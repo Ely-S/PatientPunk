@@ -1,9 +1,5 @@
 # PatientPunk
 
-Turning patient voices on social media into structured data for science.
-
----
-
 ## The Problem
 
 Reddit, patient forums, and social media are overflowing with firsthand patient reports: symptoms, treatments tried, outcomes, comorbidities, demographics. This data is qualitative, unstructured, and largely invisible to researchers. Patients who have tried dozens of treatments and documented their journeys in detail have no way to contribute that knowledge to science at scale.
