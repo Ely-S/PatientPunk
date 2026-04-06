@@ -88,15 +88,24 @@ And get back:
 
 ```sql
 SELECT
-  treatment,
-  COUNT(*) AS reports,
-  ROUND(AVG(outcome_score), 2) AS avg_outcome,
-  SUM(CASE WHEN outcome = 'positive' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS pct_positive
-FROM patient_reports
-WHERE 'ME/CFS' = ANY(conditions)
-  AND 'neuroinflammation' = ANY(symptoms)
-  AND 'brain_fog' = ANY(symptoms)
-GROUP BY treatment
+  t.canonical_name                                   AS treatment,
+  COUNT(*)                                           AS reports,
+  ROUND(AVG(tr.sentiment), 2)                        AS avg_sentiment,
+  SUM(CASE WHEN tr.sentiment > 0 THEN 1 ELSE 0 END)
+    * 100.0 / COUNT(*)                               AS pct_positive
+FROM treatment_reports tr
+JOIN treatment t ON t.id = tr.drug_id
+WHERE EXISTS (
+  SELECT 1 FROM conditions c
+  WHERE c.user_id = tr.user_id
+    AND c.condition_name = 'ME/CFS' COLLATE NOCASE
+)
+AND EXISTS (
+  SELECT 1 FROM conditions c
+  WHERE c.user_id = tr.user_id
+    AND c.condition_name = 'brain fog' COLLATE NOCASE
+)
+GROUP BY t.canonical_name
 ORDER BY reports DESC;
 ```
 

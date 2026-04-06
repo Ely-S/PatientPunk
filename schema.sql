@@ -29,13 +29,13 @@ CREATE INDEX idx_posts_date ON posts(post_date);
 
 CREATE TABLE treatment (
     id              INTEGER PRIMARY KEY,
-    canonical_name  TEXT NOT NULL UNIQUE,
+    canonical_name  TEXT NOT NULL COLLATE NOCASE UNIQUE,
     treatment_class TEXT,
     aliases         TEXT,   -- JSON array: ["LDN", "Revia"]
     notes           TEXT
 );
 
-CREATE INDEX idx_treatment_canonical ON treatment(canonical_name COLLATE NOCASE);
+CREATE INDEX idx_treatment_canonical ON treatment(canonical_name);
 
 CREATE TABLE extraction_runs (
     run_id  INTEGER PRIMARY KEY,
@@ -49,11 +49,12 @@ CREATE TABLE extraction_runs (
 -- ══════════════════════════════════════════════════════
 
 CREATE TABLE user_profiles (
-    user_id    TEXT PRIMARY KEY REFERENCES users(user_id),
+    user_id    TEXT NOT NULL REFERENCES users(user_id),
     run_id     INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     age_bucket TEXT,
     sex        TEXT,
-    location   TEXT
+    location   TEXT,
+    PRIMARY KEY (user_id, run_id)
 );
 
 CREATE TABLE conditions (
