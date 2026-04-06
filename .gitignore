@@ -1,0 +1,17 @@
+# IDE
+.project
+.pydevproject
+.idea/
+*.iml
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# Output / data
+output/
+reddit_sample_data/outputs/
+*.zip
