@@ -13,7 +13,7 @@ CREATE TABLE users (
 
 CREATE TABLE posts (
     post_id    TEXT PRIMARY KEY,
-    user_id    TEXT REFERENCES users(user_id),
+    user_id    TEXT NOT NULL REFERENCES users(user_id),
     body_text  TEXT NOT NULL,
     metadata   TEXT,                -- JSON: score, upvotes, flair, etc.
     post_date  INTEGER,
@@ -62,7 +62,7 @@ CREATE TABLE conditions (
     run_id         INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     user_id        TEXT NOT NULL REFERENCES users(user_id),
     post_id        TEXT REFERENCES posts(post_id),
-    condition_type TEXT NOT NULL,   -- "illness" or "symptom"
+    condition_type TEXT NOT NULL CHECK (condition_type IN ('illness', 'symptom')),
     condition_name TEXT NOT NULL,
     diagnosed_at   TEXT,
     resolved_at    TEXT,
