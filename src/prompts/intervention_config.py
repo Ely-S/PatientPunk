@@ -17,6 +17,7 @@ If none are mentioned, use an empty array [].
 Example: [["ldn", "low dose naltrexone"], ["famotidine", "pepcid"], []]
 """
 
+
 # Used by canonicalize.py
 HAIKU_PROMPT = """\
 You are given a list of drug/supplement/intervention names extracted from Reddit posts.
@@ -37,6 +38,16 @@ Every input name must appear as a key. If a name has no synonyms in the list, ma
 Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "famotidine": "famotidine"}
 """
 
+# Used by classify_sentiment.py (prefilter step)
+PREFILTER_PROMPT = """\
+For each item below, answer ONLY 'yes' or 'no':
+Does the AUTHOR express personal experience with the specified drug/intervention?
+Also 'yes' if the reply implies it works by saying NOT doing it made things worse.
+Answer 'no' if:
+- The author is asking someone else if they have tried it (e.g. "Have you tried X?")
+- The author is discussing research, articles, or studies rather than personal use
+Return a JSON array of strings, each 'yes' or 'no', in order.
+"""
 
 # Used by classify_sentiment.py
 def system_prompt(drug: str, synonyms: list[str] | None = None) -> str:

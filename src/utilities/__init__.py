@@ -14,6 +14,10 @@ logging.basicConfig(
 )
 log = logging.getLogger("pipeline")
 
+# Suppress noisy HTTP logs from anthropic/httpx
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("anthropic").setLevel(logging.WARNING)
+
 # ── Models ───────────────────────────────────────────────────────────────────
 MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_STRONG = "claude-sonnet-4-6"

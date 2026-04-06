@@ -2,8 +2,24 @@
 """
 canonicalize.py — Normalize drug synonyms.
 
+
 Step 2 of the pipeline. Merges synonyms (e.g. "low dose naltrexone" → "ldn")
 and rewrites tagged_mentions.json with canonical names.
+
+The output file is canonical_map.json
+    {
+        "id": "t3_1scqprg",
+        "author": "u_1234567890",
+        "text": "I took 100mg of LSD last night and it was amazing!",
+        "post_title": "I took 100mg of LSD last night and it was amazing!",
+        "parent_id": None,
+        "created_utc": 1717334400,
+        "drugs_direct": ["lsd"],
+        "drugs_context": ["psychedelic"]
+    }
+Usage:
+    python src/scripts/canonicalize.py --output-dir data/outputs
+    python src/scripts/canonicalize.py --output-dir data/outputs --limit 50 regenerate-cache
 """
 import json
 import sys

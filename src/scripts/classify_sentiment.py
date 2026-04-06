@@ -3,7 +3,30 @@
 classify_sentiment.py — Classify sentiment toward drugs.
 
 Step 3 of the pipeline. For each entry×drug pair, classifies sentiment
-(positive/negative/mixed/neutral) and signal strength.
+(positive/negative/mixed/neutral) and signal strength. Note that this will take into 
+account the context of the post/comment and the drug/intervention mentioned.
+
+The output format is:
+    {
+        "id": "t3_1scqprg",
+        "author": "u_1234567890",
+        "text": "I took 100mg of LSD last night and it was amazing!",
+        "created_utc": 1717334400,
+        "sentiment": "positive",
+        "signal": "strong",
+    },
+        {
+        "id": "t3_1scqprg",
+        "author": "u_1234567890",
+        "text": "I took it last night and it was amazing!",
+        "created_utc": 1717334400,
+        "sentiment": "positive",
+        "signal": "strong",
+    },
+
+Usage:
+    python src/scripts/classify_sentiment.py --output-dir data/outputs
+    python src/scripts/classify_sentiment.py --output-dir data/outputs --limit 50 regenerate-cache
 """
 import json
 import re
@@ -12,10 +35,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from prompts.intervention_config import system_prompt
+from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import MODEL_FAST, MODEL_STRONG, load_cache, save_cache, parse_json_array, parse_json_object, log
+
 BATCH_SIZE = 5
-PREFILTER_BATCH_SIZE = 20
+PREFILTER_BATCH_SIZE = 5
 
 
 def is_only_questions(text: str) -> bool:
@@ -29,12 +53,7 @@ def is_only_questions(text: str) -> bool:
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> list[bool]:
     """Ask Haiku if each (entry, drug) pair expresses personal experience."""
-    msg = (
-        f"For each item below, answer ONLY 'yes' or 'no':\n"
-        f"Does the AUTHOR express personal experience with the specified drug/intervention?\n"
-        f"Also 'yes' if the reply implies it works by saying NOT doing it made things worse.\n"
-        f"Return a JSON array of {len(items)} strings, each 'yes' or 'no', in order.\n\n"
-    )
+    msg = PREFILTER_PROMPT + f"\nExpecting {len(items)} answers.\n\n"
     for i, (entry, drug) in enumerate(items):
         ancestor = id_to_text.get(entry.get("parent_id", ""), "")
         msg += f"--- {i+1} --- Drug: {drug}\n"
@@ -44,13 +63,28 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> 
 
     resp = client.messages.create(
         model=MODEL_FAST,
-        max_tokens=PREFILTER_BATCH_SIZE * 10,
+        max_tokens=len(items) * 10,
         messages=[{"role": "user", "content": msg}],
     )
-    answers = parse_json_array(resp.content[0].text)
+    raw = resp.content[0].text
+    log.debug(f"Prefilter raw response: {raw!r}")
+    answers = parse_json_array(raw)
     if len(answers) == len(items):
         return [str(a).strip().lower().startswith("yes") for a in answers]
-    return [True] * len(items)  # fallback
+    # Fallback: misaligned array — classify individually to avoid false positives
+    log.warning(f"Prefilter array length mismatch: expected {len(items)}, got {len(answers)}. Raw: {raw!r}. Falling back to individual calls.")
+    results = []
+    for entry, drug in items:
+        ancestor = id_to_text.get(entry.get("parent_id", ""), "")
+        single_msg = PREFILTER_PROMPT + f"\nExpecting 1 answer.\n\n"
+        single_msg += f"--- 1 --- Drug: {drug}\n"
+        if ancestor:
+            single_msg += f"Replying to: {ancestor}\n\n"
+        single_msg += f"Comment: {entry['text'][:600]}\n\n"
+        r = client.messages.create(model=MODEL_FAST, max_tokens=10,
+                                   messages=[{"role": "user", "content": single_msg}])
+        results.append(r.content[0].text.strip().lower().startswith("yes"))
+    return results
 
 
 def format_entry(entry: dict, id_to_text: dict) -> str:
@@ -85,7 +119,6 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
 def run_classification(client, output_dir: Path, limit: int = None, regenerate_cache: bool = False):
     """Main classification logic — called by pipeline or standalone."""
     cache_path = output_dir / "sentiment_cache.json"
-    prefilter_cache_path = output_dir / "sentiment_prefilter_cache.json"
     canon_map_path = output_dir / "canonical_map.json"
 
     tagged = json.loads((output_dir / "tagged_mentions.json").read_text())
@@ -110,9 +143,9 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
         tagged = tagged[:limit]
 
     cache = {} if regenerate_cache else load_cache(cache_path)
-    prefilter_cache = {} if regenerate_cache else load_cache(prefilter_cache_path)
 
     # Build prompts per drug (with synonyms)
+    # Collect all entry×drug pairs not yet in cache
     prompts = {}
     to_do = []
     for entry in tagged:
@@ -124,46 +157,46 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                 if drug not in prompts:
                     prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
 
-    # Prefilter with Haiku
-    pf_to_do = [(e, d, k) for e, d, k in to_do if k not in prefilter_cache]
-    log.info(f"{len(prefilter_cache)} prefilter-cached, {len(pf_to_do)} to prefilter...")
+    log.info(f"{len(cache)} cached, {len(to_do)} to process...")
 
-    for i in range(0, len(pf_to_do), PREFILTER_BATCH_SIZE):
-        batch = pf_to_do[i:i + PREFILTER_BATCH_SIZE]
+    # Prefilter with Haiku
+    log.info("Prefiltering...")
+    for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
+        batch = to_do[i:i + PREFILTER_BATCH_SIZE]
         try:
             results = prefilter_batch(client, [(e, d) for e, d, k in batch], id_to_text)
-            for (e, d, k), passed in zip(batch, results):
-                prefilter_cache[k] = passed
+            for (entry, drug, key), passed in zip(batch, results):
+                if not passed:
+                    cache[key] = {"filtered": True}
         except Exception as e:
             log.error(f"Prefilter batch error: {e}")
-            for _, _, k in batch:
-                prefilter_cache[k] = True
-        save_cache(prefilter_cache, prefilter_cache_path)
-        log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(pf_to_do))}/{len(pf_to_do)}...")
+        save_cache(cache, cache_path)
+        log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(to_do))}/{len(to_do)}...")
 
-    passed = sum(1 for v in prefilter_cache.values() if v)
-    log.info(f"Prefilter: {passed}/{len(prefilter_cache)} passed → sending to Sonnet")
-
-    # Only classify entries that passed prefilter
-    to_do = [(e, d, k) for e, d, k in to_do if prefilter_cache.get(k, True)]
-    log.info(f"{len(cache)} cached, {len(to_do)} to classify...")
+    # Only classify entries that passed prefilter (not filtered, not already classified)
+    to_classify = [(e, d, k) for e, d, k in to_do if k not in cache]
+    filtered_count = sum(1 for k in cache if cache[k].get("filtered"))
+    classified_count = len(cache) - filtered_count
+    log.info(f"{filtered_count} filtered out, {classified_count} classified, {len(to_classify)} to classify...")
 
     # Group by drug for batching
     by_drug = defaultdict(list)
-    for e, d, k in to_do:
+    for e, d, k in to_classify:
         by_drug[d].append((e, d, k))
 
-    done, total = 0, len(to_do)
+    done, total = 0, len(to_classify)
     for drug, items in by_drug.items():
         for i in range(0, len(items), BATCH_SIZE):
             batch = items[i:i + BATCH_SIZE]
             try:
                 results = classify_batch(client, [(e, d) for e, d, k in batch], id_to_text, prompts)
                 for (entry, drug, key), result in zip(batch, results):
-                    if result.get("signal") != "n/a":
+                    if result.get("signal") == "n/a":
+                        cache[key] = {"filtered": True}  # neutral = filtered
+                    else:
                         cache[key] = {**result, "author": entry["author"], "text": entry["text"],
                                      "created_utc": entry.get("created_utc")}
-                        save_cache(cache, cache_path)
+                    save_cache(cache, cache_path)
             except Exception as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug, key in batch:
@@ -176,7 +209,9 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                             messages=[{"role": "user", "content": msg}],
                         )
                         result = parse_json_object(resp.content[0].text)
-                        if result.get("signal") != "n/a":
+                        if result.get("signal") == "n/a":
+                            cache[key] = {"filtered": True}
+                        else:
                             cache[key] = {**result, "author": entry["author"], "text": entry["text"],
                                          "created_utc": entry.get("created_utc")}
                         save_cache(cache, cache_path)
@@ -185,8 +220,10 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
 
-    drug_counts = Counter(k.split(":", 1)[1] for k in cache)
-    log.info(f"{len(cache)} sentiment records across {len(drug_counts)} drugs.")
+    # Final stats
+    classified = {k: v for k, v in cache.items() if not v.get("filtered")}
+    drug_counts = Counter(k.split(":", 1)[1] for k in classified)
+    log.info(f"{len(classified)} sentiment records across {len(drug_counts)} drugs.")
     log.info("Top drugs:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")
