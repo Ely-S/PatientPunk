@@ -2,6 +2,8 @@
 
 Reddit corpus scraper and biomedical extraction pipeline for the PatientPunk project. Builds structured datasets from r/covidlonghaulers using the [Arctic Shift](https://arctic-shift.photon-reddit.com) public API — **no Reddit API key required**.
 
+**→ [View interactive pipeline diagram](PatientPunk_Operationalization_Pipeline_Diagram.html)** — open in a browser for the colour-coded stage overview
+
 ---
 
 ## Project Structure
@@ -56,37 +58,42 @@ Use `--no-llm --no-discover` for a free, instant run (regex only). Use `--limit 
 
 PatientPunk uses a layered extraction strategy — each step catches what the previous one missed, and the pipeline can discover and build new extraction patterns automatically.
 
+```mermaid
+flowchart TD
+    reddit["r/covidlonghaulers<br/>Posts + comment trees"]:::src
+    uhist["Full user histories<br/>All posts/comments per author"]:::src
+    scrape["scrape_corpus.py<br/>Fetch posts · user histories · SHA-256 hash usernames"]:::script
+
+    reddit & uhist --> scrape
+    scrape --> posts["subreddit_posts.json"]:::file
+    scrape --> ufiles["users/*.json"]:::file
+
+    schema[/"schemas/covidlonghaulers_schema.json<br/>Read-only at runtime"/]:::schema
+
+    posts & ufiles --> p1
+    schema --> p1
+
+    p1["Phase 1 · extract_biomedical.py<br/>37 hand-crafted regex patterns<br/>24 base + 7 optional + 7 COVID extension fields · free · seconds"]:::phase
+    p1 --> t1[("temp/ patientpunk_records<br/>extraction_metadata")]:::temp
+    t1 --> p2["Phase 2 · llm_extract.py<br/>Claude Haiku fills regex gaps · merges results<br/>~$0.10–0.50"]:::phase
+    p2 --> t2[("temp/ merged_records<br/>regex + LLM combined")]:::temp
+    t2 --> p3["Phase 3 · discover_fields.py<br/>Haiku scans → Sonnet writes &amp; tests regex<br/>→ run patterns free → Haiku fills gaps · ~$1–3"]:::phase
+    p3 --> t3[("temp/ discovered_records<br/>discovery schema")]:::temp
+    t3 --> p4["Phase 4 · records_to_csv.py<br/>Flatten nested JSON to wide CSV"]:::phase
+    p4 --> p5["Phase 5 · make_codebook.py<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
+    p5 --> out1["records.csv<br/>Structured patient records"]:::out
+    p5 --> out2["codebook.csv / .md<br/>Data dictionary"]:::out
+
+    classDef src    fill:#FAECE7,stroke:#993C1D,color:#712B13
+    classDef script fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef file   fill:#E6F1FB,stroke:#185FA5,color:#0C447C
+    classDef schema fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef phase  fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef temp   fill:#F5F5F5,stroke:#aaa,color:#555
+    classDef out    fill:#E6F1FB,stroke:#185FA5,color:#0C447C
 ```
-                    +---------------------------+
-                    |   scrape_corpus.py        |   Scrape Reddit via Arctic Shift
-                    |   (posts, comments,       |   No API key needed
-                    |    user histories)         |
-                    +------------+--------------+
-                                 |
-                                 v
-                    +---------------------------+
-  Step 1            |   extract_biomedical.py   |   Hand-crafted regex patterns
-  (regex)           |   24 base fields          |   Fast, free, high precision
-                    |   + extension schemas     |   Runs in seconds
-                    +------------+--------------+
-                                 |
-                                 v
-                    +---------------------------+
-  Step 2            |   llm_extract.py          |   Claude Haiku fills gaps
-  (Haiku)           |   Same schema fields      |   Catches paraphrases, negation,
-                    |   + field suggestions      |   treatment-outcome pairs
-                    +------------+--------------+
-                                 |
-                                 v
-                    +---------------------------+
-  Step 3            |   discover_fields.py      |   Self-improving pipeline:
-  (Haiku + Sonnet)  |   Phase 1: Haiku scans    |   Discovers new fields,
-                    |   Phase 2: Sonnet writes   |   writes regex for them,
-                    |            regex + tests   |   validates automatically,
-                    |   Phase 3: Run new regex   |   extracts across corpus
-                    |   Phase 4: Haiku fills     |
-                    +---------------------------+
-```
+
+> For the colour-coded HTML version open **[PatientPunk_Operationalization_Pipeline_Diagram.html](PatientPunk_Operationalization_Pipeline_Diagram.html)** in a browser.
 
 ### Full pipeline — commands and outputs
 

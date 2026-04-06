@@ -132,6 +132,36 @@ The schema is organized into three layers:
 
 ---
 
+## Running the Pipeline
+
+### Step 1 — Scrape
+
+```bash
+python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
+# Outputs: Scrapers/output/subreddit_posts.json  +  Scrapers/output/users/*.json
+```
+
+### Step 2a — Demographic extraction *(who are the patients?)*
+
+```bash
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
+# Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
+```
+
+### Step 2b — Drug sentiment *(what do they say about treatments?)*
+
+```bash
+python database_creation/extract_mentions.py   # tag every post with drugs mentioned
+python database_creation/canonicalize.py       # collapse synonyms → canonical names
+python database_creation/classify_sentiment.py # classify sentiment per entry × drug
+# Output: reddit_sample_data/outputs/sentiment_cache.json
+```
+
+Steps 2a and 2b are independent — run them in either order. Both tag every record with `author_hash` (SHA-256 of username), which is the join key between the two datasets.
+
+---
+
 ## Built at
 
 Biotech Hackathon · San Francisco · April 4, 2026 · Frontier Tower
