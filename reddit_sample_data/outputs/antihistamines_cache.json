@@ -1,0 +1,291 @@
+{
+  "classification": {
+    "antihistamines:t1_oecvcdz": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author explicitly states they did not benefit from H1 or H2 antihistamines or DAO, leading them to brush off MCAS as a possibility.",
+      "text": "Gosh that's horrible, I'm so sorry. I've long sinced brushed MCAS off due to me not benefiting from h1 or h2 antihistamines or even DAO. But this recent experience might force me to reconsider. I don't even know how to tackle this.",
+      "author": "f36fc2ba9b037badcfe9af058b3a997a5f780a284b3a5fd207e513a203a677c0"
+    },
+    "antihistamines:t1_oec1l4z": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author reports ketotifen eye drops helped their swollen itchy eyes, indicating personal positive experience with this antihistamine.",
+      "text": "Ketotifen eye drops helped my swollen itchy eyes! I am also on the compounded med and it helps calm my overactive systems way down. Do you have any idea if you lean into MCAS territory? ",
+      "author": "9d803088a72fe91d9634824c2041b713c04fd26d2e038a2871211fffedd79f96"
+    },
+    "antihistamines:t3_1sbpj6f": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "The author reports that ketotifen (an antihistamine) helped them recover from a 3-month crash, with quantified improvements: walking 2k steps to work, hitting 10k steps/day multiple times a week, and jogging \u2014 calling it 'absolutely a miracle.'",
+      "text": "Just in case anyone else is supposed to be taking these and has slacked lately like me, I've been in a 3 month crash and taking 5000 IU vitamin D (blood tests showed deficiency) + 1mg ketotifen per day has got me back to being able to walk to work in the morning without collapsing (about 2k steps), hit 10k steps/day a few times a week, and jog 0.5-0.75 miles a couple times a week (at night). \n\nI've been feeling so hopeless being in one of my worst crashes ever but I see the light at the end of the crash tunnel! It is absolutely a miracle to be able to move my body and to stay in the office for a full work day and not feel like death. Yay!\n\nObligatory: my main symptoms are POTS, mild ME/CFS, post-concussion-type vision and vestibular issues, and histamine intolerance with GI symptoms ",
+      "author": "283577109c092ecae29924c2ad37c6222607afafee5b58d9b9953558a7768c1a"
+    },
+    "antihistamines:t1_oe5nhrf": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "The author personally took ketotifen (an antihistamine mast cell stabilizer) and felt better within a week after reaching a therapeutic dose, with clear temporal attribution.",
+      "text": "So I was really scared of ketotifen after reading about tons of people here experiencing side effects. I began by breaking the pill open and taking just a tiny amount of the powder. Did that for a month, and I didn't notice anything at all from that and my doctor basically told me to knock it off and take a pill morning and night. After I started doing that I felt better within a week",
+      "author": "283577109c092ecae29924c2ad37c6222607afafee5b58d9b9953558a7768c1a"
+    },
+    "antihistamines:t1_oe6p8du": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Felt better within a week of getting back on ketotifen.",
+      "text": "Felt better within a week!",
+      "author": "283577109c092ecae29924c2ad37c6222607afafee5b58d9b9953558a7768c1a"
+    },
+    "antihistamines:t1_oecawce": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author tried ketotifen but it made their muscles and skin burn more; the reply describes ongoing symptoms without crediting ketotifen with improvement.",
+      "text": "No I just get really motion sick from everyday tasks and also feel drunk when I drive more than 45 minutes ",
+      "author": "283577109c092ecae29924c2ad37c6222607afafee5b58d9b9953558a7768c1a"
+    },
+    "antihistamines:t1_oecg9jj": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author experienced difficulty getting onto ketotifen, reporting being flatlined/barely able to stay awake the first day or two.",
+      "text": "The first day or two I could barely stay awake",
+      "author": "283577109c092ecae29924c2ad37c6222607afafee5b58d9b9953558a7768c1a"
+    },
+    "antihistamines:t1_oe56w5t": {
+      "sentiment": "neutral",
+      "signal": "weak",
+      "statement": "Author mentions taking 2mg ketotifen among various other things but does not attribute any improvement or worsening specifically to it; describes still being severely debilitated.",
+      "text": "jog! office! wow... many I'd love to get back to that. Sounds like heaven.  \n  \nI could run a 6:35 mile at age 49 and get my heart rate up to 182 still. now I'm a shell, can barely stand, am lucky to walk the dogs for a minute each morning then rest the remainder of the day. Use an electric wheelchair outside but can't tolerate the output or sensory issues usually.\n\nI am on 4kIU vit D and then 2mg ketotifen and various other things.",
+      "author": "8e8d908df8491704224a4d99faf0bd80de3b81d13e2a2e71419843e3d66de463"
+    },
+    "antihistamines:t1_oe6nv4z": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author indicates they are supposed to be on ketotifen and acknowledges they need to get back on it, implying prior positive experience, but has been 'dragging their feet' and is currently regressing. No clear current outcome from antihistamine use reported.",
+      "text": "This post was for me, lol. How long until you noticed a positive effect getting back on it?\nAntibiotics helped my symptoms a ton but it feels like I\u2019m regressing. I\u2019m supposed to be on a higher amount  of both vitamin d and ketotifen , sooo I need to stop dragging my feet.",
+      "author": "c73497736cf123857b56bde0b747a51585a8415e124902b64c3467ec34e96547"
+    },
+    "antihistamines:t1_oecg44w": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author reports that increasing ketotifen 'flatlined' them, indicating a negative personal experience with the antihistamine.",
+      "text": "So I went up of the ketotifen and it flatlined me today. Did you have trouble getting onto it?",
+      "author": "c73497736cf123857b56bde0b747a51585a8415e124902b64c3467ec34e96547"
+    },
+    "antihistamines:t1_oec8mpf": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author tried ketotifen but it made their muscles and skin burn more, indicating a worsening of symptoms.",
+      "text": "Vision? Visual snow? Vestibular like tinnitus? Do you have any muscle burning? I tired ketotifen but it made my muscles and skin burn more ",
+      "author": "125857a7c03ba636902021b9ea5e8e961f7842502cc5ad7e3cb96dc2d41bfe57"
+    },
+    "antihistamines:t1_oe0fhxx": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author advises increasing antihistamine dose and trying different ones, noting they had 'a lot of luck' moving up to 2-4x per day, indicating personal positive experience.",
+      "text": "If antihistamines help a little\u2026 have you tried increasing your dose, trying different antihistamines? \u00a0I had a lot of luck moving up to 2x per day, and then 4 x per day (under the supervision of my doctor). Also trialing different antihistamines.\n\nYou could also try quercetin before meals. That really helps me as well.\u00a0\n\nI think LDN is worth trying. The main downside is that for *most * people, it can take months to see the effects. It is recommended to start low and build up slowly. And it can just take a while to work.\u00a0\n\nAnd you\u2019re really not supposed to add any other new needs in during that time. \u00a0So, I\u2019d see if there is anything else you\u2019d like to try first that would show results quicker, and then try LDN.\u00a0\n",
+      "author": "ef0dc433dd1b8b98d9039f986195cc02fa57c092a52bfb52a194e67dcab11f9d"
+    },
+    "antihistamines:t1_oe76wjo": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions ketotifen (an antihistamine) as a 'good supplement' to nervous system regulation activities in their recovery, but it is listed among multiple approaches without specific credit.",
+      "text": "I'm recovered and used an approach that addresses the cell danger response from a different angle. I used nervous system work (eg meditation, responding well to symptoms, safe expansion of activity) in conjunction with some of the things you listed. Ketotifen and eating regularly were good supplements to the other nervous system regulation activities I was doing.",
+      "author": "81bb4f651fbbe575db38f2092bb4ca0c4d385ca001ae636cb512d6962182b975"
+    },
+    "antihistamines:t3_1sbf2k9": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author states they have ketotifen/cromolyn/quercetin at home but says it makes no difference for their symptoms.",
+      "text": "So, i am two months after Covid and things keep escalating. I have preexisting condition (severely floxed by cipro amtibiotic amd have 3 years severe insomnia from it) and now my old symptoms reappear + bunch of new. \n\nSymptoms:\n\n\u2022 Bounding pulse in the back of head/neck, heart when laying to sleep\n\n\u2022insomnia worsening (had to add quetiapine to myirtazapine and sleep still shit)\n\n\u2022blurry double vision on text, hard to focus fast from short to long distance, light sensitivity\n\n\u2022severe exhaustion from speak with people: dizziness, my eyes become glassy and big, hard to find words, my face become stiff as stone\n\n\u2022random fatigue in legs\n\n\u2022weakness in dominant hand which comes and goes, stiffness in hand\n\n\u2022Cold hands/legs\n\n\u2022HR lower than usually. 45 when i sleep\n\n\u2022gut pain\n\nI need to say that i don\u2019t have histamine/mcas issues and i have all stuff like ketotifen/cromolyn/quercetin at home but it makes no difference, i have it from floxing.\n\nWhat i tried or take now:\n\nNattokinase 8000, bromelain 500mg, Nac 500-750mg, glycine 3-4g, taurine 1g, pycnogenol 100mg, astaxanthin 1g, micronised palmitoylethanolamide 1200mg, astragalus 1000mg, carotenoids complex, d3, benfothiamine 150mg, elektrolytes, resveratrol 500mg, coq 10 20mg, pqq 10mg and three days nicotine patches 3,5mg but i feel 0 relief in symptoms.. may be just little bit relief from pycnogenol.. i\u2019m also on keto 8 days. \n\nCan someone give me some insights ? May be someone have same patterns/symptoms?",
+      "author": "89ccd8983f9bef5fb1e60b84f55d528bf1a3ee6612699282ed9e4460bb0a1879"
+    },
+    "antihistamines:t1_oe371t7": {
+      "sentiment": "mixed",
+      "signal": "moderate",
+      "statement": "Author reports that benadryl (an antihistamine/anticholinergic) calms autonomic storm symptoms enough to rest, but still virtually knocks them out and hasn't helped return to normal life.",
+      "text": "Sorry to hear that! I had virtually all the same symptoms for roughly 9 months after my first covid infections in March 2020. Thankfully, the severity of many of the symptoms lessened, and actually went into full remission when I was able to take a full year off in 2022 to rest. The slow heart rate persisted for about 9 months, then came back with a vengeance after my first Pfizer shot in April 2021 (I had a pulmonary embolism 3 weeks post-shot, but have since had no clotting issues, yet all the same symptoms persist).\n\nUnfortunately, each vaccination shot or re-infection I get brings them back in a different way, with some symptoms lessened, and some new ones. Thankfully the bradycardia is mostly gone (my resting HR got as low as 33 in mid-2021 and now at least stabilizes in the low-4]s during an episode) have drastically lessened, but all the surrounding dysautonomia symptoms unfortunately have persisted.\n\nI would highly recommend getting a referral to a neurologist, as I wasted years seeing virtually every other -ologist and finding nothing wrong with me to explain my symptoms and odd vitals, only to ultimately be diagnosed with small fiber neuropathy 5 years later after autonomic testing finally flagged some of my dysfunction.\n\nAlso, at least anecdotally, a lot of my problems seem to be cholinergic or related to my muscarinic receptors (one study found anti-M2 muscarinic receptor autoantibodies in 100% of long covid patients with bradycardia, and I have both bradycardia and sudomotor failure, which can be caused by M2 and M3 muscarinic receptor dysfunction, respectively), so benadryl and atropine have been the biggest help when I'm having a really bad dysautonomic episode. It still virtually knocks me out, so it hasn't helped me return to normal life, but it at least calms the autonomic storm symptoms enough that I can somewhat comfortably take a nap instead of laying in bed feeling like I'm dying for hours on end.",
+      "author": "43f9ff35eba3bb29865d29741cf55693115a40ff1fc181a8999715dbad9cd577"
+    },
+    "antihistamines:t1_oe38nlb": {
+      "sentiment": "mixed",
+      "signal": "moderate",
+      "statement": "Author reports benadryl consistently calms dysautonomia symptoms but at the cost of all remaining energy, leaving them unable to function \u2014 helpful but with significant drawbacks.",
+      "text": "I definitely get attacks that *feel* physiologically like anxiety, but are almost certainly dysautonomia (as they also multiple hours, have no association with mental anxiety/fear, and my HR drops into the 30s or 40s during these attacks). Funny enough, the one thing that has helped me is anticholinergics. Atropine stopped my worst ever episode when I was in the hospital, and benadryl has consistently worked to calm my symptoms at home, but at the cost of any balance of energy I have left. Better to be virtually knocked out and unable to function than feel like I'm immenently dying and still obviously unable to function. ",
+      "author": "43f9ff35eba3bb29865d29741cf55693115a40ff1fc181a8999715dbad9cd577"
+    },
+    "antihistamines:t1_odwwta8": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author cannot take antihistamines because they worsen their severe dry eyes, so they use LDN instead.",
+      "text": "I cannot take antihistamines because I have severe dry eyes and they make my dry eyes worse.  LDN does not have this effect.  I started taking the LDN in the afternoon.  Taking it at night gave me insomnia.",
+      "author": "b32bd65b82ec370fb36fbb9370d33ff58f02853c5a8adbbd686609f7e7af40a1"
+    },
+    "antihistamines:t1_oe21v1y": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author took antihistamines (Hydroxyzine and Loratadine) daily for 2 years for MCAS/histamine issues and reports fatigue is now very mild, with reduced need to only one pill per week.",
+      "text": "I'm sorry you are dealing with all of that. You can look at r/longhaulersrecovery to see what medications and supplements helped people.\n\nI had similar symptoms: severe fatigue with PEM, confusion, feeling unreal, swollen lymphs, chronic phlegm/saliva, insomnia, electrical shocks in my brain...\n\nMine turned out to be histamine issues/MCAS. I took antihistamines (Hydroxyzine and Loratadine) daily for 2 years. Now i take one pill a week. I follow a low histamine diet. And i avoid heavy smells. My fatigue is very mild now. \n",
+      "author": "e41d4dc1b1af580755d2a27d5f43c5c6a80d63100f11f7b30f271c9986e29b08"
+    },
+    "antihistamines:t3_1sb94kc": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author reports antihistamines help their symptoms a bit but still dealing with brain fog; mentions currently taking non-BBB-crossing antihistamines.",
+      "text": "antihistamines help my symptoms a bit but I'm still dealing with brainfog. do you find that antihistamines that cross the blood brain barrier helped clear spike proteins or whatever else out after taking them for a period of time? I'm only terrified of the dementia risk. I'm currently taking ones that do not take the blood brain barrier. I just want to get that \"gunk\" feeling out of my head.",
+      "author": "43b5f11f655ad63b968dc58a073a89a1b5d15b1268d40a099eb797e1f2e5185a"
+    },
+    "antihistamines:t1_oe1lc9w": {
+      "sentiment": "mixed",
+      "signal": "weak",
+      "statement": "Author took Benadryl often in 2021-2022 but is uncertain whether it helped or made things worse, noting symptoms were milder then.",
+      "text": "Benadryl I took often in 2021-2022 and I wonder if it helped me or made me worse, my symptoms were more milder then. Thank you!",
+      "author": "43b5f11f655ad63b968dc58a073a89a1b5d15b1268d40a099eb797e1f2e5185a"
+    },
+    "antihistamines:t1_oe1pvh2": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author tried loratadine for about 2 weeks and didn't notice anything, acknowledging they need to take it longer.",
+      "text": "I did take it for like 2 weeks but I didn't notice anything. I need to take it for longer. The only downside is the cost from what I remember \ud83d\ude22 I'm glad it helped you! And thank you for letting me know .",
+      "author": "43b5f11f655ad63b968dc58a073a89a1b5d15b1268d40a099eb797e1f2e5185a"
+    },
+    "antihistamines:t1_oe1l6b7": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author personally tried multiple antihistamines (Benadryl, cetirizine, loratadine) and found Benadryl helped more than the others.",
+      "text": "Benadryl helped me more that cetirizine and loratadine ",
+      "author": "b64446aa97eb766e59fcd3d9c62cad6aac9aea5150d2ae05c68dbd62807c82db"
+    },
+    "antihistamines:t1_oe1nlwj": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author has been on loratadine for two years, implying ongoing personal use, but does not specifically credit it with symptom improvement (credits NAC+ for the notable difference).",
+      "text": "I've been on loratadine (generic Claritin) for two years. For the 'gunk' feeling, have you tried the supplement NAC+ yet? I took that for a month and it made a noticeable (and permanent) difference. As in, I didn't have to keep taking it after that. ",
+      "author": "fd3f25d5ed75c5f869210e1a22a12a0b866e4b13fa856a00b2bc493d8c89a415"
+    },
+    "antihistamines:t1_oe1pnih": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author personally uses a blood-brain-barrier-crossing antihistamine as a sleep aid on medical advice, indicating personal use with an implicit benefit (sleep) but minimal detail.",
+      "text": "I use that type (on medical advice) as a minor sleep aid. I\u2019ll take sleeping now over issues later, because not sleeping is worse \ud83e\udd37\u200d\u2640\ufe0f\n\nIt\u2019s one of those things that isn\u2019t a great decision to have to make but it\u2019s better than more addictive sleep meds. ",
+      "author": "875c9d819ce3706451ff71c9d105da04fd62cb2ddfc9de2e944fee1f59091cfe"
+    },
+    "antihistamines:t1_oe1u4np": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author personally uses nettle leaf tea as a natural antihistamine and reports it has 'done wonders' for them.",
+      "text": "drinking locally grown nettle leaf tea has done wonders for me: it\u2019s a natural anti-histamine plant.",
+      "author": "f22b4e86b6923af111df0d184c44b365cf0c6b560069c8d88402f2215754addb"
+    },
+    "antihistamines:t1_oe2i462": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author reports feeling worse over time using Benadryl (H1 antihistamine), noting it seems to contribute to more apnea/breathing episodes, waking with headaches and worse brain fog.",
+      "text": "Have you been checked for sleep apnea/vitamin deficiencies?\n\nIn my experience, I feel worse over time using Benadryl more than on rare occasion. I've found H1s seem to contribute to more apnea/breathing episodes per hour because I wake with headaches and worse brain fog even if I otherwise stay asleep through the night.\n\nFor me, b12 and iron supplements have so far helped a lot to improve deficient blood levels and gradual improvements in sleep quality and brain recovery. My sleep specialist also advised avoiding back sleeping altogether to reduce apnea episodes in addition to implementing better sleep hygiene habits.\n\nI haven't yet tried CPAP myself but I've heard many who find that helps significantly when addressing all these other factors aren't enough on their own to reduce apnea.",
+      "author": "c892d4db0021e9370aa61f016f8a8b0c303e8f23ee3d82250cbd0ed8f2ae6f23"
+    },
+    "antihistamines:t3_1sb0v17": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author uses antihistamine nose sprays and Cromolyn to manage burning nose symptoms, noting they help make it stop, though still experiencing significant other symptoms.",
+      "text": "This time it hit my nose. Same way like my mouth and throat were burning 3 yrs ago, same my nose now...I have to use antihistamine nose sprays and Cromolyn, to make it stop but I lost my smell and taste its all gone like 0 please someone tell me it will come back... Im freaking out. What can I do? My nose bleeds every day. I dont even mention costant pressure inside head, and pain in joints :( ",
+      "author": "7ea42cc8bbf893a7d016af56a81d42ea11f37c16e0a7e47571823c7bf34261b0"
+    },
+    "antihistamines:t1_oe01pw6": {
+      "sentiment": "mixed",
+      "signal": "moderate",
+      "statement": "Ketotifen (an antihistamine) helped with sleep, but since reinfection they have insomnia.",
+      "text": "I am on it every evening 0.5mg it helped me to sleep as well but since I got this new shi\\* I have insomnia",
+      "author": "7ea42cc8bbf893a7d016af56a81d42ea11f37c16e0a7e47571823c7bf34261b0"
+    },
+    "antihistamines:t1_oe1lhg8": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions using antihistamine nose sprays and Cromolyn to make burning stop after reinfection, implying some symptom relief, but is distressed about loss of smell/taste.",
+      "text": "How did you get reinfected?",
+      "author": "5da52c7494c6d3ec5d7d0cf926e0129c123f4e658df88294a978ef3bcaa738e2"
+    },
+    "antihistamines:t1_odyueua": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions taking antihistamines as part of their management, listed among a broader set of treatments, without specifically crediting them for improvement.",
+      "text": "PEM, brainfog, autoimmune uveitis, allergic / MCAS reactions on skin and digestion, GI symptoms, very bad silent reflux and a constant globus feeling in my throat. \n\nI did try plasmapheresis, helped short term.  \nI never took any medicine beyond antihistamines, although I was prescribed meds like beta blockers, some other heart meds and mestione\n\nDiet is interesting.  \nI will get torched for this here, but a strict carnivore diet has helped me tremendously.\n\nI basically only ate meat for 9 months, it cured my brainfog and some GI problems.  \nKeto might have a similar effect.\n\nIn terms of supplements I have tried all, the expensive exotic ones never did anything.  \nWhat did work was\n\n\\- NAC  \n\\- Glycine  \n\\- Magnesium  \n\\- Taurine  \n\\- B1",
+      "author": "d6ef9f31ee12f4d3f4b5cd001ac93b2fa85cee774c855a0848ddbc96a7f0a6f4"
+    },
+    "antihistamines:t1_oe2u3g7": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Lists antihistamines among the most successful treatments for MCAS, alongside other mast cell stabilisers, LDN, and DAO enzymes, crediting the combined regimen with gradual improvement including stopping post-orgasm adrenaline dumps.",
+      "text": "My post-orgasm adrenaline dumps stopped gradually over time as my overall condition continued to improve. \n\nI'm taking both medication and supplements for MCAS. The most successful ones for me have been:\n- antihistamines \n- mast cell stabilisers (Ketotifen, Quercetin, Luteolin + PEA)\n- LDN \n- DAO enzymes\n\nI've heard really good things about Cromolyn too, but I can't get that prescribed where I am. \n\nOther things that made a difference are: a \n- low histamine diet\n- cold showers\n- daily nervous system regulation (meditation, Yoga Nidra, and breathwork in my case). \n\nHope this helps! ",
+      "author": "5a49a48aabbe8bf544d64cce340290c6132364f88638c948d749be02d1c412a4"
+    },
+    "antihistamines:t3_1sanljb": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Explicitly states that over-the-counter antihistamines were among the things tried that 'nothing helped' before getting prescription medications (ketotifen, LDN, ivabradine) that changed their life.",
+      "text": "I'm still not healed but I've seen a massive improvement over the past months.\n\nMy main symptoms are linked to MCAS and POTS. At my worst, I couldn't do more than 1500 steps a day. I was in bed 80-90% of the time. I couldn't do any reading or cognitive activity other than scrolling / watching TV. I couldn't go to the park with my toddler. I tried everything: supplements, pacing, meditation, creatine, over the counter anti-histamines, LDN. Nothing helped. I was only getting worse. I struggled to shower once a week.\n\nThen I saw a private doctor. He prescribed the following:\n\n\\- ketotifen (5 ml / 1 mg),\n\n\\- LDN (3mg, a higher level than the one I was on), and\n\n\\- Ivabadrine (2.5 mg, 2x a day).\n\nKetotifen and LDN involved an initial TITRATION phase.\n\nI had to supplement ivabadrine with propranolol at first, to really get my POTS under control. Then I could do without it and just take Ivabadrine.\n\nTaking these meds changed my life over the course of 3 months. I can now read books, write fiction, take language lessons, play outside with my toddler and go on dates with my partner. I'm by no means cured. I still have to pace and I still have bad days. But I feel like I can live again. So there's hope![](https://www.reddit.com/submit/?source_id=t3_1sak2bi&composer_entry=crosspost_prompt)",
+      "author": "2e6b6555f1acc180d34c43cbc0931eb246ca007354345a0aa820808ad1b74205"
+    },
+    "antihistamines:t1_oe1qpkq": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Reports taking Ketotifen (a mast cell stabilizer/antihistamine) in the evenings before bed and enjoying the drowsiness to help sleep, implying ongoing use without complaint.",
+      "text": "Always evenings before bed. I enjoy the drowsiness as it helps me fall asleep. Long COVID started in March 2025.",
+      "author": "2e6b6555f1acc180d34c43cbc0931eb246ca007354345a0aa820808ad1b74205"
+    },
+    "antihistamines:t1_odx2n4k": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Mentions taking ketotifen (an antihistamine/mast cell stabilizer) in conjunction with ivabradine and LDN as part of the combination that started working, but does not specifically credit ketotifen alone.",
+      "text": "For me it started working when I increased the dosage and took it in conjunction with ivabadrine and ketotifen. But if you're already on propanolol, you might not need ivabadrine. ",
+      "author": "2e6b6555f1acc180d34c43cbc0931eb246ca007354345a0aa820808ad1b74205"
+    },
+    "antihistamines:t1_odzovvi": {
+      "sentiment": "mixed",
+      "signal": "moderate",
+      "statement": "Ketotifen didn't work for me, but luckily cetirizine did \u2014 indicates one antihistamine failed but another helped, alongside LDN improvements.",
+      "text": "Same! Once I got 3 mg LDN at around 9 months I started getting improvements more rapidly. Ketotifen didn't work for me, but luckily cetirizine did!\u00a0",
+      "author": "788877dd35702550435c4bcf3ab5ec22baf421e0617a3e30c126cb56361267c0"
+    },
+    "antihistamines:t3_1salclq": {
+      "sentiment": "weak",
+      "signal": "weak",
+      "statement": "Author takes antihistamines during tree pollen season but does not clearly report whether they help or not; antihistamine use is mentioned incidentally alongside multiple other symptoms and treatments.",
+      "text": "Not sure if it's histamine related or dysautonomia or what, but every now and then I'll have an onrush of acute anxiety. Usually during the day,not at night. I take antihistamines as it's tree pollen season here in UK. \n\nBeen short of breath recently and light headed. Insomnia. \n\nI'm on iron supplements as ferritin is 19, this can cause these issues. Or it could be a whole bag of different things. I can't arra anything in advance as my mental state changes day to day.\n\nI have some emergency diazepam (we only get 7 per year and only then after a grilling. My last order was 2024!! And still got some left). I do try promethazine if my sleep is really bad but generally react to supplements. If I get another weird surge and I'm on a day out etc in just going to have to take one as I wouldn't be able to cope . \n\nAny anecdotes appreciated, would love to hear from you!\n\n\n\n  \n",
+      "author": "aa34c08b26b784cd0831c4f8000a937bb6333aff29d3c9b5fdc82a4fd0ae8f63"
+    },
+    "antihistamines:t1_oe1ycnw": {
+      "sentiment": "mixed",
+      "signal": "weak",
+      "statement": "Author takes antihistamines but wonders if they need something stronger, implying partial but insufficient relief; also follows a low histamine diet suggesting ongoing management needs.",
+      "text": "Which meds helped the most? I take antihistamines but often wonder if I need something stronger like cromolyn, ketotifen etc. I do low histamine diet but do go off piste when I get sick of bland/banned food. Thank you for sharing \u263a\ufe0f",
+      "author": "aa34c08b26b784cd0831c4f8000a937bb6333aff29d3c9b5fdc82a4fd0ae8f63"
+    },
+    "antihistamines:t1_oe214sm": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author lists Cetirizine (H1) and Famotidine (H2) antihistamines twice daily as part of their current MCAS treatment stack, describing it as sufficient alongside dietary changes.",
+      "text": "Quercetin & Berberine b4 meals\nCetirizine & Famotadine 2x/day\nProgesterone \n\nThankfully those seem sufficient for now along with avoiding my biggest dietary triggers because I can\u2019t afford compounded ketotifen & my insurance doesn\u2019t cover cromolyn sodium (which I also can\u2019t afford at full price)",
+      "author": "d9dc114e959e57b0f669eea38d797303326014755c9b628628db12dc4330391b"
+    },
+    "antihistamines:t1_oe2kwr2": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author personally takes Ketotifen and sodium cromoglicate (mast cell stabilizers) and reports significant improvement after a few months, alongside a very restrictive diet.",
+      "text": "I take Ketotifen and sodium cromoglicate and I had a significant improvement after I had been on them a few months. My diet is incredibly restrictive as well, though.  Not just histamine I have ruled out so many other problem areas like salicylates and polyphenols. I have also learnt that I react to the way things are cooked, to baking powder and corn which rules out almost everything processed. ",
+      "author": "ebb13ca3560cd600a9718b99dbb621d87d3dbafc3e5d877260bfd76cf5e8b434"
+    },
+    "antihistamines:t1_odwy16k": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author personally uses H1 and H2 blockers (antihistamines) and confirms they help a little.",
+      "text": "Good to know. Forgot to mention I already spam H1 and H2 blockers and they do help a little ",
+      "author": "37d974da545f590355c2d5ef3322d30a8e2f3778560218f2a489ad948e1e8e88"
+    },
+    "antihistamines:t1_oe04x8c": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author calls antihistamines part of their 'holy trinity' of treatments, indicating it is among their most important and effective treatments personally.",
+      "text": "Sleep meds, antihistamines and LDN. My holy trinity. ",
+      "author": "07a00073f5f728a208e2e5537aa02c677caf3782870db1b258da66effbf09e46"
+    }
+  }
+}

@@ -1,0 +1,275 @@
+{
+  "prefilter": {},
+  "classification": {
+    "ldn:t1_oe9is5t": {
+      "sentiment": "mixed",
+      "signal": "weak",
+      "statement": "Author is on LDN and another medication, reports improvement in brain fog and fatigue but explicitly cannot attribute the benefit to LDN specifically versus the other medication.",
+      "text": "brain fog and fatigue. But I'm also on LDN, so I'm not sure which medication helped "
+    },
+    "ldn:t3_1sbm1dp": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author personally started LDN and reports it helped a bit, mostly with daily low-grade fevers, though not much overall; LDN is named but not strongly credited for broader recovery.",
+      "text": "Been dealing with this for 13 months now. Otherwise completely healthy 22M. Started LDN in September, and it has helped a bit, but not much, mostly with the daily low grade fevers. Did about 2 months of low dose Zepbound, nothing. \n\nNow was just prescribed Luvox. Really hoping this gets me over the hump. I'd say I have recovered around 50%, being able to get through work and most activities, but not in an easy way.  \n\nMain issues are as follows: \n\n   * Extreme fatigue\n   * Body pain\n   * Shakiness, teeth chattering, feeling of weakness\n   * Heart racing/palpitations\n   * Nausea\u00a0\n   * Stomach pain (think this is LDN)\n   * Terrible health anxiety\n   * Intolerance to heat/cold, alcohol and caffeine\n   * chest pain\n   * Adrenaline attacks that feel like a heart attack\n\n\n\n"
+    },
+    "ldn:t1_oe6vfe9": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author states 'It helps me' in reply to a post about Luvox, confirming personal positive experience with LDN.",
+      "text": "It helps me. "
+    },
+    "ldn:t1_oe3t0yz": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author states LDN has helped them more than all supplements after 3 years and 3 months of long COVID.",
+      "text": "LDN has helped me more than all of the supplements.  I have had long covid for 3 years and 3 months."
+    },
+    "ldn:t1_odwjowg": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author reports dramatic improvement in multiple named neurological symptoms (head pressure, eye pressure, tinnitus, loss of taste/smell, insomnia, brain fog) after just 3 days on 0.5mg LDN, calling it the only thing that has helped.",
+      "text": "I was going to wait a while to post but since you asked I thought I would give an update.  I have had long covid for 3 years and 3 months.  My symptoms are neurological-head pressure, eye pressure, tinnitus, loss of taste and smell, insomnia and brain fog.  \nI started taking 0.5 mg. of LDN two weeks ago.  All of my symptoms improved dramatically.  I started noticing improvement after 3 days.  It's early but it is the only thing that has helped me and I take all of the supplements that are often suggested.  I will continue taking LDN to see if my improvement continues."
+    },
+    "ldn:t1_odwwta8": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions taking LDN and adjusting timing to avoid insomnia side effect, implying continued use without strong endorsement of benefit.",
+      "text": "I cannot take antihistamines because I have severe dry eyes and they make my dry eyes worse.  LDN does not have this effect.  I started taking the LDN in the afternoon.  Taking it at night gave me insomnia."
+    },
+    "ldn:t1_odybzjo": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author confirms LDN is helping with taste and smell, describing the improvement as slight but noticeable.",
+      "text": "Yes.  It is helping with my taste and smell.  It's very slight but noticeable.  I hope it continues."
+    },
+    "ldn:t1_oe0ckvm": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author takes LDN alongside anti-inflammatory eating and pacing, is at 80-85% recovery, with brain slowly returning to old memories and hobbies, but LDN is not specifically credited for the improvement.",
+      "text": "Also following. I\u2019m a li\u2019l over two years in and my recovery is still in-progress. Healing hasn\u2019t been linear, but it\u2019s so much better than even last year. I\u2019ve only been in remission once and it was short lived. I relapsed February 2024 and have been symptomatic since. \ud83d\ude13\n\nI\u2019m like at 80-85% currently with anti-inflammatory eating & having to heavily restrict due to suspected MCAS. But I take LDN and pace as much as possible. My brain is slowly going back to old memories of old hobbies and foods I used to consume for the first time since before I became sick. \n\nDid you ever have a noticeable mental or emotional shift or some sort of inkling that you were getting close to recovery? I saw that you had been reinfected and a good chunk of symptoms went away once you cleared that infection."
+    },
+    "ldn:t1_oe2u3g7": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author lists LDN among several MCAS treatments that have been 'most successful' for them, but does not individually credit LDN for specific symptom improvements.",
+      "text": "My post-orgasm adrenaline dumps stopped gradually over time as my overall condition continued to improve. \n\nI'm taking both medication and supplements for MCAS. The most successful ones for me have been:\n- antihistamines \n- mast cell stabilisers (Ketotifen, Quercetin, Luteolin + PEA)\n- LDN \n- DAO enzymes\n\nI've heard really good things about Cromolyn too, but I can't get that prescribed where I am. \n\nOther things that made a difference are: a \n- low histamine diet\n- cold showers\n- daily nervous system regulation (meditation, Yoga Nidra, and breathwork in my case). \n\nHope this helps! "
+    },
+    "ldn:t3_1sanljb": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author tried LDN at a lower dose with no effect, then was prescribed a higher dose (3mg) alongside ketotifen and ivabradine, and reports the combination 'changed my life' \u2014 going from bedridden 80-90% of the time to reading books, writing, playing with their toddler, and going on dates over 3 months.",
+      "text": "I'm still not healed but I've seen a massive improvement over the past months.\n\nMy main symptoms are linked to MCAS and POTS. At my worst, I couldn't do more than 1500 steps a day. I was in bed 80-90% of the time. I couldn't do any reading or cognitive activity other than scrolling / watching TV. I couldn't go to the park with my toddler. I tried everything: supplements, pacing, meditation, creatine, over the counter anti-histamines, LDN. Nothing helped. I was only getting worse. I struggled to shower once a week.\n\nThen I saw a private doctor. He prescribed the following:\n\n\\- ketotifen (5 ml / 1 mg),\n\n\\- LDN (3mg, a higher level than the one I was on), and\n\n\\- Ivabadrine (2.5 mg, 2x a day).\n\nKetotifen and LDN involved an initial TITRATION phase.\n\nI had to supplement ivabadrine with propranolol at first, to really get my POTS under control. Then I could do without it and just take Ivabadrine.\n\nTaking these meds changed my life over the course of 3 months. I can now read books, write fiction, take language lessons, play outside with my toddler and go on dates with my partner. I'm by no means cured. I still have to pace and I still have bad days. But I feel like I can live again. So there's hope![](https://www.reddit.com/submit/?source_id=t3_1sak2bi&composer_entry=crosspost_prompt)"
+    },
+    "ldn:t1_odx2n4k": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author shares personal experience that LDN started working for them when they increased the dosage and combined it with ivabradine and ketotifen.",
+      "text": "For me it started working when I increased the dosage and took it in conjunction with ivabadrine and ketotifen. But if you're already on propanolol, you might not need ivabadrine. "
+    },
+    "ldn:t1_odwmt4p": {
+      "sentiment": "mixed",
+      "signal": "weak",
+      "statement": "Has been taking LDN for almost a week at a low dose (0.2-0.25mg) and has not seen improvements yet, but plans to increase dose gradually up to 4-4.5mg to see if benefits emerge.",
+      "text": "I would say it is worth a try. I was prescribed LDN and have been taking it for almost a week I am at 0.2-0.25mg and so far have not seen any improvements. I will slowly increase the dose up to 4-4.5mg and see if there are any improvements along the way. "
+    },
+    "ldn:t1_odzovvi": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author reports that at 3mg LDN they started getting improvements more rapidly, indicating a clear positive personal experience with temporal attribution.",
+      "text": "Same! Once I got 3 mg LDN at around 9 months I started getting improvements more rapidly. Ketotifen didn't work for me, but luckily cetirizine did!\u00a0"
+    },
+    "ldn:t1_oe1rm8h": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "At 1.5mg LDN after 9 months, the author reports sleeping through the night for the first time in 30 years, attributing the change solely to LDN.",
+      "text": "I\u2019ve gotten to LDN 1.5mg at 9 months now I sleep through the night first time in 30 years.  Nothing else is different.  Only been a week of this I better not say too much. \ud83e\udd2b"
+    },
+    "ldn:t1_odwlijh": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author reports minor improvements from LDN, noting nothing else has helped so far.",
+      "text": "I am also having minor improvements due to Ldn. Nothing else has helped so far "
+    },
+    "ldn:t1_odxdf96": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author tried LDN previously and felt terrible, though is considering trying again.",
+      "text": "I tried a tiny amount before and felt terrible. I might try it again.as crashed recently. "
+    },
+    "ldn:t1_odwpr41": {
+      "sentiment": "negative",
+      "signal": "weak",
+      "statement": "Author took LDN at the same dose for months with no change, suggesting lack of titration was the issue; starting again \u2014 outcome so far is no improvement.",
+      "text": "Make sure you do a titration schedule where you gradually increase week over week! I got my GP to prescribe and took the same amt for months with no change. Starting up again"
+    },
+    "ldn:t1_odwv3ka": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author states they believe LDN helps them with ME/CFS.",
+      "text": "It believe it does help me with me/cfs"
+    },
+    "ldn:t1_odwzrhr": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Brain fog got better and more room for energy after trying LDN.",
+      "text": "Yes it\u2019s worth the try! Brain fog got better ! More room for energy."
+    },
+    "ldn:t1_odx2k7f": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "LDN didn't help autonomic symptoms but within a couple weeks allowed author to go from completely housebound to walking around the neighborhood, shopping, and going out to dinner; three years later it still improved their baseline despite remaining moderate with PEM.",
+      "text": "I have PEM and had a similar response to LDN. It didn't touch my autonomic symptoms but within a couple weeks I went from completely housebound to being able to comfortably walk around my neighborhood, go shopping, out for dinner etc. Three years after starting I am still firmly moderate and do experience PEM, but it definitely improved my baseline. "
+    },
+    "ldn:t1_odx4nbl": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "LDN significantly helped gut issues (burning, bloating, discomfort now rarely occur), noticeably reduced brain fog, moderately helped exercise intolerance and PEM, and author would take it for life based on these improvements, though it didn't help sleep.",
+      "text": "I think it's worth trying LDN, especially given your chronic pain and gut issues. It's true it doesn't help everyone, but it's the drug that seems to help the most (or at least most consistently), even if it doesn't fully resolve symptoms. \n\nIt's done the most for my gut\u2014I really, really struggled with burning, bloating, and general gut discomfort and I rarely have any issues now, no matter what I eat. It's also reduced my brain fog noticeably. It helped moderately with my exercise intolerance and PEM, but it's not enough on its own on that front. Sadly no improvement in my sleep, and I have no chronic pain, so can't comment on that from personal experience. But I would take it for life just based on the improvement I have seen with my gut, brain fog, and energy envelope. "
+    },
+    "ldn:t1_odx2noc": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author confirms LDN helps them personally with a simple affirmation.",
+      "text": "Helps me. "
+    },
+    "ldn:t1_odx3e5l": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author reports taking 3.0mg daily and states it helps them a lot, using emphatic language.",
+      "text": "3,0mg a day helps me a lot."
+    },
+    "ldn:t1_odx3p6j": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author is actively titrating LDN upward (currently at 6mg, moving to 7.5mg) suggesting ongoing use and belief in its efficacy, but no specific symptom improvement is named.",
+      "text": "I\u2019m at 6mg and looking to increase to 7.5. I have come to the conclusion that I may be someone who has to continue titrating up for it to maintain efficacy. But my PCP doesn\u2019t mind trying whatever I bring to the table, so having one of those in my corner helps. I think most things are worth a try so long as they don\u2019t make your condition worse. Goodluck!! "
+    },
+    "ldn:t1_odx4l07": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author names a specific symptom improvement (cognitive issues) and shares practical experience switching compounding pharmacies due to filler side effects.",
+      "text": "For me, it helps with the cognitive stuff. If you are in the US, you can get a prescription through LDN direct and they\u2019ll send it to the compounding pharmacy of your choice. You can also get it through RTHM and Ageless RX. The fillers that Ageless used messed with my stomach so I ended up going to LDN direct. "
+    },
+    "ldn:t1_odx8ulh": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author reports their son tried LDN twice over 40 years and it did nothing, indicating no benefit.",
+      "text": "My son has tried 2 times over the last 40yrs and did nothing, so different for ever person.."
+    },
+    "ldn:t1_odx8yxz": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author calls LDN 'a lifesaver' and says it 'made a huge difference with chronic pain/inflammation,' using emphatic personal language indicating strong benefit.",
+      "text": "It has been a lifesaver for me. Made a huge difference with chronic pain/inflammation. And it\u2019s much safer than a lot of medications. It\u2019s definitely worth a shot. I\u2019m not sure if it\u2019s made a difference for my migraine or not. I also take sumatriptan and do the emgality injection. "
+    },
+    "ldn:t1_odxic70": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author states it took 6 weeks to be certain LDN worked for them, providing clear temporal attribution of personal benefit.",
+      "text": "It took a solid 6 weeks to be certain, but in my case, yes."
+    },
+    "ldn:t1_odxir1k": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "For me, it is the only drug I think I would stay on if I had to weed out all of my medications. My chronic pain and fatigue were NOTICEABLY better and I went from bedridden to being to gradually have a life again.",
+      "text": "For me, it is the only drug I think I would stay on if I had to weed out all of my medications. My chronic pain and fatigue were NOTICEABLY better and I went from bedridden to being to gradually have a life again. I go to a rheumatologist where we started on an insanely low dose, and did a VERY slow uptick in dosage (this is key). I get it specially compounded and pay out of pocket but it\u2019s worth it."
+    },
+    "ldn:t1_odxk0sv": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Replies 'YES!' to a question about whether LDN is worth it, implying personal affirmation without further detail.",
+      "text": "YES!"
+    },
+    "ldn:t1_odxnwyg": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "For me it helped, it got me unstuck from a downward spiral \u2014 notes it wasn't a miracle but still endorses it as worth trying with the best help/risk profile among available options.",
+      "text": "You will only have anecdotal evidence. For me it helped, it got me unstuck from a downward spiral, but it wasn't a miracle drug either. I still think it's worth trying because it's probably the medication that helps the most people with the lowest risk profile among what we are susceptible to try."
+    },
+    "ldn:t1_odxqhbj": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Started seeing improvement about 3 months after starting LDN; PEM threshold is higher and less severe, more energy day to day, HRV improved first; wishes they had started sooner.",
+      "text": "I started seeing improvement about 3 months after starting LDN. PEM threshold is higher and less severe when it hits. I also feel like i have a bit more energy day to day. My HRV was the first thing to improve. I\u2019m still very sick but it\u2019s opened life up a tiny bit for me and I\u2019m very grateful to it. I wish I\u2019d have started it sooner really "
+    },
+    "ldn:t1_odxv7eq": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author noticed an improvement after three days on LDN.",
+      "text": "I also noticed an improvement after three days but the pharmacist told me 3-6 months"
+    },
+    "ldn:t1_ody9c0t": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "With each additional 0.5mg dose increase, musculoskeletal function seems to de-age by a year.",
+      "text": "With every additional 0.5mg, week on week, my musculoskeletal function seems to de-age by a year."
+    },
+    "ldn:t1_odyppz4": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "LDN was awful; caused extreme depression and crushing fatigue, no symptoms improved, had one of the worst reactions in the trial they were involved in.",
+      "text": "For me it was awful. I was told though I had one of the the worst reactions of anyone in the trial I was involved in. They had to lower the dose so low that they couldn't even get me a pill that I didn't have to cut up with a razor blade. Even then, it made me extremely depressed to the point I almost couldn't get out of bed and caused crushing fatigue. No symptoms improved on it. Once I stopped it, those problems stopped within 2 days. Again I don't think that's the typical response, but worth putting it out there that it's a possibility. "
+    },
+    "ldn:t1_odze6uj": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author confirms LDN is worth it for them personally with a simple affirmation ('For me it is!').",
+      "text": "For me it is!"
+    },
+    "ldn:t1_odzn7od": {
+      "sentiment": "mixed",
+      "signal": "weak",
+      "statement": "Author says LDN helped them but not as much as Pyridostigmine, and is now on both so cannot clearly attribute current benefit to LDN specifically.",
+      "text": "It helped me, but not as much as Pyridostigmine is. On both now, so hard to say though whether it is still helping in combination"
+    },
+    "ldn:t1_oe04x8c": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author calls LDN part of their 'holy trinity' alongside sleep meds and antihistamines, a strong emphatic personal endorsement placing it among their most important treatments.",
+      "text": "Sleep meds, antihistamines and LDN. My holy trinity. "
+    },
+    "ldn:t1_oe0ikmv": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "The author directly states that LDN significantly improved their symptoms.",
+      "text": "LDN significantly improved my symptoms"
+    },
+    "ldn:t1_oe0k9br": {
+      "sentiment": "mixed",
+      "signal": "strong",
+      "statement": "The author reports LDN caused an 8-week crash at higher doses (verified by HRV monitor), but is tolerating lower doses under 1mg without issue and hopes it may help long-term combined with antivirals \u2014 a conflicting outcome of harm at higher doses with cautious continuation at lower doses.",
+      "text": "LDN actually put me in a crash. I\u2019m fine at .1-1 mg, but I moved up slowly to 1.5 then 2 mgs and was in an 8 week crash (verified by wearable HRV monitor). My HRV returned to usual baseline after cutting dose back under 1 mg. Moral of the story. more isn\u2019t better. The right dose is the dose you can tolerate\u2026 I hope it helps you in time! I haven\u2019t noticed much benefit, but I hope it helps long term combined with antiviral meds. "
+    },
+    "ldn:t1_oe0s0bu": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "LDN worked for me for a while, helping get through day to day even if only for a few weeks.",
+      "text": "LDN worked for me for a while. When you're in a space of taking one day to the next with no assumptions about tomorrow, anything that can get you from day to day is worth it even if it only works for a few weeks."
+    },
+    "ldn:t1_oe0wbj5": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author finds LDN worth trying but feels it is overhyped, implying some personal experience but with tempered results.",
+      "text": "Worth trying but I feel its overhyped"
+    },
+    "ldn:t1_oe1ehg6": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author is doing better on 0.75mg and still increasing dose, though PEM triggers still need to be avoided.",
+      "text": "Doing better on 0.75mg, still increasing but PEM triggers still needs to be avoided so far."
+    },
+    "ldn:t1_oe51k1j": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "LDN wasn't for the author.",
+      "text": "wasn't for me "
+    },
+    "ldn:t1_oe0ifl1": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "The author (in the ancestor) reports LDN has done the most for their gut issues, significantly resolving burning, bloating, and discomfort; the reply itself is asking a follow-up question about exercise intolerance and PEM, adding no new LDN personal experience.",
+      "text": "What have you found helpful for exercise intolerance and PEM?"
+    }
+  }
+}

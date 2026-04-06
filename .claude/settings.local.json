@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''llm_extract.py''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")",
+      "Bash(python llm_extract.py --help)",
+      "Bash(python llm_extract.py --text \"test\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''discover_fields.py''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")",
+      "Bash(python scrape_corpus.py --help)",
+      "Bash(python extract_biomedical.py --help)",
+      "Bash(python discover_fields.py --help)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(wc -l /c/Users/scgee/Documents/Projects/PatientPunk/Scrapers/output/*.json)",
+      "Bash(python -c \"import json; r=json.load\\(open\\(''''merged_records_base.json''''\\)\\); print\\(json.dumps\\(r[0], indent=2\\)\\)\")",
+      "Bash(python records_to_csv.py)",
+      "Bash(python -c \":*)",
+      "Bash(python -m py_compile Scrapers/demographic_extraction/discover_fields.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''discover_fields.py''\\).read\\(\\)\\); print\\(''discover_fields.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''run_pipeline.py''\\).read\\(\\)\\); print\\(''run_pipeline.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''discover_fields.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''discover_fields.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''run_pipeline.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''run_pipeline.py: OK''\\)\")",
+      "Bash(python run_pipeline.py --help)"
+    ]
+  }
+}

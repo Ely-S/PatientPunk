@@ -1,0 +1,494 @@
+[
+  {
+    "author": "b32bd65b82ec370fb36fbb9370d33ff58f02853c5a8adbbd686609f7e7af40a1",
+    "total_ldn_items": 5,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odwjowg",
+        "post_title": "Is LDN worth it?",
+        "text": "I was going to wait a while to post but since you asked I thought I would give an update.  I have had long covid for 3 years and 3 months.  My symptoms are neurological-head pressure, eye pressure, tinnitus, loss of taste and smell, insomnia and brain fog.  \nI started taking 0.5 mg. of LDN two weeks ago.  All of my symptoms improved dramatically.  I started noticing improvement after 3 days.  It's early but it is the only thing that has helped me and I take all of the supplements that are often suggested.  I will continue taking LDN to see if my improvement continues.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "All of my symptoms improved dramatically at 0.5mg. Only thing that has helped me in 3 yrs."
+      },
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odwwta8",
+        "post_title": "Is LDN worth it?",
+        "text": "I cannot take antihistamines because I have severe dry eyes and they make my dry eyes worse.  LDN does not have this effect.  I started taking the LDN in the afternoon.  Taking it at night gave me insomnia.",
+        "parent_id": "t1_odwudmg",
+        "ancestor_text": "The stops are that it helps 60% of people\u2026 But it may take several months to get to the dough swear it helps\u2026 If you go too fast, it will make you feel shitty\u2026 For the 40% of people who it doesn\u2019t hel",
+        "sentiment": "positive",
+        "signal": "moderate",
+        "ldn_statement": "LDN does not cause dry eyes. Switched to afternoon dosing to avoid insomnia \u2014 managing well"
+      },
+      {
+        "type": "comment",
+        "match": "reply_chain",
+        "comment_id": "t1_odybzjo",
+        "post_title": "Is LDN worth it?",
+        "text": "Yes.  It is helping with my taste and smell.  It's very slight but noticeable.  I hope it continues.",
+        "parent_id": "t1_odx5sxa",
+        "ancestor_text": "is the LDN specifically helping with taste and smell at all so far?",
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "It is helping with my taste and smell. Very slight but noticeable."
+      },
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe3t0yz",
+        "post_title": "2 months LC: Brain fog, bounding pulse, blurry vision, worsening insomnia, fatigue, hand weakness",
+        "text": "LDN has helped me more than all of the supplements.  I have had long covid for 3 years and 3 months.",
+        "parent_id": "t3_1sbf2k9",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "LDN has helped me more than all of the supplements"
+      },
+      {
+        "type": "comment",
+        "match": "reply_chain",
+        "comment_id": "t1_oe9fmjb",
+        "post_title": "2 months LC: Brain fog, bounding pulse, blurry vision, worsening insomnia, fatigue, hand weakness",
+        "text": "All of my symptoms are neurological-dizziness, tinnitus, brain fog, head pressure, ear pressure, and insomnia.  For 3 years and 3 months.",
+        "parent_id": "t1_oe3um7z",
+        "ancestor_text": "Can i ask with which symptoms??",
+        "sentiment": "positive",
+        "signal": "moderate",
+        "ldn_statement": "Listing neurological symptoms LDN improved \u2014 dizziness, tinnitus, brain fog, head/ear pressure, insomnia"
+      }
+    ]
+  },
+  {
+    "author": "2e6b6555f1acc180d34c43cbc0931eb246ca007354345a0aa820808ad1b74205",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "post",
+        "match": "direct",
+        "post_id": "t3_1sanljb",
+        "post_title": "Went from 1500 steps to 7000 steps a day",
+        "text": "Went from 1500 steps to 7000 steps a day\nI'm still not healed but I've seen a massive improvement over the past months.\n\nMy main symptoms are linked to MCAS and POTS. At my worst, I couldn't do more than 1500 steps a day. I was in bed 80-90% of the time. I couldn't do any reading or cognitive activity other than scrolling / watching TV. I couldn't go to the park with my toddler. I tried everything: supplements, pacing, meditation, creatine, over the counter anti-histamines, LDN. Nothing helped. I was only getting worse. I struggled to shower once a week.\n\nThen I saw a private doctor. He prescribed the following:\n\n\\- ketotifen (5 ml / 1 mg),\n\n\\- LDN (3mg, a higher level than the one I was on), and\n\n\\- Ivabadrine (2.5 mg, 2x a day).\n\nKetotifen and LDN involved an initial TITRATION phase.\n\nI had to supplement ivabadrine with propranolol at first, to really get my POTS under control. Then I could do without it and just take Ivabadrine.\n\nTaking these meds changed my life over the course of 3 months. I can now read books, write fiction, take language lessons, play outside with my toddler and go on dates with my partner. I'm by no means cured. I still have to pace and I still have bad days. But I feel like I can live again. So there's hope![](https://www.reddit.com/submit/?source_id=t3_1sak2bi&composer_entry=crosspost_prompt)",
+        "parent_id": null,
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "moderate",
+        "ldn_statement": "LDN (at higher prescribed dose) in ketotifen+LDN+ivabradine protocol that produced 1500\u21927000 steps improvement"
+      }
+    ]
+  },
+  {
+    "author": "c379924d6b6b5b905ebeadd645a31e44f31b3c739f5ada2f726a2dc876d642fa",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "reply_chain",
+        "comment_id": "t1_odxdf96",
+        "post_title": "Is LDN worth it?",
+        "text": "I tried a tiny amount before and felt terrible. I might try it again.as crashed recently.",
+        "parent_id": "t1_odx2k7f",
+        "ancestor_text": "I have PEM and had a similar response to LDN. It didn't touch my autonomic symptoms but within a couple weeks I went from completely housebound to being able to comfortably walk around my neighborhood",
+        "sentiment": "negative",
+        "signal": "moderate",
+        "ldn_statement": "Tried a tiny amount before and felt terrible. Might try again after crash."
+      }
+    ]
+  },
+  {
+    "author": "f10fee3b624101f60a1b2a2cf0f7fc3c872ef182c663e476efd01c14d7f061b2",
+    "total_ldn_items": 2,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odx2k7f",
+        "post_title": "Is LDN worth it?",
+        "text": "I have PEM and had a similar response to LDN. It didn't touch my autonomic symptoms but within a couple weeks I went from completely housebound to being able to comfortably walk around my neighborhood, go shopping, out for dinner etc. Three years after starting I am still firmly moderate and do experience PEM, but it definitely improved my baseline.",
+        "parent_id": "t1_odwlznu",
+        "ancestor_text": "No pem? ",
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "Went from completely housebound to walking neighborhood, shopping, dinner in 2 weeks. Still improved baseline 3 years later."
+      },
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odx4nbl",
+        "post_title": "Is LDN worth it?",
+        "text": "I think it's worth trying LDN, especially given your chronic pain and gut issues. It's true it doesn't help everyone, but it's the drug that seems to help the most (or at least most consistently), even if it doesn't fully resolve symptoms. \n\nIt's done the most for my gut\u2014I really, really struggled with burning, bloating, and general gut discomfort and I rarely have any issues now, no matter what I eat. It's also reduced my brain fog noticeably. It helped moderately with my exercise intolerance and PEM, but it's not enough on its own on that front. Sadly no improvement in my sleep, and I have no chronic pain, so can't comment on that from personal experience. But I would take it for life just based on the improvement I have seen with my gut, brain fog, and energy envelope.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "Drug that helps most consistently. Done the most for my gut. Would take it for life."
+      }
+    ]
+  },
+  {
+    "author": "fea124149db5f4ec90964a49a9cd2fe23afeda270c501d10147e4c5cb82f06d4",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe9is5t",
+        "post_title": "Has anyone tried fluvoxamine for long covid? Article attached",
+        "text": "brain fog and fatigue. But I'm also on LDN, so I'm not sure which medication helped",
+        "parent_id": "t1_oe9gkrs",
+        "ancestor_text": "Thank you for sharing your experience. Which symtoms did it help you with? ",
+        "sentiment": "mixed",
+        "signal": "confounded",
+        "ldn_statement": "On LDN but also fluvoxamine \u2014 can't tell which helped with brain fog and fatigue"
+      }
+    ]
+  },
+  {
+    "author": "fd3955920bd01d78b6218e4e9ec2cff62d1584ef6130f93ebd8804dd7de6e1d1",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "post",
+        "match": "direct",
+        "post_id": "t3_1sbm1dp",
+        "post_title": "Any luck with Luvox?",
+        "text": "Any luck with Luvox?\nBeen dealing with this for 13 months now. Otherwise completely healthy 22M. Started LDN in September, and it has helped a bit, but not much, mostly with the daily low grade fevers. Did about 2 months of low dose Zepbound, nothing. \n\nNow was just prescribed Luvox. Really hoping this gets me over the hump. I'd say I have recovered around 50%, being able to get through work and most activities, but not in an easy way.  \n\nMain issues are as follows: \n\n   * Extreme fatigue\n   * Body pain\n   * Shakiness, teeth chattering, feeling of weakness\n   * Heart racing/palpitations\n   * Nausea\u00a0\n   * Stomach pain (think this is LDN)\n   * Terrible health anxiety\n   * Intolerance to heat/cold, alcohol and caffeine\n   * chest pain\n   * Adrenaline attacks that feel like a heart attack",
+        "parent_id": null,
+        "ancestor_text": null,
+        "sentiment": "mixed",
+        "signal": "moderate",
+        "ldn_statement": "LDN helped a bit with fevers (weak positive) but also lists stomach pain as a current symptom, suspects LDN"
+      }
+    ]
+  },
+  {
+    "author": "811ce013ec5924beff40f290906ab4b19e0c17178c0aa97f68906bcf2b87d2b2",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odwlijh",
+        "post_title": "Is LDN worth it?",
+        "text": "I am also having minor improvements due to Ldn. Nothing else has helped so far",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "Minor improvements due to LDN. Nothing else has helped so far."
+      }
+    ]
+  },
+  {
+    "author": "f343699f2986c0f7bf15d9400a17d25d4c0028cbb08be0e5ea33c1c994bb40a0",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "implied_dose",
+        "comment_id": "t1_odx3e5l",
+        "post_title": "Is LDN worth it?",
+        "text": "3,0mg a day helps me a lot.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "3mg a day helps me a lot"
+      }
+    ]
+  },
+  {
+    "author": "4517c3792365dfe7f5691a7fc5aabe5f1f778fbf104b93436c335b5fd28fbabd",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odx4l07",
+        "post_title": "Is LDN worth it?",
+        "text": "For me, it helps with the cognitive stuff. If you are in the US, you can get a prescription through LDN direct and they\u2019ll send it to the compounding pharmacy of your choice. You can also get it through RTHM and Ageless RX. The fillers that Ageless used messed with my stomach so I ended up going to LDN direct.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "Helps with the cognitive stuff \u2014 shares access info alongside"
+      }
+    ]
+  },
+  {
+    "author": "91b345e1693f834adaa461edebe40808dd1e1803038b79a53a0e41518d713404",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "implied_dose",
+        "comment_id": "t1_odx9bxf",
+        "post_title": "Is LDN worth it?",
+        "text": "Got to 6mg for 4-5 months after 1.5, 3 and 4.5mg for awhile. No changes unfortunately",
+        "parent_id": "t1_odx3p6j",
+        "ancestor_text": "I\u2019m at 6mg and looking to increase to 7.5. I have come to the conclusion that I may be someone who has to continue titrating up for it to maintain efficacy. But my PCP doesn\u2019t mind trying whatever I b",
+        "sentiment": "negative",
+        "signal": "strong",
+        "ldn_statement": "Titrated 1.5\u21923\u21924.5\u21926mg over months. No changes unfortunately."
+      }
+    ]
+  },
+  {
+    "author": "b2c5a496bfbbb06a66c615f4f5b05326083d2ff41e5dcc9a6ccb7992a83659e9",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odxqhbj",
+        "post_title": "Is LDN worth it?",
+        "text": "I started seeing improvement about 3 months after starting LDN. PEM threshold is higher and less severe when it hits. I also feel like i have a bit more energy day to day. My HRV was the first thing to improve. I\u2019m still very sick but it\u2019s opened life up a tiny bit for me and I\u2019m very grateful to it. I wish I\u2019d have started it sooner really",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "PEM threshold higher, less severe. More energy. HRV improved first. Very grateful to it."
+      }
+    ]
+  },
+  {
+    "author": "02b86817c2d0ac6969bdfca0ecb0b36afba4ca7e0130f98a93a0bd80af112404",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "reply_chain",
+        "comment_id": "t1_odxv7eq",
+        "post_title": "Is LDN worth it?",
+        "text": "I also noticed an improvement after three days but the pharmacist told me 3-6 months",
+        "parent_id": "t1_odwjowg",
+        "ancestor_text": "I was going to wait a while to post but since you asked I thought I would give an update.  I have had long covid for 3 years and 3 months.  My symptoms are neurological-head pressure, eye pressure, ti",
+        "sentiment": "positive",
+        "signal": "moderate",
+        "ldn_statement": "Noticed improvement after 3 days \u2014 early but real signal"
+      }
+    ]
+  },
+  {
+    "author": "4486b4cc7ed5e4194d6d9c638d93cfa808e9928e2fb81c7b76275fe1280bb330",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "implied_dose",
+        "comment_id": "t1_ody9c0t",
+        "post_title": "Is LDN worth it?",
+        "text": "With every additional 0.5mg, week on week, my musculoskeletal function seems to de-age by a year.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "With every 0.5mg increase, musculoskeletal function de-ages by a year"
+      }
+    ]
+  },
+  {
+    "author": "788877dd35702550435c4bcf3ab5ec22baf421e0617a3e30c126cb56361267c0",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_odzovvi",
+        "post_title": "Went from 1500 steps to 7000 steps a day",
+        "text": "Same! Once I got 3 mg LDN at around 9 months I started getting improvements more rapidly. Ketotifen didn't work for me, but luckily cetirizine did!",
+        "parent_id": "t3_1sanljb",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "Once I got to 3mg LDN at 9 months, improvements came more rapidly"
+      }
+    ]
+  },
+  {
+    "author": "07a00073f5f728a208e2e5537aa02c677caf3782870db1b258da66effbf09e46",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe04x8c",
+        "post_title": "Is LDN worth it?",
+        "text": "Sleep meds, antihistamines and LDN. My holy trinity.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "Sleep meds, antihistamines and LDN \u2014 my holy trinity"
+      }
+    ]
+  },
+  {
+    "author": "2ab00cb3c6e8bfdefce94abe0565aef948a214a487bf8f470c697124ab32fbad",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe0ckvm",
+        "post_title": "Recovered, AMA",
+        "text": "Also following. I\u2019m a li\u2019l over two years in and my recovery is still in-progress. Healing hasn\u2019t been linear, but it\u2019s so much better than even last year. I\u2019ve only been in remission once and it was short lived. I relapsed February 2024 and have been symptomatic since. \ud83d\ude13\n\nI\u2019m like at 80-85% currently with anti-inflammatory eating & having to heavily restrict due to suspected MCAS. But I take LDN and pace as much as possible. My brain is slowly going back to old memories of old hobbies and foods I used to consume for the first time since before I became sick. \n\nDid you ever have a noticeable mental or emotional shift or some sort of inkling that you were getting close to recovery? I saw that you had been reinfected and a good chunk of symptoms went away once you cleared that infection.",
+        "parent_id": "t3_1sav8bh",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "Takes LDN as part of recovery protocol \u2014 at 80-85% improvement"
+      }
+    ]
+  },
+  {
+    "author": "ef0dc433dd1b8b98d9039f986195cc02fa57c092a52bfb52a194e67dcab11f9d",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe0fhxx",
+        "post_title": "Is LDN worth it?",
+        "text": "If antihistamines help a little\u2026 have you tried increasing your dose, trying different antihistamines? \u00a0I had a lot of luck moving up to 2x per day, and then 4 x per day (under the supervision of my doctor). Also trialing different antihistamines.\n\nYou could also try quercetin before meals. That really helps me as well.\u00a0\n\nI think LDN is worth trying. The main downside is that for *most * people, it can take months to see the effects. It is recommended to start low and build up slowly. And it can just take a while to work.\u00a0\n\nAnd you\u2019re really not supposed to add any other new needs in during that time. \u00a0So, I\u2019d see if there is anything else you\u2019d like to try first that would show results quicker, and then try LDN.",
+        "parent_id": "t1_odwy16k",
+        "ancestor_text": "Good to know. Forgot to mention I already spam H1 and H2 blockers and they do help a little ",
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "'I think LDN is worth trying' \u2014 recommends from personal experience, hedged"
+      }
+    ]
+  },
+  {
+    "author": "9acb56da9abc5171c68b131b5efff38dc63f16b74b46fc168ab0585cd1c7cb0b",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe0ikmv",
+        "post_title": "Is LDN worth it?",
+        "text": "LDN significantly improved my symptoms",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "LDN significantly improved my symptoms"
+      }
+    ]
+  },
+  {
+    "author": "f3651302cbc48373360ff110d85a0af0db68c4a2b541ff57d7d2e068e71b679b",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe0k9br",
+        "post_title": "Is LDN worth it?",
+        "text": "LDN actually put me in a crash. I\u2019m fine at .1-1 mg, but I moved up slowly to 1.5 then 2 mgs and was in an 8 week crash (verified by wearable HRV monitor). My HRV returned to usual baseline after cutting dose back under 1 mg. Moral of the story. more isn\u2019t better. The right dose is the dose you can tolerate\u2026 I hope it helps you in time! I haven\u2019t noticed much benefit, but I hope it helps long term combined with antiviral meds.",
+        "parent_id": "t1_odxdf96",
+        "ancestor_text": "I tried a tiny amount before and felt terrible. I might try it again.as crashed recently. ",
+        "sentiment": "negative",
+        "signal": "strong",
+        "ldn_statement": "LDN put me in 8-week crash at 1.5-2mg, verified by HRV monitor. Haven't noticed much benefit."
+      }
+    ]
+  },
+  {
+    "author": "e5ce84f8655ec99f8b25c441325d92fa7613925644bf0285eb5d48feb3e98481",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe0s0bu",
+        "post_title": "Is LDN worth it?",
+        "text": "LDN worked for me for a while. When you're in a space of taking one day to the next with no assumptions about tomorrow, anything that can get you from day to day is worth it even if it only works for a few weeks.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "mixed",
+        "signal": "moderate",
+        "ldn_statement": "LDN worked for me for a while \u2014 then stopped. Still endorses trying it."
+      }
+    ]
+  },
+  {
+    "author": "845208e39c3026713067e9b217b67c57b5f217a428182967b40694d162eab0c6",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "implied_dose",
+        "comment_id": "t1_oe1ehg6",
+        "post_title": "Is LDN worth it?",
+        "text": "Doing better on 0.75mg, still increasing but PEM triggers still needs to be avoided so far.",
+        "parent_id": "t3_1sal2jj",
+        "ancestor_text": null,
+        "sentiment": "mixed",
+        "signal": "moderate",
+        "ldn_statement": "Doing better on 0.75mg, still increasing \u2014 but PEM triggers still present"
+      }
+    ]
+  },
+  {
+    "author": "964d610a4751097932757abebd4c92b6e31ee6a7b0ea4165139f546f2213fa16",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe1rm8h",
+        "post_title": "Went from 1500 steps to 7000 steps a day",
+        "text": "I\u2019ve gotten to LDN 1.5mg at 9 months now I sleep through the night first time in 30 years.  Nothing else is different.  Only been a week of this I better not say too much. \ud83e\udd2b",
+        "parent_id": "t3_1sanljb",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "Sleep through the night for first time in 30 years at 1.5mg. Only a week in, cautiously optimistic."
+      }
+    ]
+  },
+  {
+    "author": "5a49a48aabbe8bf544d64cce340290c6132364f88638c948d749be02d1c412a4",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oe2u3g7",
+        "post_title": "Recovered, AMA",
+        "text": "My post-orgasm adrenaline dumps stopped gradually over time as my overall condition continued to improve. \n\nI'm taking both medication and supplements for MCAS. The most successful ones for me have been:\n- antihistamines \n- mast cell stabilisers (Ketotifen, Quercetin, Luteolin + PEA)\n- LDN \n- DAO enzymes\n\nI've heard really good things about Cromolyn too, but I can't get that prescribed where I am. \n\nOther things that made a difference are: a \n- low histamine diet\n- cold showers\n- daily nervous system regulation (meditation, Yoga Nidra, and breathwork in my case). \n\nHope this helps!",
+        "parent_id": "t1_oe2otb2",
+        "ancestor_text": "Thank you for responding. I had them everytime and they've tapered down, but that could be because I stopped trying from fear.\n\nDo you take specific supplements for MCAS? ",
+        "sentiment": "positive",
+        "signal": "strong",
+        "ldn_statement": "LDN in 'most successful ones for me' list for MCAS \u2014 explicitly ranked alongside antihistamines, Ketotifen, DAO"
+      }
+    ]
+  },
+  {
+    "author": "1dfcb576cb5cc1360e654dcf42580b5cea0af500adc272e0bfcb41ea16dea220",
+    "total_ldn_items": 1,
+    "entries": [
+      {
+        "type": "comment",
+        "match": "direct",
+        "comment_id": "t1_oeb5guj",
+        "post_title": "Vitamin D + upping ketotifen got me out of crash",
+        "text": "I would like to ask you what kind of medicine is Ketotifen and how affects long covid symptoms. I use ldn , propranolol (pots) and benzo for my nervous system.",
+        "parent_id": "t3_1sbpj6f",
+        "ancestor_text": null,
+        "sentiment": "positive",
+        "signal": "weak",
+        "ldn_statement": "Currently using LDN alongside propranolol and benzo \u2014 no complaints, still on it"
+      }
+    ]
+  }
+]

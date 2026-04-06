@@ -1,0 +1,141 @@
+{
+  "_manifest_version": "2.0",
+  "_description": "Documentation manifest for PatientPunk universal base fields. This file is NOT loaded at runtime — it is a reference for researchers building extension schemas.",
+
+  "base_fields": {
+    "age": {
+      "description": "Patient's current age in years (numeric string)",
+      "confidence": "medium",
+      "notes": "Restricted to 16-99 to reduce noise from non-demographic age mentions"
+    },
+    "sex_gender": {
+      "description": "Patient's biological sex or gender identity",
+      "confidence": "high"
+    },
+    "location_country": {
+      "description": "Country of residence",
+      "confidence": "medium"
+    },
+    "healthcare_system": {
+      "description": "Healthcare system type (NHS, Medicare, private insurance, etc.)",
+      "confidence": "high"
+    },
+    "conditions": {
+      "description": "Medical diagnoses and conditions mentioned",
+      "confidence": "high",
+      "icd10": "Applied via CONDITION_ICD10_MAP where available"
+    },
+    "onset_trigger": {
+      "description": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
+      "confidence": "medium"
+    },
+    "diagnosis_source": {
+      "description": "Who or what provided the diagnosis (specialist, self-diagnosed, etc.)",
+      "confidence": "high"
+    },
+    "time_to_diagnosis": {
+      "description": "How long it took to receive a diagnosis",
+      "confidence": "medium"
+    },
+    "misdiagnosis": {
+      "description": "Previous incorrect diagnoses",
+      "confidence": "medium"
+    },
+    "symptom_duration": {
+      "description": "Duration of symptoms (months, years, etc.)",
+      "confidence": "low"
+    },
+    "symptom_trajectory": {
+      "description": "Whether symptoms are improving, worsening, or stable",
+      "confidence": "medium"
+    },
+    "age_at_onset": {
+      "description": "Patient's age when illness began",
+      "confidence": "medium"
+    },
+    "medications": {
+      "description": "Current or past medications mentioned",
+      "confidence": "high"
+    },
+    "treatment_outcome": {
+      "description": "Response to treatments (helped, didn't help, worsened, etc.)",
+      "confidence": "medium"
+    },
+    "procedures": {
+      "description": "Medical procedures undergone (tilt table test, colonoscopy, etc.)",
+      "confidence": "high"
+    },
+    "activity_level": {
+      "description": "Functional capacity / activity limitation (bedbound, housebound, etc.)",
+      "confidence": "high"
+    },
+    "work_disability_status": {
+      "description": "Ability to work; disability applications/awards",
+      "confidence": "high"
+    },
+    "mental_health": {
+      "description": "Mental health conditions or experiences mentioned",
+      "confidence": "medium"
+    },
+    "doctor_dismissal": {
+      "description": "Experiences of being dismissed or disbelieved by medical professionals",
+      "confidence": "medium"
+    },
+    "diagnostic_odyssey": {
+      "description": "Long journey to diagnosis; many doctors seen; years undiagnosed",
+      "confidence": "medium"
+    },
+    "prior_infections": {
+      "description": "Prior infections that may be relevant to current illness (EBV, COVID, Lyme, etc.)",
+      "confidence": "medium"
+    },
+    "hormonal_events": {
+      "description": "Hormonal events related to illness onset or trajectory (pregnancy, menopause, etc.)",
+      "confidence": "medium"
+    },
+    "family_history": {
+      "description": "Family history of relevant conditions",
+      "confidence": "medium"
+    }
+  },
+
+  "base_optional_fields": {
+    "_description": "These fields exist in PATTERNS but are NOT extracted by default. Activate them in an extension schema via 'include_base_fields'.",
+    "location_us_state": {
+      "description": "US state of residence"
+    },
+    "ethnicity": {
+      "description": "Patient's ethnicity or race"
+    },
+    "occupation": {
+      "description": "Patient's occupation or job type"
+    },
+    "bmi_weight": {
+      "description": "BMI or weight mentions"
+    },
+    "dosage": {
+      "description": "Medication dosages (mg, mcg, etc.)"
+    },
+    "dietary_interventions": {
+      "description": "Dietary changes tried (gluten-free, low histamine, carnivore, etc.)"
+    },
+    "alternative_treatments": {
+      "description": "Alternative/complementary treatments (acupuncture, supplements, etc.)"
+    },
+    "genetic_testing": {
+      "description": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)"
+    },
+    "social_impact": {
+      "description": "Social impacts of illness (relationships, isolation, etc.)"
+    },
+    "trauma_history": {
+      "description": "Trauma or adverse childhood experiences"
+    },
+    "toxic_exposures": {
+      "description": "Environmental toxic exposures (chemicals, pesticides, mold, etc.)"
+    },
+    "healthcare_costs": {
+      "description": "Out-of-pocket costs, insurance denials, financial burden"
+    }
+  }
+}

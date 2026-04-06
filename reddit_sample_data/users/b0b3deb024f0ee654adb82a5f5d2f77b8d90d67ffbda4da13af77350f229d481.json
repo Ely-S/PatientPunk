@@ -1,0 +1,381 @@
+{
+  "author_hash": "b0b3deb024f0ee654adb82a5f5d2f77b8d90d67ffbda4da13af77350f229d481",
+  "account_created_utc": null,
+  "total_karma": null,
+  "scraped_at": "2026-04-05T02:10:16.541435+00:00",
+  "posts": [
+    {
+      "post_id": "t3_1pa1hg6",
+      "subreddit": "davinciresolve",
+      "title": "Davinci resolve audio sync slightly off.",
+      "body": "Hi I’ve been using resolve for about 5 years. I’ve been recording plays and events using 4 rode go’s recording to cams and themselves. And 2 shotgun mics recording to a zoom F3. When I come to audio sync these clips to make a multi cam the audio never syncs properly. \nIt’s nearly always off slightly. I always have to go in and manually sync the audio clips. It’s really annoying that resolve can’t do this better. Does anyone else have the same problem? ",
+      "created_utc": "2025-11-29T22:18:53+00:00",
+      "score": 1,
+      "num_comments": 7
+    },
+    {
+      "post_id": "t3_1rzmjf2",
+      "subreddit": "chemtrails",
+      "title": "Check out these from this morning.",
+      "body": "",
+      "created_utc": "2026-03-21T08:47:40+00:00",
+      "score": 1,
+      "num_comments": 13
+    },
+    {
+      "post_id": "t3_1sbumpm",
+      "subreddit": "covidlonghaulers",
+      "title": "Hi just wanted to share this in case it’s helpful for anyone else. I found this video and followed the instructions. I’ve been taking these supplements for about a month and it’s been a big improvement for me.",
+      "body": "",
+      "created_utc": "2026-04-04T00:26:30+00:00",
+      "score": 1,
+      "num_comments": 0
+    }
+  ],
+  "comments": [
+    {
+      "comment_id": "t1_ls9wc2r",
+      "subreddit": "davinciresolve",
+      "body": "I just came across this problem this is how I got round it. \n\nTo change the colour of the text from alpha to a colour in the Text Box Swipe.\n\nOpen Text Box Swipe in fusion page. \n\nhttps://preview.redd.it/nvd8phtn17vd1.png?width=3244&format=png&auto=webp&s=e1bc371ff34a7b310ed44daa7e4fd4a7f6810560\n\nOpen the nodes box up for TextBoxSwipe \n\n1. Disconnect the colour node as proxicent said. \n\n2. Open the inspector for InsideText\\_Box and choose shading in inspector. \n\n3. Select element 1 TEXT in shading elements \n\n4. Push the alpha slider to the right. \n\n5. Choose which colour you want.  \n\n  \nThats it! Hope that works for you. \n\nI'm using 19.2 Resolve studio",
+      "created_utc": "2024-10-16T22:28:04+00:00",
+      "score": 1,
+      "parent_id": "t3_1dmv8ht"
+    },
+    {
+      "comment_id": "t1_myym7wg",
+      "subreddit": "pianolearning",
+      "body": "Hi you’re doing good! You’re keyboard is too low though as your arms aren’t parallel just above it. Or your seat is too high. \nKeep practicing till you know it by muscle memory and you don’t need to think about it. Then you could try playing with your eyes closed a bit to help you relax into it.",
+      "created_utc": "2025-06-21T09:39:00+00:00",
+      "score": 1,
+      "parent_id": "t1_myuvzz4"
+    },
+    {
+      "comment_id": "t1_n45eucl",
+      "subreddit": "pianolearning",
+      "body": "Amazing playing! Keep your wrist down though it’s way too high.",
+      "created_utc": "2025-07-20T11:35:24+00:00",
+      "score": 3,
+      "parent_id": "t3_1m47adz"
+    },
+    {
+      "comment_id": "t1_nar9f52",
+      "subreddit": "videography",
+      "body": "That looks like it’s at the wrong shutter speed or juddery because of stabilisation",
+      "created_utc": "2025-08-26T12:59:02+00:00",
+      "score": 1,
+      "parent_id": "t3_1mx9lrs"
+    },
+    {
+      "comment_id": "t1_nrr3aqu",
+      "subreddit": "davinciresolve",
+      "body": "Thanks for this. Yep it's only mili seconds out.",
+      "created_utc": "2025-12-01T18:39:12+00:00",
+      "score": 1,
+      "parent_id": "t1_nrgp0ty"
+    },
+    {
+      "comment_id": "t1_nrr3xsj",
+      "subreddit": "davinciresolve",
+      "body": "Thanks for your help.  Makes sense",
+      "created_utc": "2025-12-01T18:42:16+00:00",
+      "score": 1,
+      "parent_id": "t1_nrgrvry"
+    },
+    {
+      "comment_id": "t1_nrr3y1g",
+      "subreddit": "davinciresolve",
+      "body": "Hi Yep the cams are all at same frame rate 25fps.",
+      "created_utc": "2025-12-01T18:42:17+00:00",
+      "score": 1,
+      "parent_id": "t1_nrke5wg"
+    },
+    {
+      "comment_id": "t1_nrr48gj",
+      "subreddit": "davinciresolve",
+      "body": "Thanks for your help,  that's how I do it in Fairlight",
+      "created_utc": "2025-12-01T18:43:40+00:00",
+      "score": 2,
+      "parent_id": "t1_nrjrgqr"
+    },
+    {
+      "comment_id": "t1_nuqr7cr",
+      "subreddit": "bmpcc",
+      "body": "My Olympus lenses are great,  both mft  one is 12 -40 the other is 40 -150. But more like £500 - 800 each second hand for these",
+      "created_utc": "2025-12-18T20:22:02+00:00",
+      "score": 1,
+      "parent_id": "t3_1pmno7k"
+    },
+    {
+      "comment_id": "t1_nvosbel",
+      "subreddit": "bmpcc",
+      "body": "Hi I’m an experienced bmpcc4k user - did your camera come with davinci resolve? Youre best easiest bet is to install and import your clips in there. \n\nYou need to put the SD card in the computer, not connect the camera to the computer. \n\nBut you’re better off using an approved ssd. 1 tb is fine. I use t5’s but T7 shield is approved as far as I know. \n\nYou can get a cage and ssd holder from small rig. \n\nWhat format are you filming in. Braw is best,  12-1 is fine for most things and makes smaller file sizes. But you’ll need to colour the videos in editing as they will be Raw. Or you can switch on colour managed profile in resolve preferences. \n\nThis isn’t a plug and play camera, so you’re on a fairly steep learning curve. A7III might be better option for you if you’re filming home stuff.",
+      "created_utc": "2025-12-24T08:29:50+00:00",
+      "score": 1,
+      "parent_id": "t3_1pu2vn2"
+    },
+    {
+      "comment_id": "t1_nvqzcfb",
+      "subreddit": "pluribustv",
+      "body": "Of course they’re spreading the virus with the chem trails! Immediately after the planes pass everyone gets it. Otherwise why would they show them? \nAnd in real life what do you put chem trails down to? \nThey are real, the proof is in the sky. I don’t know what’s in them or why they do them, but there they are.",
+      "created_utc": "2025-12-24T17:44:53+00:00",
+      "score": 1,
+      "parent_id": "t3_1ow3702"
+    },
+    {
+      "comment_id": "t1_nvqzig3",
+      "subreddit": "pluribustv",
+      "body": "Contrails are not the same as chem trails",
+      "created_utc": "2025-12-24T17:45:47+00:00",
+      "score": 1,
+      "parent_id": "t1_non33m8"
+    },
+    {
+      "comment_id": "t1_nvr0oro",
+      "subreddit": "pluribustv",
+      "body": "There are whistleblowers about chemtrails. What do you think they are? We know they are not contrails, because contrails evaporate quickly and are not done in squares in the sky that overlap and then blend together as they are blown in the sky to form thin clouds.",
+      "created_utc": "2025-12-24T17:52:02+00:00",
+      "score": 0,
+      "parent_id": "t1_nonokp4"
+    },
+    {
+      "comment_id": "t1_nvwcgst",
+      "subreddit": "pluribustv",
+      "body": "Chemtrails and contrails are 2 different things. One lingers in the sky and merge to become clouds and the other (contrails) evaporate quickly.",
+      "created_utc": "2025-12-25T17:46:51+00:00",
+      "score": 1,
+      "parent_id": "t1_nvsyoyy"
+    },
+    {
+      "comment_id": "t1_nvwcozv",
+      "subreddit": "pluribustv",
+      "body": "Conspiracy theorists don’t see them as the same thing",
+      "created_utc": "2025-12-25T17:48:11+00:00",
+      "score": 1,
+      "parent_id": "t1_nvr0qi8"
+    },
+    {
+      "comment_id": "t1_nvwd1xw",
+      "subreddit": "bmpcc",
+      "body": "Cool!  to get the ssd to attach to the camera most people get a cage and and an ssd holder. Small rig do them or there  are other brands like tilta too",
+      "created_utc": "2025-12-25T17:50:17+00:00",
+      "score": 1,
+      "parent_id": "t1_nvpv12f"
+    },
+    {
+      "comment_id": "t1_nvx72y8",
+      "subreddit": "pluribustv",
+      "body": "Who knows, I’m no expert. I have spent some time looking at them to see the difference and that’s what I’ve noticed. I don’t know what they are or why they do them. \nHowever I would like to wish you a very merry Christmas!",
+      "created_utc": "2025-12-25T20:48:25+00:00",
+      "score": 1,
+      "parent_id": "t1_nvwod7e"
+    },
+    {
+      "comment_id": "t1_nvx8taq",
+      "subreddit": "bmpcc",
+      "body": "I use npf batteries with my bmpcc4k’s. I’ve got about 14 of them for 2 cams and some lights. They last about an hour and a half each. power extra brand are good ones. And you can get them as a bundle with a charger in Amazon. \nYou’ll also need the npf battery plate that works with your camera to attach to your cage. \n\nPs: they can’t be used in wet or damp conditions. But you can pop the whole battery plate and battery in your pocket to help with that if needed. \n\nhttps://amzn.eu/d/bu6CKdC\n\nhttps://amzn.eu/d/eqvOCPq\n\nhttps://amzn.eu/d/fRefNaq",
+      "created_utc": "2025-12-25T20:59:13+00:00",
+      "score": 1,
+      "parent_id": "t1_nvqk5ib"
+    },
+    {
+      "comment_id": "t1_nvx9op7",
+      "subreddit": "bmpcc",
+      "body": "Hi do you have to use an external monitor if you use v mount as it gets in the way of the screen ?",
+      "created_utc": "2025-12-25T21:04:40+00:00",
+      "score": 1,
+      "parent_id": "t1_nvtscst"
+    },
+    {
+      "comment_id": "t1_nvxfl9g",
+      "subreddit": "AskBrits",
+      "body": "I’ve seen stranger things too, great show.",
+      "created_utc": "2025-12-25T21:40:52+00:00",
+      "score": 1,
+      "parent_id": "t1_nvxbz4c"
+    },
+    {
+      "comment_id": "t1_nvxi0l1",
+      "subreddit": "bmpcc",
+      "body": "Yeah I just run the camera off it. Nothing else",
+      "created_utc": "2025-12-25T21:55:42+00:00",
+      "score": 1,
+      "parent_id": "t1_nvx92uu"
+    },
+    {
+      "comment_id": "t1_nx243ju",
+      "subreddit": "tesco",
+      "body": "As a Tesco customer who has long covid thank you for not going to work when you’re ill. Your manager should be fired.",
+      "created_utc": "2026-01-01T09:43:27+00:00",
+      "score": 1,
+      "parent_id": "t3_1pxov2l"
+    },
+    {
+      "comment_id": "t1_nxbbv86",
+      "subreddit": "A24",
+      "body": "I loved this film! Just watched it today. An actual proper film in my opinion. I don’t know how people think it’s predictable when the stories main focus is on a side story rather than being focused on the more obvious story of the killer. Great movie!",
+      "created_utc": "2026-01-02T20:20:39+00:00",
+      "score": 2,
+      "parent_id": "t3_1mcxfa5"
+    },
+    {
+      "comment_id": "t1_nxokiey",
+      "subreddit": "DIYUK",
+      "body": "You may think this a banana… wrong! it’s actually a narwhal disguised as a banana. You just need to squint to see it.",
+      "created_utc": "2026-01-04T19:48:32+00:00",
+      "score": 1,
+      "parent_id": "t3_1q22jed"
+    },
+    {
+      "comment_id": "t1_nxokxck",
+      "subreddit": "drivingUK",
+      "body": "Yes coz he will be able to afford a car one day!",
+      "created_utc": "2026-01-04T19:50:25+00:00",
+      "score": 1,
+      "parent_id": "t3_1q3thjg"
+    },
+    {
+      "comment_id": "t1_nxonq88",
+      "subreddit": "DjiFlip",
+      "body": "In the edit you could probably fix this a bit. In resolve you could use Retime Process (for quality): \nWhen applying slow motion, the default \"Nearest\" or \"Frame Blend\" methods can cause jitter or ghosting. For smoother results, navigate to the Inspector > Video tab > Retime and Scaling and change the Retime Process to Optical Flow.  \n\nOptical flow is big files though, so use frame blending if it is good enough.",
+      "created_utc": "2026-01-04T20:03:05+00:00",
+      "score": 1,
+      "parent_id": "t3_1q0ebwu"
+    },
+    {
+      "comment_id": "t1_nxp4xdr",
+      "subreddit": "AskUK",
+      "body": "As per his instructions If you don’t like it, don’t watch, I turned off, but Ricky just as you have all your very strong opinions so do people who find you insulting and unnecessary. Which I guess is what he’s going for. Dicky Gervias would be more appropriate.",
+      "created_utc": "2026-01-04T21:22:47+00:00",
+      "score": 1,
+      "parent_id": "t3_1q09avy"
+    },
+    {
+      "comment_id": "t1_o0yzowh",
+      "subreddit": "davinciresolve",
+      "body": "Stabilisation should fix this. Take a look at this video, 'stabilisation davinci resolve' https://share.google/EP9MkXkfzAWtD8nXa\n\nJust search up stabilisation davinci resolve",
+      "created_utc": "2026-01-22T02:03:09+00:00",
+      "score": 1,
+      "parent_id": "t3_1qj94rc"
+    },
+    {
+      "comment_id": "t1_o0z075h",
+      "subreddit": "davinciresolve",
+      "body": "Can you put a clip up so we can see what it looks like",
+      "created_utc": "2026-01-22T02:06:01+00:00",
+      "score": 1,
+      "parent_id": "t1_o0yd249"
+    },
+    {
+      "comment_id": "t1_o1cmlzg",
+      "subreddit": "bmpcc",
+      "body": "Yeah you got a great deal. The lens is great too I’ve got that one.",
+      "created_utc": "2026-01-24T01:42:15+00:00",
+      "score": 2,
+      "parent_id": "t3_1qk828r"
+    },
+    {
+      "comment_id": "t1_o5zakf4",
+      "subreddit": "technology",
+      "body": "Back on now",
+      "created_utc": "2026-02-18T02:13:22+00:00",
+      "score": 1,
+      "parent_id": "t1_o5z9bsq"
+    },
+    {
+      "comment_id": "t1_o75bb68",
+      "subreddit": "davinciresolve",
+      "body": "Are you using colour managed profile in colour settings?",
+      "created_utc": "2026-02-24T15:09:02+00:00",
+      "score": 1,
+      "parent_id": "t3_1rcrerj"
+    },
+    {
+      "comment_id": "t1_obmpk0r",
+      "subreddit": "chemtrails",
+      "body": "Thank god chemtrails aren’t real otherwise I’d be a bit worried about all this mess\n\nhttps://preview.redd.it/mk40s4e3qcqg1.jpeg?width=4032&format=pjpg&auto=webp&s=27224df39bd0eea4adc6365cb72742d918dee45d",
+      "created_utc": "2026-03-21T07:35:10+00:00",
+      "score": 1,
+      "parent_id": "t3_1rticvq"
+    },
+    {
+      "comment_id": "t1_obmpvtw",
+      "subreddit": "chemtrails",
+      "body": "https://preview.redd.it/3ej7g0vqqcqg1.jpeg?width=4032&format=pjpg&auto=webp&s=5a51ebc2bf6a10e34790246e8b323005a71d038a\n\nThank god chem trails aren’t real otherwise I’d be a bit worried about all this mess",
+      "created_utc": "2026-03-21T07:38:26+00:00",
+      "score": 0,
+      "parent_id": "t3_1rticvq"
+    },
+    {
+      "comment_id": "t1_obmr6wm",
+      "subreddit": "chemtrails",
+      "body": "https://preview.redd.it/uyp56qttscqg1.jpeg?width=4032&format=pjpg&auto=webp&s=8366c97d923c5e4a99ea8018e1f09b1b93e2523e\n\nLots of funny looking clouds this morning!",
+      "created_utc": "2026-03-21T07:51:27+00:00",
+      "score": 0,
+      "parent_id": "t3_1rw1zul"
+    },
+    {
+      "comment_id": "t1_obmxbnx",
+      "subreddit": "covidlonghaulers",
+      "body": "Watched this and followed advise, made me a whole lot better: https://youtu.be/lyOszvJL9EU?si=iEw5CzKIv8_4d_jZ",
+      "created_utc": "2026-03-21T08:53:04+00:00",
+      "score": 1,
+      "parent_id": "t3_1bmt06l"
+    },
+    {
+      "comment_id": "t1_obn37z3",
+      "subreddit": "covidlonghaulers",
+      "body": "Glutathione and NACET \nTTFD (B1) Thiamax\nNattokinase\nbromelain\nPlasmologen \n\nThey are working very well for me been vastly improved over the last month. \n\nhttps://youtu.be/WpSd8Fah4hg?si=CQ3retb-Xu5CFuyw\n",
+      "created_utc": "2026-03-21T09:51:42+00:00",
+      "score": 2,
+      "parent_id": "t3_1ryr9hp"
+    },
+    {
+      "comment_id": "t1_oduzsy3",
+      "subreddit": "covidlonghaulers",
+      "body": "Hi I wonder if it’s B6 you might be lacking. That can cause peripheral neuropathy, but have to be careful not to take too much as it can be toxic in too big a dose. Max 100mg a day I’ve seen. But min is like 1.7 mg \nI’ve been taking \nglutathione + nacet 300- 500 mg from objective nutrition (Elliot Overton supplements)\nNattokinaise, bromelaine,\nTTFD thiamax 300- 500mg \nNicotine \nPlasmologen \nBerroca \nAnd it’s been really working great for me. I’ve seen a big improvement for the last month. Pretty much instantly too. \nThe glutathione + nacet is the best thing I think, but they all work together. \nBasically I followed this video below \n\nhttps://youtu.be/lyOszvJL9EU?si=a-r671ibOzXFhm-j",
+      "created_utc": "2026-04-02T10:51:59+00:00",
+      "score": 1,
+      "parent_id": "t1_odqu6tx"
+    },
+    {
+      "comment_id": "t1_ody1xwo",
+      "subreddit": "covidlonghaulers",
+      "body": "Hi it’s worked with everything. I was having a bit of a crisis with fatigue and lots of symptoms. I’m a freelancer and I was cutting down on work to the point of almost stopping. \n\nSince taking these much Less fatigue, less aches and pains, better breathing no migraines, hardly any cramps, eye sight has improved, sleeping better. I’ve been able to concentrate and work. Swim, shop, work much more. I went to a wedding the other day and stayed all day. \n\nI still have to take days to recover but it’s much quicker and not as bad. I still have tinnitus and reflux and papitations sometimes which means I can’t sleep properly. But not as bad as before. Also I was developing NAFLD but that’s improving now too. ",
+      "created_utc": "2026-04-02T20:03:51+00:00",
+      "score": 1,
+      "parent_id": "t1_odvcjoq"
+    },
+    {
+      "comment_id": "t1_ody2orv",
+      "subreddit": "covidlonghaulers",
+      "body": "Btw I’ve had long covid for at least 3 years and it’s slowly been getting worse. Been taking these supplements for about a month now ",
+      "created_utc": "2026-04-02T20:07:23+00:00",
+      "score": 1,
+      "parent_id": "t1_ody1xwo"
+    },
+    {
+      "comment_id": "t1_ody55g9",
+      "subreddit": "davinciresolve",
+      "body": "Does the video work on a normal player? Maybe run it through handbrake. \nOr if it’s broken, wondershare might be able to fix it. ",
+      "created_utc": "2026-04-02T20:18:54+00:00",
+      "score": 1,
+      "parent_id": "t1_odkc055"
+    },
+    {
+      "comment_id": "t1_odyeidu",
+      "subreddit": "covidlonghaulers",
+      "body": "Glutathione + nacet? ",
+      "created_utc": "2026-04-02T21:03:45+00:00",
+      "score": 1,
+      "parent_id": "t3_1s7x6uw"
+    },
+    {
+      "comment_id": "t1_oe3na3b",
+      "subreddit": "davinciresolve",
+      "body": "Does this work for you? \nTo paste audio attributes in DaVinci Resolve, select the source clip, press Ctrl+C (Win) / Cmd+C (Mac) to copy, then select the target clip(s), right-click and select Paste Attributes (or press Alt+V / Option+V). In the dialog box, check the desired audio attributes (like Plugins, Volume, or Equalizer) and click Apply. \n\n\n",
+      "created_utc": "2026-04-03T16:46:40+00:00",
+      "score": 1,
+      "parent_id": "t3_1s9wpbp"
+    }
+  ]
+}

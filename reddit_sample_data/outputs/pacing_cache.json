@@ -1,0 +1,389 @@
+{
+  "classification": {
+    "pacing:t1_oecnpd7": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Completed work in very small increments (10-15 minutes at a time) and reflects that pushing through was not clearly the best idea, implying that pacing would have been preferable.",
+      "text": "I was in the exact same scenario last semester and my symptoms were hellish. I basically had to crawl to my classes and could barely stay upright during my final exams. I\u2019m not sure if pushing through was the best idea, but my symptoms have been improving since. I finished my first semester and I\u2019m taking medical leave this semester.\n\nHave you gotten in contact with the school\u2019s disability office? If not, I would do so ASAP. Especially if the doctor gave you a formal diagnosis like dysautonomia. They might be able to give you accommodations that your professors would have to honor.\n\nAlso, are your professors willing to give extensions? Not necessarily an incomplete, but maybe an extra few weeks could help.\n\nI\u2019m sorry your professors aren\u2019t being lenient with you. Especially considering that you\u2019re having health issues. Looking back on it, I have no idea how I finished last semester. I kind of just went on autopilot and completed my work in very small increments (10-15 minutes at a time). Thankfully I was in good enough academic standing prior to getting sick to do well in all my classes.\n\nI hope you can finish off the semester, but if you truly can\u2019t do it prioritizing your health is the most important thing.",
+      "author": "9abcba1edf2fba070ad551e0339884a7da0788b5a48ad64b748ab07eff5acd61"
+    },
+    "pacing:t1_oeco773": {
+      "sentiment": "implicit_positive",
+      "signal": "strong",
+      "statement": "States they pushed themselves until bedridden and explicitly recommends against it, advising 'radical resting' \u2014 implying that not pacing made things worse.",
+      "text": "I didn't go through long covid at school, but I did push myself until I was bedridden. I'd really not recommend.\n\nSome things to help improve your baseline - low histamine veggie rich  gluten free diet, lots of water and electrolytes, and radical resting. CBD and cannabis helped me a lot too but that can be hit or miss for some folks\n\nAlso, I'm not well versed legally but I feel like there should be some repercussions for your school not accommodating your disability.",
+      "author": "5d34ffaebccfaa40e92c08bc81cec9f088119feec671ba1925127cb19cbcfca5"
+    },
+    "pacing:t1_oe1frde": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Credits 'resting as much as I need + staying under my limits' as part of what helped them reach a point of no longer getting migraines or bad PEM.",
+      "text": "I'm so sorry you're going through this. A lot of what helped my migraines was basic but with this stuff and time Im lucky enough to say I don't get any migraines/bad PEM now these days\n-lots of water with electrolytes \n-For pain and nausea/hunger I took CBD and cannabis, but do be careful with this as it can affect blood pressure for some\n-shower chair and colder showers helped me not collapse in the shower, really cold showers on my head helped with migraines/pain too\n-lowered histamines in diet, more veggies and probiotic foods as tolerated\n-resting as much as I need + staying under my limits\n-air filters/removing mold from environment\n",
+      "author": "5d34ffaebccfaa40e92c08bc81cec9f088119feec671ba1925127cb19cbcfca5"
+    },
+    "pacing:t1_odysp3w": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Mentions pushing themselves out of need in the same context as someone who pushed too hard, implying this worsened their condition.",
+      "text": "First week of August '23 here, same deal kept pushing myself out of need",
+      "author": "5d34ffaebccfaa40e92c08bc81cec9f088119feec671ba1925127cb19cbcfca5"
+    },
+    "pacing:t1_oecorfd": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Advises doing things in small amounts and taking breaks when overwhelmed, framed as personal learning from their own experience since 2021.",
+      "text": "I would suggest not powering through it because it will get worse. When you feel overwhelmed, allow yourself a break. A break from screens especially. Then reset and continue where you left off. Do things in small amounts. \n\nAlso, from going to dozens of doctors for this since 2021 one thing I\u2019ve learned that helps with brain fog is treating inflammation. Cutting out gluten for example. Working up to taking cold showers. Steering clear of anything that causes inflammation and doing things that can help treat inflammation. I hope this helps a little",
+      "author": "9acb56da9abc5171c68b131b5efff38dc63f16b74b46fc168ab0585cd1c7cb0b"
+    },
+    "pacing:t1_oe6ns5q": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author describes personal experience with pacing strategies: resting between activities, taking multiple small walks with rest in between, and avoiding PEM through gradual stamina building \u2014 framing it as what helped them recover from bed-bound state since 2021.",
+      "text": "From my experience (I\u2019ve had LC since 2021/ bed bound for apx the first 6 months) a single flare will not permanently effect the baseline you\u2019ve established. Avoiding PEM is a lot like stretching a rubber band and if u pull too hard too fast you will risk a flare but at the same time it\u2019s important to continue to very slowly and methodically build up your stamina and tolerance. Allow this flare to pass by resting but when the flare is over and you feel back to your baseline start with small walks again.\n\nWhat helped me after I had the strength to walk a couple blocks again was taking numerous small walks throughout the day and providing myself adequate rest in between. The heat really sets me back so I would often have to wait until the sun went down to complete my 2nd walk. \n\nAnd detach yourself from the negative thoughts by telling yourself \u201cit is possible to heal\u201d and continuing to tell yourself \u201cI am ok.\u201d Repeating these 2 things to myself during flares have helped me a lot over the passed few years",
+      "author": "9acb56da9abc5171c68b131b5efff38dc63f16b74b46fc168ab0585cd1c7cb0b"
+    },
+    "pacing:t1_oecvh0d": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author states 'pushing yourself will not help you be one of the people who might get better,' implying that not pacing/pushing through made things worse for them \u2014 they ended up on disability and unable to return to that level of work.",
+      "text": "I had two classes left to get my masters and just ended up quitting. It\u2019s true, be kind to yourself. I\u2019m now on disability. I never was able to go back and go that level of work. Some people are. Pushing yourself will not help you be one of the people who might get better. ",
+      "author": "c7bfafb46a2e69de2db6520d659f41398a35fa09245444b6e114f5e1ea6493d8"
+    },
+    "pacing:t3_1scha95": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author thought they had been pacing well but a busier week led to rolling PEM and a two-week crash, expressing regret they didn't see the crash coming \u2014 implying pacing works when done correctly.",
+      "text": "I\u2019ve had long covid, and as result \u2014 CFS for 5 years now and I\u2019ve managed to increase my baseline very slowly to the point where I can now work full time, flexibly and (mostly) remotely.\n\nI thought I had been pacing well, but a busier than normal week, and what I think now may have been rolling PEM without realising, has made me bedbound for two weeks with no improvement in baseline.\n\nI haven\u2019t felt this bad in years. I feel so annoyed with myself that I\u2019ve come so far yet didn\u2019t see this crash coming.\n\nMy question is - how do you deal with this? I\u2019m trying to rest aggressively and remain hopeful that I\u2019ll get back to my previous baseline.\n\nAny advice, tips, coping strategies, things you found useful all welcome.",
+      "author": "45dea8b4974e1ac6a7adeb976f60ea8ab6fddf3e9e13759c4ef5d7b053b90b57"
+    },
+    "pacing:t1_oeayvb6": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author references managing within their energy envelope as part of what helped them improve, noting that new cognitive demands from autism/ADHD diagnosis exceeded their usual energy envelope.",
+      "text": "Honestly, quitting my job when I first got sick and doing some nervous system work, and just having the time and space to try and improve is I think what got me to where I am now, but it could also just be time and luck! \n\nI got diagnosed with autism and ADHD in the last year, so I think processing that has added more cognitive exertion than what my energy envelope had been used to. My nervous system work just hasn\u2019t been helping the way it maybe did before :( \n\nAnd thank you \u2764\ufe0f ",
+      "author": "45dea8b4974e1ac6a7adeb976f60ea8ab6fddf3e9e13759c4ef5d7b053b90b57"
+    },
+    "pacing:t1_oeackzv": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Author notes that anxiety from this sub caused crashes, implying that avoiding triggers and managing their state helped them on the road to recovery, suggesting awareness of energy/nervous system management.",
+      "text": "Yeah... This sub is really stressful most of the time. I understand it's good to share knowledge. When I first got sick I also wanted to know everything... I just realized over time that it was causing me much more harm than good. So just sharing that. I'm well on my way to recovery now, so I feel more detached, but a year ago I just couldn't handle this kind of info without entering into spirals of anxiety, which made me crash more. ",
+      "author": "c8ffc2c41e1e9bf7aa7aeaf291c1ac1cab4a17bebbb48b33eee657bd8b12e868"
+    },
+    "pacing:t1_odytq3z": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author states the symptom lasted a few weeks once they learned to stop crashing, implying they deliberately stopped pushing through, which reflects pacing behavior.",
+      "text": "it lasted a few weeks once i learned to stop crashing. ",
+      "author": "ca125867bca4bbe4c69cf3c058cfc151f2b42f44850fedf5bef7f0710acd627d"
+    },
+    "pacing:t1_oe9kbq5": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author explicitly states they have earned 'the gold medal in pacing for 3 years' and it hasn't moved the needle, noting it has also led to low heart rate, extremely low blood pressure, and worsened pain.",
+      "text": "Can you explain further #7 and the PEM vo2 max comment? I\u2019ve received the gold medal in pacing for 3 years\u2026..it hasn\u2019t moved the needle. Now\u2026.i only have a low heart rate, extremely low blood pressure, and worsened pain because a painful muscle is a weak muscle. There has to be some way to begin movement and retraining it\u2019s safe to be upright without all the scolding for doing so! Also\u2026..mental health! When we are told \u201cdon\u2019t go to that grandchild\u2019s play or tee ball game\u201d \u2026\u2026no!? We DO have to have small pockets of joy even if we fight through them to get them. ",
+      "author": "f83ee6d44c95d5de6500aec1eeac93e3a351f239371a85956c9c01a6b6ef62c0"
+    },
+    "pacing:t1_oe1rvbj": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author states they are doing rest beyond what they can mentally handle and it doesn't move the needle, suggesting deliberate rest/pacing without improvement.",
+      "text": "I too had that happen. No doc ever even asked me questions about energy expenditure, flares. Etc!! I didn\u2019t know. Now I\u2019m also bedridden and I am furious. I\u2019m doing rest beyond what I can mentally handle and it doesn\u2019t move the needle \ud83d\ude22",
+      "author": "f83ee6d44c95d5de6500aec1eeac93e3a351f239371a85956c9c01a6b6ef62c0"
+    },
+    "pacing:t1_oe9ti19": {
+      "sentiment": "mixed",
+      "signal": "moderate",
+      "statement": "Author acknowledges pacing is hard and imperfect ('doing almost nothing makes you weaker'), but describes using micro-movements as a low-key strategy to stay stimulated without triggering PEM \u2014 suggesting partial adoption of pacing principles with mixed results.",
+      "text": "This part is so hard. Doing almost nothing makes you weaker. Being perfect at it is impossible as we are humans. I try to do continuous micro movements to keep my body stimulated in a very low key way, lots of fidgeting and bobbing. ",
+      "author": "8e8d908df8491704224a4d99faf0bd80de3b81d13e2a2e71419843e3d66de463"
+    },
+    "pacing:t1_oe4lkl3": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author describes using micro-movements and breathing exercises while lying down to avoid PEM \u2014 deliberately managing energy envelope, mentioned briefly alongside other strategies.",
+      "text": "I get it! It is so hard...   \n  \n\\-I try to do \"micro movements\" and breathing exercises and horizontal stuff. To not get PEM but still keep things flowing.   \n  \n\\-I have a neck cradle I got on Amazon that helps get my neck in a good position when I lay down during the day.",
+      "author": "8e8d908df8491704224a4d99faf0bd80de3b81d13e2a2e71419843e3d66de463"
+    },
+    "pacing:t1_oe4upw2": {
+      "sentiment": "negative",
+      "signal": "strong",
+      "statement": "Author states that doing little walks made them 100x sicker as a former endurance cyclist, directly contradicting activity-based approaches and implying pushing through activity (even minimal) caused severe worsening.",
+      "text": "i am glad this works for you, but for more severe cases of ME/CFS, training like this generally doesn\u2019t work.  in fact, it will actively make you worse \n\nsource: i was an endurance cyclist and i made myself 100x sicker by doing little walks ",
+      "author": "6d5856a1be0c2b1dbe3ad96b21931ada01c07a453e6746a7132326fc44bf838c"
+    },
+    "pacing:t1_oe9biwv": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author deliberately keeps recovery time under 24 hours to avoid PEM, describing this as a pacing strategy, and reports things are 'significantly better than they were.'",
+      "text": "I've had the same issue, crazy muscle cramps in my glutes, along with severe weakness in by back and neck, to the point of CCI. It turned out the glute tension was because my SI joints had got really weak, but I couldn't feel that until I'd built enough strength back for those muscles to relax a bit. \n\nThe solution for me has been progressive strengthening. Slowly slowly, with excercises specifically targeted at the weak areas, with weights, physio bands, or a back extender (roman chair). Broadly speaking I've stuck to a rule of keeping recovery time under 24 hours, that lets me avoid PEM. I've still got a long way to go, but things are significantly better than they were. \n\nI was hoping that getting moving again and doing bits of DIY around the house would be enough to recondition, but the targeted exercises have really been necessary. I think both deconditioning and viral connective tissue degradation are at play here.",
+      "author": "2fb1b356b7cc1d293baf538575915e074dab114d622067ccf976129a8bd96781"
+    },
+    "pacing:t1_oe1rcwd": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author deliberately uses a 24-hour recovery rule as a pacing strategy, doing the same exercises daily only when recovery stays within that window, and reports slow and steady progress over the past year.",
+      "text": "I'm not yet at the point of starting cardio, but have been actively reoconditioning for the last year or so. As long as my recovery time is less than 24 hours it seems to be fine, which lets me do the same set of exercises every day.\n\nI've just been focusing on the specific areas that have got weakest, for me, my neck, back and glutes. Bought myself a roman chair and some weights and have been seeing slow and steady progress. There are plenty of exercises on youtube, but it can take a bit of time to find the ones that work for you. \n\nIf you can do cardio, it might be worth going to a physio. They're usually pretty good. Currently I think my body is too sensitive for typical physio levels of exertion, and I don't want to have to navigate that thing of trying to communicate my limitations to the physio, only to be pushed too far anyway and crash.",
+      "author": "2fb1b356b7cc1d293baf538575915e074dab114d622067ccf976129a8bd96781"
+    },
+    "pacing:t1_oe3qv4h": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author describes overdoing it while managing grad school and a full-time job, resulting in serious consequences ('jobless and having to move out'), implying that pushing through instead of pacing led to their crash.",
+      "text": "I was in grad school, in my final practicum and trying to hold down my full time job. As I found out, one with LC cannot do such things. I absolutely over did it and now I\u2019m looking at being jobless and having to move out my house again. It\u2019s crazy how one minute I think I\u2019m doing great and the next I\u2019m borderline homeless and crazy from not sleeping at all. ",
+      "author": "7f1769bada57bc39e2d59db694dcb6e1ea1533ab5b48b6a1c41f2f3d2785bbc1"
+    },
+    "pacing:t1_oe8agns": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes deliberately not pushing past their tolerated baseline as a key part of their recovery strategy, alongside sleep, diet, and other interventions.",
+      "text": "There is no universal solution, i tell you what i did and what seemed to work for me. But that doesn\u00b4t mean it is the only way to go about the problem. \n\n1. First thing that was absolutely necessary for me, was that the overload and chronic stress needed to go. i know thats tough, because we have bills to pay. Thats why i begrudgingly had to give up my own apartment and live with a relative. But in the end, for me it was the right decision. Also i made sure to not push my self past my tolerated baseline.\n\n2. In my opinion, sleep and relaxation is an integral part of recovery. So thats what i emphasized most. At the beginning i used calming and sleep promoting medications (SSRIs worked for me here) for a couple of months to take the edge of and get me back to at least sleeping somewhat regularly. At the sametime i started to do a lot of calming breathing exercises and meditations (box breathing, resonance breahting, deep belly breathing etc.). Its no quick fix, but helped over time. There are different supplements that i found helpfull as well ( Magnesium glycinate and Magnesium L-threonate, L-Theanine, Melatonine, Lithiumorotate and nicotinepatches but don\u00b4t use them over night). \n\n3. Having a predictable daily rythm: Getting up the same time everyday, sunlight the first thing in the morning (for at least 15-20minutes), subtle movements (if you tolerate it), eating at the same time everyday, last large meal 3-4 hours before sleeping (a little carb snack before bed can be ok and even helpfull), sleep time everyday the same, no blue light 1-2 hours before sleeping (there are filerting glases, if you still want to use some screens). Having a relaxing nightime routine helped me, what works for you. \n\n4. Diet: i seemed to be sensitive to a lot of foods. This was a long process but through a lot of trial and error i narrowed it down to a diet, that i tolerate relatively well and is nutritious to help my body restore (first i got rid of everything processed, cut out gluten and most grains, cut out dairy for a time, eat mostly vegetables, tubers, meat, eggs, leafy greens, berries and some fruit).\n\n 5. Medications: There are some medications and treatments that can be very helpfull. Sadly it is all a big trial and error process what works for me, might not work for you or might just give you a lot of unpleasent side effects. Thats why i don\u00b4t want to recommend specific medications to you. It\u00b4s best you find a doctor who recocgnizes your condition and is willing to experiment and helps you guide through the process. \n\nEven after doing this, it was and still is a very long and exhaustive process with ups and downs, but i believe that is doable and fixable eventually. Hope you find some relief soon and get back to feeling better. I know how awfull it is!\n\n",
+      "author": "ff31dd4fe3492c782b34fdd27c8fabbdf2e90348945e411c25c33754a77d36f3"
+    },
+    "pacing:t1_oe43zju": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author says they now have tools to do 'more effective pacing' after gaining better insight into their PEM triggers, implying pacing is a valued strategy they are actively working to implement better.",
+      "text": "Because of the two day delay and waking up the next day feeling more adrenergic/\u2018better\u2019 I never realised I was always in PEM I just thought my condition was so unstable at baseline. But since going on methylene blue (increasing capacity) and getting visible I can actually see what\u2019s causing PEM so I think I have the tools now to do more effective pacing.",
+      "author": "bd0a710276e5d762d36f9460b633ecc5d944c3e93703534bea120dbd3459f0f0"
+    },
+    "pacing:t1_oe3tuym": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author states from personal experience (IME) that even a well-rounded medication and supplement plan is 'worthless without effective pacing,' placing pacing as the foundational necessity above all other treatments.",
+      "text": "IME, even a very well throughout medication, supplement, and treatment plan is worthless without effective pacing. I prefer the term effective over radical. ",
+      "author": "cba4ee748eb6fea418b7b59f2f90cea34d09199e4ea301855c8e1a0b968c8c40"
+    },
+    "pacing:t1_odx7mni": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author has identified a specific step count (7000 steps/day) as their personal sweet spot, demonstrating deliberate energy envelope management, and confirms that exceeding it (10K steps) results in a crash \u2014 validating the pacing strategy.",
+      "text": "In my recovery saga, I\u2019ve found 7000 steps a day to be a pretty sweet spot. I can get out of the house, walk the dogs, get some projects done. I can engage with the world. \n\nPushing beyond that inevitably results in a crash. Took my son to see some universities over spring break, did some campus tours, and got into the 10K range. In a big crash now. ",
+      "author": "cba4ee748eb6fea418b7b59f2f90cea34d09199e4ea301855c8e1a0b968c8c40"
+    },
+    "pacing:t3_1sbga7h": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author overdid activity (walked more than usual), crashed with PEM, and is now doing 'radical rest' \u2014 expressing regret and self-blame for not staying within limits, implying awareness that pacing/staying within limits is what they should have done.",
+      "text": "I haven\u2019t really walked long distances or anything aerobic since getting covid 6 months ago. I consider myself mild/moderate me/cfs I can work a computer job with a lot of acommodations and i walk like 20 min daily to my job and back. However, last Saturday my partner wanted to go to downtown and we walked like 30 min/ rest/30 min/rest and the day after i got PEM and i\u2019be been in a PEM flare up since then. I feel stupid for thinking i could walk that much considering some people can\u2019t even walk with this condition, i feel irresponsible and inconsiderate. Since i got into this flare up i haven\u2019t done anything for a week just radical rest/haven\u2019t worked. No shower, no cooking, nothing. Did i fuck up my baseline permanently? Im so mad at myself. Any tips/ recs? ",
+      "author": "87931f6e46a357f8e1bd04394a76900b29e0808444bc9d85ddd592a8be6f124e"
+    },
+    "pacing:t1_oe36xtg": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes personal experience of slipping over their baseline and recovering, advising not to push over limits too often \u2014 indicating deliberate awareness of staying within their energy envelope.",
+      "text": "I\u2019ve not been able to work though also being mild/moderate over all and every now and then I do slip over my baseline. It likely won\u2019t mess you up forever immediately but you should try to not push over your limits too often. It usually takes a few days to 1-2 weeks before I come back from overdoing it, so I wouldn\u2019t worry too much right now. Hope you feel better soon!",
+      "author": "5b003ca046b4a3e02a963c0af306eb55a601737bdfe7dbda404b93ac9cd29466"
+    },
+    "pacing:t1_oe3z5s9": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Author says 'I do things like this all the time and it kicks me in the butt every time' \u2014 implying that exceeding limits consistently leads to crashes, framing overdoing it as the problem without describing a deliberate pacing strategy.",
+      "text": "I do things like this all the time \nAnd yes it kicks me in the butt every time \n\nWhat makes it worse is worrying that you screwed up and it will be forever \nIt's okay it will subside give it some time and give yourself a little grace. ",
+      "author": "8adfb3a5de32dc1a997d77efb2d1073c4da338f0565d31e0698f4fc8974c691b"
+    },
+    "pacing:t1_oe6o0jm": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author references personal experience with a big crash and recovering by 'staying down,' suggesting deliberate rest/pacing during a crash helped them return to baseline.",
+      "text": "PEM is an unpredictable piece of work, because your limits can change day to day. But when in a crash, not much you can do. Just remember, you should be able to get back to baseline if stay down. My big crash took me out for 3 weeks, but I did recover. It doesn\u2019t have to be a downward spiral.\n\nPersonally, when I\u2019m in a crash I watch anime or play casual video games.",
+      "author": "54a1e9cb1b0ddff5e4450d68cd9f37503e42885b3b6c8d8ab6d826e073207ba8"
+    },
+    "pacing:t1_oe3x78l": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Author notes that pushing through PEM makes things continually worse, implying that not pushing through (pacing) would be beneficial, but never describes deliberately using pacing as a strategy.",
+      "text": "It was the worst when I first got LC in 2021. Shortness of breath, inability to regulate temperature, extreme brain fog/cognitive dysfunction, etc. Even though our bodies are saturated with oxygen there are theories that our cells are actually struggling to get oxygen from our blood. Which tracks with my experience. If I get really bad PEM it will start to come back & if I try to push through PEM it will continually get worse.",
+      "author": "4c5ccfc100c8a627a49691119b2551eabc0fce042a2cbfadfc7fe27593feeb8b"
+    },
+    "pacing:t1_oe1qqcw": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author explicitly mentions staying within one's 'energy envelope' as important, and describes not pushing during difficult periods \u2014 indicating deliberate use of pacing as a strategy during their own recovery from near-bedbound to working part time.",
+      "text": "I am only 1.5 years in but i also come from almost bedbound for a few months to working part time right now...\n\nIts a long and complex journey, i think when its time you need movement but do not expect the same every day and never ever push it while you are in limbo.\n\nPhysio may help but only if it fits in your energy envelop.\n\nI think food is also very important, i also have joint and bone pain and some foods make it worse.\n\n",
+      "author": "f4580001d2c12a9ff6a3620c6282e2a5232f9370fba64bd69a9f87b042b9116f"
+    },
+    "pacing:t1_oe1rf0d": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author describes adding too much cardio too soon causing crashes and fatigue, then backing off \u2014 framing the crash as a consequence of exceeding their energy envelope, implying pacing works. They are now deliberately scaling back, which transitions toward pacing.",
+      "text": "Like others have said go slow. I felt really good for 4 months. No crashes PEM or anything . Then I added too much cardio in too soon. I started feeling crashy and fatigued even days after my workout. Now I\u2019m backing off the bike and adding more distance to my walks and seeing a pt. I have eds so the loss of muscle tone makes my joints even more unstable than usual! We are working up to weight lifting. Hopefully by the summer! I keep reading focusing on leg and core muscles really helps everything else (venous return, stability etc) and cardio should be saved for last. Hth!",
+      "author": "37ba6d6129f2c336aab0fff44f40b4035e7428bece74ba617d66ea935542c494"
+    },
+    "pacing:t1_oe28byl": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author describes slow reconditioning using the CHOP protocol and explicitly states 'I did not push through the pain,' indicating deliberate pacing. Reports improvement in knee pain, strength, and ability to complete workouts that were previously impossible.",
+      "text": "I am slllllowwwly reconditioning.\u00a0\n\n\nI do yoga and pilates (Yoga with Adriene and Move With Nicole on YouTube), and have found that the more I do these the less my knees hurt. It's an amazing workout! My husband says he can feel my six pack, though sadly it's hidden under some fluff because some of my meds make me gain weight, but I feel so much stronger and that's what is important! The first few times I did yoga, especially warrior poses and goddess pose, I couldn't finish the workout because of my knees, but now I can do it all! I did not push through the pain\n\n\nFor cardio I'm doing a recumbent bike with the CHOP protocol (but I do every week for several weeks until I feel ready to move up). The Utah Adapt is better for ME/CFS I hear. My next step is an upright bike.\u00a0\n\n\nI also garden a lot, which typically gets me 4-7k steps per day\u00a0",
+      "author": "788877dd35702550435c4bcf3ab5ec22baf421e0617a3e30c126cb56361267c0"
+    },
+    "pacing:t1_oe2poyb": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author describes crashing after 8 minutes on the treadmill (not pacing/overdoing it) but notes that staying within comfortable limits with stretching and yoga is fine and improving joint pain \u2014 implying that staying within limits works.",
+      "text": "This seems to be the way to go. I started with light cardio - walking and had a crash after 8 minutes on the treadmill. However, stretching and yoga are fine and it's improving the joint pain. ",
+      "author": "fe02f9833562aedbd013a995ba9eb80aaa1796a33b7333ed2afe1732c8f5e621"
+    },
+    "pacing:t1_oe51o62": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author describes deliberately staying within comfortable exertion levels in the pool ('very easy to only exert yourself at a level that is comfortable'), which is a pacing strategy, and reports it 'worked wonders' over three years.",
+      "text": "I was housebound for seven months and had atrophy.  I went to the pool and started swimming laps.  It\u2019s very easy to only exert yourself at a level that is comfortable.  As you get stronger, distance and speed improve.  It worked wonders for me.  Over three years doing laps.",
+      "author": "f54d81bc18b05cf4986b6e11c83197b10b491b282a2ebf2522f33ea006a0367a"
+    },
+    "pacing:t1_oe1db25": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author describes crashing severely after cycling ('one single mistake') and subsequent crashes leaving them bedridden, implying that not pacing caused their deterioration \u2014 but does not describe deliberately using pacing as a strategy.",
+      "text": "I also need hope. 3.5 years , at my worst. I feel absolutely desperate. I was very mild, undizgnosed and one single mistake seems to have ruined my life, one single very severe crash after cycling, on one muscle only, then 3 other ones the next 14  monthes left me bedridden.\nNeed hope, help, i am about to give up, please.",
+      "author": "dc5e3cdb964fe9a9f42feb381afcce91e9937f31457146d82dff5dbf01439ebf"
+    },
+    "pacing:t1_oe1wwxo": {
+      "sentiment": "negative",
+      "signal": "moderate",
+      "statement": "Author personally finds pacing extremely hard and says it makes them feel guilty all the time, implying it is not working well for them emotionally/practically.",
+      "text": "You cant expand any more ?\nI feel its maybe possible but extremely slow.\nI dont understand why some suceed others not. I personnaly find pacing extremely hard and it makes me feel guilty all the time",
+      "author": "dc5e3cdb964fe9a9f42feb381afcce91e9937f31457146d82dff5dbf01439ebf"
+    },
+    "pacing:t1_oe4uq1x": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Author uses cats as a metaphor for resting and conserving energy, implying that spending most time resting is natural and powerful, suggesting endorsement of pacing without explicitly describing personal deliberate use.",
+      "text": "I looove watching my cats when I struggle and remind myself how much I love them, how no one doubts that they are beautiful, strong and powerful... And yet they spend most of their time just sleeping, dozing off, snacking, playing and clearly stating their needs and wishes. \n\nThey are a great example for these times in life! When you have some energy, use it to chase a toy not a task ^^",
+      "author": "c07531613ea4f166f28dbc82273865b7a7b572aec93f9b17b8f61fee2748ada1"
+    },
+    "pacing:t1_oe7252x": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes how napping makes them feel refreshed and like they've made meaningful recovery progress, implying deliberate rest as a strategy that yields better results than when they were healthy.",
+      "text": "Some of the naps I have, I feel so refreshed after! Not 100% healed, but feels like I put a dent in something and it was really important...almost productive. Although dealing with daytime exhaustion sucks no matter how you slice it, I at least acknowledge how much better at napping I have become and how better they make me feel compared to the naps I tried to take when I was healthy (they were pointless honestly). Tiny silver lining there.",
+      "author": "e0056bf4ec63ada74070f204cef288c4cc179ee522d7af95b2f986d98baa8a0a"
+    },
+    "pacing:t1_oe38m9i": {
+      "sentiment": "implicit_positive",
+      "signal": "weak",
+      "statement": "Author describes experiencing a PEM day after attending a 3-hour seminar, implying that the exertion caused the crash \u2014 suggesting awareness that pushing beyond limits leads to worsening, but no deliberate pacing strategy is explicitly described.",
+      "text": "I also have mild kidney failure due to Covid. I am not bedbound but today is a PEM-day because I went to a seminar on Wednesday afternoon (3 hours). So I am on the sofa with my cat, with a headache, POTS and brain fog, not quite sure how long this one will last.\nI do find some supplements useful for symptom management, not for recovery. Especially NAC, quercetine, glycine, citrulline and glutamine. I have had no help from any medical professionals except from my gp, who then fell ill herself. \nI am getting slightly more functional over time, but at the moment I seem to be plateau-ing.",
+      "author": "893f3e46eff1400aa6318cc55a9c5f3f694161233cb8421d6c1bb817d7ff1430"
+    },
+    "pacing:t1_oe05ksa": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes deliberately monitoring symptoms and activity levels to decide whether to attempt daily tasks, recognizing that ignoring those signals leads to worse outcomes \u2014 a clear personal pacing strategy with neck pain as a specific indicator.",
+      "text": "Pretty much. If I think I'm OK to do something based on how I feel instead of relying on knowing what I did earlier that day or in the past few days or even weeks, it could be a really bad time much more easily. But in the same way, if I just don't move around much during the crash, it's much tougher to get back to moving around even a little.\n\nThe first symptoms to clear might be sleepiness, fatigue, but if the pains are still sticking around, especially the neck pain, it's a good indicator for me that I shouldn't try to do the daily tasks the way I normally would ",
+      "author": "9b47861b13973182316d7016adf85223a864e3a0aecf797e9699c84845538246"
+    },
+    "pacing:t1_oe5kcrv": {
+      "sentiment": "positive",
+      "signal": "strong",
+      "statement": "Author explicitly states they've 'got it dialed now' after 3 years and recommends journaling symptoms and energy levels daily \u2014 mastery/calibration language indicating a well-established personal pacing strategy.",
+      "text": "Definitely. That's why we all need to be journaling symptoms and state of energy levels every day until it's automatic. I'm at yearv3 and I've got it dialed now but for 18 months at least the whole thing was a terrible mystery. ",
+      "author": "07a00073f5f728a208e2e5537aa02c677caf3782870db1b258da66effbf09e46"
+    },
+    "pacing:t1_oe7w80b": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author advises resting longer than one thinks necessary and overdoing rest, based on personal experience of crashes taking months to recover from \u2014 indicating deliberate rest/pacing as a personal strategy.",
+      "text": "My PEM sounds v similar to yours and it can take a few weeks and tbh when it\u2019s a major crash, it\u2019s often taken me months to go back to baseline (and sometimes I haven\u2019t got there). Overdo the rest and relaxation for longer than you think. Be kind to yourself. ",
+      "author": "02fb371e604649bcc4c7fd59cb6bd0f5ff4cc57a2ab480ded9fe20bae904f26a"
+    },
+    "pacing:t1_oe7wvqc": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "The author describes staying mostly in bed, only getting up when necessary, and resting as much as possible to recover from a PEM crash, indicating deliberate pacing behavior with gradual progress noted.",
+      "text": "Yeah, this crash was brutal. I\u2019m still having slight lingering symptoms like swollen lymph nodes at night, my nose is ever so stuffy during the day, still a bit lightheaded so I think I\u2019m definitely still in PEM but more on the tail end of it. I\u2019m just so ridiculously fatigued now.\n\nLuckily, progress has been gradual. VERY gradual (annoyingly). I\u2019m mostly in bed and only getting up when necessary but today I was able to actually stand up for a solid 5-10 minutes waiting for food to cook (literally all I did) which was impossible a week ago. Hope that doesn\u2019t come back to bite me in the ass haha\n\nI\u2019m just resting as much as possible and praying I get better. The mental aspect to this has completely exhausted me but I\u2019m reassuring myself this is temporary and I\u2019ll get better eventually. ",
+      "author": "86926fe7f7a0026b3ff4c51352d0cd7c4ce43122ab5d5fe79332d4030e7f0f55"
+    },
+    "pacing:t1_odyvu2l": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "The author explicitly lists pacing as part of their multi-step recovery from Long COVID, crediting it as step 1 alongside carnivore diet.",
+      "text": "I believe it was a multi step thing.\n\nCarnivore and pacing as step 1  \nA reinfection that resolved many issues overnight as step 2  \npsychological factors as step 3",
+      "author": "d6ef9f31ee12f4d3f4b5cd001ac93b2fa85cee774c855a0848ddbc96a7f0a6f4"
+    },
+    "pacing:t1_odz17lp": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "The author describes being very careful not to exceed their limits throughout their LC journey, gradually doing more only when symptoms cleared, indicating deliberate pacing that contributed to recovery.",
+      "text": "I\u2018ve had PEM throughout my LC journey and I was very hesitant to do anything beyond my perceived limits. \n\nThis shit can backfire in a grandiose way. \n\nBut considering all my other symtpoms were clear, at some point, I tried doing more in a very careful way. \n\nMore movement, a less restrictive diet - until at some point, life was just like before. \n\nSo the last percentages, going from being healthy to acting as if I\u2018m healthy were psychological.\n\nToday I honestly don\u2018t think about the disease anymore, I haven\u2018t talked or thought about it for many months. I don\u2018t even tell people, unless they bring up long covid. ",
+      "author": "d6ef9f31ee12f4d3f4b5cd001ac93b2fa85cee774c855a0848ddbc96a7f0a6f4"
+    },
+    "pacing:t1_oe7oxft": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes a boom-bust cycle where their baseline kept declining until they recognized PEM and started pacing, implying pacing helped stabilize their condition.",
+      "text": "I don't use PEM lightly, especially early on wheh my threshold was still higher, I felt fine during exercise and horrible 12-48 hours later. This would repeat as a cycle, and my baseline went down a lot during the onset time. Until I realized what it was and started pacing.",
+      "author": "d6ef9f31ee12f4d3f4b5cd001ac93b2fa85cee774c855a0848ddbc96a7f0a6f4"
+    },
+    "pacing:t1_oe0ckvm": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions pacing as much as possible alongside LDN and anti-inflammatory eating as part of their ongoing recovery strategy, currently at 80-85%.",
+      "text": "Also following. I\u2019m a li\u2019l over two years in and my recovery is still in-progress. Healing hasn\u2019t been linear, but it\u2019s so much better than even last year. I\u2019ve only been in remission once and it was short lived. I relapsed February 2024 and have been symptomatic since. \ud83d\ude13\n\nI\u2019m like at 80-85% currently with anti-inflammatory eating & having to heavily restrict due to suspected MCAS. But I take LDN and pace as much as possible. My brain is slowly going back to old memories of old hobbies and foods I used to consume for the first time since before I became sick. \n\nDid you ever have a noticeable mental or emotional shift or some sort of inkling that you were getting close to recovery? I saw that you had been reinfected and a good chunk of symptoms went away once you cleared that infection.",
+      "author": "2ab00cb3c6e8bfdefce94abe0565aef948a214a487bf8f470c697124ab32fbad"
+    },
+    "pacing:t1_oe13nuu": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author describes being able to do yoga and walk longer distances without crashing after learning limits over 2+ years, implying successful pacing after multiple failed attempts.",
+      "text": "Just wanted to say I feel you, I'm in a similar boat. Exercise was a huge part of my life and how I managed a lot of my mental health. I'm 2+ years in and finally was able to restart yoga and walking longer distances without crashing (after multiple failed previous attempts). Hang in there. ",
+      "author": "5a49a48aabbe8bf544d64cce340290c6132364f88638c948d749be02d1c412a4"
+    },
+    "pacing:t3_1sanljb": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author mentions still having to pace alongside prescribed medications that changed their life, indicating ongoing use of pacing as part of their management even if the medications are credited as the primary improvement.",
+      "text": "I'm still not healed but I've seen a massive improvement over the past months.\n\nMy main symptoms are linked to MCAS and POTS. At my worst, I couldn't do more than 1500 steps a day. I was in bed 80-90% of the time. I couldn't do any reading or cognitive activity other than scrolling / watching TV. I couldn't go to the park with my toddler. I tried everything: supplements, pacing, meditation, creatine, over the counter anti-histamines, LDN. Nothing helped. I was only getting worse. I struggled to shower once a week.\n\nThen I saw a private doctor. He prescribed the following:\n\n\\- ketotifen (5 ml / 1 mg),\n\n\\- LDN (3mg, a higher level than the one I was on), and\n\n\\- Ivabadrine (2.5 mg, 2x a day).\n\nKetotifen and LDN involved an initial TITRATION phase.\n\nI had to supplement ivabadrine with propranolol at first, to really get my POTS under control. Then I could do without it and just take Ivabadrine.\n\nTaking these meds changed my life over the course of 3 months. I can now read books, write fiction, take language lessons, play outside with my toddler and go on dates with my partner. I'm by no means cured. I still have to pace and I still have bad days. But I feel like I can live again. So there's hope![](https://www.reddit.com/submit/?source_id=t3_1sak2bi&composer_entry=crosspost_prompt)",
+      "author": "2e6b6555f1acc180d34c43cbc0931eb246ca007354345a0aa820808ad1b74205"
+    },
+    "pacing:t1_odxmdp5": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author maintained pacing/limited activity for months and improved, but going back to work caused a relapse \u2014 implying that maintaining the activity limits would have continued the improvement.",
+      "text": "I was able to maintain this for a couple of months in 2024.  Then I went back to work (half time, WFH) and it all unraveled.  I think if I would have simply maintained my activity (instead of going back to work) I would have been able continue on this way.  \n\nSo congrats, but don't get greedy :)",
+      "author": "00294e47a7c0fdd4ad38157a9b380e8eb1666a9aebe43ce674c542bc3a33a7a2"
+    },
+    "pacing:t1_odyoaw8": {
+      "sentiment": "implicit_positive",
+      "signal": "moderate",
+      "statement": "Author describes a major setback after pushing too hard (going to exercise class at 50% effort), implying that staying within limits would have prevented the crash.",
+      "text": "This just happened to me. I was feeling 80% cured so I figured I could go to my old exercise class and make 50% effort.\n\nHuge setback. It's been two weeks and I'm still back where I was months ago.",
+      "author": "aba18dd3d8196afe25ddb408534503a4d5e0852d4837d96383fc31211f2a3f07"
+    },
+    "pacing:t1_odwfgng": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author spreads work hours and takes multiple breaks as a deliberate strategy to manage their condition, which reflects pacing behavior.",
+      "text": "I have a flexible hybrid position and a medical accommodation. I spread my 8 hours over 12 and take multiple breaks. I also secretly work for free on the weekends just to finish stuff and catch up. ",
+      "author": "4517c3792365dfe7f5691a7fc5aabe5f1f778fbf104b93436c335b5fd28fbabd"
+    },
+    "pacing:t1_ody0v4y": {
+      "sentiment": "implicit_positive",
+      "signal": "strong",
+      "statement": "Author experienced a major relapse due to workload miscalculation and strongly advises others to avoid inducing relapse by being careful not to overdo it \u2014 implying that not pacing caused their worsening.",
+      "text": "Today I finally accepted that I\u2019m going to be dismissed on ill health grounds imminently. I was doing really well and working full time last year, but workload miscalculations caused a massive intractable relapse in October 25. UK government benefits for me I\u2019m afraid, so we are about to enter a very difficult time as a family. As if the last 3 years have not been bad enough. \n\nMy advice is therefore most emphatically if you are struggling: be really careful not to induce relapse and be even worse than you were before.",
+      "author": "6bb440146a5303c7748f4595e7e90909ac6114b2e4b246c5ac9c24d345f3c568"
+    },
+    "pacing:t1_odyjzbq": {
+      "sentiment": "positive",
+      "signal": "weak",
+      "statement": "Author deliberately structures their self-employment to allow lying down whenever needed and minimizing outings, reflecting deliberate energy management/pacing.",
+      "text": "Self-employment. I realize this is very privileged. I can lie down whenever I want, need to go somewhere only about twice a month. ",
+      "author": "7c0603c1254e2474439bae462fef28dd91435e0d645788f789611a3aa4691322"
+    },
+    "pacing:t1_oe1zt6l": {
+      "sentiment": "positive",
+      "signal": "moderate",
+      "statement": "Author explicitly paces their own workload, takes breaks when needed, batches intensive work strategically, and works from bed when necessary \u2014 describing deliberate energy management that allows them to remain employed.",
+      "text": "Work full-time, fully remote. I\u2019m certain this is the only reason I\u2019m still in work. I also used to volunteer with Citizens Advice so I knew my rights, and knew I needed to get to OH and get reasonable adjs in place ASAP, so as well as remote work, I also pace my own workload an take breaks when I need. That said, Im lucky that I work for a public sector org and it\u2019s been incredibly supportive. I have been extraordinarily lucky. \n\nThe downside is I use every single spoon for work, so I have zero social life.\n\nI know I can\u2019t keep FT work up in the long run but I\u2019ll do it for as long as I can, but I try to batch intensive work to the beginning of the week when I feel a bit better, batch meetings so I can get them all over and done with in one period, and work from bed when necessary. ",
+      "author": "a44fce7ed61db205753d173009bded208140ec2c6b5ca19f020d55ca04cb281a"
+    },
+    "pacing:t1_oe6u7r4": {
+      "sentiment": "implicit_positive",
+      "signal": "strong",
+      "statement": "Author wishes they had radically rested instead of pushing hard, explicitly stating they pushed themselves from mild to severe by overworking \u2014 strongly implying that pacing/rest would have prevented their deterioration. They never describe deliberately using pacing at any point.",
+      "text": "My last day of working was Sept 5th 2024.  I pushed myself from mild (in 2022-23) to severe by working 50+ hours a week as a trauma therapist.  I wish I could go back to Oct of 2022 when I first got covid and radically rest instead of pushing that hard but I was the main breadwinner and financially it\u2019s been very difficult ever since.  I literally worked until my nervous system started going haywire.  In the months leading up to my last day of work I stopped being able to sleep or eat and was having constant panic attacks and felt like I was dying.  After my last day of work I spent the next two months sleeping nonstop.  This Sept will be two years since I left my job and unfortunately it seems that the damage was done because most days I\u2019m still in bed, still not able to drive, etc.  I let my LCSW license lapse because I don\u2019t think I will ever be able to use it again with my severe memory and cognitive issues.  I\u2019m scared for my future. ",
+      "author": "bb518fd77cdbe0f3ffa40fcc884aea42b6d77d19663fbf49933e480098783a5e"
+    }
+  }
+}

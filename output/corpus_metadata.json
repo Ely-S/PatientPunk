@@ -1,0 +1,17 @@
+{
+  "subreddit": "covidlonghaulers",
+  "window": "1 week(s)",
+  "window_after": "2026-03-29T20:36:36Z",
+  "posts_scraped": 220,
+  "unique_authors": 177,
+  "user_histories_scraped": false,
+  "authors_with_history": 0,
+  "authors_deleted_or_suspended": 5,
+  "total_user_posts_collected": 0,
+  "total_user_comments_collected": 0,
+  "subreddits_seen": [],
+  "scrape_started_at": "2026-04-05T20:36:36.370053+00:00",
+  "scrape_finished_at": "2026-04-05T20:51:58.970105+00:00",
+  "profiles_enriched": false,
+  "source": "Arctic Shift API (https://arctic-shift.photon-reddit.com)"
+}

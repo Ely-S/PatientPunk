@@ -1,0 +1,5 @@
+.env
+demographic_extraction/.env
+output/
+__pycache__/
+venv_scispacy/
