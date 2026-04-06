@@ -88,56 +88,38 @@ And get back:
 
 ```sql
 SELECT
-  treatment,
-  COUNT(*) AS reports,
-  ROUND(AVG(outcome_score), 2) AS avg_outcome,
-  SUM(CASE WHEN outcome = 'positive' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS pct_positive
-FROM patient_reports
-WHERE 'ME/CFS' = ANY(conditions)
-  AND 'neuroinflammation' = ANY(symptoms)
-  AND 'brain_fog' = ANY(symptoms)
-GROUP BY treatment
+  t.canonical_name                                   AS treatment,
+  COUNT(*)                                           AS reports,
+  ROUND(AVG(tr.sentiment), 2)                        AS avg_sentiment,
+  SUM(CASE WHEN tr.sentiment > 0 THEN 1 ELSE 0 END)
+    * 100.0 / COUNT(*)                               AS pct_positive
+FROM treatment_reports tr
+JOIN treatment t ON t.id = tr.drug_id
+WHERE EXISTS (
+  SELECT 1 FROM conditions c
+  WHERE c.user_id = tr.user_id
+    AND c.condition_name = 'ME/CFS' COLLATE NOCASE
+)
+AND EXISTS (
+  SELECT 1 FROM conditions c
+  WHERE c.user_id = tr.user_id
+    AND c.condition_name = 'brain fog' COLLATE NOCASE
+)
+GROUP BY t.canonical_name
 ORDER BY reports DESC;
 ```
 
 ---
 
-## Data Model (simplified)
+## Data Model
 
-### User
+The schema is organized into three layers:
 
-| Field | Type | Description |
-|---|---|---|
-| `user_id` | hash | Anonymized identifier (hashed username) |
-| `platform` | string | Originating platform (reddit, twitter, etc.) |
-| `first_seen` | date | Date of first observed post |
-| `post_count` | int | Number of posts attributed to this user |
+- **Layer 1 — Raw:** `users`, `posts` — scraped social media content
+- **Layer 2 — Configuration:** `treatment`, `extraction_runs` — lookup tables and run metadata
+- **Layer 3 — Extracted:** `user_profiles`, `conditions`, `treatment_reports` — LLM-extracted structured data
 
-### Post
-
-| Field | Type | Description |
-|---|---|---|
-| `post_id` | string | Platform-native post ID |
-| `user_id` | hash | FK → User |
-| `platform` | string | Originating platform |
-| `raw_text` | text | Original post content |
-| `posted_at` | date | Date of original post |
-| `url` | string | Source URL |
-| `llm_output` | jsonb | Structured JSON from AI Transformation (see below) |
-
-### llm_output schema (inside Post)
-
-```json
-{
-  "conditions": ["ME/CFS", "POTS"],
-  "symptoms": ["brain_fog", "neuroinflammation", "fatigue"],
-  "treatments": [{ "name": "LDN", "dose": "4.5mg" }],
-  "outcome": "positive",
-  "outcome_score": 0.8,
-  "demographics": { "age_range": "30-40", "sex": "female" },
-  "confidence": 0.91
-}
-```
+**[View interactive schema diagram](schema_diagram_v5.html)** · **[schema.sql](schema.sql)**
 
 ---
 
