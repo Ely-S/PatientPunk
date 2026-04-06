@@ -102,42 +102,15 @@ ORDER BY reports DESC;
 
 ---
 
-## Data Model (simplified)
+## Data Model
 
-### User
+The schema is organized into three layers:
 
-| Field | Type | Description |
-|---|---|---|
-| `user_id` | hash | Anonymized identifier (hashed username) |
-| `platform` | string | Originating platform (reddit, twitter, etc.) |
-| `first_seen` | date | Date of first observed post |
-| `post_count` | int | Number of posts attributed to this user |
+- **Layer 1 — Raw:** `users`, `posts` — scraped social media content
+- **Layer 2 — Configuration:** `treatment`, `extraction_runs` — lookup tables and run metadata
+- **Layer 3 — Extracted:** `user_profiles`, `conditions`, `treatment_reports` — LLM-extracted structured data
 
-### Post
-
-| Field | Type | Description |
-|---|---|---|
-| `post_id` | string | Platform-native post ID |
-| `user_id` | hash | FK → User |
-| `platform` | string | Originating platform |
-| `raw_text` | text | Original post content |
-| `posted_at` | date | Date of original post |
-| `url` | string | Source URL |
-| `llm_output` | jsonb | Structured JSON from AI Transformation (see below) |
-
-### llm_output schema (inside Post)
-
-```json
-{
-  "conditions": ["ME/CFS", "POTS"],
-  "symptoms": ["brain_fog", "neuroinflammation", "fatigue"],
-  "treatments": [{ "name": "LDN", "dose": "4.5mg" }],
-  "outcome": "positive",
-  "outcome_score": 0.8,
-  "demographics": { "age_range": "30-40", "sex": "female" },
-  "confidence": 0.91
-}
-```
+**[View interactive schema diagram](schema_diagram_v5.html)** · **[schema.sql](schema.sql)**
 
 ---
 
