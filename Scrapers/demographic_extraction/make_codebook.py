@@ -293,6 +293,10 @@ Examples:
         "--sep", default=" | ",
         help="Multi-value separator used in the records CSV (default: ' | ')",
     )
+    parser.add_argument(
+        "--no-discovered", action="store_true",
+        help="Exclude llm_discovered fields from the codebook output.",
+    )
     args = parser.parse_args()
 
     # Resolve output path
@@ -314,6 +318,10 @@ Examples:
 
     # Build registry
     registry = build_field_registry(base_schema, ext_schema)
+    if args.no_discovered:
+        n_hidden = sum(1 for r in registry if r["source"] == "llm_discovered")
+        registry = [r for r in registry if r["source"] != "llm_discovered"]
+        print(f"  (--no-discovered: hiding {n_hidden} llm_discovered fields)")
     field_names = [r["field"] for r in registry]
     print(f"  {len(registry)} fields found")
     print(f"    base:           {sum(1 for r in registry if r['source'] == 'base')}")

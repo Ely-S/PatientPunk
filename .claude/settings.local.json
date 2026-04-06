@@ -19,7 +19,10 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\(''run_pipeline.py''\\).read\\(\\)\\); print\\(''run_pipeline.py: OK''\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''discover_fields.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''discover_fields.py: OK''\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''run_pipeline.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''run_pipeline.py: OK''\\)\")",
-      "Bash(python run_pipeline.py --help)"
+      "Bash(python run_pipeline.py --help)",
+      "Bash(ls *.json)",
+      "Bash(ls \"C:\\\\Users\\\\scgee\\\\Documents\\\\Projects\\\\PatientPunk\\\\Scrapers\\\\output\\\\temp\"\" 2>/dev/null || echo \"temp/ empty or missing \")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''run_pipeline.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")"
     ]
   }
 }

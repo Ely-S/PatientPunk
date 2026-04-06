@@ -37,8 +37,8 @@ Usage:
 """
 
 import argparse
+import csv
 import json
-import shutil
 import subprocess
 import sys
 import time
@@ -69,6 +69,219 @@ TEMP_PATTERNS = [
     "discovered_records_*.json",
     "discovered_field_report_*.json",
 ]
+
+
+# =============================================================================
+# PHASE STATISTICS
+# =============================================================================
+
+def _load_json(path: Path) -> dict | list | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def collect_phase1_stats(temp_dir: Path, schema_id: str) -> dict:
+    meta = _load_json(temp_dir / f"extraction_metadata_{schema_id}.json")
+    if not meta:
+        return {}
+    total = meta.get("total_records_processed", 0)
+    hits = meta.get("field_hit_counts", {})
+    n_fields = len(hits)
+    n_hit = sum(1 for v in hits.values() if v > 0)
+    top = sorted(hits.items(), key=lambda x: -x[1])[:5]
+    weak = [(f, v) for f, v in hits.items() if total and v / total < 0.10]
+    return {
+        "records": total,
+        "fields_available": n_fields,
+        "fields_with_hits": n_hit,
+        "fields_zero_coverage": n_fields - n_hit,
+        "top_fields": [(f, v, v / total if total else 0) for f, v in top],
+        "weak_fields": sorted(weak, key=lambda x: x[1]),
+    }
+
+
+def collect_phase2_stats(temp_dir: Path, schema_id: str) -> dict:
+    regex_path = temp_dir / f"patientpunk_records_{schema_id}.json"
+    llm_path   = temp_dir / f"llm_records_{schema_id}.json"
+    merged_path = temp_dir / f"merged_records_{schema_id}.json"
+    regex   = _load_json(regex_path) or []
+    llm     = _load_json(llm_path) or []
+    merged  = _load_json(merged_path) or []
+
+    # Count LLM-filled values: fields that are non-null in llm_records
+    llm_fills = 0
+    for rec in llm:
+        for v in rec.get("fields", {}).values():
+            if v is not None:
+                llm_fills += 1
+
+    return {
+        "records_llm": len(llm),
+        "records_merged": len(merged),
+        "llm_field_fills": llm_fills,
+        "avg_fills_per_record": round(llm_fills / len(llm), 2) if llm else 0,
+    }
+
+
+def collect_phase3_stats(temp_dir: Path) -> dict:
+    disc_files = sorted(temp_dir.glob("discovered_records_*.json"))
+    if not disc_files:
+        return {}
+    records = _load_json(disc_files[-1]) or []
+    if not records:
+        return {}
+    # Gather discovered field names and hit counts
+    field_hits: dict[str, int] = {}
+    for rec in records:
+        for fname, fdata in rec.get("discovered_fields", {}).items():
+            if fdata.get("values"):
+                field_hits[fname] = field_hits.get(fname, 0) + 1
+    n_records = len(records)
+    records_with_any = sum(
+        1 for rec in records
+        if any(fd.get("values") for fd in rec.get("discovered_fields", {}).values())
+    )
+    by_prov: dict[str, int] = {"regex": 0, "llm_filled": 0}
+    for rec in records:
+        for fdata in rec.get("discovered_fields", {}).values():
+            p = fdata.get("provenance")
+            if p in by_prov:
+                by_prov[p] += 1
+    return {
+        "fields_discovered": len(field_hits),
+        "records_total": n_records,
+        "records_with_any_hit": records_with_any,
+        "coverage_pct": round(records_with_any / n_records * 100, 1) if n_records else 0,
+        "hits_by_regex": by_prov["regex"],
+        "hits_by_llm": by_prov["llm_filled"],
+        "top_fields": sorted(field_hits.items(), key=lambda x: -x[1])[:5],
+    }
+
+
+def collect_phase4_stats(output_dir: Path) -> dict:
+    csv_path = output_dir / "records.csv"
+    if not csv_path.exists():
+        return {}
+    with open(csv_path, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        cols = reader.fieldnames or []
+    if not rows:
+        return {}
+    total_cells = len(rows) * len(cols)
+    filled_cells = sum(1 for row in rows for v in row.values() if v and v.strip())
+    return {
+        "rows": len(rows),
+        "columns": len(cols),
+        "fill_rate": round(filled_cells / total_cells * 100, 1) if total_cells else 0,
+        "total_cells": total_cells,
+        "filled_cells": filled_cells,
+    }
+
+
+def collect_phase5_stats(output_dir: Path) -> dict:
+    for name in ("codebook.csv", "codebook.md"):
+        p = output_dir / name
+        if p.exists():
+            if name.endswith(".csv"):
+                with open(p, encoding="utf-8") as f:
+                    rows = list(csv.DictReader(f))
+                covered = sum(1 for r in rows if r.get("coverage_pct", "").replace("%","").strip() not in ("", "0", "0.0"))
+                return {"fields": len(rows), "fields_with_coverage": covered}
+            else:
+                lines = p.read_text(encoding="utf-8").splitlines()
+                fields = sum(1 for l in lines if l.startswith("## "))
+                return {"fields": fields}
+    return {}
+
+
+def print_phase_summary(phase: int, stats: dict, elapsed: float) -> None:
+    """Print a compact stats block right after a phase completes."""
+    if not stats:
+        return
+    label = PHASE_NAMES.get(phase, f"Phase {phase}")
+    print(f"\n  ── Phase {phase} stats ({elapsed:.0f}s) ──────────────────────────")
+    if phase == 1:
+        total = stats.get("records", 0)
+        print(f"  Records processed : {total}")
+        print(f"  Fields with hits  : {stats['fields_with_hits']}/{stats['fields_available']}")
+        print(f"  Zero coverage     : {stats['fields_zero_coverage']} field(s)")
+        print(f"  Top fields        :", end="")
+        for f, n, pct in stats.get("top_fields", []):
+            print(f"  {f} {pct:.0%}", end="")
+        print()
+    elif phase == 2:
+        print(f"  LLM records       : {stats.get('records_llm', 0)}")
+        print(f"  Merged records    : {stats.get('records_merged', 0)}")
+        print(f"  LLM field fills   : {stats.get('llm_field_fills', 0)}")
+        print(f"  Avg fills/record  : {stats.get('avg_fills_per_record', 0)}")
+    elif phase == 3:
+        if not stats:
+            print("  No fields discovered this run.")
+        else:
+            print(f"  Fields discovered : {stats.get('fields_discovered', 0)}")
+            print(f"  Records with hits : {stats.get('records_with_any_hit', 0)}/{stats.get('records_total', 0)} ({stats.get('coverage_pct', 0)}%)")
+            print(f"  Hits by regex     : {stats.get('hits_by_regex', 0)}")
+            print(f"  Hits by LLM fill  : {stats.get('hits_by_llm', 0)}")
+    elif phase == 4:
+        print(f"  Rows              : {stats.get('rows', 0)}")
+        print(f"  Columns           : {stats.get('columns', 0)}")
+        print(f"  Overall fill rate : {stats.get('fill_rate', 0)}%  ({stats.get('filled_cells', 0)}/{stats.get('total_cells', 0)} cells)")
+    elif phase == 5:
+        print(f"  Fields documented : {stats.get('fields', 0)}")
+        if "fields_with_coverage" in stats:
+            print(f"  Fields with data  : {stats['fields_with_coverage']}")
+    print(f"  {'─' * 52}")
+
+
+def print_pipeline_summary(all_stats: dict, total_elapsed: float) -> None:
+    """Print the final end-to-end summary table."""
+    mins, secs = divmod(int(total_elapsed), 60)
+    print("\n" + "=" * 60)
+    print(f"  PIPELINE SUMMARY  ({mins}m {secs}s total)")
+    print("=" * 60)
+
+    p1 = all_stats.get(1, {})
+    p2 = all_stats.get(2, {})
+    p3 = all_stats.get(3, {})
+    p4 = all_stats.get(4, {})
+    p5 = all_stats.get(5, {})
+
+    if p1:
+        print(f"\n  Phase 1 — Regex extraction")
+        print(f"    {p1.get('records', 0)} records   "
+              f"{p1.get('fields_with_hits', 0)}/{p1.get('fields_available', 0)} fields hit   "
+              f"{p1.get('fields_zero_coverage', 0)} fields empty")
+    if p2:
+        print(f"\n  Phase 2 — LLM gap-fill")
+        print(f"    {p2.get('records_merged', 0)} merged records   "
+              f"{p2.get('llm_field_fills', 0)} LLM fills   "
+              f"{p2.get('avg_fills_per_record', 0)} fills/record avg")
+    if p3:
+        print(f"\n  Phase 3 — Field discovery")
+        print(f"    {p3.get('fields_discovered', 0)} new fields   "
+              f"{p3.get('records_with_any_hit', 0)}/{p3.get('records_total', 0)} records hit "
+              f"({p3.get('coverage_pct', 0)}%)")
+        print(f"    regex hits: {p3.get('hits_by_regex', 0)}   "
+              f"llm fills: {p3.get('hits_by_llm', 0)}")
+        if p3.get("top_fields"):
+            tops = "  ".join(f"{f}({n})" for f, n in p3["top_fields"])
+            print(f"    top: {tops}")
+    elif 3 in all_stats:
+        print(f"\n  Phase 3 — Field discovery")
+        print(f"    0 new fields discovered")
+    if p4:
+        print(f"\n  Phase 4 — CSV export")
+        print(f"    {p4.get('rows', 0)} rows × {p4.get('columns', 0)} columns   "
+              f"{p4.get('fill_rate', 0)}% fill rate")
+    if p5:
+        print(f"\n  Phase 5 — Codebook")
+        print(f"    {p5.get('fields', 0)} fields documented   "
+              f"{p5.get('fields_with_coverage', '?')} with observed data")
+
+    print("\n" + "=" * 60 + "\n")
 
 
 def clean_temp(temp_dir: Path) -> None:
@@ -109,9 +322,15 @@ def get_schema_id(schema_path: Path) -> str:
     return data.get("schema_id", schema_path.stem)
 
 
-def find_discovered_records(schema_id: str, temp_dir: Path) -> Path | None:
-    path = temp_dir / f"discovered_records_{schema_id}.json"
-    return path if path.exists() else None
+def find_discovered_records(temp_dir: Path) -> Path | None:
+    """Find the most recent discovered_records_*.json in temp/.
+
+    Discoveries are now always written to a new timestamped file in temp/
+    rather than merged into the curated schema, so we find by glob and
+    take the newest one.
+    """
+    matches = sorted(temp_dir.glob("discovered_records_*.json"))
+    return matches[-1] if matches else None
 
 
 def main():
@@ -216,6 +435,8 @@ Examples:
                         help="Include provenance + confidence columns in CSV")
     parser.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
                         help="Codebook output format (default: csv)")
+    parser.add_argument("--codebook-no-discovered", action="store_true",
+                        help="Exclude llm_discovered fields from the codebook output.")
 
     args = parser.parse_args()
 
@@ -230,6 +451,8 @@ Examples:
     python = sys.executable
 
     start = time.time()
+    all_stats: dict[int, dict] = {}
+    phase_times: dict[int, float] = {}
     print(f"\nPatientPunk Pipeline")
     print(f"  Schema:    {schema_path.name}  (id: {schema_id})")
     print(f"  Input/out: {input_dir}")
@@ -259,7 +482,11 @@ Examples:
                "--schema", str(schema_path),
                "--input-dir", str(input_dir),
                "--temp-dir", str(temp_dir)]
+        t0 = time.time()
         run(cmd, phase=1)
+        phase_times[1] = time.time() - t0
+        all_stats[1] = collect_phase1_stats(temp_dir, schema_id)
+        print_phase_summary(1, all_stats[1], phase_times[1])
 
     # -------------------------------------------------------------------------
     # Phase 2: LLM gap-filling
@@ -275,7 +502,11 @@ Examples:
             cmd += ["--limit", str(args.limit)]
         if args.resume:
             cmd += ["--resume"]
+        t0 = time.time()
         run(cmd, phase=2)
+        phase_times[2] = time.time() - t0
+        all_stats[2] = collect_phase2_stats(temp_dir, schema_id)
+        print_phase_summary(2, all_stats[2], phase_times[2])
     elif args.start_at <= 2:
         print(f"\n  [Skipping phase 2 — --no-llm]")
 
@@ -309,7 +540,11 @@ Examples:
             cmd += ["--resume"]
         if args.no_fill:
             cmd += ["--no-fill"]
+        t0 = time.time()
         run(cmd, phase=3)
+        phase_times[3] = time.time() - t0
+        all_stats[3] = collect_phase3_stats(temp_dir)
+        print_phase_summary(3, all_stats[3], phase_times[3])
     elif args.start_at <= 3:
         print(f"\n  [Skipping phase 3 — --no-discover]")
 
@@ -319,11 +554,11 @@ Examples:
     if args.start_at <= 4:
         banner(4, PHASE_NAMES[4])
 
-        # Always include base merged records
-        input_files = [temp_dir / "merged_records_base.json"]
+        # Always include merged records for this schema
+        input_files = [temp_dir / f"merged_records_{schema_id}.json"]
 
-        # Add discovered records if they exist
-        discovered = find_discovered_records(schema_id, temp_dir)
+        # Add discovered records if they exist (most recent in temp/)
+        discovered = find_discovered_records(temp_dir)
         if discovered:
             input_files.append(discovered)
             print(f"  Including discovered records: {discovered.name}")
@@ -343,7 +578,11 @@ Examples:
                    "--sep", args.sep]
             if args.provenance:
                 cmd += ["--provenance"]
+            t0 = time.time()
             run(cmd, phase=4)
+            phase_times[4] = time.time() - t0
+            all_stats[4] = collect_phase4_stats(OUTPUT_DIR)
+            print_phase_summary(4, all_stats[4], phase_times[4])
 
     # -------------------------------------------------------------------------
     # Phase 5: Codebook
@@ -358,20 +597,25 @@ Examples:
             cmd += ["--csv", str(records_csv)]
         else:
             print(f"  [Note] records.csv not found — codebook will have schema info only")
+        if args.codebook_no_discovered:
+            cmd += ["--no-discovered"]
+        t0 = time.time()
         run(cmd, phase=5)
+        phase_times[5] = time.time() - t0
+        all_stats[5] = collect_phase5_stats(OUTPUT_DIR)
+        print_phase_summary(5, all_stats[5], phase_times[5])
 
     # -------------------------------------------------------------------------
-    # Done
+    # Final summary
     # -------------------------------------------------------------------------
     elapsed = time.time() - start
-    mins, secs = divmod(int(elapsed), 60)
-    print("\n" + "=" * 60)
-    print(f"  Pipeline complete  ({mins}m {secs}s)")
-    print(f"  CSV:      {OUTPUT_DIR / 'records.csv'}")
+    print_pipeline_summary(all_stats, elapsed)
+
     codebook_ext = "md" if args.codebook_format == "markdown" else "csv"
+    print(f"  CSV:      {OUTPUT_DIR / 'records.csv'}")
     print(f"  Codebook: {OUTPUT_DIR / f'codebook.{codebook_ext}'}")
-    print(f"  Temp:     {temp_dir}  (intermediates preserved — delete to free space)")
-    print("=" * 60 + "\n")
+    print(f"  Temp:     {temp_dir}")
+    print()
 
 
 if __name__ == "__main__":

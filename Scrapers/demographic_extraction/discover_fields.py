@@ -62,7 +62,8 @@ try:
 except ImportError:
     sys.exit("anthropic is required: pip install anthropic")
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent / ".env")        # demographic_extraction/.env
+load_dotenv(Path(__file__).parent.parent / ".env")  # Scrapers/.env (fallback)
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
@@ -1774,24 +1775,15 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         for f in llm_only_fields:
             print(f"    {f['field_name']}: {f.get('extractability_note', 'not regex-extractable')}")
 
-    # Generate / merge schema
-    if existing_schema is not None:
-        # Merge new fields into the existing disease-specific schema
-        schema, added, skipped = merge_into_schema(validated_fields, existing_schema)
-        schema_file = args.schema
-        with open(schema_file, "w", encoding="utf-8") as f:
-            json.dump(schema, f, ensure_ascii=False, indent=2)
-        print(f"\n  Schema updated : {schema_file}")
-        print(f"  Fields added   : {added}  (skipped {skipped} already present)")
-    else:
-        # No schema provided — create a new standalone file
-        schemas_dir = Path(__file__).parent / "schemas"
-        schemas_dir.mkdir(exist_ok=True)
-        schema = generate_schema(validated_fields, base_schema_id)
-        schema_file = schemas_dir / f"{schema['schema_id']}.json"
-        with open(schema_file, "w", encoding="utf-8") as f:
-            json.dump(schema, f, ensure_ascii=False, indent=2)
-        print(f"\n  Schema saved: {schema_file}")
+    # Always generate a new discovery schema file in temp/.
+    # If --schema was provided it is used READ-ONLY for known-field context —
+    # discovered fields are never merged back into it, keeping the curated
+    # schema clean. Each run produces its own discovered_{timestamp}.json.
+    schema = generate_schema(validated_fields, base_schema_id)
+    schema_file = temp_dir / f"{schema['schema_id']}.json"
+    with open(schema_file, "w", encoding="utf-8") as f:
+        json.dump(schema, f, ensure_ascii=False, indent=2)
+    print(f"\n  Discovery schema saved: {schema_file}")
 
     # Phase 3: Extract with new regex across the full corpus
     records = run_phase3_regex_extract(validated_fields, corpus_items, workers=args.workers)
@@ -1811,12 +1803,8 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
     with open(records_file, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
-    # Improvement 6: update schema with bleed rate health data
-    if args.schema and records_file.exists():
-        try:
-            run_schema_health_update(args.schema, records_file)
-        except Exception as e:
-            print(f"  [Warning] Schema health update failed: {e}")
+    # Schema health update skipped — discovered fields now live in temp/,
+    # not in the curated --schema file, so bleed rates are not written back.
 
     # Build and save report
     end_time = datetime.now(timezone.utc)

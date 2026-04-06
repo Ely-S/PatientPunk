@@ -332,7 +332,7 @@ PATTERNS = {
             r"boom.bust|push.crash|wax and wan[ei])\b",
             re.I,
         ),
-        re.compile(r"\b(\d+)\s*%\s*(?:better|worse|recovered|improved)\b", re.I),
+        re.compile(r"\b(\d+\s*%\s*(?:better|worse|recovered|improved))\b", re.I),
         re.compile(r"\b(fully recovered|partially recovered|bedbound|housebound|back to normal)\b", re.I),
     ],
 
@@ -421,7 +421,7 @@ PATTERNS = {
             r"no (?:effect|improvement|difference|change)|worsened|crashed me|caused a flare)\b",
             re.I,
         ),
-        re.compile(r"\b(\d+)\s*%\s*(better|worse|improvement|reduction)\b", re.I),
+        re.compile(r"\b(\d+\s*%\s*(?:better|worse|improvement|reduction))\b", re.I),
     ],
 
     # Surgery / procedures
