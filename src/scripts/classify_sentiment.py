@@ -119,6 +119,7 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
 def run_classification(client, output_dir: Path, limit: int = None, regenerate_cache: bool = False):
     """Main classification logic — called by pipeline or standalone."""
     cache_path = output_dir / "sentiment_cache.json"
+    filtered_path = output_dir / "filtered_cache.json"
     canon_map_path = output_dir / "canonical_map.json"
 
     tagged = json.loads((output_dir / "tagged_mentions.json").read_text())
@@ -143,6 +144,7 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
         tagged = tagged[:limit]
 
     cache = {} if regenerate_cache else load_cache(cache_path)
+    filtered = {} if regenerate_cache else load_cache(filtered_path)
 
     # Build prompts per drug (with synonyms)
     # Collect all entry×drug pairs not yet in cache
@@ -152,12 +154,12 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
         all_drugs = list(dict.fromkeys(entry.get("drugs_direct", []) + entry.get("drugs_context", [])))
         for drug in all_drugs:
             key = f"{entry['id']}:{drug}"
-            if key not in cache:
+            if key not in cache and key not in filtered:
                 to_do.append((entry, drug, key))
                 if drug not in prompts:
                     prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
 
-    log.info(f"{len(cache)} cached, {len(to_do)} to process...")
+    log.info(f"{len(cache)} classified, {len(filtered)} filtered, {len(to_do)} to process...")
 
     # Prefilter with Haiku
     log.info("Prefiltering...")
@@ -167,17 +169,15 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
             results = prefilter_batch(client, [(e, d) for e, d, k in batch], id_to_text)
             for (entry, drug, key), passed in zip(batch, results):
                 if not passed:
-                    cache[key] = {"filtered": True}
+                    filtered[key] = True
         except Exception as e:
             log.error(f"Prefilter batch error: {e}")
-        save_cache(cache, cache_path)
+        save_cache(filtered, filtered_path)
         log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(to_do))}/{len(to_do)}...")
 
-    # Only classify entries that passed prefilter (not filtered, not already classified)
-    to_classify = [(e, d, k) for e, d, k in to_do if k not in cache]
-    filtered_count = sum(1 for k in cache if cache[k].get("filtered"))
-    classified_count = len(cache) - filtered_count
-    log.info(f"{filtered_count} filtered out, {classified_count} classified, {len(to_classify)} to classify...")
+    # Only classify entries that passed prefilter
+    to_classify = [(e, d, k) for e, d, k in to_do if k not in filtered]
+    log.info(f"{len(filtered)} filtered out, {len(cache)} classified, {len(to_classify)} to classify...")
 
     # Group by drug for batching
     by_drug = defaultdict(list)
@@ -192,11 +192,12 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                 results = classify_batch(client, [(e, d) for e, d, k in batch], id_to_text, prompts)
                 for (entry, drug, key), result in zip(batch, results):
                     if result.get("signal") == "n/a":
-                        cache[key] = {"filtered": True}  # neutral = filtered
+                        filtered[key] = True
+                        save_cache(filtered, filtered_path)
                     else:
                         cache[key] = {**result, "author": entry["author"], "text": entry["text"],
                                      "created_utc": entry.get("created_utc")}
-                    save_cache(cache, cache_path)
+                        save_cache(cache, cache_path)
             except Exception as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug, key in batch:
@@ -210,20 +211,20 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                         )
                         result = parse_json_object(resp.content[0].text)
                         if result.get("signal") == "n/a":
-                            cache[key] = {"filtered": True}
+                            filtered[key] = True
+                            save_cache(filtered, filtered_path)
                         else:
                             cache[key] = {**result, "author": entry["author"], "text": entry["text"],
                                          "created_utc": entry.get("created_utc")}
-                        save_cache(cache, cache_path)
+                            save_cache(cache, cache_path)
                     except Exception as e2:
                         log.error(f"ERROR on {key}: {e2}")
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
 
     # Final stats
-    classified = {k: v for k, v in cache.items() if not v.get("filtered")}
-    drug_counts = Counter(k.split(":", 1)[1] for k in classified)
-    log.info(f"{len(classified)} sentiment records across {len(drug_counts)} drugs.")
+    drug_counts = Counter(k.split(":", 1)[1] for k in cache)
+    log.info(f"{len(cache)} sentiment records across {len(drug_counts)} drugs.")
     log.info("Top drugs:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")
