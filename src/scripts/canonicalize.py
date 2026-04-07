@@ -33,7 +33,7 @@ BATCH_SIZE = 50
 
 
 
-def haiku_canonicalize(client, names: list[str]) -> dict[str, str]:
+def canonicalize(client, names: list[str], model=MODEL_FAST) -> dict[str, str]:
     """Ask Haiku to group synonyms among a list of drug names."""
     msg = HAIKU_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
     resp = client.messages.create(
