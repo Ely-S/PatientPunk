@@ -50,7 +50,7 @@ def parse_json_array(raw: str) -> list:
     """Extract JSON array from LLM response."""
     raw = _strip_markdown(raw)
     start, end = raw.find("["), raw.rfind("]") + 1
-    return json.loads(raw[start:end]) if start >= 0 else []
+    return json.loads(raw[start:end]) if start >= 0 and end > start else []
 
 def parse_json_object(raw: str) -> dict:
     """Extract JSON object from LLM response."""
