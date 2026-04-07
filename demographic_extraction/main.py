@@ -40,7 +40,7 @@ Inspect a schema::
 
 Corpus statistics::
 
-    python main.py corpus --input-dir ../output
+    python main.py corpus --input-dir ../Scrapers/output
 
 Re-export CSV and codebook from existing temp files::
 
@@ -67,7 +67,7 @@ from patientpunk.schema import Schema
 # ---------------------------------------------------------------------------
 
 _HERE = Path(__file__).parent
-_DEFAULT_INPUT_DIR = _HERE.parent / "output"
+_DEFAULT_INPUT_DIR = _HERE.parent / "Scrapers" / "output"
 _DEFAULT_SCHEMA_DIR = _HERE / "schemas"
 
 
@@ -385,10 +385,10 @@ def main() -> None:
 Examples:
   python main.py run          --schema schemas/covidlonghaulers_schema.json
   python main.py run          --schema schemas/covidlonghaulers_schema.json --no-discover --limit 10
-  python main.py demographics --input-dir ../../reddit_sample_data
-  python main.py demographics --input-dir ../../reddit_sample_data --users-only
+  python main.py demographics --input-dir ../reddit_sample_data
+  python main.py demographics --input-dir ../reddit_sample_data --users-only
   python main.py inspect      --schema schemas/covidlonghaulers_schema.json
-  python main.py corpus       --input-dir ../output
+  python main.py corpus       --input-dir ../Scrapers/output
   python main.py export       --schema schemas/covidlonghaulers_schema.json --codebook-format markdown
         """,
     )

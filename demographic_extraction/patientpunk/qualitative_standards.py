@@ -43,6 +43,14 @@ DEMOGRAPHIC_STANDARDS
 
 from __future__ import annotations
 
+# Glossary of abbreviations used in the standards below:
+#
+#   MEE     Mutually Exclusive and Exhaustive — a core coding-scheme property.
+#   ICD-10  International Classification of Diseases, 10th Revision — the WHO
+#           standard for diagnostic codes (e.g. U09.9 = post-COVID condition).
+#   NLP     Natural Language Processing.
+#   LLM     Large Language Model (e.g. Claude Haiku, Sonnet).
+
 # ---------------------------------------------------------------------------
 # FIELD DESIGN STANDARDS
 # Injected when the model is discovering / defining new fields (Phase 3).

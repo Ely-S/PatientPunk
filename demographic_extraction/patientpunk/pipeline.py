@@ -127,7 +127,7 @@ class PipelineConfig:
 
     # Paths
     input_dir: Path = field(
-        default_factory=lambda: Path(__file__).parent.parent.parent / "output"
+        default_factory=lambda: Path(__file__).parent.parent.parent / "Scrapers" / "output"
     )
     temp_dir: Path | None = None
 

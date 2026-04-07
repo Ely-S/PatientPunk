@@ -57,8 +57,8 @@ try:
 except ImportError:
     sys.exit("anthropic is required: pip install anthropic")
 
-load_dotenv(Path(__file__).parent / ".env", override=True)        # demographic_extraction/.env
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)  # Scrapers/.env (fallback)
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # demographic_extraction/.env (fallback)
 
 # Shared qualitative coding standards — injected into every system prompt so
 # the model extracts values at graduate research-methods rigour.

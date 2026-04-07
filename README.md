@@ -144,10 +144,12 @@ python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 ### Step 2a — Demographic extraction *(who are the patients?)*
 
 ```bash
-python Scrapers/demographic_extraction/run_pipeline.py \
-    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
+python demographic_extraction/main.py run \
+    --schema demographic_extraction/schemas/covidlonghaulers_schema.json
 # Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
 ```
+
+See [`demographic_extraction/README.md`](demographic_extraction/README.md) for full CLI reference and library API.
 
 ### Step 2b — Drug sentiment *(what do they say about treatments?)*
 

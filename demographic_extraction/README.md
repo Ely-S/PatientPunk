@@ -32,13 +32,14 @@ hand-crafted regex patterns and Claude Haiku/Sonnet LLM calls.
 pip install anthropic python-dotenv
 
 # 2. Add your Anthropic API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+# Add your Anthropic API key to the project root .env
+cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
 # 3. Full pipeline run (regex + LLM gap-fill + CSV + codebook)
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
 # 4. LLM-only demographics (age / sex / location only, no regex)
-python main.py demographics --input-dir ../../reddit_sample_data
+python main.py demographics --input-dir ../reddit_sample_data
 
 # 5. Inspect the schema without running anything
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
@@ -77,7 +78,7 @@ the full clinical picture.  Works across full user posting histories, which
 typically yields 4–5× more coverage than single posts.
 
 ```bash
-python main.py demographics --input-dir ../../reddit_sample_data
+python main.py demographics --input-dir ../reddit_sample_data
 ```
 
 ---
@@ -164,7 +165,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
 ### `demographics` — LLM-only age/sex/location
 
 ```bash
-python main.py demographics --input-dir ../../reddit_sample_data [options]
+python main.py demographics --input-dir ../reddit_sample_data [options]
 
   --input-dir PATH      Corpus directory
   --output PATH         Output CSV (default: {input-dir}/demographics.csv)
@@ -186,7 +187,7 @@ python main.py inspect --schema schemas/covidlonghaulers_schema.json [options]
 ### `corpus` — corpus statistics
 
 ```bash
-python main.py corpus --input-dir ../../reddit_sample_data
+python main.py corpus --input-dir ../reddit_sample_data
 # Prints: post count, user history count, total records
 ```
 
@@ -211,7 +212,7 @@ other scripts.
 from patientpunk import CorpusLoader, CorpusRecord
 from pathlib import Path
 
-loader = CorpusLoader(Path("../../reddit_sample_data"))
+loader = CorpusLoader(Path("../reddit_sample_data"))
 print(loader.post_count, loader.user_count)   # 100, 87
 
 for record in loader.iter_records(limit=5):
@@ -246,7 +247,7 @@ print(result.ok, result.elapsed)
 
 # LLM-only demographics
 result = DemographicsExtractor(
-    input_dir=Path("../../reddit_sample_data"),
+    input_dir=Path("../reddit_sample_data"),
     output_path=Path("output/demographics.csv"),
     workers=10,
     include_users=True,   # use full posting histories
@@ -388,19 +389,22 @@ Columns: `author_hash`, `source_type`, `age`, `sex_gender`,
 # Install dependencies
 pip install anthropic python-dotenv
 
-# Create .env in this directory
-ANTHROPIC_API_KEY=sk-ant-api03-...
+# Create .env at the project root (PatientPunk/.env)
+cp ../.env.example ../.env
+# Edit ../.env — add your Anthropic API key
 ```
 
-The `.env` file is read by all LLM scripts.  Phase 1 (regex) and Phases 4–5
-(export) require no API key.
+The `.env` file at the project root is the canonical location for API keys.
+It is shared by both Shaun's extraction pipeline and Polina's sentiment
+pipeline.  A local `demographic_extraction/.env` is also checked as a
+fallback.  Phase 1 (regex) and Phases 4–5 (export) require no API key.
 
 ---
 
 ## Running Tests
 
 ```bash
-cd Scrapers/demographic_extraction
+cd demographic_extraction
 python -m pytest tests/ -v
 ```
 

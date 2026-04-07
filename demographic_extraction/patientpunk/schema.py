@@ -136,12 +136,14 @@ class Schema:
         base_fields = cls._parse_fields(base_raw, source_prefix="base")
         extension_fields = cls._parse_fields(ext_raw, source_prefix="extension")
 
-        # Mark base_optional fields activated by the extension
-        activated = set(ext_raw.get("include_base_fields", []))
+        # base_optional fields are dormant by default.  The extension schema
+        # can activate specific ones via "include_base_fields": ["dosage", ...].
+        # We remove any base_optional fields that are NOT in that list —
+        # only the explicitly activated ones survive into the final schema.
+        activated_optional_fields = set(ext_raw.get("include_base_fields", []))
         for name in list(base_fields):
             fd = base_fields[name]
-            if fd.source == "base_optional" and name not in activated:
-                # Remove base_optional fields not activated by this extension
+            if fd.source == "base_optional" and name not in activated_optional_fields:
                 del base_fields[name]
 
         return cls(

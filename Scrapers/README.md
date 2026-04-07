@@ -1,56 +1,57 @@
 # PatientPunk Scrapers
 
-Reddit corpus scraper and biomedical extraction pipeline for the PatientPunk project. Builds structured datasets from r/covidlonghaulers using the [Arctic Shift](https://arctic-shift.photon-reddit.com) public API — **no Reddit API key required**.
+Reddit corpus scraper for the PatientPunk project. Fetches posts, comment
+trees, and author histories from r/covidlonghaulers using the
+[Arctic Shift](https://arctic-shift.photon-reddit.com) public API — **no
+Reddit API key required**.
 
-**→ [View interactive pipeline diagram](PatientPunk_Operationalization_Pipeline_Diagram.html)** — open in a browser for the colour-coded stage overview
+> **Looking for the extraction pipeline?** It has moved to its own top-level
+> directory: [`../demographic_extraction/`](../demographic_extraction/).
+> See [`demographic_extraction/README.md`](../demographic_extraction/README.md)
+> for pipeline docs, CLI reference, and library API.
 
 ---
 
 ## Project Structure
 
 ```
-Scrapers/
-  scrape_corpus.py              # Main scraper
-  SCRAPER_HELP.md               # Full flag reference and time estimates
-  CONTRIBUTING.md               # Architecture and contributor guide
-  requirements.txt              # Python dependencies
-  demographic_extraction/
-    run_pipeline.py             # Orchestrator: runs all steps end-to-end (start here)
-    extract_biomedical.py       # Step 1: Regex-based biomedical signal extractor
-    llm_extract.py              # Step 2: LLM-based extractor (Claude Haiku)
-    discover_fields.py          # Step 3: Multi-model field discovery pipeline
-    records_to_csv.py           # Step 4: Flatten JSON records to a flat CSV
-    make_codebook.py            # Step 5: Generate data dictionary / codebook
-    .env.example                # API key template
-    schemas/
-      base_schema.json          # Documentation manifest of universal base fields
-      covidlonghaulers_schema.json  # Hand-crafted extension schema
-      discovered_*.json         # Auto-generated schemas from discover_fields.py
+PatientPunk/
+├── Scrapers/                        ← you are here
+│   ├── scrape_corpus.py             # Reddit scraper (Arctic Shift API)
+│   ├── requirements.txt             # Python dependencies
+│   ├── SCRAPER_HELP.md              # Full flag reference and time estimates
+│   ├── CONTRIBUTING.md              # Architecture and contributor guide
+│   └── output/                      # Scraper output (corpus + pipeline results)
+│       ├── subreddit_posts.json     # All posts in window
+│       ├── users/*.json             # One file per author (--user-histories)
+│       ├── records.csv              # Flattened demographic records
+│       ├── codebook.csv             # Data dictionary
+│       └── temp/                    # Pipeline intermediate files
+│
+├── demographic_extraction/          # Extraction pipeline (separate directory)
+├── database_creation/               # Drug sentiment pipeline (Polina)
+├── reddit_sample_data/              # Sample corpus for development/testing
+└── docs/                            # Project documentation
 ```
 
 ---
 
 ## Quick Start
 
-After scraping, the entire extraction pipeline runs with a single command:
-
 ```bash
-# 1. Install dependencies and add your Anthropic API key
+# Install dependencies
 pip install -r requirements.txt
-cp demographic_extraction/.env.example demographic_extraction/.env
-# Edit .env — add your key from https://console.anthropic.com/settings/keys
 
-# 2. Scrape the corpus (no API key needed)
+# Scrape the corpus (no API key needed)
 python scrape_corpus.py --weeks 2 --comments
 
-# 3. Run the full pipeline
-python demographic_extraction/run_pipeline.py \
+# Then run the extraction pipeline (from the project root):
+cd ..
+python demographic_extraction/main.py run \
     --schema demographic_extraction/schemas/covidlonghaulers_schema.json
 ```
 
-Outputs: `output/records.csv` (flat data) and `output/codebook.csv` (data dictionary).
-
-Use `--no-llm --no-discover` for a free, instant run (regex only). Use `--limit 10 --no-discover` for a cheap test run before committing to the full corpus. See the [run_pipeline.py](#run_pipelinepy-full-pipeline-orchestrator) section below for all flags.
+Outputs: `Scrapers/output/records.csv` (flat data) and `Scrapers/output/codebook.csv` (data dictionary).
 
 ---
 

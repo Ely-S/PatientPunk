@@ -40,8 +40,8 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env", override=True)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # demographic_extraction/.env (fallback)
 
 # Shared qualitative coding standards — injected into the system prompt so the
 # model applies research-grade rigour to demographic coding decisions.

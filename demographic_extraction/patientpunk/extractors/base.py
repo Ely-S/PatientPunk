@@ -87,9 +87,25 @@ class BaseExtractor(ABC):
     """
     Abstract base class for PatientPunk extractors.
 
-    Subclasses must implement :meth:`_build_args` to return the list of
-    command-line arguments (not including ``sys.executable`` or the script
-    path — those are prepended automatically).
+    Each extractor wraps one legacy script in ``old/`` via subprocess.
+    Subclasses must set two things:
+
+    1. ``_SCRIPT`` — the filename of the script in ``old/`` to delegate to.
+    2. ``_build_args()`` — return the CLI arguments for that script.
+
+    Example subclass::
+
+        class BiomedicalExtractor(BaseExtractor):
+            _SCRIPT = "extract_biomedical.py"
+
+            def _build_args(self) -> list[str]:
+                args = ["--input-dir", str(self.input_dir)]
+                if self.schema_path:
+                    args += ["--schema", str(self.schema_path)]
+                return args
+
+    The base class handles process execution, timing, error propagation,
+    and optional output capture.
 
     Parameters
     ----------
@@ -102,7 +118,8 @@ class BaseExtractor(ABC):
         ``{input_dir}/temp/`` if not provided.
     """
 
-    #: Relative path to the legacy script, from the ``old/`` directory.
+    #: Filename of the legacy script in ``old/`` that this extractor delegates
+    #: to.  Must be overridden by every concrete subclass.
     _SCRIPT: str = ""
 
     def __init__(

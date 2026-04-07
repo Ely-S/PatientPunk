@@ -21,9 +21,28 @@ Exporters::
     from patientpunk.exporters import CSVExporter            # Phase 4
     from patientpunk.exporters import CodebookGenerator      # Phase 5
 
-Pipeline orchestrator::
+Pipeline orchestrator (Phases 1–5: regex → LLM → discovery → CSV → codebook)::
 
     from patientpunk import Pipeline, PipelineConfig
+
+Standalone demographics (LLM-only, age/sex/location — no regex, no schema)::
+
+    from patientpunk import DemographicsExtractor
+
+.. note::
+
+   **When to use Pipeline vs DemographicsExtractor:**
+
+   * Use ``Pipeline`` when you want the full clinical picture — all 37+
+     schema fields (conditions, medications, treatment outcomes, etc.)
+     extracted via regex + LLM backfill.
+
+   * Use ``DemographicsExtractor`` when you only need age, sex/gender,
+     and location.  It is simpler, cheaper, and applies a strict
+     self-reference constraint (only extracts what the author says about
+     *themselves*).  Works especially well with full user posting
+     histories, which yield 4–5x more demographic coverage than single
+     posts.
 
 Quick-start example::
 
