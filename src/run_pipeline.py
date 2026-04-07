@@ -12,7 +12,6 @@ Usage:
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs extract canonicalize
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs --limit 50
 """
-import anthropic
 import argparse
 import sys
 from pathlib import Path
@@ -20,31 +19,15 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities import get_client, log
-
-
-def run_extract(client: anthropic.Anthropic, output_dir: Path, posts_file: Path, limit: int, regenerate: bool):
-    """Step 1: Extract drug mentions."""
-    from scripts.extract_mentions import run_extraction
-    run_extraction(client, output_dir, posts_file, limit=limit, regenerate_cache=regenerate)
-
-
-def run_canonicalize(client: anthropic.Anthropic, output_dir: Path):
-    """Step 2: Canonicalize drug names."""
-    from scripts.canonicalize import run_canonicalization
-    run_canonicalization(client, output_dir)
-
-
-def run_classify(client: anthropic.Anthropic, output_dir: Path, limit: int, regenerate: bool):
-    """Step 3: Classify sentiment."""
-    from scripts.classify_sentiment import run_classification
-    run_classification(client, output_dir, limit=limit, regenerate_cache=regenerate)
-
+from utilities import PipelineConfig, get_client, log
+from scripts.extract_mentions import run_extraction
+from scripts.canonicalize import run_canonicalization
+from scripts.classify_sentiment import run_classification
 
 STEPS = {
-    "extract": run_extract,
-    "canonicalize": run_canonicalize,
-    "classify": run_classify,
+    "extract": run_extraction,
+    "canonicalize": run_canonicalization,
+    "classify": run_classification,
 }
 
 
@@ -61,15 +44,22 @@ def main():
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    posts_file = Path(args.posts_file)
-    client = get_client()
+
+    config = PipelineConfig(
+        client=get_client(),
+        output_dir=output_dir,
+        posts_file=Path(args.posts_file),
+        limit=args.limit,
+        regenerate_cache=args.regenerate_cache,
+    )
 
     steps = [s for s in args.steps if not (s == "canonicalize" and args.skip_canonicalize)]
     for step in steps:
         log.info(f"\n{'═' * 60}")
-        log.info(f"  STEP: {step_name.upper()}")
+        log.info(f"  STEP: {step.upper()}")
         log.info(f"{'═' * 60}\n")
-        STEPS[step](client, output_dir, posts_file, args.limit, args.regenerate_cache)
+        STEPS[step](config)
+
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
     log.info(f"{'═' * 60}\n")

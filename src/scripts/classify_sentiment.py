@@ -25,18 +25,24 @@ The output format is:
     },
 
 Usage:
-    python src/scripts/classify_sentiment.py --output-dir data/outputs
-    python src/scripts/classify_sentiment.py --output-dir data/outputs --limit 50 regenerate-cache
+    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs classify
+    # Or standalone (run from src/):
+    python -m scripts.classify_sentiment --output-dir ../outputs
 """
 import json
 import re
-import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+if TYPE_CHECKING:
+    from utilities import PipelineConfig
+
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
-from utilities import MODEL_FAST, MODEL_STRONG, load_cache, save_cache, parse_json_array, parse_json_object, log
+from utilities import (
+    OutputFiles, MODEL_FAST, MODEL_STRONG, llm_call,
+    load_cache, save_cache, parse_json_array, parse_json_object, log
+)
 
 BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 5
@@ -61,18 +67,14 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> 
             msg += f"Replying to: {ancestor}\n\n"
         msg += f"Comment: {entry['text'][:600]}\n\n"
 
-    resp = client.messages.create(
-        model=MODEL_FAST,
-        max_tokens=len(items) * 10,
-        messages=[{"role": "user", "content": msg}],
-    )
-    raw = resp.content[0].text
+    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10)
     log.debug(f"Prefilter raw response: {raw!r}")
     answers = parse_json_array(raw)
     if len(answers) == len(items):
         return [str(a).strip().lower().startswith("yes") for a in answers]
-    # Fallback: misaligned array — classify individually to avoid false positives
-    log.warning(f"Prefilter array length mismatch: expected {len(items)}, got {len(answers)}. Raw: {raw!r}. Falling back to individual calls.")
+    
+    # Fallback: misaligned array — classify individually
+    log.warning(f"Prefilter array length mismatch: expected {len(items)}, got {len(answers)}. Falling back to individual calls.")
     results = []
     for entry, drug in items:
         ancestor = id_to_text.get(entry.get("parent_id", ""), "")
@@ -81,9 +83,8 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> 
         if ancestor:
             single_msg += f"Replying to: {ancestor}\n\n"
         single_msg += f"Comment: {entry['text'][:600]}\n\n"
-        r = client.messages.create(model=MODEL_FAST, max_tokens=10,
-                                   messages=[{"role": "user", "content": single_msg}])
-        results.append(r.content[0].text.strip().lower().startswith("yes"))
+        raw = llm_call(client, single_msg, model=MODEL_FAST, max_tokens=10)
+        results.append(raw.strip().lower().startswith("yes"))
     return results
 
 
@@ -104,25 +105,25 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
         msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text)}\n\n"
     msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" and "signal".'
 
-    resp = client.messages.create(
-        model=MODEL_STRONG,
-        max_tokens=50 * len(items),
-        system=prompts[drug],
-        messages=[{"role": "user", "content": msg}],
-    )
-    results = parse_json_array(resp.content[0].text)
+    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50 * len(items))
+    results = parse_json_array(raw)
     if len(results) == len(items):
         return results
     raise ValueError(f"Expected {len(items)} results, got {len(results)}")
 
 
-def run_classification(client, output_dir: Path, limit: int = None, regenerate_cache: bool = False):
+def run_classification(config: "PipelineConfig"):
     """Main classification logic — called by pipeline or standalone."""
-    cache_path = output_dir / "sentiment_cache.json"
-    filtered_path = output_dir / "filtered_cache.json"
-    canon_map_path = output_dir / "canonical_map.json"
+    client = config.client
+    limit = config.limit
+    regenerate_cache = config.regenerate_cache
 
-    tagged = json.loads((output_dir / "tagged_mentions.json").read_text())
+    cache_path = config.path(OutputFiles.SENTIMENT_CACHE)
+    filtered_path = config.path(OutputFiles.FILTERED_CACHE)
+    canon_map_path = config.path(OutputFiles.CANONICAL_MAP)
+    tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
+
+    tagged = json.loads(tagged_path.read_text())
     log.info(f"Loaded {len(tagged)} tagged entries.")
 
     # Build reverse synonym map: canonical → [synonyms]
@@ -205,12 +206,8 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                     try:
                         msg = format_entry(entry, id_to_text)
                         msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
-                        resp = client.messages.create(
-                            model=MODEL_STRONG, max_tokens=50,
-                            system=prompts[drug],
-                            messages=[{"role": "user", "content": msg}],
-                        )
-                        result = parse_json_object(resp.content[0].text)
+                        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50)
+                        result = parse_json_object(raw)
                         if result.get("signal") == "n/a":
                             filtered[key] = True
                             save_cache(filtered, filtered_path)
@@ -234,7 +231,7 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
 def main():
     """Standalone entry point."""
     import argparse
-    from utilities import get_client
+    from utilities import PipelineConfig, get_client
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
@@ -242,7 +239,15 @@ def main():
     parser.add_argument("--regenerate-cache", action="store_true")
     args = parser.parse_args()
 
-    run_classification(get_client(), Path(args.output_dir), args.limit, args.regenerate_cache)
+    output_dir = Path(args.output_dir)
+    config = PipelineConfig(
+        client=get_client(),
+        output_dir=output_dir,
+        posts_file=Path("."),  # Not used by classify
+        limit=args.limit or 0,
+        regenerate_cache=args.regenerate_cache,
+    )
+    run_classification(config)
 
 
 if __name__ == "__main__":

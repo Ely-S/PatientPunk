@@ -18,15 +18,27 @@ The output format is:
         "drugs_context": ["psychedelic"]
     }
 Usage:
-    python src/scripts/extract_mentions.py --posts-file data/subreddit_posts.json --output-dir data/outputs
-    python src/scripts/extract_mentions.py --posts-file data/subreddit_posts.json --output-dir data/outputs --limit 50 regenerate-cache
+    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs extract
+    # Or standalone (run from src/):
+    python -m scripts.extract_mentions --posts-file ../data/posts.json --output-dir ../outputs
 """
 import json
-import sys
 from collections import Counter
 from functools import cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from utilities import PipelineConfig
+
+from prompts.intervention_config import EXTRACT_PROMPT
+from utilities import (
+    OutputFiles, MODEL_FAST, llm_call, parse_json_array, 
+    process_in_batches, log
+)
+
+BATCH_SIZE = 20
+SAVE_EVERY = 5
 
 
 class PostData(NamedTuple):
@@ -37,25 +49,14 @@ class PostData(NamedTuple):
     post_title: str
     created_utc: int
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from prompts.intervention_config import EXTRACT_PROMPT
-from utilities import MODEL_FAST, parse_json_array, log
-
-BATCH_SIZE = 20
-SAVE_EVERY = 5
-
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     """Ask Haiku to extract drug mentions from a batch of texts."""
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text[:600]}\n\n" for i, text in enumerate(texts)
     )
-    resp = client.messages.create(
-        model=MODEL_FAST,
-        max_tokens=len(texts) * 80,
-        messages=[{"role": "user", "content": msg}],
-    )
-    results = parse_json_array(resp.content[0].text)
+    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(texts) * 80)
+    results = parse_json_array(raw)
 
     if len(results) == len(texts):
         return results
@@ -83,17 +84,18 @@ def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict) -> dict[str, l
     return {eid: list(ancestors(eid)) for eid in id_to_parent}
 
 
-def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100, regenerate_cache: bool = False):
+def run_extraction(config: "PipelineConfig"):
     """Main extraction logic — called by pipeline or standalone."""
-    tagged_path = output_dir / "tagged_mentions.json"
+    client = config.client
+    tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
 
-    posts = json.loads(posts_file.read_text())
-    if limit:
-        posts = posts[:limit]
+    posts = json.loads(config.posts_file.read_text())
+    if config.limit:
+        posts = posts[:config.limit]
     log.info(f"Loaded {len(posts)} posts.")
 
     # Load existing tagged_mentions as cache
-    if tagged_path.exists() and not regenerate_cache:
+    if tagged_path.exists() and not config.regenerate_cache:
         existing = json.loads(tagged_path.read_text())
         id_to_drugs = {e["id"]: e["drugs_direct"] for e in existing}
     else:
@@ -116,7 +118,8 @@ def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100,
             id_to_parent[comment_id] = c.get("parent_id")
 
     # Extract uncached items
-    to_do = [(item.item_id, item.text) for item in all_items if item.item_id not in id_to_drugs and item.text.strip()]
+    to_do = [(item_id, text) for item_id, text in ((item.item_id, item.text) for item in all_items) 
+             if item_id not in id_to_drugs and text.strip()]
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged():
@@ -132,23 +135,26 @@ def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100,
         tagged_path.write_text(json.dumps(tagged, indent=2))
         return tagged
 
-    batches_since_save = 0
-    for i in range(0, len(to_do), BATCH_SIZE):
-        batch = to_do[i:i + BATCH_SIZE]
-        item_ids, texts = zip(*batch) if batch else ([], [])
-        try:
-            for item_id, drugs in zip(item_ids, extract_batch(client, list(texts))):
-                id_to_drugs[item_id] = [d.lower().strip() for d in drugs]
-        except Exception as e:
-            log.error(f"Batch error: {e}. Continuing with fallback to empty list for all potential drugs in the batch.")
-            for item_id in item_ids:
-                id_to_drugs[item_id] = []
+    def process_batch(batch: list[tuple[str, str]]) -> list[list[str]]:
+        texts = [text for _, text in batch]
+        return extract_batch(client, texts)
 
-        batches_since_save += 1
-        if batches_since_save >= SAVE_EVERY:
-            save_tagged()
-            batches_since_save = 0
-        log.info(f"Extracted {min(i + BATCH_SIZE, len(to_do))}/{len(to_do)}...")
+    # Process batches
+    results = process_in_batches(
+        items=to_do,
+        batch_size=BATCH_SIZE,
+        process_fn=process_batch,
+        progress_label="Extracted",
+        save_fn=save_tagged,
+        save_every=SAVE_EVERY,
+    )
+
+    # Update id_to_drugs with results
+    for (item_id, _), drugs in zip(to_do, results):
+        if drugs is None:
+            id_to_drugs[item_id] = []
+        else:
+            id_to_drugs[item_id] = [d.lower().strip() for d in drugs]
 
     # Final save
     tagged = save_tagged()
@@ -164,7 +170,7 @@ def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100,
 def main():
     """Standalone entry point."""
     import argparse
-    from utilities import get_client
+    from utilities import PipelineConfig, get_client
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--posts-file", required=True, help="Path to subreddit_posts.json")
@@ -175,7 +181,15 @@ def main():
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    run_extraction(get_client(), output_dir, Path(args.posts_file), args.limit, args.regenerate_cache)
+
+    config = PipelineConfig(
+        client=get_client(),
+        output_dir=output_dir,
+        posts_file=Path(args.posts_file),
+        limit=args.limit,
+        regenerate_cache=args.regenerate_cache,
+    )
+    run_extraction(config)
 
 
 if __name__ == "__main__":

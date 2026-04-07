@@ -1,13 +1,6 @@
 # intervention_config.py
 # Prompts for the drug mention pipeline
 
-SIGNAL_WEIGHTS = {
-    "strong":     3,
-    "moderate":   2,
-    "weak":       1,
-}
-
-
 # Used by extract_mentions.py
 EXTRACT_PROMPT = """\
 For each text below, list all drugs, medications, supplements, and medical interventions mentioned.

@@ -2,7 +2,6 @@
 """
 canonicalize.py — Normalize drug synonyms.
 
-
 Step 2 of the pipeline. Merges synonyms (e.g. "low dose naltrexone" → "ldn")
 and rewrites tagged_mentions.json with canonical names.
 
@@ -18,30 +17,32 @@ The output file is canonical_map.json
         "drugs_context": ["psychedelic"]
     }
 Usage:
-    python src/scripts/canonicalize.py --output-dir data/outputs
-    python src/scripts/canonicalize.py --output-dir data/outputs --limit 50 regenerate-cache
+    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs canonicalize
+    # Or standalone (run from src/):
+    python -m scripts.canonicalize --output-dir ../outputs
 """
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from utilities import MODEL_FAST, parse_json_object, log
-from prompts.intervention_config import HAIKU_PROMPT
+if TYPE_CHECKING:
+    from utilities import PipelineConfig
+
+from utilities import (
+    OutputFiles, MODEL_FAST, llm_call, parse_json_object, 
+    process_in_batches, log
+)
+from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
+
 BATCH_SIZE = 50
 
 
-
-def canonicalize(client, names: list[str], model=MODEL_FAST) -> dict[str, str]:
+def canonicalize_batch(client, names: list[str], model=MODEL_FAST) -> dict[str, str]:
     """Ask Haiku to group synonyms among a list of drug names."""
-    msg = HAIKU_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
-    resp = client.messages.create(
-        model=MODEL_FAST,
-        max_tokens=len(names) * 30,
-        messages=[{"role": "user", "content": msg}],
-    )
-    result = parse_json_object(resp.content[0].text)
+    msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
+    raw = llm_call(client, msg, model=model, max_tokens=len(names) * 30)
+    result = parse_json_object(raw)
     # Ensure every input name is mapped
     for name in names:
         if name not in result:
@@ -49,10 +50,11 @@ def canonicalize(client, names: list[str], model=MODEL_FAST) -> dict[str, str]:
     return result
 
 
-def run_canonicalization(client, output_dir: Path):
+def run_canonicalization(config: "PipelineConfig"):
     """Main canonicalization logic — called by pipeline or standalone."""
-    tagged_path = output_dir / "tagged_mentions.json"
-    canon_path = output_dir / "canonical_map.json"
+    client = config.client
+    tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
+    canon_path = config.path(OutputFiles.CANONICAL_MAP)
 
     tagged = json.loads(tagged_path.read_text())
     log.info(f"Loaded {len(tagged)} tagged entries.")
@@ -61,14 +63,20 @@ def run_canonicalization(client, output_dir: Path):
     all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])}
     log.info(f"Found {len(all_drugs)} unique drug names.")
 
-    # Batch through Haiku
-    canon_map = {}
     all_drugs_sorted = sorted(all_drugs)
 
+    def process_batch(batch: list[str]) -> list[dict[str, str]]:
+        return [canonicalize_batch(client, batch)]
+
+    def fallback_single(name: str) -> dict[str, str]:
+        return {name: name}
+
+    # Process in batches, collecting partial maps
+    canon_map = {}
     for i in range(0, len(all_drugs_sorted), BATCH_SIZE):
         batch = all_drugs_sorted[i:i + BATCH_SIZE]
         try:
-            canon_map.update(haiku_canonicalize(client, batch))
+            canon_map.update(canonicalize_batch(client, batch))
         except Exception as e:
             log.error(f"Haiku error on batch {i}: {e}. Continuing with fallback...")
             for name in batch:
@@ -104,13 +112,19 @@ def run_canonicalization(client, output_dir: Path):
 def main():
     """Standalone entry point."""
     import argparse
-    from utilities import get_client
+    from utilities import PipelineConfig, get_client
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
     args = parser.parse_args()
 
-    run_canonicalization(get_client(), Path(args.output_dir))
+    output_dir = Path(args.output_dir)
+    config = PipelineConfig(
+        client=get_client(),
+        output_dir=output_dir,
+        posts_file=Path("."),  # Not used by canonicalize
+    )
+    run_canonicalization(config)
 
 
 if __name__ == "__main__":
