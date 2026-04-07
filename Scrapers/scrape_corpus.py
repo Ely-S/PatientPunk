@@ -41,7 +41,7 @@ USERS_DIR = OUTPUT_DIR / "users"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def utc_iso(ts) -> str:
+def utc_iso(ts: int | float | str) -> str:
     """Convert a value to ISO 8601 UTC string.
 
     Arctic Shift returns created_utc as an ISO string in most cases but

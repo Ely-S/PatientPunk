@@ -1,0 +1,326 @@
+[
+  {
+    "field_name": "symptom_response_improvement_phase",
+    "description": "Specific symptoms that improved after the initial worsening phase had passed (typically weeks 2+ of treatment). Captures the symptom-level outcomes that motivated continued use despite initial tolerability issues.",
+    "examples": [
+      {
+        "text": "For me it seems to improve brain fog. My executive functions were so bad when I stoped. As well as fatigue and crashes.",
+        "extracted_value": "brain fog"
+      },
+      {
+        "text": "For me it seems to improve brain fog. My executive functions were so bad when I stoped. As well as fatigue and crashes.",
+        "extracted_value": "executive function"
+      },
+      {
+        "text": "For me it seems to improve brain fog. My executive functions were so bad when I stoped. As well as fatigue and crashes.",
+        "extracted_value": "fatigue"
+      },
+      {
+        "text": "After two weeks I had a few great days, then a pretty bad week for no discernable reason, then I was good.",
+        "extracted_value": "overall improvement"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "I hope it will be helpful for you too"
+      },
+      {
+        "text": "It's not a miracle cure but it is significant improvement"
+      },
+      {
+        "text": "people report feeling better on this"
+      }
+    ],
+    "frequency_hint": "common",
+    "research_value": "Identifies which Long COVID symptoms are responsive to fibrinolytic/anti-inflammatory supplements, guiding future clinical research on microclot and inflammatory pathways.",
+    "trigger_vocabulary": [
+      "improve",
+      "better",
+      "improved the",
+      "helped with",
+      "executive function"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Extract specific symptom names following 'improve(d|s)', 'better', 'help(ed)' when they refer to post-initiation phase.",
+    "allowed_values": [
+      "brain fog",
+      "cognitive symptoms",
+      "crashes",
+      "executive function",
+      "fatigue",
+      "physical endurance"
+    ]
+  },
+  {
+    "field_name": "treatment_discontinuation_observation",
+    "description": "Evidence that discontinuing a supplement led to symptom worsening or relapse, suggesting the treatment was having a protective/therapeutic effect. Captures the temporal re-emergence of symptoms after stopping.",
+    "examples": [
+      {
+        "text": "In December I finished my bottle and decided to stop because I wasn't sure it was doing anything and after a few weeks I started crashing in ways I hadn't in a long time, having a lot of brain fog etc. so I got back on it.",
+        "extracted_value": "crashed after stopping"
+      },
+      {
+        "text": "the other guy but realized it helped. I just went up to 12,000",
+        "extracted_value": "relapse on discontinuation"
+      },
+      {
+        "text": "My executive functions were so bad when I stoped",
+        "extracted_value": "cognitive decline after stopping"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "I stopped taking it because I didn't think it was working"
+      },
+      {
+        "text": "people sometimes discontinue this medication"
+      },
+      {
+        "text": "I was considering stopping to see what happens"
+      }
+    ],
+    "frequency_hint": "occasional",
+    "research_value": "Provides patient-level evidence for whether a treatment is symptomatically necessary vs. optional; indicates whether the supplement addresses ongoing pathology rather than just masking symptoms.",
+    "trigger_vocabulary": [
+      "stopped",
+      "finished my bottle",
+      "stopped taking",
+      "when I stopped",
+      "after stopping"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Look for temporal sequence: stop/discontinue/finished + time marker + symptom worsening/crash/relapse verbs.",
+    "allowed_values": [
+      "cognitive decline after stopping",
+      "crashed after stopping",
+      "relapse on discontinuation",
+      "symptom return after stopping"
+    ]
+  },
+  {
+    "field_name": "supplement_dosage_range",
+    "description": "The reported dosage or dose range for a supplement being taken, including units (IU, mg, grams) and whether the dose was escalated over time. Captures variability in self-managed dosing.",
+    "examples": [
+      {
+        "text": "I take 2000 every morning but I know people who have gone up to 4000",
+        "extracted_value": "2000-4000 IU daily"
+      },
+      {
+        "text": "I was taking it 4000IU for a while",
+        "extracted_value": "4000 IU daily"
+      },
+      {
+        "text": "I just went up to 12,000 a day and I have been feeling even better",
+        "extracted_value": "12000 IU daily"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "the dose should probably be adjusted by a doctor"
+      },
+      {
+        "text": "I read that people use high doses of this"
+      }
+    ],
+    "frequency_hint": "common",
+    "research_value": "Tracks patient-reported dosing practices and dose titration patterns; reveals whether dosing is evidence-based or driven by trial-and-error within patient communities.",
+    "trigger_vocabulary": [
+      "take",
+      "taking",
+      "went up to",
+      "dose",
+      "dosage",
+      "IU",
+      "mg"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Extract number + unit (IU, mg, g) in immediate context of 'take', 'taking', 'went up to', 'dose'.",
+    "allowed_values": null
+  },
+  {
+    "field_name": "treatment_efficacy_self_assessment",
+    "description": "Patient's subjective evaluation of whether a treatment is working, ranging from definite benefit through uncertain/mixed to no effect. Captures confidence level in treatment effectiveness based on observed symptom patterns.",
+    "examples": [
+      {
+        "text": "From that timeline, I'm pretty confident it does help for me!",
+        "extracted_value": "confident it helps"
+      },
+      {
+        "text": "It's not a miracle cure but it is significant improvement.",
+        "extracted_value": "significant improvement"
+      },
+      {
+        "text": "I decided to stop because I wasn't sure it was doing anything",
+        "extracted_value": "uncertain if working"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "I hope it will work for you"
+      },
+      {
+        "text": "some people say it helps but I don't know"
+      }
+    ],
+    "frequency_hint": "common",
+    "research_value": "Differentiates between objective symptom improvement and subjective treatment perception; helps identify whether patients are continuing treatments on actual efficacy vs. hope.",
+    "trigger_vocabulary": [
+      "confident it helps",
+      "does help for me",
+      "significant improvement",
+      "wasn't sure it was doing",
+      "pretty meh"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Look for self-referential efficacy statements: 'I'm confident/sure', 'helps me', 'significant improvement', 'wasn't sure', 'worked for me'.",
+    "allowed_values": [
+      "confident it helps",
+      "no effect",
+      "significant improvement",
+      "some improvement",
+      "uncertain if working"
+    ]
+  },
+  {
+    "field_name": "symptom_duration_pattern",
+    "description": "The typical duration and resolution pattern of Long COVID symptoms when they occur (e.g., 1-3 weeks with complete resolution vs. chronic persistent)",
+    "examples": [
+      {
+        "text": "When it happens, the fatigue usually lasts from 1-3 weeks and is quite severe... but has so far resolved completely",
+        "extracted_value": "1-3 weeks complete resolution"
+      },
+      {
+        "text": "I had about a month of severe fatigue... Into May my symptoms improved, and I felt I was fully recovered",
+        "extracted_value": "1 month complete resolution"
+      },
+      {
+        "text": "Long Covid symptoms for around a year after an infection last April, albeit with quite long periods of remission... December 2025 however, they've been constant and debilitating",
+        "extracted_value": "1 year with remission periods"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "I've been tired since getting COVID but some days are worse than others"
+      },
+      {
+        "text": "My symptoms fluctuate depending on activity level"
+      },
+      {
+        "text": "I'm not sure how long my symptoms typically last because they're always present"
+      }
+    ],
+    "frequency_hint": "common",
+    "research_value": "Distinguishes Long COVID phenotypes with episodic/remitting patterns from chronic persistent patterns, essential for natural history research",
+    "trigger_vocabulary": [
+      "lasts",
+      "duration",
+      "resolved",
+      "remission",
+      "persistent",
+      "weeks",
+      "months"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Extractable via temporal markers (weeks/months) combined with resolution status (complete, partial, persistent)",
+    "allowed_values": [
+      "1 month complete resolution",
+      "1-3 weeks complete resolution",
+      "months with remission",
+      "persistent with remission periods",
+      "persistent without remission",
+      "weeks with complete resolution"
+    ]
+  },
+  {
+    "field_name": "pots_like_symptoms_present",
+    "description": "Whether patient has orthostatic intolerance or POTS-like symptoms (heart rate increase on standing, dizziness on position change, orthostatic symptoms)",
+    "examples": [
+      {
+        "text": "palpitations, with a heart rate that increased significantly upon standing up (POTS like symptoms)",
+        "extracted_value": "POTS-like symptoms"
+      },
+      {
+        "text": "presenting with fatigue, diziness and OI",
+        "extracted_value": "orthostatic intolerance"
+      },
+      {
+        "text": "heart rate that increased significantly upon standing up",
+        "extracted_value": "orthostatic tachycardia"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "My heart sometimes feels like it's racing when I'm anxious"
+      },
+      {
+        "text": "I get dizzy when I stand up too quickly after lying down for a long time, but it goes away immediately"
+      },
+      {
+        "text": "I have palpitations during exercise"
+      }
+    ],
+    "frequency_hint": "common",
+    "research_value": "POTS/orthostatic intolerance is a major Long COVID symptom domain; tracking this separately allows analysis of cardiovascular post-COVID subtypes",
+    "trigger_vocabulary": [
+      "POTS",
+      "heart rate increased standing",
+      "orthostatic",
+      "dizziness on standing",
+      "palpitations position"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Detectable via explicit mention of POTS, orthostatic symptoms, heart rate + standing, or orthostatic intolerance terminology",
+    "allowed_values": [
+      "none",
+      "orthostatic intolerance",
+      "orthostatic tachycardia",
+      "pots-like symptoms"
+    ]
+  },
+  {
+    "field_name": "lyme_disease_testing_considered",
+    "description": "Whether Lyme disease testing was recommended, considered, or pursued in a Long COVID patient; captures co-infection investigation pattern",
+    "examples": [
+      {
+        "text": "this doctor also recommended that I take a test for Lyme disease",
+        "extracted_value": "testing recommended"
+      },
+      {
+        "text": "I've been very uncertain how to proceed... Is it worth a try?",
+        "extracted_value": "testing considered"
+      },
+      {
+        "text": "I did definitely grow up in a tick heavy area... have had at least 5 ticks... My mother has definitely had Lyme though",
+        "extracted_value": "testing indicated by history"
+      }
+    ],
+    "negative_examples": [
+      {
+        "text": "I've read about Lyme disease online"
+      },
+      {
+        "text": "My doctor mentioned that Lyme exists but didn't recommend testing"
+      },
+      {
+        "text": "I'm from an area without ticks"
+      }
+    ],
+    "frequency_hint": "occasional",
+    "research_value": "Captures the practice pattern of investigating Lyme co-infection in Long COVID; relevant for understanding differential diagnosis pathways",
+    "trigger_vocabulary": [
+      "Lyme test",
+      "recommended",
+      "tick",
+      "chronic Lyme",
+      "testing for Lyme"
+    ],
+    "regex_extractable": true,
+    "extractability_note": "Detectable via explicit mention of Lyme testing recommendation, consideration, or pursuit",
+    "allowed_values": [
+      "testing considered",
+      "testing declined",
+      "testing pursued",
+      "testing recommended"
+    ]
+  }
+]

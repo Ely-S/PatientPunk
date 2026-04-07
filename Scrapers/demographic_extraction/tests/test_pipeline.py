@@ -2,6 +2,33 @@
 Tests for PatientPunk extraction pipeline utilities.
 
 No API calls are made — all tests cover pure functions only.
+All imports come from ``old/discover_fields.py`` (the legacy script) because
+that is where the canonical logic lives; the library classes in
+``patientpunk/extractors/`` are thin subprocess wrappers around the same code.
+
+Test sections
+-------------
+TestParseJsonResponse       parse_json_response() — extract valid JSON from
+                            raw LLM output that may include markdown fences,
+                            prose preamble, or trailing text.
+
+TestPatternsAgainstExamples evaluate_patterns() — run compiled regex patterns
+                            against example texts and return a hit/miss report.
+                            Used in Phase 3 Stage 2 to validate Sonnet-generated
+                            patterns before committing them to the schema.
+
+TestCollectTexts            collect_texts_from_post() / collect_texts_from_user()
+                            — extract non-empty text segments from raw JSON
+                            post and user-history objects.
+
+TestMergeIntoSchema         merge_into_schema() — merge a list of newly
+                            discovered field dicts into an existing extension
+                            schema without overwriting existing fields.
+
+TestSchemaPatterns          Smoke-tests against the real
+                            schemas/covidlonghaulers_schema.json: verifies
+                            every pattern compiles and spot-checks known texts.
+                            Skipped automatically if the schema file is absent.
 
 Run with:
     cd Scrapers/demographic_extraction
@@ -14,10 +41,12 @@ from pathlib import Path
 
 import pytest
 
-# Make the parent package importable
+# Insert the demographic_extraction/ directory onto sys.path so that
+# ``from old.discover_fields import ...`` resolves correctly regardless of
+# the working directory pytest is invoked from.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from discover_fields import (
+from old.discover_fields import (
     collect_texts_from_post,
     collect_texts_from_user,
     merge_into_schema,

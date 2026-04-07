@@ -1,0 +1,4076 @@
+[
+  {
+    "field_name": "treatment_outcome",
+    "times_suggested": 6,
+    "descriptions": [
+      "Explicit pairings of treatments with their reported outcomes, including dosage information and temporal patterns of response",
+      "Paired relationship between specific treatment and reported outcome",
+      "Pairing of treatments tried with their outcomes, essential for evaluating management strategies",
+      "Pairs specific treatments with their reported outcomes for the patient; critical for understanding what works or doesn't work for individual patients with Long COVID",
+      "Pairs specific treatments with their reported outcomes for this patient, capturing both helpful and unhelpful interventions",
+      "Reported treatment outcomes and efficacy for specific interventions"
+    ],
+    "example_values": [
+      "nattokinase 2000 IU daily: helps brain fog, fatigue, and crashes; initial worsening in first month (clot breakup theory), then improvement",
+      "nattokinase 4000 IU: similar effects as 2000 IU",
+      "nattokinase 12000 IU daily: feeling even better, but weird feeling for first week",
+      "nattokinase discontinuation: crash after a few weeks with increased brain fog",
+      "elimination diet: helped manage initial rough symptoms from nattokinase",
+      "acupuncture: did not help",
+      "supplements (boatloads): not particularly helpful",
+      "osteopath: failed attempt",
+      "craniosacral: failed attempt (for long COVID, though helped with post-concussion syndrome)",
+      "float tanks: failed attempt"
+    ],
+    "frequency_hints": [
+      "common",
+      "common",
+      "common",
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_side_effects",
+    "times_suggested": 5,
+    "descriptions": [
+      "Adverse effects attributed to specific treatments to track tolerability in long COVID",
+      "Adverse effects experienced from medications, important for treatment optimization",
+      "Adverse effects experienced from medications, including initial/startup side effects that may resolve over time. Important for understanding treatment tolerance and compliance.",
+      "Adverse effects from treatments attempted, important for understanding tolerability and individual variation",
+      "Captures adverse reactions or suspected side effects from medications, useful for understanding treatment tolerability in ME/CFS populations"
+    ],
+    "example_values": [
+      "insomnia (first week)",
+      "excessive daytime sleepiness",
+      "sudden crying/weeping episode",
+      "stomach pain (attributed to LDN)",
+      "Ketotifen: initial sedation (first 1-2 days)",
+      "Ketotifen: muscle and skin burning (in some patients, not this author)",
+      "Ketotifen dose escalation: extreme fatigue",
+      "nightmares from gabapentin",
+      "severe diarrhea from gabapentin",
+      "extreme irritability from guanfacine"
+    ],
+    "frequency_hints": [
+      "common",
+      "occasional",
+      "common",
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "comorbid_conditions",
+    "times_suggested": 5,
+    "descriptions": [
+      "Long COVID often presents with multiple overlapping conditions. Tracking MCAS, POTS, hEDS, ADHD as diagnosed comorbidities is clinically relevant.",
+      "Other conditions concurrent with Long COVID (MCAS, CCI, psoriatic arthritis, etc.). Important for understanding disease complexity and treatment considerations.",
+      "Other diagnoses patient holds alongside Long COVID (POTS, MCAS, ME/CFS, insomnia, anxiety, depression, OCD, etc.)",
+      "Other medical conditions occurring alongside Long COVID/ME-CFS (e.g., Ehlers-Danlos Syndrome mentioned in one response)",
+      "Other medical or psychiatric conditions co-occurring with Long COVID (RSD mentioned in text)."
+    ],
+    "example_values": [
+      "POTS",
+      "MCAS",
+      "ME/CFS",
+      "dysautonomia",
+      "insomnia",
+      "anxiety",
+      "panic attacks",
+      "OCD",
+      "permanent headache",
+      "GI issues"
+    ],
+    "frequency_hints": [
+      "common",
+      "occasional",
+      "common",
+      "occasional",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_response_timeline",
+    "times_suggested": 4,
+    "descriptions": [
+      "How long treatments or interventions took to show effect (e.g., '2 weeks carnivore', 'months of improvement'). Helps set realistic expectations.",
+      "How quickly the patient noticed improvement from specific treatments, useful for understanding treatment efficacy and individual variation",
+      "Specific timeline of improvement for individual symptoms, useful for understanding recovery patterns in LC",
+      "Temporal response to specific treatments for symptom resolution, important for pharmacological efficacy assessment"
+    ],
+    "example_values": [
+      "floaters: extremely slow improvement over 1.5 years, every few months gaining tolerance to light",
+      "floaters: previously covered book pages in dim light, now can read in normal light without obstruction",
+      "Vitamin D + ketotifen: 1 week to noticeable improvement",
+      "Ketotifen alone: within a week",
+      "Initial ketotifen trial (micro-dose): 1 month with no effect",
+      "Cromolyn: most effective, 1-2 weeks to recovery in previous episode; ketotifen 0.5mg: improved sleep but ineffective for current nasal symptoms; antihistamine nose sprays: insufficient for current episode",
+      "try carnivore for 2 weeks to determine if it works",
+      "add back one food, wait 3 days to assess response",
+      "electrolyte drinks - helped a little over summer",
+      "nicotine - 50% improvement over 2 years"
+    ],
+    "frequency_hints": [
+      "occasional",
+      "common",
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "healthcare_access_barriers",
+    "times_suggested": 3,
+    "descriptions": [
+      "Barriers to accessing appropriate mental health care (therapy, couples counseling) for patients with chronic illness",
+      "Barriers to obtaining LDN or other treatments, including prescribing practices and alternative access routes",
+      "Documented barriers to healthcare support and resources"
+    ],
+    "example_values": [
+      "government programs not available",
+      "cannot afford hired help",
+      "no non-profit help available",
+      "no local caregivers or friend support",
+      "doctors refusing homecare assessment despite severe functional limitation",
+      "lack of therapists specializing in couples with chronic illness",
+      "insurance coverage unclear",
+      "insufficient mental health resources for chronic illness patients",
+      "NHS restricted Rimegepant to one week prescription, preferring cheaper triptans",
+      "Some US doctors won't prescribe LDN"
+    ],
+    "frequency_hints": [
+      "occasional",
+      "common",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "social_impact",
+    "times_suggested": 3,
+    "descriptions": [
+      "Changes in social relationships, isolation, and ability to participate in social activities",
+      "Impact of illness on social relationships, isolation, and mental health outcomes. Captures psychosocial burden of Long COVID.",
+      "Impact on social relationships and feelings of disconnection from able-bodied peers"
+    ],
+    "example_values": [
+      "hard to relate to people and characters",
+      "disconnected from world around her",
+      "isolated from able-bodied friends",
+      "isolated at home",
+      "limited ability to interact with friends",
+      "spouse able to maintain some social activities",
+      "social rejection",
+      "isolation",
+      "lost friendships",
+      "being ghosted by friends"
+    ],
+    "frequency_hints": [
+      "common",
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_fluctuation_pattern",
+    "times_suggested": 3,
+    "descriptions": [
+      "Describes whether symptoms are constant, intermittent, or fluctuating. Clinically relevant for understanding disease presentation and prognosis.",
+      "Whether symptoms are constant or variable, helps characterize disease phenotype",
+      "Whether symptoms wax and wane with overall health status, relevant for understanding Long COVID disease dynamics"
+    ],
+    "example_values": [
+      "symptoms worsen with overall health deterioration",
+      "comes and goes all the time",
+      "mostly gone but can reappear suddenly",
+      "Symptoms fluctuate but overall trend worsening",
+      "Dizziness/lightheadedness worse when fatigued or later in day",
+      "Derealisation comes in waves",
+      "Head pressure constant or fluctuating"
+    ],
+    "frequency_hints": [
+      "common",
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_recurrence_pattern",
+    "times_suggested": 3,
+    "descriptions": [
+      "Pattern of symptom return after remission or improvement—captures relapsing-remitting dynamics and potential triggers for recurrence",
+      "Patterns of symptom return or relapse triggers; important for understanding post-recovery vulnerability",
+      "Whether new infections trigger worsening of existing Long COVID symptoms (parosmia recurrence/intensification during acute illness)"
+    ],
+    "example_values": [
+      "new viral infection triggered worsening of existing parosmia with additional nasal pressure and reduced smell/taste",
+      "symptoms keep returning",
+      "some weird symptoms return when flu season starts or fiancé gets ill",
+      "worried previous AMA caused relapse months later",
+      "hasn't had uveitis for 2+ years"
+    ],
+    "frequency_hints": [
+      "common",
+      "common",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_triggers_environmental",
+    "times_suggested": 2,
+    "descriptions": [
+      "Environmental factors that provoke or worsen symptoms",
+      "Environmental or activity-based triggers that worsen symptoms, relevant for understanding functional limitations"
+    ],
+    "example_values": [
+      "motion",
+      "sensory stimulation",
+      "airport terminals",
+      "stores",
+      "restaurants",
+      "car rides",
+      "Bumpy roads",
+      "Off-roading/SUV activities",
+      "Phone use (improved over time)"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "conditions",
+    "times_suggested": 2,
+    "descriptions": [
+      "Medical conditions explicitly mentioned by the patient",
+      "Medical conditions explicitly mentioned by the patient, relevant to understanding their functional limitations"
+    ],
+    "example_values": [
+      "exertional intolerance",
+      "dyspnea on exertion",
+      "chronic pain in multiple joints",
+      "ME/PEM",
+      "mild/moderate ME/CFS",
+      "insomnia"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_limitations",
+    "times_suggested": 2,
+    "descriptions": [
+      "Specific functional impacts reported: bedbound status, mobility challenges, activity intolerance",
+      "Specific functional restrictions (bed-bound, shower frequency, activity tolerance) - critical for severity assessment and quality of life measurement"
+    ],
+    "example_values": [
+      "bedbound combination with some movement depending on day",
+      "physically not able to keep up",
+      "exertional intolerance with dyspnea on exertion and elevated cardiopulmonary stats",
+      "bed-bound",
+      "can shower approximately once per week",
+      "cannot tolerate hot water for showers",
+      "feels half-paralyzed during seated activities"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_list",
+    "times_suggested": 2,
+    "descriptions": [
+      "Specific symptoms affecting the patient",
+      "Specific symptoms reported by patient - useful for symptom clustering and prevalence analysis"
+    ],
+    "example_values": [
+      "brain fog",
+      "fatigue",
+      "PEM (Post-Exertional Malaise)",
+      "poor sleep/insomnia"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "clinical_trial_participation",
+    "times_suggested": 2,
+    "descriptions": [
+      "Participation in research studies related to long COVID, treatment trials, or biomarker evaluation",
+      "Whether the patient participated in clinical trials (relevant for understanding treatment exposure and research involvement in Long COVID population)"
+    ],
+    "example_values": [
+      "Not a patient report - this is a clinical trial summary/analysis written by a researcher or health analyst",
+      "One patient had worst LDN reaction in their trial",
+      "LISTEN study and RECOVER study for LC and post-vaccine syndrome cohorts",
+      "Studies at Yale: Paxlovid trial (failed for LC and vax injury), antiviral trials",
+      "Cytokine panel blood work studies",
+      "Treatment trials requiring travel (patient too sick to attend)",
+      "Studies comparing vax injury LC and traditional LC (described as 'siblings, not twins')",
+      "Paxlovid study failed for both LC and post-vaccine syndrome cohorts"
+    ],
+    "frequency_hints": [
+      "rare",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pem_awareness",
+    "times_suggested": 2,
+    "descriptions": [
+      "Multiple responders warn against 'powering through' and one describes becoming 'bedridden' from pushing too hard, indicating Post-Exertional Malaise (PEM) concerns",
+      "Patient's understanding and description of post-exertional malaise, including triggers and recovery patterns"
+    ],
+    "example_values": [
+      "Pushing through worsens condition",
+      "One person became bedridden from overexertion",
+      "Small increments of work recommended (10-15 minutes at a time)",
+      "flare states",
+      "daytime exhaustion",
+      "hyperactive distressed body and brain",
+      "inability to sustain activity"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_exacerbation_triggers",
+    "times_suggested": 2,
+    "descriptions": [
+      "Specific activities or events that triggered symptom worsening, relevant to post-exertional malaise patterns",
+      "Specific triggers that worsen symptoms, important for understanding autonomic and stress-related components"
+    ],
+    "example_values": [
+      "arousal",
+      "stress",
+      "excitement",
+      "bright light",
+      "reading in dim light",
+      "3-hour hospital visit with sustained postural control",
+      "self-administered lymphatic drainage",
+      "attempted head/neck manipulation"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_contraindications",
+    "times_suggested": 2,
+    "descriptions": [
+      "Known drug allergies or contraindications preventing use of treatments — important for personalized management",
+      "Medications or drug classes that cannot be used due to existing medical conditions"
+    ],
+    "example_values": [
+      "vasoconstrictors (due to coronary artery spasms)",
+      "allergic to aspirin (which doctor recommended for symptoms)"
+    ],
+    "frequency_hints": [
+      "occasional",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "reinfection_status",
+    "times_suggested": 2,
+    "descriptions": [
+      "Whether patient experienced documented or suspected COVID reinfection during Long COVID course",
+      "Whether patient has experienced COVID reinfection and how many times. Important for understanding disease burden and long COVID progression."
+    ],
+    "example_values": [
+      "reinfected now",
+      "at least 2 COVID infections",
+      "documented reinfection: 1 confirmed (Omicron variant with characteristic hoarse throat, tested negative)",
+      "multiple suspected reinfections (later attributed to trauma reenactment)"
+    ],
+    "frequency_hints": [
+      "occasional",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_triggers",
+    "times_suggested": 2,
+    "descriptions": [
+      "Environmental or dietary triggers that exacerbate Long COVID symptoms. Important for identifying patterns in symptom provocation.",
+      "Specific triggers that precipitate or worsen symptoms, important for understanding LC pathophysiology and management strategies"
+    ],
+    "example_values": [
+      "sleep deprivation",
+      "stress",
+      "caffeine",
+      "PPI use (mentioned as context for B12 consideration)",
+      "cooking smells",
+      "air pollution",
+      "exertion/activity",
+      "bending over",
+      "uphill walking",
+      "food or environmental triggers (specific triggers mentioned but not detailed)"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "severity_classification",
+    "times_suggested": 2,
+    "descriptions": [
+      "Patient's reported severity level (mild, moderate, severe) relevant for prognosis and exercise prescription",
+      "Patient-reported severity level (mild, moderate, severe, very severe, bedridden). Useful for stratifying outcomes and understanding disease progression patterns."
+    ],
+    "example_values": [
+      "not bedbound but significantly limited",
+      "mild (able to do light gym work once or twice weekly)",
+      "severe (one former athlete no longer able to do little walks)",
+      "mild (one participant - undiagnosed until severe crash)",
+      "severe (multiple participants)",
+      "very severe (one participant - bedbound, can't be upright)",
+      "bedridden (multiple participants)"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "cognitive_symptoms",
+    "times_suggested": 2,
+    "descriptions": [
+      "Brain fog and cognitive dysfunction severity and types",
+      "Specific cognitive impairments reported including brain fog, difficulty with attention, memory integration, multi-step reasoning, and social cognition. Tracks neurological manifestations of Long COVID."
+    ],
+    "example_values": [
+      "brain fog",
+      "difficulty connecting with people",
+      "reduced cognitive bandwidth",
+      "impaired abstraction",
+      "trouble with multi-step reasoning",
+      "difficulty integrating multiple ideas",
+      "memory issues",
+      "processing slowdown"
+    ],
+    "frequency_hints": [
+      "common",
+      "common"
+    ]
+  },
+  {
+    "field_name": "reinfection_impact",
+    "times_suggested": 2,
+    "descriptions": [
+      "Effects of COVID reinfection on LC symptoms; scientifically important for understanding immune mechanisms",
+      "Whether patient experienced reinfection and how it affected symptom severity or recovery trajectory. Scientifically useful for understanding Long COVID progression after multiple infections."
+    ],
+    "example_values": [
+      "reinfected January 2023 after seemingly full recovery in late 2022; symptoms returned 2 months later with addition of chronic pain",
+      "infected again September 2025; oxygen requirements increased to 2-3 liters permanently",
+      "reinfection at 2.5 years cured many symptoms practically overnight",
+      "described as 'magical experience when it just lifted'",
+      "patient theorizes immune system 'switched' or 'reset like a stuck computer'"
+    ],
+    "frequency_hints": [
+      "common",
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "post_type",
+    "times_suggested": 1,
+    "descriptions": [
+      "Identifies whether this is a personal patient report or a community question/discussion post seeking information from others"
+    ],
+    "example_values": [
+      "community question seeking treatment experiences"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "conditions_diagnosed",
+    "times_suggested": 1,
+    "descriptions": [
+      "Structural and functional diagnoses explicitly stated by patient"
+    ],
+    "example_values": [
+      "severe multi-level craniocervical instability (CCI)",
+      "endothelial dysfunction",
+      "dysautonomia",
+      "venous insufficiency"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pathophysiological_hypothesis",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's own hypothesis about mechanism - nervous system dysfunction related to neurological structures"
+    ],
+    "example_values": [
+      "nervous system cannot handle motion or stimulation; possible brainstem involvement, vagus nerve compression, jugular vein compression, or vascular compromise from CCI"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "baseline_trajectory",
+    "times_suggested": 1,
+    "descriptions": [
+      "Direction of illness course: worsening, stable, improving"
+    ],
+    "example_values": [
+      "baseline got worse in last yr, approaching yr 3"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "concurrent_stressors",
+    "times_suggested": 1,
+    "descriptions": [
+      "Significant life stressors coinciding with illness onset - important for understanding psychosocial context and potential exacerbating factors"
+    ],
+    "example_values": [
+      "recent breakup with long-term partner (7 years)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "accommodation_barriers",
+    "times_suggested": 1,
+    "descriptions": [
+      "Institutional or systemic barriers to accessing necessary accommodations - relevant for healthcare equity and disability access research"
+    ],
+    "example_values": [
+      "professors unwilling to provide incomplete grade accommodation"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "baseline_functional_capacity",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's prior level of functioning before illness onset, useful for understanding disease impact and trajectory"
+    ],
+    "example_values": [
+      "highly functional: worked multiple jobs, volunteering, studying simultaneously, fitness-focused"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "sensory_sensitivities",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific sensory issues (sound, light, visual stimuli) that contribute to functional limitations and guide accommodation needs"
+    ],
+    "example_values": [
+      "intolerance to sounds/sights/stressful interactions requiring rest periods"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "energy_management_strategy",
+    "times_suggested": 1,
+    "descriptions": [
+      "How patient manages limited energy/spoons (energy envelope therapy, pacing, activity limitation)"
+    ],
+    "example_values": [
+      "limits interaction duration",
+      "requires rest periods after cognitive/social exertion"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "oral_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific oral/mouth manifestations including halitosis, gum disease, ulceration, and bacterial overgrowth patterns — relevant for understanding post-COVID microbiome dysfunction and oral dysbiosis"
+    ],
+    "example_values": [
+      "sour/infection-type mouth odor",
+      "spoiled milk smell from water bottle after hours",
+      "constant gum ulcers",
+      "bleeding gums despite consistent care",
+      "bacterial-smelling breath"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "microbiome_dysfunction_indicators",
+    "times_suggested": 1,
+    "descriptions": [
+      "Signs of dysbiosis and microbial imbalance (oral and gut) that correlate with post-COVID complications and treatment resistance"
+    ],
+    "example_values": [
+      "mouth odor from bacterial overgrowth",
+      "chronic gut issues worsened by COVID",
+      "probiotic ineffectiveness",
+      "H. pylori negative but persistent symptoms",
+      "SIBO suspected but unapproved testing"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_reviewed",
+    "times_suggested": 1,
+    "descriptions": [
+      "Treatments analyzed or reviewed in the text (Paxlovid extended duration 15-25 days for Long COVID)"
+    ],
+    "example_values": [
+      "Paxlovid (Nirmatrelvir + Ritonavir): 15-day and 25-day durations tested"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "supplement_intolerance_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documented pattern of rapid adverse reactions specifically to supplements and medications (but not foods), suggesting possible MCAS or mast cell sensitivity rather than true allergies"
+    ],
+    "example_values": [
+      "rapid reactions to supplements/medications within minutes to hours",
+      "tolerates fermented foods and probiotics well",
+      "does not react to food but reacts to supplement and medication forms of same substances",
+      "previously dismissed MCAS diagnosis due to lack of response to antihistamines"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mast_cell_activation_suspected",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient and community members mention or suspect MCAS as underlying cause; patient previously dismissed it but is reconsidering given recent adverse reactions"
+    ],
+    "example_values": [
+      "patient dismissed MCAS diagnosis previously due to no benefit from H1/H2 antihistamines or DAO",
+      "patient reconsidering MCAS diagnosis after nattokinase reaction",
+      "other users in thread attribute reactions to MCAS",
+      "patient reports reacting to endogenous hormones and heat (characteristic MCAS symptoms mentioned by others)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "blood_vessel_fragility_concern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient and community members speculate about fragile blood vessel lining and blood pressure crashes as mechanism for adverse reactions, particularly with proteolytic enzymes"
+    ],
+    "example_values": [
+      "nattokinase may cause blood pressure crash by triggering bradykinin release",
+      "fragile physical lining of blood vessels and gut mentioned as risk factor",
+      "discussion of microclots and blood flow to extremities"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "experimental_treatment_interest",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient interest in or mention of experimental/novel peptide-based therapies, which may indicate engagement with cutting-edge treatments for chronic conditions"
+    ],
+    "example_values": [
+      "Tirzep peptide"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "autoimmune_markers",
+    "times_suggested": 1,
+    "descriptions": [
+      "Autoimmune test results (ANA, thyroid antibodies, etc.) that may indicate underlying autoimmune involvement in Long COVID"
+    ],
+    "example_values": [
+      "mild thyroid inflammation",
+      "positive ANA pattern 2"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_progression_trigger",
+    "times_suggested": 1,
+    "descriptions": [
+      "Environmental or external factors that worsen existing Long COVID symptoms (e.g., seasonal allergies exacerbating eye swelling)"
+    ],
+    "example_values": [
+      "seasonal allergies"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_response",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient response to treatments tried, indicating partial efficacy and ongoing management challenges"
+    ],
+    "example_values": [
+      "ointment and thick eye drops: partial relief",
+      "Ketotifen eye drops: helpful"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "screen_exposure_management",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient mentions breaks from screens as helpful for managing symptoms, which is relevant to Long COVID management strategies and cognitive overload"
+    ],
+    "example_values": [
+      "Recommended to take breaks from screens when overwhelmed"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "academic_accommodations_sought",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient engaged with disability center and sought professor accommodations, relevant to social impact and healthcare navigation"
+    ],
+    "example_values": [
+      "In contact with disability center on campus",
+      "Seeking extensions or incomplete grades",
+      "Professors unwilling to provide significant accommodation"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "inflammation_management_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Multiple mentions of anti-inflammatory approaches (gluten-free diet, cold showers) suggesting this may be a tracked intervention"
+    ],
+    "example_values": [
+      "Gluten elimination",
+      "Cold showers",
+      "Anti-inflammatory diet focus"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "cognitive_impairment",
+    "times_suggested": 1,
+    "descriptions": [
+      "Cognitive difficulties affecting reading comprehension and media consumption reported by patient"
+    ],
+    "example_values": [
+      "struggle with reading and watching shows"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "disease_progression_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Pattern of illness characterized by fluctuation between slightly better and worse days rather than improvement trajectory"
+    ],
+    "example_values": [
+      "good days where can do a few things before becoming bedbound again",
+      "living in general malaise where nothing really happens"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "self_identification",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's own description of their condition status (e.g., 'disabled/CC')"
+    ],
+    "example_values": [
+      "disabled/CC (Chronic COVID/Long COVID)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "media_representation_advocacy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient involvement in media/advocacy work related to Long COVID awareness and representation"
+    ],
+    "example_values": [
+      "involved in creating short film about Long COVID featuring character with the condition"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "symptom_presentation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptoms experienced and their characteristics as reported by patient"
+    ],
+    "example_values": [
+      "brain fog",
+      "executive dysfunction",
+      "fatigue",
+      "crashes",
+      "dizziness",
+      "anxiety"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_initiation_response",
+    "times_suggested": 1,
+    "descriptions": [
+      "Initial adverse or unusual reactions to treatment onset, including timing and symptom changes"
+    ],
+    "example_values": [
+      "dizziness and anxiety within 5-10 minutes of nattokinase dose",
+      "worsening brain fog upon initiation",
+      "general 'weird feeling' for first week at higher doses",
+      "rough symptoms at start of nattokinase"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pem_experiences",
+    "times_suggested": 1,
+    "descriptions": [
+      "Post-exertional malaise (PEM) episodes experienced, including triggers, duration, and severity. Critical for understanding ME/CFS disease patterns."
+    ],
+    "example_values": [
+      "rolling PEM without realizing it triggered by busier than normal week",
+      "bedbound for two weeks with no improvement in baseline"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "baseline_improvement_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Interventions patient used to improve baseline function over time, useful for tracking recovery trajectories."
+    ],
+    "example_values": [
+      "quitting job",
+      "nervous system work/practices",
+      "time and rest"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "crash_management_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Strategies and supplements used during crashes/relapses. Patient mentions non-evidence-based supplement regimen dialed in over years."
+    ],
+    "example_values": [
+      "aggressive rest",
+      "supplement regimen (non-evidence based, personalized)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "comorbid_neurodivergence",
+    "times_suggested": 1,
+    "descriptions": [
+      "Diagnosis of autism and/or ADHD, which may interact with or worsen ME/CFS symptoms through increased cognitive exertion."
+    ],
+    "example_values": [
+      "autism diagnosis",
+      "ADHD diagnosis (both diagnosed in last year)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "cognitive_exertion_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Impact of cognitive/emotional processing (e.g., adjusting to new diagnoses) on energy envelope and symptom management."
+    ],
+    "example_values": [
+      "processing autism and ADHD diagnoses added cognitive exertion beyond normal energy envelope"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "caregiver_relationship",
+    "times_suggested": 1,
+    "descriptions": [
+      "Relationship type of the primary caregiver (spouse, parent, family member, etc.) - important for understanding caregiver burden and its psychological impact on both patient and caregiver"
+    ],
+    "example_values": [
+      "spouse (wife)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "psychological_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Mental health effects and emotional responses to chronic illness (loss of empathy, depression, grief, relationship strain, suicidal ideation in comments)"
+    ],
+    "example_values": [
+      "loss of empathy for able-bodied people",
+      "frustration with caregiver's complaints",
+      "self-focused thinking patterns",
+      "collective grief affecting marriage",
+      "resentment toward caregiver burden"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "caregiver_burden",
+    "times_suggested": 1,
+    "descriptions": [
+      "Impact on primary caregiver's wellbeing, including emotional burden, grief, anger, loss of life plans, and compassion fatigue"
+    ],
+    "example_values": [
+      "wife managing household and childcare",
+      "wife experiencing grief and anger",
+      "wife lost companion relationship due to illness",
+      "wife feeling need to 'be strong' and unable to validate patient's suffering"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "condition_comorbidities",
+    "times_suggested": 1,
+    "descriptions": [
+      "Other medical conditions mentioned alongside long COVID or ME/CFS"
+    ],
+    "example_values": [
+      "post-concussion syndrome (previous condition, partially healed)",
+      "dysautonomia (associated with long COVID)",
+      "ME/CFS (one patient)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_philosophy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's stated approach to treatment selection - evidence-based, desperate/experimental, holistic integrated, skeptical, etc."
+    ],
+    "example_values": [
+      "professional researcher who prioritizes evidence-based treatments",
+      "desperate enough to try acupuncture despite skepticism",
+      "evidence-focused but acknowledging limitations of conventional medicine for long COVID",
+      "pragmatic - willing to try alternative approaches when conventional medicine offers limited options",
+      "skeptical of expensive unproven treatments",
+      "informed decision-making approach to holistic medicine",
+      "integrative approach combining conventional and complementary modalities"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "muscle_loss_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific body areas affected by muscle loss and degree of loss - relevant for understanding Long COVID myalgia and deconditioning patterns"
+    ],
+    "example_values": [
+      "widespread tone loss, especially abdomen"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "exercise_intolerance",
+    "times_suggested": 1,
+    "descriptions": [
+      "Inability to perform certain exercise types despite active lifestyle - captures post-exertional malaise or deconditioning patterns"
+    ],
+    "example_values": [
+      "cannot perform resistance training; can only walk and stretch; walking everywhere but limited intensity"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "suspected_pathology",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's own hypothesis about their condition in absence of diagnosis"
+    ],
+    "example_values": [
+      "suspected deficiency"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "medication_history",
+    "times_suggested": 1,
+    "descriptions": [
+      "Past medications that may have contributed to symptom onset or persistence, relevant for understanding temporal relationships and potential iatrogenic causes"
+    ],
+    "example_values": [
+      "SSRIs (discontinued ~15 years ago)",
+      "benzodiazepines (discontinued ~15 years ago)",
+      "antipsychotics (discontinued ~15 years ago)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "visual_disturbance_types",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific types of visual symptoms experienced, useful for phenotyping Long COVID neuro-ophthalmologic manifestations"
+    ],
+    "example_values": [
+      "floaters",
+      "visual snow",
+      "light sensitivity",
+      "trembling vision",
+      "afterimages",
+      "eye pain"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mast_cell_activation_syndrome_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether patient has confirmed MCAS diagnosis or suspected MCAS; relevant for understanding Xolair indication"
+    ],
+    "example_values": [
+      "suspected MCAS with typical mast cell reactions (gastrointestinal issues, severe fatigue, headaches, brain fog, urticaria)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_flare_response",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether treatments trigger symptom flares or worsening; important for post-COVID/MCAS management"
+    ],
+    "example_values": [
+      "Xolair injection triggered mast cell flares"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_flare_patterns",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether specific activities, medications, foods, or other triggers reliably cause symptom exacerbation; critical for ME/CFS differential and pacing guidance"
+    ],
+    "example_values": [
+      "no clear identified triggers for chest pain flares; unclear relationship to exercise, food intake, medication changes, posture, or IV hydration"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "cardiac_workup_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether cardiac causes have been ruled out through testing; important for risk stratification in unexplained chest pain"
+    ],
+    "example_values": [
+      "cardiac workup completed: heart function confirmed normal"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "differential_diagnoses_considered",
+    "times_suggested": 1,
+    "descriptions": [
+      "List of conditions the patient or their healthcare providers have considered; demonstrates diagnostic complexity and patient self-advocacy"
+    ],
+    "example_values": [
+      "Hashimoto's thyroiditis",
+      "POTS",
+      "costochondritis",
+      "postural factors",
+      "hernia",
+      "GERD",
+      "Roemheld syndrome",
+      "medication side effects",
+      "esophageal dysfunction"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "cardiovascular_diagnoses",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific cardiac diagnoses following COVID infection mentioned by patients, including cardiomyopathy, pulmonary hypertension, heart failure subtypes, arrhythmias, and microvascular disease"
+    ],
+    "example_values": [
+      "cardiomyopathy due to COVID-19",
+      "pulmonary hypertension due to left heart disease",
+      "heart failure with preserved ejection fraction (HFpEF)",
+      "atrial fibrillation (A Fib)",
+      "tachycardia with resting heart rate 113 bpm",
+      "microvascular heart disease",
+      "small vessel disease in brain (stroke)",
+      "pericarditis",
+      "heart failure with reduced ejection fraction",
+      "costochondritis"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_progression_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether symptoms are improving, stable, or worsening over time, relevant for understanding disease trajectory"
+    ],
+    "example_values": [
+      "getting worse over time",
+      "symptoms triggered by allergy season",
+      "3 years of fatigue, exertional malaise, brain fog, dizziness",
+      "well on way to recovery"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pre_covid_functional_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's health and activity level before COVID infection, useful for understanding degree of change"
+    ],
+    "example_values": [
+      "triathlete (husband pre-COVID)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "chest_pain_etiology",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specified causes of chest pain in Long COVID patients when differentiated (cardiac vs non-cardiac)"
+    ],
+    "example_values": [
+      "heart pain from cardiac disease",
+      "chest pain from costochondritis",
+      "chest pain from POTS",
+      "nerve pain"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "social_support_strategy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient-identified coping strategies involving social accountability or external motivation to engage in activities"
+    ],
+    "example_values": [
+      "using friend for accountability to attend church"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "mood_response_to_socialization",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether social engagement provides mood or energy benefits despite potential LC burden"
+    ],
+    "example_values": [
+      "socializing provides a little boost"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptoms_reported",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptoms mentioned by patients in this Long COVID discussion thread, useful for symptom clustering and prevalence patterns"
+    ],
+    "example_values": [
+      "tinnitus/ringing in ears",
+      "hearing loss",
+      "memory impairment",
+      "brain fog",
+      "word-finding difficulties",
+      "cognitive dysfunction"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "psychological_coping_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient-reported psychological approaches to managing Long COVID, including acceptance and mindfulness strategies"
+    ],
+    "example_values": [
+      "believing in recovery without permanent damage",
+      "avoiding hyperfocus on symptoms to prevent exacerbation"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_resolution_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether symptoms eventually resolved or improved, tracking natural history of Long COVID"
+    ],
+    "example_values": [
+      "tinnitus and hearing loss eventually resolved"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "mobility_aids_used",
+    "times_suggested": 1,
+    "descriptions": [
+      "Assistive devices needed for mobility (rollator, wheelchair, cane, etc.), indicating functional limitation severity"
+    ],
+    "example_values": [
+      "rollator"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "flare_trigger_types",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific triggers for disease exacerbations (emotional stress, infections, procedures, etc.)"
+    ],
+    "example_values": [
+      "emotional stress",
+      "illness",
+      "procedures"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "prognosis_expectations_vs_reality",
+    "times_suggested": 1,
+    "descriptions": [
+      "Gap between doctor's prognosis statement and actual patient outcomes, indicating prognostic uncertainty"
+    ],
+    "example_values": [
+      "neurologist predicted full recovery; patient reports no improvement and continued disability"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "supplement_source_recommendation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether treatment recommendation came from external source (video, social media, forum post) vs. healthcare provider—clinically important for understanding patient information-seeking behavior and non-traditional treatment discovery"
+    ],
+    "example_values": [
+      "video-based instruction"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_duration_observed",
+    "times_suggested": 1,
+    "descriptions": [
+      "Duration of treatment use before reporting outcome—useful for understanding time-to-effect and whether improvements reflect early placebo response vs. sustained benefit"
+    ],
+    "example_values": [
+      "1 month"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_initiation_date",
+    "times_suggested": 1,
+    "descriptions": [
+      "When patient started specific treatments, useful for tracking symptom changes over time and understanding long-term outcomes."
+    ],
+    "example_values": [
+      "August 2024",
+      "September 2024",
+      "since 2021",
+      "3 months (duration, not start date)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_mobility",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific measurable functional activities (steps per day, standing tolerance time, etc.) that indicate functional capacity."
+    ],
+    "example_values": [
+      "4-5,000 steps per day",
+      "cannot stand longer than 10-15 minutes without passing out",
+      "severely limited by temperature sensitivity (55°F and below, 76°F and above)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "community_experiences",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient reports of discrimination, dismissal, or lack of recognition within medical and online communities; captures social determinants of health and access to support"
+    ],
+    "example_values": [
+      "Long COVID denialism in medical subreddits",
+      "Medical professionals engaged in discrimination against Long COVID patients",
+      "Vaccine-injured individuals seeking community support and being isolated"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "associated_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Symptoms occurring alongside primary complaint (anosmia/ageusia). Helps characterize long COVID phenotype."
+    ],
+    "example_values": [
+      "pressure in head",
+      "dizziness",
+      "insomnia"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatments_attempted",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific interventions tried by patient. Captures patient-reported efficacy and availability barriers."
+    ],
+    "example_values": [
+      "smell training with essential oils",
+      "transdermal nicotine patches (not tried by this patient)",
+      "Stellate Ganglion Block/SGB (not available in country)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "previous_illness_recovery",
+    "times_suggested": 1,
+    "descriptions": [
+      "Recovery pattern from anosmia/ageusia in previous infections. Prognostic indicator for current episode."
+    ],
+    "example_values": [
+      "lost taste/smell 3 years ago, recovered within 2 weeks"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_severity_list",
+    "times_suggested": 1,
+    "descriptions": [
+      "Comprehensive list of reported symptoms to capture symptom burden profile in long COVID patients"
+    ],
+    "example_values": [
+      "extreme fatigue",
+      "body pain",
+      "shakiness and teeth chattering",
+      "feeling of weakness",
+      "heart racing/palpitations",
+      "nausea",
+      "stomach pain",
+      "terrible health anxiety",
+      "intolerance to heat",
+      "intolerance to cold"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "initial_covid_infection_date",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific timing of initial COVID infection to establish Long COVID onset; medically relevant for understanding disease duration and trajectory"
+    ],
+    "example_values": [
+      "first week of March 2020"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "symptom_phenotype",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific Long COVID symptom clusters experienced (post-exertional malaise, fatigue, cognitive dysfunction, blood vessel dysfunction, food intolerances, etc.)"
+    ],
+    "example_values": [
+      "post-exertional malaise (PEM)",
+      "fatigue",
+      "cognitive dysfunction",
+      "reduced brain functioning/brain fog",
+      "violent/sporadic attacks/relapses",
+      "auto-antibody mediated inflammation (theory from 2026)",
+      "food intolerances (severe, violent)",
+      "hypoxia-like blood vessel constriction feeling",
+      "constant thirst",
+      "nerve pain (mentioned in comments)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "supplements_used",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific supplements/nutraceuticals tried and their reported efficacy for symptom management"
+    ],
+    "example_values": [
+      "nattokinase: reduced hypoxia blood vessel feeling",
+      "lumbrokinase: reduced hypoxia blood vessel feeling",
+      "NAC: improved cognition",
+      "lactoferrin: improved cognition",
+      "magnesium: reduced thirst",
+      "potassium: reduced thirst",
+      "salt: reduced thirst"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "mental_health_sequelae",
+    "times_suggested": 1,
+    "descriptions": [
+      "Psychological/psychiatric complications arising from Long COVID experience (PTSD, trauma reenactment, depression, anxiety, existential distress)"
+    ],
+    "example_values": [
+      "PTSD from illness experience",
+      "2 years of daily crying after rehabilitation phase",
+      "depression during PEM episodes",
+      "trauma reenactment (body/mind habituated to reinfection symptoms)",
+      "existential crisis regarding cognitive loss",
+      "shame and avoidance behaviors around food/eating",
+      "suicidal ideation ('ready to die' phase)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "cognitive_impairment_type",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific cognitive domains affected by Long COVID (executive function, creativity, memory, processing speed, word-finding, etc.)"
+    ],
+    "example_values": [
+      "reduced creative functioning",
+      "reduced ability to synthetize information and concepts",
+      "reduced ability to maintain witty humor",
+      "inability to articulate complex illness experience",
+      "maintenance of ideas becomes difficult",
+      "reduced musical, social, and linguistic creativity"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "secondary_illness_complications",
+    "times_suggested": 1,
+    "descriptions": [
+      "New medical conditions or complications arising after/during Long COVID (food poisoning, gut damage, homelessness-related health impacts, etc.)"
+    ],
+    "example_values": [
+      "severe food poisoning (year 4 of Long COVID) triggering 2+ years of additional complications",
+      "gut damage and dysfunction",
+      "2 years homelessness/living out of car due to food restrictions and isolation"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "recovery_trajectory_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Observable pattern of recovery including relapse cycles, plateau periods, and breakthrough improvements"
+    ],
+    "example_values": [
+      "3 years of acute Long COVID hell",
+      "1 year of extreme physical rehabilitation",
+      "2 years of severe complications post-rehabilitation",
+      "approximately 1.5 years stable without major relapses (as of writing)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "psychosomatic_component_noted",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's recognition of trauma/psychological factors in symptom perpetuation and potential for mind-body healing"
+    ],
+    "example_values": [
+      "body keeps score phenomenon recognized",
+      "trauma reenactment causing symptom manifestation despite negative COVID test",
+      "symptoms resolved when psychological belief shifted (negative test outcome)",
+      "distinguishes between legitimate viral/inflammatory symptoms vs trauma-driven symptoms"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_categories",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's self-reported symptom profile - captures the heterogeneity of Long COVID presentation"
+    ],
+    "example_values": [
+      "POTS",
+      "mild ME/CFS",
+      "post-concussion-type vision issues",
+      "vestibular issues",
+      "histamine intolerance",
+      "GI symptoms",
+      "motion sickness",
+      "vestibular-related drunkenness sensation"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_capacity_baseline",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's pre-illness functional capacity for context on disease severity and recovery trajectory"
+    ],
+    "example_values": [
+      "Could run 6:35 mile at age 49",
+      "Heart rate capable of reaching 182 bpm"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "crash_patterns",
+    "times_suggested": 1,
+    "descriptions": [
+      "Seasonal or temporal patterns in symptom crashes mentioned in Long COVID literature"
+    ],
+    "example_values": [
+      "October slide (seasonal, ends mid-February typically)",
+      "4-year pattern with Long COVID",
+      "Winter crash following flu shot"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "lab_value_changes",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific lab values and their changes over time (A1c, fasting glucose, cholesterol, blood pressure), which are objective markers of disease progression and metabolic dysfunction post-COVID"
+    ],
+    "example_values": [
+      "A1c: 5.1% → 6.1% (within 1 year)",
+      "Fasting glucose: 5.0 → 7.7 (mmol/L assumed)",
+      "One respondent: cholesterol increased post-COVID",
+      "One respondent: blood pressure elevated post-COVID (was normal before)",
+      "One respondent: fasting glucose slightly elevated despite normal A1c"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "metabolic_complications_post_covid",
+    "times_suggested": 1,
+    "descriptions": [
+      "New-onset or worsening metabolic conditions following COVID infection (prediabetes, diabetes, lipid abnormalities, hypertension), which is an important long-COVID phenotype"
+    ],
+    "example_values": [
+      "Prediabetes (A1c 6.1%)",
+      "Elevated fasting glucose",
+      "High cholesterol",
+      "High blood pressure",
+      "Blood sugar dysregulation despite low-carb diet and supplement use"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "previous_medication_side_effects",
+    "times_suggested": 1,
+    "descriptions": [
+      "Adverse effects from previous treatments that inform current medication hesitancy and treatment choices"
+    ],
+    "example_values": [
+      "Metformin: stomach problems and chronic nausea (prior experience with PCOS treatment)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "specialist_consultations_planned",
+    "times_suggested": 1,
+    "descriptions": [
+      "Upcoming specialist appointments indicating diagnostic pathway and disease monitoring"
+    ],
+    "example_values": [
+      "Endocrinologist appointment in a few weeks (for testing cortisol, inflammation, and metabolic markers)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "hypothesized_mechanisms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient-identified or discussed potential biological mechanisms for their symptoms (inflammation, viral persistence, cortisol, sympathetic activation)"
+    ],
+    "example_values": [
+      "Persistent inflammation",
+      "High cortisol",
+      "Viral persistence",
+      "Sympathetic activation/overdrive",
+      "COVID-19 direct metabolic effects"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_location",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific anatomical location(s) where symptoms occur, useful for characterizing neuromuscular manifestations"
+    ],
+    "example_values": [
+      "calves",
+      "thighs",
+      "elbows",
+      "wrists",
+      "arms",
+      "neck"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "comorbid_conditions_mentioned",
+    "times_suggested": 1,
+    "descriptions": [
+      "Other conditions or risk factors mentioned in context of treatment decisions"
+    ],
+    "example_values": [
+      "PPI use (implied ongoing or recent)",
+      "Reflux/GI issues (affects magnesium form choice)",
+      "Restless legs syndrome (prior history, current symptoms compared to RLS)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "exercise_limiting_conditions",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific exercise intolerance patterns and post-exertional malaise (PEM) triggers mentioned by patient; helps identify severity and exercise prescription boundaries"
+    ],
+    "example_values": [
+      "little walking causes increased deconditioning",
+      "cannot do endurance training without severe worsening",
+      "must keep recovery time under 24 hours to avoid PEM",
+      "fatigue prevents core strengthening exercises"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "physical_symptoms_detailed",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific musculoskeletal manifestations including location, severity, and functional impact"
+    ],
+    "example_values": [
+      "chronic neck pain",
+      "chronic shoulder pain",
+      "chronic back pain",
+      "groaning/grunting with positional changes",
+      "loss of abdominal strength",
+      "severe slouching",
+      "muscle cramps in glutes",
+      "severe weakness in back and neck",
+      "cervical instability (CCI mentioned)",
+      "SI joint weakness"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "prior_functional_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's activity level and health status before Long COVID onset; contextualizes current disability"
+    ],
+    "example_values": [
+      "endurance cyclist (24hr team relay mountain bike racer)",
+      "previously worked out as much as possible",
+      "managed neck/back pain through consistent movement and exercise"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pathophysiological_theories_mentioned",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient-articulated theories about underlying mechanisms of illness"
+    ],
+    "example_values": [
+      "deconditioning from reduced activity",
+      "viral connective tissue degradation (collagen loss)",
+      "reactive nervous system"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pem_recovery_patterns",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether patients recover from individual PEM episodes or experience permanent baseline capacity reduction; epidemiological data on PEM chronicity and cumulative effects"
+    ],
+    "example_values": [
+      "67% reported at least one PEM episode from which they never recovered",
+      "84% experienced multiple PEM occurrences causing overall health deterioration over weeks/months"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_exertional_malaise_presence",
+    "times_suggested": 1,
+    "descriptions": [
+      "Explicit mention or discussion of PEM as a core symptom; distinguishes ME/CFS and Long COVID populations"
+    ],
+    "example_values": [
+      "PEM explicitly discussed as primary concern"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "muscle_pathology_findings",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific muscle tissue damage documented on biopsy following exertional stress; indicates objective pathophysiology of PEM"
+    ],
+    "example_values": [
+      "Muscle fiber atrophy",
+      "Necrotic muscle fibers"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "device_cost_vs_efficacy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents the financial aspect of expensive medical devices relative to their demonstrated effectiveness; highlights patient frustration with high pricing for unproven interventions"
+    ],
+    "example_values": [
+      "Neurosym: expensive, benefits likely placebo",
+      "Pulsetto: expensive relative to underlying TENS mechanism",
+      "DIY CES devices: ~$10 in parts versus commercial models at astronomical markups",
+      "General pattern: high price tags do not correlate with superior efficacy"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "company_practices_concerns",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents patient experiences with unethical company practices around devices; relevant to informed consent and research integrity"
+    ],
+    "example_values": [
+      "Neurosym offering free products/compensation in exchange for positive reviews",
+      "Neurosym failing to reimburse warranty claims as promised"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "study_design_critique",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient observations about limitations in clinical trial design relevant to Long COVID research; highlights potential methodological gaps"
+    ],
+    "example_values": [
+      "4-week study duration too short to produce sustainable nervous system changes",
+      "6 weeks of stimulation still felt too short; 3+ months may be needed",
+      "Study design good with adequate control group",
+      "Fatigue may not be appropriate outcome measure for all Long COVID patients"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_domain",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptom or symptom category being addressed by treatment; clarifies what intervention was attempted for"
+    ],
+    "example_values": [
+      "Fatigue",
+      "ME (myalgic encephalomyelitis) symptoms",
+      "Neck muscle spasms triggering migraines",
+      "Inflammation",
+      "Relaxation/anxiety"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pem_triggers_identified",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific activities or interventions that trigger PEM crashes, as identified by the patient"
+    ],
+    "example_values": [
+      "mitochondrial-related interventions",
+      "sun exposure"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_improvement_with_intervention",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptoms that improved with particular treatments/supplements"
+    ],
+    "example_values": [
+      "PEM crashes resolved to 80-90% baseline with high-potassium electrolyte",
+      "muscle weakness improved with MitoQ supplementation",
+      "energy levels increased with MitoQ and electrolyte balance"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "electrolyte_imbalance_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Symptoms attributed to or improved by electrolyte rebalancing"
+    ],
+    "example_values": [
+      "fatigue and weakness with MitoQ if electrolyte not balanced",
+      "burning in legs",
+      "muscle cramps",
+      "increased alertness with electrolyte-containing beverages"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mitochondrial_dysfunction_hypothesis",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's working theory about mitochondrial involvement in PEM and refeeding-like syndrome"
+    ],
+    "example_values": [
+      "PEM crashes may be triggered by cellular rebalancing of minerals during mitochondrial repair attempts",
+      "electrolyte imbalance prevents proper mineral homeostasis restoration during these processes"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "spoon_management_strategy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Describes how patient manages limited energy/spoons and what activities they prioritize despite constraints"
+    ],
+    "example_values": [
+      "Allocates spoons to sending greeting cards, stickers, and handwritten messages to Long COVID community; considers this meaningful despite energy limitations"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "community_engagement_coping",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether patient engages in community support activities as a coping mechanism for Long COVID"
+    ],
+    "example_values": [
+      "Actively sends cards and gifts to fellow Long Haulers; describes this as how they 'process' the experience and 'craft meaning' from illness; uses dopamine activities as coping strategy"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "olfactory_specific_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Detailed description of smell/taste dysfunction including phantom smells or distorted perceptions (parosmia subtype)"
+    ],
+    "example_values": [
+      "parosmia (distorted smells)",
+      "reduced smell and taste",
+      "nasal pressure",
+      "achy nasal sensation"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "psychological_impact_severity",
+    "times_suggested": 1,
+    "descriptions": [
+      "Explicit statement of emotional distress or mental health burden from symptoms"
+    ],
+    "example_values": [
+      "freaking out since getting sick",
+      "mentally can't deal with this again",
+      "symptom described as disgusting but improving over time"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "biomarker_symptom_correlation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether measured autoantibody levels correlate with reported symptoms over time. Important for understanding if these specific biomarkers are clinically useful for disease monitoring and prognosis in suspected autonomic conditions."
+    ],
+    "example_values": [
+      "Adrenergic/muscarinic autoantibodies show variability in levels between tests but do not clearly correlate with day-to-day symptom intensity"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_phenotype_descriptor",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's characterization of their primary symptom pattern or quality (e.g., 'wired', 'fight-or-flight state', 'crash-and-burn'). Useful for phenotyping autonomic dysfunction presentations."
+    ],
+    "example_values": [
+      "Constant 'wired' / fight-or-flight state"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "biomarker_testing_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Frequency and repetition of autoantibody testing over time, reflecting monitoring approach and whether serial testing is being used for disease tracking."
+    ],
+    "example_values": [
+      "Multiple CellTrend testing rounds spaced out over months"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "post_exertional_malaise_trigger",
+    "times_suggested": 1,
+    "descriptions": [
+      "What activities or stressors triggered the flare episode, relevant for understanding PEM patterns in Long COVID"
+    ],
+    "example_values": [
+      "combination of grad school final practicum and full-time employment"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "sleep_disturbance_type",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific sleep issues experienced (insomnia, unrefreshing sleep, sleep maintenance, etc.)"
+    ],
+    "example_values": [
+      "not sleeping at all"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's current functional capacity and activity level (bedbound, housebound, working, etc.). Critical for severity assessment."
+    ],
+    "example_values": [
+      "bedbound",
+      "attempting to reintegrate into work",
+      "feels fine despite brain fog"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mental_health_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Psychiatric manifestations including depression, anxiety, isolation-induced mental health changes, and suicidal ideation."
+    ],
+    "example_values": [
+      "depression",
+      "anxiety",
+      "self-hatred",
+      "anger",
+      "rejection sensitivity distress"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "brain_imaging_findings",
+    "times_suggested": 1,
+    "descriptions": [
+      "Neuroimaging results showing hypometabolism in specific brain regions (Precuneus, Inferior Parietal Lobule) with reduced glucose utilization."
+    ],
+    "example_values": [
+      "hypometabolism in Precuneus",
+      "hypometabolism in Inferior Parietal Lobule",
+      "reduced glucose use on brain scans"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "self_diagnosed_conditions",
+    "times_suggested": 1,
+    "descriptions": [
+      "Conditions the patient self-diagnosed or identified without formal medical confirmation, particularly relevant for rare or complex conditions like CCI where diagnostic pathways vary"
+    ],
+    "example_values": [
+      "Craniocervical instability (CCI)",
+      "MCAS (Mast Cell Activation Syndrome)",
+      "Mitochondrial dysfunction"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mechanistic_understanding",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's understanding of their illness mechanisms, showing health literacy and research engagement"
+    ],
+    "example_values": [
+      "MCAS and mitochondrial dysfunction → collagen breakdown via MMP signaling → weak ligaments/tendons/connective tissue"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "imaging_studies_performed",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific imaging modalities completed (CT chest, CT angiogram, MRI, etc.) with contrast status and findings. Clinically useful for tracking diagnostic workup completion and ruling out organic causes."
+    ],
+    "example_values": [
+      "CT chest (normal findings)",
+      "Upper body CT with contrast (normal findings)",
+      "Upper body MRI without contrast (normal findings)",
+      "Spirometry showing reduced FEF25-75"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "suspected_mechanisms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's own hypotheses about underlying pathophysiology based on their clinical picture and diagnoses."
+    ],
+    "example_values": [
+      "perfusion-ventilation mismatch from dysautonomia"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "psychological_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Mental health symptoms secondary to medical condition and diagnostic experience, including health anxiety and psychological distress"
+    ],
+    "example_values": [
+      "health anxiety",
+      "fear/anxiety about physical symptoms",
+      "distrust of medical system"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "visible_physical_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Observable physical manifestations patient can see or feel (e.g., visible pulse, visible lymph node movement)"
+    ],
+    "example_values": [
+      "visible pulse in neck visible even when standing",
+      "visible lymph node movement with pulse"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pem_severity_and_frequency",
+    "times_suggested": 1,
+    "descriptions": [
+      "Captures post-exertional malaise characteristics - frequency of crashes, recovery time, and minimum activity threshold that triggers PEM. Important for understanding functional capacity fluctuation."
+    ],
+    "example_values": [
+      "constantly in PEM cycles",
+      "any time leaving house induces PEM",
+      "two day delay before PEM symptoms appear"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_philosophy_or_framework",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient explicitly identifies with Naviaux's cell danger response theory as organizing principle for treatment decisions. Documents which theoretical frameworks guide patient self-management."
+    ],
+    "example_values": [
+      "cell danger response informed protocol",
+      "nervous system regulation approach"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "environmental_triggers",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents specific environmental exposures that worsened disease. Mould exposure identified as key trigger for symptom escalation."
+    ],
+    "example_values": [
+      "severe mould exposure (led to MCAS and POTS)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "medication_adverse_effects_discontinued",
+    "times_suggested": 1,
+    "descriptions": [
+      "Tracks treatments stopped due to side effects or lack of efficacy. Relevant for understanding treatment contraindications."
+    ],
+    "example_values": [
+      "ADHD stimulants: may have pushed into severe state by using unavailable energy",
+      "NAC: side effects and no benefit"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "preexisting_conditions",
+    "times_suggested": 1,
+    "descriptions": [
+      "Prior medical conditions that may complicate or interact with Long COVID presentation"
+    ],
+    "example_values": [
+      "Fluoroquinolone toxicity (cipro antibiotic toxication)",
+      "Chronic insomnia from antibiotic toxicity (3 years duration)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "current_medications",
+    "times_suggested": 1,
+    "descriptions": [
+      "Prescription medications currently being taken for symptom management"
+    ],
+    "example_values": [
+      "Mirtazapine (for insomnia)",
+      "Quetiapine (for insomnia/mood)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "autonomic_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Dysautonomia-related symptoms including cardiovascular and neurological manifestations"
+    ],
+    "example_values": [
+      "Bounding pulse in back of head/neck and heart when laying",
+      "Bradycardia (HR 45 when sleeping)",
+      "Cold hands and legs",
+      "Dizziness during conversation"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "neurological_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Neurological symptoms reported by patient"
+    ],
+    "example_values": [
+      "Brain fog",
+      "Blurry vision and double vision on text",
+      "Difficulty focusing from short to long distance",
+      "Light sensitivity",
+      "Glassy eyes during exertion",
+      "Stiff face",
+      "Hand weakness in dominant hand (intermittent)",
+      "Hand stiffness",
+      "Tinnitus (mentioned in replies)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "exclusion_criteria",
+    "times_suggested": 1,
+    "descriptions": [
+      "Conditions or sensitivities explicitly ruled out by patient"
+    ],
+    "example_values": [
+      "Does not have histamine intolerance/MCAS"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pem_duration_current_episode",
+    "times_suggested": 1,
+    "descriptions": [
+      "Duration of current PEM flare episode — clinically important for tracking PEM progression and recovery patterns"
+    ],
+    "example_values": [
+      "1 week (at time of posting)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "activity_trigger_distance",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific activity distance/duration that triggered PEM episode — useful for understanding individual exertion thresholds"
+    ],
+    "example_values": [
+      "60 minutes walking total (30 min/rest/30 min/rest split)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "baseline_activity_tolerance",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's established baseline activity level before PEM trigger — important for understanding pacing limits"
+    ],
+    "example_values": [
+      "20 minutes daily walking to/from job; computer work with accommodations"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "severity_self_assessment",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's self-reported ME/CFS severity classification — impacts interpretation of activity thresholds"
+    ],
+    "example_values": [
+      "mild/moderate"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_onset_date",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific date or month when symptoms first appeared, useful for tracking disease progression and identifying potential triggers"
+    ],
+    "example_values": [
+      "March 2024"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_exertional_malaise_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Detailed description of PEM characteristics including triggers, timing, and duration of crashes, critical for ME/CFS diagnosis"
+    ],
+    "example_values": [
+      "Worsens after activities like socialising or editing",
+      "Can trigger intense symptoms later in the day or next day",
+      "Unclear if crashes last hours or 24+ hours (author unsure)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "disease_progression_timeline",
+    "times_suggested": 1,
+    "descriptions": [
+      "Overall trajectory of illness severity over time, important for prognostic assessment"
+    ],
+    "example_values": [
+      "Initially mild (March 2024): light sensitivity + head pressure",
+      "Progressively worsened over ~2 years",
+      "Now severe: housebound, multiple neurological symptoms"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "suspected_diagnoses",
+    "times_suggested": 1,
+    "descriptions": [
+      "Differential diagnoses the patient is considering, useful for understanding diagnostic uncertainty and guiding clinical workup"
+    ],
+    "example_values": [
+      "CFS/ME",
+      "Dysautonomia",
+      "Post-viral syndrome",
+      "MCAS/histamine intolerance (mentioned by responder with similar symptoms)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "lymph_node_findings",
+    "times_suggested": 1,
+    "descriptions": [
+      "Description of lymphadenopathy including size, location, duration, and recent changes, relevant for infection/immune workup"
+    ],
+    "example_values": [
+      "Multiple small lymph nodes (pea-sized) for years in different body areas",
+      "Have not grown or significantly changed",
+      "Recently: one in armpit became tender and painful"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_response_history",
+    "times_suggested": 1,
+    "descriptions": [
+      "Response to treatments tried, important for guiding future therapeutic decisions"
+    ],
+    "example_values": [
+      "Responder with similar symptoms: antihistamines (Hydroxyzine and Loratadine) helpful for fatigue, confusion, derealisation, swollen lymphs, chronic phlegm/saliva, insomnia",
+      "Responder: low histamine diet helpful",
+      "Responder: avoiding heavy smells helpful"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_outcome_improvement_percentage",
+    "times_suggested": 1,
+    "descriptions": [
+      "Quantified improvement in symptoms or functional status as reported by the patient following treatment"
+    ],
+    "example_values": [
+      "60% better"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "post_exertional_malaise_events",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific instances where patient experienced PEM/crashes after activity"
+    ],
+    "example_values": [
+      "Crash after 8 minutes on treadmill from light cardio",
+      "Crashes and fatigue days after adding too much cardio too soon",
+      "Knee pain exceeding 4-5k steps and 2-3 flights of stairs per day"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "exercise_tolerance_improvements",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documented increases in exercise capacity or tolerance over recovery period"
+    ],
+    "example_values": [
+      "Improved from bedbound to able to work part-time",
+      "Improved from unable to complete yoga to completing full yoga workouts",
+      "Progressed from 10-minute stationary bike sessions with 5% weekly increases",
+      "Returned to running, lifting weights, and hiking"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "activity_pacing_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific pacing methods or protocols used to safely increase activity"
+    ],
+    "example_values": [
+      "CHOP protocol for recumbent bike",
+      "Utah Adapt protocol",
+      "5% weekly increases on stationary bike",
+      "Recovery time less than 24 hours between same exercises",
+      "Staying within energy envelope",
+      "Avoiding pushing during 'limbo' periods",
+      "Gradual progression without pushing through pain"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "specific_symptom_improvements",
+    "times_suggested": 1,
+    "descriptions": [
+      "Individual symptoms that improved with specific interventions"
+    ],
+    "example_values": [
+      "Knee pain reduced with yoga and pilates practice",
+      "Finger strength improving with MitoQ and electrolytes",
+      "Joint pain improved with stretching and yoga",
+      "Overall body strength improved with comprehensive exercise regimen"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "postexertional_malaise",
+    "times_suggested": 1,
+    "descriptions": [
+      "Presence and severity of PEM, a core Long COVID symptom characterized by worsening after minimal exertion."
+    ],
+    "example_values": [
+      "gets worse with PEM; if pushing through PEM it will continually get worse",
+      "implied by extreme fatigue and exertional shortness of breath"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "central_sleep_apnea_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Central sleep apnea as a Long COVID complication; useful for understanding respiratory dysfunction mechanisms."
+    ],
+    "example_values": [
+      "central sleep apnea diagnosed at month 10, caused by Long COVID",
+      "CPAP machine use; 0 events recorded while on nicotine patches, minor events when off patches"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "latent_condition_reactivation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Long COVID triggering reactivation of previously latent or resolved medical conditions."
+    ],
+    "example_values": [
+      "latent asthma triggered and reactivated; required blue inhaler"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "antihistamine_efficacy_comparison",
+    "times_suggested": 1,
+    "descriptions": [
+      "Comparative effectiveness of different antihistamines as reported by patient (e.g., Benadryl > cetirizine/loratadine)"
+    ],
+    "example_values": [
+      "Benadryl more effective than cetirizine and loratadine",
+      "Non-sedating antihistamines less effective for brain fog"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "blood_brain_barrier_concern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient concern about antihistamine crossing BBB, dementia risk, and interest in penetrating vs non-penetrating agents"
+    ],
+    "example_values": [
+      "Currently taking antihistamines that do not cross BBB",
+      "Concerned about dementia risk from BBB-crossing antihistamines",
+      "Interested in whether BBB-crossing antihistamines clear spike proteins"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "medication_side_effects_experienced",
+    "times_suggested": 1,
+    "descriptions": [
+      "Adverse effects noted with specific antihistamines or treatments"
+    ],
+    "example_values": [
+      "Benadryl frequent use associated with worsening headaches and brain fog in some cases",
+      "H1 antihistamines may contribute to sleep apnea episodes",
+      "NAC supplement has strong sulfur smell"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_trial_duration",
+    "times_suggested": 1,
+    "descriptions": [
+      "Length of time patient attempted various treatments before assessment"
+    ],
+    "example_values": [
+      "NAC: tried for 2 weeks (found insufficient duration), recommendation for full month minimum",
+      "Benadryl: used often in 2021-2022",
+      "Loratadine: 2 years continuous"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "diagnostic_disagreement",
+    "times_suggested": 1,
+    "descriptions": [
+      "Conflicting diagnoses from different doctors—captures the common experience of disagreement between primary care and specialists in Long COVID cases"
+    ],
+    "example_values": [
+      "current doctor insists somatoform; psychiatrist confirmed Long COVID diagnosis"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "imaging_findings",
+    "times_suggested": 1,
+    "descriptions": [
+      "MRI or imaging abnormalities noted by patient, which may indicate neurological involvement"
+    ],
+    "example_values": [
+      "brain MRI with noted issues (specific findings not detailed)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "specialist_coordination_failure",
+    "times_suggested": 1,
+    "descriptions": [
+      "Lack of communication or care coordination between specialists, affecting quality of care"
+    ],
+    "example_values": [
+      "allergy specialist did not review symptom notes or records before appointment"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "emotional_coping_strategies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Psychological coping mechanisms and mindfulness techniques used by patient to manage illness, including acceptance practices, meditation, and cognitive reframing"
+    ],
+    "example_values": [
+      "tree and mountain meditation imagery",
+      "acceptance of present moment",
+      "grieving process",
+      "self-compassion practices",
+      "limiting hope/expectations to avoid disappointment cycles"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "grief_and_identity_loss",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's experience of grieving their pre-illness self and loss of identity, relationships, and life trajectory"
+    ],
+    "example_values": [
+      "missing healthy self",
+      "grieving old better version of self",
+      "loss of relationships",
+      "lost everything to this monster"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "internalized_ableism_experience",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's awareness and description of internalized ableism and its impact on mental health and acceptance"
+    ],
+    "example_values": [
+      "feeling guilty about rest",
+      "apology for stillness",
+      "unrealistic expectations about recovery",
+      "self-pity and wallowing"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "recurrence_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documentation of symptom recurrence across time and affected body systems (mucosal involvement: mouth/throat → nasal), relevant for understanding post-COVID relapse mechanisms"
+    ],
+    "example_values": [
+      "Initial episode 3 years ago affecting mouth and throat with burning sensation; current recurrence affecting nose with same burning sensation pattern"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "household_transmission_context",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documentation of household transmission routes and potential reinfection circumstances"
+    ],
+    "example_values": [
+      "Husband acquired COVID from workplace (welding occupation); presumed transmission to patient during lunch break despite welder mask use"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "occupational_exposure_setting",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific healthcare work settings where COVID exposure occurred; useful for identifying at-risk populations and exposure patterns in non-acute care settings"
+    ],
+    "example_values": [
+      "public health",
+      "community health",
+      "primary care",
+      "swabbing sites",
+      "vaccine clinics",
+      "home visits"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "ppe_adequacy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether PPE was adequate or inconsistent during exposure period; relevant to understanding infection risk and occupational safety gaps"
+    ],
+    "example_values": [
+      "inconsistent PPE early on"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pem_episode_duration_weeks",
+    "times_suggested": 1,
+    "descriptions": [
+      "Duration of individual PEM episodes/crashes reported by patient, useful for tracking severity and recovery trajectory"
+    ],
+    "example_values": [
+      "2+ weeks (first major crash)",
+      "3-8 weeks (reported by another commenter)",
+      "months in some cases"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pem_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptoms experienced during PEM episodes (fatigue, pain, orthostatic symptoms, etc.)"
+    ],
+    "example_values": [
+      "extreme fatigue",
+      "flu-like feeling",
+      "neck pain",
+      "leg weakness and pain",
+      "swollen lymph nodes",
+      "stuffy nose",
+      "lightheadedness"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pem_triggers",
+    "times_suggested": 1,
+    "descriptions": [
+      "Identified triggers for PEM exacerbation or crashes"
+    ],
+    "example_values": [
+      "stress",
+      "certain foods",
+      "environmental reactions",
+      "exertion",
+      "overactivity"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "baseline_decline",
+    "times_suggested": 1,
+    "descriptions": [
+      "Progressive lowering of functional baseline after repeated PEM episodes"
+    ],
+    "example_values": [
+      "baseline reduced after each crash",
+      "went from very light activity to bedbound after multiple crashes"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "resting_heart_rate_monitoring",
+    "times_suggested": 1,
+    "descriptions": [
+      "Use of RHR as biomarker to track PEM recovery and dysautonomia flares"
+    ],
+    "example_values": [
+      "elevated RHR during dysautonomia flare triggered by PEM",
+      "RHR returns to normal when fully recovered from PEM"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "alternative_treatment_technique",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific parameters for alternative treatments (frequency, duration, pitch, method) to enable reproducibility and comparison across patients"
+    ],
+    "example_values": [
+      "humming at ~130 Hz, low pitch, several times daily for a few minutes, nasal inhalation with humming exhalation"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "treatment_motivation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Why patient chose specific treatment (symptom relief, immune support, vagus nerve stimulation, etc.)"
+    ],
+    "example_values": [
+      "stimulates vagus nerve",
+      "antiviral/immune support"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "psychiatric_history",
+    "times_suggested": 1,
+    "descriptions": [
+      "Pre-existing mental health conditions that may complicate or be confused with Long COVID symptoms (bipolar disorder, depression, anxiety)"
+    ],
+    "example_values": [
+      "bipolar disorder since age 21",
+      "manic episode at age 28",
+      "anxiety and depression during incarceration"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "incarceration_trauma",
+    "times_suggested": 1,
+    "descriptions": [
+      "Major stressor or potential triggering event prior to symptom onset (14 months incarceration)"
+    ],
+    "example_values": [
+      "14 months in jail preceding symptom onset"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "symptom_onset_ambiguity",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient uncertainty about when symptoms truly began or what triggered them (distinguishing post-incarceration deconditioning from potential infection)"
+    ],
+    "example_values": [
+      "unclear if symptoms are post-incarceration deconditioning or separate condition",
+      "no confirmed COVID infection history mentioned"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "sexual_dysfunction_type",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific type of sexual dysfunction reported alongside other systemic symptoms"
+    ],
+    "example_values": [
+      "erectile dysfunction with loss of sensitivity rather than typical ED"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_specificity",
+    "times_suggested": 1,
+    "descriptions": [
+      "The type of cardiac symptoms experienced (palpitations, chest pain, arrhythmia, dyspnea, etc.) — important for characterizing cardiovascular manifestations"
+    ],
+    "example_values": [
+      "heart-related symptoms (unspecified)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "bed_bound_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Whether patient is bed-bound or has severe mobility limitations, which is a critical severity marker in Long COVID"
+    ],
+    "example_values": [
+      "bed-ridden",
+      "severely limited mobility"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_exertional_malaise_severity",
+    "times_suggested": 1,
+    "descriptions": [
+      "Presence and severity of PEM (Post-Exertional Malaise), a hallmark Long COVID symptom"
+    ],
+    "example_values": [
+      "bed-bound PEM subtype mentioned by others in thread",
+      "PEM crash following minimal activity (3-hour seminar)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "organ_involvement",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific organs affected by Long COVID complications"
+    ],
+    "example_values": [
+      "kidneys (kidney stones, mild kidney failure, abnormal renal function, medical renal failure mentioned)",
+      "liver (fatty liver that won't resolve)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "dysautonomia_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific autonomic nervous system symptoms"
+    ],
+    "example_values": [
+      "POTS",
+      "sweating",
+      "erectile dysfunction",
+      "elevated heart rate",
+      "headaches"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "suicidal_ideation",
+    "times_suggested": 1,
+    "descriptions": [
+      "Mentions of suicidal thoughts or end-of-life considerations, important mental health indicator in severe Long COVID"
+    ],
+    "example_values": [
+      "stated wish for terminal diagnosis",
+      "mentioned MAID (Medical Assistance in Dying)",
+      "stated would refuse dialysis",
+      "expressed no will to live if family not present",
+      "stated would not save self in emergency"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "coagulation_disorder",
+    "times_suggested": 1,
+    "descriptions": [
+      "Factor 7 deficiency or other clotting disorders associated with Long COVID"
+    ],
+    "example_values": [
+      "Factor 7 (haemophilia)"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "appetite_recognition_impairment",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific post-COVID symptom where patients cannot recognize hunger signals until severe (near-syncope), distinct from anorexia. Important for understanding neurological post-COVID effects and appetite regulation."
+    ],
+    "example_values": [
+      "cannot tell if hungry until about to faint",
+      "recurring cycles of normal appetite alternating with complete inability to recognize hunger"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "food_aversion",
+    "times_suggested": 1,
+    "descriptions": [
+      "Post-COVID food aversion or disgust toward previously enjoyed foods during acute infection phase"
+    ],
+    "example_values": [
+      "became disgusted by commonly enjoyed foods during acute infection",
+      "could only stomach a few foods"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "weight_change",
+    "times_suggested": 1,
+    "descriptions": [
+      "Changes in body weight attributed to illness or recovery"
+    ],
+    "example_values": [
+      "gained 5 lbs in last year (intentional weight gain from underweight state)",
+      "previously underweight due to severe TMJ issues"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "infection_type",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific type of concurrent infection during COVID exposure"
+    ],
+    "example_values": [
+      "flurona (concurrent COVID and influenza)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_differential_uncertainty",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient unable to determine whether symptoms stem from multiple possible causes (post-COVID vs ADHD vs autism vs cardiac/GI disorder)"
+    ],
+    "example_values": [
+      "uncertain if symptoms from post-COVID effects, ADHD, autism, or underlying cardiac/GI condition"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_considerations",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient concerns about drug interactions or safety"
+    ],
+    "example_values": [
+      "concern about serotonin syndrome risk with combined DXM and trazodone"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "medication_dosing_trial",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific medication dosing schedules and titration protocols being attempted by patient for symptom management"
+    ],
+    "example_values": [
+      "Mestinon 90mg extended-release nightly",
+      "Mestinon 60mg XR split dosing",
+      "Proposed titration: start 15mg 1x daily, increase to 3x daily, then 30mg, 45mg, 60mg with weeks between increases"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_side_effects_concern",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific side effects or contraindications patient is aware of or warned about"
+    ],
+    "example_values": [
+      "Mestinon can worsen fasciculations"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "positional_symptoms",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents specific positional intolerances (supine, prone, side-lying) which are clinically relevant to orthostatic and CSF dynamics"
+    ],
+    "example_values": [
+      "unable to lay down supine without feeling like dying",
+      "unable to lay on sides without symptom exacerbation",
+      "symptoms worsened by horizontal position",
+      "some relief from sitting upright"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "co_occurring_diagnoses",
+    "times_suggested": 1,
+    "descriptions": [
+      "Other confirmed diagnoses beyond primary illness, including vascular and structural findings"
+    ],
+    "example_values": [
+      "internal jugular vein compression",
+      "thoracic outlet syndrome",
+      "CFS/ME"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_removed_content",
+    "times_suggested": 1,
+    "descriptions": [
+      "Indicates the post content has been removed or deleted from the platform"
+    ],
+    "example_values": [
+      "[removed]"
+    ],
+    "frequency_hints": [
+      "rare"
+    ]
+  },
+  {
+    "field_name": "tick_exposure_history",
+    "times_suggested": 1,
+    "descriptions": [
+      "Number and details of tick exposures, tick prevalence in home region, and family history of tick-borne illness — relevant for Lyme disease assessment"
+    ],
+    "example_values": [
+      "grew up in tick-heavy area",
+      "at least 5 remembered tick bites",
+      "no recalled Lyme symptoms (rash, etc.)",
+      "mother confirmed Lyme disease by NHS",
+      "sister likely had Lyme"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_characteristics",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific symptoms reported by patient for Long COVID presentation"
+    ],
+    "example_values": [
+      "fatigue",
+      "dizziness",
+      "orthostatic intolerance (OI)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "geographic_location",
+    "times_suggested": 1,
+    "descriptions": [
+      "Non-US location; patient is based in UK"
+    ],
+    "example_values": [
+      "UK"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_capacity_measure",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific functional limitations (e.g., walking distance, ability to work, daily activities). Helps track disease impact and recovery."
+    ],
+    "example_values": [
+      "can walk 300 feet",
+      "can walk 500 steps in 24 hours",
+      "could barely walk in December, now hitting record steps",
+      "can't walk anymore",
+      "can work full-time",
+      "couldn't work, now in college and starting business",
+      "in bed 99% of time",
+      "can't be upright, lying down causes issues",
+      "breathes on own but experiences air hunger, heart palpitations, tinnitus"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "diet_intervention_attempted",
+    "times_suggested": 1,
+    "descriptions": [
+      "Dietary approaches tried for symptom management (carnivore, ketogenic, low-histamine, etc.). Important for identifying potential therapeutic interventions and individual responses."
+    ],
+    "example_values": [
+      "strict carnivore (unprocessed meat, salt, butter, water)",
+      "low histamine diet (tried, did not work)",
+      "FODMAP restricted",
+      "paleoketogenic diet",
+      "bland diet with steamed white fish",
+      "electrolyte drinks",
+      "carb reintroduction with dietician guidance"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_specific_severity",
+    "times_suggested": 1,
+    "descriptions": [
+      "Severity of specific symptoms separate from overall severity (e.g., cardiac symptoms, neurological, post-exertional malaise). Helps identify phenotypes."
+    ],
+    "example_values": [
+      "post-exertional malaise (PEMS) - major limitation",
+      "muscular weakness prominent (not cardio)",
+      "cardio hits harder than resistance training",
+      "head pressure and symptoms severe",
+      "unable to tolerate sensory stimulation",
+      "breathing problems (air hunger)",
+      "heart palpitations",
+      "tinnitus"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "regression_or_relapse_experience",
+    "times_suggested": 1,
+    "descriptions": [
+      "Periods of regression or relapse after improvement. Important for understanding disease trajectory volatility."
+    ],
+    "example_values": [
+      "bad regression 8-9 months ago after years of slow improvement, thought healing was fluke, now slowly returning to baseline",
+      "went away for 3 months after 18 months bedridden, then returned worse than before",
+      "getting worse as time goes on (4 years sick, 3 bedridden, very severe last few months)",
+      "steady decline for 4 years, started improving years 5-6"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "mental_health_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Psychological/emotional toll of illness (depression, hopelessness, anxiety, suicidal ideation). Critical for holistic patient care."
+    ],
+    "example_values": [
+      "severe desperation and hopelessness",
+      "thoughts that life is over",
+      "crying very often",
+      "about to give up",
+      "bawling from symptoms",
+      "lost hope",
+      "terrified of treatment options",
+      "dislike of life even before COVID"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "doctor_type_consulted",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific types of medical professionals seen (Integrative Medicine, neurologist, cardiologist, etc.). Helps understand healthcare utilization patterns."
+    ],
+    "example_values": [
+      "Integrative Medicine Doctor",
+      "multiple general practitioners",
+      "specialists (unspecified types)",
+      "Dr. Groysman (Long COVID specialist in Texas)",
+      "dietician"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "supplemental_support_mentioned",
+    "times_suggested": 1,
+    "descriptions": [
+      "Supplements specifically mentioned for mitochondrial support or symptom management. Useful for tracking popular interventions and outcomes."
+    ],
+    "example_values": [
+      "CoQ10",
+      "Alpha lipoic acid",
+      "L-carnitine",
+      "glycine powder",
+      "creatine monohydrate",
+      "l-glutamine",
+      "copper",
+      "PQQ",
+      "Phospholipids (BodyBio brand)",
+      "artemisinin (Artemesia annua)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "recovery_indicators",
+    "times_suggested": 1,
+    "descriptions": [
+      "Signs of improvement or recovery mentioned by patients (able to shower, work, exercise, etc.). Helps identify positive milestones."
+    ],
+    "example_values": [
+      "able to sing along to music more",
+      "can sit in chair longer",
+      "can go places in wheelchair",
+      "able to enjoy life more",
+      "urge to go for a run felt doable",
+      "able to walk outside",
+      "shower before appointment possible",
+      "not nauseated or lightheaded when standing",
+      "able to do chores",
+      "doing triathlon after 3 years bedridden"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pre_treatment_activity_baseline",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents baseline functional capacity before treatment intervention, useful for measuring treatment efficacy"
+    ],
+    "example_values": [
+      "1500 steps per day",
+      "bedbound 80-90% of time",
+      "unable to shower weekly"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_treatment_activity_plateau",
+    "times_suggested": 1,
+    "descriptions": [
+      "Identifies functional ceiling or optimal activity level achieved post-treatment, important for understanding recovery limits in Long COVID"
+    ],
+    "example_values": [
+      "7000 steps per day"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "pem_trigger_threshold",
+    "times_suggested": 1,
+    "descriptions": [
+      "Documents activity level that triggers post-exertional malaise crashes, critical for pacing guidance"
+    ],
+    "example_values": [
+      "exceeding 10,000 steps"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_titration_required",
+    "times_suggested": 1,
+    "descriptions": [
+      "Tracks whether medications required initial titration phase versus immediate full dosing"
+    ],
+    "example_values": [
+      "ketotifen (required titration)",
+      "LDN (required titration)",
+      "ivabadrine (immediate dosing)"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "symptom_onset_pattern",
+    "times_suggested": 1,
+    "descriptions": [
+      "How symptoms emerged and progressed over time; useful for understanding disease trajectory and phenotype variations"
+    ],
+    "example_values": [
+      "first 12 months everything got worse, then slowly better"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_timeframe",
+    "times_suggested": 1,
+    "descriptions": [
+      "Duration between treatment initiation and symptom improvement; helps establish therapeutic efficacy windows"
+    ],
+    "example_values": [
+      "carnivore diet: brain fog cured after 9 months",
+      "plasmapheresis: helped air hunger/SOB (resolved after treatment)",
+      "dysautonomia symptoms improved gradually after 1 year"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "functional_recovery_sequence",
+    "times_suggested": 1,
+    "descriptions": [
+      "Order in which functional capacities return; helps predict recovery trajectory for other patients"
+    ],
+    "example_values": [
+      "brain fog improved around 18 months",
+      "exercise capacity was last to recover",
+      "work and daily activities recovered before exercise tolerance"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "autoimmune_disease_trigger",
+    "times_suggested": 1,
+    "descriptions": [
+      "Temporal relationship between LC onset and autoimmune condition emergence"
+    ],
+    "example_values": [
+      "uveitis came back frequently during active LC, resolved with treatment",
+      "at beginning came back every 3 months, now no recurrence for 2+ years"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "psychological_recovery_component",
+    "times_suggested": 1,
+    "descriptions": [
+      "Role of psychological factors and mindset shifts in LC recovery trajectory"
+    ],
+    "example_values": [
+      "identified psychological factors as step 3 of recovery",
+      "needed to push past perceived limits carefully",
+      "finally acted healthy instead of fearing disease",
+      "stopped thinking/talking about LC after recovery"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "pacing_strategy",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific pacing approach used to manage PEM and exertion; helps others tailor similar strategies"
+    ],
+    "example_values": [
+      "very hesitant about doing anything beyond perceived limits early on",
+      "after other symptoms cleared, tried doing more in careful way",
+      "found that psychological component kept him limited even after physical recovery"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "vaccine_injury_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Explicitly stated vaccine injury status and severity assessment by patient"
+    ],
+    "example_values": [
+      "vax injured",
+      "horrifying experience"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "vaccine_type_received",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific COVID-19 vaccine(s) the patient received"
+    ],
+    "example_values": [
+      "Pfizer",
+      "mRNA vaccine"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "vaccine_hesitancy_reason",
+    "times_suggested": 1,
+    "descriptions": [
+      "Reasons for vaccine hesitation or alternative vaccine preference"
+    ],
+    "example_values": [
+      "concerns about spike protein cytotoxicity",
+      "preferred Novavax over mRNA vaccines",
+      "Novavax unavailable in small city"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "trust_in_healthcare",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient's stated trust level or distrust in medical system and institutions"
+    ],
+    "example_values": [
+      "distrust in American medical system",
+      "distrust in pharmaceutical companies",
+      "concerns about rushed vaccines to market"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "bruising_characteristics",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific patterns and characteristics of bruising reported (frequency, color progression, location, healing time) — clinically useful for assessing microvasculature complications in Long COVID"
+    ],
+    "example_values": [
+      "petechiae for months post-COVID",
+      "yellow bruises appearing 1-2 per month",
+      "some spontaneous (unknown cause), some from recalled trauma",
+      "delayed healing - bruises remain for weeks to months (one bruise lasted 6 months)",
+      "not previously prone to easy bruising"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "delayed_wound_healing",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific evidence of delayed healing in cuts and bruises post-COVID — indicates possible connective tissue or coagulation dysfunction"
+    ],
+    "example_values": [
+      "cut on leg took nearly 1 month to heal",
+      "bruises take extended time to disappear",
+      "one bruise lasted 6 months"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "postulated_deficiencies",
+    "times_suggested": 1,
+    "descriptions": [
+      "Patient-identified or discussed potential nutritional deficiencies based on symptoms (vitamin C, vitamin K, B12, ferritin)"
+    ],
+    "example_values": [
+      "vitamin C deficiency",
+      "vitamin K deficiency",
+      "B12 levels not checked recently",
+      "ferritin levels not checked recently"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "post_viral_symptom_triggers",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific post-viral infections and their connection to acute anxiety/adrenaline dumps, helps identify patterns in immune response dysregulation"
+    ],
+    "example_values": [
+      "Recent unidentified virus 10 days ago triggered anxiety, breathlessness, imbalance, lightheadedness",
+      "Each subsequent virus has immune system 'going crazy'"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "medication_adverse_effects",
+    "times_suggested": 1,
+    "descriptions": [
+      "Negative reactions to psychiatric medications and drug interactions relevant to LC management"
+    ],
+    "example_values": [
+      "Zoloft 50mg: prescribed inappropriately for anxiety that was actually dysautonomia; withdrawal caused ~35 days of insomnia after 20 months use",
+      "Metoprolol-Zoloft interaction: started Metoprolol ~3 weeks before Zoloft discontinuation, interaction contributed to severe insomnia"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "weight_changes",
+    "times_suggested": 1,
+    "descriptions": [
+      "Significant weight loss during acute illness phase and subsequent recovery weight gain"
+    ],
+    "example_values": [
+      "Lost 30 pounds (mostly muscle) during severe POTS phase in early 2023",
+      "Neck circumference decreased from 19 inches to 16.5 inches",
+      "Regained weight over last 2 years during recovery phase"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "social_functional_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Impact of dysautonomia symptoms on social interactions and behavioral adaptation"
+    ],
+    "example_values": [
+      "Avoids confrontation with strangers due to immediate cardiac palpitations (2 seconds onset)",
+      "Cannot speak up in public situations despite previously being able to pre-pandemic",
+      "Recovery takes 10-15 minutes from brief confrontational interactions",
+      "Avoids arguments at all costs; can have serious discussions with family/friends"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "cardiac_symptoms_detail",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific cardiac manifestations distinguishing from traditional panic attacks"
+    ],
+    "example_values": [
+      "Involuntary palpitations multiple times daily",
+      "Heart rate drops to 30s-40s during episodes",
+      "Chest pounding within 2 seconds of confrontation",
+      "Previously severe: fear of passing out while showering (only 2 showers in 3 months at worst)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "work_capacity_hours_per_week",
+    "times_suggested": 1,
+    "descriptions": [
+      "Current actual working hours per week reported by patient, useful for tracking functional decline and capacity changes over time"
+    ],
+    "example_values": [
+      "4 hours (took 17 hours to complete 4-hour task)",
+      "10 hours/week",
+      "20 hours/week",
+      "25 hours/week",
+      "8 hours spread over 12",
+      "50+ hours/week (before collapse)",
+      "full-time remote"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "work_accommodation_types",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific workplace accommodations used by patient to maintain employment, important for understanding supportive employment structures"
+    ],
+    "example_values": [
+      "remote work",
+      "flexible hybrid schedule",
+      "medical accommodation",
+      "multiple breaks",
+      "FMLA",
+      "occupational health reasonable adjustments",
+      "self-paced workload",
+      "work from bed",
+      "flexible scheduling",
+      "reduced hours"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "employment_history_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Job losses, career changes, and income reduction directly attributed to Long COVID"
+    ],
+    "example_values": [
+      "lost 4 jobs over the years",
+      "last worked July 7 2024",
+      "opened small business March 2020, now earning 1/10th of former salary",
+      "laid off September 2024",
+      "working full-time in 2023, relapsed October 2025",
+      "last day of work September 5 2024",
+      "earning half previous salary at age 41",
+      "currently unemployed/on disability",
+      "left job after 1.5 year absence, co-workers noticed cognitive decline",
+      "let LCSW license lapse"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "relapse_trigger_work_related",
+    "times_suggested": 1,
+    "descriptions": [
+      "Work-related activities or stress that triggered disease relapse, important for understanding PEM mechanisms"
+    ],
+    "example_values": [
+      "pushed too hard, July 2024",
+      "workload miscalculations caused massive intractable relapse October 2025",
+      "worked 50+ hours/week as trauma therapist, progressed from mild to severe",
+      "on-call service tech pushed harder than thought possible November 2024",
+      "25 hours/week became too fatiguing"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "cognitive_symptoms_work_impact",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific cognitive symptoms affecting work performance and workplace perception"
+    ],
+    "example_values": [
+      "brain fog",
+      "can't get brain to work",
+      "short-term memory loss",
+      "processing difficulties",
+      "forgetfulness noticed by coworkers and managers",
+      "stuttering, talking over people",
+      "points disappearing mid-thought",
+      "severe memory issues",
+      "cognitive decline",
+      "unable to sleep or eat during final work months"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "post_work_status",
+    "times_suggested": 1,
+    "descriptions": [
+      "Current status and timeframe since cessation of work"
+    ],
+    "example_values": [
+      "last worked July 7 2024",
+      "haven't worked since 12/2023",
+      "first week of August 2023",
+      "last day September 5 2024, now in bed most days two years later",
+      "laid off September 2024",
+      "put on long-term sick leave",
+      "retired at 57, now 61",
+      "out of work for 2 years before current role"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "financial_impact_category",
+    "times_suggested": 1,
+    "descriptions": [
+      "Types and severity of financial impacts from job loss or reduced capacity"
+    ],
+    "example_values": [
+      "earning 1/10th of former full-time salary",
+      "earning half of previous salary",
+      "dependent on partner for financial support",
+      "partner is breadwinner",
+      "requires government disability benefits",
+      "financially devastated",
+      "difficult financial times ahead",
+      "worried no one would hire again after employment gap"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "treatment_outcome_ldn",
+    "times_suggested": 1,
+    "descriptions": [
+      "Specific outcomes reported by patients taking LDN, capturing both positive and negative responses with dosages used"
+    ],
+    "example_values": [
+      "LDN 0.5mg: all neurological symptoms improved dramatically after 3 days",
+      "LDN at unspecified dose: minor improvements",
+      "LDN 0.2-0.25mg increasing to 4-4.5mg: no improvements yet after week",
+      "LDN at unspecified dose: helped 60% of people, may take several months",
+      "LDN: helped with ME/CFS",
+      "LDN: no effect on PEM, but went from housebound to able to walk, shop, eat out",
+      "LDN 3.0mg: helps",
+      "LDN 6mg increasing to 7.5mg: significant improvement, continuing titration",
+      "LDN: helps with cognitive symptoms",
+      "LDN: improved gut issues, brain fog, energy envelope"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "symptom_profile",
+    "times_suggested": 1,
+    "descriptions": [
+      "Comprehensive list of symptoms reported by individual patients to characterize their long COVID presentation"
+    ],
+    "example_values": [
+      "migraines, eye issues, skin sensitivity, OCD, overly sensitive nervous system, chronic pain, joint and muscle problems, gut problems, GERD, fatigue after exercise, sleep issues",
+      "neurological - head pressure, eye pressure, tinnitus, loss of taste and smell, insomnia, brain fog",
+      "dizziness, no PEM",
+      "PEM, autonomic symptoms"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "concurrent_medications",
+    "times_suggested": 1,
+    "descriptions": [
+      "Other medications and supplements being taken alongside LDN or during treatment trials"
+    ],
+    "example_values": [
+      "Magnesium glycinate, Vitamin B2, low-dose propranolol, oregano oil, probiotics, medical cannabis (low THC high CBD), Rimegepant",
+      "H1 and H2 blockers",
+      "Ivabadrine, ketotifen (with LDN)",
+      "Sumatriptan, Emgality injection",
+      "SSRIs and therapy for OCD",
+      "Sleep meds, antihistamines, LDN (holy trinity)",
+      "Pyridostigmine (compared to LDN)",
+      "Antiviral meds (with LDN)"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "ldn_dosing_schedule",
+    "times_suggested": 1,
+    "descriptions": [
+      "LDN dosages reported by patients, including starting doses, titration progression, and final therapeutic doses"
+    ],
+    "example_values": [
+      "0.5mg initial, dramatic improvement",
+      "0.2-0.25mg initial, titrating to 4-4.5mg",
+      "Unclear dose with no improvements",
+      "Started too high, restarting with titration",
+      "0.75mg, still increasing",
+      "3.0mg",
+      "6mg, looking to increase to 7.5mg",
+      "1.5mg initial, titrated slowly (key to success)",
+      "0.1-1mg tolerable, 1.5-2mg caused crash",
+      "0.5mg week-on-week increase showing musculoskeletal function improvement"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  },
+  {
+    "field_name": "ldn_adverse_reactions",
+    "times_suggested": 1,
+    "descriptions": [
+      "Negative side effects or adverse reactions experienced when starting or titrating LDN"
+    ],
+    "example_values": [
+      "Difficulty when starting and increasing dosage (general)",
+      "Insomnia when taking at night (switched to afternoon dosing)",
+      "Felt terrible on tiny amount, might retry",
+      "Severe depression and crushing fatigue (worst reaction in trial), resolved within 2 days of stopping",
+      "8-week crash with HRV monitoring at 1.5-2mg doses"
+    ],
+    "frequency_hints": [
+      "occasional"
+    ]
+  },
+  {
+    "field_name": "ldn_treatment_timeline",
+    "times_suggested": 1,
+    "descriptions": [
+      "Time to symptom improvement or benefit observed when taking LDN"
+    ],
+    "example_values": [
+      "Improvement after 3 days",
+      "Solid 6 weeks to be certain of benefit",
+      "3 months to start seeing improvement",
+      "Pharmacist stated 3-6 months expected",
+      "Several months may be needed",
+      "3 years after starting still firmly moderate with improvements"
+    ],
+    "frequency_hints": [
+      "common"
+    ]
+  }
+]
