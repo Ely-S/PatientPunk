@@ -12,6 +12,7 @@ Usage:
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs extract canonicalize
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs --limit 50
 """
+import anthropic
 import argparse
 import sys
 from pathlib import Path

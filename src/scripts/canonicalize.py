@@ -70,7 +70,7 @@ def run_canonicalization(client, output_dir: Path):
         try:
             canon_map.update(haiku_canonicalize(client, batch))
         except Exception as e:
-            log.error(f"Haiku error on batch {i}: {e}")
+            log.error(f"Haiku error on batch {i}: {e}. Continuing with fallback...")
             for name in batch:
                 canon_map[name] = name
         log.info(f"Canonicalized {min(i + BATCH_SIZE, len(all_drugs_sorted))}/{len(all_drugs_sorted)}...")

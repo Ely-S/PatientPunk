@@ -26,6 +26,16 @@ import sys
 from collections import Counter
 from functools import cache
 from pathlib import Path
+from typing import NamedTuple
+
+
+class PostData(NamedTuple):
+    item_id: str
+    text: str
+    author: str
+    parent_id: str | None
+    post_title: str
+    created_utc: int
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from prompts.intervention_config import EXTRACT_PROMPT
@@ -90,32 +100,34 @@ def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100,
         id_to_drugs = {}
 
     # Collect all items
-    all_items, id_to_parent = [], {}
+    all_items: list[PostData] = []
+    id_to_parent = {}
     for post in posts:
-        pid, ts = post["post_id"], post["created_utc"]
+        post_id, created_utc = post["post_id"], post["created_utc"]
         text = f"{post.get('title', '')} {post.get('body') or ''}".strip()
-        all_items.append((pid, text, post["author_hash"], None, post.get("title", ""), ts))
-        id_to_parent[pid] = None
+        all_items.append(PostData(item_id=post_id, text=text, author=post["author_hash"], parent_id=None, post_title=post.get("title", ""), created_utc=created_utc))
+        id_to_parent[post_id] = None
 
         for c in post.get("comments", []):
-            cid = c["comment_id"]
-            all_items.append((cid, c.get("body", ""), c["author_hash"], c.get("parent_id"),
-                             post.get("title", ""), c.get("created_utc", ts)))
-            id_to_parent[cid] = c.get("parent_id")
+            comment_id = c["comment_id"]
+            all_items.append(PostData(
+                item_id=comment_id, text=c.get("body", ""), author=c["author_hash"], parent_id=c.get("parent_id"), post_title=post.get("title", ""), created_utc=c.get("created_utc", created_utc)
+            ))
+            id_to_parent[comment_id] = c.get("parent_id")
 
     # Extract uncached items
-    to_do = [(eid, text) for eid, text, *_ in all_items if eid not in id_to_drugs and text.strip()]
+    to_do = [(item.item_id, item.text) for item in all_items if item.item_id not in id_to_drugs and item.text.strip()]
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged():
         """Rebuild and save tagged_mentions.json."""
         ancestor_drugs = compute_ancestor_drugs(id_to_parent, id_to_drugs)
         tagged = [
-            {"id": eid, "author": author, "text": text, "post_title": title,
-             "parent_id": parent_id, "created_utc": ts,
-             "drugs_direct": id_to_drugs.get(eid, []), "drugs_context": ancestor_drugs.get(eid, [])}
-            for eid, text, author, parent_id, title, ts in all_items
-            if id_to_drugs.get(eid) or ancestor_drugs.get(eid)
+            {"id": item.item_id, "author": item.author, "text": item.text, "post_title": item.post_title,
+             "parent_id": item.parent_id, "created_utc": item.created_utc,
+             "drugs_direct": id_to_drugs.get(item.item_id, []), "drugs_context": ancestor_drugs.get(item.item_id, [])}
+            for item in all_items
+            if id_to_drugs.get(item.item_id) or ancestor_drugs.get(item.item_id)
         ]
         tagged_path.write_text(json.dumps(tagged, indent=2))
         return tagged
@@ -123,14 +135,14 @@ def run_extraction(client, output_dir: Path, posts_file: Path, limit: int = 100,
     batches_since_save = 0
     for i in range(0, len(to_do), BATCH_SIZE):
         batch = to_do[i:i + BATCH_SIZE]
-        eids, texts = zip(*batch) if batch else ([], [])
+        item_ids, texts = zip(*batch) if batch else ([], [])
         try:
-            for eid, drugs in zip(eids, extract_batch(client, list(texts))):
-                id_to_drugs[eid] = [d.lower().strip() for d in drugs]
+            for item_id, drugs in zip(item_ids, extract_batch(client, list(texts))):
+                id_to_drugs[item_id] = [d.lower().strip() for d in drugs]
         except Exception as e:
-            log.error(f"Batch error: {e}")
-            for eid in eids:
-                id_to_drugs[eid] = []
+            log.error(f"Batch error: {e}. Continuing with fallback to empty list for all potential drugs in the batch.")
+            for item_id in item_ids:
+                id_to_drugs[item_id] = []
 
         batches_since_save += 1
         if batches_since_save >= SAVE_EVERY:

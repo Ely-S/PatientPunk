@@ -19,7 +19,7 @@ Example: [["ldn", "low dose naltrexone"], ["famotidine", "pepcid"], []]
 
 
 # Used by canonicalize.py
-HAIKU_PROMPT = """\
+CANONICALIZE_COMPOUND_PROMPT = """\
 You are given a list of drug/supplement/intervention names extracted from Reddit posts.
 Your job is to identify true synonyms — names that refer to the exact same drug or compound.
 

@@ -171,7 +171,7 @@ def run_classification(client, output_dir: Path, limit: int = None, regenerate_c
                 if not passed:
                     filtered[key] = True
         except Exception as e:
-            log.error(f"Prefilter batch error: {e}")
+            raise RuntimeError(f"Prefilter batch error: {e}")
         if (i // PREFILTER_BATCH_SIZE) % 10 == 0:
             save_cache(filtered, filtered_path)
         log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(to_do))}/{len(to_do)}...")
