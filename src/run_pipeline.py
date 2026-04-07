@@ -56,6 +56,7 @@ def main():
     parser.add_argument("--output-dir", required=True, help="Directory for output files")
     parser.add_argument("--limit", type=int, default=100, help="Limit posts processed")
     parser.add_argument("--regenerate-cache", action="store_true", help="Ignore existing caches")
+    parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -63,18 +64,12 @@ def main():
     posts_file = Path(args.posts_file)
     client = get_client()
 
-    for step_name in args.steps:
+    steps = [s for s in args.steps if not (s == "canonicalize" and args.skip_canonicalize)]
+    for step in steps:
         log.info(f"\n{'═' * 60}")
         log.info(f"  STEP: {step_name.upper()}")
         log.info(f"{'═' * 60}\n")
-        
-        if step_name == "extract":
-            run_extract(client, output_dir, posts_file, args.limit, args.regenerate_cache)
-        elif step_name == "classify":
-            run_classify(client, output_dir, args.limit, args.regenerate_cache)
-        else:
-            run_canonicalize(client, output_dir)
-
+        STEPS[step](client, output_dir, posts_file, args.limit, args.regenerate_cache)
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
     log.info(f"{'═' * 60}\n")
