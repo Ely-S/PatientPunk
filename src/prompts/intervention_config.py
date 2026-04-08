@@ -4,14 +4,17 @@
 # Used by extract_mentions.py
 EXTRACT_PROMPT = """\
 For each text below, list all drugs, medications, supplements, and medical interventions mentioned.
-Include brand names, generic names, abbreviations (e.g. LDN, LDA), and informal names.
+Include brand names, generic names, abbreviations (e.g. LDN, LDA), informal names,
+drug categories (e.g. "antihistamines", "h1 blocker", "beta blocker"), enzymes/supplements
+(e.g. "DAO", "probiotics", "nattokinase"), and generic references (e.g. "an oral antibiotic").
 Return ONLY a JSON array of arrays — one inner array per text, each containing lowercase strings.
 If none are mentioned, use an empty array [].
-Example: [["ldn", "low dose naltrexone"], ["famotidine", "pepcid"], []]
+Example: [["ldn", "low dose naltrexone"], ["h1 antihistamines", "dao", "nattokinase"], ["oral antibiotic", "probiotic"], []]
 """
 
 
 # Used by canonicalize.py
+#TODO: potentially change this with: https://github.com/Ely-S/PatientPunk/pull/2#discussion_r3047716889
 CANONICALIZE_COMPOUND_PROMPT = """\
 You are given a list of drug/supplement/intervention names extracted from Reddit posts.
 Your job is to identify true synonyms — names that refer to the exact same drug or compound.

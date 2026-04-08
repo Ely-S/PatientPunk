@@ -123,7 +123,7 @@ def run_extraction(config: "PipelineConfig"):
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged():
-        """Rebuild and save tagged_mentions.json."""
+        """Rebuild and save tagged_mentions.json. Only items with drugs are saved."""
         ancestor_drugs = compute_ancestor_drugs(id_to_parent, id_to_drugs)
         tagged = [
             {"id": item.item_id, "author": item.author, "text": item.text, "post_title": item.post_title,
@@ -134,13 +134,20 @@ def run_extraction(config: "PipelineConfig"):
         ]
         tagged_path.write_text(json.dumps(tagged, indent=2))
         return tagged
-
+    
     def process_batch(batch: list[tuple[str, str]]) -> list[list[str]]:
         texts = [text for _, text in batch]
-        return extract_batch(client, texts)
+        batch_results = extract_batch(client, texts)
+        # Update id_to_drugs immediately so save_fn sees current data
+        for (item_id, _), drugs in zip(batch, batch_results):
+            if drugs is None:
+                id_to_drugs[item_id] = []
+            else:
+                id_to_drugs[item_id] = [d.lower().strip() for d in drugs]
+        return batch_results
 
     # Process batches
-    results = process_in_batches(
+    process_in_batches(
         items=to_do,
         batch_size=BATCH_SIZE,
         process_fn=process_batch,
@@ -148,13 +155,6 @@ def run_extraction(config: "PipelineConfig"):
         save_fn=save_tagged,
         save_every=SAVE_EVERY,
     )
-
-    # Update id_to_drugs with results
-    for (item_id, _), drugs in zip(to_do, results):
-        if drugs is None:
-            id_to_drugs[item_id] = []
-        else:
-            id_to_drugs[item_id] = [d.lower().strip() for d in drugs]
 
     # Final save
     tagged = save_tagged()

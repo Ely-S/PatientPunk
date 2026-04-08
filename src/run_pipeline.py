@@ -9,7 +9,7 @@ Steps:
 
 Usage:
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs
-    python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs extract canonicalize
+    python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs --skip-canonicalize
     python src/run_pipeline.py --posts-file data/posts.json --output-dir data/outputs --limit 50
 """
 import argparse
@@ -24,17 +24,15 @@ from scripts.extract_mentions import run_extraction
 from scripts.canonicalize import run_canonicalization
 from scripts.classify_sentiment import run_classification
 
-STEPS = {
-    "extract": run_extraction,
-    "canonicalize": run_canonicalization,
-    "classify": run_classification,
-}
+STEPS = [
+    ("extract", run_extraction),
+    ("canonicalize", run_canonicalization),
+    ("classify", run_classification),
+]
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run drug mention database pipeline")
-    parser.add_argument("steps", nargs="*", default=["extract", "canonicalize", "classify"],
-                        choices=list(STEPS.keys()), help="Steps to run (default: all)")
     parser.add_argument("--posts-file", required=True, help="Path to subreddit_posts.json")
     parser.add_argument("--output-dir", required=True, help="Directory for output files")
     parser.add_argument("--limit", type=int, default=100, help="Limit posts processed")
@@ -53,12 +51,13 @@ def main():
         regenerate_cache=args.regenerate_cache,
     )
 
-    steps = [s for s in args.steps if not (s == "canonicalize" and args.skip_canonicalize)]
-    for step in steps:
+    for step_name, step_fn in STEPS:
+        if step_name == "canonicalize" and args.skip_canonicalize:
+            continue
         log.info(f"\n{'═' * 60}")
-        log.info(f"  STEP: {step.upper()}")
+        log.info(f"  STEP: {step_name.upper()}")
         log.info(f"{'═' * 60}\n")
-        STEPS[step](config)
+        step_fn(config)
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")

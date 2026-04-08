@@ -16,7 +16,6 @@ class OutputFiles:
     TAGGED_MENTIONS = "tagged_mentions.json"
     CANONICAL_MAP = "canonical_map.json"
     SENTIMENT_CACHE = "sentiment_cache.json"
-    FILTERED_CACHE = "filtered_cache.json"
 
 
 # ── Pipeline Config ───────────────────────────────────────────────────────────

@@ -70,7 +70,6 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> 
         msg += f"Comment: {entry['text'][:600]}\n\n"
 
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10)
-    log.debug(f"Prefilter raw response: {raw!r}")
     answers = parse_json_array(raw)
     if len(answers) == len(items):
         return [str(a).strip().lower().startswith("yes") for a in answers]
@@ -113,20 +112,6 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
         return results
     raise ValueError(f"Expected {len(items)} results, got {len(results)}")
 
-def process_and_save(entry: dict, drug: str, key: str, result: dict, cache: dict, filtered: dict, cache_path: Path, filtered_path: Path):
-    """Helper to update cache or filtered dict and save."""
-    if result.get("signal") == "n/a":
-        filtered[key] = True
-        save_cache(filtered, filtered_path)
-    else:
-        cache[key] = {
-            **result,
-            "author": entry["author"],
-            "text": entry["text"],
-            "created_utc": entry.get("created_utc"),
-        }
-        save_cache(cache, cache_path)
-
 
 def run_classification(config: "PipelineConfig"):
     """Main classification logic — called by pipeline or standalone."""
@@ -135,7 +120,6 @@ def run_classification(config: "PipelineConfig"):
     regenerate_cache = config.regenerate_cache
 
     cache_path = config.path(OutputFiles.SENTIMENT_CACHE)
-    filtered_path = config.path(OutputFiles.FILTERED_CACHE)
     canon_map_path = config.path(OutputFiles.CANONICAL_MAP)
     tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
 
@@ -161,7 +145,6 @@ def run_classification(config: "PipelineConfig"):
         tagged = tagged[:limit]
 
     cache = {} if regenerate_cache else load_cache(cache_path)
-    filtered = {} if regenerate_cache else load_cache(filtered_path)
 
     # Build prompts per drug (with synonyms)
     # Collect all entry×drug pairs not yet in cache
@@ -171,31 +154,30 @@ def run_classification(config: "PipelineConfig"):
         all_drugs = list(dict.fromkeys(entry.get("drugs_direct", []) + entry.get("drugs_context", [])))
         for drug in all_drugs:
             key = f"{entry['id']}:{drug}"
-            if key not in cache and key not in filtered:
+            if key not in cache:
                 to_do.append((entry, drug, key))
                 if drug not in prompts:
                     prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
 
-    log.info(f"{len(cache)} classified, {len(filtered)} filtered, {len(to_do)} to process...")
+    log.info(f"{len(cache)} classified, {len(to_do)} to process...")
 
-    # Prefilter with Haiku
+    # Prefilter with Haiku (in-memory only, not persisted)
     log.info("Prefiltering...")
+    filtered_keys = set()
     for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
         batch = to_do[i:i + PREFILTER_BATCH_SIZE]
         try:
             results = prefilter_batch(client, [(e, d) for e, d, k in batch], id_to_text)
             for (entry, drug, key), passed in zip(batch, results):
                 if not passed:
-                    filtered[key] = True
+                    filtered_keys.add(key)
         except Exception as e:
             raise RuntimeError(f"Prefilter batch error: {e}")
-        if (i // PREFILTER_BATCH_SIZE) % 10 == 0:
-            save_cache(filtered, filtered_path)
         log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(to_do))}/{len(to_do)}...")
 
     # Only classify entries that passed prefilter
-    to_classify = [(e, d, k) for e, d, k in to_do if k not in filtered]
-    log.info(f"{len(filtered)} filtered out, {len(cache)} classified, {len(to_classify)} to classify...")
+    to_classify = [(e, d, k) for e, d, k in to_do if k not in filtered_keys]
+    log.info(f"{len(filtered_keys)} filtered out, {len(cache)} classified, {len(to_classify)} to classify...")
 
     # Group by drug for batching
     by_drug = defaultdict(list)
@@ -209,7 +191,14 @@ def run_classification(config: "PipelineConfig"):
             try:
                 results = classify_batch(client, [(e, d) for e, d, k in batch], id_to_text, prompts)
                 for (entry, drug, key), result in zip(batch, results):
-                    process_and_save(entry, drug, key, result)
+                    if result.get("signal") != "n/a":
+                        cache[key] = {
+                            **result,
+                            "author": entry["author"],
+                            "text": entry["text"],
+                            "created_utc": entry.get("created_utc"),
+                        }
+                        save_cache(cache, cache_path)
             except Exception as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug, key in batch:
@@ -218,7 +207,14 @@ def run_classification(config: "PipelineConfig"):
                         msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
                         raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50)
                         result = parse_json_object(raw)
-                        process_and_save(entry, drug, key, result)
+                        if result.get("signal") != "n/a":
+                            cache[key] = {
+                                **result,
+                                "author": entry["author"],
+                                "text": entry["text"],
+                                "created_utc": entry.get("created_utc"),
+                            }
+                            save_cache(cache, cache_path)
                     except Exception as e2:
                         log.error(f"ERROR on {key}: {e2}")
             done += len(batch)
