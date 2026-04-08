@@ -19,9 +19,7 @@ ROOT = Path(__file__).parent.parent
 
 # ── Load data ────────────────────────────────────────────────────────────────
 
-posts_raw = json.loads(
-    (ROOT / "reddit_sample_data/subreddit_posts.json").read_text(encoding="utf-8")
-)
+posts_raw = json.load((ROOT / "reddit_sample_data/subreddit_posts.json").open())
 post_to_hash = {p["post_id"]: p.get("author_hash") for p in posts_raw}
 
 pipeline = {}
