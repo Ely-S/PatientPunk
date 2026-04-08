@@ -4,6 +4,7 @@
 .idea/
 *.iml
 .vscode/
+.claude/settings.local.json
 
 # Python
 __pycache__/
