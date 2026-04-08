@@ -13,9 +13,11 @@ CREATE TABLE users (
 
 CREATE TABLE posts (
     post_id    TEXT PRIMARY KEY,
+    title      TEXT, 
+    parent_id  TEXT,
     user_id    TEXT NOT NULL REFERENCES users(user_id),
     body_text  TEXT NOT NULL,
-    metadata   TEXT,                -- JSON: score, upvotes, flair, etc.
+    flair   TEXT,
     post_date  INTEGER,
     scraped_at INTEGER NOT NULL
 );
@@ -40,8 +42,9 @@ CREATE INDEX idx_treatment_canonical ON treatment(canonical_name);
 CREATE TABLE extraction_runs (
     run_id  INTEGER PRIMARY KEY,
     run_at  INTEGER NOT NULL,
-    model   TEXT NOT NULL,
-    config  TEXT NOT NULL   -- JSON: prompt, version, temperature, etc.
+    commit_hash TEXT NOT NULL,
+    extraction_type TEXT NOT NULL, 
+    config  TEXT NOT NULL   -- JSON: models, prompt, version, temperature, etc.
 );
 
 -- ══════════════════════════════════════════════════════
