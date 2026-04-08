@@ -82,8 +82,8 @@ CREATE TABLE treatment_reports (
     post_id         TEXT NOT NULL REFERENCES posts(post_id),
     user_id         TEXT REFERENCES users(user_id),
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
-    sentiment       TEXT NOT NULL,
-    signal_strength TEXT NOT NULL,
+    sentiment       REAL NOT NULL,
+    signal_strength REAL NOT NULL,
     sentiment_raw   TEXT
 );
 
