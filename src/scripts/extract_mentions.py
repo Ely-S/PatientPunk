@@ -53,7 +53,7 @@ class PostData(NamedTuple):
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     """Ask Haiku to extract drug mentions from a batch of texts."""
     msg = EXTRACT_PROMPT + "\n" + "".join(
-        f"--- {i+1} ---\n{text[:600]}\n\n" for i, text in enumerate(texts)
+        f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(texts) * 80)
     results = parse_json_array(raw)

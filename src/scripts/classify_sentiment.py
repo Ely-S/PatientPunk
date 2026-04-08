@@ -29,6 +29,8 @@ Usage:
     # Or standalone (run from src/):
     python -m scripts.classify_sentiment --output-dir ../outputs
 """
+
+#TODO: don't iteratively save things: do a large one at the end.
 import json
 import re
 from collections import Counter, defaultdict
@@ -110,6 +112,20 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
     if len(results) == len(items):
         return results
     raise ValueError(f"Expected {len(items)} results, got {len(results)}")
+
+def process_and_save(entry: dict, drug: str, key: str, result: dict, cache: dict, filtered: dict, cache_path: Path, filtered_path: Path):
+    """Helper to update cache or filtered dict and save."""
+    if result.get("signal") == "n/a":
+        filtered[key] = True
+        save_cache(filtered, filtered_path)
+    else:
+        cache[key] = {
+            **result,
+            "author": entry["author"],
+            "text": entry["text"],
+            "created_utc": entry.get("created_utc"),
+        }
+        save_cache(cache, cache_path)
 
 
 def run_classification(config: "PipelineConfig"):
@@ -193,13 +209,7 @@ def run_classification(config: "PipelineConfig"):
             try:
                 results = classify_batch(client, [(e, d) for e, d, k in batch], id_to_text, prompts)
                 for (entry, drug, key), result in zip(batch, results):
-                    if result.get("signal") == "n/a":
-                        filtered[key] = True
-                        save_cache(filtered, filtered_path)
-                    else:
-                        cache[key] = {**result, "author": entry["author"], "text": entry["text"],
-                                     "created_utc": entry.get("created_utc")}
-                        save_cache(cache, cache_path)
+                    process_and_save(entry, drug, key, result)
             except Exception as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug, key in batch:
@@ -208,13 +218,7 @@ def run_classification(config: "PipelineConfig"):
                         msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
                         raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50)
                         result = parse_json_object(raw)
-                        if result.get("signal") == "n/a":
-                            filtered[key] = True
-                            save_cache(filtered, filtered_path)
-                        else:
-                            cache[key] = {**result, "author": entry["author"], "text": entry["text"],
-                                         "created_utc": entry.get("created_utc")}
-                            save_cache(cache, cache_path)
+                        process_and_save(entry, drug, key, result)
                     except Exception as e2:
                         log.error(f"ERROR on {key}: {e2}")
             done += len(batch)
