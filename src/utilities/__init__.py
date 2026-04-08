@@ -15,7 +15,6 @@ class OutputFiles:
     """Centralized output file names."""
     TAGGED_MENTIONS = "tagged_mentions.json"
     CANONICAL_MAP = "canonical_map.json"
-    SENTIMENT_CACHE = "sentiment_cache.json"
 
 
 # ── Pipeline Config ───────────────────────────────────────────────────────────

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     OutputFiles, MODEL_FAST, MODEL_STRONG, llm_call,
-    load_cache, save_cache, parse_json_array, parse_json_object, log
+    parse_json_array, parse_json_object, log
 )
 
 BATCH_SIZE = 5
@@ -113,13 +113,11 @@ def classify_batch(client, items: list[tuple[dict, str]], id_to_text: dict, prom
     raise ValueError(f"Expected {len(items)} results, got {len(results)}")
 
 
-def run_classification(config: "PipelineConfig"):
-    """Main classification logic — called by pipeline or standalone."""
+def run_classification(config: "PipelineConfig") -> dict:
+    """Main classification logic — called by pipeline. Returns sentiment cache dict."""
     client = config.client
     limit = config.limit
-    regenerate_cache = config.regenerate_cache
 
-    cache_path = config.path(OutputFiles.SENTIMENT_CACHE)
     canon_map_path = config.path(OutputFiles.CANONICAL_MAP)
     tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
 
@@ -144,24 +142,23 @@ def run_classification(config: "PipelineConfig"):
     if limit:
         tagged = tagged[:limit]
 
-    cache = {} if regenerate_cache else load_cache(cache_path)
+    cache: dict = {}
 
     # Build prompts per drug (with synonyms)
-    # Collect all entry×drug pairs not yet in cache
+    # Collect all entry×drug pairs
     prompts = {}
     to_do = []
     for entry in tagged:
         all_drugs = list(dict.fromkeys(entry.get("drugs_direct", []) + entry.get("drugs_context", [])))
         for drug in all_drugs:
             key = f"{entry['id']}:{drug}"
-            if key not in cache:
-                to_do.append((entry, drug, key))
-                if drug not in prompts:
-                    prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
+            to_do.append((entry, drug, key))
+            if drug not in prompts:
+                prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
 
-    log.info(f"{len(cache)} classified, {len(to_do)} to process...")
+    log.info(f"{len(to_do)} entry×drug pairs to process...")
 
-    # Prefilter with Haiku (in-memory only, not persisted)
+    # Prefilter with Haiku
     log.info("Prefiltering...")
     filtered_keys = set()
     for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
@@ -177,7 +174,7 @@ def run_classification(config: "PipelineConfig"):
 
     # Only classify entries that passed prefilter
     to_classify = [(e, d, k) for e, d, k in to_do if k not in filtered_keys]
-    log.info(f"{len(filtered_keys)} filtered out, {len(cache)} classified, {len(to_classify)} to classify...")
+    log.info(f"{len(filtered_keys)} filtered out, {len(to_classify)} to classify...")
 
     # Group by drug for batching
     by_drug = defaultdict(list)
@@ -198,7 +195,6 @@ def run_classification(config: "PipelineConfig"):
                             "text": entry["text"],
                             "created_utc": entry.get("created_utc"),
                         }
-                        save_cache(cache, cache_path)
             except Exception as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug, key in batch:
@@ -214,7 +210,6 @@ def run_classification(config: "PipelineConfig"):
                                 "text": entry["text"],
                                 "created_utc": entry.get("created_utc"),
                             }
-                            save_cache(cache, cache_path)
                     except Exception as e2:
                         log.error(f"ERROR on {key}: {e2}")
             done += len(batch)
@@ -226,6 +221,8 @@ def run_classification(config: "PipelineConfig"):
     log.info("Top drugs:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")
+
+    return cache
 
 
 def main():

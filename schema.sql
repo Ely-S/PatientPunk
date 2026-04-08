@@ -43,6 +43,7 @@ CREATE TABLE extraction_runs (
     run_id  INTEGER PRIMARY KEY,
     run_at  INTEGER NOT NULL,
     commit_hash TEXT NOT NULL,
+    extraction_type TEXT NOT NULL,
     config  TEXT NOT NULL   -- JSON: models, prompt, version, temperature, etc.
 );
 
@@ -81,8 +82,8 @@ CREATE TABLE treatment_reports (
     post_id         TEXT NOT NULL REFERENCES posts(post_id),
     user_id         TEXT REFERENCES users(user_id),
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
-    sentiment       REAL NOT NULL,
-    signal_strength REAL NOT NULL,
+    sentiment       TEXT NOT NULL,
+    signal_strength TEXT NOT NULL,
     sentiment_raw   TEXT
 );
 
