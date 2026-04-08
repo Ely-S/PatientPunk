@@ -33,7 +33,7 @@ REDDIT_USER_AGENT = "patientpunk-scraper/0.1 (corpus research)"
 SUBREDDIT = "covidlonghaulers"
 REQUEST_DELAY = 1.0       # seconds between Arctic Shift calls
 REDDIT_REQUEST_DELAY = 7  # seconds between Reddit calls (~10/min unauthenticated)
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = Path(__file__).parent.parent / "data"
 USERS_DIR = OUTPUT_DIR / "users"
 
 

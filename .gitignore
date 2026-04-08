@@ -11,7 +11,7 @@ __pycache__/
 *.egg-info/
 .env
 
-# Output / data
-output/
+# Runtime data output (written by scraper, read by extraction pipeline)
+data/
 reddit_sample_data/outputs/
 *.zip

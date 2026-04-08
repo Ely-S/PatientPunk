@@ -138,18 +138,18 @@ The schema is organized into three layers:
 
 ```bash
 python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
-# Outputs: Scrapers/output/subreddit_posts.json  +  Scrapers/output/users/*.json
+# Outputs: data/subreddit_posts.json  +  data/users/*.json
 ```
 
-### Step 2a — Demographic extraction *(who are the patients?)*
+### Step 2a — Variable extraction *(who are the patients?)*
 
 ```bash
-python demographic_extraction/main.py run \
-    --schema demographic_extraction/schemas/covidlonghaulers_schema.json
-# Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
+python variable_extraction/main.py run \
+    --schema variable_extraction/schemas/covidlonghaulers_schema.json
+# Outputs: data/records.csv  +  data/codebook.csv
 ```
 
-See [`demographic_extraction/README.md`](demographic_extraction/README.md) for full CLI reference and library API.
+See [`variable_extraction/README.md`](variable_extraction/README.md) for full CLI reference and library API.
 
 ### Step 2b — Drug sentiment *(what do they say about treatments?)*
 

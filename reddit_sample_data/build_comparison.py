@@ -1,7 +1,7 @@
 """Build demographics_comparison.csv.
 
 Compares three approaches for the same 100 subreddit posts:
-  - pipeline: regex + LLM gap-fill (Scrapers/output/records.csv)
+  - pipeline: regex + LLM gap-fill (data/records.csv)
   - llm_post: Haiku-only on the single post text
   - llm_user: Haiku-only on the full user history (where available)
 
@@ -26,7 +26,7 @@ post_to_hash = {p["post_id"]: p.get("author_hash") for p in posts_raw}
 
 pipeline = {}
 for row in csv.DictReader(
-    open(ROOT / "Scrapers/output/records.csv", encoding="utf-8")
+    open(ROOT / "data/records.csv", encoding="utf-8")
 ):
     pipeline[row["post_id"]] = row
 

@@ -93,10 +93,10 @@ One record per user with age, sex, location — joined to treatment reports by `
 
 ### Pipeline
 
-**2a. Demographic extraction** — `Scrapers/demographic_extraction/run_pipeline.py`
+**2a. Variable extraction** — `python variable_extraction/main.py run`
 - Full pipeline: regex extraction → Haiku gap-fill → LLM field discovery
-- Extracts age, sex, location from full user Reddit histories
-- Schema: `Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json`
+- Extracts demographics, conditions, medications, treatment outcomes, and more
+- Schema: `variable_extraction/schemas/covidlonghaulers_schema.json`
 - Status: ⚠️ Still needs to be debugged a bit.
 
 **2b. ETL to SQLite** — not yet written
