@@ -121,7 +121,7 @@ def build_csv_row(
 ) -> dict:
     meta = rec.get("record_meta", {})
     row: dict[str, str] = {
-        "author_hash": (meta.get("author_hash") or "")[:16] + "…",
+        "author_hash": meta.get("author_hash") or "",
         "source": meta.get("source") or "",
         "post_id": meta.get("post_id") or "",
         "text_count": str(meta.get("text_count") or ""),
