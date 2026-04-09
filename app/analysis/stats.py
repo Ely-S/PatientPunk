@@ -60,6 +60,34 @@ def categorize_sentiment(score: float) -> str:
 SENTIMENT_CATEGORIES = ["positive", "mixed", "neutral", "negative"]
 
 
+# ── Structured warnings ──────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class AnalysisWarning:
+    """Structured warning attached to statistical results.
+
+    Attributes
+    ----------
+    code     : machine-readable identifier (e.g. "small_sample", "low_epp")
+    severity : "caveat" | "caution" | "unreliable"
+        caveat     — minor limitation, present results with a note
+        caution    — moderate issue, hedge interpretation strongly
+        unreliable — results should not be treated as trustworthy
+    message  : human-readable explanation with specific numbers
+    """
+    code: str
+    severity: str       # "caveat" | "caution" | "unreliable"
+    message: str
+
+    def to_dict(self) -> dict:
+        return {"code": self.code, "severity": self.severity, "message": self.message}
+
+
+def _warn(code: str, severity: str, message: str) -> AnalysisWarning:
+    """Shorthand constructor for AnalysisWarning."""
+    return AnalysisWarning(code=code, severity=severity, message=message)
+
+
 def _safe_exp(value: float) -> float:
     """Exponentiate a log-scale coefficient without emitting overflow warnings."""
     clipped = float(np.clip(value, -700, 700))
@@ -71,9 +99,89 @@ def _round_or_default(value: float, digits: int, default: float = 0.0) -> float:
     return round(float(value), digits) if np.isfinite(value) else default
 
 
-def _dedupe_warnings(messages: list[str]) -> list[str]:
-    """Preserve order while removing duplicate warning strings."""
-    return list(dict.fromkeys(messages))
+def _filter_predictors(
+    df: pd.DataFrame,
+    predictor_names: list[str],
+    sparse_threshold: float = 0.8,
+) -> tuple[list[str], list[AnalysisWarning]]:
+    """Filter predictors by coverage and variance. Shared by logit/OLS/survival.
+
+    Steps:
+    1. Drop predictors where > sparse_threshold of values are NaN
+    2. Drop predictors with zero variance (only one unique value after dropna)
+
+    Returns (available_predictors, warnings).
+    """
+    available = []
+    warn_list: list[AnalysisWarning] = []
+
+    for pred in predictor_names:
+        if pred not in df.columns:
+            continue
+        nan_rate = df[pred].isna().mean()
+        if nan_rate > sparse_threshold:
+            warn_list.append(_warn("sparse_predictor", "caveat",
+                f"Predictor '{pred}' is missing for > {int(sparse_threshold * 100)}% of users — dropped."
+            ))
+            continue
+        available.append(pred)
+
+    return available, warn_list
+
+
+def _drop_zero_variance(
+    X: pd.DataFrame,
+    predictor_names: list[str],
+    warn_list: list[AnalysisWarning],
+) -> tuple[pd.DataFrame, list[str]]:
+    """Drop predictors with no variance from feature matrix X.
+
+    Modifies warn_list in place. Returns (X, remaining_predictors).
+    """
+    remaining = []
+    for pred in predictor_names:
+        if X[pred].nunique() < 2:
+            warn_list.append(_warn("zero_variance_predictor", "caveat",
+                f"Predictor '{pred}' has no variance — dropped."
+            ))
+            X = X.drop(columns=[pred])
+        else:
+            remaining.append(pred)
+    return X, remaining
+
+
+def _check_vif(
+    X: pd.DataFrame,
+    predictor_names: list[str],
+    warn_list: list[AnalysisWarning],
+    threshold: float = 5.0,
+) -> None:
+    """Check VIF multicollinearity and append warnings. Best-effort."""
+    if len(predictor_names) < 2:
+        return
+    try:
+        from statsmodels.stats.outliers_influence import variance_inflation_factor
+        pred_matrix = X[predictor_names].astype(float)
+        for j, pred in enumerate(predictor_names):
+            vif = variance_inflation_factor(pred_matrix.values, j)
+            if np.isfinite(vif) and vif > threshold:
+                warn_list.append(_warn("high_vif", "caution",
+                    f"High multicollinearity on '{pred}' (VIF={vif:.1f}) — "
+                    "coefficient may be unstable."
+                ))
+    except Exception:
+        pass
+
+
+def _dedupe_warnings(warnings_list: list[AnalysisWarning]) -> list[AnalysisWarning]:
+    """Preserve order while removing duplicate warnings (by code)."""
+    seen: set[str] = set()
+    result = []
+    for w in warnings_list:
+        if w.code not in seen:
+            seen.add(w.code)
+            result.append(w)
+    return result
 
 
 # ── Wilson score confidence interval ──────────────────────────────────────────
@@ -179,7 +287,7 @@ def get_user_sentiment(
 @dataclass
 class SampleSizeCheck:
     ok: bool
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def check_sample_sizes(group_a: pd.Series, group_b: pd.Series) -> SampleSizeCheck:
@@ -191,34 +299,34 @@ def check_sample_sizes(group_a: pd.Series, group_b: pd.Series) -> SampleSizeChec
     - Any expected cell count < 5 in the chi-square contingency table
       (triggers fallback to Fisher's exact test)
     """
-    warnings = []
+    warn_list: list[AnalysisWarning] = []
     na, nb = len(group_a), len(group_b)
 
     if na < 5 or nb < 5:
         return SampleSizeCheck(
             ok=False,
-            warnings=[
+            warnings=[_warn("sample_too_small", "unreliable",
                 f"Sample sizes are too small to run a meaningful test "
                 f"(Group A: {na} users, Group B: {nb} users). "
                 f"At least 5 users per group are needed."
-            ],
+            )],
         )
 
     if na < 20:
-        warnings.append(
+        warn_list.append(_warn("small_sample", "caveat",
             f"Group A has only {na} users — interpret results cautiously."
-        )
+        ))
     if nb < 20:
-        warnings.append(
+        warn_list.append(_warn("small_sample", "caveat",
             f"Group B has only {nb} users — interpret results cautiously."
-        )
+        ))
     ratio = max(na, nb) / min(na, nb)
     if ratio >= 3:
-        warnings.append(
+        warn_list.append(_warn("imbalanced_samples", "caveat",
             f"Sample sizes are imbalanced ({na} vs {nb} users), which can distort effect estimates."
-        )
+        ))
 
-    return SampleSizeCheck(ok=True, warnings=warnings)
+    return SampleSizeCheck(ok=True, warnings=warn_list)
 
 
 # ── Statistical tests ──────────────────────────────────────────────────────────
@@ -249,7 +357,7 @@ class ComparisonResult:
     n_b: int
 
     # Warnings from sample size check
-    warnings: list[str]
+    warnings: list[AnalysisWarning]
 
 
 def _count_categories(series: pd.Series) -> dict[str, int]:
@@ -299,17 +407,17 @@ def run_comparison(
     n_a, n_b = len(scores_a), len(scores_b)
     if scores_a.nunique() == 1 and scores_b.nunique() == 1:
         comparison_warnings = list(size_check.warnings)
-        comparison_warnings.append(
+        comparison_warnings.append(_warn("no_within_variation", "caution",
             "Both groups have zero within-group sentiment variation."
-        )
+        ))
     else:
         comparison_warnings = list(size_check.warnings)
 
     # ── Check for identical distributions ─────────────────────────────────────
     if scores_a.nunique() == 1 and scores_b.nunique() == 1 and float(scores_a.iloc[0]) == float(scores_b.iloc[0]):
-        comparison_warnings.append(
+        comparison_warnings.append(_warn("identical_distributions", "unreliable",
             "Both groups have identical sentiment distributions — no comparison possible."
-        )
+        ))
 
     # ── Mann-Whitney U ────────────────────────────────────────────────────────
     mw_stat, mw_p = sp_stats.mannwhitneyu(scores_a, scores_b, alternative="two-sided")
@@ -334,9 +442,9 @@ def run_comparison(
     #   - any expected cell < 5
     has_zero_observed = any(cell == 0 for row in observed for cell in row)
     if len(active_cats) < 2:
-        comparison_warnings.append(
+        comparison_warnings.append(_warn("single_category", "unreliable",
             "Only one sentiment category is present across both groups; the categorical comparison is not informative."
-        )
+        ))
 
     if len(active_cats) >= 2:
         chi2_stat, chi2_p, _, expected = sp_stats.chi2_contingency(observed)
@@ -344,9 +452,9 @@ def run_comparison(
             has_zero_observed or any(cell < 5 for row in expected for cell in row)
         )
         if len(active_cats) > 2 and any(cell < 5 for row in expected for cell in row):
-            comparison_warnings.append(
+            comparison_warnings.append(_warn("sparse_cells", "caveat",
                 "Categorical comparison uses chi-square with sparse cells; interpret cautiously."
-            )
+            ))
     else:
         chi2_stat, chi2_p, expected = None, None, None
         use_fisher = True
@@ -382,9 +490,9 @@ def run_comparison(
         cat_effect = round(cramers_v, 3)
 
     if abs(mw_r) > 0.8 and max(n_a, n_b) < 20:
-        comparison_warnings.append(
+        comparison_warnings.append(_warn("large_effect_small_n", "caution",
             "A very large Mann-Whitney effect was estimated from a small sample."
-        )
+        ))
 
     return ComparisonResult(
         mw_statistic=round(mw_stat, 3),
@@ -456,7 +564,7 @@ class BinomialResult:
     significant: bool
     ci_lower: float             # Wilson 95% CI on observed rate
     ci_upper: float
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_binomial_test(
@@ -479,13 +587,13 @@ def run_binomial_test(
     n_pos = int((df["category"] == "positive").sum())
     result = sp_stats.binomtest(n_pos, n, p=baseline, alternative="two-sided")
     ci_lower, ci_upper = wilson_ci(n_pos, n)
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
     if n < 10:
-        result_warnings.append(f"Only {n} users available for the binomial test.")
+        result_warnings.append(_warn("small_sample", "caveat", f"Only {n} users available for the binomial test."))
     if n_pos == 0 or n_pos == n:
-        result_warnings.append("Observed outcomes have no variation; the rate estimate is extreme.")
+        result_warnings.append(_warn("no_variation", "caution", "Observed outcomes have no variation; the rate estimate is extreme."))
     if baseline in (0.0, 1.0):
-        result_warnings.append("Baseline is at an extreme boundary (0 or 1); interpret cautiously.")
+        result_warnings.append(_warn("extreme_baseline", "caution", "Baseline is at an extreme boundary (0 or 1); interpret cautiously."))
 
     return BinomialResult(
         n_users=n,
@@ -523,7 +631,7 @@ class LogitResult:
     n_obs: int
     n_events: int               # count of positive outcomes
     converged: bool
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def _load_latest_profiles(conn: sqlite3.Connection) -> pd.DataFrame:
@@ -640,42 +748,23 @@ def run_logit(
     if df is None or len(df) < 10:
         return None
 
-    # Keep only columns needed and drop rows with any NaN in predictors
-    cols = ["positive"] + [p for p in predictor_names if p in df.columns]
-    available_predictors = [p for p in predictor_names if p in df.columns]
+    # Filter predictors by coverage and variance
+    available_predictors, result_warnings = _filter_predictors(df, predictor_names)
     if not available_predictors:
         return LogitResult(
             predictors=[], pseudo_r2=0.0, aic=0.0,
             n_obs=len(df), n_events=int(df["positive"].sum()),
             converged=False,
-            warnings=["No valid predictors available (all demographics missing)."],
-        )
-
-    result_warnings: list[str] = []
-
-    # Drop predictors where > 80% of values are NaN (e.g., sex with low coverage)
-    for pred in available_predictors.copy():
-        if pred in df.columns and df[pred].isna().mean() > 0.8:
-            result_warnings.append(
-                f"Predictor '{pred}' is missing for > 80% of users — dropped."
-            )
-            available_predictors.remove(pred)
-
-    if not available_predictors:
-        return LogitResult(
-            predictors=[], pseudo_r2=0.0, aic=0.0,
-            n_obs=len(df), n_events=int(df["positive"].sum()),
-            converged=False,
-            warnings=result_warnings + ["No predictors with sufficient coverage."],
+            warnings=result_warnings + [_warn("no_predictors", "unreliable", "No predictors with sufficient coverage.")],
         )
 
     cols = ["positive"] + available_predictors
     model_df = df[cols].dropna()
     dropped_rows = len(df) - len(model_df)
     if dropped_rows > 0:
-        result_warnings.append(
+        result_warnings.append(_warn("rows_dropped", "caveat",
             f"Dropped {dropped_rows} users with missing predictor values before fitting."
-        )
+        ))
     if len(model_df) < 10:
         return None
 
@@ -686,7 +775,7 @@ def run_logit(
             n_obs=len(model_df), n_events=int(y.sum()),
             converged=False,
             warnings=_dedupe_warnings(
-                result_warnings + ["Outcome has no variation after filtering; logistic regression is unusable."]
+                result_warnings + [_warn("no_variation", "unreliable", "Outcome has no variation after filtering; logistic regression is unusable.")]
             ),
         )
     X = sm.add_constant(model_df[available_predictors].astype(float))
@@ -694,40 +783,21 @@ def run_logit(
     # Check events-per-predictor rule (≥ 10 events per predictor)
     n_events = int(y.sum())
     if n_events < 10 * len(available_predictors):
-        result_warnings.append(
+        result_warnings.append(_warn("low_epp", "caution",
             f"Low events-per-predictor ratio ({n_events} events / "
             f"{len(available_predictors)} predictors). Results may be unreliable."
-        )
+        ))
 
-    # Check for zero variance in any predictor
-    for pred in available_predictors.copy():
-        if X[pred].nunique() < 2:
-            result_warnings.append(f"Predictor '{pred}' has no variance — dropped.")
-            X = X.drop(columns=[pred])
-            available_predictors.remove(pred)
-
+    X, available_predictors = _drop_zero_variance(X, available_predictors, result_warnings)
     if not available_predictors:
         return LogitResult(
             predictors=[], pseudo_r2=0.0, aic=0.0,
             n_obs=len(model_df), n_events=n_events,
             converged=False,
-            warnings=["All predictors had zero variance after filtering."],
+            warnings=result_warnings + [_warn("no_predictors", "unreliable", "All predictors had zero variance after filtering.")],
         )
 
-    # Check multicollinearity (VIF)
-    if len(available_predictors) >= 2:
-        try:
-            from statsmodels.stats.outliers_influence import variance_inflation_factor
-            pred_matrix = X[available_predictors].astype(float)
-            for j, pred in enumerate(available_predictors):
-                vif = variance_inflation_factor(pred_matrix.values, j)
-                if np.isfinite(vif) and vif > 5:
-                    result_warnings.append(
-                        f"High multicollinearity on '{pred}' (VIF={vif:.1f}) — "
-                        "coefficient may be unstable."
-                    )
-        except Exception:
-            pass  # VIF check is best-effort
+    _check_vif(X, available_predictors, result_warnings)
 
     try:
         with warnings.catch_warnings():
@@ -766,22 +836,22 @@ def run_logit(
             warnings=[f"Model failed to fit: {e}"],
         )
     if not converged:
-        result_warnings.append("Logistic regression did not fully converge.")
+        result_warnings.append(_warn("non_convergence", "unreliable", "Logistic regression did not fully converge."))
     if not np.isfinite(llnull):
-        result_warnings.append("Baseline log-likelihood is non-finite; model fit is unstable.")
+        result_warnings.append(_warn("unstable_ll", "unreliable", "Baseline log-likelihood is non-finite; model fit is unstable."))
         pseudo_r2 = 0.0
     elif llnull == 0:
-        result_warnings.append("Baseline log-likelihood is zero; pseudo R² is undefined.")
+        result_warnings.append(_warn("unstable_ll", "unreliable", "Baseline log-likelihood is zero; pseudo R² is undefined."))
         pseudo_r2 = 0.0
     else:
         pseudo_r2 = 1 - (llf / llnull)
         if not np.isfinite(pseudo_r2):
-            result_warnings.append("Pseudo R² is non-finite; model fit is unstable.")
+            result_warnings.append(_warn("unstable_r2", "unreliable", "Pseudo R² is non-finite; model fit is unstable."))
             pseudo_r2 = 0.0
     if pred_results and all(not pred.significant for pred in pred_results) and n_events < 20:
-        result_warnings.append(
+        result_warnings.append(_warn("no_sig_small_n", "caution",
             "No predictors were significant and the event count is small."
-        )
+        ))
 
     return LogitResult(
         predictors=pred_results,
@@ -816,7 +886,7 @@ class OLSResult:
     f_statistic: float
     f_p_value: float
     n_obs: int
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_ols(
@@ -840,73 +910,43 @@ def run_ols(
     if df is None or len(df) < 10:
         return None
 
-    available_predictors = [p for p in predictor_names if p in df.columns]
-    result_warnings: list[str] = []
-
-    # Drop predictors where > 80% of values are NaN
-    for pred in available_predictors.copy():
-        if pred in df.columns and df[pred].isna().mean() > 0.8:
-            result_warnings.append(
-                f"Predictor '{pred}' is missing for > 80% of users — dropped."
-            )
-            available_predictors.remove(pred)
-
+    available_predictors, result_warnings = _filter_predictors(df, predictor_names)
     if not available_predictors:
         return OLSResult(
             predictors=[], r_squared=0.0, adj_r_squared=0.0,
             f_statistic=0.0, f_p_value=1.0, n_obs=len(df),
-            warnings=result_warnings + ["No predictors with sufficient coverage."],
+            warnings=result_warnings + [_warn("no_predictors", "unreliable", "No predictors with sufficient coverage.")],
         )
 
     model_cols = ["avg_sentiment"] + available_predictors
     model_df = df[model_cols].dropna()
     dropped_rows = len(df) - len(model_df)
     if dropped_rows > 0:
-        result_warnings.append(
+        result_warnings.append(_warn("rows_dropped", "caveat",
             f"Dropped {dropped_rows} users with missing predictor values before fitting."
-        )
+        ))
     if len(model_df) < 10:
         return None
 
-    # Drop zero-variance predictors
-    for pred in available_predictors.copy():
-        if model_df[pred].nunique() < 2:
-            result_warnings.append(f"Predictor '{pred}' has no variance — dropped.")
-            model_df = model_df.drop(columns=[pred])
-            available_predictors.remove(pred)
-
-    if not available_predictors:
-        return OLSResult(
-            predictors=[], r_squared=0.0, adj_r_squared=0.0,
-            f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
-            warnings=result_warnings + ["All predictors had zero variance."],
-        )
-
+    # Use shared helpers for zero-variance and VIF checks
     y = model_df["avg_sentiment"]
     if y.nunique() < 2:
         return OLSResult(
             predictors=[], r_squared=0.0, adj_r_squared=0.0,
             f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
             warnings=_dedupe_warnings(
-                result_warnings + ["Outcome has no variation after filtering; OLS is not informative."]
+                result_warnings + [_warn("no_variation", "unreliable", "Outcome has no variation after filtering; OLS is not informative.")]
             ),
         )
     X = sm.add_constant(model_df[available_predictors].astype(float))
-
-    # Check multicollinearity (VIF)
-    if len(available_predictors) >= 2:
-        try:
-            from statsmodels.stats.outliers_influence import variance_inflation_factor
-            pred_matrix = X[available_predictors].astype(float)
-            for j, pred in enumerate(available_predictors):
-                vif = variance_inflation_factor(pred_matrix.values, j)
-                if np.isfinite(vif) and vif > 5:
-                    result_warnings.append(
-                        f"High multicollinearity on '{pred}' (VIF={vif:.1f}) — "
-                        "coefficient may be unstable."
-                    )
-        except Exception:
-            pass
+    X, available_predictors = _drop_zero_variance(X, available_predictors, result_warnings)
+    if not available_predictors:
+        return OLSResult(
+            predictors=[], r_squared=0.0, adj_r_squared=0.0,
+            f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
+            warnings=result_warnings + [_warn("no_predictors", "unreliable", "All predictors had zero variance.")],
+        )
+    _check_vif(X, available_predictors, result_warnings)
 
     try:
         with warnings.catch_warnings():
@@ -926,7 +966,7 @@ def run_ols(
         rsquared = float(fit.rsquared)
         adj_r_squared = float(fit.rsquared_adj)
     if not np.isfinite(fvalue):
-        result_warnings.append("OLS F-statistic is non-finite; model fit is unstable.")
+        result_warnings.append(_warn("unstable_fit", "unreliable", "OLS F-statistic is non-finite; model fit is unstable."))
         fvalue = 0.0
         f_pvalue = 1.0
 
@@ -979,7 +1019,7 @@ class KruskalResult:
     eta_squared: float          # effect size: H / (N - 1)
     group_sizes: dict[str, int]
     pairwise: list[PairwiseResult]
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
@@ -1002,12 +1042,12 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
     group_sizes = {k: len(valid[k]) for k in group_names}
     N = sum(group_sizes.values())
 
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
     for name, n in group_sizes.items():
         if n < 20:
-            result_warnings.append(f"Group '{name}' has only {n} users.")
+            result_warnings.append(_warn("small_group", "caveat", f"Group '{name}' has only {n} users."))
         if valid[name]["avg_sentiment"].nunique() == 1:
-            result_warnings.append(f"Group '{name}' has zero within-group sentiment variation.")
+            result_warnings.append(_warn("no_within_variation", "caution", f"Group '{name}' has zero within-group sentiment variation."))
 
     # Kruskal-Wallis H test
     h_stat, kw_p = sp_stats.kruskal(*arrays)
@@ -1016,10 +1056,10 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
     # Post-hoc pairwise Mann-Whitney with Bonferroni correction
     n_comparisons = len(group_names) * (len(group_names) - 1) // 2
     if n_comparisons >= 10:
-        result_warnings.append(
+        result_warnings.append(_warn("multiple_comparisons", "caveat",
             f"{n_comparisons} pairwise comparisons — Bonferroni correction applied, "
             "individual effects may be masked."
-        )
+        ))
     pairwise: list[PairwiseResult] = []
 
     for i in range(len(group_names)):
@@ -1064,7 +1104,7 @@ class TimeTrendResult:
     direction: str              # "improving" / "declining" / "stable"
     n_months: int
     monthly_data: list[dict]    # [{month: str, avg_sentiment: float, n_reports: int}]
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | None:
@@ -1102,22 +1142,22 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         n_reports=("sentiment", "count"),
     ).reset_index()
     monthly = monthly.sort_values("month")
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
 
     if len(monthly) < 3:
         return TimeTrendResult(
             tau=0.0, p_value=1.0, significant=False, slope=0.0,
             direction="stable", n_months=len(monthly),
             monthly_data=[],
-            warnings=["Fewer than 3 months of data — trend analysis not meaningful."],
+            warnings=[_warn("misc", "caveat", "Fewer than 3 months of data — trend analysis not meaningful.")],
         )
     if len(monthly) < 6:
-        result_warnings.append("Fewer than 6 months of data are available for trend estimation.")
+        result_warnings.append(_warn("short_series", "caution", "Fewer than 6 months of data are available for trend estimation."))
     month_index = pd.period_range(monthly["month"].min(), monthly["month"].max(), freq="M")
     if len(month_index) != len(monthly):
-        result_warnings.append("Monthly data contain gaps; trend estimates may be distorted.")
+        result_warnings.append(_warn("gappy_series", "caution", "Monthly data contain gaps; trend estimates may be distorted."))
     if monthly["avg_sentiment"].nunique() == 1:
-        result_warnings.append("Monthly sentiment has no variation; trend testing is not informative.")
+        result_warnings.append(_warn("no_variation", "caution", "Monthly sentiment has no variation; trend testing is not informative."))
 
     y = monthly["avg_sentiment"].values
     x = np.arange(len(y), dtype=float)
@@ -1177,7 +1217,7 @@ class SurvivalResult:
     n_events: int               # users who reached positive outcome
     n_censored: int
     median_time_days: float | None  # median time to event (None if > 50% censored)
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def _parse_mixed_datetimes(values: pd.Series) -> pd.Series:
@@ -1313,17 +1353,20 @@ def run_survival(
 
     n_events = int(df["event"].sum())
     n_users = len(df)
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
 
     if n_events < 10:
-        early_warnings = [
-            f"Only {n_events} events observed (need ≥ 10 for Cox PH). "
-            "Cannot run survival analysis reliably."
+        early_warnings: list[AnalysisWarning] = [
+            _warn("too_few_events", "unreliable",
+                f"Only {n_events} events observed (need ≥ 10 for Cox PH). "
+                "Cannot run survival analysis reliably.")
         ]
         if n_users > 0 and (n_users - n_events) > n_users / 2:
-            early_warnings.append("More than half of observations are censored.")
+            early_warnings.append(_warn("heavy_censoring", "caution",
+                "More than half of observations are censored."))
         if n_users > 0 and (n_events / n_users) < 0.2:
-            early_warnings.append("Event rate is below 20%; hazard estimates may be unstable.")
+            early_warnings.append(_warn("low_event_rate", "caution",
+                "Event rate is below 20%; hazard estimates may be unstable."))
         return SurvivalResult(
             predictors=[], concordance=0.0,
             n_users=n_users, n_events=n_events,
@@ -1338,19 +1381,14 @@ def run_survival(
     model_df = df[model_cols].dropna()
     dropped_rows = len(df) - len(model_df)
     if dropped_rows > 0:
-        result_warnings.append(
+        result_warnings.append(_warn("rows_dropped", "caveat",
             f"Dropped {dropped_rows} users with missing predictor values before fitting."
-        )
+        ))
 
     if len(model_df) < 10:
         return None
 
-    # Drop zero-variance predictors
-    for pred in available_preds.copy():
-        if model_df[pred].nunique() < 2:
-            result_warnings.append(f"Predictor '{pred}' has no variance — dropped.")
-            model_df = model_df.drop(columns=[pred])
-            available_preds.remove(pred)
+    model_df, available_preds = _drop_zero_variance(model_df, available_preds, result_warnings)
 
     # Fit Cox PH
     try:
@@ -1393,14 +1431,14 @@ def run_survival(
         event_durations = model_df.loc[model_df["event"] == 1, "duration_days"]
     else:
         event_durations = pd.Series(dtype=float)
-        result_warnings.append("More than half of observations are censored.")
+        result_warnings.append(_warn("heavy_censoring", "caution", "More than half of observations are censored."))
     if len(event_durations) > 0:
         median_time = round(float(event_durations.median()), 1)
     event_rate = float(model_df["event"].mean())
     if event_rate < 0.2:
-        result_warnings.append("Event rate is below 20%; hazard estimates may be unstable.")
+        result_warnings.append(_warn("low_event_rate", "caution", "Event rate is below 20%; hazard estimates may be unstable."))
     if (model_df["duration_days"] <= 1).mean() > 0.25:
-        result_warnings.append("Many durations were clipped to the 1-day minimum.")
+        result_warnings.append(_warn("clipped_durations", "caution", "Many durations were clipped to the 1-day minimum."))
 
     return SurvivalResult(
         predictors=pred_results,
@@ -1428,7 +1466,7 @@ class WilcoxonResult:
     n_paired: int               # users who tried both
     mean_diff: float            # mean(sentiment_a - sentiment_b)
     median_diff: float
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def get_paired_sentiment(
@@ -1485,12 +1523,12 @@ def run_wilcoxon(
         return None
 
     n = len(df)
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
 
     if n < 20:
-        result_warnings.append(
+        result_warnings.append(_warn("small_paired_n", "caveat",
             f"Only {n} users tried both drugs — interpret cautiously."
-        )
+        ))
 
     diffs = df["diff"].values
 
@@ -1502,7 +1540,7 @@ def run_wilcoxon(
             effect_size_r=0.0, direction="no_difference",
             drug_a=drug_a, drug_b=drug_b, n_paired=n,
             mean_diff=0.0, median_diff=0.0,
-            warnings=result_warnings + ["All paired differences are zero — no comparison possible."],
+            warnings=result_warnings + [_warn("zero_differences", "unreliable", "All paired differences are zero — no comparison possible.")],
         )
 
     stat, p = sp_stats.wilcoxon(diffs, alternative="two-sided")
@@ -1545,7 +1583,7 @@ class SpearmanResult:
     n: int
     variable_a: str
     variable_b: str
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_spearman(
@@ -1567,13 +1605,13 @@ def run_spearman(
         return None
 
     n = len(combined)
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
 
     if n < 20:
-        result_warnings.append(f"Only {n} observations — interpret cautiously.")
+        result_warnings.append(_warn("small_sample", "caveat", f"Only {n} observations — interpret cautiously."))
 
     if combined["a"].nunique() < 3 or combined["b"].nunique() < 3:
-        result_warnings.append("One or both variables have very low variability.")
+        result_warnings.append(_warn("low_variability", "caution", "One or both variables have very low variability."))
 
     rho, p = sp_stats.spearmanr(combined["a"], combined["b"])
 
@@ -1601,7 +1639,7 @@ class PropensityResult:
     p_value: float
     significant: bool
     balance_table: list[dict]   # [{predictor, smd_before, smd_after}]
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[AnalysisWarning] = field(default_factory=list)
 
 
 def run_propensity_match(
@@ -1667,7 +1705,7 @@ def run_propensity_match(
     df = pd.concat([drug_df, control_df], ignore_index=True)
 
     # Join predictors
-    result_warnings: list[str] = []
+    result_warnings: list[AnalysisWarning] = []
     available_predictors = []
 
     if any(p in ("sex", "age_bucket") for p in predictor_names):
@@ -1706,14 +1744,14 @@ def run_propensity_match(
         if pred in df.columns and df[pred].isna().mean() <= 0.8 and df[pred].nunique() >= 2:
             available_predictors.append(pred)
         elif pred in df.columns:
-            result_warnings.append(f"Predictor '{pred}' dropped (sparse or no variance).")
+            result_warnings.append(_warn("sparse_predictor", "caveat", f"Predictor '{pred}' dropped (sparse or no variance)."))
 
     if not available_predictors:
         return PropensityResult(
             n_matched=0, n_unmatched_treated=len(treated_ids), ate=0.0,
             ate_ci_lower=0.0, ate_ci_upper=0.0, p_value=1.0, significant=False,
             balance_table=[],
-            warnings=result_warnings + ["No valid predictors for propensity model."],
+            warnings=result_warnings + [_warn("no_predictors", "unreliable", "No valid predictors for propensity model.")],
         )
 
     model_df = df[["user_id", "treated", "sentiment"] + available_predictors].dropna()
@@ -1765,7 +1803,7 @@ def run_propensity_match(
             n_unmatched_treated=len(treated) - n_matched,
             ate=0.0, ate_ci_lower=0.0, ate_ci_upper=0.0,
             p_value=1.0, significant=False, balance_table=[],
-            warnings=result_warnings + [f"Only {n_matched} matches found (need ≥ 5)."],
+            warnings=result_warnings + [_warn("few_matches", "unreliable", f"Only {n_matched} matches found (need ≥ 5).")],
         )
 
     # ATE = mean difference in matched pairs
@@ -1799,9 +1837,9 @@ def run_propensity_match(
             "smd_after": round(smd_after, 3),
         })
         if abs(smd_after) > 0.1:
-            result_warnings.append(
+            result_warnings.append(_warn("residual_imbalance", "caution",
                 f"Residual imbalance on '{pred}' after matching (SMD={smd_after:.2f})."
-            )
+            ))
 
     return PropensityResult(
         n_matched=n_matched,

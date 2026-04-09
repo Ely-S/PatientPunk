@@ -18,6 +18,7 @@ import pandas as pd
 import pytest
 
 from app.analysis.stats import (
+    AnalysisWarning,
     _build_logit_features,
     _build_survival_data,
     BinomialResult,
@@ -417,7 +418,7 @@ class TestRunComparison:
         result = run_comparison(df_a, df_c)
         assert result is not None
         assert result.cat_test_name == "chi-square"
-        assert any("sparse cells" in warning for warning in result.warnings)
+        assert any("sparse cells" in w.message for w in result.warnings)
 
     def test_small_sample_returns_none(self):
         """Groups smaller than 5 should return None."""
@@ -486,7 +487,7 @@ class TestRunComparison:
         })
         result = run_comparison(df_large, df_small)
         assert result is not None
-        assert any("imbalanced" in warning for warning in result.warnings)
+        assert any("imbalanced" in w.message for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -571,9 +572,9 @@ class TestRunBinomialTest:
         })
         result = run_binomial_test(df, baseline=1.0)
         assert result is not None
-        assert any("Only 3 users" in warning for warning in result.warnings)
-        assert any("no variation" in warning.lower() for warning in result.warnings)
-        assert any("extreme boundary" in warning.lower() for warning in result.warnings)
+        assert any("Only 3 users" in w.message for w in result.warnings)
+        assert any("no variation" in w.message.lower() for w in result.warnings)
+        assert any("extreme boundary" in w.message.lower() for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -613,7 +614,7 @@ class TestRunLogit:
         result = run_logit(conn, "test_drug_a", ["sex", "has_pots"])
         # Should run (using has_pots) even though sex is sparse
         if result is not None and result.warnings:
-            sex_warnings = [w for w in result.warnings if "sex" in w.lower()]
+            sex_warnings = [w for w in result.warnings if "sex" in w.message.lower()]
             # Either sex was dropped or the model ran fine with it
             # (depends on synthetic data overlap)
 
@@ -652,7 +653,7 @@ class TestRunLogit:
     def test_logit_warns_when_rows_are_dropped(self, conn):
         result = run_logit(conn, "test_drug_a", ["sex", "age_bucket", "has_pots"])
         assert result is not None
-        assert any("Dropped" in warning for warning in result.warnings)
+        assert any("Dropped" in w.message for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -699,7 +700,7 @@ class TestRunOLS:
     def test_ols_warns_when_rows_are_dropped(self, conn):
         result = run_ols(conn, "test_drug_a", ["sex", "age_bucket", "has_pots"])
         assert result is not None
-        assert any("Dropped" in warning for warning in result.warnings)
+        assert any("Dropped" in w.message for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -844,9 +845,9 @@ class TestRunTimeTrend:
         conn.commit()
         result = run_time_trend(conn, "gappy_trend_drug")
         assert result is not None
-        assert any("Fewer than 6 months" in warning for warning in result.warnings)
-        assert any("gaps" in warning.lower() for warning in result.warnings)
-        assert any("no variation" in warning.lower() for warning in result.warnings)
+        assert any("Fewer than 6 months" in w.message for w in result.warnings)
+        assert any("gaps" in w.message.lower() for w in result.warnings)
+        assert any("no variation" in w.message.lower() for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -944,7 +945,7 @@ class TestRunSurvival:
         conn.commit()
         result = run_survival(conn, "warning_survival_drug", ["has_pots"])
         assert result is not None
-        assert any("censored" in warning.lower() for warning in result.warnings)
+        assert any("censored" in w.message.lower() for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -991,7 +992,7 @@ class TestRunWilcoxon:
         """If n_paired < 20, should include a warning."""
         result = run_wilcoxon(conn, "test_drug_a", "test_drug_b")
         if result is not None and result.n_paired < 20:
-            assert any("Only" in w and "users tried both" in w for w in result.warnings)
+            assert any("Only" in w.message and "users tried both" in w.message for w in result.warnings)
 
     def test_nonexistent_drug(self, conn):
         result = run_wilcoxon(conn, "test_drug_a", "nonexistent_xyz")
@@ -1038,7 +1039,7 @@ class TestRunSpearman:
         b = pd.Series([5, 5, 5, 5, 5, 6, 5, 5, 5, 5])
         result = run_spearman(a, b)
         assert result is not None
-        assert any("variability" in w.lower() for w in result.warnings)
+        assert any("variability" in w.message.lower() for w in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1096,14 +1097,14 @@ class TestWarnings:
             groups[f"extra_{len(groups)}"] = base_df.copy()
         result = run_kruskal_wallis(groups)
         assert result is not None
-        assert any("pairwise comparisons" in w for w in result.warnings)
+        assert any("pairwise comparisons" in w.message for w in result.warnings)
 
     def test_logit_low_epp_warning(self, conn):
         """2 predictors with few events should trigger EPP warning."""
         # Drug B: only 3 positive events out of 15 users
         result = run_logit(conn, "test_drug_b", ["has_pots", "has_mcas"])
         if result is not None:
-            assert any("events-per-predictor" in w.lower() or "epp" in w.lower()
+            assert any("events-per-predictor" in w.message.lower() or "epp" in w.message.lower()
                        for w in result.warnings)
 
     def test_identical_distributions_warning(self, conn):
@@ -1116,7 +1117,7 @@ class TestWarnings:
         })
         result = run_comparison(df_same, df_same)
         assert result is not None
-        assert any("identical" in w.lower() for w in result.warnings)
+        assert any("identical" in w.message.lower() for w in result.warnings)
 
     def test_reporting_bias_disclaimer_exists(self):
         """The REPORTING_BIAS_DISCLAIMER constant should be importable."""
