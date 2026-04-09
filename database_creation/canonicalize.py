@@ -5,7 +5,7 @@ canonicalize.py
 Step 1.5 of the drug mention database pipeline.
 
 Collects all unique drug names from tagged_mentions.json, collapses true
-synonyms (e.g. "low dose naltrexone" → "ldn") but keeps distinct drugs
+synonyms (e.g. "low dose naltrexone" -> "ldn") but keeps distinct drugs
 separate even if related (e.g. "famotidine" and "antihistamines" are NOT merged).
 
 Steps:
@@ -40,9 +40,9 @@ Rules:
   e.g. "famotidine" and "antihistamines" are related but NOT the same — keep separate.
   e.g. "h1 blocker" and "antihistamines" are related but NOT the same — keep separate.
 - Brand names and generic names for the same drug ARE synonyms.
-  e.g. "pepcid" and "famotidine" → same drug → merge.
+  e.g. "pepcid" and "famotidine" -> same drug -> merge.
 - Abbreviations for the same drug ARE synonyms.
-  e.g. "ldn" and "low dose naltrexone" → same drug → merge.
+  e.g. "ldn" and "low dose naltrexone" -> same drug -> merge.
 - Choose the most common/recognizable name as the canonical form (usually generic name or common abbreviation).
 
 Return a JSON object mapping every input name to its canonical form.
@@ -83,7 +83,7 @@ def main():
         sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
     client = anthropic.Anthropic(api_key=api_key)
 
-    tagged = json.loads(tagged_path.read_text())
+    tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
     print(f"Loaded {len(tagged)} tagged entries.")
 
     # ── Step 1: collect all unique drug names ─────────────────────────────────
@@ -111,7 +111,7 @@ def main():
     print()
 
     # ── Step 4: save canonical map ────────────────────────────────────────────
-    canon_path.write_text(json.dumps(canon_map, indent=2, sort_keys=True))
+    canon_path.write_text(encoding="utf-8", data=json.dumps(canon_map, indent=2, sort_keys=True))
     print(f"Wrote {canon_path.name}")
 
     # Print summary of groupings
@@ -122,7 +122,7 @@ def main():
     if groups:
         print(f"\nSynonym groups found ({len(groups)}):")
         for canonical, synonyms in sorted(groups.items()):
-            print(f"  {canonical} ← {', '.join(synonyms)}")
+            print(f"  {canonical} <- {', '.join(synonyms)}")
     else:
         print("\nNo synonym groups found.")
 
@@ -134,7 +134,7 @@ def main():
         entry["drugs_direct"]  = canonicalize_list(entry.get("drugs_direct", []))
         entry["drugs_context"] = canonicalize_list(entry.get("drugs_context", []))
 
-    tagged_path.write_text(json.dumps(tagged, indent=2))
+    tagged_path.write_text(encoding="utf-8", data=json.dumps(tagged, indent=2))
     print(f"Rewrote {tagged_path.name} with canonical drug names.")
 
 

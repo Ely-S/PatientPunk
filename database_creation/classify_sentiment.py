@@ -77,11 +77,11 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 
 def load_cache(path: Path) -> dict:
-    return json.loads(path.read_text()) if path.exists() else {}
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
 def save_cache(cache: dict, path: Path):
-    path.write_text(json.dumps(cache, indent=2))
+    path.write_text(encoding="utf-8", data=json.dumps(cache, indent=2))
 
 
 # ── Classification ────────────────────────────────────────────────────────────
@@ -141,16 +141,16 @@ def main():
         sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
     client = anthropic.Anthropic(api_key=api_key)
 
-    tagged = json.loads((output_dir / "tagged_mentions.json").read_text())
+    tagged = json.loads((output_dir / "tagged_mentions.json").read_text(encoding="utf-8"))
     print(f"Loaded {len(tagged)} tagged entries.")
 
-    # Build id → text lookup from tagged_mentions itself
+    # Build id -> text lookup from tagged_mentions itself
     id_to_text = {e["id"]: e["text"] for e in tagged}
 
     # Filter pure questions
     before = len(tagged)
     tagged = [e for e in tagged if not is_only_questions(e["text"])]
-    print(f"Filtered {before - len(tagged)} pure-question entries → {len(tagged)} remaining.")
+    print(f"Filtered {before - len(tagged)} pure-question entries -> {len(tagged)} remaining.")
 
     if args.debug_ldn:
         LDN_TERMS = {"ldn", "naltrexone", "low dose naltrexone", "low-dose naltrexone"}
@@ -212,7 +212,7 @@ def main():
         print()
 
     passed = sum(1 for v in prefilter_cache.values() if v)
-    print(f"Prefilter: {passed}/{len(prefilter_cache)} passed → sending to Sonnet")
+    print(f"Prefilter: {passed}/{len(prefilter_cache)} passed -> sending to Sonnet")
 
     # Only classify entries that passed prefilter
     to_do = [(entry, drug, key) for entry, drug, key in to_do

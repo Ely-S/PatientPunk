@@ -25,11 +25,11 @@ Example: [["ldn", "low dose naltrexone"], ["famotidine", "pepcid"], []]
 
 
 def load_cache(path: Path) -> dict:
-    return json.loads(path.read_text()) if path.exists() else {}
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
 def save_cache(cache: dict, path: Path):
-    path.write_text(json.dumps(cache, indent=2))
+    path.write_text(encoding="utf-8", data=json.dumps(cache, indent=2))
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
@@ -117,7 +117,7 @@ def main():
         sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
     client = anthropic.Anthropic(api_key=api_key)
 
-    posts = json.loads(POSTS_FILE.read_text())
+    posts = json.loads(POSTS_FILE.read_text(encoding="utf-8"))
     if args.limit:
         posts = posts[:args.limit]
     print(f"Loaded {len(posts)} posts.")
@@ -207,7 +207,7 @@ def main():
 
     # ── Step 5: save ────────────────────────────────────────────────────────
     out_path = output_dir / "tagged_mentions.json"
-    out_path.write_text(json.dumps(tagged, indent=2))
+    out_path.write_text(encoding="utf-8", data=json.dumps(tagged, indent=2))
 
     from collections import Counter
     drug_counts = Counter(d for e in tagged for d in e["drugs_direct"])
