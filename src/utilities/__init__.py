@@ -23,9 +23,9 @@ class PipelineConfig:
     """Shared configuration for all pipeline steps."""
     client: anthropic.Anthropic
     output_dir: Path
-    posts_file: Path
+    db_path: Path
     limit: int = 100
-    regenerate_cache: bool = False
+    reclassify: bool = False
 
     def path(self, filename: str) -> Path:
         """Get full path for an output file."""
@@ -53,13 +53,6 @@ def get_client() -> anthropic.Anthropic:
     if not api_key:
         sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
     return anthropic.Anthropic(api_key=api_key)
-
-# ── Cache helpers ────────────────────────────────────────────────────────────
-def load_cache(path: Path) -> dict:
-    return json.loads(path.read_text()) if path.exists() else {}
-
-def save_cache(cache: dict, path: Path):
-    path.write_text(json.dumps(cache, indent=2))
 
 # ── LLM response parsing ─────────────────────────────────────────────────────
 def _strip_markdown(raw: str) -> str:

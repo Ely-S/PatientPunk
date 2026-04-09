@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-database_utils.py — Import data into SQLite database.
+database_utils.py — Import Reddit posts into SQLite database.
 
 Assumes database was created with schema.sql first:
     sqlite3 data/posts.db < schema.sql
 
 Usage:
     python src/database_scripts/database_utils.py --reddit-posts data/subreddit_posts.json --output-db data/posts.db
-    python src/database_scripts/database_utils.py --tagged-mentions outputs/tagged_mentions.json --output-db data/posts.db
-    python src/database_scripts/database_utils.py --reddit-posts data/posts.json --tagged-mentions outputs/tagged_mentions.json --output-db data/posts.db
 """
 import argparse
 import json
 import logging
 import sqlite3
-from collections import defaultdict
+import sys
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from itertools import chain
 from pathlib import Path
 from typing import TypedDict
+
+# Allow imports from src/
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from db import open_db
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -41,13 +42,6 @@ class PostRow(TypedDict):
     flair: str | None
     post_date: int | None
     scraped_at: int
-
-
-class TreatmentRow(TypedDict):
-    canonical_name: str
-    treatment_class: str | None
-    aliases: str | None  # JSON array
-    notes: str | None
 
 
 @dataclass
@@ -138,14 +132,13 @@ def load_posts(input_path: Path, subreddit_override: str | None = None) -> tuple
                 parent_id=comment.get("parent_id"),
             ))
 
+    # Null out parent_ids that reference posts/comments not in our dataset
+    known_ids = {p["post_id"] for p in posts}
+    for post in posts:
+        if post["parent_id"] and post["parent_id"] not in known_ids:
+            post["parent_id"] = None
+
     return list(users.values()), posts
-
-
-def open_db(db_path: Path) -> sqlite3.Connection:
-    """Open database connection. Assumes schema.sql was already run."""
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
 
 
 def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> ImportStats:
@@ -171,65 +164,17 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     return ImportStats(users=user_count, posts=post_count, comments=comment_count)
 
 
-def import_treatments(conn: sqlite3.Connection, tagged_path: Path, canonical_map_path: Path | None = None) -> int:
-    """Build treatment table from tagged_mentions.json and optional canonical_map.json.
-
-    Returns the number of treatments inserted.
-    """
-    tagged: list[dict] = json.loads(tagged_path.read_text())
-
-    # Invert canonical map: canonical_name -> [aliases]
-    aliases_for: dict[str, list[str]] = defaultdict(list)
-    if canonical_map_path and canonical_map_path.exists():
-        for raw, canonical in json.loads(canonical_map_path.read_text()).items():
-            if raw != canonical:
-                aliases_for[canonical].append(raw)
-
-    # Collect unique non-empty drug names
-    all_drugs = {
-        drug for entry in tagged
-        for drug in chain(entry.get("drugs_direct", []), entry.get("drugs_context", []))
-        if drug.strip()
-    }
-
-    def make_row(drug: str) -> TreatmentRow:
-        aliases = aliases_for.get(drug)
-        return TreatmentRow(
-            canonical_name=drug,
-            treatment_class=None,
-            aliases=json.dumps(aliases) if aliases else None,
-            notes=None,
-        )
-
-    with conn:
-        conn.executemany(
-            "INSERT OR IGNORE INTO treatment (canonical_name, treatment_class, aliases, notes) "
-            "VALUES (:canonical_name, :treatment_class, :aliases, :notes)",
-            (make_row(drug) for drug in sorted(all_drugs)),
-        )
-
-    return conn.execute("SELECT COUNT(*) FROM treatment").fetchone()[0]
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Create SQLite database from JSON sources")
-    parser.add_argument("--reddit-posts", help="Path to subreddit_posts.json")
-    parser.add_argument("--tagged-mentions", help="Path to tagged_mentions.json (for treatment table)")
-    parser.add_argument("--canonical-map", help="Path to canonical_map.json (optional, for treatment aliases)")
+    parser = argparse.ArgumentParser(description="Import Reddit posts into SQLite database")
+    parser.add_argument("--reddit-posts", required=True, help="Path to subreddit_posts.json")
     parser.add_argument("--output-db", required=True, help="Path for output .db file")
     parser.add_argument("--subreddit", help="Override subreddit name (default: extracted from URLs)")
     args = parser.parse_args()
 
     db_path = Path(args.output_db)
     with closing(open_db(db_path)) as conn:
-        if args.reddit_posts:
-            stats = import_reddit_posts(conn, Path(args.reddit_posts), args.subreddit)
-            log.info(f"Imported reddit posts: {stats.users} users, {stats.posts} posts, {stats.comments} comments")
-
-        if args.tagged_mentions:
-            canon_path = Path(args.canonical_map) if args.canonical_map else None
-            count = import_treatments(conn, Path(args.tagged_mentions), canon_path)
-            log.info(f"Imported {count} treatments")
+        stats = import_reddit_posts(conn, Path(args.reddit_posts), args.subreddit)
+        log.info(f"Imported: {stats.users} users, {stats.posts} posts, {stats.comments} comments")
 
     log.info(f"Wrote {db_path}")
 

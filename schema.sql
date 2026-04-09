@@ -19,8 +19,8 @@ CREATE TABLE posts (
     body_text  TEXT NOT NULL,
     flair   TEXT,
     post_date  INTEGER,
-    scraped_at INTEGER NOT NULL
-    metadata   TEXT,                -- JSON: score, upvotes, flair, etc. 
+    scraped_at INTEGER NOT NULL,
+    metadata   TEXT                 -- JSON: score, upvotes, flair, etc.
 );
 
 CREATE INDEX idx_posts_user ON posts(user_id);
@@ -83,9 +83,8 @@ CREATE TABLE treatment_reports (
     post_id         TEXT NOT NULL REFERENCES posts(post_id),
     user_id         TEXT REFERENCES users(user_id),
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
-    sentiment       REAL NOT NULL,
-    signal_strength REAL NOT NULL,
-    sentiment_raw   TEXT
+    sentiment       TEXT NOT NULL,
+    signal_strength TEXT NOT NULL
 );
 
 CREATE INDEX idx_tr_post ON treatment_reports(post_id);

@@ -8,7 +8,7 @@ For rigorous, prompt-tuned analysis of a specific intervention, see `detailed_an
 
 ## Overview
 
-The pipeline takes a Reddit posts file and produces a sentiment database: for each post/comment x drug pair, did this author have a positive, negative, or mixed experience?
+The pipeline reads posts from a SQLite database and produces a sentiment database: for each post/comment × drug pair, did this author have a positive, negative, or mixed experience?
 
 A key design principle: **reply chain context is preserved**. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from ancestors via the parent chain).
 
@@ -25,135 +25,137 @@ export ANTHROPIC_API_KEY=your_key_here
 
 ## Running the pipeline
 
-**Full pipeline (all 3 steps):**
+**Step 0 — Import posts into SQLite:**
+```bash
+sqlite3 data/posts.db < schema.sql
+python src/database_scripts/database_utils.py \
+  --reddit-posts data/subreddit_posts.json \
+  --output-db data/posts.db
+```
+
+**Run the pipeline:**
 ```bash
 python src/run_pipeline.py \
-  --posts-file data/subreddit_posts.json \
-  --output-dir data/outputs \
+  --db data/posts.db \
+  --output-dir outputs \
   --limit 100
-```
-
-**Skip canonicalization:**
-```bash
-python src/run_pipeline.py \
-  --posts-file data/subreddit_posts.json \
-  --output-dir data/outputs \
-  --skip-canonicalize
-```
-
-**Ignore existing caches and reprocess everything:**
-```bash
-python src/run_pipeline.py \
-  --posts-file data/subreddit_posts.json \
-  --output-dir data/outputs \
-  --regenerate-cache
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--posts-file` | Path to the Reddit posts JSON file (required) |
-| `--output-dir` | Directory for all output files (required) |
-| `--limit N` | Process only the first N posts (default: 100) |
-| `--skip-canonicalize` | Skip step 2, classify using raw drug names |
-| `--regenerate-cache` | Ignore all existing caches and reprocess from scratch |
+| `--db` | Path to SQLite database with posts already imported (required) |
+| `--output-dir` | Directory for intermediate files (required) |
+| `--limit N` | Process only the first N posts/comments (default: 100) |
+| `--skip-canonicalize` | Skip synonym normalization, classify using raw drug names |
+| `--reclassify` | Re-classify all pairs, even those already in the database |
 
 ---
 
 ## Architecture
 
-All pipeline steps accept a shared `PipelineConfig` dataclass (defined in `utilities/`), which holds the Anthropic client, output directory, posts file path, limit, and regenerate flag. This means each step can be run via `run_pipeline.py` or standalone.
+All pipeline steps accept a shared `PipelineConfig` dataclass (defined in `utilities/`), which holds the Anthropic client, output directory, database path, limit, and reclassify flag.
 
 All LLM prompts live in `prompts/intervention_config.py` — one file for the extract prompt, canonicalization prompt, prefilter prompt, and the Sonnet classification system prompt.
 
-Shared helpers (`llm_call`, `process_in_batches`, `parse_json_array`, `load_cache`, `save_cache`) live in `utilities/__init__.py`, along with model constants (`MODEL_FAST = claude-haiku-4-5`, `MODEL_STRONG = claude-sonnet-4-6`).
+Shared helpers (`llm_call`, `process_in_batches`, `parse_json_array`, `parse_json_object`) live in `utilities/__init__.py`, along with model constants (`MODEL_FAST = claude-haiku-4-5`, `MODEL_STRONG = claude-sonnet-4-6`).
+
+Database helpers live in `db.py`: `open_db()` for connection setup, `import_treatments()` and `load_synonyms()` for the treatment table, and `ReportWriter` for incremental classification writes.
 
 ---
 
 ## Pipeline steps
 
-### Step 1 — `extract_mentions.py`
+### Step 1 — Extract (`extract_mentions.py`)
 
-Scans every post and comment, asks Haiku to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
+Reads posts/comments from the `posts` table in SQLite. Asks Haiku to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
 
 **Ancestor context:** For each comment, `drugs_context` is computed by walking up the parent chain and collecting all `drugs_direct` from ancestors. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name.
 
-**Output:** `tagged_mentions.json` — only entries with at least one drug (direct or context) are included.
+**Output:** `tagged_mentions.json` — intermediate file with drug mentions per entry.
 
-```json
-{
-  "id": "t1_abc123",
-  "author": "<sha256-hashed>",
-  "text": "I've been taking LDN for 3 months...",
-  "post_title": "My LDN experience",
-  "parent_id": "t3_xyz",
-  "created_utc": "2026-01-01T00:00:00+00:00",
-  "drugs_direct": ["ldn"],
-  "drugs_context": ["mestinon"]
-}
-```
+### Step 2 — Canonicalize (`canonicalize.py`)
 
-- `drugs_direct` — drugs mentioned in this post/comment's own text
-- `drugs_context` — drugs inherited from the ancestor chain (parent, grandparent, etc.)
+Collects all unique drug names from `tagged_mentions.json`, sends them to Haiku in batches of 50, and merges true synonyms (e.g. `"low dose naltrexone"` -> `"ldn"`, `"pepcid"` -> `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names. Returns the canonical map in memory for the next step.
 
-### Step 2 — `canonicalize.py`
+**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
 
-Collects all unique drug names from `tagged_mentions.json`, sends them to Haiku in batches of 50, and merges true synonyms (e.g. `"low dose naltrexone"` -> `"ldn"`, `"pepcid"` -> `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names and deduplicates within each entry's drug lists.
+Can be skipped with `--skip-canonicalize`.
 
-**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate). This is important because categories and specific drugs carry different information.
+### Step 3 — Import Treatments
 
-Can be skipped with `--skip-canonicalize` if you want to classify using raw extracted names.
+Populates the `treatment` table from the drug names in `tagged_mentions.json` and the canonical map (if canonicalize ran). Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe.
 
-**Output:** `canonical_map.json` — maps every raw name to its canonical form.
+### Step 4 — Classify (`classify_sentiment.py`)
 
-### Step 3 — `classify_sentiment.py`
+For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-For each entry x drug pair, classifies the author's sentiment toward that drug. Two-stage process to minimize API cost:
+1. **Haiku prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 5 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
 
-1. **Haiku prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 5 items per call. Explicitly rejects questions about the drug ("Have you tried X?") and research/article discussions. Entries that fail are kept in memory for the run but not persisted — only real results are saved.
+2. **Sonnet classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in ancestor text = "ldn".
 
-2. **Sonnet classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt amortizes tokens). The system prompt includes synonym info from `canonical_map.json` so the model knows "naltrexone" in ancestor text = "ldn".
-
-**Reply chain handling:** Ancestor text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" -> positive, where "it" = the drug in the parent post). But the classifier only scores signal from the reply itself — ancestor text is context, not evidence.
+**Reply chain handling:** Ancestor text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" -> positive, where "it" = the drug in the parent post).
 
 **Pure-question filter:** Before any LLM calls, entries where every sentence ends with `?` are filtered out.
 
-**Output:** `sentiment_cache.json` — only real classified results, no filtered entries.
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
 
-```json
-{
-  "t1_abc123:ldn": {
-    "sentiment": "positive",
-    "signal": "strong",
-    "author": "<sha256-hashed>",
-    "text": "LDN changed my life -- I went from bedbound to walking...",
-    "created_utc": "2026-01-01T00:00:00+00:00"
-  },
-  "t1_def456:famotidine": {
-    "sentiment": "negative",
-    "signal": "moderate",
-    "author": "<sha256-hashed>",
-    "text": "Famotidine did absolutely nothing for me after 3 months.",
-    "created_utc": "2026-02-15T12:30:00+00:00"
-  }
-}
-```
-
-Cache key format: `entry_id:drug_name`
-
-| Field | Values |
-|-------|--------|
+| Column | Values |
+|--------|--------|
 | `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
-| `signal` | `strong`, `moderate`, `weak`, `n/a` |
+| `signal_strength` | `strong`, `moderate`, `weak` |
 
 ---
 
-## Output files
+## Crash recovery
 
-| File | Description |
-|------|-------------|
-| `tagged_mentions.json` | Every post/comment with drug mentions, including ancestor context |
-| `canonical_map.json` | Raw drug name -> canonical name mapping |
-| `sentiment_cache.json` | Classified entry x drug pairs (real results only, the main output) |
+The pipeline is designed to resume after interruptions:
+
+- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
+- **Canonicalize:** Re-runs fully (cheap Haiku calls on drug names only).
+- **Import treatments:** `INSERT OR IGNORE` — existing rows are skipped.
+- **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
+
+Use `--reclassify` to force re-classification of all pairs. Old results are preserved with their original `run_id` — nothing is deleted.
+
+---
+
+## Output
+
+Results live in the `treatment_reports` table in the SQLite database:
+
+```sql
+-- All reports for a specific drug
+SELECT tr.*, t.canonical_name
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+WHERE t.canonical_name = 'ldn';
+
+-- Sentiment breakdown per drug
+SELECT t.canonical_name, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name
+ORDER BY n DESC;
+
+-- Top drugs by number of reports
+SELECT t.canonical_name, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name
+ORDER BY n DESC
+LIMIT 20;
+
+-- All reports for a specific user
+SELECT tr.*, t.canonical_name
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+WHERE tr.user_id = '<hash>';
+
+-- Compare results across runs
+SELECT run_id, COUNT(*) as n
+FROM treatment_reports
+GROUP BY run_id;
+```
 
 ---
 
@@ -161,45 +163,17 @@ Cache key format: `entry_id:drug_name`
 
 ```
 src/
-  run_pipeline.py            # Orchestrates all three steps via PipelineConfig
+  run_pipeline.py            # Orchestrates all steps
+  db.py                      # open_db, import_treatments, load_synonyms, ReportWriter
   requirements.txt
   scripts/
-    extract_mentions.py      # Step 1: tag drugs in each post/comment
+    extract_mentions.py      # Step 1: extract drug mentions from posts
     canonicalize.py          # Step 2: normalize synonyms
-    classify_sentiment.py    # Step 3: two-stage sentiment classification
+    classify_sentiment.py    # Step 4: two-stage sentiment classification
+  database_scripts/
+    database_utils.py        # Step 0: import Reddit JSON into SQLite
   prompts/
     intervention_config.py   # All LLM prompts in one place
   utilities/
-    __init__.py              # PipelineConfig, OutputFiles, llm_call, process_in_batches, etc.
-```
-
----
-
-## Querying the output
-
-`sentiment_cache.json` is the main output. To get all entries for a specific drug:
-
-```python
-import json
-
-cache = json.loads(open("data/outputs/sentiment_cache.json").read())
-ldn = {k: v for k, v in cache.items() if k.endswith(":ldn")}
-```
-
-Breakdown by sentiment:
-```python
-from collections import Counter
-Counter(v["sentiment"] for v in ldn.values())
-# Counter({'positive': 42, 'negative': 3, 'mixed': 2})
-```
-
-All drugs with counts:
-```python
-drug_counts = Counter(k.split(":", 1)[1] for k in cache)
-drug_counts.most_common(20)
-```
-
-All entries for a specific author:
-```python
-author_entries = {k: v for k, v in cache.items() if v["author"] == "<hash>"}
+    __init__.py              # PipelineConfig, llm_call, process_in_batches, etc.
 ```

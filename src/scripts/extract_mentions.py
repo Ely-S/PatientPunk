@@ -18,9 +18,9 @@ The output format is:
         "drugs_context": ["psychedelic"]
     }
 Usage:
-    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs extract
+    python src/run_pipeline.py --db data/posts.db --output-dir outputs
     # Or standalone (run from src/):
-    python -m scripts.extract_mentions --posts-file ../data/posts.json --output-dir ../outputs
+    python -m scripts.extract_mentions --db ../data/posts.db --output-dir ../outputs
 """
 import json
 from collections import Counter
@@ -84,38 +84,73 @@ def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict) -> dict[str, l
     return {eid: list(ancestors(eid)) for eid in id_to_parent}
 
 
+def load_posts_from_db(db_path: Path, limit: int | None = None) -> tuple[list[PostData], dict]:
+    """Load posts from SQLite, returning (all_items, id_to_parent)."""
+    from db import open_db
+
+    conn = open_db(db_path)
+    rows = conn.execute(
+        "SELECT post_id, title, parent_id, user_id, body_text, post_date "
+        "FROM posts ORDER BY post_date"
+    ).fetchall()
+    conn.close()
+
+    if limit:
+        rows = rows[:limit]
+
+    id_to_row = {r[0]: r for r in rows}
+
+    # Resolve post_title: walk up to root post's title
+    _title_cache: dict[str, str] = {}
+
+    def resolve_title(post_id: str) -> str:
+        if post_id in _title_cache:
+            return _title_cache[post_id]
+        r = id_to_row.get(post_id)
+        if r is None:
+            _title_cache[post_id] = ""
+            return ""
+        if r[2] is None:  # top-level post
+            _title_cache[post_id] = r[1] or ""
+        else:
+            _title_cache[post_id] = resolve_title(r[2])
+        return _title_cache[post_id]
+
+    all_items: list[PostData] = []
+    id_to_parent: dict[str, str | None] = {}
+
+    for post_id, title, parent_id, user_id, body_text, post_date in rows:
+        id_to_parent[post_id] = parent_id
+        if parent_id is None:
+            text = f"{title or ''} {body_text or ''}".strip()
+        else:
+            text = body_text or ""
+        all_items.append(PostData(
+            item_id=post_id,
+            text=text,
+            author=user_id,
+            parent_id=parent_id,
+            post_title=resolve_title(post_id),
+            created_utc=post_date or 0,
+        ))
+
+    return all_items, id_to_parent
+
+
 def run_extraction(config: "PipelineConfig"):
     """Main extraction logic — called by pipeline or standalone."""
     client = config.client
     tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
 
-    posts = json.loads(config.posts_file.read_text())
-    if config.limit:
-        posts = posts[:config.limit]
-    log.info(f"Loaded {len(posts)} posts.")
+    all_items, id_to_parent = load_posts_from_db(config.db_path, config.limit)
+    log.info(f"Loaded {len(all_items)} posts/comments from database.")
 
     # Load existing tagged_mentions as cache
-    if tagged_path.exists() and not config.regenerate_cache:
+    if tagged_path.exists() and not config.reclassify:
         existing = json.loads(tagged_path.read_text())
         id_to_drugs = {e["id"]: e["drugs_direct"] for e in existing}
     else:
         id_to_drugs = {}
-
-    # Collect all items
-    all_items: list[PostData] = []
-    id_to_parent = {}
-    for post in posts:
-        post_id, created_utc = post["post_id"], post["created_utc"]
-        text = f"{post.get('title', '')} {post.get('body') or ''}".strip()
-        all_items.append(PostData(item_id=post_id, text=text, author=post["author_hash"], parent_id=None, post_title=post.get("title", ""), created_utc=created_utc))
-        id_to_parent[post_id] = None
-
-        for c in post.get("comments", []):
-            comment_id = c["comment_id"]
-            all_items.append(PostData(
-                item_id=comment_id, text=c.get("body", ""), author=c["author_hash"], parent_id=c.get("parent_id"), post_title=post.get("title", ""), created_utc=c.get("created_utc", created_utc)
-            ))
-            id_to_parent[comment_id] = c.get("parent_id")
 
     # Extract uncached items
     to_do = [(item_id, text) for item_id, text in ((item.item_id, item.text) for item in all_items) 
@@ -173,10 +208,10 @@ def main():
     from utilities import PipelineConfig, get_client
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--posts-file", required=True, help="Path to subreddit_posts.json")
+    parser.add_argument("--db", required=True, help="Path to SQLite database with posts table")
     parser.add_argument("--output-dir", required=True, help="Directory for output files")
     parser.add_argument("--limit", type=int, default=100)
-    parser.add_argument("--regenerate-cache", action="store_true")
+    parser.add_argument("--reclassify", action="store_true")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -185,9 +220,9 @@ def main():
     config = PipelineConfig(
         client=get_client(),
         output_dir=output_dir,
-        posts_file=Path(args.posts_file),
+        db_path=Path(args.db),
         limit=args.limit,
-        regenerate_cache=args.regenerate_cache,
+        reclassify=args.reclassify,
     )
     run_extraction(config)
 

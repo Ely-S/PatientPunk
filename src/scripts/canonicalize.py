@@ -17,7 +17,7 @@ The output file is canonical_map.json
         "drugs_context": ["psychedelic"]
     }
 Usage:
-    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs canonicalize
+    python src/run_pipeline.py --db data/posts.db --output-dir outputs
     # Or standalone (run from src/):
     python -m scripts.canonicalize --output-dir ../outputs
 """
@@ -50,8 +50,11 @@ def canonicalize_batch(client, names: list[str], model=MODEL_FAST) -> dict[str, 
     return result
 
 
-def run_canonicalization(config: "PipelineConfig"):
-    """Main canonicalization logic — called by pipeline or standalone."""
+def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
+    """Main canonicalization logic — called by pipeline or standalone.
+
+    Returns the canonical map: {raw_name: canonical_name}.
+    """
     client = config.client
     tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
     canon_path = config.path(OutputFiles.CANONICAL_MAP)
@@ -64,12 +67,6 @@ def run_canonicalization(config: "PipelineConfig"):
     log.info(f"Found {len(all_drugs)} unique drug names.")
 
     all_drugs_sorted = sorted(all_drugs)
-
-    def process_batch(batch: list[str]) -> list[dict[str, str]]:
-        return [canonicalize_batch(client, batch)]
-
-    def fallback_single(name: str) -> dict[str, str]:
-        return {name: name}
 
     # Process in batches, collecting partial maps
     canon_map = {}
@@ -108,6 +105,8 @@ def run_canonicalization(config: "PipelineConfig"):
     tagged_path.write_text(json.dumps(tagged, indent=2))
     log.info(f"Rewrote {tagged_path.name} with canonical drug names.")
 
+    return canon_map
+
 
 def main():
     """Standalone entry point."""
@@ -122,7 +121,7 @@ def main():
     config = PipelineConfig(
         client=get_client(),
         output_dir=output_dir,
-        posts_file=Path("."),  # Not used by canonicalize
+        db_path=Path("."),  # Not used by canonicalize
     )
     run_canonicalization(config)
 
