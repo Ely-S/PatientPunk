@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from db import ReportWriter
+    from database_scripts.db import ReportWriter
     from utilities import PipelineConfig
 
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
@@ -126,7 +126,7 @@ def run_classification(
 
     # Load synonyms from treatment table (empty if no DB or canonicalize was skipped)
     if writer is not None:
-        from db import load_synonyms
+        from database_scripts.db import load_synonyms
         synonyms_for = load_synonyms(config.db_path)
     else:
         synonyms_for = {}

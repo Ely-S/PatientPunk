@@ -7,7 +7,6 @@ free of schema details.
 import json
 import sqlite3
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
 COMMIT_EVERY = 5  # commit after this many writes
@@ -72,37 +71,26 @@ def import_treatments(
     return count
 
 
-@dataclass
 class ReportWriter:
-    """Manages run logging and incremental writes to treatment_reports.
+    """Incremental writer for treatment_reports.
 
-    Creates the extraction_runs row on init and uses that run_id for all
-    subsequent inserts. Holds a single connection for the lifetime of
-    classification. Commits are batched (every COMMIT_EVERY writes) to
-    balance durability and performance.
-
-    NOTE: _existing loads all (post_id, drug_id) pairs into memory.
-    Fine for <1M rows; revisit if the table grows significantly.
+    Creates an extraction_runs row on init, then batches inserts with
+    periodic commits. Use as a context manager.
     """
-    db_path: Path
-    run_config: dict
-    commit_hash: str
-    run_id: int = field(init=False, repr=False)
-    _conn: sqlite3.Connection = field(init=False, repr=False)
-    _drug_ids: dict[str, int] = field(init=False, repr=False)
-    _existing: set[tuple[str, int]] = field(init=False, repr=False)
-    _pending: int = field(init=False, repr=False, default=0)
 
-    def __post_init__(self):
-        self._conn = open_db(self.db_path)
+    def __init__(self, db_path: Path, run_config: dict, commit_hash: str):
+        self._conn = open_db(db_path)
+        self._pending = 0
+
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
-            (int(time.time()), self.commit_hash, "treatment_sentiment",
-             json.dumps(self.run_config)),
+            (int(time.time()), commit_hash, "treatment_sentiment",
+             json.dumps(run_config)),
         )
         self.run_id = cursor.lastrowid
         self._conn.commit()
+
         self._drug_ids = {
             row[0].lower(): row[1]
             for row in self._conn.execute("SELECT canonical_name, id FROM treatment")

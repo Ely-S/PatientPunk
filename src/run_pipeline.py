@@ -21,8 +21,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from db import ReportWriter, import_treatments
-from utilities import PipelineConfig, OutputFiles, get_client, log, MODEL_FAST, MODEL_STRONG
+from database_scripts.db import ReportWriter, import_treatments
+from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, log, MODEL_FAST, MODEL_STRONG
 from scripts.extract_mentions import run_extraction
 from scripts.canonicalize import run_canonicalization
 from scripts.classify_sentiment import run_classification
@@ -77,7 +77,7 @@ def main():
     _banner("IMPORT TREATMENTS")
     count = import_treatments(
         config.db_path,
-        config.path(OutputFiles.TAGGED_MENTIONS),
+        config.path(TAGGED_MENTIONS),
         canon_map,
     )
     log.info(f"{count} treatments in database.")

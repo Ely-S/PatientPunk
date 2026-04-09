@@ -164,13 +164,13 @@ GROUP BY run_id;
 ```
 src/
   run_pipeline.py            # Orchestrates all steps
-  db.py                      # open_db, import_treatments, load_synonyms, ReportWriter
   requirements.txt
   scripts/
     extract_mentions.py      # Step 1: extract drug mentions from posts
     canonicalize.py          # Step 2: normalize synonyms
     classify_sentiment.py    # Step 4: two-stage sentiment classification
   database_scripts/
+    db.py                    # open_db, import_treatments, load_synonyms, ReportWriter
     database_utils.py        # Step 0: import Reddit JSON into SQLite
   prompts/
     intervention_config.py   # All LLM prompts in one place

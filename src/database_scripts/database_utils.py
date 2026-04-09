@@ -12,16 +12,13 @@ import argparse
 import json
 import logging
 import sqlite3
-import sys
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
-# Allow imports from src/
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from db import open_db
+from database_scripts.db import open_db
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)

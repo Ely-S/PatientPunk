@@ -86,7 +86,7 @@ def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict) -> dict[str, l
 
 def load_posts_from_db(db_path: Path, limit: int | None = None) -> tuple[list[PostData], dict]:
     """Load posts from SQLite, returning (all_items, id_to_parent)."""
-    from db import open_db
+    from database_scripts.db import open_db
 
     conn = open_db(db_path)
     rows = conn.execute(
