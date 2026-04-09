@@ -791,31 +791,111 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                     deduped.append(v)
             field_data["values"] = deduped
 
-    # Apply conditions canonicalization (same logic as regex extractor)
-    _CONDITION_CANONICAL = {
-        "long-covid": "long covid", "post-covid": "long covid",
-        "post covid": "long covid", "pasc": "long covid",
-        "myalgic encephalomyelitis": "me/cfs",
-        "chronic fatigue syndrome": "me/cfs",
-        "post-exertional malaise": "pem", "post-exertional": "pem",
-        "post-viral": "post-viral", "post-infectious": "post-viral",
-        "small fiber neuropathy": "small fiber neuropathy", "sfn": "small fiber neuropathy",
-        "ehlers-danlos": "ehlers-danlos syndrome", "eds": "ehlers-danlos syndrome",
-        "heds": "ehlers-danlos syndrome",
+    # Multi-field canonicalization: map LLM vocabulary drift to controlled labels.
+    # Each field has a dict of {variant: canonical_form}. Values not in the dict
+    # are kept as-is (the LLM may discover legitimate new values).
+    _CANONICAL_MAPS: dict[str, dict[str, str]] = {
+        "conditions": {
+            "long-covid": "long covid", "post-covid": "long covid",
+            "post covid": "long covid", "pasc": "long covid",
+            "myalgic encephalomyelitis": "me/cfs",
+            "chronic fatigue syndrome": "me/cfs", "cfs": "me/cfs",
+            "post-exertional malaise": "pem", "post-exertional": "pem",
+            "post-viral": "post-viral", "post-infectious": "post-viral",
+            "small fiber neuropathy": "small fiber neuropathy",
+            "sfn": "small fiber neuropathy",
+            "ehlers-danlos": "ehlers-danlos syndrome",
+            "eds": "ehlers-danlos syndrome", "heds": "ehlers-danlos syndrome",
+        },
+        "functional_status_tier": {
+            "bed bound": "bedbound", "bed-bound": "bedbound",
+            "cannot get out of bed": "bedbound", "can't get out of bed": "bedbound",
+            "mostly in bed": "bedbound",
+            "house bound": "housebound", "house-bound": "housebound",
+            "home bound": "housebound", "homebound": "housebound",
+            "can't leave house": "housebound", "cannot leave house": "housebound",
+            "very severe": "severe",
+            "mostly functional": "mostly_functional",
+            "mostly normal": "mostly_functional",
+            "back to normal": "mostly_functional",
+            "fully functional": "mostly_functional",
+        },
+        "treatment_outcome": {
+            "worked": "helped", "improved": "helped", "fixed": "helped",
+            "resolved": "helped", "cured": "helped", "effective": "helped",
+            "beneficial": "helped", "positive": "helped",
+            "didn't work": "no_effect", "no improvement": "no_effect",
+            "didn't help": "no_effect", "ineffective": "no_effect",
+            "no benefit": "no_effect", "no change": "no_effect",
+            "made worse": "worsened", "side effects": "worsened",
+            "adverse": "worsened", "negative": "worsened",
+        },
+        "social_impact": {
+            "isolated": "isolation", "alone": "isolation",
+            "lonely": "isolation", "loneliness": "isolation",
+            "lost friends": "lost relationships",
+            "lost relationships": "lost relationships",
+            "relationship strain": "relationship strain",
+            "relationship breakdown": "relationship strain",
+        },
+        "mental_health": {
+            "depressed": "depression", "anxious": "anxiety",
+            "therapist": "therapy", "counseling": "therapy",
+            "psychologist": "therapy", "psychiatrist": "therapy",
+        },
+        "onset_trigger": {
+            "after covid": "covid", "post covid": "covid",
+            "covid infection": "covid", "covid-19": "covid",
+            "covid-19 infection": "covid", "sars-cov-2": "covid",
+            "re infection": "reinfection", "re-infection": "reinfection",
+            "second infection": "reinfection", "third infection": "reinfection",
+        },
+        "doctor_dismissal": {
+            "gaslit": "gaslighting", "gas lit": "gaslighting",
+            "all in your head": "dismissed",
+            "all in my head": "dismissed",
+            "psychosomatic": "dismissed",
+            "it's just anxiety": "dismissed",
+            "no one believes me": "dismissed",
+        },
+        "work_disability_status": {
+            "can't work": "unable to work", "cannot work": "unable to work",
+            "unable to work": "unable to work",
+            "had to quit": "unable to work",
+            "on disability": "on disability", "ssdi": "on disability",
+            "back to work": "working", "still working": "working",
+            "work from home": "working reduced",
+            "part time": "working reduced", "part-time": "working reduced",
+            "reduced hours": "working reduced",
+        },
+        "symptom_trajectory": {
+            "getting worse": "worsening", "worse": "worsening",
+            "deteriorating": "worsening", "declining": "worsening",
+            "getting better": "improving", "improved": "improving",
+            "recovery": "improving",
+            "back to normal": "recovered", "fully recovered": "recovered",
+            "partially recovered": "improving",
+            "relapse": "relapsing", "relapsing-remitting": "relapsing",
+            "flare": "relapsing",
+            "bedbound": "severe decline", "housebound": "severe decline",
+        },
     }
+
     for rec in merged:
-        cond_data = rec.get("fields", {}).get("conditions", {})
-        values = cond_data.get("values")
-        if not values:
-            continue
-        canonical: list[str] = []
-        seen_conds: set[str] = set()
-        for v in values:
-            normalized = _CONDITION_CANONICAL.get(v, v)
-            if normalized not in seen_conds:
-                seen_conds.add(normalized)
-                canonical.append(normalized)
-        cond_data["values"] = canonical
+        for field_name, canon_map in _CANONICAL_MAPS.items():
+            field_data = rec.get("fields", {}).get(field_name, {})
+            values = field_data.get("values")
+            if not values:
+                continue
+            canonical: list[str] = []
+            seen: set[str] = set()
+            for v in values:
+                normalized = canon_map.get(v, v) if isinstance(v, str) else v
+                key = normalized if isinstance(normalized, str) else repr(normalized)
+                if key not in seen:
+                    seen.add(key)
+                    canonical.append(normalized)
+            field_data["values"] = canonical
 
     return merged
 

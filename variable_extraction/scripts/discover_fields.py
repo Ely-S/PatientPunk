@@ -42,6 +42,7 @@ Output:
 
 
 import argparse
+import builtins
 import json
 import os
 import random
@@ -51,6 +52,17 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Windows cp1252 terminal can't encode unicode arrows, emoji, etc. from LLM output.
+# Override print globally in this module to replace non-ASCII chars.
+_original_print = builtins.print
+
+def print(*args, **kwargs):
+    safe_args = [
+        str(a).encode("ascii", "replace").decode("ascii") if isinstance(a, str) else a
+        for a in args
+    ]
+    _original_print(*safe_args, **kwargs)
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -174,12 +186,12 @@ def call_model(
                 messages=[{"role": "user", "content": user_message}],
             )
             return response.content[0].text
-        except anthropic.RateLimitError:
+        except (anthropic.RateLimitError, anthropic.InternalServerError):
             if attempt == len(RETRY_DELAYS):
                 raise
-            print(f"    Rate limited.")
+            print(f"    Rate limited / server error.")
         except anthropic.APIStatusError as e:
-            if e.status_code >= 500 and attempt < len(RETRY_DELAYS):
+            if e.status_code in (429, 500, 502, 503, 529) and attempt < len(RETRY_DELAYS):
                 print(f"    API error {e.status_code}.")
             else:
                 raise
@@ -238,13 +250,22 @@ def collect_texts_from_post(post: dict) -> list[str]:
     return texts
 
 
-def load_corpus_texts(input_dir: Path, limit: int | None = None) -> list[dict]:
-    """Load corpus into a list of {source, author_hash, post_id, texts} dicts."""
+def load_corpus_texts(
+    input_dir: Path,
+    limit: int | None = None,
+    posts_only: bool = False,
+) -> list[dict]:
+    """Load corpus into a list of {source, author_hash, post_id, texts} dicts.
+
+    When posts_only=True, skip user histories. This is useful for field
+    discovery (Phase 3) where user histories introduce noise from
+    unrelated subreddits -- we only want patterns from the target subreddit.
+    """
     items = []
     users_dir = input_dir / "users"
     posts_file = input_dir / "subreddit_posts.json"
 
-    if users_dir.exists():
+    if users_dir.exists() and not posts_only:
         for user_file in sorted(users_dir.glob("*.json")):
             with open(user_file, encoding="utf-8") as f:
                 user_data = json.load(f)
@@ -1686,7 +1707,9 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
     # Always load corpus - needed for Phase 3 and 4 regardless of whether
     # Phase 1 runs or is loaded from cache.
     print("\nLoading corpus...")
-    corpus_items = load_corpus_texts(output_dir, limit=None)  # Phase 3 always uses full corpus
+    # Discovery uses posts only (not user histories) to avoid finding
+    # patterns from unrelated subreddits in users' full Reddit activity.
+    corpus_items = load_corpus_texts(output_dir, limit=None, posts_only=True)
     print(f"  {len(corpus_items)} items loaded")
 
     # Phase 1: Discover (or load from cache)

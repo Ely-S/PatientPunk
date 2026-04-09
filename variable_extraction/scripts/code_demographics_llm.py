@@ -312,8 +312,8 @@ def build_codebook(results: list[dict]) -> dict:
             fname = disc.get("field_name", "").strip()
             if not fname:
                 continue
-            value = disc.get("value", "").strip()
-            evidence = disc.get("evidence", "").strip()
+            value = (disc.get("value") or "").strip()
+            evidence = (disc.get("evidence") or "").strip()
             confidence = disc.get("confidence", "low")
 
             if fname not in codebook:
