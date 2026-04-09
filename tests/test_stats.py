@@ -12,11 +12,14 @@ from __future__ import annotations
 import math
 import sqlite3
 import time
+import warnings
 
 import pandas as pd
 import pytest
 
 from app.analysis.stats import (
+    _build_logit_features,
+    _build_survival_data,
     BinomialResult,
     ComparisonResult,
     KruskalResult,
@@ -468,6 +471,23 @@ class TestRunComparison:
         assert reverse.mw_effect_size_r < 0
         assert abs(forward.mw_effect_size_r) == abs(reverse.mw_effect_size_r)
 
+    def test_comparison_warns_on_imbalanced_samples(self):
+        df_large = pd.DataFrame({
+            "user_id": [f"a{i}" for i in range(30)],
+            "avg_sentiment": [1.0] * 30,
+            "n_posts": [1] * 30,
+            "category": ["positive"] * 30,
+        })
+        df_small = pd.DataFrame({
+            "user_id": [f"b{i}" for i in range(10)],
+            "avg_sentiment": [-1.0] * 10,
+            "n_posts": [1] * 10,
+            "category": ["negative"] * 10,
+        })
+        result = run_comparison(df_large, df_small)
+        assert result is not None
+        assert any("imbalanced" in warning for warning in result.warnings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # summarize_drug
@@ -542,6 +562,19 @@ class TestRunBinomialTest:
         assert 0 <= result.ci_lower <= result.observed_rate
         assert result.observed_rate <= result.ci_upper <= 1.0
 
+    def test_binomial_warns_on_small_extreme_sample(self):
+        df = pd.DataFrame({
+            "user_id": ["a", "b", "c"],
+            "avg_sentiment": [1.0, 1.0, 1.0],
+            "n_posts": [1, 1, 1],
+            "category": ["positive", "positive", "positive"],
+        })
+        result = run_binomial_test(df, baseline=1.0)
+        assert result is not None
+        assert any("Only 3 users" in warning for warning in result.warnings)
+        assert any("no variation" in warning.lower() for warning in result.warnings)
+        assert any("extreme boundary" in warning.lower() for warning in result.warnings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # run_logit
@@ -595,6 +628,32 @@ class TestRunLogit:
         if result is not None:
             assert result.converged is False or len(result.warnings) > 0
 
+    def test_duplicate_profile_runs_do_not_duplicate_feature_rows(self, conn):
+        conn.execute("INSERT INTO extraction_runs VALUES (2, ?, 'test', '{}')", (int(time.time()),))
+        conn.execute(
+            "INSERT INTO user_profiles VALUES ('user_00', 2, '50s', 'male', NULL)"
+        )
+        conn.commit()
+
+        features = _build_logit_features(conn, "test_drug_a", ["sex", "age_bucket"])
+        assert features is not None
+        assert features["user_id"].nunique() == len(features)
+        row = features.loc[features["user_id"] == "user_00"].iloc[0]
+        assert row["sex"] == 0
+        assert row["age_bucket"] == 5
+
+    def test_logit_does_not_emit_library_warnings(self, conn):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = run_logit(conn, "test_drug_a", ["sex", "has_pots"])
+        assert result is not None
+        assert caught == []
+
+    def test_logit_warns_when_rows_are_dropped(self, conn):
+        result = run_logit(conn, "test_drug_a", ["sex", "age_bucket", "has_pots"])
+        assert result is not None
+        assert any("Dropped" in warning for warning in result.warnings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # run_ols
@@ -629,6 +688,18 @@ class TestRunOLS:
         assert result is not None
         assert result.f_statistic >= 0
         assert 0 <= result.f_p_value <= 1
+
+    def test_ols_does_not_emit_library_warnings(self, conn):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = run_ols(conn, "test_drug_a", ["sex", "has_pots"])
+        assert result is not None
+        assert caught == []
+
+    def test_ols_warns_when_rows_are_dropped(self, conn):
+        result = run_ols(conn, "test_drug_a", ["sex", "age_bucket", "has_pots"])
+        assert result is not None
+        assert any("Dropped" in warning for warning in result.warnings)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -756,6 +827,27 @@ class TestRunTimeTrend:
         assert result.n_months == 3
         assert [point["month"] for point in result.monthly_data] == ["2026-01", "2026-02", "2026-03"]
 
+    def test_time_trend_warns_on_short_gappy_series(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (8, 'gappy_trend_drug')")
+        points = [
+            ("user_03", "post_user_03_m0", "2026-01-01T00:00:00Z", 0.1),
+            ("user_04", "post_user_04_m1", "2026-03-01T00:00:00Z", 0.1),
+            ("user_05", "post_user_05_m2", "2026-05-01T00:00:00Z", 0.1),
+        ]
+        for user_id, post_id, post_date, sentiment in points:
+            conn.execute("UPDATE posts SET post_date = ? WHERE post_id = ?", (post_date, post_id))
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 8, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+        result = run_time_trend(conn, "gappy_trend_drug")
+        assert result is not None
+        assert any("Fewer than 6 months" in warning for warning in result.warnings)
+        assert any("gaps" in warning.lower() for warning in result.warnings)
+        assert any("no variation" in warning.lower() for warning in result.warnings)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # run_survival
@@ -812,3 +904,44 @@ class TestRunSurvival:
         assert result is not None
         assert result.n_censored > result.n_events
         assert result.median_time_days is None
+
+    def test_mixed_timestamp_entry_uses_true_earliest_post(self, conn):
+        conn.execute(
+            "INSERT INTO users VALUES ('mixed_user', 'covidlonghaulers', ?)",
+            (int(time.time()),),
+        )
+        conn.execute(
+            "INSERT INTO posts VALUES ('mixed_iso', 'mixed_user', 'body', NULL, ?, ?)",
+            ("2019-01-01T00:00:00Z", int(time.time())),
+        )
+        conn.execute(
+            "INSERT INTO posts VALUES ('mixed_epoch', 'mixed_user', 'body', NULL, ?, ?)",
+            (1700000000, int(time.time())),
+        )
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (7, 'mixed_survival_drug')")
+        conn.execute(
+            "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+            " VALUES (1, 'mixed_epoch', 'mixed_user', 7, 1.0, 1.0)"
+        )
+        conn.commit()
+
+        survival_df = _build_survival_data(conn, "mixed_survival_drug", [])
+        assert survival_df is not None
+        row = survival_df.loc[survival_df["user_id"] == "mixed_user"].iloc[0]
+        assert row["duration_days"] > 1000
+
+    def test_survival_warns_on_heavy_censoring_and_short_durations(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (9, 'warning_survival_drug')")
+        for i in range(20):
+            user_id = f"user_{i:02d}"
+            post_id = f"post_{user_id}_m0"
+            sentiment = 1.0 if i < 3 else 0.0
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 9, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+        result = run_survival(conn, "warning_survival_drug", ["has_pots"])
+        assert result is not None
+        assert any("censored" in warning.lower() for warning in result.warnings)

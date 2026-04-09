@@ -66,6 +66,16 @@ def _safe_exp(value: float) -> float:
     return float(np.exp(clipped))
 
 
+def _round_or_default(value: float, digits: int, default: float = 0.0) -> float:
+    """Round finite numeric values, otherwise return a safe default."""
+    return round(float(value), digits) if np.isfinite(value) else default
+
+
+def _dedupe_warnings(messages: list[str]) -> list[str]:
+    """Preserve order while removing duplicate warning strings."""
+    return list(dict.fromkeys(messages))
+
+
 # ── Wilson score confidence interval ──────────────────────────────────────────
 
 def wilson_ci(n_successes: int, n_total: int, z: float = 1.96) -> tuple[float, float]:
@@ -202,6 +212,11 @@ def check_sample_sizes(group_a: pd.Series, group_b: pd.Series) -> SampleSizeChec
         warnings.append(
             f"Group B has only {nb} users — interpret results cautiously."
         )
+    ratio = max(na, nb) / min(na, nb)
+    if ratio >= 3:
+        warnings.append(
+            f"Sample sizes are imbalanced ({na} vs {nb} users), which can distort effect estimates."
+        )
 
     return SampleSizeCheck(ok=True, warnings=warnings)
 
@@ -282,6 +297,13 @@ def run_comparison(
         return None
 
     n_a, n_b = len(scores_a), len(scores_b)
+    if scores_a.nunique() == 1 and scores_b.nunique() == 1:
+        comparison_warnings = list(size_check.warnings)
+        comparison_warnings.append(
+            "Both groups have zero within-group sentiment variation."
+        )
+    else:
+        comparison_warnings = list(size_check.warnings)
 
     # ── Mann-Whitney U ────────────────────────────────────────────────────────
     mw_stat, mw_p = sp_stats.mannwhitneyu(scores_a, scores_b, alternative="two-sided")
@@ -304,8 +326,11 @@ def run_comparison(
     #   - fewer than 3 active categories (not enough for chi-square)
     #   - any observed cell is 0
     #   - any expected cell < 5
-    comparison_warnings = list(size_check.warnings)
     has_zero_observed = any(cell == 0 for row in observed for cell in row)
+    if len(active_cats) < 2:
+        comparison_warnings.append(
+            "Only one sentiment category is present across both groups; the categorical comparison is not informative."
+        )
 
     if len(active_cats) >= 2:
         chi2_stat, chi2_p, _, expected = sp_stats.chi2_contingency(observed)
@@ -350,6 +375,11 @@ def run_comparison(
         cat_p = chi2_p
         cat_effect = round(cramers_v, 3)
 
+    if abs(mw_r) > 0.8 and max(n_a, n_b) < 20:
+        comparison_warnings.append(
+            "A very large Mann-Whitney effect was estimated from a small sample."
+        )
+
     return ComparisonResult(
         mw_statistic=round(mw_stat, 3),
         mw_p_value=round(mw_p, 4),
@@ -364,7 +394,7 @@ def run_comparison(
         counts_b=counts_b,
         n_a=n_a,
         n_b=n_b,
-        warnings=comparison_warnings,
+        warnings=_dedupe_warnings(comparison_warnings),
     )
 
 
@@ -420,6 +450,7 @@ class BinomialResult:
     significant: bool
     ci_lower: float             # Wilson 95% CI on observed rate
     ci_upper: float
+    warnings: list[str] = field(default_factory=list)
 
 
 def run_binomial_test(
@@ -435,11 +466,20 @@ def run_binomial_test(
     """
     if df.empty:
         return None
+    if not 0 <= baseline <= 1:
+        raise ValueError("baseline must be between 0 and 1 inclusive")
 
     n = len(df)
     n_pos = int((df["category"] == "positive").sum())
     result = sp_stats.binomtest(n_pos, n, p=baseline, alternative="two-sided")
     ci_lower, ci_upper = wilson_ci(n_pos, n)
+    result_warnings: list[str] = []
+    if n < 10:
+        result_warnings.append(f"Only {n} users available for the binomial test.")
+    if n_pos == 0 or n_pos == n:
+        result_warnings.append("Observed outcomes have no variation; the rate estimate is extreme.")
+    if baseline in (0.0, 1.0):
+        result_warnings.append("Baseline is at an extreme boundary (0 or 1); interpret cautiously.")
 
     return BinomialResult(
         n_users=n,
@@ -450,6 +490,7 @@ def run_binomial_test(
         significant=result.pvalue < 0.05,
         ci_lower=round(ci_lower, 3),
         ci_upper=round(ci_upper, 3),
+        warnings=_dedupe_warnings(result_warnings),
     )
 
 
@@ -477,6 +518,24 @@ class LogitResult:
     n_events: int               # count of positive outcomes
     converged: bool
     warnings: list[str] = field(default_factory=list)
+
+
+def _load_latest_profiles(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Return one profile row per user using the latest available extraction run."""
+    rows = conn.execute(
+        """
+        SELECT up.user_id, up.sex, up.age_bucket
+        FROM user_profiles up
+        JOIN (
+            SELECT user_id, MAX(run_id) AS run_id
+            FROM user_profiles
+            GROUP BY user_id
+        ) latest
+            ON latest.user_id = up.user_id
+           AND latest.run_id = up.run_id
+        """
+    ).fetchall()
+    return pd.DataFrame(rows, columns=["user_id", "sex", "age_bucket"])
 
 
 def _build_logit_features(
@@ -514,12 +573,7 @@ def _build_logit_features(
 
     # Join demographics if needed
     if "sex" in predictor_names or "age_bucket" in predictor_names:
-        profiles = pd.DataFrame(
-            conn.execute(
-                "SELECT user_id, sex, age_bucket FROM user_profiles"
-            ).fetchall(),
-            columns=["user_id", "sex", "age_bucket"],
-        )
+        profiles = _load_latest_profiles(conn)
         df = df.merge(profiles, on="user_id", how="left")
 
         if "sex" in predictor_names:
@@ -576,8 +630,6 @@ def run_logit(
     and warnings if the model fails to converge (e.g., perfect separation).
     """
     import statsmodels.api as sm
-    from statsmodels.tools.sm_exceptions import HessianInversionWarning, PerfectSeparationWarning
-
     df = _build_logit_features(conn, drug, predictor_names)
     if df is None or len(df) < 10:
         return None
@@ -613,10 +665,24 @@ def run_logit(
 
     cols = ["positive"] + available_predictors
     model_df = df[cols].dropna()
+    dropped_rows = len(df) - len(model_df)
+    if dropped_rows > 0:
+        result_warnings.append(
+            f"Dropped {dropped_rows} users with missing predictor values before fitting."
+        )
     if len(model_df) < 10:
         return None
 
     y = model_df["positive"]
+    if y.nunique() < 2:
+        return LogitResult(
+            predictors=[], pseudo_r2=0.0, aic=0.0,
+            n_obs=len(model_df), n_events=int(y.sum()),
+            converged=False,
+            warnings=_dedupe_warnings(
+                result_warnings + ["Outcome has no variation after filtering; logistic regression is unusable."]
+            ),
+        )
     X = sm.add_constant(model_df[available_predictors].astype(float))
 
     # Check events-per-predictor rule (≥ 10 events per predictor)
@@ -644,11 +710,33 @@ def run_logit(
 
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=PerfectSeparationWarning)
-            warnings.simplefilter("ignore", category=HessianInversionWarning)
-            warnings.simplefilter("ignore", category=RuntimeWarning)
+            warnings.simplefilter("ignore")
             logit_model = sm.Logit(y, X)
             fit = logit_model.fit(disp=0, maxiter=100)
+            converged = bool(
+                fit.mle_retvals.get("converged", False) if hasattr(fit, "mle_retvals") else True
+            )
+            llf = float(fit.llf)
+            llnull = float(fit.llnull)
+            aic = float(fit.aic)
+            conf = fit.conf_int()
+
+            pred_results = []
+            for pred in available_predictors:
+                if pred not in fit.params.index:
+                    continue
+                coef = fit.params[pred]
+                ci_lo, ci_hi = conf.loc[pred]
+                p_value = float(fit.pvalues[pred])
+                pred_results.append(LogitPredictor(
+                    name=pred,
+                    coefficient=round(float(coef), 3),
+                    odds_ratio=round(_safe_exp(float(coef)), 3),
+                    ci_lower=round(_safe_exp(float(ci_lo)), 3),
+                    ci_upper=round(_safe_exp(float(ci_hi)), 3),
+                    p_value=round(p_value, 4),
+                    significant=p_value < 0.05,
+                ))
     except Exception as e:
         return LogitResult(
             predictors=[], pseudo_r2=0.0, aic=0.0,
@@ -656,38 +744,32 @@ def run_logit(
             converged=False,
             warnings=[f"Model failed to fit: {e}"],
         )
-    converged = bool(fit.mle_retvals.get("converged", False) if hasattr(fit, "mle_retvals") else True)
     if not converged:
         result_warnings.append("Logistic regression did not fully converge.")
-    if not np.isfinite(fit.llnull):
+    if not np.isfinite(llnull):
         result_warnings.append("Baseline log-likelihood is non-finite; model fit is unstable.")
-
-    # Extract results per predictor (skip 'const')
-    pred_results = []
-    conf = fit.conf_int()
-    for pred in available_predictors:
-        if pred not in fit.params.index:
-            continue
-        coef = fit.params[pred]
-        ci_lo, ci_hi = conf.loc[pred]
-        pred_results.append(LogitPredictor(
-            name=pred,
-            coefficient=round(float(coef), 3),
-            odds_ratio=round(_safe_exp(float(coef)), 3),
-            ci_lower=round(_safe_exp(float(ci_lo)), 3),
-            ci_upper=round(_safe_exp(float(ci_hi)), 3),
-            p_value=round(float(fit.pvalues[pred]), 4),
-            significant=float(fit.pvalues[pred]) < 0.05,
-        ))
+        pseudo_r2 = 0.0
+    elif llnull == 0:
+        result_warnings.append("Baseline log-likelihood is zero; pseudo R² is undefined.")
+        pseudo_r2 = 0.0
+    else:
+        pseudo_r2 = 1 - (llf / llnull)
+        if not np.isfinite(pseudo_r2):
+            result_warnings.append("Pseudo R² is non-finite; model fit is unstable.")
+            pseudo_r2 = 0.0
+    if pred_results and all(not pred.significant for pred in pred_results) and n_events < 20:
+        result_warnings.append(
+            "No predictors were significant and the event count is small."
+        )
 
     return LogitResult(
         predictors=pred_results,
-        pseudo_r2=round(float(fit.prsquared), 3),
-        aic=round(float(fit.aic), 1),
+        pseudo_r2=_round_or_default(pseudo_r2, 3),
+        aic=_round_or_default(aic, 1),
         n_obs=int(fit.nobs),
         n_events=n_events,
         converged=converged,
-        warnings=result_warnings,
+        warnings=_dedupe_warnings(result_warnings),
     )
 
 
@@ -757,6 +839,11 @@ def run_ols(
 
     model_cols = ["avg_sentiment"] + available_predictors
     model_df = df[model_cols].dropna()
+    dropped_rows = len(df) - len(model_df)
+    if dropped_rows > 0:
+        result_warnings.append(
+            f"Dropped {dropped_rows} users with missing predictor values before fitting."
+        )
     if len(model_df) < 10:
         return None
 
@@ -775,6 +862,14 @@ def run_ols(
         )
 
     y = model_df["avg_sentiment"]
+    if y.nunique() < 2:
+        return OLSResult(
+            predictors=[], r_squared=0.0, adj_r_squared=0.0,
+            f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
+            warnings=_dedupe_warnings(
+                result_warnings + ["Outcome has no variation after filtering; OLS is not informative."]
+            ),
+        )
     X = sm.add_constant(model_df[available_predictors].astype(float))
 
     try:
@@ -788,8 +883,16 @@ def run_ols(
             warnings=[f"OLS failed to fit: {e}"],
         )
 
-    if not np.isfinite(fit.fvalue):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        fvalue = float(fit.fvalue)
+        f_pvalue = float(fit.f_pvalue)
+        rsquared = float(fit.rsquared)
+        adj_r_squared = float(fit.rsquared_adj)
+    if not np.isfinite(fvalue):
         result_warnings.append("OLS F-statistic is non-finite; model fit is unstable.")
+        fvalue = 0.0
+        f_pvalue = 1.0
 
     # Extract per-predictor results
     pred_results = []
@@ -809,12 +912,12 @@ def run_ols(
 
     return OLSResult(
         predictors=pred_results,
-        r_squared=round(float(fit.rsquared), 3),
-        adj_r_squared=round(float(fit.rsquared_adj), 3),
-        f_statistic=round(float(fit.fvalue), 3),
-        f_p_value=round(float(fit.f_pvalue), 4),
+        r_squared=_round_or_default(rsquared, 3),
+        adj_r_squared=_round_or_default(adj_r_squared, 3),
+        f_statistic=_round_or_default(fvalue, 3),
+        f_p_value=_round_or_default(f_pvalue, 4, default=1.0),
         n_obs=int(fit.nobs),
-        warnings=result_warnings,
+        warnings=_dedupe_warnings(result_warnings),
     )
 
 
@@ -867,6 +970,8 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
     for name, n in group_sizes.items():
         if n < 20:
             result_warnings.append(f"Group '{name}' has only {n} users.")
+        if valid[name]["avg_sentiment"].nunique() == 1:
+            result_warnings.append(f"Group '{name}' has zero within-group sentiment variation.")
 
     # Kruskal-Wallis H test
     h_stat, kw_p = sp_stats.kruskal(*arrays)
@@ -902,7 +1007,7 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
         eta_squared=round(eta_sq, 3),
         group_sizes=group_sizes,
         pairwise=pairwise,
-        warnings=result_warnings,
+        warnings=_dedupe_warnings(result_warnings),
     )
 
 
@@ -944,10 +1049,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         return None
 
     df = pd.DataFrame(rows, columns=["post_date", "sentiment"])
-    numeric_dates = pd.to_numeric(df["post_date"], errors="coerce")
-    parsed_numeric = pd.to_datetime(numeric_dates, unit="s", errors="coerce", utc=True)
-    parsed_generic = pd.to_datetime(df["post_date"], errors="coerce", utc=True)
-    df["post_date"] = parsed_numeric.fillna(parsed_generic).dt.tz_localize(None)
+    df["post_date"] = _parse_mixed_datetimes(df["post_date"])
     df = df.dropna(subset=["post_date"])
     if df.empty:
         return None
@@ -959,6 +1061,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         n_reports=("sentiment", "count"),
     ).reset_index()
     monthly = monthly.sort_values("month")
+    result_warnings: list[str] = []
 
     if len(monthly) < 3:
         return TimeTrendResult(
@@ -967,6 +1070,13 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
             monthly_data=[],
             warnings=["Fewer than 3 months of data — trend analysis not meaningful."],
         )
+    if len(monthly) < 6:
+        result_warnings.append("Fewer than 6 months of data are available for trend estimation.")
+    month_index = pd.period_range(monthly["month"].min(), monthly["month"].max(), freq="M")
+    if len(month_index) != len(monthly):
+        result_warnings.append("Monthly data contain gaps; trend estimates may be distorted.")
+    if monthly["avg_sentiment"].nunique() == 1:
+        result_warnings.append("Monthly sentiment has no variation; trend testing is not informative.")
 
     y = monthly["avg_sentiment"].values
     x = np.arange(len(y), dtype=float)
@@ -1000,6 +1110,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         direction=direction,
         n_months=len(monthly),
         monthly_data=monthly_data,
+        warnings=_dedupe_warnings(result_warnings),
     )
 
 
@@ -1036,6 +1147,21 @@ def _parse_mixed_datetimes(values: pd.Series) -> pd.Series:
     return parsed_numeric.fillna(parsed_generic).dt.tz_localize(None)
 
 
+def _load_parsed_posts(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Load posts with normalized datetimes for downstream temporal analyses."""
+    posts = pd.DataFrame(
+        conn.execute(
+            "SELECT post_id, user_id, post_date FROM posts WHERE post_date IS NOT NULL"
+        ).fetchall(),
+        columns=["post_id", "user_id", "post_date"],
+    )
+    if posts.empty:
+        return posts
+    posts["post_date"] = _parse_mixed_datetimes(posts["post_date"])
+    posts = posts.dropna(subset=["post_date"])
+    return posts
+
+
 def _build_survival_data(
     conn: sqlite3.Connection,
     drug: str,
@@ -1049,42 +1175,27 @@ def _build_survival_data(
              at their last report date
     Duration: days between entry and event/censor
     """
-    # Get each user's first post date (entry into cohort)
-    entry_sql = """
-        SELECT user_id, MIN(post_date) AS entry_date
-        FROM posts
-        WHERE post_date IS NOT NULL
-        GROUP BY user_id
-    """
-    entries = pd.DataFrame(
-        conn.execute(entry_sql).fetchall(),
-        columns=["user_id", "entry_date"],
-    )
+    posts = _load_parsed_posts(conn)
+    if posts.empty:
+        return None
+    entries = posts.groupby("user_id", as_index=False)["post_date"].min()
+    entries.columns = ["user_id", "entry_date"]
 
     # Get treatment reports with dates for this drug
     report_sql = """
-        SELECT tr.user_id, p.post_date, tr.sentiment
+        SELECT tr.user_id, tr.post_id, tr.sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
-        JOIN posts p ON p.post_id = tr.post_id
         WHERE t.canonical_name = ? COLLATE NOCASE
-        AND p.post_date IS NOT NULL
-        ORDER BY tr.user_id, p.post_date
     """
     reports = pd.DataFrame(
         conn.execute(report_sql, [drug]).fetchall(),
-        columns=["user_id", "post_date", "sentiment"],
+        columns=["user_id", "post_id", "sentiment"],
     )
     if reports.empty:
         return None
-    reports["post_date"] = _parse_mixed_datetimes(reports["post_date"])
-    reports = reports.dropna(subset=["post_date"])
+    reports = reports.merge(posts[["post_id", "post_date"]], on="post_id", how="inner")
     if reports.empty:
-        return None
-
-    entries["entry_date"] = _parse_mixed_datetimes(entries["entry_date"])
-    entries = entries.dropna(subset=["entry_date"])
-    if entries.empty:
         return None
 
     # Find first positive report per user
@@ -1110,10 +1221,7 @@ def _build_survival_data(
 
     # Join predictors
     if "sex" in predictor_names or "age_bucket" in predictor_names:
-        profiles = pd.DataFrame(
-            conn.execute("SELECT user_id, sex, age_bucket FROM user_profiles").fetchall(),
-            columns=["user_id", "sex", "age_bucket"],
-        )
+        profiles = _load_latest_profiles(conn)
         df = df.merge(profiles, on="user_id", how="left")
         if "sex" in predictor_names:
             sex_map = {"female": 1, "f": 1, "woman": 1, "male": 0, "m": 0, "man": 0}
@@ -1167,21 +1275,31 @@ def run_survival(
     result_warnings: list[str] = []
 
     if n_events < 10:
+        early_warnings = [
+            f"Only {n_events} events observed (need ≥ 10 for Cox PH). "
+            "Cannot run survival analysis reliably."
+        ]
+        if n_users > 0 and (n_users - n_events) > n_users / 2:
+            early_warnings.append("More than half of observations are censored.")
+        if n_users > 0 and (n_events / n_users) < 0.2:
+            early_warnings.append("Event rate is below 20%; hazard estimates may be unstable.")
         return SurvivalResult(
             predictors=[], concordance=0.0,
             n_users=n_users, n_events=n_events,
             n_censored=n_users - n_events,
             median_time_days=None,
-            warnings=[
-                f"Only {n_events} events observed (need ≥ 10 for Cox PH). "
-                "Cannot run survival analysis reliably."
-            ],
+            warnings=_dedupe_warnings(early_warnings),
         )
 
     # Prepare model DataFrame
     available_preds = [p for p in predictor_names if p in df.columns]
     model_cols = ["duration_days", "event"] + available_preds
     model_df = df[model_cols].dropna()
+    dropped_rows = len(df) - len(model_df)
+    if dropped_rows > 0:
+        result_warnings.append(
+            f"Dropped {dropped_rows} users with missing predictor values before fitting."
+        )
 
     if len(model_df) < 10:
         return None
@@ -1234,8 +1352,14 @@ def run_survival(
         event_durations = model_df.loc[model_df["event"] == 1, "duration_days"]
     else:
         event_durations = pd.Series(dtype=float)
+        result_warnings.append("More than half of observations are censored.")
     if len(event_durations) > 0:
         median_time = round(float(event_durations.median()), 1)
+    event_rate = float(model_df["event"].mean())
+    if event_rate < 0.2:
+        result_warnings.append("Event rate is below 20%; hazard estimates may be unstable.")
+    if (model_df["duration_days"] <= 1).mean() > 0.25:
+        result_warnings.append("Many durations were clipped to the 1-day minimum.")
 
     return SurvivalResult(
         predictors=pred_results,
@@ -1244,5 +1368,5 @@ def run_survival(
         n_events=int(model_df["event"].sum()),
         n_censored=int((model_df["event"] == 0).sum()),
         median_time_days=median_time,
-        warnings=result_warnings,
+        warnings=_dedupe_warnings(result_warnings),
     )

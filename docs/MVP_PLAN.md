@@ -116,6 +116,8 @@ One record per user with age, sex, location -- joined to treatment reports by `a
 
 A simple interface for a patient to query the database. No LLM calls at query time -- pure SQL against the static database.
 
+The current analysis layer is warning-oriented rather than exception-oriented. Statistical catches such as sparse tables, dropped rows, unstable regressions, short time series, and heavy censoring should be passed through to the presentation layer and interpreted there rather than silently discarded.
+
 ### Queries to support
 
 **Basic (Step 1):**
@@ -154,6 +156,7 @@ Recommendation: build CLI first, web UI second. Both query the same database -- 
 ### Remaining work
 - [ ] Write `query.py` CLI -- drug lookup, optional demographic filters, output formatting
 - [ ] Define "close enough" for demographic matching (exact match vs. buckets)
+- [ ] Render statistical warnings alongside numeric results so downstream LLM/UI layers can judge reliability
 - [ ] *(Optional)* Wrap in minimal local/executable UI
 
 ---

@@ -78,9 +78,47 @@ And get back:
 - **Modular ingestion** — swap in new data sources (Reddit, forums, health apps) without changing downstream logic
 - **Symptom normalization** — maps patient language ("brain fog", "crushing fatigue") to standard medical ontologies
 - **Treatment outcome tracking** — classifies reported outcomes as positive, negative, neutral, or mixed
+- **Analysis engine with sanity checks** — statistical routines surface small-sample, sparse-table, censoring, convergence, and missing-data issues as structured warnings for downstream interpretation
 - **Cohort queries** — filter by condition profile, demographics, comorbidities, and treatment history
 - **Privacy-first** — no PII stored; usernames hashed; posts anonymized before storage
 - **Researcher-ready exports** — CSV, SQL dumps, and structured JSON for direct analysis
+
+---
+
+## Analysis Layer
+
+The query-side analysis code lives in `app/analysis/stats.py`. It works on user-level aggregates and currently supports:
+
+- two-group comparisons
+- one-sample binomial checks
+- logistic and OLS regression
+- Kruskal-Wallis multi-group comparisons
+- monthly trend analysis
+- Cox proportional hazards survival analysis
+
+The analysis layer is intentionally warning-oriented. Most suspicious-but-usable situations do not raise exceptions. Instead they are attached to the returned result as `warnings` so the UI or downstream LLM can interpret them in context.
+
+Examples of situations that now emit warnings:
+
+- small or highly imbalanced sample sizes
+- sparse categorical tables
+- dropped rows from missing predictors
+- unstable or non-converged regression fits
+- flat outcomes with no variation
+- short or gappy trend series
+- heavy censoring or low event rates in survival analysis
+
+Hard failures are reserved for invalid inputs or genuinely unusable outputs, such as impossible parameter values.
+
+### Analysis test suite
+
+The focused regression and stress-test suite for the analysis engine is:
+
+```bash
+pytest tests/test_stats.py -q
+```
+
+This suite intentionally covers mixed timestamp storage, repeated profile runs, sparse regressions, heavy censoring, and warning propagation behavior.
 
 ---
 
