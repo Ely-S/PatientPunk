@@ -80,7 +80,7 @@ def import_treatment_reports(db_path: Path, sentiment_cache: dict, run_id: int) 
 
         rows = []
         for key, entry in sentiment_cache.items():
-            post_id, drug_name = key.rsplit(":", 1)
+            post_id, drug_name = key.split(":", 1)
             drug_id = drug_ids.get(drug_name.lower())
             if not drug_id:
                 log.warning(f"Drug not found in treatment table: {drug_name}")
