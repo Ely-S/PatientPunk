@@ -48,7 +48,6 @@ SIGNAL_SCORES = {"strong": 1.0, "moderate": 0.66, "weak": 0.33}
 
 def log_extraction_run(db_path: Path, config: PipelineConfig, skip_canonicalize: bool) -> int:
     """Log this pipeline run to the database. Returns the run_id."""
-    run_id = random.randint(1, 2**31 - 1)
     run_config = {
         "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},
         "limit": config.limit,
@@ -59,11 +58,12 @@ def log_extraction_run(db_path: Path, config: PipelineConfig, skip_canonicalize:
     }
 
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            "INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (run_id, int(time.time()), get_git_commit(), "treatment_sentiment", json.dumps(run_config)),
+        cursor = conn.execute(
+            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
+            "VALUES (?, ?, ?, ?)",
+            (int(time.time()), get_git_commit(), "treatment_sentiment", json.dumps(run_config)),
         )
+        run_id = cursor.lastrowid
     log.info(f"Logged run {run_id} to {db_path}")
     return run_id
 
