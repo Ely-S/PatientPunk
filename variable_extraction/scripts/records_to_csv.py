@@ -75,7 +75,9 @@ def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
         return "", "", ""
     values = field_data.get("values") or []
     if isinstance(values, list):
-        val_str = sep.join(str(v) for v in values if v is not None and str(v).strip())
+        val_str = sep.join(
+            str(item) for item in values if item is not None and str(item).strip()
+        )
     else:
         val_str = str(values) if values is not None else ""
     return (
@@ -85,16 +87,27 @@ def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
     )
 
 
+def _all_fields_from_record(rec: dict) -> dict:
+    """Return a flat field dict from whichever keys the record uses.
+
+    Records from the regex extractor store fields under ``base`` and
+    ``extension``.  Records from the LLM merge step use ``fields`` and
+    ``discovered_fields``.  Both are supported here.
+    """
+    return {
+        **rec.get("base", {}),
+        **rec.get("extension", {}),
+        **rec.get("fields", {}),
+        **rec.get("discovered_fields", {}),
+    }
+
+
 def merge_records(base: dict, incoming: dict, sep: str) -> dict:
     """Merge fields from `incoming` into `base`, filling empty values only."""
-    base_fields = base.setdefault("_fields_merged", dict(base.get("fields", {})))
-    for fname, fdata in incoming.get("fields", {}).items():
-        if fname not in base_fields or not (base_fields[fname].get("values")):
-            base_fields[fname] = fdata
-    # Also merge discovered_fields if present
-    for fname, fdata in incoming.get("discovered_fields", {}).items():
-        if fname not in base_fields or not (base_fields[fname].get("values")):
-            base_fields[fname] = fdata
+    base_fields = base.setdefault("_fields_merged", _all_fields_from_record(base))
+    for field_name, field_data in _all_fields_from_record(incoming).items():
+        if field_name not in base_fields or not (base_fields[field_name].get("values")):
+            base_fields[field_name] = field_data
     base["_fields_merged"] = base_fields
     return base
 
@@ -104,8 +117,7 @@ def collect_all_field_names(merged_rows: dict) -> list[str]:
     names: set[str] = set()
     for row in merged_rows.values():
         names.update(row.get("_fields_merged", {}).keys())
-        names.update(row.get("fields", {}).keys())
-        names.update(row.get("discovered_fields", {}).keys())
+        names.update(_all_fields_from_record(row).keys())
     return sorted(names)
 
 
@@ -117,7 +129,7 @@ def build_csv_row(
 ) -> dict:
     meta = rec.get("record_meta", {})
     row: dict[str, str] = {
-        "author_hash": (meta.get("author_hash") or "")[:16] + "…",
+        "author_hash": meta.get("author_hash") or "",
         "source": meta.get("source") or "",
         "post_id": meta.get("post_id") or "",
         "text_count": str(meta.get("text_count") or ""),
@@ -126,17 +138,14 @@ def build_csv_row(
         "extracted_at": rec.get("_extracted_at") or "",
     }
 
-    all_fields = rec.get("_fields_merged") or {
-        **rec.get("fields", {}),
-        **rec.get("discovered_fields", {}),
-    }
+    all_fields = rec.get("_fields_merged") or _all_fields_from_record(rec)
 
-    for fname in field_names:
-        val_str, provenance, confidence = flatten_field(all_fields.get(fname), sep)
-        row[fname] = val_str
+    for field_name in field_names:
+        val_str, provenance, confidence = flatten_field(all_fields.get(field_name), sep)
+        row[field_name] = val_str
         if include_provenance:
-            row[f"{fname}__provenance"] = provenance
-            row[f"{fname}__confidence"] = confidence
+            row[f"{field_name}__provenance"] = provenance
+            row[f"{field_name}__confidence"] = confidence
 
     return row
 
@@ -230,20 +239,17 @@ Output columns:
     total_rows = len(merged)
     filled: dict[str, int] = {f: 0 for f in field_names}
     for rec in merged.values():
-        all_fields = rec.get("_fields_merged") or {
-            **rec.get("fields", {}),
-            **rec.get("discovered_fields", {}),
-        }
-        for fname in field_names:
-            if all_fields.get(fname, {}).get("values"):
-                filled[fname] += 1
+        all_fields = rec.get("_fields_merged") or _all_fields_from_record(rec)
+        for field_name in field_names:
+            if all_fields.get(field_name, {}).get("values"):
+                filled[field_name] += 1
 
     print(f"Wrote {total_rows} rows x {len(all_columns)} columns to {args.output}\n")
     print(f"{'Field':<40} {'Filled':>6}  {'Coverage':>8}")
     print("-" * 58)
-    for fname in field_names:
-        pct = filled[fname] / total_rows if total_rows else 0
-        print(f"  {fname:<38} {filled[fname]:>6}  {pct:>7.0%}")
+    for field_name in field_names:
+        pct = filled[field_name] / total_rows if total_rows else 0
+        print(f"  {field_name:<38} {filled[field_name]:>6}  {pct:>7.0%}")
 
 
 if __name__ == "__main__":

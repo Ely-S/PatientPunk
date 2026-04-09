@@ -6,8 +6,8 @@ Multi-model field discovery pipeline (Phase 3).
 Wraps ``scripts/discover_fields.py``.  Automatically discovers new biomedical
 fields from patient-authored text using a two-model architecture:
 
-* **Haiku** — fast, cheap: scans corpus for field candidates; fills gaps.
-* **Sonnet** — precise: writes and validates regex patterns.
+* **Haiku** -- fast, cheap: scans corpus for field candidates; fills gaps.
+* **Sonnet** -- precise: writes and validates regex patterns.
 
 The four internal stages are:
 
@@ -20,9 +20,9 @@ Requires an Anthropic API key in ``variable_extraction/.env``.
 
 Output files
 ------------
-* ``schemas/discovered_{timestamp}.json`` — or updates *schema_path* in-place.
-* ``temp/discovered_records_{schema_id}.json`` — full extraction results.
-* ``temp/discovered_field_report_{schema_id}.json`` — coverage stats.
+* ``schemas/discovered_{timestamp}.json`` -- or updates *schema_path* in-place.
+* ``temp/discovered_records_{schema_id}.json`` -- full extraction results.
+* ``temp/discovered_field_report_{schema_id}.json`` -- coverage stats.
 
 Example
 -------
@@ -46,7 +46,7 @@ from .base import BaseExtractor
 
 class FieldDiscoveryExtractor(BaseExtractor):
     """
-    Phase 3 — multi-model field discovery.
+    Phase 3 -- multi-model field discovery.
 
     Parameters
     ----------
@@ -67,7 +67,7 @@ class FieldDiscoveryExtractor(BaseExtractor):
     resume:
         When *True*, resume Stage 4 from an existing records file.
     candidates_file:
-        Path to a saved ``phase1_candidates.json`` — skips Stage 1 entirely.
+        Path to a saved ``phase1_candidates.json`` -- skips Stage 1 entirely.
         If *None* and ``{temp_dir}/phase1_candidates.json`` exists, it is
         used automatically (the same auto-detect behaviour as ``run_pipeline.py``).
     sample:

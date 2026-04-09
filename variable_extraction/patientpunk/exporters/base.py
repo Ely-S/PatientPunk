@@ -14,7 +14,7 @@ defined by each concrete subclass.
 
 from __future__ import annotations
 
-# Re-use the extractor base — the run / subprocess plumbing is identical.
+# Re-use the extractor base -- the run / subprocess plumbing is identical.
 from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
 
 __all__ = ["BaseExporter", "ExporterError", "ExporterResult"]

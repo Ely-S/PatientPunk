@@ -51,17 +51,24 @@ python main.py inspect --schema schemas/covidlonghaulers_schema.json
 Two distinct pipelines. They are complementary — both output records tagged
 with `author_hash` as the join key, and can be run in either order.
 
-### Approach A — Full Pipeline (regex → LLM backfill)
+### Approach A — Full Pipeline (regex + LLM)
 
 Extracts **all 37+ fields** defined in the schema (age, sex/gender, conditions,
 medications, procedures, functional status, etc.).
 
 - **Phase 1** — regex patterns match known signals instantly and for free.
-- **Phase 2** — Claude Haiku fills fields that regex missed.
-- **Phase 3** — (optional) discovers *new* fields not yet in the schema.
+- **Phase 2** — Claude Haiku extracts fields that regex missed (default).
+- **Phase 3** — (opt-in) discovers *new* fields not yet in the schema.
 
 ```bash
+# Default: Phases 1-2-4-5 (no discovery)
 python main.py run --schema schemas/covidlonghaulers_schema.json
+
+# With discovery (auto-merge all candidates)
+python main.py run --schema schemas/covidlonghaulers_schema.json --discover auto
+
+# With discovery (stop for human review in Marimo variable picker)
+python main.py run --schema schemas/covidlonghaulers_schema.json --discover review
 ```
 
 ### Approach B — LLM-Only Demographics
@@ -100,20 +107,23 @@ python main.py demographics --input-dir ../data --users-only
 | Phase | Script | Class | Cost | Description |
 |-------|--------|-------|------|-------------|
 | 1 | `extract_biomedical.py` | `BiomedicalExtractor` | Free | Regex patterns across all schema fields |
-| 2 | `llm_extract.py` | `LLMExtractor` | ~$0.05–0.10 | Claude Haiku fills fields regex missed |
-| 3 | `discover_fields.py` | `FieldDiscoveryExtractor` | ~$1–3 | Haiku discovers new fields; Sonnet writes regex |
+| 2 | `llm_extract.py` | `LLMExtractor` | ~$0.05-0.10 | Claude Haiku extracts fields regex missed |
+| 3 | `discover_fields.py` | `FieldDiscoveryExtractor` | ~$1-3 | Haiku discovers new fields; Sonnet writes regex (opt-in) |
 | 4 | `records_to_csv.py` | `CSVExporter` | Free | Flatten JSON records to `records.csv` |
 | 5 | `make_codebook.py` | `CodebookGenerator` | Free | Generate `codebook.csv` data dictionary |
 
 ```bash
-# Skip discovery (fastest, cheapest)
-python main.py run --schema schemas/... --no-discover
+# Default run (Phases 1-2-4-5, discovery off)
+python main.py run --schema schemas/...
 
-# Regex only — no API key needed
-python main.py run --schema schemas/... --no-llm --no-discover
+# Regex only -- no API key needed
+python main.py run --schema schemas/... --no-llm
 
-# Resume from phase 3 after a crash
-python main.py run --schema schemas/... --start-at 3 --no-clean
+# With discovery (auto-merge)
+python main.py run --schema schemas/... --discover auto
+
+# With discovery (human review via Marimo)
+python main.py run --schema schemas/... --discover review
 ```
 
 ### Cost estimates (220-post corpus)
@@ -125,7 +135,7 @@ python main.py run --schema schemas/... --start-at 3 --no-clean
 | 3 — Discovery | Haiku + Sonnet | ~$1–3 |
 | 4–5 — Export | none | Free |
 
-Use `--limit 10 --no-discover` for a cheap test run before committing to the full corpus.
+Use `--limit 10` for a cheap test run before committing to the full corpus.
 
 ### Intermediate files
 
@@ -226,7 +236,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --temp-dir PATH       Intermediate files (default: {input-dir}/temp/)
   --start-at N          Resume from phase N (1–5)
   --no-llm              Skip Phase 2
-  --no-discover         Skip Phase 3
+  --discover MODE       Enable Phase 3: 'auto' (merge all) or 'review' (stop for human selection)
   --no-clean            Don't wipe temp/ before starting
   --workers N           Concurrent API workers (default: 10)
   --limit N             Process at most N records (cost control)
@@ -297,7 +307,7 @@ config = PipelineConfig(
     schema_path=Path("schemas/covidlonghaulers_schema.json"),
     input_dir=Path("../data"),
     run_llm=True,
-    run_discovery=False,
+    discovery_mode=None,  # "auto" or "review" to enable
     limit=50,
 )
 result = Pipeline(config).run()

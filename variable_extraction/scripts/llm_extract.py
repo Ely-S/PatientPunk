@@ -108,7 +108,7 @@ BASE_FIELD_DESCRIPTIONS = {
     "medications": "Current or past medications mentioned",
     "treatment_outcome": "Response to specific treatments - MUST include both the treatment AND the outcome as a pair (e.g., 'LDN: helped brain fog', 'metoprolol: reduced heart rate but caused fatigue')",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
-    "activity_level": "Functional capacity (bedbound, housebound, limited, mostly functional, fully recovered)",
+    # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
     "mental_health": "Mental health conditions or impacts mentioned",
     "doctor_dismissal": "Experiences of being dismissed or disbelieved by doctors",
@@ -230,10 +230,23 @@ Your job is to read patient-authored text from Reddit and extract structured bio
 EXTRACTION RULES:
 1. Only extract information that is EXPLICITLY stated in the text. Never infer or guess.
 2. If a field cannot be determined from the text, set it to null.
-3. For treatment_outcome, ALWAYS pair the treatment with its outcome (e.g., "LDN: helped fatigue"). A treatment mentioned without an outcome goes in "medications" only, NOT in treatment_outcome.
-4. Distinguish between what the AUTHOR says about THEMSELVES vs. what they say about OTHERS. Only extract self-reported information for the structured fields.
-5. Pay attention to NEGATION: "I don't have POTS" means POTS should NOT be in conditions.
-6. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
+3. Distinguish between what the AUTHOR says about THEMSELVES vs. what they say about OTHERS. Only extract self-reported information for the structured fields.
+4. Pay attention to NEGATION: "I don't have POTS" means POTS should NOT be in conditions.
+5. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
+
+VALUE FORMAT RULES:
+- Each value MUST be 1-5 words. Never write sentences. Never include explanations or mechanisms.
+- GOOD: "LDN", "bedbound", "3 years", "isolation", "Paxlovid"
+- BAD: "Seed DS-01 probiotic (B. longum, B. infantis, B. adolescentis...)" -- just write "Seed DS-01"
+- BAD: "self-employed, lost clients, business continues but impaired" -- just write "lost clients"
+
+FIELD-SPECIFIC RULES:
+- conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
+- medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
+- alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
+- treatment_outcome: Use ONLY the format "drug: label" where label is one of: helped, no_effect, worsened, mixed, unknown. Example: "LDN: helped", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline here.
+- functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
+- social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
 
 SCHEMA FIELDS to extract:
 {fields_block}
@@ -271,10 +284,17 @@ Regex extraction already ran on this text. You are filling in ONLY the fields it
 EXTRACTION RULES:
 1. Only extract information EXPLICITLY stated in the text. Never infer or guess.
 2. If a field cannot be determined, set it to null.
-3. For treatment_outcome, ALWAYS pair treatment with outcome (e.g., "LDN: helped brain fog").
-4. Only extract what the AUTHOR says about THEMSELVES.
-5. Respect NEGATION: "I don't have POTS" → POTS not in conditions.
-6. Respect TEMPORAL context: past symptoms/treatments should be noted as such.
+3. Only extract what the AUTHOR says about THEMSELVES.
+4. Respect NEGATION: "I don't have POTS" means POTS not in conditions.
+5. Respect TEMPORAL context: past symptoms/treatments should be noted as such.
+
+VALUE FORMAT RULES:
+- Each value MUST be 1-5 words. Never write sentences.
+- conditions: ONLY diagnosed conditions (POTS, ME/CFS, long COVID). NOT symptoms (brain fog, fatigue, pain).
+- treatment_outcome: ONLY "drug: label" where label is helped/no_effect/worsened/mixed/unknown.
+- functional_status_tier: ONLY one of: bedbound/housebound/severe/moderate/mild/mostly_functional.
+- social_impact: 1-3 word labels only (e.g., "isolation", "relationship strain").
+- alternative_treatments: Non-pharmaceutical only. Do NOT duplicate medications here.
 
 FIELDS TO EXTRACT (regex found nothing for these):
 {fields_block}
@@ -745,6 +765,57 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         if llm_rec.get("suggested_fields"):
             merged_record["suggested_fields"] = llm_rec["suggested_fields"]
         merged.append(merged_record)
+
+    # Post-merge normalization: lowercase all values, canonicalize conditions
+    for rec in merged:
+        for field_name, field_data in rec.get("fields", {}).items():
+            values = field_data.get("values")
+            if not values:
+                continue
+            # Ensure values is a list (LLM sometimes returns bare int/str)
+            if not isinstance(values, list):
+                values = [values]
+                field_data["values"] = values
+            # Lowercase all string values
+            normalized = [
+                v.lower().strip() if isinstance(v, str) else v
+                for v in values
+            ]
+            # Deduplicate after lowering
+            seen: set[str] = set()
+            deduped: list = []
+            for v in normalized:
+                key = v if isinstance(v, str) else repr(v)
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(v)
+            field_data["values"] = deduped
+
+    # Apply conditions canonicalization (same logic as regex extractor)
+    _CONDITION_CANONICAL = {
+        "long-covid": "long covid", "post-covid": "long covid",
+        "post covid": "long covid", "pasc": "long covid",
+        "myalgic encephalomyelitis": "me/cfs",
+        "chronic fatigue syndrome": "me/cfs",
+        "post-exertional malaise": "pem", "post-exertional": "pem",
+        "post-viral": "post-viral", "post-infectious": "post-viral",
+        "small fiber neuropathy": "small fiber neuropathy", "sfn": "small fiber neuropathy",
+        "ehlers-danlos": "ehlers-danlos syndrome", "eds": "ehlers-danlos syndrome",
+        "heds": "ehlers-danlos syndrome",
+    }
+    for rec in merged:
+        cond_data = rec.get("fields", {}).get("conditions", {})
+        values = cond_data.get("values")
+        if not values:
+            continue
+        canonical: list[str] = []
+        seen_conds: set[str] = set()
+        for v in values:
+            normalized = _CONDITION_CANONICAL.get(v, v)
+            if normalized not in seen_conds:
+                seen_conds.add(normalized)
+                canonical.append(normalized)
+        cond_data["values"] = canonical
 
     return merged
 

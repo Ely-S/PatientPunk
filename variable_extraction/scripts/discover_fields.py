@@ -105,9 +105,17 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 
 HAIKU = "claude-haiku-4-5-20251001"
 SONNET = "claude-sonnet-4-6"
-MAX_TOKENS_HAIKU = 4096
-MAX_TOKENS_SONNET = 4096
-MAX_TEXT_CHARS = 30_000
+# Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
+# 4096 was too low -- batches of 14+ posts regularly hit the ceiling and returned
+# truncated JSON, causing PARSE FAILED on every batch. Haiku's hard max is 8192;
+# Sonnet 3.5+ supports up to 8192 as well.
+MAX_TOKENS_HAIKU = 8192
+MAX_TOKENS_SONNET = 8192
+# Each discovered field requires ~600-800 chars of JSON (description, examples,
+# vocabulary). 14 posts already generates ~16k chars of response which barely
+# fits in 8192 tokens. Keeping batches to ~10 posts each stays comfortably under
+# the output limit. 30k was too large.
+MAX_TEXT_CHARS = 10_000
 # Text cap for Phase 3 regex matching. Keeps each operation bounded even for
 # users with thousands of posts. Patterns generally match early in text.
 MAX_TEXT_CHARS_PHASE3 = 30_000
@@ -532,8 +540,8 @@ def run_phase1_discovery(
                         entry["frequency_hints"].append(field["frequency_hint"])
                     for ex in field.get("examples", []):
                         if ex.get("text") and len(entry["examples"]) < EXAMPLES_PER_FIELD * 2:
-                            existing_vals = {e.get("extracted_value", "").lower() for e in entry["examples"]}
-                            if ex.get("extracted_value", "").lower() not in existing_vals:
+                            existing_vals = {(e.get("extracted_value") or "").lower() for e in entry["examples"]}
+                            if (ex.get("extracted_value") or "").lower() not in existing_vals:
                                 entry["examples"].append(ex)
                     for neg in field.get("negative_examples", []):
                         if neg.get("text") and len(entry["negative_examples"]) < EXAMPLES_PER_FIELD:
@@ -979,7 +987,7 @@ def run_phase2_build_regex(
             )
 
             if report["compile_errors"]:
-                log.append(f"    ⚠ {len(report['compile_errors'])} compile error(s)")
+                log.append(f"    ! {len(report['compile_errors'])} compile error(s)")
 
             if report["hit_rate"] > best_hit_rate:
                 best_hit_rate = report["hit_rate"]
@@ -1107,7 +1115,7 @@ def run_phase3_regex_extract(
                     except TimeoutError:
                         record_timeouts += 1
                         timeout_msgs.append(
-                            f"    ⚠ timeout: '{field_name}' - {pat.pattern[:60]}"
+                            f"    ! timeout: '{field_name}' - {pat.pattern[:60]}"
                         )
                         continue
                     for m in found:
@@ -1161,7 +1169,7 @@ def run_phase3_regex_extract(
             n = stats["done"]
 
         with print_lock:
-            timeout_str = f"  ⚠{record_timeouts}" if record_timeouts else ""
+            timeout_str = f"  !{record_timeouts}" if record_timeouts else ""
             print(
                 f"  [{n}/{total}] {(item.get('author_hash') or '?')[:10]}...  "
                 f"{record_hits} fields hit{timeout_str}",

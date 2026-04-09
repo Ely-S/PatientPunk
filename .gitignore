@@ -9,9 +9,29 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+dist/
 .env
 
-# Runtime data output (written by scraper, read by extraction pipeline)
+# Runtime data — do not commit data files. Store them externally and
+# provide download instructions in the README.
 data/
-reddit_sample_data/outputs/
+!data/.gitkeep
 *.zip
+
+# Scraped corpus data (user histories, subreddit posts)
+Scrapers/users/
+Scrapers/output/
+**/subreddit_posts.json
+
+# Pipeline intermediate / temp files
+**/temp/
+**/patientpunk_records_*.json
+**/merged_records_*.json
+**/llm_records_*.json
+**/discovered_records_*.json
+**/discovered_field_report_*.json
+**/extraction_metadata_*.json
+**/phase1_candidates.json
+
+# Database files
+*.db

@@ -11,9 +11,9 @@ Requires an Anthropic API key in ``variable_extraction/.env``.
 
 Output files (written to *temp_dir*)
 --------------------------------------
-* ``llm_records_{schema_id}.json``      — raw LLM extractions
-* ``llm_field_suggestions_{schema_id}.json`` — suggested new fields
-* ``merged_records_{schema_id}.json``   — combined regex + LLM records
+* ``llm_records_{schema_id}.json``      -- raw LLM extractions
+* ``llm_field_suggestions_{schema_id}.json`` -- suggested new fields
+* ``merged_records_{schema_id}.json``   -- combined regex + LLM records
 
 Example
 -------
@@ -36,7 +36,7 @@ from .base import BaseExtractor
 
 class LLMExtractor(BaseExtractor):
     """
-    Phase 2 — LLM gap-filling with Claude Haiku.
+    Phase 2 -- LLM gap-filling with Claude Haiku.
 
     Parameters
     ----------
@@ -57,7 +57,7 @@ class LLMExtractor(BaseExtractor):
     merge:
         When *True* (the default), combine LLM results with regex records.
     resume:
-        When *True*, skip records already present in the LLM output file —
+        When *True*, skip records already present in the LLM output file --
         useful for continuing a crashed run.
     limit:
         Process at most *limit* records (cost-control / testing).

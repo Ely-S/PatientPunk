@@ -36,7 +36,8 @@ BASE_FIELDS = frozenset({
     "conditions", "onset_trigger", "diagnosis_source", "time_to_diagnosis",
     "misdiagnosis", "symptom_duration", "symptom_trajectory", "age_at_onset",
     "medications", "treatment_outcome", "procedures",
-    "activity_level", "work_disability_status", "mental_health",
+    # activity_level removed -- redundant with functional_status_tier (extension).
+    "work_disability_status", "mental_health",
     "doctor_dismissal", "diagnostic_odyssey",
     "prior_infections", "hormonal_events", "family_history",
 })
@@ -57,7 +58,6 @@ BASE_FIELD_CONFIDENCE: dict[str, str] = {
     "medications": "high",
     "treatment_outcome": "medium",
     "procedures": "high",
-    "activity_level": "high",
     "work_disability_status": "high",
     "mental_health": "medium",
     "doctor_dismissal": "medium",
@@ -121,9 +121,12 @@ US_STATES = (
     r"wisconsin|wyoming|district of columbia|washington d\.?c\.?"
 )
 
+# ME (Maine) and OR (Oregon) are excluded because in medical subreddits
+# they almost always mean ME/CFS or the conjunction "or". Both states are
+# still captured by their full names in US_STATES above.
 US_STATE_ABBREVS = (
-    r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|"
-    r"MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|"
+    r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|MD|MA|MI|"
+    r"MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|PA|RI|SC|SD|TN|TX|UT|VT|"
     r"VA|WA|WV|WI|WY|DC)\b"
 )
 
@@ -270,14 +273,22 @@ PATTERNS = {
         re.compile(r"\byears?\s+(?:of\s+)?(?:searching|looking|trying)\s+(?:for\s+)?(?:a\s+)?diagnos", re.I),
     ],
 
-    # Misdiagnosis
+    # Misdiagnosis -- the second pattern requires a dismissal-context prefix so
+    # it doesn't fire on genuine comorbidities ("I have anxiety from long COVID").
     "misdiagnosis": [
         re.compile(
-            r"\b(?:misdiagnosed|wrongly diagnosed|told it was|thought it was|"
-            r"dismissed as|written off as|diagnosed with .+ before)\b",
+            r"\b(misdiagnosed|wrongly diagnosed|told it was|thought it was|"
+            r"dismissed as|written off as)\b",
             re.I,
         ),
-        re.compile(r"\b(?:anxiety|depression|hypochondria|psychosomatic|all in (?:your|my) head)\b", re.I),
+        re.compile(
+            r"\b(?:misdiagnosed\s+(?:as|with)|dismissed\s+as|told\s+(?:it\s+was|I\s+(?:had|have))|"
+            r"written\s+off\s+as|blamed\s+(?:on|it\s+on)|put\s+(?:it\s+)?down\s+to|"
+            r"said\s+it\s+was)\s+"
+            r"(anxiety|depression|hypochondria|psychosomatic|stress|all in (?:your|my) head)",
+            re.I,
+        ),
+        re.compile(r"\b(diagnosed with .{3,60}? before (?:finally|eventually|they found|getting))\b", re.I),
     ],
 
     # Diagnosis source
@@ -297,8 +308,15 @@ PATTERNS = {
     # -------------------------------------------------------------------------
 
     # Age at onset
+    # NOTE: the optional anchor (?:at\s+|when\s+i\s+was\s+)? means the first
+    # pattern would match "symptoms started 5 years ago" (duration, not age).
+    # Negative lookahead (?!\s*(?:years?|months?|weeks?|days?)) prevents that.
     "age_at_onset": [
-        re.compile(r"\b(?:onset|symptoms?\s+(?:started|began)|got sick|became ill)\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b", re.I),
+        re.compile(
+            r"\b(?:onset|symptoms?\s+(?:started|began)|got sick|became ill)"
+            r"\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b(?!\s*(?:years?|months?|weeks?|days?))",
+            re.I,
+        ),
         re.compile(r"\b(?:started|began)\s+(?:at\s+age\s+|when\s+i\s+was\s+)(\d{1,2})\b", re.I),
     ],
 
@@ -319,11 +337,12 @@ PATTERNS = {
         re.compile(r"\bno (?:known\s+)?(?:trigger|cause|reason)\b", re.I),
     ],
 
-    # Symptom duration
+    # Symptom duration -- captures number + unit together (e.g. "3 years")
+    # so the stored value is meaningful without context.
     "symptom_duration": [
-        re.compile(r"\b(\d+)\s+(year|month|week|day)s?\s+(?:of\s+)?(?:symptoms?|sick|ill)\b", re.I),
-        re.compile(r"\b(\d+)\s+(year|month|week|day)s?\s+(?:in|post|since)\b", re.I),
-        re.compile(r"\b(?:for|over)\s+(\d+)\s+(year|month|week|day)s?\b", re.I),
+        re.compile(r"\b(\d+\s+(?:year|month|week|day)s?)\s+(?:of\s+)?(?:symptoms?|sick|ill)\b", re.I),
+        re.compile(r"\b(\d+\s+(?:year|month|week|day)s?)\s+(?:in|post|since)\b", re.I),
+        re.compile(r"\b(?:for|over)\s+(\d+\s+(?:year|month|week|day)s?)\b", re.I),
     ],
 
     # Symptom trajectory
@@ -481,15 +500,8 @@ PATTERNS = {
         ),
     ],
 
-    "activity_level": [
-        re.compile(
-            r"\b(bedbound|bed.bound|mostly in bed|"
-            r"housebound|house.bound|can.t leave (?:the )?house|"
-            r"wheelchair|mobility aid|walking aid|cane\b|crutches|"
-            r"limited mobility|mostly functional|back to normal|fully functional)\b",
-            re.I,
-        ),
-    ],
+    # activity_level removed -- redundant with functional_status_tier (extension field).
+    # Its patterns (bedbound, housebound, etc.) are already in the extension schema.
 
     "mental_health": [
         re.compile(
@@ -599,6 +611,37 @@ PATTERNS = {
 
 
 # =============================================================================
+# POST-EXTRACTION CANONICALIZATION
+# =============================================================================
+
+# Condition synonyms -> canonical form. Checked in order, first match wins.
+_CONDITION_CANONICAL: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"^(?:long[\s-]?covid|post[\s-]?covid|pasc|post[\s-]?acute sequelae)$", re.I), "long covid"),
+    (re.compile(r"^(?:me/?cfs|myalgic encephalomyelitis|chronic fatigue syndrome)$", re.I), "me/cfs"),
+    (re.compile(r"^(?:post[\s-]?exertional malaise|post[\s-]?exertional|pem)$", re.I), "pem"),
+    (re.compile(r"^(?:post[\s-]?viral|post[\s-]?infectious)$", re.I), "post-viral"),
+    (re.compile(r"^(?:small fiber neuropathy|sfn)$", re.I), "small fiber neuropathy"),
+    (re.compile(r"^(?:ehlers[\s-]?danlos|eds|heds)$", re.I), "ehlers-danlos syndrome"),
+]
+
+
+def _canonicalize_conditions(values: list[str]) -> list[str]:
+    """Normalize condition names to canonical forms and deduplicate."""
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for raw_value in values:
+        normalized = raw_value.strip().lower()
+        for pattern, replacement in _CONDITION_CANONICAL:
+            if pattern.match(normalized):
+                normalized = replacement
+                break
+        if normalized not in seen:
+            seen.add(normalized)
+            canonical.append(normalized)
+    return canonical
+
+
+# =============================================================================
 # EXTRACTION ENGINE
 # =============================================================================
 
@@ -622,7 +665,11 @@ def extract_from_text(text: str, patterns: dict = None) -> dict:
 
 
 def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
-    """Merge extractions across multiple texts (all posts + comments for a user)."""
+    """Merge extractions across multiple texts (all posts + comments for a user).
+
+    After merging, applies field-specific canonicalization (e.g. normalizing
+    condition names) so downstream aggregation is cleaner.
+    """
     if patterns is None:
         patterns = PATTERNS
     merged: dict[str, list] = defaultdict(list)
@@ -634,6 +681,11 @@ def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
             for v in values:
                 if v not in merged[field]:
                     merged[field].append(v)
+
+    # Canonicalize condition names to merge variants
+    if "conditions" in merged:
+        merged["conditions"] = _canonicalize_conditions(merged["conditions"])
+
     return dict(merged)
 
 
@@ -825,28 +877,41 @@ def build_record(
 # CORPUS PROCESSING
 # =============================================================================
 
+_REDDIT_REMOVED = frozenset({"[removed]", "[deleted]"})
+
+
+def _keep_text(raw: str | None) -> str | None:
+    """Strip whitespace and return None for empty or Reddit-removed placeholders."""
+    cleaned = (raw or "").strip()
+    return cleaned if cleaned and cleaned not in _REDDIT_REMOVED else None
+
+
 def collect_texts_from_user(user_data: dict) -> list[str]:
-    texts = []
+    """Collect non-empty, non-removed text segments from a user history dict."""
+    texts: list[str] = []
     for post in user_data.get("posts", []):
-        if post.get("title"):
-            texts.append(post["title"])
-        if post.get("body"):
-            texts.append(post["body"])
+        for raw in (post.get("title"), post.get("body")):
+            kept = _keep_text(raw)
+            if kept:
+                texts.append(kept)
     for comment in user_data.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
+        kept = _keep_text(comment.get("body"))
+        if kept:
+            texts.append(kept)
     return texts
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    texts = []
-    if post.get("title"):
-        texts.append(post["title"])
-    if post.get("body"):
-        texts.append(post["body"])
+    """Collect non-empty, non-removed text segments from a subreddit post."""
+    texts: list[str] = []
+    for raw in (post.get("title"), post.get("body")):
+        kept = _keep_text(raw)
+        if kept:
+            texts.append(kept)
     for comment in post.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
+        kept = _keep_text(comment.get("body"))
+        if kept:
+            texts.append(kept)
     return texts
 
 

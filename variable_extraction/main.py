@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PatientPunk — demographic extraction pipeline entry point.
+PatientPunk -- demographic extraction pipeline entry point.
 
 Subcommands
 -----------
@@ -25,14 +25,21 @@ export
 
 Usage examples
 --------------
-Full pipeline run::
+Full pipeline run (LLM extraction, no discovery)::
 
     python main.py run --schema schemas/covidlonghaulers_schema.json
 
-Cheap test run (10 records, no discovery)::
+With field discovery (auto-merge all candidates)::
 
-    python main.py run --schema schemas/covidlonghaulers_schema.json \\
-        --limit 10 --no-discover
+    python main.py run --schema schemas/covidlonghaulers_schema.json --discover auto
+
+With field discovery (stop for human review)::
+
+    python main.py run --schema schemas/covidlonghaulers_schema.json --discover review
+
+Cheap test run (10 records)::
+
+    python main.py run --schema schemas/covidlonghaulers_schema.json --limit 10
 
 Inspect a schema::
 
@@ -76,7 +83,7 @@ _DEFAULT_SCHEMA_DIR = _HERE / "schemas"
 # ---------------------------------------------------------------------------
 
 def _add_run_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    p = sub.add_parser(
+    run_parser = sub.add_parser(
         "run",
         help="Run the full extraction pipeline.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -84,67 +91,70 @@ def _add_run_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[ty
 Run all (or a subset of) pipeline phases:
 
   Phase 1  extract_biomedical  Regex extraction (free, seconds)
-  Phase 2  llm_extract         LLM gap-filling  (Claude Haiku)
-  Phase 3  discover_fields     Field discovery  (Haiku + Sonnet)
+  Phase 2  llm_extract         LLM extraction   (Claude Haiku)
+  Phase 3  discover_fields     Field discovery   (Haiku + Sonnet) -- off by default
   Phase 4  records_to_csv      Flatten to CSV
   Phase 5  make_codebook       Generate data dictionary
 
-Use --no-llm to skip Phase 2, --no-discover to skip Phase 3, or
---start-at N to resume from a specific phase.
+Default runs Phases 1-2-4-5. Use --discover auto|review to enable Phase 3.
+Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
         """,
     )
     # Required
-    p.add_argument("--schema", type=Path, required=True,
+    run_parser.add_argument("--schema", type=Path, required=True,
                    help="Extension schema JSON (e.g. schemas/covidlonghaulers_schema.json)")
 
     # Paths
-    p.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+    run_parser.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
                    help=f"Corpus / output directory (default: {_DEFAULT_INPUT_DIR})")
-    p.add_argument("--temp-dir", type=Path, default=None,
+    run_parser.add_argument("--temp-dir", type=Path, default=None,
                    help="Intermediate file directory (default: {input-dir}/temp/)")
 
     # Phase control
-    p.add_argument("--start-at", type=int, default=1, choices=[1, 2, 3, 4, 5],
-                   help="Start from this phase (1–5).  Phases before this are skipped.")
-    p.add_argument("--no-llm", action="store_true",
+    run_parser.add_argument("--start-at", type=int, default=1, choices=[1, 2, 3, 4, 5],
+                   help="Start from this phase (1-5).  Phases before this are skipped.")
+    run_parser.add_argument("--no-llm", action="store_true",
                    help="Skip phase 2 (LLM gap-filling).")
-    p.add_argument("--no-discover", action="store_true",
-                   help="Skip phase 3 (field discovery).")
-    p.add_argument("--no-clean", action="store_true",
+    run_parser.add_argument("--discover", choices=["auto", "review"], default=None,
+                   help="Run Phase 3 field discovery. 'auto' runs all stages and "
+                        "merges candidates. 'review' stops after candidate generation "
+                        "so you can select fields in the Marimo variable picker "
+                        "(apps/discover.py). Default: skip discovery entirely.")
+    run_parser.add_argument("--no-clean", action="store_true",
                    help="Do not wipe temp/ before starting.  Useful when resuming.")
 
     # Shared
-    p.add_argument("--workers", type=int, default=10,
+    run_parser.add_argument("--workers", type=int, default=10,
                    help="Concurrent API workers (default: 10).")
-    p.add_argument("--limit", type=int, default=None,
+    run_parser.add_argument("--limit", type=int, default=None,
                    help="Process at most N records (cost control / testing).")
-    p.add_argument("--resume", action="store_true",
+    run_parser.add_argument("--resume", action="store_true",
                    help="Resume interrupted LLM / discovery runs.")
 
     # Phase 2
-    p.add_argument("--skip-threshold", type=float, default=0.7,
-                   help="Skip LLM for records where regex hit ≥ this fraction (default: 0.7).")
-    p.add_argument("--no-focus-gaps", action="store_true",
+    run_parser.add_argument("--skip-threshold", type=float, default=0.7,
+                   help="Skip LLM for records where regex hit >= this fraction (default: 0.7).")
+    run_parser.add_argument("--no-focus-gaps", action="store_true",
                    help="Disable LLM focused-gap mode.")
 
     # Phase 3
-    p.add_argument("--candidates", type=Path, default=None,
-                   help="Saved phase1_candidates.json — skips Stage 1 of discover_fields.")
-    p.add_argument("--sample", type=int, default=None,
+    run_parser.add_argument("--candidates", type=Path, default=None,
+                   help="Saved phase1_candidates.json -- skips Stage 1 of discover_fields.")
+    run_parser.add_argument("--sample", type=int, default=None,
                    help="Randomly sample N corpus items for discovery Stage 1.")
-    p.add_argument("--no-fill", action="store_true",
+    run_parser.add_argument("--no-fill", action="store_true",
                    help="Skip discovery Stage 4 gap-filling.")
 
     # Phase 4
-    p.add_argument("--sep", default=" | ",
+    run_parser.add_argument("--sep", default=" | ",
                    help="Multi-value separator for CSV (default: ' | ').")
-    p.add_argument("--provenance", action="store_true",
+    run_parser.add_argument("--provenance", action="store_true",
                    help="Include {field}__provenance and {field}__confidence columns in CSV.")
 
     # Phase 5
-    p.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
+    run_parser.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
                    help="Codebook output format (default: csv).")
-    p.add_argument("--no-discovered", action="store_true",
+    run_parser.add_argument("--no-discovered", action="store_true",
                    help="Exclude llm_discovered fields from the codebook.")
 
 
@@ -159,7 +169,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         temp_dir=args.temp_dir,
         start_at=args.start_at,
         run_llm=not args.no_llm,
-        run_discovery=not args.no_discover,
+        discovery_mode=args.discover,
         clean=not args.no_clean,
         workers=args.workers,
         limit=args.limit,
@@ -184,7 +194,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def _add_demographics_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    p = sub.add_parser(
+    demo_parser = sub.add_parser(
         "demographics",
         help="LLM-only demographic coding (deductive, inductive, or both).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -194,50 +204,51 @@ LLM-only demographic coding using Claude Haiku.
 Supports two complementary qualitative coding approaches:
 
   deductive   Extract predefined fields: age, sex_gender, location_country,
-              location_state.  Top-down — apply the codebook to the data.
+              location_state.  Top-down -- apply the codebook to the data.
 
   inductive   Discover NEW demographic categories from the data: occupation,
               ethnicity, disability status, insurance type, education level,
-              etc.  Bottom-up — let themes emerge.
+              etc.  Bottom-up -- let themes emerge.
 
   both        Do deductive + inductive in a single LLM pass (default).
 
 Works across both corpus sources:
-  subreddit_posts.json   — one record per post
-  users/*.json           — full posting history per user (recommended)
+  subreddit_posts.json   -- one record per post
+  users/*.json           -- full posting history per user (recommended)
 
 Outputs (depending on mode):
-  demographics_deductive.csv   — predefined fields
-  demographics_inductive.json  — per-record discovered categories
-  demographics_codebook.json   — aggregated category frequencies
+  demographics_deductive.csv   -- predefined fields
+  demographics_inductive.json  -- per-record discovered categories
+  demographics_codebook.json   -- aggregated category frequencies
         """,
     )
-    p.add_argument(
+    demo_parser.add_argument(
         "--input-dir", type=Path,
         default=_DEFAULT_INPUT_DIR,
         help=f"Directory containing subreddit_posts.json and/or users/ (default: {_DEFAULT_INPUT_DIR})",
     )
-    p.add_argument(
+    demo_parser.add_argument(
         "--output-dir", type=Path, default=None,
         help="Output directory (default: same as --input-dir)",
     )
-    p.add_argument(
+    demo_parser.add_argument(
         "--mode", choices=["deductive", "inductive", "both"], default="both",
         help="Coding mode (default: both).",
     )
-    p.add_argument(
+    demo_parser.add_argument(
         "--workers", type=int, default=10,
         help="Concurrent Haiku API requests (default: 10).",
     )
-    p.add_argument(
+    source_group = demo_parser.add_mutually_exclusive_group()
+    source_group.add_argument(
         "--posts-only", action="store_true",
         help="Only process subreddit_posts.json, skip users/.",
     )
-    p.add_argument(
+    source_group.add_argument(
         "--users-only", action="store_true",
         help="Only process users/*.json histories, skip subreddit_posts.json.",
     )
-    p.add_argument(
+    demo_parser.add_argument(
         "--max-chars", type=int, default=8000,
         help="Max characters of text sent per record to the LLM (default: 8000).",
     )
@@ -262,19 +273,19 @@ def _cmd_demographics(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def _add_inspect_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    p = sub.add_parser(
+    inspect_parser = sub.add_parser(
         "inspect",
         help="Inspect a schema file.",
         description="Print field metadata for a schema without running extraction.",
     )
-    p.add_argument("--schema", type=Path, required=True,
+    inspect_parser.add_argument("--schema", type=Path, required=True,
                    help="Extension schema JSON to inspect.")
-    p.add_argument("--base-schema", type=Path, default=None,
+    inspect_parser.add_argument("--base-schema", type=Path, default=None,
                    help="Base schema JSON (auto-detected if omitted).")
-    p.add_argument("--source", default=None,
+    inspect_parser.add_argument("--source", default=None,
                    choices=["base", "base_optional", "extension", "llm_discovered"],
                    help="Filter fields by source.")
-    p.add_argument("--verbose", "-v", action="store_true",
+    inspect_parser.add_argument("--verbose", "-v", action="store_true",
                    help="Print patterns for each field.")
 
 
@@ -301,12 +312,12 @@ def _cmd_inspect(args: argparse.Namespace) -> None:
     print(f"\nFields{src_label}:\n")
 
     for name in field_names:
-        fd = schema.all_fields[name]
-        icd = f"  ICD-10: {fd.icd10}" if fd.icd10 else ""
-        print(f"  {name:<40} [{fd.confidence:<6}] [{fd.source}]{icd}")
-        if args.verbose and fd.patterns:
-            for pat in fd.patterns:
-                print(f"    pattern: {pat}")
+        field_def = schema.all_fields[name]
+        icd_label = f"  ICD-10: {field_def.icd10}" if field_def.icd10 else ""
+        print(f"  {name:<40} [{field_def.confidence:<6}] [{field_def.source}]{icd_label}")
+        if args.verbose and field_def.patterns:
+            for pattern in field_def.patterns:
+                print(f"    pattern: {pattern}")
 
     print()
 
@@ -316,12 +327,12 @@ def _cmd_inspect(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def _add_corpus_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    p = sub.add_parser(
+    corpus_parser = sub.add_parser(
         "corpus",
         help="Print corpus statistics.",
         description="Show record counts and source breakdown for an input directory.",
     )
-    p.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+    corpus_parser.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
                    help=f"Corpus directory (default: {_DEFAULT_INPUT_DIR})")
 
 
@@ -339,24 +350,24 @@ def _cmd_corpus(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def _add_export_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    p = sub.add_parser(
+    export_parser = sub.add_parser(
         "export",
         help="Re-run export phases only (Phase 4 + 5).",
         description="Flatten existing intermediate JSON records to CSV and regenerate the codebook.",
     )
-    p.add_argument("--schema", type=Path, required=True,
+    export_parser.add_argument("--schema", type=Path, required=True,
                    help="Extension schema JSON.")
-    p.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+    export_parser.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
                    help=f"Directory containing temp/ and where outputs are written (default: {_DEFAULT_INPUT_DIR})")
-    p.add_argument("--temp-dir", type=Path, default=None,
+    export_parser.add_argument("--temp-dir", type=Path, default=None,
                    help="Intermediate file directory (default: {input-dir}/temp/).")
-    p.add_argument("--sep", default=" | ",
+    export_parser.add_argument("--sep", default=" | ",
                    help="Multi-value separator for CSV (default: ' | ').")
-    p.add_argument("--provenance", action="store_true",
+    export_parser.add_argument("--provenance", action="store_true",
                    help="Include provenance / confidence columns in CSV.")
-    p.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
+    export_parser.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
                    help="Codebook output format (default: csv).")
-    p.add_argument("--no-discovered", action="store_true",
+    export_parser.add_argument("--no-discovered", action="store_true",
                    help="Exclude llm_discovered fields from the codebook.")
 
 
@@ -369,9 +380,9 @@ def _cmd_export(args: argparse.Namespace) -> None:
         schema_path=schema_path,
         input_dir=args.input_dir,
         temp_dir=args.temp_dir,
-        start_at=4,             # skip phases 1–3
+        start_at=4,             # skip phases 1-3
         run_llm=False,
-        run_discovery=False,
+        discovery_mode=None,
         clean=False,
         csv_sep=args.sep,
         csv_provenance=args.provenance,
@@ -395,7 +406,7 @@ def main() -> None:
         epilog="""
 Examples:
   python main.py run          --schema schemas/covidlonghaulers_schema.json
-  python main.py run          --schema schemas/covidlonghaulers_schema.json --no-discover --limit 10
+  python main.py run          --schema schemas/covidlonghaulers_schema.json --limit 10
   python main.py demographics --input-dir ../reddit_sample_data
   python main.py demographics --input-dir ../reddit_sample_data --users-only
   python main.py inspect      --schema schemas/covidlonghaulers_schema.json

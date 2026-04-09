@@ -21,26 +21,29 @@ from __future__ import annotations
 
 import json
 import warnings
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from . import _utils
+
 
 # ---------------------------------------------------------------------------
-# Data classes
+# Models
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class FieldDefinition:
+class FieldDefinition(BaseModel):
     """Metadata for a single extraction field."""
+    model_config = ConfigDict(frozen=True)
 
     name: str
     description: str
     confidence: str                # "high" | "medium" | "low"
     source: str                    # "base" | "base_optional" | "extension" | "llm_discovered"
-    patterns: list[str] = field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
     icd10: str | None = None
-    extra: dict[str, Any] = field(default_factory=dict)   # any other schema keys
+    extra: dict[str, Any] = Field(default_factory=dict)   # any other schema keys
 
     def __repr__(self) -> str:
         return (
@@ -74,8 +77,8 @@ class Schema:
         Merged view: base + extension, extension takes precedence on collision.
     """
 
-    # Default location of base_schema.json relative to this file.
-    _DEFAULT_BASE = Path(__file__).parent.parent / "schemas" / "base_schema.json"
+    # Default location of base_schema.json, resolved from PACKAGE_ROOT.
+    _DEFAULT_BASE = _utils.PACKAGE_ROOT / "schemas" / "base_schema.json"
 
     def __init__(
         self,
@@ -138,12 +141,12 @@ class Schema:
 
         # base_optional fields are dormant by default.  The extension schema
         # can activate specific ones via "include_base_fields": ["dosage", ...].
-        # We remove any base_optional fields that are NOT in that list —
+        # We remove any base_optional fields that are NOT in that list --
         # only the explicitly activated ones survive into the final schema.
         activated_optional_fields = set(ext_raw.get("include_base_fields", []))
         for name in list(base_fields):
-            fd = base_fields[name]
-            if fd.source == "base_optional" and name not in activated_optional_fields:
+            field_def = base_fields[name]
+            if field_def.source == "base_optional" and name not in activated_optional_fields:
                 del base_fields[name]
 
         return cls(
@@ -183,8 +186,8 @@ class Schema:
                     patterns=list(meta.get("patterns", [])),
                     icd10=meta.get("icd10"),
                     extra={
-                        k: v for k, v in meta.items()
-                        if k not in {"description", "confidence", "patterns", "icd10"}
+                        key: val for key, val in meta.items()
+                        if key not in {"description", "confidence", "patterns", "icd10"}
                     },
                 )
 
@@ -206,7 +209,10 @@ class Schema:
         """
         if source is None:
             return list(self.all_fields)
-        return [n for n, f in self.all_fields.items() if f.source == source]
+        return [
+            name for name, field_def in self.all_fields.items()
+            if field_def.source == source
+        ]
 
     def to_dict(self) -> dict:
         """Return the raw extension schema dict."""

@@ -5,17 +5,17 @@ Inductive + deductive demographic coder.
 
 Wraps ``scripts/code_demographics_llm.py``.  Supports three coding modes:
 
-* **deductive** — extract predefined fields (age, sex_gender, location_country,
+* **deductive** -- extract predefined fields (age, sex_gender, location_country,
   location_state) from author self-reports.
-* **inductive** — discover new demographic categories (occupation, ethnicity,
+* **inductive** -- discover new demographic categories (occupation, ethnicity,
   disability status, etc.) that emerge from the data.
-* **both** (default) — do deductive + inductive in a single LLM pass.
+* **both** (default) -- do deductive + inductive in a single LLM pass.
 
 Output files
 ------------
-* ``{output_dir}/demographics_deductive.csv``  — predefined fields (deductive)
-* ``{output_dir}/demographics_inductive.json`` — per-record discoveries (inductive)
-* ``{output_dir}/demographics_codebook.json``  — aggregated category frequencies
+* ``{output_dir}/demographics_deductive.csv``  -- predefined fields (deductive)
+* ``{output_dir}/demographics_inductive.json`` -- per-record discoveries (inductive)
+* ``{output_dir}/demographics_codebook.json``  -- aggregated category frequencies
 
 Requires an Anthropic API key in the project-root ``.env``.
 
@@ -48,7 +48,7 @@ class DemographicCoder(BaseExtractor):
     output_dir:
         Output directory for CSV and JSON files.  Defaults to *input_dir*.
     mode:
-        Coding mode — ``"deductive"`` | ``"inductive"`` | ``"both"`` (default).
+        Coding mode -- ``"deductive"`` | ``"inductive"`` | ``"both"`` (default).
     workers:
         Concurrent Haiku API requests (default: 10).
     include_posts:
@@ -76,6 +76,11 @@ class DemographicCoder(BaseExtractor):
         self.output_dir = Path(output_dir) if output_dir else None
         self.mode = mode
         self.workers = workers
+        if not include_posts and not include_users:
+            raise ValueError(
+                "At least one source must be enabled: "
+                "include_posts and include_users cannot both be False."
+            )
         self.include_posts = include_posts
         self.include_users = include_users
         self.max_chars = max_chars

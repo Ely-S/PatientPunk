@@ -4,7 +4,7 @@ patientpunk.exporters.codebook
 Generate a data dictionary (codebook) from the extraction schema.
 
 Wraps ``scripts/make_codebook.py``.  Produces a human-readable reference that
-documents every field — its description, confidence tier, ICD-10 code (where
+documents every field -- its description, confidence tier, ICD-10 code (where
 applicable), data type, example values, and observed coverage percentage.
 
 Output file
@@ -29,16 +29,14 @@ from pathlib import Path
 
 from .base import BaseExporter
 
-# Default base schema location (same sibling ``schemas/`` directory used by
-# the Schema class and the old scripts).
-_DEFAULT_BASE_SCHEMA = (
-    Path(__file__).parent.parent.parent / "schemas" / "base_schema.json"
-)
+# Default base schema location, resolved from PACKAGE_ROOT.
+from .._utils import PACKAGE_ROOT
+_DEFAULT_BASE_SCHEMA = PACKAGE_ROOT / "schemas" / "base_schema.json"
 
 
 class CodebookGenerator(BaseExporter):
     """
-    Phase 5 — generate data dictionary / codebook.
+    Phase 5 -- generate data dictionary / codebook.
 
     Parameters
     ----------
@@ -54,7 +52,7 @@ class CodebookGenerator(BaseExporter):
     output_path:
         Output file path.  Defaults to ``../data/codebook.{csv|md}``.
     fmt:
-        Output format — ``"csv"`` (default) or ``"markdown"``.
+        Output format -- ``"csv"`` (default) or ``"markdown"``.
     max_examples:
         Maximum example values to include per field (default: 5).
     sep:

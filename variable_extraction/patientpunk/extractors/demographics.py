@@ -11,15 +11,15 @@ demographics the author explicitly states about themselves.
 
 Extracts four fields per record
 --------------------------------
-* ``age``              — integer, or null
-* ``sex_gender``       — ``"male"`` | ``"female"`` | ``"non-binary"`` | other | null
-* ``location_country`` — country name, or null
-* ``location_state``   — US state name / abbreviation, or null
+* ``age``              -- integer, or null
+* ``sex_gender``       -- ``"male"`` | ``"female"`` | ``"non-binary"`` | other | null
+* ``location_country`` -- country name, or null
+* ``location_state``   -- US state name / abbreviation, or null
 
 Works across both corpus sources
 ----------------------------------
 * Subreddit posts  (``subreddit_posts.json``)
-* Full user histories (``users/*.json``) — typically yields 4-5× more
+* Full user histories (``users/*.json``) -- typically yields 4-5× more
   demographic coverage than single posts because people repeat demographics
   across many posts and comments.
 
@@ -84,7 +84,7 @@ class DemographicsExtractor(BaseExtractor):
         max_chars: int = _DEFAULT_MAX_CHARS,
     ) -> None:
         # This extractor has no schema and writes directly to a CSV, so
-        # temp_dir is unused — we pass input_dir as both values.
+        # temp_dir is unused -- we pass input_dir as both values.
         super().__init__(input_dir=input_dir, schema_path=None, temp_dir=input_dir)
         self.output_path = Path(output_path) if output_path else None
         self.workers = workers

@@ -10,8 +10,8 @@ and handled by :class:`~patientpunk.extractors.FieldDiscoveryExtractor`.
 
 Output files (written to *temp_dir*)
 --------------------------------------
-* ``patientpunk_records_{schema_id}.json`` — per-record extraction results
-* ``extraction_metadata_{schema_id}.json``  — field hit counts / summary
+* ``patientpunk_records_{schema_id}.json`` -- per-record extraction results
+* ``extraction_metadata_{schema_id}.json``  -- field hit counts / summary
 
 Example
 -------
@@ -32,7 +32,7 @@ from .base import BaseExtractor
 
 class BiomedicalExtractor(BaseExtractor):
     """
-    Phase 1 — regex extraction.
+    Phase 1 -- regex extraction.
 
     Parameters
     ----------

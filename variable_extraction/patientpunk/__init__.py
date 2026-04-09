@@ -25,7 +25,7 @@ Pipeline orchestrator (Phases 1–5: regex → LLM → discovery → CSV → cod
 
     from patientpunk import Pipeline, PipelineConfig
 
-Standalone demographics (LLM-only, age/sex/location — no regex, no schema)::
+Standalone demographics (LLM-only, age/sex/location -- no regex, no schema)::
 
     from patientpunk import DemographicsExtractor
 
@@ -33,7 +33,7 @@ Standalone demographics (LLM-only, age/sex/location — no regex, no schema)::
 
    **When to use Pipeline vs DemographicsExtractor:**
 
-   * Use ``Pipeline`` when you want the full clinical picture — all 37+
+   * Use ``Pipeline`` when you want the full clinical picture -- all 37+
      schema fields (conditions, medications, treatment outcomes, etc.)
      extracted via regex + LLM backfill.
 
@@ -53,7 +53,7 @@ Quick-start example::
         schema_path=Path("schemas/covidlonghaulers_schema.json"),
         input_dir=Path("../data"),
         run_llm=True,
-        run_discovery=False,   # skip the expensive discovery step
+        discovery_mode=None,   # discovery off by default; "auto" or "review" to enable
     )
     result = Pipeline(config).run()
     print(result.summary())

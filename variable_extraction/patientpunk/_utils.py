@@ -5,7 +5,7 @@ Internal shared helpers.  Not part of the public API.
 
 These are small, stateless utility functions used by multiple modules inside
 the ``patientpunk`` package.  Nothing here should import from the rest of the
-package — this module sits at the bottom of the dependency graph so that
+package -- this module sits at the bottom of the dependency graph so that
 corpus.py, schema.py, and pipeline.py can all import from it without creating
 circular imports.
 
@@ -37,14 +37,19 @@ import csv
 import json
 from pathlib import Path
 
+# Root of the variable_extraction package tree.
+# All path resolution should reference this constant instead of
+# repeating Path(__file__).parent.parent... chains.
+PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
+
 
 def load_json(path: Path) -> dict | list | None:
     """Load a JSON file, returning *None* on any filesystem or parse error."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        # JSONDecodeError — file exists but is not valid JSON.
-        # OSError — file not found, permission denied, etc.
+        # JSONDecodeError -- file exists but is not valid JSON.
+        # OSError -- file not found, permission denied, etc.
         return None
 
 
@@ -83,32 +88,40 @@ def clean_temp_dir(temp_dir: Path, patterns: list[str]) -> list[str]:
         return []
     removed: list[str] = []
     for pattern in patterns:
-        for f in temp_dir.glob(pattern):
-            f.unlink()
-            removed.append(f.name)
+        for matching_file in temp_dir.glob(pattern):
+            matching_file.unlink()
+            removed.append(matching_file.name)
     return sorted(removed)
 
 
 def csv_fill_rate(csv_path: Path) -> dict:
     """
-    Return basic fill-rate statistics for a CSV file without re-running
-    any extraction step.
+    Return basic fill-rate statistics for a CSV file.
+
+    Streams rows instead of materialising the entire CSV, so memory
+    usage stays constant regardless of corpus size.
     """
     if not csv_path.exists():
         return {}
     with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        rows = list(reader)
-        cols = reader.fieldnames or []
-    if not rows:
+        columns = reader.fieldnames or []
+        if not columns:
+            return {}
+        col_count = len(columns)
+        row_count = 0
+        filled_cells = 0
+        for row in reader:
+            row_count += 1
+            filled_cells += sum(
+                1 for value in row.values() if value and value.strip()
+            )
+    if row_count == 0:
         return {}
-    total_cells = len(rows) * len(cols)
-    filled_cells = sum(
-        1 for row in rows for v in row.values() if v and v.strip()
-    )
+    total_cells = row_count * col_count
     return {
-        "rows": len(rows),
-        "columns": len(cols),
+        "rows": row_count,
+        "columns": col_count,
         "fill_rate": round(filled_cells / total_cells * 100, 1) if total_cells else 0,
         "total_cells": total_cells,
         "filled_cells": filled_cells,

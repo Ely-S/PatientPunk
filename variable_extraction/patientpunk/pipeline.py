@@ -3,8 +3,8 @@ patientpunk.pipeline
 ~~~~~~~~~~~~~~~~~~~~~
 High-level orchestrator for the PatientPunk extraction pipeline.
 
-The :class:`Pipeline` class ties together all five phases — regex extraction,
-LLM gap-filling, field discovery, CSV export, and codebook generation — into
+The :class:`Pipeline` class ties together all five phases -- regex extraction,
+LLM gap-filling, field discovery, CSV export, and codebook generation -- into
 a single, configurable object.  Each phase is optional and can be skipped via
 the ``PipelineConfig`` flags.
 
@@ -24,10 +24,12 @@ Example
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from ._utils import clean_temp_dir, csv_fill_rate, find_newest_glob, get_schema_id, load_json
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_newest_glob, get_schema_id, load_json
 from .extractors import BiomedicalExtractor, ExtractorError, FieldDiscoveryExtractor, LLMExtractor
 from .exporters import CSVExporter, CodebookGenerator
 
@@ -54,87 +56,25 @@ _TEMP_PATTERNS: list[str] = [
 # Configuration dataclass
 # ---------------------------------------------------------------------------
 
-@dataclass
-class PipelineConfig:
-    """
-    All settings that control a pipeline run.
-
-    Parameters
-    ----------
-    schema_path:
-        Extension schema JSON (e.g. ``schemas/covidlonghaulers_schema.json``).
-        Required for named-schema runs; all five phases use it.
-    input_dir:
-        Directory containing the corpus and where final outputs are written.
-        Defaults to ``../../data`` relative to this file.
-    temp_dir:
-        Directory for intermediate files.  Defaults to ``{input_dir}/temp/``.
-
-    Phase control
-    ~~~~~~~~~~~~~
-    start_at:
-        Phase number to start from (1–5).  Phases before this are skipped.
-    run_llm:
-        Include Phase 2 — LLM gap-filling (requires Anthropic API key).
-    run_discovery:
-        Include Phase 3 — field discovery (requires Anthropic API key).
-    clean:
-        Wipe ``temp_dir`` before starting Phase 1.  Has no effect when
-        ``start_at > 1``.
-
-    Shared options
-    ~~~~~~~~~~~~~~
-    workers:
-        Concurrent API workers for LLM phases (default: 10).
-    limit:
-        Process at most *N* records — useful for cost-capped test runs.
-    resume:
-        Resume interrupted LLM / discovery runs.
-
-    Phase 2 options
-    ~~~~~~~~~~~~~~~
-    llm_skip_threshold:
-        Skip records where regex already found ≥ this fraction of fields
-        (0.0–1.0, default: 0.7).
-    llm_focus_gaps:
-        Only ask the LLM about fields regex missed (default: *True*).
-
-    Phase 3 options
-    ~~~~~~~~~~~~~~~
-    candidates_file:
-        Path to a saved ``phase1_candidates.json`` — skips Phase 3 Stage 1.
-    discovery_sample:
-        Randomly sample *N* corpus items for Phase 3 Stage 1.
-    discovery_fill_gaps:
-        Run Phase 3 Stage 4 gap-filling (default: *True*).
-
-    Phase 4 options
-    ~~~~~~~~~~~~~~~
-    csv_sep:
-        Multi-value separator for the CSV (default: ``" | "``).
-    csv_provenance:
-        Include ``{field}__provenance`` and ``{field}__confidence`` columns.
-
-    Phase 5 options
-    ~~~~~~~~~~~~~~~
-    codebook_format:
-        ``"csv"`` (default) or ``"markdown"``.
-    codebook_include_discovered:
-        Include ``llm_discovered`` fields in the codebook (default: *True*).
-    """
+class PipelineConfig(BaseModel):
+    """All settings that control a pipeline run."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     schema_path: Path
 
     # Paths
-    input_dir: Path = field(
-        default_factory=lambda: Path(__file__).parent.parent.parent / "data"
+    input_dir: Path = Field(
+        default_factory=lambda: PACKAGE_ROOT.parent / "data"
     )
     temp_dir: Path | None = None
 
     # Phase control
     start_at: int = 1
     run_llm: bool = True
-    run_discovery: bool = True
+    # Discovery is off by default. Use discovery_mode="auto" to run and
+    # auto-merge all candidates, or "review" to stop after candidate
+    # generation so the user can select fields in the Marimo variable picker.
+    discovery_mode: str | None = None
     clean: bool = True
 
     # Shared
@@ -159,12 +99,9 @@ class PipelineConfig:
     codebook_format: str = "csv"
     codebook_include_discovered: bool = True
 
-    def __post_init__(self) -> None:
-        # Coerce to Path objects here rather than relying on callers to do so.
-        # Users often pass plain strings (e.g. from argparse or config files),
-        # and all downstream code depends on Path methods (.exists(), /operator,
-        # .name, etc.).  Doing the coercion once in __post_init__ keeps every
-        # other method clean and avoids silent AttributeErrors at runtime.
+    @model_validator(mode="after")
+    def _coerce_paths_and_validate(self) -> "PipelineConfig":
+        """Coerce string paths to Path objects and validate start_at range."""
         self.schema_path = Path(self.schema_path)
         self.input_dir = Path(self.input_dir)
         if self.temp_dir is None:
@@ -173,19 +110,20 @@ class PipelineConfig:
             self.temp_dir = Path(self.temp_dir)
         if self.candidates_file:
             self.candidates_file = Path(self.candidates_file)
-        # Validate start_at here (in __post_init__) rather than in Pipeline.run()
-        # so that a misconfigured PipelineConfig raises immediately on construction,
-        # before any files are touched or API calls are made.
         if self.start_at not in range(1, 6):
-            raise ValueError(f"start_at must be 1–5, got {self.start_at}")
+            raise ValueError(f"start_at must be 1-5, got {self.start_at}")
+        if self.discovery_mode is not None and self.discovery_mode not in ("auto", "review"):
+            raise ValueError(
+                f"discovery_mode must be None, 'auto', or 'review', got {self.discovery_mode!r}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
 # Per-phase result
 # ---------------------------------------------------------------------------
 
-@dataclass
-class PhaseResult:
+class PhaseResult(BaseModel):
     """Outcome and timing for a single pipeline phase."""
 
     phase: int
@@ -194,27 +132,27 @@ class PhaseResult:
     elapsed: float = 0.0
     ok: bool = True
     error: str | None = None
-    stats: dict = field(default_factory=dict)
+    stats: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Pipeline result
 # ---------------------------------------------------------------------------
 
-@dataclass
-class PipelineResult:
+class PipelineResult(BaseModel):
     """Aggregate result of a full pipeline run."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    phases: list[PhaseResult] = field(default_factory=list)
+    phases: list[PhaseResult] = Field(default_factory=list)
     total_elapsed: float = 0.0
     schema_id: str = ""
-    input_dir: Path = field(default_factory=Path)
-    output_dir: Path = field(default_factory=Path)
+    input_dir: Path = Field(default_factory=Path)
+    output_dir: Path = Field(default_factory=Path)
 
     @property
     def ok(self) -> bool:
         """True if every executed phase succeeded."""
-        return all(p.ok for p in self.phases if not p.skipped)
+        return all(phase.ok for phase in self.phases if not phase.skipped)
 
     def summary(self) -> str:
         """Return a human-readable multi-line summary string."""
@@ -225,14 +163,14 @@ class PipelineResult:
             f"  PIPELINE SUMMARY  ({mins}m {secs}s total)",
             "=" * 60,
         ]
-        for pr in self.phases:
-            if pr.skipped:
-                lines.append(f"\n  Phase {pr.phase} — {pr.label}  [SKIPPED]")
+        for phase_result in self.phases:
+            if phase_result.skipped:
+                lines.append(f"\n  Phase {phase_result.phase} -- {phase_result.label}  [SKIPPED]")
                 continue
-            status = "OK" if pr.ok else f"FAILED (exit {pr.error})"
-            lines.append(f"\n  Phase {pr.phase} — {pr.label}  [{status}]  {pr.elapsed:.0f}s")
-            for k, v in pr.stats.items():
-                lines.append(f"    {k:<28} {v}")
+            status = "OK" if phase_result.ok else f"FAILED (exit {phase_result.error})"
+            lines.append(f"\n  Phase {phase_result.phase} -- {phase_result.label}  [{status}]  {phase_result.elapsed:.0f}s")
+            for stat_name, stat_value in phase_result.stats.items():
+                lines.append(f"    {stat_name:<28} {stat_value}")
         lines.append("\n" + "=" * 60 + "\n")
         return "\n".join(lines)
 
@@ -287,7 +225,7 @@ class Pipeline:
         if cfg.start_at == 1 and cfg.clean:
             self._clean_temp()
 
-        # Phase 1 — regex extraction
+        # Phase 1 -- regex extraction
         result.phases.append(
             self._run_phase(
                 phase=1,
@@ -300,7 +238,7 @@ class Pipeline:
             )
         )
         # Fail-fast pattern: if Phase 1 regex extraction failed there is nothing
-        # for Phase 2 to work on — the merged_records file won't exist and every
+        # for Phase 2 to work on -- the merged_records file won't exist and every
         # downstream phase would fail with confusing "file not found" errors.
         # Returning early here gives the caller a clean, partial PipelineResult
         # with ok=False on the failed phase rather than a cascade of failures.
@@ -308,7 +246,7 @@ class Pipeline:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 2 — LLM gap-filling
+        # Phase 2 -- LLM gap-filling
         result.phases.append(
             self._run_phase(
                 phase=2,
@@ -332,11 +270,17 @@ class Pipeline:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 3 — field discovery
+        # Phase 3 -- field discovery
+        # discovery_mode=None skips entirely (default).
+        # "auto" runs all 4 stages and merges candidates into the schema.
+        # "review" runs stages 1-2 (candidate scan + regex gen), saves
+        # candidates JSON, then stops so the user can select fields in
+        # the Marimo variable picker (apps/discover.py).
+        skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
         result.phases.append(
             self._run_phase(
                 phase=3,
-                skip=(cfg.start_at > 3 or not cfg.run_discovery),
+                skip=skip_discovery,
                 extractor=FieldDiscoveryExtractor(
                     input_dir=cfg.input_dir,
                     schema_path=cfg.schema_path,
@@ -350,21 +294,26 @@ class Pipeline:
                 ),
             )
         )
-        # If discovery failed, discovered_records_*.json won't exist; Phase 4
-        # would silently export an incomplete CSV with no discovered columns.
-        # Stopping here preserves the integrity of the final output.
-        if not result.phases[-1].ok:
+        if not result.phases[-1].ok and not result.phases[-1].skipped:
+            result.total_elapsed = time.time() - pipeline_start
+            return result
+        # In "review" mode, stop after Phase 3 so the user can review
+        # candidates before they flow into Phases 4-5.
+        if cfg.discovery_mode == "review" and not result.phases[-1].skipped:
+            print("\n  Discovery candidates saved to temp/.")
+            print("  Review in: marimo run apps/discover.py")
+            print("  Then re-run with: --start-at 4 --no-clean")
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 4 — CSV export
+        # Phase 4 -- CSV export
         result.phases.append(self._run_phase_4())
         # No CSV means the codebook (Phase 5) has no fill-rate data to work from.
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 5 — codebook
+        # Phase 5 -- codebook
         result.phases.append(self._run_phase_5())
 
         result.total_elapsed = time.time() - pipeline_start
@@ -387,8 +336,8 @@ class Pipeline:
         try:
             # raise_on_error=True tells the extractor to raise ExtractorError
             # (rather than returning a falsy result) if the subprocess it spawns
-            # exits with a non-zero return code.  We catch it here — rather than
-            # letting it propagate to the caller — so that _run_phase can always
+            # exits with a non-zero return code.  We catch it here -- rather than
+            # letting it propagate to the caller -- so that _run_phase can always
             # return a fully populated PhaseResult object.  This keeps Pipeline.run()
             # clean: it only needs to inspect result.phases[-1].ok instead of
             # wrapping every phase call in its own try/except.
@@ -457,7 +406,7 @@ class Pipeline:
         return find_newest_glob(self._temp_dir, "discovered_records_*.json")
 
     def _run_phase_4(self) -> PhaseResult:
-        """Phase 4 — assemble input files and call CSVExporter."""
+        """Phase 4 -- assemble input files and call CSVExporter."""
         phase = 4
         label = self._PHASE_LABELS[phase]
 
@@ -467,11 +416,17 @@ class Pipeline:
 
         self._print_phase_banner(phase, label)
 
-        # Always include merged records (the combined regex + LLM output from
-        # Phases 1 and 2).  This is the primary structured dataset.
-        input_files = [
-            self._temp_dir / f"merged_records_{self._schema_id}.json"
-        ]
+        # Prefer merged records (combined regex + LLM from Phases 1–2), but
+        # fall back to regex-only records when --no-llm skips Phase 2.
+        merged_path = self._temp_dir / f"merged_records_{self._schema_id}.json"
+        regex_path = self._temp_dir / f"patientpunk_records_{self._schema_id}.json"
+        if merged_path.exists():
+            input_files = [merged_path]
+        elif regex_path.exists():
+            print(f"  merged_records not found -- falling back to regex-only records")
+            input_files = [regex_path]
+        else:
+            input_files = [merged_path]  # will be caught by the missing-file check below
 
         # Auto-include the most recent discovered records if they exist.
         # Discovered records are kept as a separate file rather than being
@@ -487,16 +442,16 @@ class Pipeline:
             input_files.append(disc)
             print(f"  Including discovered records: {disc.name}")
         else:
-            print(f"  No discovered records found — exporting base records only")
+            print(f"  No discovered records found -- exporting base records only")
 
         # Prune missing files
-        missing = [p for p in input_files if not p.exists()]
+        missing = [path for path in input_files if not path.exists()]
         if missing:
-            print(f"  [Warning] Missing: {[p.name for p in missing]}")
-        input_files = [p for p in input_files if p.exists()]
+            print(f"  [Warning] Missing: {[path.name for path in missing]}")
+        input_files = [path for path in input_files if path.exists()]
 
         if not input_files:
-            print("  [Skipping phase 4 — no input files available]")
+            print("  [Skipping phase 4 -- no input files available]")
             return PhaseResult(phase=phase, label=label, skipped=True)
 
         output_csv = self.config.input_dir / "records.csv"
@@ -526,7 +481,7 @@ class Pipeline:
             )
 
     def _run_phase_5(self) -> PhaseResult:
-        """Phase 5 — codebook generation."""
+        """Phase 5 -- codebook generation."""
         phase = 5
         label = self._PHASE_LABELS[phase]
 
@@ -571,18 +526,18 @@ class Pipeline:
         # completed, guaranteeing that the JSON files it reads already exist on disk.
         import json
 
-        sid = self._schema_id
-        td = self._temp_dir
+        schema_id = self._schema_id
+        temp_dir = self._temp_dir
 
         if phase == 1:
-            meta_path = td / f"extraction_metadata_{sid}.json"
+            meta_path = temp_dir / f"extraction_metadata_{schema_id}.json"
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 return {}
             total = meta.get("total_records_processed", 0)
             hits = meta.get("field_hit_counts", {})
-            n_hit = sum(1 for v in hits.values() if v > 0)
+            n_hit = sum(1 for hit_count in hits.values() if hit_count > 0)
             return {
                 "records processed":  total,
                 "fields with hits":   f"{n_hit}/{len(hits)}",
@@ -590,8 +545,8 @@ class Pipeline:
             }
 
         if phase == 2:
-            llm_path = td / f"llm_records_{sid}.json"
-            merged_path = td / f"merged_records_{sid}.json"
+            llm_path = temp_dir / f"llm_records_{schema_id}.json"
+            merged_path = temp_dir / f"merged_records_{schema_id}.json"
             try:
                 llm = json.loads(llm_path.read_text(encoding="utf-8"))
                 merged = json.loads(merged_path.read_text(encoding="utf-8"))
@@ -605,8 +560,8 @@ class Pipeline:
             # relatively little incremental value.
             fills = sum(
                 1 for rec in llm
-                for v in rec.get("fields", {}).values()
-                if v is not None
+                for field_value in rec.get("fields", {}).values()
+                if field_value is not None
             )
             return {
                 "LLM records":     len(llm),
@@ -628,7 +583,7 @@ class Pipeline:
                 for fname, fdata in rec.get("discovered_fields", {}).items():
                     if fdata.get("values"):
                         field_hits[fname] = field_hits.get(fname, 0) + 1
-            n = len(records)
+            record_count = len(records)
             covered = sum(
                 1 for rec in records
                 if any(
@@ -638,8 +593,8 @@ class Pipeline:
             )
             return {
                 "fields discovered":     len(field_hits),
-                "records with any hit":  f"{covered}/{n}",
-                "coverage %":            f"{round(covered / n * 100, 1) if n else 0}%",
+                "records with any hit":  f"{covered}/{record_count}",
+                "coverage %":            f"{round(covered / record_count * 100, 1) if record_count else 0}%",
             }
 
         return {}
@@ -658,8 +613,10 @@ class Pipeline:
             print(f"  Starting at phase {cfg.start_at}")
         if not cfg.run_llm:
             print("  Skipping:  phase 2 (run_llm=False)")
-        if not cfg.run_discovery:
-            print("  Skipping:  phase 3 (run_discovery=False)")
+        if cfg.discovery_mode is None:
+            print("  Skipping:  phase 3 (discovery off by default; use --discover auto|review)")
+        else:
+            print(f"  Discovery: {cfg.discovery_mode}")
 
     @staticmethod
     def _print_phase_banner(phase: int, label: str) -> None:
@@ -668,12 +625,12 @@ class Pipeline:
         print("=" * 60)
 
     @staticmethod
-    def _print_phase_stats(pr: PhaseResult) -> None:
-        if not pr.stats:
+    def _print_phase_stats(phase_result: PhaseResult) -> None:
+        if not phase_result.stats:
             return
-        print(f"\n  -- Phase {pr.phase} stats ({pr.elapsed:.0f}s) " + "-" * 26)
-        for k, v in pr.stats.items():
-            print(f"  {k:<30} {v}")
+        print(f"\n  -- Phase {phase_result.phase} stats ({phase_result.elapsed:.0f}s) " + "-" * 26)
+        for stat_name, stat_value in phase_result.stats.items():
+            print(f"  {stat_name:<30} {stat_value}")
         print("  " + "-" * 52)
 
     def _clean_temp(self) -> None:

@@ -33,7 +33,7 @@ from .base import BaseExporter
 
 class CSVExporter(BaseExporter):
     """
-    Phase 4 — flatten records to CSV.
+    Phase 4 -- flatten records to CSV.
 
     Parameters
     ----------
@@ -68,13 +68,13 @@ class CSVExporter(BaseExporter):
             schema_path=None,
             temp_dir=None,
         )
-        self.input_files = [Path(p) for p in input_files]
+        self.input_files = [Path(input_path) for input_path in input_files]
         self.output_path = Path(output_path) if output_path else None
         self.sep = sep
         self.include_provenance = include_provenance
 
     def _build_args(self) -> list[str]:
-        args = ["--input"] + [str(p) for p in self.input_files]
+        args = ["--input"] + [str(input_path) for input_path in self.input_files]
         args += ["--sep", self.sep]
         if self.output_path:
             args += ["--output", str(self.output_path)]

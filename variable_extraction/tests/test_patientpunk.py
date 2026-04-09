@@ -11,7 +11,7 @@ Covers the modules introduced during the OOP refactor:
     patientpunk.pipeline
     patientpunk.qualitative_standards
 
-No API calls are made — all tests use pure functions, in-memory data, or
+No API calls are made -- all tests use pure functions, in-memory data, or
 mocked subprocesses.
 
 Run with:
@@ -164,43 +164,43 @@ def tmp_csv(tmp_path):
 
 class TestLoadJson:
     def test_valid_json(self, tmp_path):
-        p = tmp_path / "data.json"
-        p.write_text('{"key": "value"}', encoding="utf-8")
-        assert load_json(p) == {"key": "value"}
+        test_file = tmp_path / "data.json"
+        test_file.write_text('{"key": "value"}', encoding="utf-8")
+        assert load_json(test_file) == {"key": "value"}
 
     def test_valid_json_list(self, tmp_path):
-        p = tmp_path / "data.json"
-        p.write_text('[1, 2, 3]', encoding="utf-8")
-        assert load_json(p) == [1, 2, 3]
+        test_file = tmp_path / "data.json"
+        test_file.write_text('[1, 2, 3]', encoding="utf-8")
+        assert load_json(test_file) == [1, 2, 3]
 
     def test_nonexistent_file_returns_none(self, tmp_path):
         assert load_json(tmp_path / "missing.json") is None
 
     def test_invalid_json_returns_none(self, tmp_path):
-        p = tmp_path / "bad.json"
-        p.write_text("{not valid json", encoding="utf-8")
-        assert load_json(p) is None
+        test_file = tmp_path / "bad.json"
+        test_file.write_text("{not valid json", encoding="utf-8")
+        assert load_json(test_file) is None
 
     def test_empty_file_returns_none(self, tmp_path):
-        p = tmp_path / "empty.json"
-        p.write_text("", encoding="utf-8")
-        assert load_json(p) is None
+        test_file = tmp_path / "empty.json"
+        test_file.write_text("", encoding="utf-8")
+        assert load_json(test_file) is None
 
 
 class TestGetSchemaId:
     def test_from_json(self, tmp_path):
-        p = tmp_path / "schema.json"
-        p.write_text('{"schema_id": "my_schema_v2"}', encoding="utf-8")
-        assert get_schema_id(p) == "my_schema_v2"
+        test_file = tmp_path / "schema.json"
+        test_file.write_text('{"schema_id": "my_schema_v2"}', encoding="utf-8")
+        assert get_schema_id(test_file) == "my_schema_v2"
 
     def test_fallback_to_stem(self, tmp_path):
-        p = tmp_path / "fallback_name.json"
-        p.write_text('{"no_id_here": true}', encoding="utf-8")
-        assert get_schema_id(p) == "fallback_name"
+        test_file = tmp_path / "fallback_name.json"
+        test_file.write_text('{"no_id_here": true}', encoding="utf-8")
+        assert get_schema_id(test_file) == "fallback_name"
 
     def test_nonexistent_file_returns_stem(self, tmp_path):
-        p = tmp_path / "nofile.json"
-        assert get_schema_id(p) == "nofile"
+        test_file = tmp_path / "nofile.json"
+        assert get_schema_id(test_file) == "nofile"
 
 
 class TestFindNewestGlob:
@@ -288,9 +288,9 @@ class TestCsvFillRate:
         assert csv_fill_rate(tmp_path / "no.csv") == {}
 
     def test_empty_csv_returns_empty(self, tmp_path):
-        p = tmp_path / "empty.csv"
-        p.write_text("col1,col2\n", encoding="utf-8")
-        assert csv_fill_rate(p) == {}
+        test_file = tmp_path / "empty.csv"
+        test_file.write_text("col1,col2\n", encoding="utf-8")
+        assert csv_fill_rate(test_file) == {}
 
 
 # =============================================================================
@@ -314,11 +314,11 @@ class TestCorpusRecord:
             post_id="p1",
             texts=["a", "b", "c"],
         )
-        r = repr(rec)
-        assert "subreddit_post" in r
-        assert "texts=3" in r
+        repr_str = repr(rec)
+        assert "subreddit_post" in repr_str
+        assert "texts=3" in repr_str
         # Only first 10 chars of hash shown
-        assert "abcdefghij" in r
+        assert "abcdefghij" in repr_str
 
 
 class TestCorpusLoader:
@@ -429,11 +429,11 @@ class TestFieldDefinition:
             source="base",
             patterns=[r"\d+"],
         )
-        r = repr(fd)
-        assert "age" in r
-        assert "base" in r
-        assert "medium" in r
-        assert "patterns=1" in r
+        repr_str = repr(fd)
+        assert "age" in repr_str
+        assert "base" in repr_str
+        assert "medium" in repr_str
+        assert "patterns=1" in repr_str
 
     def test_frozen(self):
         fd = FieldDefinition(
@@ -442,7 +442,7 @@ class TestFieldDefinition:
             confidence="medium",
             source="base",
         )
-        with pytest.raises(AttributeError):
+        with pytest.raises(Exception):  # Pydantic frozen raises ValidationError
             fd.name = "new_name"
 
 
@@ -475,14 +475,14 @@ class TestSchema:
 
     def test_to_dict(self):
         schema = Schema.from_file(EXT_SCHEMA)
-        d = schema.to_dict()
-        assert isinstance(d, dict)
-        assert "schema_id" in d
+        schema_dict = schema.to_dict()
+        assert isinstance(schema_dict, dict)
+        assert "schema_id" in schema_dict
 
     def test_repr(self):
         schema = Schema.from_file(EXT_SCHEMA)
-        r = repr(schema)
-        assert "covidlonghaulers_v1" in r
+        repr_str = repr(schema)
+        assert "covidlonghaulers_v1" in repr_str
 
     def test_extension_fields_have_patterns(self):
         schema = Schema.from_file(EXT_SCHEMA)
@@ -552,7 +552,7 @@ class TestSchemaFromMinimalFile:
 
 
 # =============================================================================
-# extractors — base class and argument building
+# extractors -- base class and argument building
 # =============================================================================
 
 class TestExtractorResult:
@@ -561,17 +561,17 @@ class TestExtractorResult:
         assert ExtractorResult(returncode=1, elapsed=1.0).ok is False
 
     def test_stdout_stderr_default_none(self):
-        r = ExtractorResult(returncode=0, elapsed=1.0)
-        assert r.stdout is None
-        assert r.stderr is None
+        extractor_result = ExtractorResult(returncode=0, elapsed=1.0)
+        assert extractor_result.stdout is None
+        assert extractor_result.stderr is None
 
     def test_stdout_stderr_populated(self):
-        r = ExtractorResult(
+        extractor_result = ExtractorResult(
             returncode=0, elapsed=1.0,
             stdout="output line\n", stderr="warning\n",
         )
-        assert r.stdout == "output line\n"
-        assert r.stderr == "warning\n"
+        assert extractor_result.stdout == "output line\n"
+        assert extractor_result.stderr == "warning\n"
 
 
 class TestExtractorError:
@@ -721,9 +721,9 @@ class TestBaseExtractorRepr:
             input_dir=tmp_path / "input",
             schema_path=tmp_path / "schema.json",
         )
-        r = repr(ext)
-        assert "BiomedicalExtractor" in r
-        assert "input" in r
+        repr_str = repr(ext)
+        assert "BiomedicalExtractor" in repr_str
+        assert "input" in repr_str
 
 
 class TestBaseExtractorCaptureOutput:
@@ -783,7 +783,7 @@ class TestBaseExtractorCaptureOutput:
 
 
 # =============================================================================
-# exporters — argument building
+# exporters -- argument building
 # =============================================================================
 
 class TestCSVExporterArgs:
@@ -835,7 +835,7 @@ class TestCodebookGeneratorArgs:
 
 
 # =============================================================================
-# pipeline — config and result
+# pipeline -- config and result
 # =============================================================================
 
 class TestPipelineConfig:
@@ -843,10 +843,23 @@ class TestPipelineConfig:
         cfg = PipelineConfig(schema_path=tmp_path / "s.json")
         assert cfg.start_at == 1
         assert cfg.run_llm is True
-        assert cfg.run_discovery is True
+        assert cfg.discovery_mode is None  # discovery off by default
         assert cfg.clean is True
         assert cfg.workers == 10
         assert cfg.temp_dir == cfg.input_dir / "temp"
+
+    def test_discovery_mode_validation(self, tmp_path):
+        """discovery_mode must be None, 'auto', or 'review'."""
+        # Valid values
+        cfg = PipelineConfig(schema_path=tmp_path / "s.json", discovery_mode="auto")
+        assert cfg.discovery_mode == "auto"
+        cfg = PipelineConfig(schema_path=tmp_path / "s.json", discovery_mode="review")
+        assert cfg.discovery_mode == "review"
+        cfg = PipelineConfig(schema_path=tmp_path / "s.json", discovery_mode=None)
+        assert cfg.discovery_mode is None
+        # Invalid value
+        with pytest.raises(ValueError, match="discovery_mode"):
+            PipelineConfig(schema_path=tmp_path / "s.json", discovery_mode="bad")
 
     def test_invalid_start_at(self, tmp_path):
         with pytest.raises(ValueError, match="start_at must be 1"):
@@ -1085,7 +1098,7 @@ class TestPipelineDiscoverySelection:
         pipeline = self._make_pipeline(tmp_path, "schema_a")
         pipeline.config.start_at = 4
         pipeline.config.run_llm = False
-        pipeline.config.run_discovery = False
+        pipeline.config.discovery_mode = None
         pipeline.config.clean = False
 
         phase4 = PhaseResult(phase=4, label="CSV export", ok=True, elapsed=0.01)
@@ -1255,7 +1268,7 @@ class TestQualitativeStandards:
 
 
 # =============================================================================
-# demographic_coder — DemographicCoder class
+# demographic_coder -- DemographicCoder class
 # =============================================================================
 
 class TestDemographicCoderArgs:
@@ -1306,8 +1319,8 @@ class TestDemographicCoderArgs:
 
     def test_repr(self, tmp_path):
         coder = DemographicCoder(input_dir=tmp_path / "data")
-        r = repr(coder)
-        assert "DemographicCoder" in r
+        repr_str = repr(coder)
+        assert "DemographicCoder" in repr_str
 
 
 class TestCodeDemographicsCodebook:
@@ -1417,8 +1430,8 @@ class TestCorpusRecordEdgeCases:
     def test_repr_truncates_short_hash(self):
         """repr should not crash when hash is shorter than 10 chars."""
         rec = CorpusRecord(author_hash="short", source="s", post_id=None, texts=[])
-        r = repr(rec)
-        assert "short" in r
+        repr_str = repr(rec)
+        assert "short" in repr_str
 
 
 class TestCorpusLoaderNoPostsFile:
@@ -1593,9 +1606,9 @@ class TestPipelineConfigRepr:
             schema_path=tmp_path / "my_schema.json",
             start_at=2,
         )
-        r = repr(cfg)
-        assert "my_schema.json" in r
-        assert "2" in r
+        repr_str = repr(cfg)
+        assert "my_schema.json" in repr_str
+        assert "2" in repr_str
 
 
 class TestFieldDiscoveryExplicitCandidates:

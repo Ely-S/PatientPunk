@@ -5,8 +5,8 @@ Corpus loading utilities.
 
 The PatientPunk corpus lives in a directory that may contain:
 
-* ``subreddit_posts.json``  — list of post objects scraped from a subreddit.
-* ``users/``                — directory of per-user history JSON files.
+* ``subreddit_posts.json``  -- list of post objects scraped from a subreddit.
+* ``users/``                -- directory of per-user history JSON files.
 
 This module provides a :class:`CorpusLoader` that abstracts over both sources
 and yields :class:`CorpusRecord` objects suitable for extraction.
@@ -21,39 +21,24 @@ Example
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
+
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
-# Data classes
+# Models
 # ---------------------------------------------------------------------------
 
-@dataclass
-class CorpusRecord:
-    """
-    A single unit of text ready for extraction.
-
-    Attributes
-    ----------
-    author_hash : str
-        SHA-256 hash of the Reddit username.
-    source : str
-        ``"subreddit_post"`` or ``"user_history"``.
-    post_id : str | None
-        Reddit post ID (only set for subreddit_post records).
-    texts : list[str]
-        Non-empty text segments (titles, bodies, comment bodies).
-    raw : dict
-        The original JSON object this record was built from.
-    """
+class CorpusRecord(BaseModel):
+    """A single unit of text ready for extraction."""
 
     author_hash: str
     source: str
     post_id: str | None
     texts: list[str]
-    raw: dict = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = Field(default_factory=dict, repr=False)
 
     @property
     def full_text(self) -> str:
@@ -168,7 +153,15 @@ class CorpusLoader:
         posts_file = self.input_dir / "subreddit_posts.json"
         if not posts_file.exists():
             return
-        posts = json.loads(posts_file.read_text(encoding="utf-8"))
+        try:
+            posts = json.loads(posts_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            import sys
+            print(
+                f"Warning: skipping {posts_file.name}: {exc}",
+                file=sys.stderr,
+            )
+            return
         for post in posts:
             texts = self._texts_from_post(post)
             yield CorpusRecord(
@@ -219,9 +212,9 @@ class CorpusLoader:
         if body and body not in ("[removed]", "[deleted]"):
             texts.append(body)
         for comment in post.get("comments", []):
-            cb = (comment.get("body") or "").strip()
-            if cb and cb not in ("[removed]", "[deleted]"):
-                texts.append(cb)
+            comment_body = (comment.get("body") or "").strip()
+            if comment_body and comment_body not in ("[removed]", "[deleted]"):
+                texts.append(comment_body)
         return texts
 
     @staticmethod
@@ -236,7 +229,7 @@ class CorpusLoader:
             if body and body not in ("[removed]", "[deleted]"):
                 texts.append(body)
         for comment in user.get("comments", []):
-            cb = (comment.get("body") or "").strip()
-            if cb and cb not in ("[removed]", "[deleted]"):
-                texts.append(cb)
+            comment_body = (comment.get("body") or "").strip()
+            if comment_body and comment_body not in ("[removed]", "[deleted]"):
+                texts.append(comment_body)
         return texts

@@ -39,7 +39,7 @@ class ExtractorResult:
     Attributes
     ----------
     returncode : int
-        Process exit code — 0 indicates success.
+        Process exit code -- 0 indicates success.
     elapsed : float
         Wall-clock seconds the subprocess ran.
     args : list[str]
@@ -90,8 +90,8 @@ class BaseExtractor(ABC):
     Each extractor wraps one executable script in ``scripts/`` via subprocess.
     Subclasses must set two things:
 
-    1. ``_SCRIPT`` — the filename of the script in ``scripts/`` to delegate to.
-    2. ``_build_args()`` — return the CLI arguments for that script.
+    1. ``_SCRIPT`` -- the filename of the script in ``scripts/`` to delegate to.
+    2. ``_build_args()`` -- return the CLI arguments for that script.
 
     Example subclass::
 
@@ -132,10 +132,9 @@ class BaseExtractor(ABC):
         self.schema_path = Path(schema_path) if schema_path else None
         self.temp_dir = Path(temp_dir) if temp_dir else self.input_dir / "temp"
 
-        # Resolve the script path relative to the variable_extraction root.
-        self._script_path: Path = (
-            Path(__file__).parent.parent.parent / "scripts" / self._SCRIPT
-        )
+        # Resolve the script path relative to PACKAGE_ROOT.
+        from .._utils import PACKAGE_ROOT
+        self._script_path: Path = PACKAGE_ROOT / "scripts" / self._SCRIPT
 
     # ------------------------------------------------------------------
     # Public interface
@@ -199,7 +198,7 @@ class BaseExtractor(ABC):
     def _build_args(self) -> list[str]:
         """
         Return the *extra* CLI arguments for this extractor (not including
-        the interpreter or the script path — those are added automatically).
+        the interpreter or the script path -- those are added automatically).
         """
 
     # ------------------------------------------------------------------

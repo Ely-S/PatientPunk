@@ -1,26 +1,26 @@
 """
 Tests for PatientPunk extraction pipeline utilities.
 
-No API calls are made — all tests cover pure functions only.
+No API calls are made -- all tests cover pure functions only.
 All imports come from ``scripts/discover_fields.py`` because the library
 wrappers launch those executable modules directly.
 
 Test sections
 -------------
-TestParseJsonResponse       parse_json_response() — extract valid JSON from
+TestParseJsonResponse       parse_json_response() -- extract valid JSON from
                             raw LLM output that may include markdown fences,
                             prose preamble, or trailing text.
 
-TestPatternsAgainstExamples evaluate_patterns() — run compiled regex patterns
+TestPatternsAgainstExamples evaluate_patterns() -- run compiled regex patterns
                             against example texts and return a hit/miss report.
                             Used in Phase 3 Stage 2 to validate Sonnet-generated
                             patterns before committing them to the schema.
 
 TestCollectTexts            collect_texts_from_post() / collect_texts_from_user()
-                            — extract non-empty text segments from raw JSON
+                            -- extract non-empty text segments from raw JSON
                             post and user-history objects.
 
-TestMergeIntoSchema         merge_into_schema() — merge a list of newly
+TestMergeIntoSchema         merge_into_schema() -- merge a list of newly
                             discovered field dicts into an existing extension
                             schema without overwriting existing fields.
 
@@ -107,7 +107,7 @@ class TestParseJsonResponse:
 
     def test_integer_json_returns_none(self):
         # A bare integer is valid JSON but not a useful LLM response object
-        # (behaviour depends on implementation — just verify it doesn't crash)
+        # (behaviour depends on implementation -- just verify it doesn't crash)
         result = parse_json_response("42")
         # Either None or the integer 42; the key contract is no exception
         assert result is None or result == 42
@@ -259,7 +259,7 @@ class TestCollectTexts:
         }
         texts = collect_texts_from_post(post)
         assert "My post" in texts
-        # [removed] is included at this level — CorpusLoader filters it later
+        # [removed] is included at this level -- CorpusLoader filters it later
         assert "[removed]" in texts
         assert "I have the same issue" in texts
         # Empty comment body should not appear
@@ -425,7 +425,7 @@ class TestMergeIntoSchema:
 
 
 # =============================================================================
-# Schema pattern smoke tests — loads the real schema file and checks patterns
+# Schema pattern smoke tests -- loads the real schema file and checks patterns
 # compile and match their embedded example values
 # =============================================================================
 

@@ -1,7 +1,9 @@
-# DEPRECATED — Reference Only
+# DEPRECATED -- Reference Only
 
-> **Do not add new code here. Do not call these scripts directly.**
-> This folder will likely be deleted before the project is complete.
+> **Nothing in the codebase imports or calls these files.**
+> **Do not add new code here. Do not modify these files.**
+> They exist solely as historical reference. If you are reviewing
+> this repo, skip this directory entirely.
 
 These are the original flat scripts from before the `patientpunk/` library was
 introduced. All active logic has been moved to `scripts/`. These copies exist
