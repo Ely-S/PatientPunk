@@ -64,7 +64,7 @@ def to_epoch(ts: str | int | None) -> int | None:
     if isinstance(ts, int):
         return ts
     try:
-        return int(datetime.fromisoformat(ts).timestamp())
+        return int(datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp())
     except (ValueError, TypeError):
         return None
 
