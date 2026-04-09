@@ -73,12 +73,13 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import MODEL_FAST, get_llm_client
+from patientpunk._utils import MODEL_FAST, get_llm_client, split_retry_batch
 MODEL = MODEL_FAST
 MAX_TOKENS = 4096
 MAX_TEXT_CHARS = 30_000
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
+BATCH_SIZE = 5      # records per LLM call (larger text per record → smaller batch)
 
 # Subreddits known to contain health/chronic illness content.
 # Text from these is prioritised when building the per-record prompt so the
@@ -479,21 +480,132 @@ def _process_one(
         prompt = system_prompt
 
     user_message = build_user_message(texts)
-    raw = call_haiku(client, prompt, user_message)
-    parsed = parse_json_response(raw)
 
-    if parsed is None:
-        return {"_failed": True, "author_hash": author_hash, "post_id": post_id}
+    # Return prepared item for batching instead of calling LLM here
+    return {
+        "_ready": True,
+        "user_message": user_message,
+        "prompt": prompt,
+        "source": source,
+        "author_hash": author_hash,
+        "post_id": post_id,
+        "text_count": len(texts),
+        "schema": schema,
+    }
 
-    record = build_llm_record(
-        llm_output=parsed,
-        source=source,
-        author_hash=author_hash,
-        text_count=len(texts),
-        schema=schema,
-        post_id=post_id,
+
+def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]:
+    """Send multiple records in one API call. Returns list of parsed dicts.
+
+    Each item must have key 'user_message' with the per-record text.
+    """
+    msg = (
+        "Extract biomedical information from the following patient-authored records. "
+        "Each record is by a DIFFERENT author.\n\n"
+        "Return a JSON array with one result object per record, in the same order. "
+        "Each object should have 'fields' and 'suggested_fields' as specified.\n\n"
     )
-    return record
+    for i, item in enumerate(items, 1):
+        # Strip the instruction prefix from each user_message to avoid repeating it
+        text = item["user_message"]
+        if text.startswith("Extract biomedical"):
+            text = text.split("\n\n", 1)[-1]
+        msg += f"--- Record {i} ---\n{text}\n\n"
+
+    raw = call_haiku(client, system_prompt, msg)
+
+    # Try to parse as JSON array
+    raw = raw.strip()
+    if raw.startswith("```"):
+        first_nl = raw.index("\n")
+        raw = raw[first_nl + 1:]
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+
+    results = json.loads(raw)
+    if not isinstance(results, list):
+        raise ValueError(f"Expected JSON array, got {type(results).__name__}")
+    if len(results) != len(items):
+        raise ValueError(f"Expected {len(items)} results, got {len(results)}")
+    return results
+
+
+def _process_batch(
+    batch_items: list[tuple],
+    client: anthropic.Anthropic,
+    system_prompt: str,
+    gap_system_prompt_fn,
+    schema: dict | None,
+    regex_index: dict,
+    field_names: list[str],
+    skip_threshold: float,
+    focus_gaps: bool,
+) -> list[dict]:
+    """Process a batch of work items. Pre-filters, then sends ready items
+    to the LLM in a single multi-item call."""
+
+    # Phase 1: prepare each item (text collection, skip checks)
+    prepared = []
+    for item_type, item in batch_items:
+        result = _process_one(
+            item_type, item, client, system_prompt, gap_system_prompt_fn,
+            schema, regex_index, field_names, skip_threshold, focus_gaps,
+        )
+        prepared.append((item_type, item, result))
+
+    # Phase 2: separate ready items from skipped/failed
+    ready_indices = []
+    ready_items = []
+    output = [None] * len(batch_items)
+
+    for i, (item_type, item, result) in enumerate(prepared):
+        if result is not None and result.get("_ready"):
+            ready_indices.append(i)
+            ready_items.append(result)
+        else:
+            output[i] = result  # skipped or failed
+
+    if not ready_items:
+        return [o for o in output]
+
+    # Phase 3: batch LLM call with split-retry
+    # Group by prompt (most will share system_prompt, gap prompts differ)
+    prompt_groups: dict[str, list[tuple[int, dict]]] = defaultdict(list)
+    for idx, item in zip(ready_indices, ready_items):
+        prompt_groups[item["prompt"]].append((idx, item))
+
+    for prompt, group in prompt_groups.items():
+        indices = [idx for idx, _ in group]
+        items = [item for _, item in group]
+
+        def call_fn(sub_items, _prompt=prompt):
+            return _call_batch_raw(client, _prompt, sub_items)
+
+        try:
+            raw_results = split_retry_batch(call_fn, items)
+        except Exception:
+            # Total failure — mark all as failed
+            for idx, item in zip(indices, items):
+                output[idx] = {"_failed": True, "author_hash": item["author_hash"],
+                               "post_id": item["post_id"]}
+            continue
+
+        for idx, item, parsed in zip(indices, items, raw_results):
+            if parsed is None or not isinstance(parsed, dict):
+                output[idx] = {"_failed": True, "author_hash": item["author_hash"],
+                               "post_id": item["post_id"]}
+            else:
+                record = build_llm_record(
+                    llm_output=parsed,
+                    source=item["source"],
+                    author_hash=item["author_hash"],
+                    text_count=item["text_count"],
+                    schema=item["schema"],
+                    post_id=item["post_id"],
+                )
+                output[idx] = record
+
+    return output
 
 
 def process_corpus(
@@ -574,7 +686,12 @@ def process_corpus(
 
     total = len(work_items)
     already_done = len(records)
-    print(f"Processing {total} remaining items with {workers} workers...\n")
+
+    # Chunk into batches
+    batches = [work_items[i:i + BATCH_SIZE] for i in range(0, total, BATCH_SIZE)]
+    n_batches = len(batches)
+    print(f"Processing {total} remaining items in {n_batches} batches "
+          f"(batch size {BATCH_SIZE}) with {workers} workers...\n")
 
     completed = 0
     skipped = 0
@@ -587,61 +704,59 @@ def process_corpus(
             json.dump(records, f, ensure_ascii=False, indent=2)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        future_to_label = {}
-        for item_type, item in work_items:
-            if item_type == "user":
-                label = f"user/{item.stem[:12]}"
-            else:
-                label = f"post/{item.get('post_id', '?')}"
-
+        future_to_batch_idx = {}
+        for batch_idx, batch in enumerate(batches):
             future = executor.submit(
-                _process_one,
-                item_type, item,
+                _process_batch,
+                batch,
                 client, system_prompt, gap_system_prompt_fn,
                 schema, regex_index or {}, field_names,
                 skip_threshold, focus_gaps,
             )
-            future_to_label[future] = label
+            future_to_batch_idx[future] = batch_idx
 
-        for future in as_completed(future_to_label):
-            label = future_to_label[future]
-            completed += 1
+        for future in as_completed(future_to_batch_idx):
+            batch_idx = future_to_batch_idx[future]
 
             try:
-                result = future.result()
+                batch_results = future.result()
             except Exception as exc:
                 with print_lock:
-                    print(f"  [{completed}/{total}] {label} - ERROR: {exc}")
-                failed += 1
+                    print(f"  [batch {batch_idx+1}/{n_batches}] ERROR: {exc}")
+                failed += BATCH_SIZE
+                completed += BATCH_SIZE
                 continue
 
-            if result is None or result.get("_failed"):
-                with print_lock:
-                    print(f"  [{completed}/{total}] {label} - PARSE FAILED")
-                failed += 1
-                continue
+            for result in batch_results:
+                completed += 1
 
-            if result.get("_skipped"):
-                reason = result.get("reason", "?")
-                skipped += 1
-                with print_lock:
-                    print(f"  [{completed}/{total}] {label} - skipped ({reason})")
-                continue
+                if result is None or result.get("_failed"):
+                    with print_lock:
+                        ah = result.get("author_hash", "?") if result else "?"
+                        print(f"  [{completed}/{total}] {ah[:12]} - PARSE FAILED")
+                    failed += 1
+                    continue
 
-            with save_lock:
-                records.append(result)
-                for suggestion in result.get("suggested_fields", []):
-                    suggestion["_from_record"] = (result["record_meta"].get("author_hash") or "unknown")[:12]
-                    all_suggestions.append(suggestion)
+                if result.get("_skipped"):
+                    reason = result.get("reason", "?")
+                    skipped += 1
+                    continue
 
-                n_fields = sum(1 for v in result.get("fields", {}).values() if v is not None)
-                n_suggestions = len(result.get("suggested_fields", []))
+                with save_lock:
+                    records.append(result)
+                    for suggestion in result.get("suggested_fields", []):
+                        suggestion["_from_record"] = (result["record_meta"].get("author_hash") or "unknown")[:12]
+                        all_suggestions.append(suggestion)
 
-                with print_lock:
-                    print(f"  [{completed}/{total}] {label} - {n_fields} fields, {n_suggestions} suggestions")
+                    n_fields = sum(1 for v in result.get("fields", {}).values() if v is not None)
+                    n_suggestions = len(result.get("suggested_fields", []))
 
-                if len(records) % SAVE_EVERY_N == 0:
-                    save_incremental()
+                    with print_lock:
+                        ah = result["record_meta"].get("author_hash", "?")[:12]
+                        print(f"  [{completed}/{total}] {ah} - {n_fields} fields, {n_suggestions} suggestions")
+
+                    if len(records) % SAVE_EVERY_N == 0:
+                        save_incremental()
 
     # Final save
     save_incremental()

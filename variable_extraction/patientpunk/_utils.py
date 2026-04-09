@@ -93,6 +93,58 @@ def get_llm_client():
     return anthropic.Anthropic(**kwargs)
 
 
+def split_retry_batch(
+    call_fn,
+    items: list,
+    max_depth: int = 2,
+    _depth: int = 0,
+) -> list:
+    """Call *call_fn* with a batch of items; on parse failure split and retry.
+
+    This implements Polina's recursive split pattern for multi-item LLM calls:
+    1. Try the full batch → expect a list with len == len(items)
+    2. On ValueError / JSONDecodeError (wrong count, bad JSON):
+       split in half and recurse
+    3. At max depth or single item: call individually and collect results
+
+    Parameters
+    ----------
+    call_fn : callable(list) -> list
+        Function that sends items to the LLM and returns a list of results.
+        Must raise ValueError or json.JSONDecodeError on parse failure.
+    items : list
+        Batch of work items (records, texts, etc.)
+    max_depth : int
+        Maximum recursion depth before falling back to individual calls.
+
+    Returns
+    -------
+    list of results, same length as *items*, in the same order.
+    """
+    try:
+        results = call_fn(items)
+        if len(results) != len(items):
+            raise ValueError(
+                f"Expected {len(items)} results, got {len(results)}"
+            )
+        return results
+    except (ValueError, json.JSONDecodeError):
+        if _depth >= max_depth or len(items) <= 1:
+            # Fall back to individual calls
+            individual = []
+            for item in items:
+                try:
+                    r = call_fn([item])
+                    individual.append(r[0])
+                except Exception:
+                    individual.append(None)
+            return individual
+        mid = len(items) // 2
+        left = split_retry_batch(call_fn, items[:mid], max_depth, _depth + 1)
+        right = split_retry_batch(call_fn, items[mid:], max_depth, _depth + 1)
+        return left + right
+
+
 def load_json(path: Path) -> dict | list | None:
     """Load a JSON file, returning *None* on any filesystem or parse error."""
     try:

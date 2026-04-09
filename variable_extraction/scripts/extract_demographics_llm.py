@@ -50,13 +50,14 @@ load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variab
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
 
-from patientpunk._utils import MODEL_FAST
+from patientpunk._utils import MODEL_FAST, split_retry_batch
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
 # the first MAX_CHARS characters, which usually covers enough posts to
 # capture repeated self-mentions of age/sex.
 MAX_CHARS = 8000
+BATCH_SIZE = 10  # records per LLM call
 
 SYSTEM_PROMPT = f"""\
 You are a demographic data extractor for a medical research project about long COVID.
@@ -129,10 +130,8 @@ def build_text(record: dict, source_type: str, max_chars: int = MAX_CHARS) -> st
     return text
 
 
-def call_haiku(client: anthropic.Anthropic, author_hash: str,
-               source_type: str, text: str) -> dict:
-    """Single API call. Returns a result dict."""
-    base = {
+def _make_empty_result(author_hash: str, source_type: str, evidence: str = "") -> dict:
+    return {
         "author_hash": author_hash,
         "source_type": source_type,
         "age": None,
@@ -140,58 +139,106 @@ def call_haiku(client: anthropic.Anthropic, author_hash: str,
         "location_country": None,
         "location_state": None,
         "confidence": "none",
-        "evidence": "",
+        "evidence": evidence,
     }
 
-    if not text.strip():
-        base["evidence"] = "no text content"
-        return base
 
-    user_msg = (
-        "Extract demographic information from the following Reddit "
-        f"post(s) by a single author:\n\n{text}"
+def _strip_markdown_fences(raw: str) -> str:
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        raw = "\n".join(
+            l for l in lines
+            if not l.strip().startswith("```") and not l.strip() == "json"
+        )
+    return raw
+
+
+def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
+    """Send multiple records in one API call. Returns list of parsed dicts.
+
+    Each item in *items* must have keys: author_hash, source_type, text.
+    Raises ValueError if the response array length doesn't match.
+    """
+    # Build numbered prompt
+    msg = (
+        "Extract demographic information from the following Reddit records. "
+        "Each record is by a DIFFERENT author.\n\n"
+        "Return a JSON array with one result object per record, in the same "
+        "order. Each object has: age, sex_gender, location_country, "
+        "location_state, confidence, evidence.\n\n"
     )
+    for i, item in enumerate(items, 1):
+        msg += f"--- Record {i} ---\n{item['text']}\n\n"
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=len(items) * 300,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": msg}],
+    )
+    raw = _strip_markdown_fences(response.content[0].text.strip())
+    results = json.loads(raw)
+    if not isinstance(results, list):
+        raise ValueError(f"Expected JSON array, got {type(results).__name__}")
+    if len(results) != len(items):
+        raise ValueError(f"Expected {len(items)} results, got {len(results)}")
+    return results
+
+
+def process_batch(client, batch: list[tuple], max_chars=MAX_CHARS) -> list[dict]:
+    """Process a batch of (record, source_type) tuples via multi-item LLM call.
+
+    Uses split_retry_batch for automatic retry on parse failures.
+    """
+    # Prepare items with text
+    items = []
+    for record, source_type in batch:
+        author_hash = record.get("author_hash", "unknown")
+        text = build_text(record, source_type, max_chars=max_chars)
+        items.append({
+            "author_hash": author_hash,
+            "source_type": source_type,
+            "text": text,
+        })
+
+    # Skip-empty items (no text)
+    non_empty_indices = [i for i, it in enumerate(items) if it["text"].strip()]
+    if not non_empty_indices:
+        return [_make_empty_result(it["author_hash"], it["source_type"], "no text content")
+                for it in items]
+
+    non_empty_items = [items[i] for i in non_empty_indices]
+
+    def call_fn(sub_items):
+        return _call_haiku_batch_raw(client, sub_items)
 
     try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=300,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        raw = response.content[0].text.strip()
-
-        # Strip accidental markdown code fences
-        if raw.startswith("```"):
-            lines = raw.splitlines()
-            raw = "\n".join(
-                l for l in lines
-                if not l.strip().startswith("```") and not l.strip() == "json"
-            )
-
-        data = json.loads(raw)
-        base.update({
-            "age": data.get("age"),
-            "sex_gender": data.get("sex_gender"),
-            "location_country": data.get("location_country"),
-            "location_state": data.get("location_state"),
-            "confidence": data.get("confidence", "low"),
-            "evidence": str(data.get("evidence", ""))[:200],
-        })
-    except json.JSONDecodeError as e:
-        base["confidence"] = "parse_error"
-        base["evidence"] = f"JSON parse error: {e} | raw: {raw[:80]}"
+        raw_results = split_retry_batch(call_fn, non_empty_items)
     except Exception as e:
-        base["confidence"] = "error"
-        base["evidence"] = str(e)[:120]
+        # Total failure — return error results
+        return [_make_empty_result(it["author_hash"], it["source_type"], f"batch error: {e}")
+                for it in items]
 
-    return base
-
-
-def process_record(client, record, source_type, max_chars=MAX_CHARS):
-    author_hash = record.get("author_hash", "unknown")
-    text = build_text(record, source_type, max_chars=max_chars)
-    return call_haiku(client, author_hash, source_type, text)
+    # Map results back, filling in empties
+    output = [_make_empty_result(it["author_hash"], it["source_type"], "no text content")
+              for it in items]
+    for idx, raw in zip(non_empty_indices, raw_results):
+        it = items[idx]
+        result = _make_empty_result(it["author_hash"], it["source_type"])
+        if raw is not None and isinstance(raw, dict):
+            result.update({
+                "age": raw.get("age"),
+                "sex_gender": raw.get("sex_gender"),
+                "location_country": raw.get("location_country"),
+                "location_state": raw.get("location_state"),
+                "confidence": raw.get("confidence", "low"),
+                "evidence": str(raw.get("evidence", ""))[:200],
+            })
+        else:
+            result["confidence"] = "error"
+            result["evidence"] = "failed to parse after retries"
+        output[idx] = result
+    return output
 
 
 def main():
@@ -267,31 +314,40 @@ Examples:
         else:
             print(f"  Warning: {users_dir} not found - skipping user histories")
 
-    print(f"\nProcessing {len(work_items)} records with {args.workers} workers...\n")
+    # Chunk work items into batches
+    batches = [
+        work_items[i:i + BATCH_SIZE]
+        for i in range(0, len(work_items), BATCH_SIZE)
+    ]
+    n_batches = len(batches)
+    print(
+        f"\nProcessing {len(work_items)} records in {n_batches} batches "
+        f"(batch size {BATCH_SIZE}) with {args.workers} workers...\n"
+    )
 
     results = []
-    n = len(work_items)
     completed = 0
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        future_to_item = {
-            executor.submit(process_record, client, rec, src, max_chars): (rec, src)
-            for rec, src in work_items
+        future_to_batch = {
+            executor.submit(process_batch, client, batch, max_chars): batch
+            for batch in batches
         }
-        for future in as_completed(future_to_item):
-            result = future.result()
-            results.append(result)
+        for future in as_completed(future_to_batch):
+            batch_results = future.result()
+            results.extend(batch_results)
             completed += 1
 
-            age_str = str(result["age"]) if result["age"] is not None else "-"
-            sex_str = result["sex_gender"] or "-"
-            loc_str = result["location_country"] or "-"
-            src_short = "post" if result["source_type"] == "subreddit_post" else "user"
-            hash_short = (result["author_hash"] or "unknown")[:10]
-            print(
-                f"  [{completed:3d}/{n}] {src_short} {hash_short}..."
-                f"  age={age_str:<4} sex={sex_str:<12} loc={loc_str}"
-            )
+            for result in batch_results:
+                age_str = str(result["age"]) if result["age"] is not None else "-"
+                sex_str = result["sex_gender"] or "-"
+                loc_str = result["location_country"] or "-"
+                src_short = "post" if result["source_type"] == "subreddit_post" else "user"
+                hash_short = (result["author_hash"] or "unknown")[:10]
+                print(
+                    f"  [batch {completed}/{n_batches}] {src_short} {hash_short}..."
+                    f"  age={age_str:<4} sex={sex_str:<12} loc={loc_str}"
+                )
 
     # Sort: subreddit posts first, then user histories; within each by author_hash
     results.sort(key=lambda r: (0 if r["source_type"] == "subreddit_post" else 1,
