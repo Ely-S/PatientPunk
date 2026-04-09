@@ -60,6 +60,12 @@ def categorize_sentiment(score: float) -> str:
 SENTIMENT_CATEGORIES = ["positive", "mixed", "neutral", "negative"]
 
 
+def _safe_exp(value: float) -> float:
+    """Exponentiate a log-scale coefficient without emitting overflow warnings."""
+    clipped = float(np.clip(value, -700, 700))
+    return float(np.exp(clipped))
+
+
 # ── Wilson score confidence interval ──────────────────────────────────────────
 
 def wilson_ci(n_successes: int, n_total: int, z: float = 1.96) -> tuple[float, float]:
@@ -96,18 +102,18 @@ def get_user_sentiment(
         n_posts         int   number of posts/comments contributing
         category        str   categorized sentiment of avg_sentiment
     """
-    params: list = [drug]
-    condition_join = ""
     condition_clause = ""
     sex_clause = ""
     age_clause = ""
 
     if condition:
-        condition_join = """
-            JOIN conditions c ON c.user_id = tr.user_id
+        condition_clause = """
+            AND EXISTS (
+                SELECT 1 FROM conditions c
+                WHERE c.user_id = tr.user_id
+                AND LOWER(c.condition_name) LIKE LOWER(?)
+            )
         """
-        condition_clause = "AND LOWER(c.condition_name) LIKE LOWER(?)"
-        params.append(f"%{condition}%")
 
     if sex:
         sex_clause = """
@@ -117,7 +123,6 @@ def get_user_sentiment(
                 AND LOWER(up.sex) = LOWER(?)
             )
         """
-        params.append(sex)
 
     if age_bucket:
         age_clause = """
@@ -127,7 +132,6 @@ def get_user_sentiment(
                 AND up.age_bucket = ?
             )
         """
-        params.append(age_bucket)
 
     sql = f"""
         SELECT
@@ -136,21 +140,16 @@ def get_user_sentiment(
             COUNT(*)            AS n_posts
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
-        {condition_join}
         WHERE t.canonical_name = ? COLLATE NOCASE
         {condition_clause}
         {sex_clause}
         {age_clause}
         GROUP BY tr.user_id
     """
-    # drug param comes after condition param in the WHERE clause
-    # rebuild params in SQL order: condition (if join), then drug, then condition clause, sex, age
     ordered_params: list = []
+    ordered_params.append(drug)
     if condition:
-        ordered_params.append(drug)
         ordered_params.append(f"%{condition}%")
-    else:
-        ordered_params.append(drug)
     if sex:
         ordered_params.append(sex)
     if age_bucket:
@@ -244,6 +243,27 @@ def _count_categories(series: pd.Series) -> dict[str, int]:
     return {cat: counts.get(cat, 0) for cat in SENTIMENT_CATEGORIES}
 
 
+def _mann_whitney_effect_size(scores_a: pd.Series, scores_b: pd.Series, p_value: float) -> float:
+    """Return signed Mann-Whitney r using the larger-median group for direction."""
+    total_n = len(scores_a) + len(scores_b)
+    if total_n == 0 or p_value >= 1.0:
+        return 0.0
+
+    z = sp_stats.norm.ppf(1 - p_value / 2)
+    if not np.isfinite(z):
+        return 0.0
+
+    median_a = float(scores_a.median())
+    median_b = float(scores_b.median())
+    direction = 0.0
+    if median_a > median_b:
+        direction = 1.0
+    elif median_a < median_b:
+        direction = -1.0
+
+    return direction * (abs(float(z)) / math.sqrt(total_n))
+
+
 def run_comparison(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
@@ -265,9 +285,7 @@ def run_comparison(
 
     # ── Mann-Whitney U ────────────────────────────────────────────────────────
     mw_stat, mw_p = sp_stats.mannwhitneyu(scores_a, scores_b, alternative="two-sided")
-    # Effect size r = Z / sqrt(N) where Z is the normal approximation
-    z = sp_stats.norm.ppf(1 - mw_p / 2)
-    mw_r = abs(z) / math.sqrt(n_a + n_b)
+    mw_r = _mann_whitney_effect_size(scores_a, scores_b, float(mw_p))
 
     # ── Contingency table ─────────────────────────────────────────────────────
     counts_a = _count_categories(df_a["category"])
@@ -286,27 +304,42 @@ def run_comparison(
     #   - fewer than 3 active categories (not enough for chi-square)
     #   - any observed cell is 0
     #   - any expected cell < 5
+    comparison_warnings = list(size_check.warnings)
     has_zero_observed = any(cell == 0 for row in observed for cell in row)
-    if len(active_cats) < 3 or has_zero_observed:
-        use_fisher = True
-        chi2_stat, chi2_p, expected = None, None, None
-    else:
+
+    if len(active_cats) >= 2:
         chi2_stat, chi2_p, _, expected = sp_stats.chi2_contingency(observed)
-        use_fisher = any(cell < 5 for row in expected for cell in row)
+        use_fisher = len(active_cats) == 2 and (
+            has_zero_observed or any(cell < 5 for row in expected for cell in row)
+        )
+        if len(active_cats) > 2 and any(cell < 5 for row in expected for cell in row):
+            comparison_warnings.append(
+                "Categorical comparison uses chi-square with sparse cells; interpret cautiously."
+            )
+    else:
+        chi2_stat, chi2_p, expected = None, None, None
+        use_fisher = True
 
     if use_fisher:
-        # Collapse to 2×2: positive vs non-positive
-        pos_a = counts_a["positive"]
-        pos_b = counts_b["positive"]
-        not_pos_a = n_a - pos_a
-        not_pos_b = n_b - pos_b
-        _, fisher_p = sp_stats.fisher_exact([[pos_a, not_pos_a], [pos_b, not_pos_b]])
-        # Laplace-smoothed odds ratio as effect size
-        odds_ratio = ((pos_a + 0.5) * (not_pos_b + 0.5)) / ((not_pos_a + 0.5) * (pos_b + 0.5))
+        fisher_table = observed if len(active_cats) == 2 else [
+            [counts_a["positive"], n_a - counts_a["positive"]],
+            [counts_b["positive"], n_b - counts_b["positive"]],
+        ]
+        odds_ratio_raw, fisher_p = sp_stats.fisher_exact(fisher_table)
+        if len(active_cats) == 2:
+            a00, a01 = fisher_table[0]
+            b00, b01 = fisher_table[1]
+            odds_ratio = ((a00 + 0.5) * (b01 + 0.5)) / ((a01 + 0.5) * (b00 + 0.5))
+        else:
+            pos_a = counts_a["positive"]
+            pos_b = counts_b["positive"]
+            not_pos_a = n_a - pos_a
+            not_pos_b = n_b - pos_b
+            odds_ratio = ((pos_a + 0.5) * (not_pos_b + 0.5)) / ((not_pos_a + 0.5) * (pos_b + 0.5))
         cat_name = "Fisher's exact"
         cat_stat = None
         cat_p = fisher_p
-        cat_effect = round(odds_ratio, 3)
+        cat_effect = round(float(odds_ratio if np.isfinite(odds_ratio_raw) else odds_ratio), 3)
     else:
         # Cramér's V as effect size
         n_total = n_a + n_b
@@ -331,7 +364,7 @@ def run_comparison(
         counts_b=counts_b,
         n_a=n_a,
         n_b=n_b,
-        warnings=size_check.warnings,
+        warnings=comparison_warnings,
     )
 
 
@@ -543,6 +576,7 @@ def run_logit(
     and warnings if the model fails to converge (e.g., perfect separation).
     """
     import statsmodels.api as sm
+    from statsmodels.tools.sm_exceptions import HessianInversionWarning, PerfectSeparationWarning
 
     df = _build_logit_features(conn, drug, predictor_names)
     if df is None or len(df) < 10:
@@ -610,7 +644,9 @@ def run_logit(
 
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", category=PerfectSeparationWarning)
+            warnings.simplefilter("ignore", category=HessianInversionWarning)
+            warnings.simplefilter("ignore", category=RuntimeWarning)
             logit_model = sm.Logit(y, X)
             fit = logit_model.fit(disp=0, maxiter=100)
     except Exception as e:
@@ -620,6 +656,11 @@ def run_logit(
             converged=False,
             warnings=[f"Model failed to fit: {e}"],
         )
+    converged = bool(fit.mle_retvals.get("converged", False) if hasattr(fit, "mle_retvals") else True)
+    if not converged:
+        result_warnings.append("Logistic regression did not fully converge.")
+    if not np.isfinite(fit.llnull):
+        result_warnings.append("Baseline log-likelihood is non-finite; model fit is unstable.")
 
     # Extract results per predictor (skip 'const')
     pred_results = []
@@ -632,9 +673,9 @@ def run_logit(
         pred_results.append(LogitPredictor(
             name=pred,
             coefficient=round(float(coef), 3),
-            odds_ratio=round(float(np.exp(coef)), 3),
-            ci_lower=round(float(np.exp(ci_lo)), 3),
-            ci_upper=round(float(np.exp(ci_hi)), 3),
+            odds_ratio=round(_safe_exp(float(coef)), 3),
+            ci_lower=round(_safe_exp(float(ci_lo)), 3),
+            ci_upper=round(_safe_exp(float(ci_hi)), 3),
             p_value=round(float(fit.pvalues[pred]), 4),
             significant=float(fit.pvalues[pred]) < 0.05,
         ))
@@ -645,7 +686,7 @@ def run_logit(
         aic=round(float(fit.aic), 1),
         n_obs=int(fit.nobs),
         n_events=n_events,
-        converged=bool(fit.mle_retvals.get("converged", False) if hasattr(fit, "mle_retvals") else True),
+        converged=converged,
         warnings=result_warnings,
     )
 
@@ -737,13 +778,18 @@ def run_ols(
     X = sm.add_constant(model_df[available_predictors].astype(float))
 
     try:
-        fit = sm.OLS(y, X).fit()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            fit = sm.OLS(y, X).fit()
     except Exception as e:
         return OLSResult(
             predictors=[], r_squared=0.0, adj_r_squared=0.0,
             f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
             warnings=[f"OLS failed to fit: {e}"],
         )
+
+    if not np.isfinite(fit.fvalue):
+        result_warnings.append("OLS F-statistic is non-finite; model fit is unstable.")
 
     # Extract per-predictor results
     pred_results = []
@@ -898,7 +944,10 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         return None
 
     df = pd.DataFrame(rows, columns=["post_date", "sentiment"])
-    df["post_date"] = pd.to_datetime(df["post_date"], unit="s", errors="coerce")
+    numeric_dates = pd.to_numeric(df["post_date"], errors="coerce")
+    parsed_numeric = pd.to_datetime(numeric_dates, unit="s", errors="coerce", utc=True)
+    parsed_generic = pd.to_datetime(df["post_date"], errors="coerce", utc=True)
+    df["post_date"] = parsed_numeric.fillna(parsed_generic).dt.tz_localize(None)
     df = df.dropna(subset=["post_date"])
     if df.empty:
         return None
@@ -979,6 +1028,14 @@ class SurvivalResult:
     warnings: list[str] = field(default_factory=list)
 
 
+def _parse_mixed_datetimes(values: pd.Series) -> pd.Series:
+    """Parse epoch-second or ISO-style datetimes into naive timestamps."""
+    numeric_dates = pd.to_numeric(values, errors="coerce")
+    parsed_numeric = pd.to_datetime(numeric_dates, unit="s", errors="coerce", utc=True)
+    parsed_generic = pd.to_datetime(values, errors="coerce", utc=True)
+    return parsed_numeric.fillna(parsed_generic).dt.tz_localize(None)
+
+
 def _build_survival_data(
     conn: sqlite3.Connection,
     drug: str,
@@ -1020,6 +1077,15 @@ def _build_survival_data(
     )
     if reports.empty:
         return None
+    reports["post_date"] = _parse_mixed_datetimes(reports["post_date"])
+    reports = reports.dropna(subset=["post_date"])
+    if reports.empty:
+        return None
+
+    entries["entry_date"] = _parse_mixed_datetimes(entries["entry_date"])
+    entries = entries.dropna(subset=["entry_date"])
+    if entries.empty:
+        return None
 
     # Find first positive report per user
     positive_reports = reports[reports["sentiment"] > 0.7]
@@ -1039,7 +1105,7 @@ def _build_survival_data(
     # Calculate duration and event indicator
     df["event"] = df["event_date"].notna().astype(int)
     df["end_date"] = df["event_date"].fillna(df["last_report_date"])
-    df["duration_days"] = (df["end_date"] - df["entry_date"]) / 86400  # seconds to days
+    df["duration_days"] = (df["end_date"] - df["entry_date"]).dt.total_seconds() / 86400
     df["duration_days"] = df["duration_days"].clip(lower=1)  # minimum 1 day
 
     # Join predictors
@@ -1164,7 +1230,10 @@ def run_survival(
 
     # Median survival time
     median_time = None
-    event_durations = model_df.loc[model_df["event"] == 1, "duration_days"]
+    if int((model_df["event"] == 0).sum()) <= len(model_df) / 2:
+        event_durations = model_df.loc[model_df["event"] == 1, "duration_days"]
+    else:
+        event_durations = pd.Series(dtype=float)
     if len(event_durations) > 0:
         median_time = round(float(event_durations.median()), 1)
 

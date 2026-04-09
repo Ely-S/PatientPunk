@@ -334,6 +334,18 @@ class TestGetUserSentiment:
             assert idx < 10  # has POTS
             assert idx % 2 == 0  # is female
 
+    def test_condition_filter_does_not_duplicate_post_counts(self, conn):
+        conn.execute(
+            "INSERT INTO conditions (run_id, user_id, condition_type, condition_name)"
+            " VALUES (1, 'user_00', 'illness', 'pots syndrome')"
+        )
+        conn.commit()
+
+        df = get_user_sentiment(conn, "test_drug_a", condition="pots")
+        row = df.loc[df["user_id"] == "user_00"].iloc[0]
+        assert row["n_posts"] == 1
+        assert row["avg_sentiment"] == 1.0
+
     def test_nonexistent_drug(self, conn):
         df = get_user_sentiment(conn, "nonexistent_drug_xyz")
         assert df.empty
@@ -396,12 +408,13 @@ class TestRunComparison:
         assert result.mw_effect_size_r < 0.1
 
     def test_fisher_fallback(self, conn):
-        """Drug C has all mixed sentiment → sparse table → Fisher's."""
+        """Drug C yields a sparse multi-category table but still returns a valid result."""
         df_a = get_user_sentiment(conn, "test_drug_a")
         df_c = get_user_sentiment(conn, "test_drug_c")
         result = run_comparison(df_a, df_c)
         assert result is not None
-        assert result.cat_test_name == "Fisher's exact"
+        assert result.cat_test_name == "chi-square"
+        assert any("sparse cells" in warning for warning in result.warnings)
 
     def test_small_sample_returns_none(self):
         """Groups smaller than 5 should return None."""
@@ -420,7 +433,40 @@ class TestRunComparison:
         result = run_comparison(df_a, df_b)
         assert isinstance(result, ComparisonResult)
         assert all(cat in result.counts_a for cat in ["positive", "negative"])
-        assert 0 <= result.mw_effect_size_r <= 1
+        assert -1 <= result.mw_effect_size_r <= 1
+
+    def test_fisher_uses_active_categories_not_positive_collapse(self):
+        df_negative = pd.DataFrame({
+            "user_id": [f"n{i}" for i in range(6)],
+            "avg_sentiment": [-1.0] * 6,
+            "n_posts": [1] * 6,
+            "category": ["negative"] * 6,
+        })
+        df_mixed = pd.DataFrame({
+            "user_id": [f"m{i}" for i in range(6)],
+            "avg_sentiment": [0.5] * 6,
+            "n_posts": [1] * 6,
+            "category": ["mixed"] * 6,
+        })
+
+        result = run_comparison(df_negative, df_mixed)
+        assert result is not None
+        assert result.cat_test_name == "Fisher's exact"
+        assert result.cat_significant
+        assert result.cat_p_value < 0.05
+
+    def test_mann_whitney_effect_size_is_signed(self, conn):
+        df_a = get_user_sentiment(conn, "test_drug_a")
+        df_b = get_user_sentiment(conn, "test_drug_b")
+
+        forward = run_comparison(df_a, df_b)
+        reverse = run_comparison(df_b, df_a)
+
+        assert forward is not None
+        assert reverse is not None
+        assert forward.mw_effect_size_r > 0
+        assert reverse.mw_effect_size_r < 0
+        assert abs(forward.mw_effect_size_r) == abs(reverse.mw_effect_size_r)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -520,6 +566,14 @@ class TestRunLogit:
             assert pred.odds_ratio > 0
             assert pred.ci_lower <= pred.odds_ratio <= pred.ci_upper
             assert 0 <= pred.p_value <= 1
+
+    def test_logit_confidence_intervals_are_finite(self, conn):
+        result = run_logit(conn, "test_drug_a", ["sex", "has_pots"])
+        assert result is not None
+        for pred in result.predictors:
+            assert math.isfinite(pred.odds_ratio)
+            assert math.isfinite(pred.ci_lower)
+            assert math.isfinite(pred.ci_upper)
 
     def test_sparse_predictor_dropped(self, conn):
         """Sex has > 80% NaN for drug users → should be dropped with warning."""
@@ -678,6 +732,30 @@ class TestRunTimeTrend:
                 assert "n_reports" in point
                 assert point["n_reports"] > 0
 
+    def test_iso_timestamp_strings_are_parsed(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (5, 'iso_trend_drug')")
+        iso_points = [
+            ("user_00", "post_user_00_m0", "2026-01-15T00:00:00Z", -1.0),
+            ("user_01", "post_user_01_m1", "2026-02-15T00:00:00Z", 0.0),
+            ("user_02", "post_user_02_m2", "2026-03-15T00:00:00Z", 1.0),
+        ]
+        for user_id, post_id, post_date, sentiment in iso_points:
+            conn.execute(
+                "UPDATE posts SET post_date = ? WHERE post_id = ?",
+                (post_date, post_id),
+            )
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 5, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+
+        result = run_time_trend(conn, "iso_trend_drug")
+        assert result is not None
+        assert result.n_months == 3
+        assert [point["month"] for point in result.monthly_data] == ["2026-01", "2026-02", "2026-03"]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # run_survival
@@ -716,3 +794,21 @@ class TestRunSurvival:
         result = run_survival(conn, "test_drug_a", ["has_pots"])
         if result is not None and result.concordance > 0:
             assert 0 <= result.concordance <= 1
+
+    def test_median_time_none_when_majority_censored(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (6, 'censored_drug')")
+        for i in range(12):
+            user_id = f"user_{i:02d}"
+            post_id = f"post_{user_id}_m0"
+            sentiment = 1.0 if i < 5 else 0.0
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 6, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+
+        result = run_survival(conn, "censored_drug", ["has_pots"])
+        assert result is not None
+        assert result.n_censored > result.n_events
+        assert result.median_time_days is None
