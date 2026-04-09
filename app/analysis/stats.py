@@ -305,6 +305,12 @@ def run_comparison(
     else:
         comparison_warnings = list(size_check.warnings)
 
+    # ── Check for identical distributions ─────────────────────────────────────
+    if scores_a.nunique() == 1 and scores_b.nunique() == 1 and float(scores_a.iloc[0]) == float(scores_b.iloc[0]):
+        comparison_warnings.append(
+            "Both groups have identical sentiment distributions — no comparison possible."
+        )
+
     # ── Mann-Whitney U ────────────────────────────────────────────────────────
     mw_stat, mw_p = sp_stats.mannwhitneyu(scores_a, scores_b, alternative="two-sided")
     mw_r = _mann_whitney_effect_size(scores_a, scores_b, float(mw_p))
@@ -708,6 +714,21 @@ def run_logit(
             warnings=["All predictors had zero variance after filtering."],
         )
 
+    # Check multicollinearity (VIF)
+    if len(available_predictors) >= 2:
+        try:
+            from statsmodels.stats.outliers_influence import variance_inflation_factor
+            pred_matrix = X[available_predictors].astype(float)
+            for j, pred in enumerate(available_predictors):
+                vif = variance_inflation_factor(pred_matrix.values, j)
+                if np.isfinite(vif) and vif > 5:
+                    result_warnings.append(
+                        f"High multicollinearity on '{pred}' (VIF={vif:.1f}) — "
+                        "coefficient may be unstable."
+                    )
+        except Exception:
+            pass  # VIF check is best-effort
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -872,6 +893,21 @@ def run_ols(
         )
     X = sm.add_constant(model_df[available_predictors].astype(float))
 
+    # Check multicollinearity (VIF)
+    if len(available_predictors) >= 2:
+        try:
+            from statsmodels.stats.outliers_influence import variance_inflation_factor
+            pred_matrix = X[available_predictors].astype(float)
+            for j, pred in enumerate(available_predictors):
+                vif = variance_inflation_factor(pred_matrix.values, j)
+                if np.isfinite(vif) and vif > 5:
+                    result_warnings.append(
+                        f"High multicollinearity on '{pred}' (VIF={vif:.1f}) — "
+                        "coefficient may be unstable."
+                    )
+        except Exception:
+            pass
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -979,6 +1015,11 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
 
     # Post-hoc pairwise Mann-Whitney with Bonferroni correction
     n_comparisons = len(group_names) * (len(group_names) - 1) // 2
+    if n_comparisons >= 10:
+        result_warnings.append(
+            f"{n_comparisons} pairwise comparisons — Bonferroni correction applied, "
+            "individual effects may be masked."
+        )
     pairwise: list[PairwiseResult] = []
 
     for i in range(len(group_names)):
@@ -1370,3 +1411,415 @@ def run_survival(
         median_time_days=median_time,
         warnings=_dedupe_warnings(result_warnings),
     )
+
+
+# ── Test 9: Wilcoxon signed-rank (paired within-subject) ─────────────────────
+
+@dataclass
+class WilcoxonResult:
+    """Result of a paired within-subject comparison (Wilcoxon signed-rank)."""
+    statistic: float
+    p_value: float
+    significant: bool
+    effect_size_r: float        # r = Z / sqrt(N)
+    direction: str              # "drug_a_better" / "drug_b_better" / "no_difference"
+    drug_a: str
+    drug_b: str
+    n_paired: int               # users who tried both
+    mean_diff: float            # mean(sentiment_a - sentiment_b)
+    median_diff: float
+    warnings: list[str] = field(default_factory=list)
+
+
+def get_paired_sentiment(
+    conn: sqlite3.Connection,
+    drug_a: str,
+    drug_b: str,
+) -> pd.DataFrame | None:
+    """Return one row per user who tried BOTH drugs.
+
+    Columns: user_id, sentiment_a, sentiment_b, diff
+    """
+    sql = """
+        SELECT
+            a.user_id,
+            a.avg_a,
+            b.avg_b
+        FROM (
+            SELECT tr.user_id, AVG(tr.sentiment) AS avg_a
+            FROM treatment_reports tr
+            JOIN treatment t ON t.id = tr.drug_id
+            WHERE t.canonical_name = ? COLLATE NOCASE
+            GROUP BY tr.user_id
+        ) a
+        JOIN (
+            SELECT tr.user_id, AVG(tr.sentiment) AS avg_b
+            FROM treatment_reports tr
+            JOIN treatment t ON t.id = tr.drug_id
+            WHERE t.canonical_name = ? COLLATE NOCASE
+            GROUP BY tr.user_id
+        ) b ON a.user_id = b.user_id
+    """
+    rows = conn.execute(sql, [drug_a, drug_b]).fetchall()
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=["user_id", "sentiment_a", "sentiment_b"])
+    df["diff"] = df["sentiment_a"] - df["sentiment_b"]
+    return df
+
+
+def run_wilcoxon(
+    conn: sqlite3.Connection,
+    drug_a: str,
+    drug_b: str,
+) -> WilcoxonResult | None:
+    """Paired within-subject comparison of two drugs using Wilcoxon signed-rank.
+
+    Only includes users who tried BOTH drugs — all between-subject confounders
+    (severity, demographics, illness duration) cancel out.
+
+    Returns None if fewer than 5 paired users.
+    """
+    df = get_paired_sentiment(conn, drug_a, drug_b)
+    if df is None or len(df) < 5:
+        return None
+
+    n = len(df)
+    result_warnings: list[str] = []
+
+    if n < 20:
+        result_warnings.append(
+            f"Only {n} users tried both drugs — interpret cautiously."
+        )
+
+    diffs = df["diff"].values
+
+    # Check for zero differences (ties) — Wilcoxon drops them
+    non_zero = diffs[diffs != 0]
+    if len(non_zero) == 0:
+        return WilcoxonResult(
+            statistic=0.0, p_value=1.0, significant=False,
+            effect_size_r=0.0, direction="no_difference",
+            drug_a=drug_a, drug_b=drug_b, n_paired=n,
+            mean_diff=0.0, median_diff=0.0,
+            warnings=result_warnings + ["All paired differences are zero — no comparison possible."],
+        )
+
+    stat, p = sp_stats.wilcoxon(diffs, alternative="two-sided")
+
+    # Effect size r = Z / sqrt(N)
+    z = sp_stats.norm.ppf(1 - p / 2) if p < 1.0 else 0.0
+    r = z / math.sqrt(n) if n > 0 and np.isfinite(z) else 0.0
+
+    mean_diff = float(np.mean(diffs))
+    if mean_diff > 0:
+        direction = "drug_a_better"
+    elif mean_diff < 0:
+        direction = "drug_b_better"
+    else:
+        direction = "no_difference"
+
+    return WilcoxonResult(
+        statistic=round(float(stat), 3),
+        p_value=round(float(p), 4),
+        significant=float(p) < 0.05,
+        effect_size_r=round(r, 3),
+        direction=direction,
+        drug_a=drug_a,
+        drug_b=drug_b,
+        n_paired=n,
+        mean_diff=round(mean_diff, 3),
+        median_diff=round(float(np.median(diffs)), 3),
+        warnings=_dedupe_warnings(result_warnings),
+    )
+
+
+# ── Test 10: Spearman correlation ─────────────────────────────────────────────
+
+@dataclass
+class SpearmanResult:
+    """Result of a Spearman rank correlation."""
+    rho: float                  # -1 to 1
+    p_value: float
+    significant: bool
+    n: int
+    variable_a: str
+    variable_b: str
+    warnings: list[str] = field(default_factory=list)
+
+
+def run_spearman(
+    values_a: pd.Series,
+    values_b: pd.Series,
+    label_a: str = "variable_a",
+    label_b: str = "variable_b",
+) -> SpearmanResult | None:
+    """Spearman rank correlation between two numeric series.
+
+    Useful for: sentiment vs signal strength, number of posts vs outcome,
+    time since first post vs sentiment, etc.
+
+    Returns None if fewer than 5 paired observations.
+    """
+    # Align and drop NaN
+    combined = pd.DataFrame({"a": values_a, "b": values_b}).dropna()
+    if len(combined) < 5:
+        return None
+
+    n = len(combined)
+    result_warnings: list[str] = []
+
+    if n < 20:
+        result_warnings.append(f"Only {n} observations — interpret cautiously.")
+
+    if combined["a"].nunique() < 3 or combined["b"].nunique() < 3:
+        result_warnings.append("One or both variables have very low variability.")
+
+    rho, p = sp_stats.spearmanr(combined["a"], combined["b"])
+
+    return SpearmanResult(
+        rho=round(float(rho), 3),
+        p_value=round(float(p), 4),
+        significant=float(p) < 0.05,
+        n=n,
+        variable_a=label_a,
+        variable_b=label_b,
+        warnings=_dedupe_warnings(result_warnings),
+    )
+
+
+# ── Test 11: Propensity score matching ────────────────────────────────────────
+
+@dataclass
+class PropensityResult:
+    """Result of propensity-score-matched comparison."""
+    n_matched: int              # pairs after matching
+    n_unmatched_treated: int    # treated users that couldn't be matched
+    ate: float                  # average treatment effect (mean diff in matched pairs)
+    ate_ci_lower: float
+    ate_ci_upper: float
+    p_value: float
+    significant: bool
+    balance_table: list[dict]   # [{predictor, smd_before, smd_after}]
+    warnings: list[str] = field(default_factory=list)
+
+
+def run_propensity_match(
+    conn: sqlite3.Connection,
+    drug: str,
+    predictor_names: list[str],
+    caliper: float = 0.2,
+) -> PropensityResult | None:
+    """Propensity score matching: compare users who tried a drug vs those who didn't.
+
+    1. Build a feature matrix of all users with treatment reports
+    2. Fit logistic regression predicting treatment (tried drug vs not)
+    3. Match treated to untreated on propensity score within caliper
+    4. Compare sentiment in matched pairs
+
+    Returns None if insufficient data or predictors.
+    """
+    import statsmodels.api as sm
+
+    # Get all users with any treatment report
+    all_users_sql = """
+        SELECT DISTINCT tr.user_id
+        FROM treatment_reports tr
+    """
+    all_user_ids = {r[0] for r in conn.execute(all_users_sql).fetchall()}
+
+    # Get users who tried THIS drug
+    drug_users_sql = """
+        SELECT DISTINCT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        FROM treatment_reports tr
+        JOIN treatment t ON t.id = tr.drug_id
+        WHERE t.canonical_name = ? COLLATE NOCASE
+        GROUP BY tr.user_id
+    """
+    drug_df = pd.DataFrame(
+        conn.execute(drug_users_sql, [drug]).fetchall(),
+        columns=["user_id", "sentiment"],
+    )
+    if drug_df.empty or len(drug_df) < 10:
+        return None
+
+    treated_ids = set(drug_df["user_id"])
+    control_ids = all_user_ids - treated_ids
+
+    if len(control_ids) < 10:
+        return None
+
+    # Get average sentiment for control users (across all their drugs)
+    control_sql = """
+        SELECT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        FROM treatment_reports tr
+        WHERE tr.user_id IN ({})
+        GROUP BY tr.user_id
+    """.format(",".join("?" for _ in control_ids))
+    control_df = pd.DataFrame(
+        conn.execute(control_sql, list(control_ids)).fetchall(),
+        columns=["user_id", "sentiment"],
+    )
+
+    # Build combined DataFrame
+    drug_df["treated"] = 1
+    control_df["treated"] = 0
+    df = pd.concat([drug_df, control_df], ignore_index=True)
+
+    # Join predictors
+    result_warnings: list[str] = []
+    available_predictors = []
+
+    if any(p in ("sex", "age_bucket") for p in predictor_names):
+        profiles = pd.DataFrame(
+            conn.execute("SELECT user_id, sex, age_bucket FROM user_profiles").fetchall(),
+            columns=["user_id", "sex", "age_bucket"],
+        )
+        df = df.merge(profiles, on="user_id", how="left")
+        if "sex" in predictor_names:
+            sex_map = {"female": 1, "f": 1, "woman": 1, "male": 0, "m": 0, "man": 0}
+            df["sex"] = df["sex"].map(sex_map)
+        if "age_bucket" in predictor_names:
+            def bucket_to_ordinal(b):
+                if pd.isna(b) or not isinstance(b, str):
+                    return None
+                digits = "".join(c for c in b if c.isdigit())
+                return int(digits) // 10 if digits else None
+            df["age_bucket"] = df["age_bucket"].map(bucket_to_ordinal)
+
+    condition_preds = [p for p in predictor_names if p.startswith("has_")]
+    if condition_preds:
+        conditions = pd.DataFrame(
+            conn.execute("SELECT user_id, condition_name FROM conditions").fetchall(),
+            columns=["user_id", "condition_name"],
+        )
+        for pred in condition_preds:
+            cond_name = pred[4:]
+            matching = set(conditions.loc[
+                conditions["condition_name"].str.contains(cond_name, case=False, na=False),
+                "user_id",
+            ])
+            df[pred] = df["user_id"].isin(matching).astype(int)
+
+    # Drop sparse predictors
+    for pred in predictor_names:
+        if pred in df.columns and df[pred].isna().mean() <= 0.8 and df[pred].nunique() >= 2:
+            available_predictors.append(pred)
+        elif pred in df.columns:
+            result_warnings.append(f"Predictor '{pred}' dropped (sparse or no variance).")
+
+    if not available_predictors:
+        return PropensityResult(
+            n_matched=0, n_unmatched_treated=len(treated_ids), ate=0.0,
+            ate_ci_lower=0.0, ate_ci_upper=0.0, p_value=1.0, significant=False,
+            balance_table=[],
+            warnings=result_warnings + ["No valid predictors for propensity model."],
+        )
+
+    model_df = df[["user_id", "treated", "sentiment"] + available_predictors].dropna()
+    if len(model_df) < 20:
+        return None
+
+    # Fit propensity score model
+    y = model_df["treated"]
+    X = sm.add_constant(model_df[available_predictors].astype(float))
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ps_model = sm.Logit(y, X).fit(disp=0)
+        model_df["propensity"] = ps_model.predict(X)
+    except Exception as e:
+        return PropensityResult(
+            n_matched=0, n_unmatched_treated=len(treated_ids), ate=0.0,
+            ate_ci_lower=0.0, ate_ci_upper=0.0, p_value=1.0, significant=False,
+            balance_table=[],
+            warnings=[f"Propensity model failed: {e}"],
+        )
+
+    # Nearest-neighbor matching within caliper
+    treated = model_df[model_df["treated"] == 1].copy()
+    control = model_df[model_df["treated"] == 0].copy()
+
+    matched_pairs: list[tuple[float, float]] = []  # (sentiment_treated, sentiment_control)
+    matched_treated_idx = set()
+    matched_control_idx = set()
+
+    for idx, row in treated.iterrows():
+        ps = row["propensity"]
+        distances = (control["propensity"] - ps).abs()
+        # Exclude already-matched controls
+        distances = distances[~distances.index.isin(matched_control_idx)]
+        if distances.empty:
+            continue
+        nearest_idx = distances.idxmin()
+        if distances[nearest_idx] <= caliper * model_df["propensity"].std():
+            matched_pairs.append((row["sentiment"], control.loc[nearest_idx, "sentiment"]))
+            matched_treated_idx.add(idx)
+            matched_control_idx.add(nearest_idx)
+
+    n_matched = len(matched_pairs)
+    if n_matched < 5:
+        return PropensityResult(
+            n_matched=n_matched,
+            n_unmatched_treated=len(treated) - n_matched,
+            ate=0.0, ate_ci_lower=0.0, ate_ci_upper=0.0,
+            p_value=1.0, significant=False, balance_table=[],
+            warnings=result_warnings + [f"Only {n_matched} matches found (need ≥ 5)."],
+        )
+
+    # ATE = mean difference in matched pairs
+    diffs = [t - c for t, c in matched_pairs]
+    ate = float(np.mean(diffs))
+    se = float(np.std(diffs, ddof=1)) / math.sqrt(n_matched)
+    ci_lower = ate - 1.96 * se
+    ci_upper = ate + 1.96 * se
+
+    # Paired t-test on matched differences
+    _, p = sp_stats.ttest_rel(
+        [t for t, c in matched_pairs],
+        [c for t, c in matched_pairs],
+    )
+
+    # Balance table: standardized mean difference before/after matching
+    balance_table = []
+    for pred in available_predictors:
+        t_before = model_df.loc[model_df["treated"] == 1, pred].mean()
+        c_before = model_df.loc[model_df["treated"] == 0, pred].mean()
+        pooled_std = model_df[pred].std()
+        smd_before = (t_before - c_before) / pooled_std if pooled_std > 0 else 0.0
+
+        t_after = model_df.loc[list(matched_treated_idx), pred].mean()
+        c_after = model_df.loc[list(matched_control_idx), pred].mean()
+        smd_after = (t_after - c_after) / pooled_std if pooled_std > 0 else 0.0
+
+        balance_table.append({
+            "predictor": pred,
+            "smd_before": round(smd_before, 3),
+            "smd_after": round(smd_after, 3),
+        })
+        if abs(smd_after) > 0.1:
+            result_warnings.append(
+                f"Residual imbalance on '{pred}' after matching (SMD={smd_after:.2f})."
+            )
+
+    return PropensityResult(
+        n_matched=n_matched,
+        n_unmatched_treated=len(treated) - n_matched,
+        ate=round(ate, 3),
+        ate_ci_lower=round(ci_lower, 3),
+        ate_ci_upper=round(ci_upper, 3),
+        p_value=round(float(p), 4),
+        significant=float(p) < 0.05,
+        balance_table=balance_table,
+        warnings=_dedupe_warnings(result_warnings),
+    )
+
+
+# ── Survivorship / reporting bias disclaimer ──────────────────────────────────
+
+REPORTING_BIAS_DISCLAIMER = (
+    "Based on self-selected Reddit posts. Users who never posted about a "
+    "treatment are not represented. Results reflect reporting patterns, not "
+    "population-level treatment effects."
+)

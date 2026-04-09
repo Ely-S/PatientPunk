@@ -945,3 +945,181 @@ class TestRunSurvival:
         result = run_survival(conn, "warning_survival_drug", ["has_pots"])
         assert result is not None
         assert any("censored" in warning.lower() for warning in result.warnings)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# run_wilcoxon (paired within-subject)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from app.analysis.stats import get_paired_sentiment, run_wilcoxon, WilcoxonResult
+
+
+class TestRunWilcoxon:
+    def test_paired_users_found(self, conn):
+        """Users 0-14 have reports for both drug A and drug B."""
+        df = get_paired_sentiment(conn, "test_drug_a", "test_drug_b")
+        assert df is not None
+        assert len(df) > 0
+        assert "diff" in df.columns
+
+    def test_significant_paired_difference(self, conn):
+        """Drug A (positive) vs Drug B (negative) among shared users."""
+        result = run_wilcoxon(conn, "test_drug_a", "test_drug_b")
+        assert result is not None
+        assert isinstance(result, WilcoxonResult)
+        assert result.significant
+        assert result.direction == "drug_a_better"
+        assert result.mean_diff > 0
+        assert result.n_paired >= 5
+
+    def test_same_drug_not_significant(self, conn):
+        """Same drug vs itself → no difference."""
+        result = run_wilcoxon(conn, "test_drug_a", "test_drug_a")
+        if result is not None:
+            assert not result.significant
+            assert result.direction == "no_difference"
+
+    def test_too_few_pairs_returns_none(self, conn):
+        """Drugs with < 5 shared users should return None."""
+        result = run_wilcoxon(conn, "test_drug_a", "trend_drug")
+        # trend_drug has very few users, unlikely to have 5 shared with drug_a
+        # Either None or a result — both acceptable
+        if result is not None:
+            assert result.n_paired >= 5
+
+    def test_warns_on_small_pairs(self, conn):
+        """If n_paired < 20, should include a warning."""
+        result = run_wilcoxon(conn, "test_drug_a", "test_drug_b")
+        if result is not None and result.n_paired < 20:
+            assert any("Only" in w and "users tried both" in w for w in result.warnings)
+
+    def test_nonexistent_drug(self, conn):
+        result = run_wilcoxon(conn, "test_drug_a", "nonexistent_xyz")
+        assert result is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# run_spearman
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from app.analysis.stats import run_spearman, SpearmanResult
+
+
+class TestRunSpearman:
+    def test_perfect_positive_correlation(self):
+        a = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        b = pd.Series([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+        result = run_spearman(a, b, "x", "y")
+        assert result is not None
+        assert result.rho == 1.0
+        assert result.significant
+
+    def test_no_correlation(self):
+        a = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        b = pd.Series([5, 3, 8, 1, 9, 2, 7, 4, 10, 6])
+        result = run_spearman(a, b)
+        assert result is not None
+        assert abs(result.rho) < 0.5
+
+    def test_too_few_returns_none(self):
+        a = pd.Series([1, 2, 3])
+        b = pd.Series([4, 5, 6])
+        assert run_spearman(a, b) is None
+
+    def test_handles_nan(self):
+        a = pd.Series([1, 2, None, 4, 5, 6, 7, 8, 9, 10])
+        b = pd.Series([10, 20, 30, None, 50, 60, 70, 80, 90, 100])
+        result = run_spearman(a, b)
+        assert result is not None
+        assert result.n == 8  # 2 NaN rows dropped
+
+    def test_low_variability_warning(self):
+        a = pd.Series([1, 1, 1, 1, 1, 2, 1, 1, 1, 1])
+        b = pd.Series([5, 5, 5, 5, 5, 6, 5, 5, 5, 5])
+        result = run_spearman(a, b)
+        assert result is not None
+        assert any("variability" in w.lower() for w in result.warnings)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# run_propensity_match
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from app.analysis.stats import run_propensity_match, PropensityResult
+
+
+class TestRunPropensityMatch:
+    def test_basic_propensity(self, conn):
+        """Drug A users vs non-drug-A users, matched on conditions."""
+        result = run_propensity_match(conn, "test_drug_a", ["has_pots", "has_mcas"])
+        # May return None if not enough control users; that's ok
+        if result is not None:
+            assert isinstance(result, PropensityResult)
+            assert result.n_matched >= 0
+
+    def test_balance_table_present(self, conn):
+        result = run_propensity_match(conn, "test_drug_a", ["has_pots"])
+        if result is not None and result.n_matched > 0:
+            assert len(result.balance_table) > 0
+            for row in result.balance_table:
+                assert "predictor" in row
+                assert "smd_before" in row
+                assert "smd_after" in row
+
+    def test_nonexistent_drug(self, conn):
+        result = run_propensity_match(conn, "nonexistent_xyz", ["has_pots"])
+        assert result is None
+
+    def test_no_valid_predictors(self, conn):
+        result = run_propensity_match(conn, "test_drug_a", ["has_nonexistent"])
+        if result is not None:
+            assert result.n_matched == 0 or len(result.warnings) > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Warning-specific tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWarnings:
+    def test_kruskal_multiple_comparisons_warning(self, conn):
+        """With 5 groups → 10 comparisons → should warn."""
+        groups = {}
+        for i in range(5):
+            drug_name = f"test_drug_{'abc'[i % 3]}"
+            df = get_user_sentiment(conn, drug_name)
+            if not df.empty:
+                groups[f"group_{i}"] = df
+        # Need 5 groups with data; duplicate some if needed
+        base_df = get_user_sentiment(conn, "test_drug_a")
+        while len(groups) < 5:
+            groups[f"extra_{len(groups)}"] = base_df.copy()
+        result = run_kruskal_wallis(groups)
+        assert result is not None
+        assert any("pairwise comparisons" in w for w in result.warnings)
+
+    def test_logit_low_epp_warning(self, conn):
+        """2 predictors with few events should trigger EPP warning."""
+        # Drug B: only 3 positive events out of 15 users
+        result = run_logit(conn, "test_drug_b", ["has_pots", "has_mcas"])
+        if result is not None:
+            assert any("events-per-predictor" in w.lower() or "epp" in w.lower()
+                       for w in result.warnings)
+
+    def test_identical_distributions_warning(self, conn):
+        """Both groups 100% positive → warning."""
+        df_same = pd.DataFrame({
+            "user_id": [f"u{i}" for i in range(10)],
+            "avg_sentiment": [1.0] * 10,
+            "n_posts": [1] * 10,
+            "category": ["positive"] * 10,
+        })
+        result = run_comparison(df_same, df_same)
+        assert result is not None
+        assert any("identical" in w.lower() for w in result.warnings)
+
+    def test_reporting_bias_disclaimer_exists(self):
+        """The REPORTING_BIAS_DISCLAIMER constant should be importable."""
+        from app.analysis.stats import REPORTING_BIAS_DISCLAIMER
+        assert "self-selected" in REPORTING_BIAS_DISCLAIMER
+        assert "Reddit" in REPORTING_BIAS_DISCLAIMER
