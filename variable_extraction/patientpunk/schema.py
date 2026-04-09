@@ -166,8 +166,10 @@ class Schema:
         """Parse ``fields`` / ``extension_fields`` / ``base_optional_fields`` from a raw dict."""
         result: dict[str, FieldDefinition] = {}
 
-        # Base schema uses "fields" and "base_optional_fields"
+        # Base schema uses "base_fields" (not "fields") and "base_optional_fields".
+        # Extension schemas use "extension_fields". Check all variants.
         for section, source in [
+            ("base_fields", source_prefix),
             ("fields", source_prefix),
             ("base_optional_fields", "base_optional"),
             ("extension_fields", source_prefix),
