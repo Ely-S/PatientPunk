@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
-    OutputFiles, MODEL_FAST, MODEL_STRONG, llm_call,
+    TAGGED_MENTIONS, MODEL_FAST, MODEL_STRONG, llm_call,
     parse_json_array, parse_json_object, log,
 )
 
@@ -119,7 +119,7 @@ def run_classification(
     client = config.client
     limit = config.limit
 
-    tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
+    tagged_path = config.path(TAGGED_MENTIONS)
 
     tagged = json.loads(tagged_path.read_text())
     log.info(f"Loaded {len(tagged)} tagged entries.")
