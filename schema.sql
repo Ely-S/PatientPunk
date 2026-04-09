@@ -14,12 +14,13 @@ CREATE TABLE users (
 CREATE TABLE posts (
     post_id    TEXT PRIMARY KEY,
     title      TEXT, 
-    parent_id  TEXT,
+    parent_id  TEXT REFERENCES posts(post_id),
     user_id    TEXT NOT NULL REFERENCES users(user_id),
     body_text  TEXT NOT NULL,
     flair   TEXT,
     post_date  INTEGER,
     scraped_at INTEGER NOT NULL
+    metadata   TEXT,                -- JSON: score, upvotes, flair, etc. 
 );
 
 CREATE INDEX idx_posts_user ON posts(user_id);
