@@ -50,7 +50,8 @@ load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variab
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
 
-MODEL = "claude-haiku-4-5-20251001"
+from patientpunk._utils import MODEL_FAST
+MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
 # the first MAX_CHARS characters, which usually covers enough posts to
@@ -236,11 +237,8 @@ Examples:
 
     max_chars = args.max_chars
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        sys.exit("Error: ANTHROPIC_API_KEY not set. Add it to .env or environment.")
-
-    client = anthropic.Anthropic(api_key=api_key)
+    from patientpunk._utils import get_llm_client
+    client = get_llm_client()
     work_items = []  # list of (record_dict, source_type_str)
 
     # --- Load subreddit posts ---

@@ -72,7 +72,9 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # CONSTANTS
 # =============================================================================
 
-MODEL = "claude-haiku-4-5-20251001"
+# Model name resolved from _utils (OpenRouter or Anthropic direct)
+from patientpunk._utils import MODEL_FAST, get_llm_client
+MODEL = MODEL_FAST
 MAX_TOKENS = 4096
 MAX_TEXT_CHARS = 30_000
 RETRY_DELAYS = [2, 5, 15, 30]
@@ -139,14 +141,7 @@ BASE_OPTIONAL_DESCRIPTIONS = {
 # =============================================================================
 
 def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key or api_key.startswith("sk-ant-your-"):
-        sys.exit(
-            "ANTHROPIC_API_KEY not set or still placeholder.\n"
-            "  1. Copy .env.example to .env\n"
-            "  2. Add your key from https://console.anthropic.com/settings/keys"
-        )
-    return anthropic.Anthropic(api_key=api_key)
+    return get_llm_client()
 
 
 def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str) -> str:

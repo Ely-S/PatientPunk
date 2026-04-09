@@ -35,12 +35,62 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import sys
 from pathlib import Path
 
 # Root of the variable_extraction package tree.
 # All path resolution should reference this constant instead of
 # repeating Path(__file__).parent.parent... chains.
 PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
+
+
+# ---------------------------------------------------------------------------
+# LLM client configuration (OpenRouter by default)
+# ---------------------------------------------------------------------------
+# OpenRouter is a proxy that lets you switch models without code changes.
+# Set OPENROUTER_API_KEY in .env. Falls back to ANTHROPIC_API_KEY if set.
+#
+# To use Anthropic directly instead, set LLM_PROVIDER=anthropic in .env.
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter")
+
+# Model names differ between providers
+if LLM_PROVIDER == "openrouter":
+    MODEL_FAST = "anthropic/claude-haiku-4.5"
+    MODEL_STRONG = "anthropic/claude-sonnet-4.6"
+    _API_BASE = "https://openrouter.ai/api"
+else:
+    MODEL_FAST = "claude-haiku-4-5-20251001"
+    MODEL_STRONG = "claude-sonnet-4-6"
+    _API_BASE = None  # use Anthropic default
+
+
+def get_llm_client():
+    """Return a configured Anthropic client (direct or via OpenRouter).
+
+    Reads API key from environment: OPENROUTER_API_KEY (preferred) or
+    ANTHROPIC_API_KEY (fallback). Exits with a clear message if neither is set.
+    """
+    try:
+        import anthropic
+    except ImportError:
+        sys.exit("anthropic package required: pip install anthropic")
+
+    api_key = (
+        os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or ""
+    )
+    if not api_key or api_key.startswith("sk-ant-your-"):
+        sys.exit(
+            "API key not set. Add OPENROUTER_API_KEY or ANTHROPIC_API_KEY to .env"
+        )
+
+    kwargs: dict = {"api_key": api_key}
+    if _API_BASE:
+        kwargs["base_url"] = _API_BASE
+    return anthropic.Anthropic(**kwargs)
 
 
 def load_json(path: Path) -> dict | list | None:

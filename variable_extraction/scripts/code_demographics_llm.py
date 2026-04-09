@@ -64,7 +64,8 @@ from patientpunk.qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
-MODEL = "claude-haiku-4-5-20251001"
+from patientpunk._utils import MODEL_FAST
+MODEL = MODEL_FAST
 MAX_CHARS = 8000
 
 
@@ -455,11 +456,8 @@ Examples:
     output_dir = args.output_dir or args.input_dir
     max_chars = args.max_chars
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        sys.exit("Error: ANTHROPIC_API_KEY not set. Add it to .env or environment.")
-
-    client = anthropic.Anthropic(api_key=api_key)
+    from patientpunk._utils import get_llm_client
+    client = get_llm_client()
     system_prompt = build_system_prompt(args.mode)
     work_items: list[tuple[dict, str]] = []
 

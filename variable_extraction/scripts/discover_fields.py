@@ -115,8 +115,10 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # CONSTANTS
 # =============================================================================
 
-HAIKU = "claude-haiku-4-5-20251001"
-SONNET = "claude-sonnet-4-6"
+# Model names resolved from _utils (OpenRouter or Anthropic direct)
+from patientpunk._utils import MODEL_FAST, MODEL_STRONG
+HAIKU = MODEL_FAST
+SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
 # 4096 was too low -- batches of 14+ posts regularly hit the ceiling and returned
 # truncated JSON, causing PARSE FAILED on every batch. Haiku's hard max is 8192;
@@ -150,14 +152,8 @@ MIN_EXAMPLES = 3
 # =============================================================================
 
 def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key or api_key.startswith("sk-ant-your-"):
-        sys.exit(
-            "ANTHROPIC_API_KEY not set or still placeholder.\n"
-            "  1. Copy .env.example to .env\n"
-            "  2. Add your key from https://console.anthropic.com/settings/keys"
-        )
-    return anthropic.Anthropic(api_key=api_key)
+    from patientpunk._utils import get_llm_client
+    return get_llm_client()
 
 
 def call_model(
