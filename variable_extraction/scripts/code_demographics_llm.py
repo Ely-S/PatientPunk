@@ -64,9 +64,10 @@ from patientpunk.qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
-from patientpunk._utils import MODEL_FAST
+from patientpunk._utils import MODEL_FAST, split_retry_batch
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
+BATCH_SIZE = 10
 
 
 # =============================================================================
@@ -298,6 +299,122 @@ def call_haiku(
     return base
 
 
+def _strip_markdown_fences(raw: str) -> str:
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        raw = "\n".join(
+            l for l in lines
+            if not l.strip().startswith("```") and l.strip() != "json"
+        )
+    return raw
+
+
+def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: str) -> list[dict]:
+    """Send multiple records in one API call. Returns list of parsed dicts."""
+    msg = (
+        "Code demographic information from the following Reddit records. "
+        "Each record is by a DIFFERENT author.\n\n"
+        "Return a JSON array with one result object per record, in the same order.\n\n"
+    )
+    for i, item in enumerate(items, 1):
+        msg += f"--- Record {i} ---\n{item['text']}\n\n"
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=len(items) * 800,
+        system=[{
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": msg}],
+    )
+    raw = _strip_markdown_fences(response.content[0].text.strip())
+    results = json.loads(raw)
+    if not isinstance(results, list) or len(results) != len(items):
+        raise ValueError(f"Expected {len(items)} results, got {len(results) if isinstance(results, list) else type(results)}")
+    return results
+
+
+def process_batch(client, system_prompt: str, batch: list[tuple], mode: str,
+                  max_chars=MAX_CHARS) -> list[dict]:
+    """Process a batch of (record, source_type) tuples via multi-item LLM call."""
+    items = []
+    for record, source_type in batch:
+        author_hash = record.get("author_hash") or "unknown"
+        text = build_text(record, source_type, max_chars=max_chars)
+        items.append({
+            "author_hash": author_hash,
+            "source_type": source_type,
+            "text": text,
+        })
+
+    non_empty = [i for i, it in enumerate(items) if it["text"].strip()]
+    if not non_empty:
+        output = []
+        for it in items:
+            base = {"author_hash": it["author_hash"], "source_type": it["source_type"],
+                    "error": "no text content"}
+            if mode in ("deductive", "both"):
+                base.update(age=None, sex_gender=None, location_country=None,
+                            location_state=None, confidence="none", evidence="")
+            if mode in ("inductive", "both"):
+                base["discovered_demographics"] = []
+            output.append(base)
+        return output
+
+    ne_items = [items[i] for i in non_empty]
+
+    def call_fn(sub_items):
+        return _call_haiku_batch_raw(client, system_prompt, sub_items, mode)
+
+    try:
+        raw_results = split_retry_batch(call_fn, ne_items)
+    except Exception as e:
+        # Total failure
+        output = []
+        for it in items:
+            base = {"author_hash": it["author_hash"], "source_type": it["source_type"],
+                    "error": f"batch error: {e}"}
+            if mode in ("deductive", "both"):
+                base.update(age=None, sex_gender=None, location_country=None,
+                            location_state=None, confidence="error", evidence="")
+            if mode in ("inductive", "both"):
+                base["discovered_demographics"] = []
+            output.append(base)
+        return output
+
+    # Map back
+    output = []
+    for it in items:
+        base = {"author_hash": it["author_hash"], "source_type": it["source_type"]}
+        if mode in ("deductive", "both"):
+            base.update(age=None, sex_gender=None, location_country=None,
+                        location_state=None, confidence="none", evidence="")
+        if mode in ("inductive", "both"):
+            base["discovered_demographics"] = []
+        output.append(base)
+
+    for idx, raw in zip(non_empty, raw_results):
+        if raw is not None and isinstance(raw, dict):
+            if mode in ("deductive", "both"):
+                output[idx].update({
+                    "age": raw.get("age"),
+                    "sex_gender": raw.get("sex_gender"),
+                    "location_country": raw.get("location_country"),
+                    "location_state": raw.get("location_state"),
+                    "confidence": raw.get("confidence", "low"),
+                    "evidence": str(raw.get("evidence", ""))[:200],
+                })
+            if mode in ("inductive", "both"):
+                output[idx]["discovered_demographics"] = raw.get("discovered_demographics", [])
+        else:
+            output[idx]["error"] = "failed to parse after retries"
+            if mode in ("deductive", "both"):
+                output[idx]["confidence"] = "error"
+    return output
+
+
 # =============================================================================
 # CODEBOOK AGGREGATION (inductive mode)
 # =============================================================================
@@ -487,33 +604,36 @@ Examples:
     print(f"  Workers             : {args.workers}")
     print(f"  Max chars/record    : {max_chars}")
 
-    # --- Process concurrently ---
+    # --- Process concurrently in batches ---
     results: list[dict] = []
     errors = 0
 
-    def process_one(item: tuple[dict, str]) -> dict:
-        record, source_type = item
-        author_hash = record.get("author_hash") or "unknown"
-        text = build_text(record, source_type, max_chars=max_chars)
-        return call_haiku(client, system_prompt, text, author_hash, source_type, args.mode)
+    batches = [work_items[i:i + BATCH_SIZE] for i in range(0, len(work_items), BATCH_SIZE)]
+    n_batches = len(batches)
+    print(
+        f"\n  Processing {len(work_items)} records in {n_batches} batches "
+        f"(batch size {BATCH_SIZE}) with {args.workers} workers...\n"
+    )
 
-    print(f"\n  Processing {len(work_items)} records with {args.workers} workers...\n")
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(process_one, item): i for i, item in enumerate(work_items)}
+        futures = {
+            pool.submit(process_batch, client, system_prompt, batch, args.mode, max_chars): i
+            for i, batch in enumerate(batches)
+        }
         for future in as_completed(futures):
             idx = futures[future]
             try:
-                result = future.result()
-                results.append(result)
-                if "error" in result:
-                    errors += 1
-                # Progress indicator
+                batch_results = future.result()
+                results.extend(batch_results)
+                for r in batch_results:
+                    if "error" in r:
+                        errors += 1
                 done = len(results)
                 if done % 20 == 0 or done == len(work_items):
                     print(f"    {done}/{len(work_items)} done", end="\r")
             except Exception as e:
                 errors += 1
-                print(f"  [{idx}] Error: {e}")
+                print(f"  [batch {idx}] Error: {e}")
 
     print(f"\n\n  Completed: {len(results)} results, {errors} errors")
 
