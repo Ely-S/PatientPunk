@@ -740,7 +740,8 @@ class TestRunKruskalWallis:
         assert len(result.pairwise) == 3
         for pw in result.pairwise:
             # Bonferroni: adjusted p must be >= raw p
-            assert pw.p_adjusted >= pw.p_value
+            assert pw.p_bonferroni >= pw.p_value
+            assert pw.p_fdr >= pw.p_value
 
     def test_two_groups_still_works(self, conn):
         """Should still work with 2 groups (degenerates to Mann-Whitney)."""

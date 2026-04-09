@@ -137,9 +137,10 @@ class OLSResultModel(BaseModel):
 class PairwiseResultModel(BaseModel):
     group_a: str
     group_b: str
-    p_value: float = Field(ge=0, le=1)
-    p_adjusted: float = Field(ge=0, le=1)
-    significant: bool
+    p_value: float = Field(ge=0, le=1, description="Raw uncorrected p-value")
+    p_bonferroni: float = Field(ge=0, le=1, description="Bonferroni-corrected p-value")
+    p_fdr: float = Field(ge=0, le=1, description="Benjamini-Hochberg FDR-corrected p-value")
+    significant: bool = Field(description="True if p_fdr < 0.05")
     effect_size_r: float
 
 

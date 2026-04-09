@@ -1004,9 +1004,10 @@ class PairwiseResult:
     """One row of post-hoc pairwise comparison."""
     group_a: str
     group_b: str
-    p_value: float
-    p_adjusted: float           # Bonferroni-corrected
-    significant: bool           # p_adjusted < 0.05
+    p_value: float              # raw (uncorrected)
+    p_bonferroni: float         # Bonferroni-corrected
+    p_fdr: float                # Benjamini-Hochberg FDR-corrected
+    significant: bool           # p_fdr < 0.05
     effect_size_r: float
 
 
@@ -1062,6 +1063,8 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
         ))
     pairwise: list[PairwiseResult] = []
 
+    # Collect raw pairwise results first, then apply corrections
+    raw_pairwise: list[dict] = []
     for i in range(len(group_names)):
         for j in range(i + 1, len(group_names)):
             a_name, b_name = group_names[i], group_names[j]
@@ -1070,16 +1073,49 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
             z = sp_stats.norm.ppf(1 - mw_p / 2) if mw_p < 1.0 else 0.0
             n_pair = len(a_vals) + len(b_vals)
             r = abs(z) / math.sqrt(n_pair) if n_pair > 0 else 0.0
-            p_adj = min(mw_p * n_comparisons, 1.0)
+            raw_pairwise.append({
+                "group_a": a_name, "group_b": b_name,
+                "p_value": float(mw_p), "effect_size_r": round(r, 3),
+            })
 
-            pairwise.append(PairwiseResult(
-                group_a=a_name,
-                group_b=b_name,
-                p_value=round(mw_p, 4),
-                p_adjusted=round(p_adj, 4),
-                significant=p_adj < 0.05,
-                effect_size_r=round(r, 3),
-            ))
+    # Benjamini-Hochberg FDR correction
+    raw_ps = [pw["p_value"] for pw in raw_pairwise]
+    if raw_ps:
+        from scipy.stats import false_discovery_control  # scipy ≥ 1.11
+        # Fallback manual BH if scipy version doesn't have it
+        try:
+            fdr_mask = false_discovery_control(raw_ps, method="bh")
+            # false_discovery_control returns bool array; we need adjusted p-values
+            # Use manual BH instead for actual p-values
+            raise ImportError("use manual")
+        except (ImportError, TypeError):
+            pass
+        # Manual Benjamini-Hochberg: sort p-values, compute adjusted
+        n_p = len(raw_ps)
+        sorted_indices = sorted(range(n_p), key=lambda k: raw_ps[k])
+        fdr_ps = [0.0] * n_p
+        prev = 1.0
+        for rank_minus_1 in range(n_p - 1, -1, -1):
+            idx = sorted_indices[rank_minus_1]
+            rank = rank_minus_1 + 1
+            adjusted = min(prev, raw_ps[idx] * n_p / rank)
+            fdr_ps[idx] = min(adjusted, 1.0)
+            prev = fdr_ps[idx]
+    else:
+        fdr_ps = []
+
+    for k, pw in enumerate(raw_pairwise):
+        p_bonf = min(pw["p_value"] * n_comparisons, 1.0)
+        p_fdr = fdr_ps[k] if k < len(fdr_ps) else pw["p_value"]
+        pairwise.append(PairwiseResult(
+            group_a=pw["group_a"],
+            group_b=pw["group_b"],
+            p_value=round(pw["p_value"], 4),
+            p_bonferroni=round(p_bonf, 4),
+            p_fdr=round(p_fdr, 4),
+            significant=p_fdr < 0.05,   # FDR is the default significance criterion
+            effect_size_r=pw["effect_size_r"],
+        ))
 
     return KruskalResult(
         h_statistic=round(float(h_stat), 3),
