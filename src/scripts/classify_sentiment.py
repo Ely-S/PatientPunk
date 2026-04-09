@@ -124,9 +124,12 @@ def run_classification(
     tagged = json.loads(tagged_path.read_text())
     log.info(f"Loaded {len(tagged)} tagged entries.")
 
-    # Load synonyms from treatment table (empty if canonicalize was skipped)
-    from db import load_synonyms
-    synonyms_for = load_synonyms(config.db_path)
+    # Load synonyms from treatment table (empty if no DB or canonicalize was skipped)
+    if writer is not None:
+        from db import load_synonyms
+        synonyms_for = load_synonyms(config.db_path)
+    else:
+        synonyms_for = {}
 
     id_to_text = {e["id"]: e["text"] for e in tagged}
 
