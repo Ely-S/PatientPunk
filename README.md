@@ -134,33 +134,81 @@ The schema is organized into three layers:
 
 ## Running the Pipeline
 
-### Step 1 — Scrape
+### Step 1 -- Scrape
 
 ```bash
-python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
+# Quick test (80 posts, no comments or user histories)
+python Scrapers/scrape_corpus.py --weeks 2 --limit-posts 80
+
+# Full scrape (2 months of posts + comments + user histories)
+python Scrapers/scrape_corpus.py --months 2 --comments --user-histories
 # Outputs: data/subreddit_posts.json  +  data/users/*.json
 ```
 
-### Step 2a — Variable extraction *(who are the patients?)*
+### Step 2a -- Variable extraction *(who are the patients?)*
+
+Extracts 36+ demographic and clinical fields per record using regex + LLM backfill.
 
 ```bash
+# Default: regex extraction + LLM gap-fill (Phases 1-2-4-5)
 python variable_extraction/main.py run \
     --schema variable_extraction/schemas/covidlonghaulers_schema.json
+
+# With field discovery (finds new variables in the data)
+python variable_extraction/main.py run \
+    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
+    --discover auto
+
+# Regex only (no API key needed)
+python variable_extraction/main.py run \
+    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
+    --no-llm
 # Outputs: data/records.csv  +  data/codebook.csv
 ```
 
-See [`variable_extraction/README.md`](variable_extraction/README.md) for full CLI reference and library API.
+### Step 2b -- Demographics *(age, sex, location)*
 
-### Step 2b — Drug sentiment *(what do they say about treatments?)*
+Dedicated LLM pass for demographic fields (deductive + inductive coding).
 
 ```bash
-python database_creation/extract_mentions.py   # tag every post with drugs mentioned
-python database_creation/canonicalize.py       # collapse synonyms → canonical names
-python database_creation/classify_sentiment.py # classify sentiment per entry × drug
-# Output: reddit_sample_data/outputs/sentiment_cache.json
+python variable_extraction/main.py demographics --input-dir data --mode both
+# Outputs: data/demographics_deductive.csv  +  data/demographics_inductive.json
 ```
 
-Steps 2a and 2b are independent — run them in either order. Both tag every record with `author_hash` (SHA-256 of username), which is the join key between the two datasets.
+### Step 2c -- Drug sentiment *(what do they say about treatments?)*
+
+```bash
+cd database_creation
+python extract_mentions.py --output-dir ../data/drug_pipeline
+python canonicalize.py --output-dir ../data/drug_pipeline
+python classify_sentiment.py --output-dir ../data/drug_pipeline
+# Output: data/drug_pipeline/sentiment_cache.json
+```
+
+Steps 2a-2c are independent -- run them in any order. All tag records with
+`author_hash` (SHA-256 of username) as the join key.
+
+See [`variable_extraction/README.md`](variable_extraction/README.md) for full
+CLI reference and library API.
+
+### Step 3 -- Combine into unified database
+
+```bash
+python load_db.py
+# Joins both pipelines into patientpunk.db via author_hash
+# Outputs: patientpunk.db + data/combined_treatment_outcomes.csv
+```
+
+### Latest run (316 records: 220 posts + 96 user histories)
+
+| Metric | Value |
+|---|---|
+| Treatment reports | 1,316 |
+| Unique drugs | 430 |
+| Sentiment | 70% positive, 21% negative, 9% mixed |
+| Demographics | age 30%, sex 46%, location 57% |
+| Conditions | 88 unique, 78% coverage |
+| Overall field fill rate | 47.2% |
 
 ---
 

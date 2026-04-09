@@ -167,11 +167,22 @@ class BaseExtractor(ABC):
         """
         cmd = self._full_command()
         t0 = time.time()
-        proc = subprocess.run(
-            cmd,
-            capture_output=capture_output,
-            text=capture_output,        # decode bytes→str when capturing
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=capture_output,
+                text=capture_output,        # decode bytes->str when capturing
+            )
+        except OSError as exc:
+            # Script not found, not executable, or other OS-level failure
+            elapsed = time.time() - t0
+            return ExtractorResult(
+                returncode=127,
+                elapsed=elapsed,
+                args=cmd,
+                stdout=None,
+                stderr=str(exc),
+            )
         elapsed = time.time() - t0
 
         result = ExtractorResult(

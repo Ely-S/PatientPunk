@@ -100,17 +100,17 @@ class CorpusLoader:
 
         if include_posts:
             for record in self._iter_posts():
+                if limit is not None and count >= limit:
+                    return
                 yield record
                 count += 1
-                if limit and count >= limit:
-                    return
 
         if include_users:
             for record in self._iter_users():
+                if limit is not None and count >= limit:
+                    return
                 yield record
                 count += 1
-                if limit and count >= limit:
-                    return
 
     def load_all(
         self,

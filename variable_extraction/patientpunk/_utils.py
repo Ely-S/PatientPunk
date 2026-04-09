@@ -89,8 +89,12 @@ def clean_temp_dir(temp_dir: Path, patterns: list[str]) -> list[str]:
     removed: list[str] = []
     for pattern in patterns:
         for matching_file in temp_dir.glob(pattern):
-            matching_file.unlink()
-            removed.append(matching_file.name)
+            try:
+                matching_file.unlink()
+                removed.append(matching_file.name)
+            except OSError:
+                # File may be locked or permission-restricted; skip it
+                pass
     return sorted(removed)
 
 
