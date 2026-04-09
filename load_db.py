@@ -10,15 +10,14 @@ Usage:
     python load_db.py --db my_output.db
 
 Then query via Marimo:
-    cd PatientPunk_v2 && marimo run apps/query.py
+    marimo run PatientPunk_v2/apps/query.py
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-# Add PatientPunk_v2/src to path so we can import db.py
-sys.path.insert(0, str(Path(__file__).parent / "PatientPunk_v2" / "src"))
+sys.path.insert(0, str(Path(__file__).parent / "variable_extraction"))
 
 from patientpunk.db import (
     init_db,
