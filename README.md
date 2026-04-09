@@ -132,6 +132,38 @@ The schema is organized into three layers:
 
 ---
 
+## Installation
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install dependencies
+git clone https://github.com/Ely-S/PatientPunk.git
+cd PatientPunk
+uv sync
+
+# Copy env template and add your API key
+cp Scrapers/demographic_extraction/.env.example .env
+# Edit .env and set ANTHROPIC_API_KEY=<your key>
+```
+
+To run any pipeline command, prefix it with `uv run`:
+
+```bash
+uv run python Scrapers/scrape_corpus.py --help
+```
+
+### Running tests
+
+```bash
+uv run pytest -v
+```
+
+---
+
 ## Running the Pipeline
 
 ### Step 1 -- Scrape

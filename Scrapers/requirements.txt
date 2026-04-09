@@ -1,4 +1,0 @@
-requests
-anthropic
-python-dotenv
-pytest
