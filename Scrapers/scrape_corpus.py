@@ -33,7 +33,7 @@ REDDIT_USER_AGENT = "patientpunk-scraper/0.1 (corpus research)"
 SUBREDDIT = "covidlonghaulers"
 REQUEST_DELAY = 1.0       # seconds between Arctic Shift calls
 REDDIT_REQUEST_DELAY = 7  # seconds between Reddit calls (~10/min unauthenticated)
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = Path(__file__).parent.parent / "data"
 USERS_DIR = OUTPUT_DIR / "users"
 
 
@@ -41,7 +41,7 @@ USERS_DIR = OUTPUT_DIR / "users"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def utc_iso(ts) -> str:
+def utc_iso(ts: int | float | str) -> str:
     """Convert a value to ISO 8601 UTC string.
 
     Arctic Shift returns created_utc as an ISO string in most cases but
@@ -345,9 +345,13 @@ What to collect (combine freely):
   --enrich-profiles   Fetch Reddit profile data per author (avatar, bio,
                       karma, account age). Requires --user-histories.
 
+Limits:
+  --limit-posts N     Stop after downloading N posts (useful for testing).
+
 EXAMPLES
 --------
   python scrape_corpus.py                                  # posts only, last 2 months
+  python scrape_corpus.py --limit-posts 80                 # first 80 posts, last 2 months
   python scrape_corpus.py --weeks 1 --comments             # quick 1-week sample with comments
   python scrape_corpus.py --months 3 --comments            # 3 months of posts + comments
   python scrape_corpus.py --months 3 --comments \\
@@ -410,6 +414,14 @@ def main():
         help="Fetch Reddit profile data (avatar, bio, karma, account age) for each "
              "author. Requires --user-histories. Adds ~7s per user.",
     )
+    parser.add_argument(
+        "--limit-posts",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Stop after downloading N posts. Useful for quick tests without "
+             "waiting for the full window to download.",
+    )
     args = parser.parse_args()
 
     if args.enrich_profiles and not args.user_histories:
@@ -426,6 +438,7 @@ def main():
     print("=" * 60)
     print(f"  Subreddit : r/{SUBREDDIT}")
     print(f"  Window    : last {window_label} (since {after_ts[:10]})")
+    print(f"  Post limit: {args.limit_posts if args.limit_posts else 'none (all)'}")
     print(f"  Comments  : {'yes' if args.comments else 'no'}")
     print(f"  Histories : {'yes' if args.user_histories else 'no'}")
     print(f"  Profiles  : {'yes' if args.enrich_profiles else 'no'}")
@@ -436,7 +449,12 @@ def main():
     # -----------------------------------------------------------------------
     print(f"\n[Phase 0] Measuring posts in window...")
     post_count, post_stubs = count_posts_in_window(SUBREDDIT, after_ts)
-    print(f"  Found {post_count} posts to download.\n")
+    print(f"  Found {post_count} posts to download.")
+    if args.limit_posts and args.limit_posts < post_count:
+        post_stubs = post_stubs[:args.limit_posts]
+        post_count = len(post_stubs)
+        print(f"  Limiting to first {post_count} posts (--limit-posts).")
+    print()
 
     # -----------------------------------------------------------------------
     # Phase 1: Download full posts (+ comments if requested)
@@ -565,7 +583,8 @@ def main():
     print(f"\n{'=' * 60}")
     print(f"  Done!")
     print(f"  Window            : last {window_label}")
-    print(f"  Posts downloaded  : {len(posts)}")
+    print(f"  Posts downloaded  : {len(posts)}"
+          + (f" (capped at --limit-posts {args.limit_posts})" if args.limit_posts else ""))
     print(f"  Duplicates skipped: {duplicate_posts_skipped}")
     print(f"  Unique authors    : {total_authors}")
     if args.user_histories:
