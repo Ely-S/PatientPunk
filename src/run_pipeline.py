@@ -21,11 +21,11 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from database_scripts.db import ReportWriter, import_treatments
+from utilities.db import ReportWriter, import_treatments
 from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, log, MODEL_FAST, MODEL_STRONG
-from scripts.extract_mentions import run_extraction
-from scripts.canonicalize import run_canonicalization
-from scripts.classify_sentiment import run_classification
+from pipeline.extract import run_extraction
+from pipeline.canonicalize import run_canonicalization
+from pipeline.classify import run_classification
 
 
 def get_git_commit() -> str:

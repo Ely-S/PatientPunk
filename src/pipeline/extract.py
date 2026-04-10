@@ -64,7 +64,7 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     Each item is a dict with keys: id, text, author, parent_id, post_title, created_utc.
     """
-    from database_scripts.db import open_db
+    from utilities.db import open_db
 
     conn = open_db(db_path)
     rows = conn.execute(

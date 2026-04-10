@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import Reddit posts JSON into SQLite."""
+"""Import Reddit posts JSON into SQLite. This populates the users and posts tables."""
 import argparse
 import json
 import logging
@@ -8,7 +8,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from database_scripts.db import open_db
+from utilities.db import open_db
 
 log = logging.getLogger(__name__)
 

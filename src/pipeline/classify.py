@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from database_scripts.db import ReportWriter
+    from utilities.db import ReportWriter
     from utilities import PipelineConfig
 
 from pydantic import ValidationError
@@ -138,7 +138,7 @@ def run_classification(
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
-        from database_scripts.db import load_synonyms, open_db
+        from utilities.db import load_synonyms, open_db
         synonyms_for = load_synonyms(config.db_path)
         conn = open_db(config.db_path)
         row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
