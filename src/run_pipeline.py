@@ -4,9 +4,8 @@ run_pipeline.py — Run the full drug mention database pipeline.
 
 Steps:
   1. extract      — Extract drug mentions from posts → tagged_mentions.json
-  2. canonicalize — Normalize synonyms → canonical_map.json, update tagged_mentions.json
-  3. treatments   — Populate treatment table from tagged_mentions + canonical_map
-  4. classify     — Classify sentiment for each entry×drug → treatment_reports table
+  2. canonicalize — Normalize synonyms, populate treatment table (with aliases)
+  3. classify     — Classify sentiment for each entry×drug → treatment_reports table
 
 Usage:
     python src/run_pipeline.py --db data/posts.db --output-dir outputs
@@ -21,7 +20,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities.db import ReportWriter, import_treatments
+from utilities.db import ReportWriter, upsert_treatments
 from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, log, MODEL_FAST, MODEL_STRONG
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
@@ -69,18 +68,16 @@ def main():
     _banner("EXTRACT")
     run_extraction(config)
 
-    canon_map = None
     if not args.skip_canonicalize:
         _banner("CANONICALIZE")
-        canon_map = run_canonicalization(config)
-
-    _banner("IMPORT TREATMENTS")
-    count = import_treatments(
-        config.db_path,
-        config.path(TAGGED_MENTIONS),
-        canon_map,
-    )
-    log.info(f"{count} treatments in database.")
+        run_canonicalization(config)  # also populates treatment table
+    else:
+        # No canonicalization — insert raw drug names with no aliases
+        import json
+        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text())
+        all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
+        count = upsert_treatments(config.db_path, all_drugs)
+        log.info(f"{count} treatments in database (no aliases).")
 
     run_config = {
         "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},

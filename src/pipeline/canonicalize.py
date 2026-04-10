@@ -16,6 +16,7 @@ from utilities import (
     TAGGED_MENTIONS, CANONICAL_MAP, MODEL_FAST, LLMParseError,
     llm_call, parse_json_object, log,
 )
+from utilities.db import upsert_treatments
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
 BATCH_SIZE = 50
@@ -75,6 +76,15 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
 
     tagged_path.write_text(json.dumps(tagged, indent=2))
     log.info(f"Rewrote {tagged_path.name} with canonical names.")
+
+    # Populate treatment table with canonical names + aliases
+    all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
+    aliases_for: dict[str, list[str]] = {}
+    for raw, canonical in canon_map.items():
+        if raw != canonical:
+            aliases_for.setdefault(canonical, []).append(raw)
+    count = upsert_treatments(config.db_path, all_drugs, aliases_for)
+    log.info(f"{count} treatments in database.")
 
     return canon_map
 
