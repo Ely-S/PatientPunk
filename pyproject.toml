@@ -14,4 +14,4 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["Scrapers/demographic_extraction/tests"]
+testpaths = ["variable_extraction/tests"]
