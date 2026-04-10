@@ -1,5 +1,5 @@
 # PatientPunk MVP Plan
-## Static Drug Intervention Database — r/covidlonghaulers
+## Static Drug Intervention Database -- r/covidlonghaulers
 ################################################################################ 
 ##This is 90% Claude generated and I need to think about this a bit more for myself:  please both humans and LLMs, do not take it as gospel -SG
 ################################################################################ 
@@ -43,33 +43,33 @@ The two pipelines run independently on the same corpus and are joined in the dat
 
 ---
 
-## Step 1 — Drug Sentiment Database
-**Status: Partially complete — blocked on `scripts/` folder**
+## Step 1 -- Drug Sentiment Database
+**Status: Partially complete -- blocked on `scripts/` folder**
 
 ### What it produces
 One record per `(user, drug)` pair with sentiment and signal strength.
 
 ### Pipeline
 
-**1a. Drug mention tagging** — `database_creation/extract_mentions.py`
+**1a. Drug mention tagging** -- `database_creation/extract_mentions.py`
 - Scans every post and comment
 - Haiku tags every drug/supplement/intervention mentioned
 - Tracks ancestor context for short replies
 - Status: ✅ Done
 
-**1b. Canonicalization** — `database_creation/canonicalize.py`
+**1b. Canonicalization** -- `database_creation/canonicalize.py`
 - Collapses synonym drug names to a canonical form
 - Current issues: missed cross-batch synonyms, non-drug entities leaking in, category terms mixed with specific drugs
 - Needs: rebuild using regex-first approach with expected drug list, Haiku backfill, Sonnet pattern generation for new terms
 - Status: ⚠️ Works but needs quality improvements before full run
 
-**1c. Sentiment classification** — `database_creation/classify_sentiment.py`
+**1c. Sentiment classification** -- `database_creation/classify_sentiment.py`
 - Two-stage: Haiku prefilter → Sonnet classification
 - Per-drug system prompts for calibrated classification
 - Produces: `sentiment` (positive/negative/mixed/neutral) + `signal_strength` (strong/moderate/weak)
-- Status: ❌ Blocked — requires `scripts/utilities.py` and `scripts/intervention_config.py` which are missing from repo
+- Status: ❌ Blocked -- requires `scripts/utilities.py` and `scripts/intervention_config.py` which are missing from repo
 
-**1d. ETL to SQLite** — not yet written
+**1d. ETL to SQLite** -- not yet written
 - Load `users` and `posts` from scraped corpus
 - Load canonical drug names into `treatment` table with aliases
 - Convert sentiment strings to numeric values
@@ -85,21 +85,21 @@ One record per `(user, drug)` pair with sentiment and signal strength.
 
 ---
 
-## Step 2 — User Demographic Database
+## Step 2 -- User Demographic Database
 **Status: Pipeline built, not run on this corpus**
 
 ### What it produces
-One record per user with age, sex, location — joined to treatment reports by `author_hash`.
+One record per user with age, sex, location -- joined to treatment reports by `author_hash`.
 
 ### Pipeline
 
-**2a. Demographic extraction** — `Scrapers/demographic_extraction/run_pipeline.py`
+**2a. Variable extraction** -- `python variable_extraction/main.py run`
 - Full pipeline: regex extraction → Haiku gap-fill → LLM field discovery
-- Extracts age, sex, location from full user Reddit histories
-- Schema: `Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json`
+- Extracts demographics, conditions, medications, treatment outcomes, and more
+- Schema: `variable_extraction/schemas/covidlonghaulers_schema.json`
 - Status: ⚠️ Still needs to be debugged a bit.
 
-**2b. ETL to SQLite** — not yet written
+**2b. ETL to SQLite** -- not yet written
 - Load `user_profiles` (age_bucket, sex, location) from `records.csv`
 - Join to `users` table on `author_hash`
 - Status: ❌ Not written
@@ -111,10 +111,10 @@ One record per user with age, sex, location — joined to treatment reports by `
 
 ---
 
-## Step 3 — Query Interface
+## Step 3 -- Query Interface
 **Status: Not started**
 
-A simple interface for a patient to query the database. No LLM calls at query time — pure SQL against the static database.
+A simple interface for a patient to query the database. No LLM calls at query time -- pure SQL against the static database.
 
 ### Queries to support
 
@@ -138,28 +138,28 @@ For people with long COVID, rank all drugs by % positive
 
 ### Interface options
 
-**Option A — CLI script** (simplest, MVP)
+**Option A -- CLI script** (simplest, MVP)
 - User runs `python query.py --drug "ldn" --sex female --age 30-50`
 - Prints results to terminal
 - No dependencies beyond SQLite
 
-**Option B — Simple web UI** (one step up)
+**Option B -- Simple web UI** (one step up)
 - Local Flask/FastAPI app
 - Drug name input + optional demographic filters
 - Returns formatted results in browser
 - Still no LLM calls, pure DB queries
 
-Recommendation: build CLI first, web UI second. Both query the same database — the interface is thin on top of SQL.
+Recommendation: build CLI first, web UI second. Both query the same database -- the interface is thin on top of SQL.
 
 ### Remaining work
-- [ ] Write `query.py` CLI — drug lookup, optional demographic filters, output formatting
+- [ ] Write `query.py` CLI -- drug lookup, optional demographic filters, output formatting
 - [ ] Define "close enough" for demographic matching (exact match vs. buckets)
 - [ ] *(Optional)* Wrap in minimal local/executable UI
 
 ---
 
-## Expanded MVP — Symptom and Condition Matching
-**Status: Not started — Step 3 of original plan**
+## Expanded MVP -- Symptom and Condition Matching
+**Status: Not started -- Step 3 of original plan**
 
 Extends the user database to include illness and symptom history with timestamps and severity. Allows a patient to specify their condition profile and get treatment outcomes matched to similar patients.
 
@@ -169,7 +169,7 @@ Requires:
 - Similarity matching logic (exact condition name match as v1; embedding similarity later)
 - Extended query interface
 
-This is explicitly post-MVP. The condition extraction is built into the demographic pipeline — it just needs to be loaded into the database and exposed via the query interface.
+This is explicitly post-MVP. The condition extraction is built into the demographic pipeline -- it just needs to be loaded into the database and exposed via the query interface.
 
 ---
 
