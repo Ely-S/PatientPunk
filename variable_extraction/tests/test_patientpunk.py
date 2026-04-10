@@ -1181,7 +1181,6 @@ class TestPipelineResult:
 # qualitative_standards
 # =============================================================================
 
-@pytest.mark.skipif(not HAS_DISCOVERY, reason="scripts/ not in this PR")
 class TestQualitativeStandards:
     """Verify the shared qualitative standards constants are well-formed."""
 
@@ -1236,6 +1235,7 @@ class TestQualitativeStandards:
         assert "SELF-REFERENCE ONLY" in SYSTEM_PROMPT
         assert "CONFIDENCE CALIBRATION" in SYSTEM_PROMPT
 
+    @pytest.mark.skipif(not HAS_DISCOVERY, reason="discover_fields.py not available")
     def test_standards_injected_into_discovery(self):
         """Verify FIELD_DESIGN_STANDARDS actually appears in the discovery prompt."""
         from scripts.discover_fields import build_discovery_prompt
@@ -1331,7 +1331,6 @@ class TestDemographicCoderArgs:
         assert "DemographicCoder" in repr_str
 
 
-@pytest.mark.skipif(not HAS_DISCOVERY, reason="scripts/ not in this PR")
 class TestCodeDemographicsCodebook:
     """Test the codebook aggregation logic from code_demographics_llm.py."""
 
