@@ -47,7 +47,12 @@ from patientpunk.schema import FieldDefinition, Schema
 from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
 from patientpunk.extractors.biomedical import BiomedicalExtractor
 from patientpunk.extractors.llm import LLMExtractor
-from patientpunk.extractors.discovery import FieldDiscoveryExtractor
+try:
+    from patientpunk.extractors.discovery import FieldDiscoveryExtractor
+    HAS_DISCOVERY = True
+except ImportError:
+    FieldDiscoveryExtractor = None
+    HAS_DISCOVERY = False
 from patientpunk.extractors.demographics import DemographicsExtractor
 from patientpunk.extractors.demographic_coder import DemographicCoder
 from patientpunk.exporters.csv_exporter import CSVExporter
@@ -639,6 +644,7 @@ class TestLLMExtractorArgs:
         assert "--limit" not in args
 
 
+@pytest.mark.skipif(not HAS_DISCOVERY, reason="discover_fields.py not in this PR")
 class TestFieldDiscoveryArgs:
     def test_all_options(self, tmp_path):
         ext = FieldDiscoveryExtractor(
@@ -880,6 +886,7 @@ class TestPipelineConfig:
         assert isinstance(cfg.schema_path, Path)
 
 
+@pytest.mark.skipif(not HAS_DISCOVERY, reason="discover_fields.py not in this PR")
 class TestPipelineDiscoverySelection:
     def _make_pipeline(self, tmp_path, schema_id: str) -> Pipeline:
         schema_path = tmp_path / f"{schema_id}.json"
@@ -1174,6 +1181,7 @@ class TestPipelineResult:
 # qualitative_standards
 # =============================================================================
 
+@pytest.mark.skipif(not HAS_DISCOVERY, reason="scripts/ not in this PR")
 class TestQualitativeStandards:
     """Verify the shared qualitative standards constants are well-formed."""
 
@@ -1323,6 +1331,7 @@ class TestDemographicCoderArgs:
         assert "DemographicCoder" in repr_str
 
 
+@pytest.mark.skipif(not HAS_DISCOVERY, reason="scripts/ not in this PR")
 class TestCodeDemographicsCodebook:
     """Test the codebook aggregation logic from code_demographics_llm.py."""
 
@@ -1611,6 +1620,7 @@ class TestPipelineConfigRepr:
         assert "2" in repr_str
 
 
+@pytest.mark.skipif(not HAS_DISCOVERY, reason="discover_fields.py not in this PR")
 class TestFieldDiscoveryExplicitCandidates:
     def test_explicit_candidates_file_takes_precedence_over_auto(self, tmp_path):
         """When candidates_file is explicitly set, auto-detect is skipped."""
