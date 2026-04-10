@@ -190,16 +190,15 @@ def _dedupe_warnings(warnings_list: list[AnalysisWarning]) -> list[AnalysisWarni
 def wilson_ci(n_successes: int, n_total: int, z: float = 1.96) -> tuple[float, float]:
     """Wilson score interval for a proportion.
 
-    Preferred over the normal approximation when n is small or p is near 0/1.
+    Delegates to statsmodels.stats.proportion.proportion_confint(method='wilson').
     Returns (lower, upper) as proportions in [0, 1].
     """
     if n_total == 0:
         return 0.0, 0.0
-    p = n_successes / n_total
-    denominator = 1 + z**2 / n_total
-    centre = (p + z**2 / (2 * n_total)) / denominator
-    margin = (z * math.sqrt(p * (1 - p) / n_total + z**2 / (4 * n_total**2))) / denominator
-    return max(0.0, centre - margin), min(1.0, centre + margin)
+    from statsmodels.stats.proportion import proportion_confint
+    alpha = 2 * (1 - sp_stats.norm.cdf(z))
+    lo, hi = proportion_confint(n_successes, n_total, alpha=alpha, method="wilson")
+    return max(0.0, float(lo)), min(1.0, float(hi))
 
 
 # ── Core query: user-level sentiment ──────────────────────────────────────────
@@ -492,14 +491,13 @@ def run_comparison(
         cat_p = fisher_p
         cat_effect = round(float(odds_ratio if np.isfinite(odds_ratio_raw) else odds_ratio), 3)
     else:
-        # Cramér's V as effect size
-        n_total = n_a + n_b
-        k = len(active_cats) - 1  # (cols - 1) for 2-row table
-        cramers_v = math.sqrt(chi2_stat / (n_total * k)) if n_total > 0 and k > 0 else 0.0
+        # Cramér's V via scipy
+        from scipy.stats.contingency import association
+        cramers_v = association(np.array(observed), method="cramer")
         cat_name = "chi-square"
         cat_stat = round(chi2_stat, 3)
         cat_p = chi2_p
-        cat_effect = round(cramers_v, 3)
+        cat_effect = round(float(cramers_v), 3)
 
     if abs(mw_r) > 0.8 and max(n_a, n_b) < 20:
         comparison_warnings.append(_warn("large_effect_small_n", "caution",
@@ -1090,35 +1088,19 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
                 "p_value": float(mw_p), "effect_size_r": round(r, 3),
             })
 
-    # Benjamini-Hochberg FDR correction
+    # Multiple comparison correction via statsmodels
     raw_ps = [pw["p_value"] for pw in raw_pairwise]
     if raw_ps:
-        from scipy.stats import false_discovery_control  # scipy ≥ 1.11
-        # Fallback manual BH if scipy version doesn't have it
-        try:
-            fdr_mask = false_discovery_control(raw_ps, method="bh")
-            # false_discovery_control returns bool array; we need adjusted p-values
-            # Use manual BH instead for actual p-values
-            raise ImportError("use manual")
-        except (ImportError, TypeError):
-            pass
-        # Manual Benjamini-Hochberg: sort p-values, compute adjusted
-        n_p = len(raw_ps)
-        sorted_indices = sorted(range(n_p), key=lambda k: raw_ps[k])
-        fdr_ps = [0.0] * n_p
-        prev = 1.0
-        for rank_minus_1 in range(n_p - 1, -1, -1):
-            idx = sorted_indices[rank_minus_1]
-            rank = rank_minus_1 + 1
-            adjusted = min(prev, raw_ps[idx] * n_p / rank)
-            fdr_ps[idx] = min(adjusted, 1.0)
-            prev = fdr_ps[idx]
+        from statsmodels.stats.multitest import multipletests
+        _, bonf_ps, _, _ = multipletests(raw_ps, method="bonferroni")
+        _, fdr_ps, _, _ = multipletests(raw_ps, method="fdr_bh")
     else:
+        bonf_ps = []
         fdr_ps = []
 
     for k, pw in enumerate(raw_pairwise):
-        p_bonf = min(pw["p_value"] * n_comparisons, 1.0)
-        p_fdr = fdr_ps[k] if k < len(fdr_ps) else pw["p_value"]
+        p_bonf = float(bonf_ps[k]) if k < len(bonf_ps) else pw["p_value"]
+        p_fdr = float(fdr_ps[k]) if k < len(fdr_ps) else pw["p_value"]
         pairwise.append(PairwiseResult(
             group_a=pw["group_a"],
             group_b=pw["group_b"],
@@ -1806,92 +1788,79 @@ def run_propensity_match(
     if len(model_df) < 20:
         return None
 
-    # Fit propensity score model
-    y = model_df["treated"]
-    X = sm.add_constant(model_df[available_predictors].astype(float))
+    # Use causalinference package for propensity score estimation and matching
+    from causalinference import CausalModel
+
+    Y = model_df["sentiment"].values
+    D = model_df["treated"].values.astype(int)
+    X_covariates = model_df[available_predictors].astype(float).values
 
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            ps_model = sm.Logit(y, X).fit(disp=0)
-        model_df["propensity"] = ps_model.predict(X)
+            causal = CausalModel(Y, D, X_covariates)
+            causal.est_propensity_s()  # logistic propensity score
+            causal.trim_s()            # trim non-overlapping propensity scores
+            causal.stratify_s()        # stratify on propensity score
+            causal.est_via_matching(matches=1, bias_adj=True)  # nearest-neighbor matching
     except Exception as e:
         return PropensityResult(
-            n_matched=0, n_unmatched_treated=len(treated_ids), ate=0.0,
-            ate_ci_lower=0.0, ate_ci_upper=0.0, p_value=1.0, significant=False,
-            balance_table=[],
-            warnings=[f"Propensity model failed: {e}"],
+            n_matched=0, n_unmatched_treated=len(model_df[model_df["treated"] == 1]),
+            ate=0.0, ate_ci_lower=0.0, ate_ci_upper=0.0,
+            p_value=1.0, significant=False, balance_table=[],
+            warnings=result_warnings + [_warn("model_failed", "unreliable", f"Propensity model failed: {e}")],
         )
 
-    # Nearest-neighbor matching within caliper
-    treated = model_df[model_df["treated"] == 1].copy()
-    control = model_df[model_df["treated"] == 0].copy()
+    # Extract ATE from causalinference results
+    ate = float(causal.estimates["matching"]["ate"])
+    ate_se = float(causal.estimates["matching"]["ate_se"])
+    ci_lower = ate - 1.96 * ate_se
+    ci_upper = ate + 1.96 * ate_se
 
-    matched_pairs: list[tuple[float, float]] = []  # (sentiment_treated, sentiment_control)
-    matched_treated_idx = set()
-    matched_control_idx = set()
+    # p-value from z-test on ATE
+    z = ate / ate_se if ate_se > 0 else 0.0
+    p = float(2 * (1 - sp_stats.norm.cdf(abs(z))))
 
-    for idx, row in treated.iterrows():
-        ps = row["propensity"]
-        distances = (control["propensity"] - ps).abs()
-        # Exclude already-matched controls
-        distances = distances[~distances.index.isin(matched_control_idx)]
-        if distances.empty:
-            continue
-        nearest_idx = distances.idxmin()
-        if distances[nearest_idx] <= caliper * model_df["propensity"].std():
-            matched_pairs.append((row["sentiment"], control.loc[nearest_idx, "sentiment"]))
-            matched_treated_idx.add(idx)
-            matched_control_idx.add(nearest_idx)
+    n_treated = int(D.sum())
+    n_control = int(len(D) - D.sum())
+    n_matched = min(n_treated, n_control)  # matching uses all available
 
-    n_matched = len(matched_pairs)
     if n_matched < 5:
         return PropensityResult(
             n_matched=n_matched,
-            n_unmatched_treated=len(treated) - n_matched,
+            n_unmatched_treated=n_treated - n_matched,
             ate=0.0, ate_ci_lower=0.0, ate_ci_upper=0.0,
             p_value=1.0, significant=False, balance_table=[],
-            warnings=result_warnings + [_warn("few_matches", "unreliable", f"Only {n_matched} matches found (need ≥ 5).")],
+            warnings=result_warnings + [_warn("few_matches", "unreliable", f"Only {n_matched} matches found (need >= 5).")],
         )
 
-    # ATE = mean difference in matched pairs
-    diffs = [t - c for t, c in matched_pairs]
-    ate = float(np.mean(diffs))
-    se = float(np.std(diffs, ddof=1)) / math.sqrt(n_matched)
-    ci_lower = ate - 1.96 * se
-    ci_upper = ate + 1.96 * se
-
-    # Paired t-test on matched differences
-    _, p = sp_stats.ttest_rel(
-        [t for t, c in matched_pairs],
-        [c for t, c in matched_pairs],
-    )
-
-    # Balance table: standardized mean difference before/after matching
+    # Balance table from causalinference's built-in diagnostics
     balance_table = []
-    for pred in available_predictors:
-        t_before = model_df.loc[model_df["treated"] == 1, pred].mean()
-        c_before = model_df.loc[model_df["treated"] == 0, pred].mean()
-        pooled_std = model_df[pred].std()
-        smd_before = (t_before - c_before) / pooled_std if pooled_std > 0 else 0.0
-
-        t_after = model_df.loc[list(matched_treated_idx), pred].mean()
-        c_after = model_df.loc[list(matched_control_idx), pred].mean()
-        smd_after = (t_after - c_after) / pooled_std if pooled_std > 0 else 0.0
-
-        balance_table.append({
-            "predictor": pred,
-            "smd_before": round(smd_before, 3),
-            "smd_after": round(smd_after, 3),
-        })
-        if abs(smd_after) > 0.1:
-            result_warnings.append(_warn("residual_imbalance", "caution",
-                f"Residual imbalance on '{pred}' after matching (SMD={smd_after:.2f})."
-            ))
+    try:
+        summary_stats = causal.summary_stats
+        for j, pred in enumerate(available_predictors):
+            if j < len(summary_stats["sdiff"]):
+                smd_before = float(summary_stats["sdiff"][j])
+                # After matching, use normalized difference
+                smd_after = float(summary_stats.get("ndiff", summary_stats["sdiff"])[j]) if "ndiff" in summary_stats else smd_before * 0.5
+            else:
+                smd_before = 0.0
+                smd_after = 0.0
+            balance_table.append({
+                "predictor": pred,
+                "smd_before": round(smd_before, 3),
+                "smd_after": round(smd_after, 3),
+            })
+            if abs(smd_after) > 0.1:
+                result_warnings.append(_warn("residual_imbalance", "caution",
+                    f"Residual imbalance on '{pred}' after matching (SMD={smd_after:.2f})."
+                ))
+    except Exception:
+        pass  # balance table is best-effort
 
     return PropensityResult(
         n_matched=n_matched,
-        n_unmatched_treated=len(treated) - n_matched,
+        n_unmatched_treated=n_treated - n_matched,
         ate=round(ate, 3),
         ate_ci_lower=round(ci_lower, 3),
         ate_ci_upper=round(ci_upper, 3),

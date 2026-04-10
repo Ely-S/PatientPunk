@@ -285,7 +285,7 @@ class TestWilsonCI:
 
     def test_zero_success(self):
         lo, hi = wilson_ci(0, 10)
-        assert lo == 0.0
+        assert lo < 1e-10  # essentially zero (statsmodels may return tiny float)
         assert hi < 0.4  # not just 0.0 — Wilson adjusts upward
 
     def test_single_observation(self):
