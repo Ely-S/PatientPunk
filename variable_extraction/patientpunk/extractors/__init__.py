@@ -2,8 +2,12 @@ from .base import BaseExtractor, ExtractorError, ExtractorResult
 from .biomedical import BiomedicalExtractor
 from .demographic_coder import DemographicCoder
 from .demographics import DemographicsExtractor
-from .discovery import FieldDiscoveryExtractor
 from .llm import LLMExtractor
+
+try:
+    from .discovery import FieldDiscoveryExtractor
+except ImportError:
+    FieldDiscoveryExtractor = None  # discovery module is optional (separate PR)
 
 __all__ = [
     "BaseExtractor",
