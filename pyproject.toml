@@ -12,12 +12,17 @@ dependencies = [
     "lifelines>=0.29",
     "pydantic>=2.5",
     "causalinference>=0.1",
+    "pingouin>=0.6",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
 ]
+ui = [
+    "streamlit>=1.30",
+    "plotly>=5.18",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["variable_extraction/tests", "tests"]

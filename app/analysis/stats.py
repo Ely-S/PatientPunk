@@ -28,9 +28,12 @@ Usage:
 from __future__ import annotations
 
 import math
+import os
 import sqlite3
+import tempfile
 import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -92,6 +95,15 @@ def _safe_exp(value: float) -> float:
     """Exponentiate a log-scale coefficient without emitting overflow warnings."""
     clipped = float(np.clip(value, -700, 700))
     return float(np.exp(clipped))
+
+
+def _get_pingouin():
+    """Import pingouin with a writable Matplotlib cache directory."""
+    mpl_config_dir = Path(tempfile.gettempdir()) / "patientpunk_mpl"
+    mpl_config_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(mpl_config_dir))
+    import pingouin as pg
+    return pg
 
 
 def _round_or_default(value: float, digits: int, default: float = 0.0) -> float:
@@ -377,27 +389,6 @@ def _count_categories(series: pd.Series) -> dict[str, int]:
     return {cat: counts.get(cat, 0) for cat in SENTIMENT_CATEGORIES}
 
 
-def _mann_whitney_effect_size(scores_a: pd.Series, scores_b: pd.Series, p_value: float) -> float:
-    """Return signed Mann-Whitney r using the larger-median group for direction."""
-    total_n = len(scores_a) + len(scores_b)
-    if total_n == 0 or p_value >= 1.0:
-        return 0.0
-
-    z = sp_stats.norm.ppf(1 - p_value / 2)
-    if not np.isfinite(z):
-        return 0.0
-
-    median_a = float(scores_a.median())
-    median_b = float(scores_b.median())
-    direction = 0.0
-    if median_a > median_b:
-        direction = 1.0
-    elif median_a < median_b:
-        direction = -1.0
-
-    return direction * (abs(float(z)) / math.sqrt(total_n))
-
-
 def run_comparison(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
@@ -431,8 +422,11 @@ def run_comparison(
         ))
 
     # ── Mann-Whitney U ────────────────────────────────────────────────────────
-    mw_stat, mw_p = sp_stats.mannwhitneyu(scores_a, scores_b, alternative="two-sided")
-    mw_r = _mann_whitney_effect_size(scores_a, scores_b, float(mw_p))
+    pg = _get_pingouin()
+    mw_result = pg.mwu(scores_a.to_numpy(), scores_b.to_numpy(), alternative="two-sided")
+    mw_stat = float(mw_result["U_val"].iat[0])
+    mw_p = float(mw_result["p_val"].iat[0])
+    mw_r = float(mw_result["RBC"].iat[0])
 
     # ── Contingency table ─────────────────────────────────────────────────────
     counts_a = _count_categories(df_a["category"])
@@ -471,25 +465,17 @@ def run_comparison(
         use_fisher = True
 
     if use_fisher:
+        from statsmodels.stats.contingency_tables import Table2x2
         fisher_table = observed if len(active_cats) == 2 else [
             [counts_a["positive"], n_a - counts_a["positive"]],
             [counts_b["positive"], n_b - counts_b["positive"]],
         ]
-        odds_ratio_raw, fisher_p = sp_stats.fisher_exact(fisher_table)
-        if len(active_cats) == 2:
-            a00, a01 = fisher_table[0]
-            b00, b01 = fisher_table[1]
-            odds_ratio = ((a00 + 0.5) * (b01 + 0.5)) / ((a01 + 0.5) * (b00 + 0.5))
-        else:
-            pos_a = counts_a["positive"]
-            pos_b = counts_b["positive"]
-            not_pos_a = n_a - pos_a
-            not_pos_b = n_b - pos_b
-            odds_ratio = ((pos_a + 0.5) * (not_pos_b + 0.5)) / ((not_pos_a + 0.5) * (pos_b + 0.5))
+        fisher_result = Table2x2(np.asarray(fisher_table, dtype=float))
+        _, fisher_p = sp_stats.fisher_exact(fisher_table)
         cat_name = "Fisher's exact"
         cat_stat = None
         cat_p = fisher_p
-        cat_effect = round(float(odds_ratio if np.isfinite(odds_ratio_raw) else odds_ratio), 3)
+        cat_effect = round(float(fisher_result.oddsratio), 3)
     else:
         # Cramér's V via scipy
         from scipy.stats.contingency import association
@@ -1079,13 +1065,12 @@ def run_kruskal_wallis(groups: dict[str, pd.DataFrame]) -> KruskalResult | None:
         for j in range(i + 1, len(group_names)):
             a_name, b_name = group_names[i], group_names[j]
             a_vals, b_vals = arrays[i], arrays[j]
-            u_stat, mw_p = sp_stats.mannwhitneyu(a_vals, b_vals, alternative="two-sided")
-            z = sp_stats.norm.ppf(1 - mw_p / 2) if mw_p < 1.0 else 0.0
-            n_pair = len(a_vals) + len(b_vals)
-            r = abs(z) / math.sqrt(n_pair) if n_pair > 0 else 0.0
+            pg = _get_pingouin()
+            mw_result = pg.mwu(a_vals, b_vals, alternative="two-sided")
             raw_pairwise.append({
                 "group_a": a_name, "group_b": b_name,
-                "p_value": float(mw_p), "effect_size_r": round(r, 3),
+                "p_value": float(mw_result["p_val"].iat[0]),
+                "effect_size_r": round(float(mw_result["RBC"].iat[0]), 3),
             })
 
     # Multiple comparison correction via statsmodels
@@ -1573,11 +1558,11 @@ def run_wilcoxon(
             warnings=result_warnings + [_warn("zero_differences", "unreliable", "All paired differences are zero — no comparison possible.")],
         )
 
-    stat, p = sp_stats.wilcoxon(diffs, alternative="two-sided")
-
-    # Effect size r = Z / sqrt(N)
-    z = sp_stats.norm.ppf(1 - p / 2) if p < 1.0 else 0.0
-    r = z / math.sqrt(n) if n > 0 and np.isfinite(z) else 0.0
+    pg = _get_pingouin()
+    wilcoxon_result = pg.wilcoxon(diffs, alternative="two-sided")
+    stat = float(wilcoxon_result["W_val"].iat[0])
+    p = float(wilcoxon_result["p_val"].iat[0])
+    r = float(wilcoxon_result["RBC"].iat[0])
 
     mean_diff = float(np.mean(diffs))
     if mean_diff > 0:
