@@ -277,21 +277,26 @@ class Pipeline:
         # candidates JSON, then stops so the user can select fields in
         # the Marimo variable picker (apps/discover.py).
         skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
+        discovery_extractor = None
+        if not skip_discovery and FieldDiscoveryExtractor is not None:
+            discovery_extractor = FieldDiscoveryExtractor(
+                input_dir=cfg.input_dir,
+                schema_path=cfg.schema_path,
+                temp_dir=self._temp_dir,
+                workers=cfg.workers,
+                limit=cfg.limit,
+                fill_gaps=cfg.discovery_fill_gaps,
+                resume=cfg.resume,
+                candidates_file=cfg.candidates_file,
+                sample=cfg.discovery_sample,
+            )
+        elif not skip_discovery and FieldDiscoveryExtractor is None:
+            skip_discovery = True
         result.phases.append(
             self._run_phase(
                 phase=3,
                 skip=skip_discovery,
-                extractor=FieldDiscoveryExtractor(
-                    input_dir=cfg.input_dir,
-                    schema_path=cfg.schema_path,
-                    temp_dir=self._temp_dir,
-                    workers=cfg.workers,
-                    limit=cfg.limit,
-                    fill_gaps=cfg.discovery_fill_gaps,
-                    resume=cfg.resume,
-                    candidates_file=cfg.candidates_file,
-                    sample=cfg.discovery_sample,
-                ),
+                extractor=discovery_extractor,
             )
         )
         if not result.phases[-1].ok and not result.phases[-1].skipped:
