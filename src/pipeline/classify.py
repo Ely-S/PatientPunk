@@ -246,7 +246,7 @@ def run_classification(
                                     sentiment=result.sentiment, signal=result.signal,
                                 )
                     except (LLMParseError, ValidationError) as e2:
-                        raise type(e2)(f"Error on {entry['id']}:{drug}: {e2}").with_traceback(e2.__traceback__)
+                        raise RuntimeError(f"Error on {entry['id']}:{drug}: {e2}") from e2
                    
 
             done += len(batch)
