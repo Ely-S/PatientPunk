@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run drug mention database pipeline")
     parser.add_argument("--db", required=True, help="Path to SQLite database (must have posts imported)")
     parser.add_argument("--output-dir", required=True, help="Directory for output files")
-    parser.add_argument("--limit", type=int, default=100, help="Limit posts processed")
+    parser.add_argument("--limit", type=int, default=0, help="Limit posts processed")
     parser.add_argument("--reclassify", action="store_true", help="Re-run classification for all pairs, even those already in the database")
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
     args = parser.parse_args()
