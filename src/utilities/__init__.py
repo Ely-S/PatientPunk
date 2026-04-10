@@ -54,26 +54,30 @@ def _strip_markdown(raw: str) -> str:
     return raw.strip()
 
 
+class LLMParseError(ValueError):
+    """LLM response could not be parsed as JSON."""
+
+
 def parse_json_array(raw: str) -> list:
     raw = _strip_markdown(raw)
     start, end = raw.find("["), raw.rfind("]") + 1
     if start < 0 or end <= start:
-        return []
+        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
     try:
         return json.loads(raw[start:end])
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as e:
+        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
 def parse_json_object(raw: str) -> dict:
     raw = _strip_markdown(raw)
     start, end = raw.find("{"), raw.rfind("}") + 1
     if start < 0 or end <= start:
-        return {}
+        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
     try:
         return json.loads(raw[start:end])
-    except json.JSONDecodeError:
-        return {}
+    except json.JSONDecodeError as e:
+        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────

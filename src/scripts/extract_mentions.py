@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from prompts.intervention_config import EXTRACT_PROMPT
-from utilities import TAGGED_MENTIONS, MODEL_FAST, llm_call, parse_json_array, log
+from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
 
 BATCH_SIZE = 20
 SAVE_EVERY = 5
@@ -27,7 +27,12 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(texts) * 80)
-    results = parse_json_array(raw)
+
+    try:
+        results = parse_json_array(raw)
+    except LLMParseError as e:
+        log.warning(f"Parse failed: {e}")
+        results = []
 
     if len(results) == len(texts):
         return results

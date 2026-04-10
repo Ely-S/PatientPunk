@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from utilities import (
-    TAGGED_MENTIONS, CANONICAL_MAP, MODEL_FAST,
+    TAGGED_MENTIONS, CANONICAL_MAP, MODEL_FAST, LLMParseError,
     llm_call, parse_json_object, log,
 )
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
@@ -47,7 +47,7 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
         batch = all_drugs[i:i + BATCH_SIZE]
         try:
             canon_map.update(canonicalize_batch(client, batch))
-        except Exception as e:
+        except LLMParseError as e:
             log.error(f"Batch {i} failed: {e}. Keeping raw names.")
             for name in batch:
                 canon_map[name] = name
