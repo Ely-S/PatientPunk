@@ -14,12 +14,13 @@ CREATE TABLE users (
 CREATE TABLE posts (
     post_id    TEXT PRIMARY KEY,
     title      TEXT, 
-    parent_id  TEXT,
+    parent_id  TEXT REFERENCES posts(post_id),
     user_id    TEXT NOT NULL REFERENCES users(user_id),
     body_text  TEXT NOT NULL,
     flair   TEXT,
     post_date  INTEGER,
-    scraped_at INTEGER NOT NULL
+    scraped_at INTEGER NOT NULL,
+    metadata   TEXT                 -- JSON: score, upvotes, flair, etc.
 );
 
 CREATE INDEX idx_posts_user ON posts(user_id);
@@ -43,6 +44,7 @@ CREATE TABLE extraction_runs (
     run_id  INTEGER PRIMARY KEY,
     run_at  INTEGER NOT NULL,
     commit_hash TEXT NOT NULL,
+    extraction_type TEXT NOT NULL,
     config  TEXT NOT NULL   -- JSON: models, prompt, version, temperature, etc.
 );
 
@@ -81,9 +83,8 @@ CREATE TABLE treatment_reports (
     post_id         TEXT NOT NULL REFERENCES posts(post_id),
     user_id         TEXT REFERENCES users(user_id),
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
-    sentiment       REAL NOT NULL,
-    signal_strength REAL NOT NULL,
-    sentiment_raw   TEXT
+    sentiment       TEXT NOT NULL,
+    signal_strength TEXT NOT NULL
 );
 
 CREATE INDEX idx_tr_post ON treatment_reports(post_id);

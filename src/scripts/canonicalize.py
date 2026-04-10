@@ -4,25 +4,8 @@ canonicalize.py — Normalize drug synonyms.
 
 Step 2 of the pipeline. Merges synonyms (e.g. "low dose naltrexone" → "ldn")
 and rewrites tagged_mentions.json with canonical names.
-
-The output file is canonical_map.json
-    {
-        "id": "t3_1scqprg",
-        "author": "u_1234567890",
-        "text": "I took 100mg of LSD last night and it was amazing!",
-        "post_title": "I took 100mg of LSD last night and it was amazing!",
-        "parent_id": None,
-        "created_utc": 1717334400,
-        "drugs_direct": ["lsd"],
-        "drugs_context": ["psychedelic"]
-    }
-Usage:
-    python src/run_pipeline.py --posts-file data/posts.json --output-dir outputs canonicalize
-    # Or standalone (run from src/):
-    python -m scripts.canonicalize --output-dir ../outputs
 """
 import json
-from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,8 +13,8 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from utilities import (
-    OutputFiles, MODEL_FAST, llm_call, parse_json_object, 
-    process_in_batches, log
+    TAGGED_MENTIONS, CANONICAL_MAP, MODEL_FAST,
+    llm_call, parse_json_object, log,
 )
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
@@ -43,61 +26,46 @@ def canonicalize_batch(client, names: list[str], model=MODEL_FAST) -> dict[str, 
     msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
     raw = llm_call(client, msg, model=model, max_tokens=len(names) * 30)
     result = parse_json_object(raw)
-    # Ensure every input name is mapped
     for name in names:
         if name not in result:
             result[name] = name
     return result
 
 
-def run_canonicalization(config: "PipelineConfig"):
-    """Main canonicalization logic — called by pipeline or standalone."""
+def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
+    """Main canonicalization logic. Returns {raw_name: canonical_name}."""
     client = config.client
-    tagged_path = config.path(OutputFiles.TAGGED_MENTIONS)
-    canon_path = config.path(OutputFiles.CANONICAL_MAP)
+    tagged_path = config.path(TAGGED_MENTIONS)
+    canon_path = config.path(CANONICAL_MAP)
 
     tagged = json.loads(tagged_path.read_text())
-    log.info(f"Loaded {len(tagged)} tagged entries.")
+    all_drugs = sorted({d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])})
+    log.info(f"{len(tagged)} entries, {len(all_drugs)} unique drug names.")
 
-    # Collect all unique drug names
-    all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])}
-    log.info(f"Found {len(all_drugs)} unique drug names.")
-
-    all_drugs_sorted = sorted(all_drugs)
-
-    def process_batch(batch: list[str]) -> list[dict[str, str]]:
-        return [canonicalize_batch(client, batch)]
-
-    def fallback_single(name: str) -> dict[str, str]:
-        return {name: name}
-
-    # Process in batches, collecting partial maps
     canon_map = {}
-    for i in range(0, len(all_drugs_sorted), BATCH_SIZE):
-        batch = all_drugs_sorted[i:i + BATCH_SIZE]
+    for i in range(0, len(all_drugs), BATCH_SIZE):
+        batch = all_drugs[i:i + BATCH_SIZE]
         try:
             canon_map.update(canonicalize_batch(client, batch))
         except Exception as e:
-            log.error(f"Haiku error on batch {i}: {e}. Continuing with fallback...")
+            log.error(f"Batch {i} failed: {e}. Keeping raw names.")
             for name in batch:
                 canon_map[name] = name
-        log.info(f"Canonicalized {min(i + BATCH_SIZE, len(all_drugs_sorted))}/{len(all_drugs_sorted)}...")
+        log.info(f"Canonicalized {min(i + BATCH_SIZE, len(all_drugs))}/{len(all_drugs)}...")
 
-    # Save canonical map
     canon_path.write_text(json.dumps(canon_map, indent=2, sort_keys=True))
-    log.info(f"Wrote {canon_path.name}")
 
-    # Print summary
-    groups = defaultdict(list)
+    # Log synonym groups
+    groups: dict[str, list[str]] = {}
     for raw, canonical in canon_map.items():
         if raw != canonical:
-            groups[canonical].append(raw)
+            groups.setdefault(canonical, []).append(raw)
     if groups:
-        log.info(f"Synonym groups found ({len(groups)}):")
+        log.info(f"Synonym groups ({len(groups)}):")
         for canonical, synonyms in sorted(groups.items()):
             log.info(f"  {canonical} ← {', '.join(synonyms)}")
 
-    # Rewrite tagged_mentions.json
+    # Rewrite tagged_mentions.json with canonical names
     def canonicalize_list(drugs: list[str]) -> list[str]:
         return list(dict.fromkeys(canon_map.get(d, d) for d in drugs))
 
@@ -106,7 +74,9 @@ def run_canonicalization(config: "PipelineConfig"):
         entry["drugs_context"] = canonicalize_list(entry.get("drugs_context", []))
 
     tagged_path.write_text(json.dumps(tagged, indent=2))
-    log.info(f"Rewrote {tagged_path.name} with canonical drug names.")
+    log.info(f"Rewrote {tagged_path.name} with canonical names.")
+
+    return canon_map
 
 
 def main():
@@ -115,14 +85,11 @@ def main():
     from utilities import PipelineConfig, get_client
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
+    parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
     config = PipelineConfig(
-        client=get_client(),
-        output_dir=output_dir,
-        posts_file=Path("."),  # Not used by canonicalize
+        client=get_client(), output_dir=Path(args.output_dir), db_path=Path("."),
     )
     run_canonicalization(config)
 
