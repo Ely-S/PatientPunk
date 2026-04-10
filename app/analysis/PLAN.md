@@ -4,7 +4,7 @@
 
 A pure-Python statistical analysis engine for querying the PatientPunk database. No UI, no LLM calls — just functions that take a SQLite connection and return structured results with warnings.
 
-This engine will be consumed by a Haiku-powered interface (built separately) where Haiku acts as a statistician: it selects the appropriate test based on the user's question, runs it through this engine, and explains the results in plain language. The structured warning system ensures Haiku knows when to hedge, caveat, or refuse to present results.
+This engine is consumed by a **Claude Code research-assistant skill** (`SKILL.md`) where Claude acts as a statistician: it explores the database, selects the appropriate test based on the user's question, runs it through this engine, and explains the results in a Jupyter notebook. The structured warning system ensures Claude knows when to hedge, caveat, or refuse to present results.
 
 ## Architecture
 
@@ -12,10 +12,11 @@ This engine will be consumed by a Haiku-powered interface (built separately) whe
 User question (natural language)
         |
         v
-  Haiku wizard (selects test, checks sample sizes)
+  Research-assistant skill (SKILL.md)
+  Claude explores database, proposes analysis plan
         |
         v
-  Payload builder (normalizes results, computes max_severity)
+  User approves plan
         |
         v
   Stats engine  <-- THIS PR
@@ -25,13 +26,14 @@ User question (natural language)
   Structured result + warnings
         |
         v
-  Haiku explainer (interprets results at appropriate confidence level)
+  Claude generates Jupyter notebook
+  (charts, tables, plain-language summary, caveats)
         |
         v
-  Streamlit UI (graphs + text)
+  Voila renders notebook as web dashboard for presentation
 ```
 
-The stats engine sits at the bottom of this stack. It knows nothing about Haiku, Streamlit, or natural language. It takes parameters, runs math, and returns dataclasses.
+The stats engine sits at the bottom of this stack. It knows nothing about Claude, notebooks, or natural language. It takes parameters, runs math, and returns dataclasses.
 
 ## Key design decisions
 
@@ -41,31 +43,38 @@ All statistics aggregate to **one data point per user per drug**. If a user post
 
 ### Warning-oriented, not exception-oriented
 
-Most problematic-but-usable situations do not raise exceptions. Instead, they attach an `AnalysisWarning(code, severity, message)` to the result. The downstream layer (Haiku) uses the severity to decide how confidently to present findings.
+Most problematic-but-usable situations do not raise exceptions. Instead, they attach an `AnalysisWarning(code, severity, message)` to the result. The downstream layer (Claude / notebook) uses the severity to decide how confidently to present findings:
+- **caveat** — present results, then note the limitation
+- **caution** — present with explicit hedging
+- **unreliable** — do not present as trustworthy; explain why and suggest alternatives
 
 ### Benjamini-Hochberg FDR
 
 Post-hoc pairwise comparisons report both Bonferroni (conservative) and BH FDR (exploratory-friendly) adjusted p-values. Significance is based on FDR by default — appropriate for exploratory patient data where finding real signals matters more than eliminating every possible false positive.
 
-## Build order for the UI (not in this PR)
+### Package-backed statistics
 
-1. Payload builder — hard boundary between stats engine and LLM
-2. Wizard — Haiku guides the user to a research question
-3. Results — Haiku explains output with appropriate confidence
-4. Charts — descriptive (bar charts, histograms) + inferential (forest plots, KM curves)
-5. Streamlit app — ties it together
+Every statistical computation uses an established package — no hand-rolled formulas:
+- `pingouin` — Mann-Whitney U, Wilcoxon, effect sizes
+- `statsmodels` — logistic/OLS regression, Wilson CI, BH FDR, odds ratios
+- `scipy` — chi-square, Fisher's exact, Cramér's V, Spearman, Kendall, binomial
+- `lifelines` — Cox proportional hazards
+- `causalinference` — propensity score matching
 
-## What Haiku will do with this engine
+## Presentation layer (not in this PR)
 
-Haiku receives a normalized JSON payload containing:
-- The statistical result (p-values, effect sizes, counts)
-- Structured warnings with severity tiers
-- A `max_severity` field computed deterministically from the warnings
+The research-assistant skill generates Jupyter notebooks as output. For hackathon presentation, **Voila** renders these as clean web dashboards (no code cells visible, just charts and text).
 
-Haiku's system prompt will instruct it to:
-- Name the test and explain what it does in one sentence
-- Present the result with appropriate confidence based on `max_severity`
-- Never hide warnings — every warning appears in the explanation
-- Use specific numbers from warnings ("only 8 users" not "few users")
-- If `max_severity` is "unreliable", explicitly disclaim the result
-- Always end with the reporting bias disclaimer
+**Future upgrade paths:**
+- **Marimo** — reactive notebooks with interactive widgets (dropdowns, sliders). ~2-3 hours to switch. Same analysis code, different notebook format.
+- **Streamlit** — full web app with chat interface. More polish, more code. Build if the project continues.
+
+## What Claude will do with this engine
+
+The research-assistant skill instructs Claude to:
+1. Explore the database schema and run sample queries
+2. Propose an analysis plan and wait for approval
+3. Generate a notebook using this stats engine for treatment outcome analysis
+4. Surface all warnings in the notebook summary
+5. End every notebook with `REPORTING_BIAS_DISCLAIMER`
+6. Flag caveats, data limitations, and surprising results
