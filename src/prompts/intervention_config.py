@@ -7,6 +7,12 @@ For each text below, list all drugs, medications, supplements, and medical inter
 Include brand names, generic names, abbreviations (e.g. LDN, LDA), informal names,
 drug categories (e.g. "antihistamines", "h1 blocker", "beta blocker"), enzymes/supplements
 (e.g. "DAO", "probiotics", "nattokinase"), and generic references (e.g. "an oral antibiotic").
+
+Do NOT include diseases, conditions, symptoms, or diagnoses. These are NOT interventions:
+  depression, anxiety, ADHD, POTS, MCAS, ME/CFS, dysautonomia, brain fog, fatigue,
+  insomnia, PEM, lyme, bartonella, long covid, fibromyalgia.
+Only include things a patient TAKES, DOES, or RECEIVES as treatment.
+
 Return ONLY a JSON array of arrays — one inner array per text, each containing lowercase strings.
 If none are mentioned, use an empty array [].
 Example: [["ldn", "low dose naltrexone"], ["h1 antihistamines", "dao", "nattokinase"], ["oral antibiotic", "probiotic"], []]
