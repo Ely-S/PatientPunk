@@ -48,27 +48,20 @@ def is_only_questions(text: str) -> bool:
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
-
-def _truncate(text: str, max_chars: int) -> str:
-    if max_chars and len(text) > max_chars:
-        return text[:max_chars]
-    return text
-
-
-def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_ancestor_chars: int = 0) -> str:
+def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format a single (entry, drug) item for the prefilter prompt."""
-    ancestor = id_to_text.get(entry.get("parent_id", ""), "")
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
     block = f"--- {i+1} --- Drug: {drug}\n"
-    if ancestor:
-        block += f"Replying to: {_truncate(ancestor, max_ancestor_chars)}\n\n"
+    if upstream_comment:
+        block += f"Replying to: {upstream_comment[:max_upstream_chars]}\n\n"
     block += f"Comment: {entry['text']}\n\n"
     return block
 
 
-def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_ancestor_chars: int = 0) -> list[bool]:
+def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
     """Ask Haiku if each (entry, drug) pair expresses personal experience."""
     blocks = [
-        _prefilter_block(i, entry, drug, id_to_text, max_ancestor_chars)
+        _prefilter_block(i, entry, drug, id_to_text, max_upstream_chars)
         for i, (entry, drug) in enumerate(items)
     ]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
@@ -91,7 +84,7 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     return [
         llm_call(
             client,
-            PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, e, d, id_to_text, max_ancestor_chars),
+            PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, e, d, id_to_text, max_upstream_chars),
             model=MODEL_FAST,
             max_tokens=10,
         ).strip().lower().startswith("yes")
@@ -99,24 +92,24 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     ]
 
 
-def format_entry(entry: dict, id_to_text: dict, max_ancestor_chars: int = 0) -> str:
+def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format entry for classification prompt."""
     msg = f"Text:\n{entry['text']}"
-    ancestor = id_to_text.get(entry.get("parent_id", ""), "")
-    if ancestor:
-        msg += f"\n\nReplying to:\n{_truncate(ancestor, max_ancestor_chars)}"
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    if upstream_comment:
+        msg += f"\n\nReplying to:\n{upstream_comment[:max_upstream_chars]}"
     return msg
 
 
 def classify_batch(
     client, items: list[tuple[dict, str]], id_to_text: dict, prompts: dict,
-    max_ancestor_chars: int = 0,
+    max_upstream_chars: int | None = None,
 ) -> list[dict]:
     """Classify a batch of (entry, drug) pairs. All must share the same drug."""
     drug = items[0][1]
     msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
     for i, (entry, _) in enumerate(items):
-        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_ancestor_chars)}\n\n"
+        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
     msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" and "signal".'
 
     raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50 * len(items))
@@ -196,7 +189,7 @@ def run_classification(
     for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
         batch = to_do[i:i + PREFILTER_BATCH_SIZE]
         try:
-            results = prefilter_batch(client, batch, id_to_text, config.max_ancestor_chars)
+            results = prefilter_batch(client, batch, id_to_text, config.max_upstream_chars)
             for (entry, drug), passed in zip(batch, results):
                 if not passed:
                     filtered.add((entry["id"], drug))
@@ -223,7 +216,7 @@ def run_classification(
 
             try:
                 results = classify_batch(
-                    client, batch, id_to_text, prompts, config.max_ancestor_chars,
+                    client, batch, id_to_text, prompts, config.max_upstream_chars,
                 )
                 for (entry, drug), result in zip(batch, results):
                     if result.signal != "n/a":
@@ -238,7 +231,7 @@ def run_classification(
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug in batch:
                     try:
-                        msg = format_entry(entry, id_to_text, config.max_ancestor_chars)
+                        msg = format_entry(entry, id_to_text, config.max_upstream_chars)
                         msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
                         raw = llm_call(
                             client, msg, model=MODEL_STRONG,

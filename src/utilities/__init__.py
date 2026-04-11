@@ -21,8 +21,8 @@ class PipelineConfig:
     db_path: Path
     limit: int = 100
     reclassify: bool = False
-    max_ancestor_chars: int = 0  # 0 = unlimited; truncate ancestor text to N chars
-    max_ancestor_depth: int = 0  # 0 = unlimited; max ancestor hops for drug context
+    max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
+    max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
 
     def path(self, filename: str) -> Path:
         return self.output_dir / filename
