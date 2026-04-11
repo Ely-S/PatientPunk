@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from import_posts import import_reddit_posts
 from run_pipeline import run_pipeline
+from extract_demographics_conditions import run_demographics
 from utilities import PipelineConfig, get_client
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
@@ -59,8 +60,20 @@ def test_populate_users_and_posts(db: DB):
     assert post_count ==  4
     assert user_count == 4
 
+def test_extract_demographic_data(db: DB):
+    """Test that the demographic extraction pipeline works."""
+    run_demographics(db.path)
+    user_profiles = db.conn.execute("SELECT * from user_profiles").fetchall()
+    conditions = db.conn.execute("SELECT * FROM conditions").fetchall()
+    all_user_ids = ["a", "b", "c", "d"]
+    # Every user should have a row, even if demographics are null
+    user_ids_in_profiles = sorted(row[0] for row in user_profiles)
+    assert user_ids_in_profiles == all_user_ids
+    
+    user_ids_in_conditions = sorted(row[2] for row in conditions)
+    assert set(user_ids_in_conditions).issubset(all_user_ids)
 
-def test_treatment_cannon_pipeline(db: DB):
+def test_treatment_end2end_pipeline(db: DB):
     """Test that the treatment canonicalization pipeline works."""
     config = PipelineConfig(
         client=get_client(),

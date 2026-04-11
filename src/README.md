@@ -47,6 +47,8 @@ python src/run_pipeline.py \
 | `--limit N` | Process only the first N posts/comments (default: all) |
 | `--skip-canonicalize` | Skip synonym normalization, classify using raw drug names |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
+| `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
+| `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 
 ---
 
@@ -121,6 +123,25 @@ The pipeline is designed to resume after interruptions:
 - **Canonicalize:** Re-runs fully (cheap Haiku calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
 
+### Standalone — Demographics (`extract_demographics_conditions.py`)
+
+Not part of the main pipeline — run separately. Groups posts by user, sends them to Haiku, and extracts demographics and conditions. Not currently used downstream by the treatment pipeline — the two are independent.
+
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+
+```bash
+python src/extract_demographics_conditions.py --db data/posts.db
+```
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database (required) |
+| `--limit N` | Limit to N users (default: all) |
+| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
+| `--max-chars N` | Max characters per post (default: 500) |
+
+---
+
 Use `--reclassify` to force re-classification of all pairs. Old results are preserved with their original `run_id` — nothing is deleted.
 
 ---
@@ -158,17 +179,19 @@ LIMIT 20;
 
 ```
 src/
-  run_pipeline.py              # Orchestrates all steps
-  import_posts.py              # Step 0: import Reddit JSON into SQLite
-  models.py                    # ClassificationResult (Pydantic validation)
+  run_pipeline.py                    # Orchestrates extract → canonicalize → classify
+  import_posts.py                    # Step 0: import Reddit JSON into SQLite
+  extract_demographics_conditions.py # Extract demographics + conditions per user
+  models.py                          # ClassificationResult (Pydantic validation)
   requirements.txt
   pipeline/
-    extract.py                 # Step 1: extract drug mentions from posts
-    canonicalize.py            # Step 2: normalize synonyms + populate treatment table
-    classify.py                # Step 3: two-stage sentiment classification
+    extract.py                       # Step 1: extract drug mentions from posts
+    canonicalize.py                  # Step 2: normalize synonyms + populate treatment table
+    classify.py                      # Step 3: two-stage sentiment classification
   utilities/
-    __init__.py                # PipelineConfig, llm_call, LLMParseError, JSON parsing
-    db.py                      # open_db, upsert_treatments, load_synonyms, ReportWriter
+    __init__.py                      # PipelineConfig, llm_call, LLMParseError, JSON parsing
+    db.py                            # open_db, upsert_treatments, load_synonyms, ReportWriter
   prompts/
-    intervention_config.py     # All LLM prompts in one place
+    intervention_config.py           # Extract, canonicalize, prefilter, and classification prompts
+    demographic_prompt.py            # Demographics extraction prompt
 ```

@@ -13,7 +13,6 @@ Usage:
     python src/run_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 
@@ -21,22 +20,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, log, MODEL_FAST, MODEL_STRONG
+from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
 
-
-def get_git_commit() -> str:
-    """Get current git commit hash, or 'unknown' if not in a git repo."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return "unknown"
 
 
 def _banner(label: str) -> None:
