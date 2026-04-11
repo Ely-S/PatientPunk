@@ -39,16 +39,24 @@ logging.getLogger("anthropic").setLevel(logging.WARNING)
 # ── Models + Provider ────────────────────────────────────────────────────────
 # OpenRouter is the default — set OPENROUTER_API_KEY in .env.
 # To use Anthropic directly, set LLM_PROVIDER=anthropic in .env.
+#
+# Override models in .env:
+#   MODEL_FAST=google/gemini-2.0-flash
+#   MODEL_STRONG=openai/gpt-4o
+# Any model supported by your provider works.
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter")
 
 if LLM_PROVIDER == "openrouter":
-    MODEL_FAST = "anthropic/claude-haiku-4.5"
-    MODEL_STRONG = "anthropic/claude-sonnet-4.6"
+    _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
+    _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
     _API_BASE = "https://openrouter.ai/api"
 else:
-    MODEL_FAST = "claude-haiku-4-5-20251001"
-    MODEL_STRONG = "claude-sonnet-4-6"
+    _DEFAULT_FAST = "claude-haiku-4-5-20251001"
+    _DEFAULT_STRONG = "claude-sonnet-4-6"
     _API_BASE = None
+
+MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
+MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
