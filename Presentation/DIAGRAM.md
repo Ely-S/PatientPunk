@@ -3,7 +3,7 @@
 ```mermaid
 flowchart TD
     subgraph Sources["Data Sources"]
-        AS["Arctic Shift API\nHistorical Reddit NDJSON\ncovidlonghaulers · ehlersdanlos · PSSD\nmicrodosing · abortion"]
+        AS["Arctic Shift API\nHistorical Reddit NDJSON"]
     end
 
     subgraph Ingest["Ingestion"]
