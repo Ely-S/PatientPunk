@@ -24,6 +24,14 @@ class PipelineConfig:
     db_path: Path
     limit: int = 100
     reclassify: bool = False
+    max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
+    max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
+
+    def __post_init__(self):
+        if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
+            raise ValueError(f"max_upstream_chars must be non-negative, got {self.max_upstream_chars}")
+        if self.max_upstream_depth is not None and self.max_upstream_depth < 0:
+            raise ValueError(f"max_upstream_depth must be non-negative, got {self.max_upstream_depth}")
 
     def path(self, filename: str) -> Path:
         return self.output_dir / filename
@@ -37,6 +45,19 @@ logging.getLogger("anthropic").setLevel(logging.WARNING)
 # ── Models ───────────────────────────────────────────────────────────────────
 MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_STRONG = "claude-sonnet-4-6"
+
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+def get_git_commit() -> str:
+    """Return current git commit hash, or 'unknown'."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
 
 
 # ── Client ───────────────────────────────────────────────────────────────────

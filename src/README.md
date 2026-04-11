@@ -1,8 +1,8 @@
 # PatientPunk — Drug Mention Pipeline (`src/`)
 
-General-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in a Reddit corpus. Automatically discovers every drug/supplement/intervention mentioned (including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic"), normalizes synonyms, and classifies how each author feels about each drug — without any hardcoded drug list.
+General-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in a Reddit corpus.
 
-For rigorous, prompt-tuned analysis of a specific intervention, see `detailed_analysis/`.
+Automatically discovers every drug/supplement/intervention mentioned (including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic"), normalizes synonyms, and classifies how each author feels about each drug — without any hardcoded drug list. 
 
 ---
 
@@ -10,7 +10,9 @@ For rigorous, prompt-tuned analysis of a specific intervention, see `detailed_an
 
 The pipeline reads posts from a SQLite database and produces a sentiment database: for each post/comment × drug pair, did this author have a positive, negative, or mixed experience?
 
-A key design principle: **reply chain context is preserved**. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from ancestors via the parent chain).
+A key design principle: **reply chain context is preserved**. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from upstream comments via the parent chain).
+
+(In progress) extracts demographic data for each user, including age, gender, and location. For each user, when available, it extracts their conditions, the onset and recovery time, and severity.
 
 ---
 
@@ -40,6 +42,7 @@ python src/run_pipeline.py \
   --output-dir outputs
 ```
 
+
 | Flag | Description |
 |------|-------------|
 | `--db` | Path to SQLite database with posts already imported (required) |
@@ -47,36 +50,30 @@ python src/run_pipeline.py \
 | `--limit N` | Process only the first N posts/comments (default: all) |
 | `--skip-canonicalize` | Skip synonym normalization, classify using raw drug names |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
+| `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
+| `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 
 ---
 
-## Architecture
+**Optional Step: extract demographic information**
+```bash
+python src/extract_demographics_conditions.py \
+  --db data/posts.db
+```
 
-All pipeline steps accept a shared `PipelineConfig` dataclass (defined in `utilities/`), which holds the Anthropic client, output directory, database path, limit, and reclassify flag.
-
-All LLM prompts live in `prompts/intervention_config.py` — one file for the extract prompt, canonicalization prompt, prefilter prompt, and the Sonnet classification system prompt.
-
-Shared helpers (`llm_call`, `parse_json_array`, `parse_json_object`) and `LLMParseError` live in `utilities/__init__.py`, along with model constants (`MODEL_FAST = claude-haiku-4-5`, `MODEL_STRONG = claude-sonnet-4-6`).
-
-Database helpers live in `utilities/db.py`: `open_db()` for connection setup, `upsert_treatments()` and `load_synonyms()` for the treatment table, and `ReportWriter` for incremental classification writes.
-
-LLM classification responses are validated with a Pydantic model (`ClassificationResult` in `models.py`), enforcing `Literal` types for sentiment and signal values.
-
----
-
-## Pipeline steps
+## Sentiment Pipeline steps
 
 ### Step 1 — Extract (`pipeline/extract.py`)
 
-Reads posts/comments from the `posts` table in SQLite. Asks Haiku to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
+Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
 
-**Ancestor context:** For each comment, `drugs_context` is computed by walking up the parent chain and collecting all `drugs_direct` from ancestors. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name.
+**Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name. 
 
 **Output:** `tagged_mentions.json` — intermediate file with drug mentions per entry.
 
 ### Step 2 — Canonicalize (`pipeline/canonicalize.py`)
 
-Collects all unique drug names from `tagged_mentions.json`, sends them to Haiku in batches of 50, and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
+Collects all unique drug names from `tagged_mentions.json`, sends them to a fast model in batches, and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
 
 **Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
 
@@ -88,15 +85,11 @@ Can be skipped with `--skip-canonicalize` (raw drug names inserted into the trea
 
 For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-1. **Haiku prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
 
-2. **Sonnet classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in ancestor text = "ldn". The subreddit name is read from the database and injected into the prompt.
+2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
 
-**Reply chain handling:** Ancestor text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
-
-**Pure-question filter:** Before any LLM calls, entries where every sentence ends with `?` are filtered out.
-
-**Validation:** Each LLM classification response is validated through the `ClassificationResult` Pydantic model. Invalid sentiment or signal values raise `ValidationError` instead of silently writing bad data to the database.
+**Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
 
 **Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
 
@@ -106,10 +99,13 @@ For each entry × drug pair, classifies the author's sentiment. Two-stage proces
 | `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
 
 ---
+## Data overwriting
 
-## Error handling
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
 
-LLM responses that can't be parsed as JSON raise `LLMParseError(ValueError)` instead of silently returning empty results. Callers catch this to trigger retry logic (e.g. splitting a failed batch into smaller pieces).
+Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
+
+Demographics uses `INSERT OR REPLACE` on `user_profiles`, keyed on `(user_id, run_id)`, so re-running with the same run overwrites that run's results while different runs produce separate rows.
 
 ---
 
@@ -118,8 +114,27 @@ LLM responses that can't be parsed as JSON raise `LLMParseError(ValueError)` ins
 The pipeline is designed to resume after interruptions:
 
 - **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
-- **Canonicalize:** Re-runs fully (cheap Haiku calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
+- **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
+
+### Standalone — Demographics (`extract_demographics_conditions.py`)
+
+Not part of the main pipeline — run separately. Groups posts by user, sends them to a fast model, and extracts demographics and conditions. Not currently used downstream by the treatment pipeline — the two are independent.
+
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+
+```bash
+python src/extract_demographics_conditions.py --db data/posts.db
+```
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database (required) |
+| `--limit N` | Limit to N users (default: all) |
+| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
+| `--max-chars N` | Max characters per post (default: 500) |
+
+---
 
 Use `--reclassify` to force re-classification of all pairs. Old results are preserved with their original `run_id` — nothing is deleted.
 
@@ -153,22 +168,3 @@ LIMIT 20;
 ```
 
 ---
-
-## File structure
-
-```
-src/
-  run_pipeline.py              # Orchestrates all steps
-  import_posts.py              # Step 0: import Reddit JSON into SQLite
-  models.py                    # ClassificationResult (Pydantic validation)
-  requirements.txt
-  pipeline/
-    extract.py                 # Step 1: extract drug mentions from posts
-    canonicalize.py            # Step 2: normalize synonyms + populate treatment table
-    classify.py                # Step 3: two-stage sentiment classification
-  utilities/
-    __init__.py                # PipelineConfig, llm_call, LLMParseError, JSON parsing
-    db.py                      # open_db, upsert_treatments, load_synonyms, ReportWriter
-  prompts/
-    intervention_config.py     # All LLM prompts in one place
-```

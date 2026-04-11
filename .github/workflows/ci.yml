@@ -26,3 +26,5 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -v
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
