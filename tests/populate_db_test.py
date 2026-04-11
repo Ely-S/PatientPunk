@@ -17,8 +17,6 @@ from utilities import PipelineConfig, get_client
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 SAMPLE = Path(__file__).parent / "sample_data.json"
 
-NOW = int(time.time())
-
 
 class DB(NamedTuple):
     conn: sqlite3.Connection
@@ -56,7 +54,6 @@ def test_schema_creates_all_tables(db: DB):
 def test_populate_users_and_posts(db: DB):
     import_reddit_posts(db.conn, SAMPLE, subreddit="test_subreddit")
 
-    data = json.loads(SAMPLE.read_text())
     post_count = db.conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     user_count = db.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     assert post_count ==  4
