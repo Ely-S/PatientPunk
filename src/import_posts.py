@@ -50,7 +50,7 @@ def extract_subreddit(url: str | None) -> str:
 
 def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> None:
     """Import subreddit_posts.json into users + posts tables."""
-    data = json.loads(input_path.read_text())
+    data = json.loads(input_path.read_text(encoding="utf-8"))
     now = int(datetime.now(timezone.utc).timestamp())
 
     users: list[UserRow] = []

@@ -247,7 +247,7 @@ def run_classification(
                                     sentiment=result.sentiment, signal=result.signal,
                                 )
                     except (LLMParseError, ValidationError) as e2:
-                        raise RuntimeError(f"Error on {entry['id']}:{drug}: {e2}") from e2
+                        log.warning(f"Skipping {entry['id']}:{drug}: {e2}")
                    
 
             done += len(batch)
