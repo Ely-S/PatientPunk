@@ -31,17 +31,43 @@ log = logging.getLogger("pipeline")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 
-# ── Models ───────────────────────────────────────────────────────────────────
-MODEL_FAST = "claude-haiku-4-5-20251001"
-MODEL_STRONG = "claude-sonnet-4-6"
+# ── Models + Provider ────────────────────────────────────────────────────────
+# OpenRouter is the default — set OPENROUTER_API_KEY in .env.
+# To use Anthropic directly, set LLM_PROVIDER=anthropic in .env.
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter")
+
+if LLM_PROVIDER == "openrouter":
+    MODEL_FAST = "anthropic/claude-haiku-4.5"
+    MODEL_STRONG = "anthropic/claude-sonnet-4.6"
+    _API_BASE = "https://openrouter.ai/api"
+else:
+    MODEL_FAST = "claude-haiku-4-5-20251001"
+    MODEL_STRONG = "claude-sonnet-4-6"
+    _API_BASE = None
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
-    return anthropic.Anthropic(api_key=api_key)
+    """Return a configured Anthropic client (direct or via OpenRouter).
+
+    Reads API key from environment: OPENROUTER_API_KEY (preferred) or
+    ANTHROPIC_API_KEY (fallback). Exits with a clear message if neither is set.
+    """
+    api_key = (
+        os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or ""
+    )
+    if not api_key or api_key.startswith("sk-ant-your-"):
+        sys.exit(
+            "API key not set. Add OPENROUTER_API_KEY or ANTHROPIC_API_KEY to .env\n"
+            "  export OPENROUTER_API_KEY=your_key_here\n"
+            "  # or: export ANTHROPIC_API_KEY=your_key_here"
+        )
+    kwargs: dict = {"api_key": api_key}
+    if _API_BASE:
+        kwargs["base_url"] = _API_BASE
+    return anthropic.Anthropic(**kwargs)
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────
