@@ -47,6 +47,8 @@ python src/run_pipeline.py \
 | `--limit N` | Process only the first N posts/comments (default: all) |
 | `--skip-canonicalize` | Skip synonym normalization, classify using raw drug names |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
+| `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
+| `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 
 ---
 
@@ -158,17 +160,19 @@ LIMIT 20;
 
 ```
 src/
-  run_pipeline.py              # Orchestrates all steps
-  import_posts.py              # Step 0: import Reddit JSON into SQLite
-  models.py                    # ClassificationResult (Pydantic validation)
+  run_pipeline.py                    # Orchestrates extract → canonicalize → classify
+  import_posts.py                    # Step 0: import Reddit JSON into SQLite
+  extract_demographics_conditions.py # Extract demographics + conditions per user
+  models.py                          # ClassificationResult (Pydantic validation)
   requirements.txt
   pipeline/
-    extract.py                 # Step 1: extract drug mentions from posts
-    canonicalize.py            # Step 2: normalize synonyms + populate treatment table
-    classify.py                # Step 3: two-stage sentiment classification
+    extract.py                       # Step 1: extract drug mentions from posts
+    canonicalize.py                  # Step 2: normalize synonyms + populate treatment table
+    classify.py                      # Step 3: two-stage sentiment classification
   utilities/
-    __init__.py                # PipelineConfig, llm_call, LLMParseError, JSON parsing
-    db.py                      # open_db, upsert_treatments, load_synonyms, ReportWriter
+    __init__.py                      # PipelineConfig, llm_call, LLMParseError, JSON parsing
+    db.py                            # open_db, upsert_treatments, load_synonyms, ReportWriter
   prompts/
-    intervention_config.py     # All LLM prompts in one place
+    intervention_config.py           # Extract, canonicalize, prefilter, and classification prompts
+    demographic_prompt.py            # Demographics extraction prompt
 ```
