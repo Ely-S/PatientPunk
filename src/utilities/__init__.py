@@ -58,7 +58,9 @@ _has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_K
 _has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
 
 # Auto-detect provider from available keys, or use explicit override
-_explicit_provider = os.environ.get("LLM_PROVIDER")
+_explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
+if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
+    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
 if _explicit_provider:
     LLM_PROVIDER = _explicit_provider
 elif _has_openrouter:
