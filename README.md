@@ -145,9 +145,10 @@ git clone https://github.com/Ely-S/PatientPunk.git
 cd PatientPunk
 uv sync
 
-# Copy env template and add your API key
+# Set your Anthropic API key
 cp Scrapers/demographic_extraction/.env.example .env
 # Edit .env and set ANTHROPIC_API_KEY=<your key>
+export ANTHROPIC_API_KEY=<your key>  # also export for the current shell session
 ```
 
 To run any pipeline command, prefix it with `uv run`:
@@ -168,29 +169,94 @@ uv run pytest -v
 
 ### Step 1 — Scrape
 
-```bash
-python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
-# Outputs: Scrapers/output/subreddit_posts.json  +  Scrapers/output/users/*.json
-```
+Pulls posts from r/covidlonghaulers via the [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift) public API — no Reddit API key required. All usernames are SHA-256 hashed before being written to disk; raw usernames never touch the filesystem.
 
-### Step 2a — Demographic extraction *(who are the patients?)*
+`--comments` fetches full reply trees. `--user-histories` scrapes each author's full Reddit history across all subreddits — useful because patients document their health journeys across many communities, not just one.
 
 ```bash
-python Scrapers/demographic_extraction/run_pipeline.py \
-    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
-# Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
+uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
+# Outputs:
+#   output/subreddit_posts.json     all posts (+ comments if --comments)
+#   output/users/{hash}.json        one file per author (only with --user-histories)
+#   output/corpus_metadata.json     run summary and stats
 ```
 
-### Step 2b — Drug sentiment *(what do they say about treatments?)*
+### Step 2 — Import into database
+
+Normalizes the scraped JSON into a SQLite database. `schema.sql` creates the tables; `import_posts.py` loads posts and comments into the `users` and `posts` tables, preserving the `parent_id` chain between comments and their parents.
+
+The parent chain matters: a short reply like *"same, it really helped me"* is meaningless without its parent post. The pipeline uses these chains to propagate drug mentions from parent posts to replies, and to include ancestor text when classifying sentiment.
 
 ```bash
-python database_creation/extract_mentions.py   # tag every post with drugs mentioned
-python database_creation/canonicalize.py       # collapse synonyms → canonical names
-python database_creation/classify_sentiment.py # classify sentiment per entry × drug
-# Output: reddit_sample_data/outputs/sentiment_cache.json
+mkdir -p data
+sqlite3 data/posts.db < schema.sql
+uv run python src/import_posts.py \
+    --reddit-posts output/subreddit_posts.json \
+    --output-db data/posts.db
 ```
 
-Steps 2a and 2b are independent — run them in either order. Both tag every record with `author_hash` (SHA-256 of username), which is the join key between the two datasets.
+### Step 3a — Demographic extraction *(who are the patients?)*
+
+Extracts structured patient attributes from post text — vaccination status, functional tier, infection count, reported biomarkers, and more — using a combination of regex patterns and Claude Haiku to fill gaps the patterns miss. A discovery phase (`discover_fields.py`) also uses LLM calls to find fields not in the schema yet.
+
+The output is a per-user CSV with one row per patient and a codebook describing each field. These demographics are the "who" — without them, treatment outcomes can't be segmented by patient subtype.
+
+Run from the `Scrapers/demographic_extraction/` directory. Pass `--input-dir` pointing back to the project root `output/` directory where the scraper wrote its data:
+
+```bash
+cd Scrapers/demographic_extraction
+uv run python run_pipeline.py \
+    --schema schemas/covidlonghaulers_schema.json \
+    --input-dir ../../output
+# Outputs:
+#   Scrapers/output/records.csv      one row per patient, one column per extracted field
+#   Scrapers/output/codebook.csv     data dictionary describing each field
+```
+
+For a quick demo run, add `--limit 20 --no-discover` to process only 20 records and skip the field discovery phase (which makes additional LLM calls to find schema fields not already defined):
+
+```bash
+uv run python run_pipeline.py \
+    --schema schemas/covidlonghaulers_schema.json \
+    --input-dir ../../output \
+    --limit 20 --no-discover
+```
+
+### Step 3b — Drug sentiment *(what do they say about treatments?)*
+
+Builds a treatment outcome database from the post corpus. Runs three stages internally:
+
+1. **Extract** — Haiku reads every post and comment, identifying all drugs, supplements, and interventions mentioned (brand names, abbreviations, categories like "antihistamines", generic references like "an oral antibiotic"). Drug mentions from a parent post are inherited by its replies, so a short reply to an LDN thread carries LDN even if it doesn't name it.
+
+2. **Canonicalize** — Collapses synonyms so "low dose naltrexone", "LDN", and "low-dose naltrexone" all count as the same treatment. Without this step, the same drug would fragment into dozens of variants and sentiment counts would be meaningless.
+
+3. **Classify** — Two-stage to minimize cost: Haiku prefilters each (post, drug) pair to check whether the author is expressing personal experience (discards questions, research discussion, third-party reports), then Sonnet classifies sentiment (`positive` / `negative` / `mixed` / `neutral`) and signal strength (`strong` / `moderate` / `weak`). Ancestor text is included so replies like *"I love it too"* resolve correctly.
+
+Results are written incrementally to the database — if the run is interrupted, it resumes from where it left off.
+
+```bash
+uv run python src/run_pipeline.py \
+    --db data/posts.db \
+    --output-dir outputs
+# Output: treatment_reports table in data/posts.db
+```
+
+For a quick demo run, add `--limit 50` to process only the first 50 posts:
+
+```bash
+uv run python src/run_pipeline.py \
+    --db data/posts.db \
+    --output-dir outputs \
+    --limit 50
+```
+
+| Flag | Description |
+|------|-------------|
+| `--limit N` | Process only the first N posts/comments (useful for testing) |
+| `--skip-canonicalize` | Skip synonym normalization — classify using raw drug names |
+| `--reclassify` | Re-classify all pairs, even those already in the database |
+
+Steps 3a and 3b are independent — run them in either order. Both identify records by `author_hash` (SHA-256 of username), which is the join key between the two datasets.
 
 ---
 
