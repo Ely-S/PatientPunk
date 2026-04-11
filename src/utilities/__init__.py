@@ -7,9 +7,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
-# Load .env from project root (try multiple locations)
-load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+# Load .env from project root. override=False so explicitly-exported
+# env vars always win over .env file values. Root is the single source
+# of truth; src/.env is a fallback only if root doesn't exist.
+_root_env = Path(__file__).parent.parent.parent / ".env"
+_src_env = Path(__file__).parent.parent / ".env"
+if _root_env.exists():
+    load_dotenv(_root_env, override=False)
+elif _src_env.exists():
+    load_dotenv(_src_env, override=False)
 
 import anthropic
 
@@ -37,14 +43,30 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 
 # ── Models + Provider ────────────────────────────────────────────────────────
-# OpenRouter is the default — set OPENROUTER_API_KEY in .env.
-# To use Anthropic directly, set LLM_PROVIDER=anthropic in .env.
+# Provider is auto-detected from which API key is set, unless overridden:
+#   OPENROUTER_API_KEY set → openrouter (default models: anthropic/claude-*)
+#   ANTHROPIC_API_KEY set  → anthropic  (default models: claude-*-20251001)
+#   LLM_PROVIDER=...       → explicit override
 #
 # Override models in .env:
 #   MODEL_FAST=google/gemini-2.0-flash
 #   MODEL_STRONG=openai/gpt-4o
 # Any model supported by your provider works.
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter")
+_PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX"}
+
+_has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_KEYS
+_has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
+
+# Auto-detect provider from available keys, or use explicit override
+_explicit_provider = os.environ.get("LLM_PROVIDER")
+if _explicit_provider:
+    LLM_PROVIDER = _explicit_provider
+elif _has_openrouter:
+    LLM_PROVIDER = "openrouter"
+elif _has_anthropic:
+    LLM_PROVIDER = "anthropic"
+else:
+    LLM_PROVIDER = "anthropic"  # default for backward compatibility
 
 if LLM_PROVIDER == "openrouter":
     _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
@@ -63,20 +85,26 @@ MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 def get_client() -> anthropic.Anthropic:
     """Return a configured Anthropic client (direct or via OpenRouter).
 
-    Reads API key from environment: OPENROUTER_API_KEY (preferred) or
-    ANTHROPIC_API_KEY (fallback). Exits with a clear message if neither is set.
+    Key selection is tied to the provider:
+      openrouter → requires OPENROUTER_API_KEY
+      anthropic  → requires ANTHROPIC_API_KEY
     """
-    api_key = (
-        os.environ.get("OPENROUTER_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or ""
-    )
-    if not api_key or api_key.startswith("sk-ant-your-"):
+    if LLM_PROVIDER == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        key_name = "OPENROUTER_API_KEY"
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key_name = "ANTHROPIC_API_KEY"
+
+    if not api_key or api_key in _PLACEHOLDER_KEYS:
         sys.exit(
-            "API key not set. Add OPENROUTER_API_KEY or ANTHROPIC_API_KEY to .env\n"
-            "  export OPENROUTER_API_KEY=your_key_here\n"
-            "  # or: export ANTHROPIC_API_KEY=your_key_here"
+            f"{key_name} not set (provider={LLM_PROVIDER}).\n"
+            f"  Add {key_name}=... to .env\n"
+            f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
         )
+
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+
     kwargs: dict = {"api_key": api_key}
     if _API_BASE:
         kwargs["base_url"] = _API_BASE
