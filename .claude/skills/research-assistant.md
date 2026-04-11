@@ -293,5 +293,6 @@ The diverging bar chart (see above) is usually the best single chart for treatme
 - **Skipping approval** — never generate the notebook before the researcher signs off on the plan
 - **Silent data quality issues** — if nulls or small N could affect conclusions, say so in the plan and again in the notebook summary
 - **Opaque notebooks** — every code cell needs a markdown explanation; notebooks are read by people who weren't in the conversation
+- **Displaying full DataFrames** — never `display(df)` a table with 50+ rows; always truncate with `.head(20)` or `.head(30)` sorted by the most meaningful column (usually user count). The full table can be saved to CSV for reference if needed.
 - **Mixed segment on the wrong side** — in diverging bar charts, Mixed must be innermost (adjacent to center), not outermost; see Charting Standards above
 - **Legend over data** — always place legends outside the bar area using `bbox_to_anchor`; see Charting Standards above
