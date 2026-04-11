@@ -82,7 +82,5 @@ The gap between patient knowledge and the clinical literature is measured in yea
 
 ---
 
-## Team
-
-Eli, Polina, and Shaun — built at a biotech hackathon in San Francisco, April 2026.
+*Built at a biotech hackathon in San Francisco, April 2026.*
 
