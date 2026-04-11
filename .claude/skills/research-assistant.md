@@ -71,6 +71,8 @@ Where `N` is the next sequential integer (check existing notebooks first).
 - Load results into `pandas` DataFrames for manipulation
 - **For treatment outcome analysis, prefer the PatientPunk stats engine** over raw statsmodels (see below)
 - Use `matplotlib` or `seaborn` for charts
+- **Suppress warnings in notebooks** — add `import warnings; warnings.filterwarnings("ignore")` in the setup cell so users never see `FutureWarning`, `DeprecationWarning`, etc. in the output
+- When using seaborn, always pass `hue=` instead of the deprecated `palette`-without-`hue` pattern (e.g., `sns.boxplot(data=df, x="Group", y="score", hue="Group", legend=False)` instead of `palette=[...]`)
 - Every code cell should have a markdown cell above it explaining what it does and why
 - Include a **Summary** markdown cell at the end with key findings in plain language
 - Hard-code the database path as a variable at the top of the notebook so it's easy to change
