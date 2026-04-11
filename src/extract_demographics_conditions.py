@@ -87,7 +87,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
         if any([age_bucket, sex, location]):
             conn.execute(
                 "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
-                "VALUES (?, ?, ?, ?, ?)"p,
+                "VALUES (?, ?, ?, ?, ?)",
                 (user_id, run_id, age_bucket, sex, location),
             )
             profiles_written += 1
