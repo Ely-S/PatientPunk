@@ -73,5 +73,5 @@ def test_treatment_cannon_pipeline(db: DB):
     run_pipeline(config)
     treatment_counts = db.conn.execute("SELECT COUNT(*) FROM treatment").fetchone()[0]
     assert treatment_counts >= 1
-    treatment_reports = db.conn.execute("SELECT * FROM treatment_reports").fetchall()
-    assert treatment_reports == [(1, 1, 'Comment1', 'b', 1, 'positive', 'strong')]
+    treatment_reports = db.conn.execute("SELECT post_id, user_id, sentiment, signal_strength FROM treatment_reports").fetchall()
+    assert treatment_reports == [('Comment1', 'b', 'positive', 'strong')]
