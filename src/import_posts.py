@@ -7,6 +7,24 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
+
+
+class UserRow(NamedTuple):
+    user_id: str
+    source_subreddit: str | None
+    scraped_at: int
+
+
+class PostRow(NamedTuple):
+    post_id: str
+    title: str | None
+    parent_id: str | None
+    user_id: str
+    body_text: str
+    flair: str | None
+    post_date: int | None
+    scraped_at: int
 
 from utilities.db import open_db
 
@@ -27,7 +45,7 @@ def to_epoch(ts: str | int | None) -> int | None:
 def extract_subreddit(url: str | None) -> str:
     if url and "/r/" in url:
         return url.split("/r/")[1].split("/")[0]
-    return "unknown"
+    return None
 
 
 def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> None:
@@ -35,31 +53,34 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     data = json.loads(input_path.read_text())
     now = int(datetime.now(timezone.utc).timestamp())
 
-    users: list[tuple] = []
-    posts: list[tuple] = []
+    users: list[UserRow] = []
+    posts: list[PostRow] = []
     seen_users: set[str] = set()
 
     def add_user(author: str, sub: str) -> None:
         if author not in seen_users:
             seen_users.add(author)
-            users.append((author, sub, now))
+            users.append(UserRow(author, sub, now))
 
     for post in data:
         author = post["author_hash"]
         sub = subreddit or extract_subreddit(post.get("url"))
+
         add_user(author, sub)
-        posts.append((
-            post["post_id"], post.get("title"), None, author,
-            post.get("body") or "", post.get("flair"),
-            to_epoch(post.get("created_utc")), now,
+        posts.append(PostRow(
+            post_id=post["post_id"], title=post.get("title"), parent_id=None,
+            user_id=author, body_text=post.get("body") or "",
+            flair=post.get("flair"), post_date=to_epoch(post.get("created_utc")),
+            scraped_at=now,
         ))
         for comment in post.get("comments", []):
             c_author = comment["author_hash"]
             add_user(c_author, sub)
-            posts.append((
-                comment["comment_id"], None, comment.get("parent_id"), c_author,
-                comment.get("body", ""), None,
-                to_epoch(comment.get("created_utc")), now,
+            posts.append(PostRow(
+                post_id=comment["comment_id"], title=None,
+                parent_id=comment.get("parent_id"), user_id=c_author,
+                body_text=comment.get("body", ""), flair=None,
+                post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
     with conn:

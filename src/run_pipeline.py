@@ -45,6 +45,40 @@ def _banner(label: str) -> None:
     log.info(f"{'═' * 60}\n")
 
 
+def run_pipeline(config: PipelineConfig, *, skip_canonicalize: bool = False) -> None:
+    """Run the full pipeline programmatically given a PipelineConfig."""
+    import json
+
+    _banner("EXTRACT")
+    run_extraction(config)
+
+    if not skip_canonicalize:
+        _banner("CANONICALIZE")
+        run_canonicalization(config)
+    else:
+        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text())
+        all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
+        count = upsert_treatments(config.db_path, all_drugs)
+        log.info(f"{count} treatments in database (no aliases).")
+
+    run_config = {
+        "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},
+        "limit": config.limit,
+        "reclassify": config.reclassify,
+        "skip_canonicalize": skip_canonicalize,
+        "output_dir": str(config.output_dir),
+    }
+
+    _banner("CLASSIFY")
+    with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
+        log.info(f"Extraction run {writer.run_id}")
+        run_classification(config, writer=writer)
+
+    log.info(f"\n{'═' * 60}")
+    log.info("  PIPELINE COMPLETE")
+    log.info(f"{'═' * 60}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run drug mention database pipeline")
     parser.add_argument("--db", required=True, help="Path to SQLite database (must have posts imported)")
@@ -65,36 +99,7 @@ def main():
         reclassify=args.reclassify,
     )
 
-    _banner("EXTRACT")
-    run_extraction(config)
-
-    if not args.skip_canonicalize:
-        _banner("CANONICALIZE")
-        run_canonicalization(config)  # also populates treatment table
-    else:
-        # No canonicalization — insert raw drug names with no aliases
-        import json
-        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text())
-        all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
-        count = upsert_treatments(config.db_path, all_drugs)
-        log.info(f"{count} treatments in database (no aliases).")
-
-    run_config = {
-        "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},
-        "limit": config.limit,
-        "reclassify": config.reclassify,
-        "skip_canonicalize": args.skip_canonicalize,
-        "output_dir": str(config.output_dir),
-    }
-
-    _banner("CLASSIFY")
-    with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
-        log.info(f"Extraction run {writer.run_id}")
-        run_classification(config, writer=writer)
-
-    log.info(f"\n{'═' * 60}")
-    log.info("  PIPELINE COMPLETE")
-    log.info(f"{'═' * 60}\n")
+    run_pipeline(config, skip_canonicalize=args.skip_canonicalize)
 
 
 if __name__ == "__main__":

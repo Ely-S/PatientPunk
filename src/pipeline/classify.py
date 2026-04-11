@@ -37,7 +37,7 @@ from utilities import (
 )
 
 BATCH_SIZE = 5
-PREFILTER_BATCH_SIZE = 5
+PREFILTER_BATCH_SIZE = 20
 
 
 def is_only_questions(text: str) -> bool:
@@ -61,10 +61,12 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict) -> str:
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> list[bool]:
     """Ask Haiku if each (entry, drug) pair expresses personal experience."""
-    msg = (
-        PREFILTER_PROMPT + f"\nExpecting {len(items)} answers.\n\n"
-        + "".join(_prefilter_block(i, e, d, id_to_text) for i, (e, d) in enumerate(items))
-    )
+    blocks = [
+        _prefilter_block(i, entry, drug, id_to_text)
+        for i, (entry, drug) in enumerate(items)
+    ]
+    msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
+   
 
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10)
     try:
@@ -140,9 +142,8 @@ def run_classification(
     if writer is not None:
         from utilities.db import load_synonyms, open_db
         synonyms_for = load_synonyms(config.db_path)
-        conn = open_db(config.db_path)
-        row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
-        conn.close()
+        with open_db(config.db_path) as conn:
+            row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
         subreddit = row[0] if row else "Long COVID"
     else:
         synonyms_for = {}

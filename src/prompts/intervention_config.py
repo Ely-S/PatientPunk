@@ -37,7 +37,10 @@ Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "f
 # Used by classify_sentiment.py (prefilter step)
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
-Does the AUTHOR express personal experience with the specified drug/intervention?
+Does the AUTHOR express personal experience with the specified treatment?
+"Treatment" includes drugs, supplements, therapies, devices, lifestyle interventions,
+exercises, diets, and any health-related practice (e.g. infrared sauna, epsom salt baths,
+physical therapy).
 Also 'yes' if the reply implies it works by saying NOT doing it made things worse.
 Answer 'no' if:
 - The author is asking someone else if they have tried it (e.g. "Have you tried X?")

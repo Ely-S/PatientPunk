@@ -5,6 +5,8 @@ canonicalize.py — Normalize drug synonyms.
 Step 2 of the pipeline. Merges synonyms (e.g. "low dose naltrexone" → "ldn")
 and rewrites tagged_mentions.json with canonical names.
 """
+from collections import defaultdict
+
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,7 +15,7 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from utilities import (
-    TAGGED_MENTIONS, CANONICAL_MAP, MODEL_FAST, LLMParseError,
+    TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
     llm_call, parse_json_object, log,
 )
 from utilities.db import upsert_treatments
@@ -37,8 +39,6 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     """Main canonicalization logic. Returns {raw_name: canonical_name}."""
     client = config.client
     tagged_path = config.path(TAGGED_MENTIONS)
-    canon_path = config.path(CANONICAL_MAP)
-
     tagged = json.loads(tagged_path.read_text())
     all_drugs = sorted({d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])})
     log.info(f"{len(tagged)} entries, {len(all_drugs)} unique drug names.")
@@ -53,8 +53,6 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
             for name in batch:
                 canon_map[name] = name
         log.info(f"Canonicalized {min(i + BATCH_SIZE, len(all_drugs))}/{len(all_drugs)}...")
-
-    canon_path.write_text(json.dumps(canon_map, indent=2, sort_keys=True))
 
     # Log synonym groups
     groups: dict[str, list[str]] = {}
@@ -78,8 +76,13 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     log.info(f"Rewrote {tagged_path.name} with canonical names.")
 
     # Populate treatment table with canonical names + aliases
-    all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
-    aliases_for: dict[str, list[str]] = {}
+    # Gather all unique, non-empty drug names from both "drugs_direct" and "drugs_context"
+    all_drugs = set()
+    for entry in tagged:
+        for drug in entry.get("drugs_direct", []) + entry.get("drugs_context", []):
+            if drug.strip():
+                all_drugs.add(drug)
+    aliases_for: dict[str, list[str]] = defaultdict(list)
     for raw, canonical in canon_map.items():
         if raw != canonical:
             aliases_for.setdefault(canonical, []).append(raw)
