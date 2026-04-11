@@ -45,12 +45,15 @@ def _banner(label: str) -> None:
     log.info(f"{'═' * 60}\n")
 
 
-def run_pipeline(config: PipelineConfig, *, skip_canonicalize: bool = False) -> None:
+def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = False) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
     import json
 
-    _banner("EXTRACT")
-    run_extraction(config)
+    if not skip_extract:
+        _banner("EXTRACT")
+        run_extraction(config)
+    else:
+        log.info("Skipping extraction (using existing tagged_mentions.json)")
 
     if not skip_canonicalize:
         _banner("CANONICALIZE")
@@ -72,7 +75,7 @@ def run_pipeline(config: PipelineConfig, *, skip_canonicalize: bool = False) -> 
     _banner("CLASSIFY")
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
-        run_classification(config, writer=writer)
+        run_classification(config, writer=writer, skip_prefilter=skip_prefilter)
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
@@ -85,7 +88,9 @@ def main():
     parser.add_argument("--output-dir", required=True, help="Directory for output files")
     parser.add_argument("--limit", type=int, default=0, help="Limit posts processed")
     parser.add_argument("--reclassify", action="store_true", help="Re-run classification for all pairs, even those already in the database")
+    parser.add_argument("--skip-extract", action="store_true", help="Skip extraction step (use existing tagged_mentions.json)")
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
+    parser.add_argument("--skip-prefilter", action="store_true", help="Skip Haiku prefilter, send all pairs to Sonnet")
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
     parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
     args = parser.parse_args()
@@ -103,7 +108,7 @@ def main():
         max_upstream_depth=args.max_upstream_depth,
     )
 
-    run_pipeline(config, skip_canonicalize=args.skip_canonicalize)
+    run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=args.skip_prefilter)
 
 
 if __name__ == "__main__":

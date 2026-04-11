@@ -7,6 +7,7 @@ with drugs found in each post/comment (direct mentions + inherited from upstream
 """
 import json
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,8 +18,8 @@ if TYPE_CHECKING:
 from prompts.intervention_config import EXTRACT_PROMPT
 from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
 
-BATCH_SIZE = 20
-SAVE_EVERY = 5
+BATCH_SIZE = 10
+MAX_WORKERS = 3
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
@@ -37,6 +38,15 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     if len(results) == len(texts):
         return results
 
+    # Near-miss: use what we can
+    if len(results) > len(texts):
+        log.warning(f"Mismatch ({len(results)}/{len(texts)}) — truncating extra results.")
+        return results[:len(texts)]
+    if len(results) >= len(texts) - 2:
+        log.warning(f"Mismatch ({len(results)}/{len(texts)}) — padding with empty arrays.")
+        return results + [[] for _ in range(len(texts) - len(results))]
+
+    # Big mismatch: retry as smaller batches
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
         mid = len(texts) // 2
@@ -141,20 +151,24 @@ def run_extraction(config: "PipelineConfig"):
         tagged_path.write_text(json.dumps(tagged, indent=2))
         return tagged
 
-    # Process in batches
-    batches_since_save = 0
-    for i in range(0, len(to_do), BATCH_SIZE):
-        batch = to_do[i:i + BATCH_SIZE]
-        texts = [text for _, text in batch]
-        batch_results = extract_batch(client, texts)
-        for (item_id, _), drugs in zip(batch, batch_results):
-            id_to_drugs[item_id] = [d.lower().strip() for d in (drugs or [])]
-
-        batches_since_save += 1
-        if batches_since_save >= SAVE_EVERY:
+    # Process in batches (parallel), save after every batch
+    all_batches = [to_do[i:i + BATCH_SIZE] for i in range(0, len(to_do), BATCH_SIZE)]
+    done_ext = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {
+            pool.submit(extract_batch, client, [t for _, t in batch]): batch
+            for batch in all_batches
+        }
+        for future in as_completed(futures):
+            batch = futures[future]
+            for (item_id, _), drugs in zip(batch, future.result()):
+                # Flatten drugs if any nested lists exist, ensure all are strings, lowercase and stripped
+                flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                id_to_drugs[item_id] = flat
+         
+            done_ext += len(batch)
             save_tagged()
-            batches_since_save = 0
-        log.info(f"Extracted {min(i + BATCH_SIZE, len(to_do))}/{len(to_do)}...")
+            log.info(f"Extracted {done_ext}/{len(to_do)}...")
 
     tagged = save_tagged()
 

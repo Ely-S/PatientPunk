@@ -94,14 +94,27 @@ def parse_json_object(raw: str) -> dict:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+import time as _time
+import random as _random
+
+_RETRYABLE = (anthropic.RateLimitError, anthropic.APITimeoutError, anthropic.APIConnectionError, anthropic.InternalServerError)
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
+    _max_retries: int = 5,
 ) -> str:
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
+    for attempt in range(_max_retries):
+        try:
+            return client.messages.create(**kwargs).content[0].text
+        except _RETRYABLE as e:
+            wait = min(2 ** attempt, 8) + _random.random()
+            log.warning(f"{type(e).__name__}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_max_retries})...")
+            _time.sleep(wait)
     return client.messages.create(**kwargs).content[0].text
