@@ -10,7 +10,6 @@ import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
-CANONICAL_MAP = "canonical_map.json"
 
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
@@ -22,6 +21,14 @@ class PipelineConfig:
     db_path: Path
     limit: int = 100
     reclassify: bool = False
+    max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
+    max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
+
+    def __post_init__(self):
+        if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
+            raise ValueError(f"max_upstream_chars must be non-negative, got {self.max_upstream_chars}")
+        if self.max_upstream_depth is not None and self.max_upstream_depth < 0:
+            raise ValueError(f"max_upstream_depth must be non-negative, got {self.max_upstream_depth}")
 
     def path(self, filename: str) -> Path:
         return self.output_dir / filename
@@ -54,26 +61,36 @@ def _strip_markdown(raw: str) -> str:
     return raw.strip()
 
 
+class LLMParseError(ValueError):
+    """LLM response could not be parsed as JSON."""
+
+
+import re
+
+_TRAILING_COMMA = re.compile(r",\s*([}\]])")
+
 def parse_json_array(raw: str) -> list:
     raw = _strip_markdown(raw)
     start, end = raw.find("["), raw.rfind("]") + 1
     if start < 0 or end <= start:
-        return []
+        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
+    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
-        return json.loads(raw[start:end])
-    except json.JSONDecodeError:
-        return []
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
 def parse_json_object(raw: str) -> dict:
     raw = _strip_markdown(raw)
     start, end = raw.find("{"), raw.rfind("}") + 1
     if start < 0 or end <= start:
-        return {}
+        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
+    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
-        return json.loads(raw[start:end])
-    except json.JSONDecodeError:
-        return {}
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────

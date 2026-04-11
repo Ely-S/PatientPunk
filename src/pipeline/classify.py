@@ -24,17 +24,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from database_scripts.db import ReportWriter
+    from utilities.db import ReportWriter
     from utilities import PipelineConfig
 
+from pydantic import ValidationError
+
+from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
-    TAGGED_MENTIONS, MODEL_FAST, MODEL_STRONG, llm_call,
-    parse_json_array, parse_json_object, log,
+    TAGGED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
+    llm_call, parse_json_array, parse_json_object, log,
 )
 
 BATCH_SIZE = 5
-PREFILTER_BATCH_SIZE = 5
+PREFILTER_BATCH_SIZE = 20
 
 
 def is_only_questions(text: str) -> bool:
@@ -45,64 +48,75 @@ def is_only_questions(text: str) -> bool:
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
+def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
+    """Format a single (entry, drug) item for the prefilter prompt."""
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    block = f"--- {i+1} --- Drug: {drug}\n"
+    if upstream_comment:
+        block += f"Replying to: {upstream_comment[:max_upstream_chars]}\n\n"
+    block += f"Comment: {entry['text']}\n\n"
+    return block
 
-def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict) -> list[bool]:
+
+def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
     """Ask Haiku if each (entry, drug) pair expresses personal experience."""
-    msg = PREFILTER_PROMPT + f"\nExpecting {len(items)} answers.\n\n"
-    for i, (entry, drug) in enumerate(items):
-        ancestor = id_to_text.get(entry.get("parent_id", ""), "")
-        msg += f"--- {i+1} --- Drug: {drug}\n"
-        if ancestor:
-            msg += f"Replying to: {ancestor}\n\n"
-        msg += f"Comment: {entry['text'][:600]}\n\n"
+    blocks = [
+        _prefilter_block(i, entry, drug, id_to_text, max_upstream_chars)
+        for i, (entry, drug) in enumerate(items)
+    ]
+    msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
+
 
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10)
-    answers = parse_json_array(raw)
+    try:
+        answers = parse_json_array(raw)
+    except LLMParseError as e:
+        log.warning(f"Prefilter parse failed: {e}. Falling back to individual calls.")
+        answers = []
+
     if len(answers) == len(items):
         return [str(a).strip().lower().startswith("yes") for a in answers]
 
-    # Fallback: misaligned array — classify individually
     log.warning(
         f"Prefilter array length mismatch: expected {len(items)}, got {len(answers)}. "
         "Falling back to individual calls."
     )
-    results = []
-    for entry, drug in items:
-        ancestor = id_to_text.get(entry.get("parent_id", ""), "")
-        single_msg = PREFILTER_PROMPT + f"\nExpecting 1 answer.\n\n"
-        single_msg += f"--- 1 --- Drug: {drug}\n"
-        if ancestor:
-            single_msg += f"Replying to: {ancestor}\n\n"
-        single_msg += f"Comment: {entry['text'][:600]}\n\n"
-        r = llm_call(client, single_msg, model=MODEL_FAST, max_tokens=10)
-        results.append(r.strip().lower().startswith("yes"))
-    return results
+    return [
+        llm_call(
+            client,
+            PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, e, d, id_to_text, max_upstream_chars),
+            model=MODEL_FAST,
+            max_tokens=10,
+        ).strip().lower().startswith("yes")
+        for e, d in items
+    ]
 
 
-def format_entry(entry: dict, id_to_text: dict) -> str:
+def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format entry for classification prompt."""
     msg = f"Text:\n{entry['text']}"
-    ancestor = id_to_text.get(entry.get("parent_id", ""), "")
-    if ancestor:
-        msg += f"\n\nReplying to:\n{ancestor}"
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    if upstream_comment:
+        msg += f"\n\nReplying to:\n{upstream_comment[:max_upstream_chars]}"
     return msg
 
 
 def classify_batch(
     client, items: list[tuple[dict, str]], id_to_text: dict, prompts: dict,
+    max_upstream_chars: int | None = None,
 ) -> list[dict]:
     """Classify a batch of (entry, drug) pairs. All must share the same drug."""
     drug = items[0][1]
     msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
     for i, (entry, _) in enumerate(items):
-        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text)}\n\n"
+        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
     msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" and "signal".'
 
     raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50 * len(items))
-    results = parse_json_array(raw)
-    if len(results) == len(items):
-        return results
-    raise ValueError(f"Expected {len(items)} results, got {len(results)}")
+    results = parse_json_array(raw)  # raises LLMParseError on bad JSON
+    if len(results) != len(items):
+        raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
+    return [ClassificationResult.model_validate(r) for r in results]
 
 
 def run_classification(
@@ -124,12 +138,16 @@ def run_classification(
     tagged = json.loads(tagged_path.read_text())
     log.info(f"Loaded {len(tagged)} tagged entries.")
 
-    # Load synonyms from treatment table (empty if no DB or canonicalize was skipped)
+    # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
-        from database_scripts.db import load_synonyms
+        from utilities.db import load_synonyms, open_db
         synonyms_for = load_synonyms(config.db_path)
+        with open_db(config.db_path) as conn:
+            row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
+        subreddit = row[0] if row else "Long COVID"
     else:
         synonyms_for = {}
+        subreddit = "Long COVID"
 
     id_to_text = {e["id"]: e["text"] for e in tagged}
 
@@ -161,7 +179,7 @@ def run_classification(
 
             to_do.append((entry, drug))
             if drug not in prompts:
-                prompts[drug] = system_prompt(drug, synonyms_for.get(drug))
+                prompts[drug] = system_prompt(drug, synonyms_for.get(drug), subreddit)
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
@@ -171,7 +189,7 @@ def run_classification(
     for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
         batch = to_do[i:i + PREFILTER_BATCH_SIZE]
         try:
-            results = prefilter_batch(client, batch, id_to_text)
+            results = prefilter_batch(client, batch, id_to_text, config.max_upstream_chars)
             for (entry, drug), passed in zip(batch, results):
                 if not passed:
                     filtered.add((entry["id"], drug))
@@ -198,38 +216,39 @@ def run_classification(
 
             try:
                 results = classify_batch(
-                    client, batch, id_to_text, prompts,
+                    client, batch, id_to_text, prompts, config.max_upstream_chars,
                 )
                 for (entry, drug), result in zip(batch, results):
-                    if result.get("signal") != "n/a":
+                    if result.signal != "n/a":
                         classified += 1
                         drug_counter[drug] += 1
                         if writer is not None:
                             writer.write_one(
                                 post_id=entry["id"], drug=drug, author=entry["author"],
-                                sentiment=result["sentiment"], signal=result["signal"],
+                                sentiment=result.sentiment, signal=result.signal,
                             )
-            except Exception as e:
+            except (LLMParseError, ValidationError) as e:
                 log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
                 for entry, drug in batch:
                     try:
-                        msg = format_entry(entry, id_to_text)
+                        msg = format_entry(entry, id_to_text, config.max_upstream_chars)
                         msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
                         raw = llm_call(
                             client, msg, model=MODEL_STRONG,
                             system=prompts[drug], max_tokens=50,
                         )
-                        result = parse_json_object(raw)
-                        if result.get("signal") != "n/a":
+                        result = ClassificationResult.model_validate(parse_json_object(raw))
+                        if result.signal != "n/a":
                             classified += 1
                             drug_counter[drug] += 1
                             if writer is not None:
                                 writer.write_one(
                                     post_id=entry["id"], drug=drug, author=entry["author"],
-                                    sentiment=result["sentiment"], signal=result["signal"],
+                                    sentiment=result.sentiment, signal=result.signal,
                                 )
-                    except Exception as e2:
-                        log.error(f"ERROR on {entry['id']}:{drug}: {e2}")
+                    except (LLMParseError, ValidationError) as e2:
+                        raise RuntimeError(f"Error on {entry['id']}:{drug}: {e2}") from e2
+                   
 
             done += len(batch)
             log.info(f"Classified {done}/{total}...")

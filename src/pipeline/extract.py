@@ -3,11 +3,11 @@
 extract_mentions.py — Extract drug mentions from Reddit posts.
 
 Step 1 of the pipeline. Reads posts from SQLite and outputs tagged_mentions.json
-with drugs found in each post/comment (direct mentions + inherited from ancestors).
+with drugs found in each post/comment (direct mentions + inherited from upstream comments).
 """
 import json
 from collections import Counter
-from functools import cache
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from prompts.intervention_config import EXTRACT_PROMPT
-from utilities import TAGGED_MENTIONS, MODEL_FAST, llm_call, parse_json_array, log
+from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
 
 BATCH_SIZE = 20
 SAVE_EVERY = 5
@@ -27,7 +27,12 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(texts) * 80)
-    results = parse_json_array(raw)
+
+    try:
+        results = parse_json_array(raw)
+    except LLMParseError as e:
+        log.warning(f"Parse failed: {e}")
+        results = []
 
     if len(results) == len(texts):
         return results
@@ -41,17 +46,20 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     return [[] for _ in texts]
 
 
-def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict) -> dict[str, list[str]]:
-    """Pre-compute ancestor drugs using memoization."""
-    @cache
-    def ancestors(eid: str) -> tuple[str, ...]:
+def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_depth: int | None = None) -> dict[str, list[str]]:
+    """Pre-compute upstream mentioned drugs with memoization. max_depth=None means unlimited."""
+    @lru_cache(maxsize=None)
+    def upstream(eid: str, remaining: int | None) -> tuple[str, ...]:
+        if remaining == 0:
+            return ()
         parent_id = id_to_parent.get(eid)
         if not parent_id:
             return ()
         parent_drugs = tuple(id_to_drugs.get(parent_id, []))
-        return tuple(dict.fromkeys(parent_drugs + ancestors(parent_id)))
+        next_remaining = None if remaining is None else remaining - 1
+        return tuple(dict.fromkeys(parent_drugs + upstream(parent_id, next_remaining)))
 
-    return {eid: list(ancestors(eid)) for eid in id_to_parent}
+    return {eid: list(upstream(eid, max_depth)) for eid in id_to_parent}
 
 
 def load_posts_from_db(db_path: Path, limit: int | None = None):
@@ -59,7 +67,7 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     Each item is a dict with keys: id, text, author, parent_id, post_title, created_utc.
     """
-    from database_scripts.db import open_db
+    from utilities.db import open_db
 
     conn = open_db(db_path)
     rows = conn.execute(
@@ -123,12 +131,12 @@ def run_extraction(config: "PipelineConfig"):
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged():
-        ancestor_drugs = compute_ancestor_drugs(id_to_parent, id_to_drugs)
+        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged = [
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
-             "drugs_context": ancestor_drugs.get(item["id"], [])}
+             "drugs_context": upstream_drugs.get(item["id"], [])}
             for item in all_items
-            if id_to_drugs.get(item["id"]) or ancestor_drugs.get(item["id"])
+            if id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"])
         ]
         tagged_path.write_text(json.dumps(tagged, indent=2))
         return tagged
