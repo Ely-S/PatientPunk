@@ -287,6 +287,19 @@ Use instead:
    sns.violinplot(data=df, x="avg_sentiment", y="drug", cut=0, inner="box", ax=ax)
    ```
 
+**Do not use box plots for sentiment distributions** either — the discrete values produce degenerate boxes spanning -1 to 1. Use a **forest plot** (dot + 95% CI error bar) instead to show mean sentiment and precision:
+```python
+from scipy import stats as sp_stats
+means, cis = [], []
+for drug in drugs:
+    scores = df[df["drug"] == drug]["avg_sentiment"].values
+    means.append(scores.mean())
+    se = sp_stats.sem(scores)
+    cis.append(se * sp_stats.t.ppf(0.975, len(scores) - 1))
+ax.errorbar(means, y, xerr=cis, fmt="none", ecolor="#555", capsize=3)
+ax.scatter(means, y, c=colors, s=60, edgecolors="white")
+```
+
 The diverging bar chart (see above) is usually the best single chart for treatment outcomes — it already encodes both frequency (bar width) and sentiment direction.
 
 ## Common Mistakes
