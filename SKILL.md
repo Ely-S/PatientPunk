@@ -97,6 +97,39 @@ Where `N` is the next sequential integer (check existing notebooks first).
 - plain language findings, caveats, suggested next steps
 ```
 
+### Execute and export
+
+After writing the notebook, **always execute it and export to HTML** so the researcher gets a clean, code-free dashboard:
+
+```python
+import nbformat
+from pathlib import Path
+from nbconvert.preprocessors import ExecutePreprocessor
+from nbconvert import HTMLExporter
+
+nb_path = Path("notebooks/N_topic.ipynb")
+nb = nbformat.read(str(nb_path), as_version=4)
+
+# Execute all cells
+ExecutePreprocessor(timeout=600, kernel_name="python3").preprocess(
+    nb, {"metadata": {"path": str(nb_path.parent)}}
+)
+
+# Save executed notebook
+nbformat.write(nb, str(nb_path.with_stem(nb_path.stem + "_executed")))
+
+# Export to HTML (no code cells — clean dashboard output)
+exporter = HTMLExporter()
+exporter.exclude_input = True
+body, _ = exporter.from_notebook_node(nb)
+html_path = nb_path.with_suffix(".html")
+html_path.write_text(body, encoding="utf-8")
+```
+
+Report the HTML path to the researcher. This is equivalent to running Voila but produces a static file that can be shared or viewed in any browser.
+
+If execution fails, fix the error in the notebook and re-run. Never deliver an unexecuted notebook.
+
 ## Step 4: Report and Iterate
 
 After generating the notebook:
