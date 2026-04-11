@@ -11,6 +11,11 @@ drug categories (e.g. "antihistamines", "h1 blocker", "beta blocker"), enzymes/s
 Do NOT include diseases, conditions, symptoms, or diagnoses. These are NOT interventions:
   depression, anxiety, ADHD, POTS, MCAS, ME/CFS, dysautonomia, brain fog, fatigue,
   insomnia, PEM, lyme, bartonella, long covid, fibromyalgia.
+Do NOT include vague generic references that don't identify a specific drug, class, or intervention:
+  medication, medicine, drug, drugs, pill, pills, something, a treatment, some treatment,
+  prescription, over-the-counter, otc, a supplement (when no substance is named).
+  A specific drug class IS acceptable (e.g. "antihistamines", "beta blocker", "ssri") because
+  it identifies what was taken. "medication" alone is not acceptable because it identifies nothing.
 Only include things a patient TAKES, DOES, or RECEIVES as treatment.
 
 Return ONLY a JSON array of arrays — one inner array per text, each containing lowercase strings.
