@@ -6,6 +6,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+# Load .env from project root (try multiple locations)
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+
 import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
