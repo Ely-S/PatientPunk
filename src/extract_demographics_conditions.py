@@ -2,9 +2,14 @@
 """
 run_demographics.py — Extract demographics and conditions from user posts.
 
-Reads from the posts table, groups by user, sends to Haiku for extraction,
+Reads from the posts table, groups by user, sends to a fast model for extraction,
 and writes to user_profiles and conditions tables.
 
+In user_profiles, we store demographic data that is inferred from the user's posts.
+In the conditions table, we store the conditions that are inferred from the user's posts, 
+along with the type of condition (illness or symptom), the severity of the condition, 
+and the date of diagnosis and resolution.
+Both of these may have empty values if the model fails to extract any information.
 Usage:
     python src/run_demographics.py --db data/posts.db
     python src/run_demographics.py --db data/posts.db --limit 50
@@ -29,18 +34,21 @@ from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 # ═════════════════════════════════════════════════════════════════════════════
 
 def extract_demographics(client, texts: list[str], *, max_posts: int = 10, max_chars: int = 500) -> dict:
-    """Call Haiku to extract demographics from a user's posts."""
+    """Call MODEL_FAST to extract demographics from a user's posts."""
     combined = "\n---\n".join(t[:max_chars] for t in texts[:max_posts])
     raw = llm_call(client, DEMOGRAPHICS_PROMPT + combined, model=MODEL_FAST, max_tokens=300)
     try:
         result = parse_json_object(raw)
-    except Exception:
+    except Exception as e:
+        logging.log_error(f"Failed to parse demographics: {raw}: {e}")
         return {"age_bucket": None, "sex": None, "location": None, "conditions": []}
+    raw_conditions = result.get("conditions")
+    conditions = raw_conditions if isinstance(raw_conditions, list) else []
     return {
         "age_bucket": result.get("age_bucket"),
         "sex": result.get("sex"),
         "location": result.get("location"),
-        "conditions": result.get("conditions") or [],
+        "conditions": conditions,
     }
 
 
@@ -79,9 +87,21 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
 
         profiles_written = 0
         conditions_written = 0
+        failures = 0
+        COMMIT_EVERY = 20
 
         for i, (user_id, texts) in enumerate(users.items()):
-            result = extract_demographics(client, texts, max_posts=max_posts, max_chars=max_chars)
+            try:
+                result = extract_demographics(client, texts, max_posts=max_posts, max_chars=max_chars)
+            except Exception as e:
+                log.error(f"  Failed {user_id}: {e}")
+                failures += 1
+                conn.execute(
+                    "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (user_id, run_id, None, None, None),
+                )
+                continue
 
             age_bucket, sex, location = result["age_bucket"], result["sex"], result["location"]
             conn.execute(
@@ -92,8 +112,14 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
             profiles_written += 1
 
             for cond in result.get("conditions", []):
-                name = cond.get("condition_name", "").strip().lower()
-                ctype = cond.get("condition_type", "illness")
+                if isinstance(cond, dict):
+                    name = (cond.get("condition_name") or "").strip().lower()
+                    ctype = (cond.get("condition_type") or "illness").strip().lower()
+                elif isinstance(cond, str):
+                    name = cond.strip().lower()
+                    ctype = "illness"
+                else:
+                    continue
                 if ctype not in ("illness", "symptom"):
                     ctype = "illness"
                 if name:
@@ -104,12 +130,13 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
                     )
                     conditions_written += 1
 
-            if (i + 1) % 10 == 0:
+            if (i + 1) % COMMIT_EVERY == 0:
+                conn.commit()
                 log.info(f"  ... {i + 1}/{len(users)} users")
 
         conn.commit()
 
-    log.info(f"Done: {profiles_written} profiles, {conditions_written} conditions written")
+    log.info(f"Done: {profiles_written} profiles, {conditions_written} conditions written, {failures} failures")
 
 
 def main():
