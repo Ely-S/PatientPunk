@@ -3,13 +3,10 @@
 ```mermaid
 flowchart TD
     subgraph Sources["Data Sources"]
-        R1["r/covidlonghaulers\n37,000+ posts · 650k comments"]
-        R2["r/ehlersdanlos · r/PSSD\nr/microdosing · r/abortion"]
-        AS["Arctic Shift API\nHistorical bulk NDJSON"]
+        AS["Arctic Shift API\nHistorical Reddit NDJSON\ncovidlonghaulers · ehlersdanlos · PSSD\nmicrodosing · abortion"]
     end
 
     subgraph Ingest["Ingestion"]
-        SC["scrape_corpus.py\nLive scraper"]
         TR["transform_arctic_shift.py\nBulk NDJSON → JSON"]
         LDB["load_db.py\nETL → SQLite"]
     end
@@ -44,9 +41,8 @@ flowchart TD
         HTML["Static HTML Dashboards\nnbconvert --no-input"]
     end
 
-    R1 & R2 --> SC
     AS --> TR
-    SC & TR --> LDB
+    TR --> LDB
     LDB --> P & U
 
     P & U --> E
