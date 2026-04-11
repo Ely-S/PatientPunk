@@ -140,7 +140,13 @@ def run_extraction(config: "PipelineConfig"):
         texts = [text for _, text in batch]
         batch_results = extract_batch(client, texts)
         for (item_id, _), drugs in zip(batch, batch_results):
-            id_to_drugs[item_id] = [d.lower().strip() for d in (drugs or [])]
+            flat = []
+            for d in (drugs or []):
+                if isinstance(d, str):
+                    flat.append(d.lower().strip())
+                elif isinstance(d, list):
+                    flat.extend(x.lower().strip() for x in d if isinstance(x, str))
+            id_to_drugs[item_id] = flat
 
         batches_since_save += 1
         if batches_since_save >= SAVE_EVERY:

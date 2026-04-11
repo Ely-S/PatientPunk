@@ -229,7 +229,7 @@ def run_classification(
                                     sentiment=result["sentiment"], signal=result["signal"],
                                 )
                     except Exception as e2:
-                        log.error(f"ERROR on {entry['id']}:{drug}: {e2}")
+                        log.warning(f"Skipping {entry['id']}:{drug}: {e2}")
 
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
