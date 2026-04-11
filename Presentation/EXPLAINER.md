@@ -75,7 +75,7 @@ Current extraction covers ~1,100 posts from r/covidlonghaulers with **526 treatm
 
 | Person | Role |
 |---|---|
-| **Eli** | Project lead · research-assistant skill · OpenRouter config |
+| **Eli** | Research-assistant skill · OpenRouter config |
 | **Polina** | Drug sentiment pipeline (extract → canonicalize → classify) |
 | **Shaun** | Variable extraction · stats engine · data scraping · ETL |
 
