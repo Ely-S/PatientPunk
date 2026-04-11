@@ -37,7 +37,10 @@ Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "f
 # Used by classify_sentiment.py (prefilter step)
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
-Does the AUTHOR express personal experience with the specified drug/intervention?
+Does the AUTHOR express personal experience with the specified treatment?
+"Treatment" includes drugs, supplements, therapies, devices, lifestyle interventions,
+exercises, diets, and any health-related practice (e.g. infrared sauna, epsom salt baths,
+physical therapy).
 Also 'yes' if the reply implies it works by saying NOT doing it made things worse.
 Answer 'no' if:
 - The author is asking someone else if they have tried it (e.g. "Have you tried X?")
@@ -46,7 +49,7 @@ Return a JSON array of strings, each 'yes' or 'no', in order.
 """
 
 # Used by classify_sentiment.py
-def system_prompt(drug: str, synonyms: list[str] | None = None) -> str:
+def system_prompt(drug: str, synonyms: list[str] | None = None, subreddit: str = "Long COVID") -> str:
     """Generate system prompt for sentiment classification."""
     # Keep acronyms uppercase, title-case regular words
     name = drug.upper() if drug.isalpha() and len(drug) <= 4 else drug.title()
@@ -54,7 +57,7 @@ def system_prompt(drug: str, synonyms: list[str] | None = None) -> str:
     if synonyms:
         synonym_note = f"\nAlso known as: {', '.join(synonyms)}"
     return f"""\
-Classify Reddit posts/comments about {name} from a Long COVID subreddit.
+Classify Reddit posts/comments about {name} from r/{subreddit}.
 
 You are identifying whether the author has personally used or tried: {name}{synonym_note}
 

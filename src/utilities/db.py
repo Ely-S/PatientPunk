@@ -33,38 +33,15 @@ def load_synonyms(db_path: Path) -> dict[str, list[str]]:
     return {name: json.loads(aliases) for name, aliases in rows}
 
 
-def import_treatments(
-    db_path: Path,
-    tagged_path: Path,
-    canon_map: dict[str, str] | None = None,
-) -> int:
-    """Populate the treatment table from pipeline outputs.
-
-    Reads tagged_mentions.json for the drug list. If canon_map is provided,
-    builds aliases from it. Returns the number of treatments in the table.
-    """
-    tagged = json.loads(tagged_path.read_text())
-    all_drugs = {
-        drug for entry in tagged
-        for drug in entry.get("drugs_direct", []) + entry.get("drugs_context", [])
-        if drug.strip()
-    }
-
-    aliases_for: dict[str, list[str]] = {}
-    if canon_map:
-        for raw, canonical in canon_map.items():
-            if raw != canonical:
-                aliases_for.setdefault(canonical, []).append(raw)
-
+def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[str]] | None = None) -> int:
+    """Insert drug names into the treatment table. Returns row count."""
+    aliases = aliases or {}
     conn = open_db(db_path)
     with conn:
         conn.executemany(
-            "INSERT OR IGNORE INTO treatment (canonical_name, aliases) "
-            "VALUES (?, ?)",
-            (
-                (drug, json.dumps(aliases_for[drug]) if drug in aliases_for else None)
-                for drug in sorted(all_drugs)
-            ),
+            "INSERT OR IGNORE INTO treatment (canonical_name, aliases) VALUES (?, ?)",
+            ((drug, json.dumps(aliases[drug]) if drug in aliases else None)
+             for drug in sorted(drugs)),
         )
     count = conn.execute("SELECT COUNT(*) FROM treatment").fetchone()[0]
     conn.close()
