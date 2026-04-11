@@ -111,6 +111,9 @@ REPLY CHAIN: Ancestor text is context only — use it to understand what pronoun
     e.g. "I love it too", "same here, it helped me a lot" → positive (ancestor establishes what "it" is)
   - Reply contains NO personal experience or opinion about {name} → neutral / n/a
     e.g. "How did you get reinfected?", "Which doctor prescribed it?", "Hope you feel better" → neutral
+  - Reply discusses a DIFFERENT treatment or topic than {name} → neutral / n/a
+    Even if {name} appears in ancestor text, if the reply has moved on to a different subject,
+    the author is NOT expressing experience with {name}.
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
 Respond ONLY with JSON: {{"sentiment":"...","signal":"..."}}"""

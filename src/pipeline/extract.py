@@ -46,15 +46,16 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     return [[] for _ in texts]
 
 
-def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict) -> dict[str, list[str]]:
-    """Pre-compute ancestor drugs using memoization."""
-    @cache
-    def ancestors(eid: str) -> tuple[str, ...]:
+def compute_ancestor_drugs(id_to_parent: dict, id_to_drugs: dict, max_depth: int = 0) -> dict[str, list[str]]:
+    """Pre-compute ancestor drugs using memoization. max_depth=0 means unlimited."""
+    def ancestors(eid: str, depth: int = 0) -> tuple[str, ...]:
+        if max_depth and depth >= max_depth:
+            return ()
         parent_id = id_to_parent.get(eid)
         if not parent_id:
             return ()
         parent_drugs = tuple(id_to_drugs.get(parent_id, []))
-        return tuple(dict.fromkeys(parent_drugs + ancestors(parent_id)))
+        return tuple(dict.fromkeys(parent_drugs + ancestors(parent_id, depth + 1)))
 
     return {eid: list(ancestors(eid)) for eid in id_to_parent}
 
@@ -128,7 +129,7 @@ def run_extraction(config: "PipelineConfig"):
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged():
-        ancestor_drugs = compute_ancestor_drugs(id_to_parent, id_to_drugs)
+        ancestor_drugs = compute_ancestor_drugs(id_to_parent, id_to_drugs, config.max_ancestor_depth)
         tagged = [
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
              "drugs_context": ancestor_drugs.get(item["id"], [])}
