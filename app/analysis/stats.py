@@ -277,7 +277,7 @@ def get_user_sentiment(
         )
         SELECT
             tr.user_id,
-            AVG(tr.sentiment)   AS avg_sentiment,
+            AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END)   AS avg_sentiment,
             COUNT(*)            AS n_posts
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
@@ -666,7 +666,7 @@ def _build_logit_features(
     """
     # Start with user-level sentiment for this drug
     sql = """
-        SELECT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT tr.user_id, AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1499,14 +1499,14 @@ def get_paired_sentiment(
             a.avg_a,
             b.avg_b
         FROM (
-            SELECT tr.user_id, AVG(tr.sentiment) AS avg_a
+            SELECT tr.user_id, AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END) AS avg_a
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
             GROUP BY tr.user_id
         ) a
         JOIN (
-            SELECT tr.user_id, AVG(tr.sentiment) AS avg_b
+            SELECT tr.user_id, AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END) AS avg_b
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1683,7 +1683,7 @@ def run_propensity_match(
 
     # Get users who tried THIS drug
     drug_users_sql = """
-        SELECT DISTINCT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT DISTINCT tr.user_id, AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1704,7 +1704,7 @@ def run_propensity_match(
 
     # Get average sentiment for control users (across all their drugs)
     control_sql = """
-        SELECT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT tr.user_id, AVG(CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END) AS avg_sentiment
         FROM treatment_reports tr
         WHERE tr.user_id IN ({})
         GROUP BY tr.user_id

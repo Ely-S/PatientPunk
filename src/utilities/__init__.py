@@ -6,6 +6,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env from project root; fall back to src/.env. Don't override
+# explicitly-exported env vars (so CI secrets take precedence).
+_root_env = Path(__file__).parent.parent.parent / ".env"
+_src_env = Path(__file__).parent.parent / ".env"
+if _root_env.exists():
+    load_dotenv(_root_env, override=False)
+elif _src_env.exists():
+    load_dotenv(_src_env, override=False)
+
 import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
@@ -39,17 +50,55 @@ log = logging.getLogger("pipeline")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 
-# ── Models ───────────────────────────────────────────────────────────────────
-MODEL_FAST = "claude-haiku-4-5-20251001"
-MODEL_STRONG = "claude-sonnet-4-6"
+# ── Models + Provider ────────────────────────────────────────────────────────
+_PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX"}
+
+_has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_KEYS
+_has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
+
+_explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
+if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
+    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
+if _explicit_provider:
+    LLM_PROVIDER = _explicit_provider
+elif _has_openrouter:
+    LLM_PROVIDER = "openrouter"
+elif _has_anthropic:
+    LLM_PROVIDER = "anthropic"
+else:
+    LLM_PROVIDER = "anthropic"
+
+if LLM_PROVIDER == "openrouter":
+    _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
+    _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
+    _API_BASE = "https://openrouter.ai/api"
+else:
+    _DEFAULT_FAST = "claude-haiku-4-5-20251001"
+    _DEFAULT_STRONG = "claude-sonnet-4-6"
+    _API_BASE = None
+
+MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
+MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
-    return anthropic.Anthropic(api_key=api_key)
+    if LLM_PROVIDER == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        key_name = "OPENROUTER_API_KEY"
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key_name = "ANTHROPIC_API_KEY"
+
+    if not api_key or api_key in _PLACEHOLDER_KEYS:
+        sys.exit(f"{key_name} not set (provider={LLM_PROVIDER}).")
+
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+
+    kwargs: dict = {"api_key": api_key}
+    if _API_BASE:
+        kwargs["base_url"] = _API_BASE
+    return anthropic.Anthropic(**kwargs)
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────

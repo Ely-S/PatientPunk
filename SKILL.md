@@ -215,9 +215,83 @@ voila notebooks/1_treatment_outcomes.ipynb
 
 This strips all code cells and shows only markdown + chart output.
 
+## Charting Standards
+
+### Diverging bar charts (negative / mixed / positive)
+
+Mixed sentiment must sit **adjacent to the 0% center line**, with Negative as the outermost left segment. The correct left-to-right stack order is:
+
+```
+← [  Negative  |  Mixed  ] 0% [ Positive  ] →
+```
+
+In matplotlib, achieve this by plotting Mixed first (from zero leftward), then Negative starting from the edge of Mixed:
+
+```python
+# Correct stacking — mixed is innermost (adjacent to center), negative is outermost
+ax.barh(y, -mixed_pct,   left=0,           color=COLORS["mixed"],    label="Mixed/Neutral")
+ax.barh(y, -negative_pct, left=-mixed_pct,  color=COLORS["negative"], label="Negative")
+ax.barh(y,  positive_pct, left=0,           color=COLORS["positive"], label="Positive")
+```
+
+**Never** put Mixed on the far left outside Negative — that misrepresents the sentiment scale.
+
+### Legend placement
+
+Legends must **never overlap data**. Preferred placements:
+
+1. **Below the chart** (best for wide charts with many bars):
+   ```python
+   ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12),
+             ncol=3, frameon=False)
+   fig.subplots_adjust(bottom=0.15)  # make room
+   ```
+
+2. **Above the chart**:
+   ```python
+   ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.02),
+             ncol=3, frameon=False)
+   fig.subplots_adjust(top=0.88)
+   ```
+
+3. **Outside right** (only if the chart is not full-width):
+   ```python
+   ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False)
+   fig.tight_layout()
+   ```
+
+**Never use `loc="best"`** on diverging bar charts — matplotlib places it in the data area. Always supply an explicit `bbox_to_anchor` that clears the bars.
+
+### Strip / dot plots for sentiment data
+
+**Do not use strip plots or jitter plots for sentiment distributions.** Sentiment values are discrete (-1.0, 0.0, 0.5, 1.0), so dots pile up in vertical columns at each value and convey no useful distributional information.
+
+Use instead:
+
+1. **Grouped bar chart of sentiment counts per drug** (preferred — shows frequency and category simultaneously):
+   ```python
+   # Pivot to counts per sentiment category, then plot grouped bars
+   counts = df.groupby(["drug", "sentiment"]).size().unstack(fill_value=0)
+   counts[["negative","mixed","neutral","positive"]].plot(kind="barh", stacked=False, ax=ax)
+   ```
+
+2. **Proportion bar chart** (same as above but normalised to 100%):
+   ```python
+   pct = counts.div(counts.sum(axis=1), axis=0) * 100
+   ```
+
+3. **Violin plot** with `cut=0` and `inner="box"` if you need to show a continuous user-level average:
+   ```python
+   sns.violinplot(data=df, x="avg_sentiment", y="drug", cut=0, inner="box", ax=ax)
+   ```
+
+The diverging bar chart (see above) is usually the best single chart for treatment outcomes — it already encodes both frequency (bar width) and sentiment direction.
+
 ## Common Mistakes
 
 - **Building before exploring** — always run schema + sample queries first; the data often doesn't match expectations
 - **Skipping approval** — never generate the notebook before the researcher signs off on the plan
 - **Silent data quality issues** — if nulls or small N could affect conclusions, say so in the plan and again in the notebook summary
 - **Opaque notebooks** — every code cell needs a markdown explanation; notebooks are read by people who weren't in the conversation
+- **Mixed segment on the wrong side** — in diverging bar charts, Mixed must be innermost (adjacent to center), not outermost; see Charting Standards above
+- **Legend over data** — always place legends outside the bar area using `bbox_to_anchor`; see Charting Standards above
