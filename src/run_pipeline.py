@@ -86,6 +86,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Limit posts processed")
     parser.add_argument("--reclassify", action="store_true", help="Re-run classification for all pairs, even those already in the database")
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
+    parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
+    parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -97,6 +99,8 @@ def main():
         db_path=Path(args.db),
         limit=args.limit,
         reclassify=args.reclassify,
+        max_upstream_chars=args.max_upstream_chars,
+        max_upstream_depth=args.max_upstream_depth,
     )
 
     run_pipeline(config, skip_canonicalize=args.skip_canonicalize)

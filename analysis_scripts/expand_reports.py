@@ -14,9 +14,9 @@ import sqlite3
 from pathlib import Path
 
 
-def get_ancestors(conn: sqlite3.Connection, post_id: str) -> list[str]:
-    """Walk up the parent chain, return ancestor texts oldest-first (excluding the post itself)."""
-    ancestors = []
+def get_upstream_comments(conn: sqlite3.Connection, post_id: str) -> list[str]:
+    """Walk up the parent chain, return upstream comment texts oldest-first (excluding the post itself)."""
+    upstream = []
     row = conn.execute("SELECT parent_id FROM posts WHERE post_id = ?", (post_id,)).fetchone()
     current = row[0] if row else None
     while current:
@@ -24,10 +24,10 @@ def get_ancestors(conn: sqlite3.Connection, post_id: str) -> list[str]:
         if not row:
             break
         text = f"{row[1]}\n{row[2]}" if row[1] else row[2]
-        ancestors.append(text)
+        upstream.append(text)
         current = row[0]
-    ancestors.reverse()
-    return ancestors
+    upstream.reverse()
+    return upstream
 
 
 def expand_reports(db_path: Path, n: int) -> dict:
@@ -49,7 +49,7 @@ def expand_reports(db_path: Path, n: int) -> dict:
             "drug": drug,
             "sentiment": sentiment,
             "signal": signal,
-            "ancestors": get_ancestors(conn, post_id),
+            "upstream_comments": get_upstream_comments(conn, post_id),
             "comment": comment_text,
         })
 
@@ -64,7 +64,7 @@ def expand_reports(db_path: Path, n: int) -> dict:
     unclassified = []
     for post_id, comment_text in unclassified_rows:
         unclassified.append({
-            "ancestors": get_ancestors(conn, post_id),
+            "upstream_comments": get_upstream_comments(conn, post_id),
             "comment": comment_text,
         })
 

@@ -105,12 +105,15 @@ MULTIPLE DRUGS: If the author takes {name} alongside other treatments and report
   improvement, classify as positive/weak if {name} is named in the stack.
   Only use mixed if the author themselves expresses uncertainty about whether it helped.
 
-REPLY CHAIN: Ancestor text is context only — use it to understand what pronouns refer to.
+REPLY CHAIN: Upstream comment text is context only — use it to understand what pronouns refer to.
   Signal must come from the reply itself.
-  - Reply expresses a personal reaction or experience, even without naming {name} → use ancestor for context
-    e.g. "I love it too", "same here, it helped me a lot" → positive (ancestor establishes what "it" is)
+  - Reply expresses a personal reaction or experience, even without naming {name} → use upstream comment for context
+    e.g. "I love it too", "same here, it helped me a lot" → positive (upstream comment establishes what "it" is)
   - Reply contains NO personal experience or opinion about {name} → neutral / n/a
     e.g. "How did you get reinfected?", "Which doctor prescribed it?", "Hope you feel better" → neutral
+  - Reply discusses a DIFFERENT treatment or topic than {name} → neutral / n/a
+    Even if {name} appears in upstream comments, if the reply has moved on to a different subject,
+    the author is NOT expressing experience with {name}.
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
 Respond ONLY with JSON: {{"sentiment":"...","signal":"..."}}"""

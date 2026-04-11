@@ -21,6 +21,14 @@ class PipelineConfig:
     db_path: Path
     limit: int = 100
     reclassify: bool = False
+    max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
+    max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
+
+    def __post_init__(self):
+        if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
+            raise ValueError(f"max_upstream_chars must be non-negative, got {self.max_upstream_chars}")
+        if self.max_upstream_depth is not None and self.max_upstream_depth < 0:
+            raise ValueError(f"max_upstream_depth must be non-negative, got {self.max_upstream_depth}")
 
     def path(self, filename: str) -> Path:
         return self.output_dir / filename
