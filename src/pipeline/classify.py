@@ -135,7 +135,7 @@ def run_classification(
 
     tagged_path = config.path(TAGGED_MENTIONS)
 
-    tagged = json.loads(tagged_path.read_text())
+    tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
     log.info(f"Loaded {len(tagged)} tagged entries.")
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
