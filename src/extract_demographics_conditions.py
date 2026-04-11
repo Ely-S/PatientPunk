@@ -84,13 +84,12 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
             result = extract_demographics(client, texts, max_posts=max_posts, max_chars=max_chars)
 
             age_bucket, sex, location = result["age_bucket"], result["sex"], result["location"]
-            if any([age_bucket, sex, location]):
-                conn.execute(
-                    "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (user_id, run_id, age_bucket, sex, location),
-                )
-                profiles_written += 1
+            conn.execute(
+                "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, run_id, age_bucket, sex, location),
+            )
+            profiles_written += 1
 
             for cond in result.get("conditions", []):
                 name = cond.get("condition_name", "").strip().lower()
