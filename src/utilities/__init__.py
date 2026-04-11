@@ -44,6 +44,19 @@ MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_STRONG = "claude-sonnet-4-6"
 
 
+# ── Git ──────────────────────────────────────────────────────────────────────
+def get_git_commit() -> str:
+    """Return current git commit hash, or 'unknown'."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
+
+
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
