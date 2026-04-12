@@ -16,6 +16,8 @@ And get back:
 
 ## Architecture
 
+**[View pipeline diagram](docs/pipeline_diagram.pdf)**
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                       INGESTION                         │
