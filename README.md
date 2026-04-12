@@ -18,36 +18,6 @@ And get back:
 
 **[View pipeline diagram](docs/pipeline_diagram.pdf)**
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                       INGESTION                         │
-│  (modular — Reddit, Twitter/X, patient forums, etc.)    │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                    NORMALIZATION                         │
-│  Posts stored in a normalized schema:                   │
-│  User entity · Post entity · source metadata            │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                 AI TRANSFORMATION                        │
-│  LLM-powered entity extraction · Symptom ontology       │
-│  mapping (MeSH / SNOMED) · Outcome scoring              │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                     DATABASE                            │
-│  User records · Post records ·                          │
-│  LLM outputs stored as structured JSON                  │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                      OUTPUTS                            │
-│  CSV exports · SQL queries · REST API · Research kits   │
-└─────────────────────────────────────────────────────────┘
-```
-
 ---
 
 ## Key Features
@@ -202,3 +172,12 @@ Steps 3a and 3b are independent — run in either order. Both key on `author_has
 ## Built at
 
 Biotech Hackathon · San Francisco · April 4, 2026 · Frontier Tower
+
+```
+██████╗ ██╗ ██████╗     ██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗
+██╔══██╗██║██╔═══██╗    ██╔══██╗██║   ██║████╗  ██║██║ ██╔╝
+██████╔╝██║██║   ██║    ██████╔╝██║   ██║██╔██╗ ██║█████╔╝
+██╔══██╗██║██║   ██║    ██╔═══╝ ██║   ██║██║╚██╗██║██╔═██╗
+██████╔╝██║╚██████╔╝    ██║     ╚██████╔╝██║ ╚████║██║  ██╗
+╚═════╝ ╚═╝ ╚═════╝     ╚═╝      ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝
+```
