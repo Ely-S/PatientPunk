@@ -14,66 +14,15 @@ And get back:
 
 ---
 
-## Architecture
+## Architecture Overview
 
 **[View pipeline diagram](docs/pipeline_diagram.pdf)**
 
----
+The pipeline reads posts from a SQLite database and produces a sentiment database: for each post/comment × drug pair, did this author have a positive, negative, or mixed experience?
 
-## Key Features
+A key design principle: reply chain context is preserved. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both drugs_direct (mentioned in that post/comment) and drugs_context (inherited from upstream comments via the parent chain).
 
-- **Modular ingestion** — swap in new data sources without changing downstream logic
-- **Symptom normalization** — maps patient language to standard medical ontologies
-- **Treatment outcome tracking** — classifies reported outcomes as positive, negative, neutral, or mixed
-- **Cohort queries** — filter by condition profile, demographics, comorbidities, and treatment history
-- **Privacy-first** — no PII stored; usernames SHA-256 hashed; posts anonymized before storage
-- **Researcher-ready exports** — CSV, SQL dumps, and structured JSON
-
----
-
-## Example Query
-
-```sql
-SELECT
-  t.canonical_name                                   AS treatment,
-  COUNT(*)                                           AS reports,
-  ROUND(AVG(tr.sentiment), 2)                        AS avg_sentiment,
-  SUM(CASE WHEN tr.sentiment > 0 THEN 1 ELSE 0 END)
-    * 100.0 / COUNT(*)                               AS pct_positive
-FROM treatment_reports tr
-JOIN treatment t ON t.id = tr.drug_id
-WHERE EXISTS (
-  SELECT 1 FROM conditions c
-  WHERE c.user_id = tr.user_id
-    AND c.condition_name = 'ME/CFS' COLLATE NOCASE
-)
-AND EXISTS (
-  SELECT 1 FROM conditions c
-  WHERE c.user_id = tr.user_id
-    AND c.condition_name = 'brain fog' COLLATE NOCASE
-)
-GROUP BY t.canonical_name
-ORDER BY reports DESC;
-```
-
----
-
-## Data Model
-
-- **Layer 1 — Raw:** `users`, `posts` — scraped social media content
-- **Layer 2 — Configuration:** `treatment`, `extraction_runs` — lookup tables and run metadata
-- **Layer 3 — Extracted:** `user_profiles`, `conditions`, `treatment_reports` — LLM-extracted structured data
-
-**[View interactive schema diagram](schema_diagram_v5.html)** · **[schema.sql](schema.sql)**
-
----
-
-## Ethical Commitments
-
-- Data used strictly for scientific and patient-benefit purposes
-- No re-identification of individuals
-- Opt-out mechanisms respected (deleted posts are purged)
-- Data provenance transparent in all exports
+The pipeline also extracts demographic data for each user, including age bucket, sex, and location (in progress). For each user, when available, it extracts their conditions, onset and recovery time, and severity.
 
 ---
 
@@ -121,32 +70,32 @@ uv run python src/import_posts.py \
     --output-db data/posts.db
 ```
 
-Preserves the `parent_id` chain between comments and parents — required for drug context propagation in Step 3b.
-
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
-Extracts structured patient attributes (vaccination status, functional tier, infection count, biomarkers, etc.) using regex patterns and Claude Haiku. Outputs a per-user CSV and codebook.
+Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
+
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
 
 ```bash
-cd Scrapers/demographic_extraction
-uv run python run_pipeline.py \
-    --schema schemas/covidlonghaulers_schema.json \
-    --input-dir ../../output
-# Outputs:
-#   Scrapers/output/records.csv
-#   Scrapers/output/codebook.csv
+uv run python src/extract_demographics_conditions.py --db data/posts.db
 ```
 
-Add `--limit 20 --no-discover` for a quick demo run (skips the LLM field-discovery phase).
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database (required) |
+| `--limit N` | Limit to N users (default: all) |
+| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
+| `--max-chars N` | Max characters per post (default: 500) |
+
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
 
-General-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in the corpus. Automatically discovers every drug/supplement/intervention mentioned — including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic" — normalizes synonyms, and classifies how each author feels about each treatment, without any hardcoded drug list.
+A general-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in the corpus. It automatically discovers every drug/supplement/intervention mentioned — including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic" — normalizes synonyms, and classifies how each author feels about each treatment, without any hardcoded drug list.
 
 A key design principle: **reply chain context is preserved**. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from upstream comments). A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post.
 
 ```bash
-uv run python src/run_pipeline.py \
+uv run python src/run_sentiment_pipeline.py \
     --db data/posts.db \
     --output-dir outputs
 ```
@@ -163,36 +112,41 @@ Add `--limit 50` for a quick demo run.
 | `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 
-Steps 3a and 3b are independent — run in either order. Both key on `author_hash` (SHA-256 of username).
+Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
 
 ---
 
 ## Drug Sentiment Pipeline — Internals
 
-### Extract (`pipeline/extract.py`)
+### Step 1 — Extract (`pipeline/extract.py`)
 
-Reads posts/comments from the `posts` table. Asks Haiku to identify all drugs, supplements, and interventions mentioned — specific drugs, brand names, abbreviations, drug categories ("beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
+Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
 
-**Upstream context:** For each comment, `drugs_context` is built by walking up the parent chain (up to `--max-upstream-depth` hops) and collecting all `drugs_direct` from upstream posts. This ensures a reply to an LDN thread carries LDN in context even if it doesn't name it.
+**Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name. 
 
-**Output:** `tagged_mentions.json`
+**Output:** `tagged_mentions.json` — intermediate file with drug mentions per entry.
 
-### Canonicalize (`pipeline/canonicalize.py`)
+### Step 2 — Canonicalize (`pipeline/canonicalize.py`)
 
-Collects all unique drug names from `tagged_mentions.json`, sends them to a fast model in batches, and merges true synonyms (`"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
+Collects all unique drug names from `tagged_mentions.json`, sends them to a fast model in batches, and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
 
 **Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
 
-Also populates the `treatment` table. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe. Can be skipped with `--skip-canonicalize` (raw drug names are inserted into the treatment table with no aliases).
+Also populates the `treatment` table from the drug names and canonical map. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe.
 
-### Classify (`pipeline/classify.py`)
+Can be skipped with `--skip-canonicalize` (raw drug names inserted into the treatment table with no aliases).
 
-Two-stage process to minimize API cost:
+### Step 3 — Classify (`pipeline/classify.py`)
 
-1. **Haiku prefilter** — "does this author express personal experience with this drug?" Batches 20 items per call. Rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
-2. **Sonnet classifier** — classifies sentiment and signal strength. Batches 5 items per drug. System prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream text = "ldn". The subreddit name is read from the database and injected into the prompt. Upstream comment text is included so replies like *"I love it too"* resolve correctly.
+For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-**Output:** Rows in `treatment_reports`, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id`.
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
+
+2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
+
+**Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
+
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
 
 | Column | Values |
 |--------|--------|
@@ -201,20 +155,20 @@ Two-stage process to minimize API cost:
 
 ---
 
-## Data Overwriting
+## Run traceability
 
-Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, timestamp, git commit hash, extraction type, and config. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id` so results are traceable to the exact run that produced them.
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
 
-Re-running does not delete old data. The classify step skips `(post_id, drug_id)` pairs already in `treatment_reports`. Use `--reclassify` to force re-classification — old results are preserved with their original `run_id` alongside the new ones.
-
-Demographics uses `INSERT OR REPLACE` on `user_profiles`, keyed on `(user_id, run_id)`, so re-running with the same run overwrites that run's results while different runs produce separate rows.
+Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 
 ---
 
-## Crash Recovery
+## Crash recovery
 
-- **Extract:** Cached in `tagged_mentions.json`; already-extracted entries are skipped on re-run. Saves every 5 batches.
-- **Canonicalize:** Re-runs fully (cheap — fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
+The pipeline is designed to resume after interruptions:
+
+- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
+- **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
 
 ---
