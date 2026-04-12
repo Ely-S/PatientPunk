@@ -32,18 +32,18 @@ Seven research questions across three patient communities, each demonstrating a 
 
 **Subtitle:** 7 questions · 3 communities · 10,000+ treatment reports
 
-1. **Which treatments have the best outcomes in Long COVID?** — Patients are trying dozens of treatments with no centralized way to compare results. We rank them.
+1. **Long COVID:** Which treatments have the best outcomes? — Patients are trying dozens of treatments with no centralized way to compare results. We rank them.
 
-2. **How do POTS patients compare to the broader Long COVID population?** — POTS is one of the most disabling Long COVID subtypes. Do these patients need a different treatment approach?
+2. **Long COVID (POTS):** How do POTS patients compare to the broader population? — POTS is one of the most disabling subtypes. Do these patients need a different treatment approach?
 
-3. **What is the optimal treatment strategy for POTS?** — Following up on #2's finding that polypharmacy correlates with better outcomes. What specific combinations work?
+3. **Long COVID (POTS):** What is the optimal treatment strategy? — Following up on #2's finding that polypharmacy correlates with better outcomes. What specific combinations work?
 
-4. **What helps Long COVID fatigue specifically?** — Fatigue is the #1 reported symptom. Which treatments actually move the needle for this specific complaint?
+4. **Long COVID (Fatigue):** What helps fatigue specifically? — Fatigue is the #1 reported symptom. Which treatments actually move the needle for this specific complaint?
 
-5. **Which SSRIs cause the worst PSSD?** — Thousands of patients report permanent sexual dysfunction after SSRIs. Which drugs are worst, and does dose matter?
+5. **PSSD:** Which SSRIs cause the worst harm? — Thousands of patients report permanent sexual dysfunction after SSRIs. Which drugs are worst, and does dose matter?
 
-6. **What helps PSSD recovery?** — For patients already harmed, what does the community report actually helps? The medical establishment has no approved treatment.
+6. **PSSD:** What helps recovery? — For patients already harmed, what does the community report actually helps? The medical establishment has no approved treatment.
 
-7. **What predicts a positive vs negative abortion experience?** — Patients agonize over method choice, but does it actually matter? Or is it the support system and clinical environment?
+7. **Abortion Recovery:** What predicts a positive vs negative experience? — Patients agonize over method choice, but does it actually matter? Or is it the support system and clinical environment?
 
 **Footer:** Each question generates a full reproducible analysis — statistical tests, visualizations, patient quotes, tiered recommendations, and research limitations. Ask a new question, get a new notebook.
