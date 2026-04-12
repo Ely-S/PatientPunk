@@ -35,7 +35,7 @@ Build the analysis as a story with five beats:
    - Treatments where community sentiment contradicts clinical guidelines (e.g., beta blockers first-line for POTS but negative sentiment)
    - Treatments where the same compound shows opposite results at different doses or in different contexts (e.g., microdosing vs macro-dose psilocybin)
    - Subgroups that respond opposite to the population
-   - Highly-discussed treatments that underperform their reputation (e.g., bupropion in PSSD)
+   - Highly-discussed treatments that underperform their reputation (e.g., a treatment the community recommends frequently but that shows mediocre positive rates in the data)
    - Treatments that are conspicuously absent despite being commonly prescribed
    - Results that contradict what the community believes about itself
    **Counterintuitive findings must be surprising to a human reader, not just to a text-mining algorithm.** "People who write 'regret' often mean they don't feel it" is a data-processing observation, not a research finding — any human reading those posts would understand the negation immediately. Similarly, "sentiment scores don't capture mixed emotions" is a known limitation, not a discovery. The bar is: would a clinician, patient, or researcher say "huh, I wouldn't have expected that" upon reading this finding? If not, it's not counterintuitive — it's methodology commentary. Put methodology observations in the limitations section, not the findings.
