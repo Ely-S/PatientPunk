@@ -39,8 +39,6 @@ from utilities import (
 
 BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
-PREFILTER_WORKERS = 4
-CLASSIFY_WORKERS = 3
 
 
 def is_only_questions(text: str) -> bool:

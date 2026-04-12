@@ -19,7 +19,6 @@ from prompts.intervention_config import EXTRACT_PROMPT
 from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
 
 BATCH_SIZE = 10
-MAX_WORKERS = 3
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
@@ -38,15 +37,6 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     if len(results) == len(texts):
         return results
 
-    # Near-miss: use what we can
-    if len(results) > len(texts):
-        log.warning(f"Mismatch ({len(results)}/{len(texts)}) — truncating extra results.")
-        return results[:len(texts)]
-    if len(results) >= len(texts) - 2:
-        log.warning(f"Mismatch ({len(results)}/{len(texts)}) — padding with empty arrays.")
-        return results + [[] for _ in range(len(texts) - len(results))]
-
-    # Big mismatch: retry as smaller batches
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
         mid = len(texts) // 2
