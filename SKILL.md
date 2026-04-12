@@ -98,6 +98,10 @@ Where `N` is the next sequential integer (check existing notebooks first).
 
 ## 2. Data Exploration
 - schema check, row counts, nulls
+- MUST report the date range of the data (earliest and latest post_date
+  from the posts table). Display as "Data covers: YYYY-MM-DD to YYYY-MM-DD
+  (N months)". This grounds the analysis in time and tells the reader
+  how current the data is.
 - MUST include a visualization (e.g., sentiment distribution pie/bar,
   symptom prevalence chart, or dataset overview figure)
 
