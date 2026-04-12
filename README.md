@@ -140,10 +140,13 @@ Add `--limit 50` for a quick demo run.
 | `--db` | Path to SQLite database (required) |
 | `--output-dir` | Directory for intermediate files (required) |
 | `--limit N` | Process only the first N posts/comments (default: all) |
+| `--skip-extract` | Skip extraction step (use existing tagged_mentions.json) |
 | `--skip-canonicalize` | Skip synonym normalization |
+| `--skip-prefilter` | Skip prefilter, send all pairs directly to classifier |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
 | `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
+| `--workers N` | Parallel workers for LLM calls during extract/classify (default: 3, use 1 for sequential) |
 
 Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
 

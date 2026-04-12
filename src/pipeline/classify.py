@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,8 @@ from utilities import (
 
 BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
+PREFILTER_WORKERS = 4
+CLASSIFY_WORKERS = 3
 
 
 def is_only_questions(text: str) -> bool:
@@ -110,7 +113,7 @@ def classify_batch(
     msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
     for i, (entry, _) in enumerate(items):
         msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
-    msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" and "signal".'
+    msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" (positive/negative/mixed/neutral) and "signal" (strong/moderate/weak/n/a).'
 
     raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
@@ -123,6 +126,7 @@ def run_classification(
     config: PipelineConfig,
     *,
     writer: ReportWriter | None = None,
+    skip_prefilter: bool = False,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
@@ -183,19 +187,49 @@ def run_classification(
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
-    # Prefilter with Haiku (cheap — no persistence needed)
-    log.info("Prefiltering...")
+    # Prefilter with Haiku — results cached to prefilter_results.json
+    prefilter_path = config.path("prefilter_results.json")
     filtered: set[tuple[str, str]] = set()
-    for i in range(0, len(to_do), PREFILTER_BATCH_SIZE):
-        batch = to_do[i:i + PREFILTER_BATCH_SIZE]
-        try:
-            results = prefilter_batch(client, batch, id_to_text, config.max_upstream_chars)
-            for (entry, drug), passed in zip(batch, results):
-                if not passed:
-                    filtered.add((entry["id"], drug))
-        except Exception as e:
-            raise RuntimeError(f"Prefilter batch error: {e}")
-        log.info(f"Prefiltered {min(i + PREFILTER_BATCH_SIZE, len(to_do))}/{len(to_do)}...")
+    if skip_prefilter:
+        log.info("Skipping prefilter, sending all pairs to classify...")
+    else:
+        # Load cached prefilter results
+        cached_pf: dict[str, bool] = {}
+        if prefilter_path.exists():
+            cached_pf = json.loads(prefilter_path.read_text())
+            log.info(f"Loaded {len(cached_pf)} cached prefilter results.")
+
+        # Split into cached vs uncached
+        uncached = [(e, d) for e, d in to_do if f"{e['id']}:{d}" not in cached_pf]
+        for e, d in to_do:
+            key = f"{e['id']}:{d}"
+            if key in cached_pf and not cached_pf[key]:
+                filtered.add((e["id"], d))
+
+        log.info(f"Prefiltering {len(uncached)} uncached pairs ({len(to_do) - len(uncached)} cached)...")
+
+        if uncached:
+            prefilter_batches = [
+                uncached[i:i + PREFILTER_BATCH_SIZE]
+                for i in range(0, len(uncached), PREFILTER_BATCH_SIZE)
+            ]
+            done_pf = 0
+            with ThreadPoolExecutor(max_workers=config.workers) as pool:
+                futures = {
+                    pool.submit(prefilter_batch, client, batch, id_to_text, config.max_upstream_chars): batch
+                    for batch in prefilter_batches
+                }
+                for future in as_completed(futures):
+                    batch = futures[future]
+                    results = future.result()
+                    for (entry, drug), passed in zip(batch, results):
+                        key = f"{entry['id']}:{drug}"
+                        cached_pf[key] = passed
+                        if not passed:
+                            filtered.add((entry["id"], drug))
+                    done_pf += len(batch)
+                    prefilter_path.write_text(json.dumps(cached_pf))
+                    log.info(f"Prefiltered {done_pf}/{len(uncached)}...")
 
     # Only classify entries that passed prefilter
     to_classify = [(e, d) for e, d in to_do if (e["id"], d) not in filtered]
@@ -210,46 +244,49 @@ def run_classification(
     drug_counter: Counter = Counter()
     done, total = 0, len(to_classify)
 
+    # Build all classify batches across all drugs
+    all_batches: list[list[tuple[dict, str]]] = []
     for drug, items in by_drug.items():
         for i in range(0, len(items), BATCH_SIZE):
-            batch = items[i:i + BATCH_SIZE]
+            all_batches.append(items[i:i + BATCH_SIZE])
 
-            try:
-                results = classify_batch(
-                    client, batch, id_to_text, prompts, config.max_upstream_chars,
-                )
-                for (entry, drug), result in zip(batch, results):
-                    if result.signal != "n/a":
-                        classified += 1
-                        drug_counter[drug] += 1
-                        if writer is not None:
-                            writer.write_one(
-                                post_id=entry["id"], drug=drug, author=entry["author"],
-                                sentiment=result.sentiment, signal=result.signal,
-                            )
-            except (LLMParseError, ValidationError) as e:
-                log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
-                for entry, drug in batch:
-                    try:
-                        msg = format_entry(entry, id_to_text, config.max_upstream_chars)
-                        msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
-                        raw = llm_call(
-                            client, msg, model=MODEL_STRONG,
-                            system=prompts[drug], max_tokens=50,
+    def _classify_one_batch(batch):
+        """Classify a single batch, with per-item fallback on failure."""
+        drug = batch[0][1]
+        try:
+            return batch, classify_batch(
+                client, batch, id_to_text, prompts, config.max_upstream_chars,
+            )
+        except (LLMParseError, ValidationError) as e:
+            log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
+            results = []
+            for entry, d in batch:
+                try:
+                    msg = format_entry(entry, id_to_text, config.max_upstream_chars)
+                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
+                    raw = llm_call(
+                        client, msg, model=MODEL_STRONG,
+                        system=prompts[d], max_tokens=50,
+                    )
+                    results.append(ClassificationResult.model_validate(parse_json_object(raw)))
+                except (LLMParseError, ValidationError) as e2:
+                    log.warning(f"Skipping {entry['id']}:{d}: {e2}")
+                    results.append(ClassificationResult(sentiment="neutral", signal="n/a"))
+            return batch, results
+
+    with ThreadPoolExecutor(max_workers=config.workers) as pool:
+        futures = {pool.submit(_classify_one_batch, batch): batch for batch in all_batches}
+        for future in as_completed(futures):
+            batch, results = future.result()
+            for (entry, drug), result in zip(batch, results):
+                if result.signal != "n/a":
+                    classified += 1
+                    drug_counter[drug] += 1
+                    if writer is not None:
+                        writer.write_one(
+                            post_id=entry["id"], drug=drug, author=entry["author"],
+                            sentiment=result.sentiment, signal=result.signal,
                         )
-                        result = ClassificationResult.model_validate(parse_json_object(raw))
-                        if result.signal != "n/a":
-                            classified += 1
-                            drug_counter[drug] += 1
-                            if writer is not None:
-                                writer.write_one(
-                                    post_id=entry["id"], drug=drug, author=entry["author"],
-                                    sentiment=result.sentiment, signal=result.signal,
-                                )
-                    except (LLMParseError, ValidationError) as e2:
-                        log.warning(f"Skipping {entry['id']}:{drug}: {e2}")
-                   
-
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
 
