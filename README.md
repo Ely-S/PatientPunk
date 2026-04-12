@@ -81,7 +81,7 @@ Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/REA
 
 **Option B — Arctic Shift bulk download** (faster for large datasets):
 
-Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform using the `transform_arctic_shift.py` script (available on the `shaun/scrapers_update` branch):
+Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform:
 
 ```bash
 uv run python Scrapers/transform_arctic_shift.py \
