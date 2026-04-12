@@ -90,8 +90,11 @@ And get back:
 SELECT
   t.canonical_name                                   AS treatment,
   COUNT(*)                                           AS reports,
-  ROUND(AVG(tr.sentiment), 2)                        AS avg_sentiment,
-  SUM(CASE WHEN tr.sentiment > 0 THEN 1 ELSE 0 END)
+  ROUND(AVG(CASE tr.sentiment
+    WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5
+    WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0
+    ELSE 0.0 END), 2)                                AS avg_sentiment,
+  SUM(CASE WHEN tr.sentiment = 'positive' THEN 1 ELSE 0 END)
     * 100.0 / COUNT(*)                               AS pct_positive
 FROM treatment_reports tr
 JOIN treatment t ON t.id = tr.drug_id
@@ -146,8 +149,11 @@ cd PatientPunk
 uv sync
 
 # Copy env template and add your API key
-cp Scrapers/demographic_extraction/.env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=<your key>
+cp .env.example .env
+# Edit .env and set your LLM API key:
+#   OPENROUTER_API_KEY=your_key    (recommended — supports any model)
+#   ANTHROPIC_API_KEY=your_key     (direct Anthropic access)
+# The pipeline auto-detects which key is set.
 ```
 
 To run any pipeline command, prefix it with `uv run`:
@@ -166,14 +172,70 @@ uv run pytest -v
 
 ## Running the Pipeline
 
-### Step 1 — Scrape
+### Step 1 — Get data
+
+Two options for acquiring Reddit data:
+
+**Option A — Arctic Shift API** (live, any time window):
 
 ```bash
 python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
-# Outputs: Scrapers/output/subreddit_posts.json  +  Scrapers/output/users/*.json
+# Outputs: data/subreddit_posts.json  +  data/users/*.json
 ```
 
-### Step 2a — Demographic extraction *(who are the patients?)*
+Currently hardcoded to r/covidlonghaulers. The scraper calls the Arctic Shift API (not Reddit directly), fetches posts and full comment trees, then optionally scrapes each author's Reddit history.
+
+| Flag | Description |
+|------|-------------|
+| `--months N` | How many months back to scrape (default: 2) |
+| `--weeks N` | Alternative: weeks instead of months |
+| `--comments` | Fetch full comment trees (adds time) |
+| `--user-histories` | Scrape each author's full Reddit history (adds 2-4 hours) |
+| `--limit-posts N` | Stop after N posts (for testing) |
+
+**Option B — Arctic Shift bulk download** (faster for large datasets):
+
+Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform:
+
+```bash
+python Scrapers/transform_arctic_shift.py \
+    --posts r_covidlonghaulers_posts_6_months.jsonl \
+    --comments r_covidlonghaulers_comments_6_months.jsonl \
+    --output data/subreddit_posts.json
+```
+
+Supports `.zst` compressed files. Works with any subreddit — not hardcoded.
+
+### Step 2 — Import into SQLite
+
+```bash
+sqlite3 data/posts.db < schema.sql
+python src/import_posts.py \
+    --reddit-posts data/subreddit_posts.json \
+    --output-db data/posts.db
+```
+
+### Step 3 — Run the drug sentiment pipeline
+
+```bash
+python src/run_pipeline.py \
+    --db data/posts.db \
+    --output-dir data/drug_pipeline
+```
+
+This runs three stages automatically: extract drug mentions, canonicalize synonyms, and classify sentiment. Results are written to `treatment_reports` in the SQLite database.
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database with posts imported (required) |
+| `--output-dir` | Directory for intermediate files (required) |
+| `--limit N` | Process only the first N posts (default: all) |
+| `--reclassify` | Re-run classification for all pairs, even those already in the DB |
+| `--skip-canonicalize` | Skip synonym normalization |
+
+See [src/README.md](src/README.md) for detailed pipeline architecture, crash recovery, and non-Anthropic model usage (Qwen, Gemini, etc. via OpenRouter).
+
+### Step 4 (optional) — Demographic extraction
 
 ```bash
 python Scrapers/demographic_extraction/run_pipeline.py \
@@ -181,16 +243,7 @@ python Scrapers/demographic_extraction/run_pipeline.py \
 # Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
 ```
 
-### Step 2b — Drug sentiment *(what do they say about treatments?)*
-
-```bash
-python database_creation/extract_mentions.py   # tag every post with drugs mentioned
-python database_creation/canonicalize.py       # collapse synonyms → canonical names
-python database_creation/classify_sentiment.py # classify sentiment per entry × drug
-# Output: reddit_sample_data/outputs/sentiment_cache.json
-```
-
-Steps 2a and 2b are independent — run them in either order. Both tag every record with `author_hash` (SHA-256 of username), which is the join key between the two datasets.
+Independent of the drug sentiment pipeline. Both use `author_hash` (SHA-256 of username) as the join key.
 
 ---
 
