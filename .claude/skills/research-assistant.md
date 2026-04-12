@@ -258,13 +258,20 @@ for w in result.warnings:
     print(f"[{w.severity}] {w.message}")
 ```
 
-### Reporting bias disclaimer
+### Research limitations section
 
-Every notebook summary must end with:
+Every notebook summary must end with a **Research Limitations** section that covers ALL of the following biases. Do not abbreviate — spell each one out so the reader understands why these results are not clinical evidence:
 
-> Based on self-selected Reddit posts. Users who never posted about a treatment are not represented. Results reflect reporting patterns, not population-level treatment effects.
+1. **Selection bias** — users who post on Reddit are not representative of all patients. They skew younger, more tech-literate, and more engaged with their condition.
+2. **Reporting bias** — people with strong reactions (positive or negative) are more likely to post than those with neutral experiences. This inflates both tails and underrepresents "it was fine."
+3. **Survivorship bias** — users who left the community (because they recovered, gave up, or died) are not represented. The dataset overweights ongoing patients.
+4. **Recall bias** — self-reports are retrospective and colored by current state. A user feeling better today may remember a treatment more positively than they experienced it.
+5. **Confounding** — patients typically try multiple treatments simultaneously. A positive report about Drug A may reflect Drug B (or natural recovery) happening at the same time.
+6. **No control group** — there is no untreated comparison group. We cannot distinguish treatment effect from placebo effect or natural disease course.
+7. **Sentiment is not efficacy** — our pipeline classifies how users *talk about* a treatment, not whether it objectively worked. Sentiment reflects experience, expectations, and communication style.
+8. **Temporal snapshot** — the data covers a specific time window. Treatment availability, community composition, and medical consensus may have changed.
 
-Available as `REPORTING_BIAS_DISCLAIMER` from the stats module.
+End with: *"These findings reflect reporting patterns in online communities, not population-level treatment effects. This is not medical advice. Always consult a healthcare provider before starting or changing any treatment."*
 
 ### When to use raw SQL/statsmodels instead
 
