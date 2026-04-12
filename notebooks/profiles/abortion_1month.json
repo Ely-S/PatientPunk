@@ -1,0 +1,205 @@
+{
+  "db_file": "abortion_1month.db",
+  "subreddit": "abortion",
+  "users": 2052,
+  "posts": 9885,
+  "treatment_reports": 1272,
+  "unique_reporters": 562,
+  "unique_drugs": 30,
+  "date_range": [
+    "2026-03-13",
+    "2026-04-12"
+  ],
+  "sentiment_distribution": {
+    "positive": 731,
+    "negative": 380,
+    "mixed": 121,
+    "neutral": 40
+  },
+  "top_treatments": [
+    {
+      "name": "misoprostol",
+      "users": 297,
+      "pos": 211,
+      "neg": 131,
+      "pct_pos": 62
+    },
+    {
+      "name": "abortion pill",
+      "users": 173,
+      "pos": 95,
+      "neg": 59,
+      "pct_pos": 62
+    },
+    {
+      "name": "mifepristone",
+      "users": 173,
+      "pos": 127,
+      "neg": 49,
+      "pct_pos": 72
+    },
+    {
+      "name": "ibuprofen",
+      "users": 100,
+      "pos": 87,
+      "neg": 22,
+      "pct_pos": 80
+    },
+    {
+      "name": "medical abortion",
+      "users": 53,
+      "pos": 25,
+      "neg": 23,
+      "pct_pos": 52
+    },
+    {
+      "name": "ma",
+      "users": 40,
+      "pos": 22,
+      "neg": 18,
+      "pct_pos": 55
+    },
+    {
+      "name": "heat",
+      "users": 35,
+      "pos": 33,
+      "neg": 8,
+      "pct_pos": 80
+    },
+    {
+      "name": "birth control",
+      "users": 34,
+      "pos": 6,
+      "neg": 27,
+      "pct_pos": 18
+    },
+    {
+      "name": "mife",
+      "users": 29,
+      "pos": 18,
+      "neg": 11,
+      "pct_pos": 62
+    },
+    {
+      "name": "tylenol",
+      "users": 22,
+      "pos": 18,
+      "neg": 5,
+      "pct_pos": 78
+    },
+    {
+      "name": "pills",
+      "users": 14,
+      "pos": 8,
+      "neg": 4,
+      "pct_pos": 67
+    },
+    {
+      "name": "sedation",
+      "users": 14,
+      "pos": 15,
+      "neg": 3,
+      "pct_pos": 83
+    },
+    {
+      "name": "anti-nausea medication",
+      "users": 13,
+      "pos": 11,
+      "neg": 2,
+      "pct_pos": 85
+    },
+    {
+      "name": "zofran",
+      "users": 12,
+      "pos": 10,
+      "neg": 0,
+      "pct_pos": 100
+    },
+    {
+      "name": "medication",
+      "users": 11,
+      "pos": 7,
+      "neg": 4,
+      "pct_pos": 64
+    },
+    {
+      "name": "antibiotics",
+      "users": 9,
+      "pos": 2,
+      "neg": 2,
+      "pct_pos": 50
+    },
+    {
+      "name": "paracetamol",
+      "users": 9,
+      "pos": 7,
+      "neg": 2,
+      "pct_pos": 78
+    },
+    {
+      "name": "anesthesia",
+      "users": 6,
+      "pos": 5,
+      "neg": 1,
+      "pct_pos": 83
+    },
+    {
+      "name": "pill",
+      "users": 6,
+      "pos": 4,
+      "neg": 3,
+      "pct_pos": 57
+    },
+    {
+      "name": "weed",
+      "users": 6,
+      "pos": 5,
+      "neg": 0,
+      "pct_pos": 100
+    },
+    {
+      "name": "ondansetron",
+      "users": 5,
+      "pos": 4,
+      "neg": 0,
+      "pct_pos": 100
+    }
+  ],
+  "conditions": [],
+  "text_themes": {
+    "fatigue": 35,
+    "pain": 518,
+    "anxiety": 128,
+    "depression": 55,
+    "sleep": 149,
+    "nausea": 169,
+    "bleeding": 471,
+    "scared": 279,
+    "alone": 279,
+    "support": 406,
+    "relief": 100,
+    "regret": 223,
+    "guilt": 198,
+    "doctor": 262,
+    "recovery": 86,
+    "improved": 14
+  },
+  "generics_found": [
+    {
+      "name": "medication",
+      "users": 11
+    },
+    {
+      "name": "antibiotics",
+      "users": 9
+    }
+  ],
+  "causal_context_candidates": [
+    {
+      "name": "birth control",
+      "category": "birth_control",
+      "users": 34,
+      "neg_rate": 0.79
+    }
+  ]
+}
