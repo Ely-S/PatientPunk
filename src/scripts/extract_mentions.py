@@ -140,8 +140,9 @@ def run_extraction(config: "PipelineConfig"):
         texts = [text for _, text in batch]
         batch_results = extract_batch(client, texts)
         for (item_id, _), drugs in zip(batch, batch_results):
+            raw = [drugs] if isinstance(drugs, str) else (drugs or [])
             flat = []
-            for d in (drugs or []):
+            for d in raw:
                 if isinstance(d, str):
                     flat.append(d.lower().strip())
                 elif isinstance(d, list):

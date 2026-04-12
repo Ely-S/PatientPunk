@@ -161,7 +161,14 @@ def main():
             for eid, drugs in zip(eids, results):
                 print(eid, drugs)
                 print("--------------------------------")
-                cache[eid] = [d.lower().strip() for d in drugs]
+                raw = [drugs] if isinstance(drugs, str) else (drugs or [])
+                flat = []
+                for d in raw:
+                    if isinstance(d, str):
+                        flat.append(d.lower().strip())
+                    elif isinstance(d, list):
+                        flat.extend(x.lower().strip() for x in d if isinstance(x, str))
+                cache[eid] = flat
         except Exception as e:
             print(f"  Batch error: {e}")
             for eid in eids:
