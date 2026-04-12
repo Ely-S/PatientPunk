@@ -1,0 +1,453 @@
+{
+  "db_file": "polina_onemonth.db",
+  "subreddit": "covidlonghaulers",
+  "users": 2827,
+  "posts": 17182,
+  "treatment_reports": 6815,
+  "unique_reporters": 1121,
+  "unique_drugs": 1257,
+  "date_range": [
+    "2026-03-11",
+    "2026-04-10"
+  ],
+  "sentiment_distribution": {
+    "positive": 4564,
+    "negative": 1619,
+    "mixed": 581,
+    "neutral": 51
+  },
+  "top_treatments": [
+    {
+      "name": "low dose naltrexone",
+      "users": 183,
+      "pos": 246,
+      "neg": 51,
+      "pct_pos": 83
+    },
+    {
+      "name": "supplements",
+      "users": 123,
+      "pos": 93,
+      "neg": 50,
+      "pct_pos": 65
+    },
+    {
+      "name": "antihistamines",
+      "users": 116,
+      "pos": 119,
+      "neg": 52,
+      "pct_pos": 70
+    },
+    {
+      "name": "nicotine",
+      "users": 82,
+      "pos": 74,
+      "neg": 28,
+      "pct_pos": 73
+    },
+    {
+      "name": "coq10",
+      "users": 62,
+      "pos": 50,
+      "neg": 20,
+      "pct_pos": 71
+    },
+    {
+      "name": "medication",
+      "users": 62,
+      "pos": 53,
+      "neg": 25,
+      "pct_pos": 68
+    },
+    {
+      "name": "vitamin d",
+      "users": 60,
+      "pos": 54,
+      "neg": 11,
+      "pct_pos": 83
+    },
+    {
+      "name": "magnesium",
+      "users": 56,
+      "pos": 60,
+      "neg": 4,
+      "pct_pos": 94
+    },
+    {
+      "name": "nattokinase",
+      "users": 50,
+      "pos": 52,
+      "neg": 23,
+      "pct_pos": 69
+    },
+    {
+      "name": "ssri",
+      "users": 50,
+      "pos": 26,
+      "neg": 30,
+      "pct_pos": 46
+    },
+    {
+      "name": "probiotics",
+      "users": 46,
+      "pos": 50,
+      "neg": 12,
+      "pct_pos": 81
+    },
+    {
+      "name": "n-acetylcysteine",
+      "users": 41,
+      "pos": 32,
+      "neg": 11,
+      "pct_pos": 74
+    },
+    {
+      "name": "vitamin c",
+      "users": 41,
+      "pos": 35,
+      "neg": 8,
+      "pct_pos": 81
+    },
+    {
+      "name": "electrolyte",
+      "users": 40,
+      "pos": 41,
+      "neg": 5,
+      "pct_pos": 89
+    },
+    {
+      "name": "b12",
+      "users": 38,
+      "pos": 34,
+      "neg": 6,
+      "pct_pos": 85
+    },
+    {
+      "name": "beta blocker",
+      "users": 37,
+      "pos": 33,
+      "neg": 8,
+      "pct_pos": 80
+    },
+    {
+      "name": "ketotifen",
+      "users": 37,
+      "pos": 45,
+      "neg": 15,
+      "pct_pos": 75
+    },
+    {
+      "name": "propranolol",
+      "users": 37,
+      "pos": 30,
+      "neg": 8,
+      "pct_pos": 79
+    },
+    {
+      "name": "famotidine",
+      "users": 36,
+      "pos": 26,
+      "neg": 11,
+      "pct_pos": 70
+    },
+    {
+      "name": "antibiotics",
+      "users": 34,
+      "pos": 20,
+      "neg": 19,
+      "pct_pos": 51
+    },
+    {
+      "name": "cetirizine",
+      "users": 33,
+      "pos": 23,
+      "neg": 12,
+      "pct_pos": 66
+    },
+    {
+      "name": "creatine",
+      "users": 32,
+      "pos": 31,
+      "neg": 8,
+      "pct_pos": 79
+    },
+    {
+      "name": "h1 antihistamine",
+      "users": 32,
+      "pos": 28,
+      "neg": 12,
+      "pct_pos": 70
+    },
+    {
+      "name": "melatonin",
+      "users": 32,
+      "pos": 24,
+      "neg": 7,
+      "pct_pos": 77
+    },
+    {
+      "name": "vaccine",
+      "users": 30,
+      "pos": 6,
+      "neg": 27,
+      "pct_pos": 18
+    },
+    {
+      "name": "glp-1 receptor agonist",
+      "users": 29,
+      "pos": 17,
+      "neg": 10,
+      "pct_pos": 63
+    },
+    {
+      "name": "pepcid",
+      "users": 29,
+      "pos": 22,
+      "neg": 9,
+      "pct_pos": 71
+    },
+    {
+      "name": "fexofenadine",
+      "users": 28,
+      "pos": 28,
+      "neg": 6,
+      "pct_pos": 82
+    },
+    {
+      "name": "h2 antihistamine",
+      "users": 28,
+      "pos": 16,
+      "neg": 14,
+      "pct_pos": 53
+    },
+    {
+      "name": "quercetin",
+      "users": 28,
+      "pos": 31,
+      "neg": 2,
+      "pct_pos": 94
+    }
+  ],
+  "conditions": [
+    {
+      "name": "long covid",
+      "users": 136
+    },
+    {
+      "name": "pem",
+      "users": 88
+    },
+    {
+      "name": "pots",
+      "users": 80
+    },
+    {
+      "name": "mcas",
+      "users": 75
+    },
+    {
+      "name": "dysautonomia",
+      "users": 59
+    },
+    {
+      "name": "me/cfs",
+      "users": 58
+    },
+    {
+      "name": "post-viral",
+      "users": 45
+    },
+    {
+      "name": "ehlers-danlos syndrome",
+      "users": 28
+    },
+    {
+      "name": "ms",
+      "users": 27
+    },
+    {
+      "name": "covid related",
+      "users": 23
+    },
+    {
+      "name": "ibs",
+      "users": 21
+    },
+    {
+      "name": "fibromyalgia",
+      "users": 20
+    },
+    {
+      "name": "small fiber neuropathy",
+      "users": 17
+    },
+    {
+      "name": "mast cell activation",
+      "users": 16
+    },
+    {
+      "name": "autonomic dysfunction",
+      "users": 15
+    },
+    {
+      "name": "lupus",
+      "users": 13
+    },
+    {
+      "name": "lyme disease",
+      "users": 12
+    },
+    {
+      "name": "gastroparesis",
+      "users": 10
+    },
+    {
+      "name": "covid induced",
+      "users": 9
+    },
+    {
+      "name": "ra",
+      "users": 8
+    }
+  ],
+  "text_themes": {
+    "fatigue": 442,
+    "pain": 468,
+    "brain_fog": 287,
+    "anxiety": 232,
+    "depression": 125,
+    "sleep": 417,
+    "nausea": 60,
+    "bleeding": 14,
+    "scared": 58,
+    "alone": 198,
+    "support": 235,
+    "relief": 130,
+    "regret": 17,
+    "guilt": 26,
+    "doctor": 619,
+    "dismissed": 68,
+    "recovery": 485,
+    "improved": 459
+  },
+  "generics_found": [
+    {
+      "name": "supplements",
+      "users": 123
+    },
+    {
+      "name": "medication",
+      "users": 62
+    },
+    {
+      "name": "vitamin",
+      "users": 12
+    },
+    {
+      "name": "antihistamines",
+      "users": 116
+    },
+    {
+      "name": "antibiotics",
+      "users": 34
+    }
+  ],
+  "causal_context_candidates": [
+    {
+      "name": "covid vaccine",
+      "category": "vaccine",
+      "users": 27,
+      "neg_rate": 0.89
+    },
+    {
+      "name": "flu vaccine",
+      "category": "vaccine",
+      "users": 5,
+      "neg_rate": 0.8
+    },
+    {
+      "name": "mmr vaccine",
+      "category": "vaccine",
+      "users": 3,
+      "neg_rate": 0.67
+    },
+    {
+      "name": "moderna vaccine",
+      "category": "vaccine",
+      "users": 6,
+      "neg_rate": 1.33
+    },
+    {
+      "name": "mrna covid-19 vaccine",
+      "category": "vaccine",
+      "users": 7,
+      "neg_rate": 1.0
+    },
+    {
+      "name": "pfizer vaccine",
+      "category": "vaccine",
+      "users": 13,
+      "neg_rate": 1.08
+    },
+    {
+      "name": "vaccine",
+      "category": "vaccine",
+      "users": 30,
+      "neg_rate": 0.9
+    },
+    {
+      "name": "vaccine injection",
+      "category": "vaccine",
+      "users": 14,
+      "neg_rate": 0.93
+    },
+    {
+      "name": "pfizer",
+      "category": "vaccine",
+      "users": 7,
+      "neg_rate": 1.0
+    },
+    {
+      "name": "pfizer vaccine",
+      "category": "vaccine",
+      "users": 13,
+      "neg_rate": 1.08
+    },
+    {
+      "name": "moderna vaccine",
+      "category": "vaccine",
+      "users": 6,
+      "neg_rate": 1.33
+    },
+    {
+      "name": "booster",
+      "category": "vaccine",
+      "users": 17,
+      "neg_rate": 0.65
+    },
+    {
+      "name": "sertraline",
+      "category": "ssri",
+      "users": 11,
+      "neg_rate": 0.64
+    },
+    {
+      "name": "duloxetine",
+      "category": "ssri",
+      "users": 8,
+      "neg_rate": 0.88
+    },
+    {
+      "name": "fluvoxamine",
+      "category": "ssri",
+      "users": 24,
+      "neg_rate": 0.62
+    },
+    {
+      "name": "snri",
+      "category": "ssri",
+      "users": 3,
+      "neg_rate": 1.0
+    }
+  ]
+}

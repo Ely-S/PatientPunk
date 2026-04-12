@@ -1,0 +1,328 @@
+{
+  "db_file": "pssd.db",
+  "subreddit": "PSSD",
+  "users": 500,
+  "posts": 2532,
+  "treatment_reports": 902,
+  "unique_reporters": 220,
+  "unique_drugs": 245,
+  "date_range": [
+    "2026-03-12",
+    "2026-04-11"
+  ],
+  "sentiment_distribution": {
+    "negative": 561,
+    "positive": 238,
+    "mixed": 95,
+    "neutral": 8
+  },
+  "top_treatments": [
+    {
+      "name": "ssri",
+      "users": 82,
+      "pos": 7,
+      "neg": 99,
+      "pct_pos": 7
+    },
+    {
+      "name": "sertraline",
+      "users": 39,
+      "pos": 0,
+      "neg": 50,
+      "pct_pos": 0
+    },
+    {
+      "name": "lexapro",
+      "users": 26,
+      "pos": 5,
+      "neg": 32,
+      "pct_pos": 14
+    },
+    {
+      "name": "antidepressant",
+      "users": 23,
+      "pos": 0,
+      "neg": 24,
+      "pct_pos": 0
+    },
+    {
+      "name": "fluoxetine",
+      "users": 20,
+      "pos": 2,
+      "neg": 18,
+      "pct_pos": 10
+    },
+    {
+      "name": "bupropion",
+      "users": 18,
+      "pos": 11,
+      "neg": 12,
+      "pct_pos": 48
+    },
+    {
+      "name": "escitalopram",
+      "users": 10,
+      "pos": 1,
+      "neg": 7,
+      "pct_pos": 12
+    },
+    {
+      "name": "cabergoline",
+      "users": 9,
+      "pos": 5,
+      "neg": 4,
+      "pct_pos": 56
+    },
+    {
+      "name": "gabapentin",
+      "users": 9,
+      "pos": 3,
+      "neg": 6,
+      "pct_pos": 33
+    },
+    {
+      "name": "probiotics",
+      "users": 9,
+      "pos": 1,
+      "neg": 7,
+      "pct_pos": 12
+    },
+    {
+      "name": "prozac",
+      "users": 9,
+      "pos": 1,
+      "neg": 8,
+      "pct_pos": 11
+    },
+    {
+      "name": "buspirone",
+      "users": 8,
+      "pos": 3,
+      "neg": 3,
+      "pct_pos": 50
+    },
+    {
+      "name": "vortioxetine",
+      "users": 8,
+      "pos": 0,
+      "neg": 9,
+      "pct_pos": 0
+    },
+    {
+      "name": "d2 agonist",
+      "users": 7,
+      "pos": 1,
+      "neg": 4,
+      "pct_pos": 20
+    },
+    {
+      "name": "paroxetine",
+      "users": 7,
+      "pos": 0,
+      "neg": 7,
+      "pct_pos": 0
+    },
+    {
+      "name": "shrooms",
+      "users": 7,
+      "pos": 1,
+      "neg": 7,
+      "pct_pos": 12
+    },
+    {
+      "name": "weed",
+      "users": 7,
+      "pos": 3,
+      "neg": 4,
+      "pct_pos": 43
+    },
+    {
+      "name": "antihistamine",
+      "users": 6,
+      "pos": 6,
+      "neg": 1,
+      "pct_pos": 86
+    },
+    {
+      "name": "cyproheptadine",
+      "users": 6,
+      "pos": 3,
+      "neg": 4,
+      "pct_pos": 43
+    },
+    {
+      "name": "snri",
+      "users": 6,
+      "pos": 0,
+      "neg": 6,
+      "pct_pos": 0
+    },
+    {
+      "name": "antipsychotics",
+      "users": 5,
+      "pos": 1,
+      "neg": 7,
+      "pct_pos": 12
+    },
+    {
+      "name": "citalopram",
+      "users": 5,
+      "pos": 0,
+      "neg": 4,
+      "pct_pos": 0
+    },
+    {
+      "name": "dextromethorphan",
+      "users": 5,
+      "pos": 2,
+      "neg": 8,
+      "pct_pos": 20
+    },
+    {
+      "name": "duloxetine",
+      "users": 5,
+      "pos": 0,
+      "neg": 7,
+      "pct_pos": 0
+    },
+    {
+      "name": "dxm",
+      "users": 5,
+      "pos": 2,
+      "neg": 7,
+      "pct_pos": 22
+    },
+    {
+      "name": "hcg",
+      "users": 5,
+      "pos": 0,
+      "neg": 4,
+      "pct_pos": 0
+    },
+    {
+      "name": "ketogenic diet",
+      "users": 5,
+      "pos": 5,
+      "neg": 0,
+      "pct_pos": 100
+    },
+    {
+      "name": "loratadine",
+      "users": 5,
+      "pos": 4,
+      "neg": 2,
+      "pct_pos": 67
+    },
+    {
+      "name": "magnesium glycinate",
+      "users": 5,
+      "pos": 1,
+      "neg": 3,
+      "pct_pos": 25
+    },
+    {
+      "name": "microdosing",
+      "users": 5,
+      "pos": 7,
+      "neg": 1,
+      "pct_pos": 88
+    }
+  ],
+  "conditions": [],
+  "text_themes": {
+    "fatigue": 23,
+    "pain": 36,
+    "brain_fog": 20,
+    "anxiety": 40,
+    "depression": 38,
+    "sleep": 58,
+    "scared": 5,
+    "alone": 16,
+    "support": 22,
+    "relief": 9,
+    "doctor": 72,
+    "dismissed": 12,
+    "recovery": 56,
+    "improved": 81
+  },
+  "generics_found": [
+    {
+      "name": "antidepressant",
+      "users": 23
+    }
+  ],
+  "causal_context_candidates": [
+    {
+      "name": "ssri",
+      "category": "ssri",
+      "users": 82,
+      "neg_rate": 1.21
+    },
+    {
+      "name": "sertraline",
+      "category": "ssri",
+      "users": 39,
+      "neg_rate": 1.28
+    },
+    {
+      "name": "fluoxetine",
+      "category": "ssri",
+      "users": 20,
+      "neg_rate": 0.9
+    },
+    {
+      "name": "paroxetine",
+      "category": "ssri",
+      "users": 7,
+      "neg_rate": 1.0
+    },
+    {
+      "name": "escitalopram",
+      "category": "ssri",
+      "users": 10,
+      "neg_rate": 0.7
+    },
+    {
+      "name": "citalopram",
+      "category": "ssri",
+      "users": 5,
+      "neg_rate": 0.8
+    },
+    {
+      "name": "escitalopram",
+      "category": "ssri",
+      "users": 10,
+      "neg_rate": 0.7
+    },
+    {
+      "name": "lexapro",
+      "category": "ssri",
+      "users": 26,
+      "neg_rate": 1.23
+    },
+    {
+      "name": "prozac",
+      "category": "ssri",
+      "users": 9,
+      "neg_rate": 0.89
+    },
+    {
+      "name": "vortioxetine",
+      "category": "ssri",
+      "users": 8,
+      "neg_rate": 1.12
+    },
+    {
+      "name": "duloxetine",
+      "category": "ssri",
+      "users": 5,
+      "neg_rate": 1.4
+    },
+    {
+      "name": "snri",
+      "category": "ssri",
+      "users": 6,
+      "neg_rate": 1.0
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "db_file": "abortion.db",
+  "subreddit": "abortion",
+  "users": 658,
+  "posts": 2377,
+  "treatment_reports": 522,
+  "unique_reporters": 205,
+  "unique_drugs": 76,
+  "date_range": [
+    "2026-04-04",
+    "2026-04-11"
+  ],
+  "sentiment_distribution": {
+    "positive": 256,
+    "negative": 210,
+    "mixed": 49,
+    "neutral": 7
+  },
+  "top_treatments": [
+    {
+      "name": "misoprostol",
+      "users": 78,
+      "pos": 66,
+      "neg": 46,
+      "pct_pos": 59
+    },
+    {
+      "name": "mifepristone",
+      "users": 52,
+      "pos": 32,
+      "neg": 31,
+      "pct_pos": 51
+    },
+    {
+      "name": "abortion pills",
+      "users": 38,
+      "pos": 21,
+      "neg": 16,
+      "pct_pos": 57
+    },
+    {
+      "name": "medical abortion",
+      "users": 35,
+      "pos": 10,
+      "neg": 21,
+      "pct_pos": 32
+    },
+    {
+      "name": "ibuprofen",
+      "users": 18,
+      "pos": 16,
+      "neg": 6,
+      "pct_pos": 73
+    },
+    {
+      "name": "medication abortion",
+      "users": 17,
+      "pos": 5,
+      "neg": 17,
+      "pct_pos": 23
+    },
+    {
+      "name": "pill",
+      "users": 13,
+      "pos": 6,
+      "neg": 8,
+      "pct_pos": 43
+    },
+    {
+      "name": "surgical abortion",
+      "users": 12,
+      "pos": 2,
+      "neg": 5,
+      "pct_pos": 29
+    },
+    {
+      "name": "heating pad",
+      "users": 10,
+      "pos": 9,
+      "neg": 3,
+      "pct_pos": 75
+    },
+    {
+      "name": "plan b",
+      "users": 8,
+      "pos": 3,
+      "neg": 5,
+      "pct_pos": 38
+    },
+    {
+      "name": "birth control",
+      "users": 7,
+      "pos": 1,
+      "neg": 8,
+      "pct_pos": 11
+    },
+    {
+      "name": "intrauterine device",
+      "users": 7,
+      "pos": 4,
+      "neg": 4,
+      "pct_pos": 50
+    },
+    {
+      "name": "medication",
+      "users": 7,
+      "pos": 5,
+      "neg": 3,
+      "pct_pos": 62
+    },
+    {
+      "name": "pain medication",
+      "users": 7,
+      "pos": 6,
+      "neg": 1,
+      "pct_pos": 86
+    },
+    {
+      "name": "tylenol",
+      "users": 7,
+      "pos": 7,
+      "neg": 0,
+      "pct_pos": 100
+    },
+    {
+      "name": "ultrasound",
+      "users": 5,
+      "pos": 3,
+      "neg": 2,
+      "pct_pos": 60
+    },
+    {
+      "name": "zofran",
+      "users": 5,
+      "pos": 5,
+      "neg": 0,
+      "pct_pos": 100
+    }
+  ],
+  "conditions": [],
+  "text_themes": {
+    "fatigue": 10,
+    "pain": 151,
+    "anxiety": 36,
+    "depression": 12,
+    "sleep": 26,
+    "nausea": 46,
+    "bleeding": 122,
+    "scared": 66,
+    "alone": 78,
+    "support": 116,
+    "relief": 26,
+    "regret": 60,
+    "guilt": 41,
+    "doctor": 77,
+    "recovery": 18,
+    "improved": 5
+  },
+  "generics_found": [
+    {
+      "name": "medication",
+      "users": 7
+    }
+  ],
+  "causal_context_candidates": [
+    {
+      "name": "birth control",
+      "category": "birth_control",
+      "users": 7,
+      "neg_rate": 1.14
+    },
+    {
+      "name": "plan b",
+      "category": "birth_control",
+      "users": 8,
+      "neg_rate": 0.62
+    }
+  ]
+}
