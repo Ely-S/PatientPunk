@@ -98,17 +98,29 @@ Where `N` is the next sequential integer (check existing notebooks first).
 
 ## 2. Data Exploration
 - schema check, row counts, nulls
+- MUST include a visualization (e.g., sentiment distribution pie/bar,
+  symptom prevalence chart, or dataset overview figure)
 
-## 3. Analysis
+## 3-N. Analysis sections (one per research question)
 - queries → DataFrames → transforms → stats
+- EVERY analysis section MUST produce at least one chart. No exceptions.
+  The chart is the primary output — the table is supporting detail.
+  Choose the most informative chart type for the data:
+    * Diverging bar chart for treatment outcome comparisons
+    * Forest plot (dot + 95% CI) for precision/uncertainty
+    * Grouped bar chart for category breakdowns
+    * Heatmap for co-occurrence or correlation matrices
+    * Pie/donut chart for simple proportion breakdowns (≤6 categories)
+  If a section only has a table and no chart, add one. If the data
+  doesn't support a meaningful chart, merge the section into another.
 
-## 4. Visualization
-- charts with labeled axes and titles
-
-## 5. Recommendations
+## Recommendations
 - tiered by evidence strength (Strong / Moderate / Preliminary)
+- MUST include a visual summary (e.g., forest plot of all recommended
+  treatments color-coded by tier, or a single diverging bar chart
+  showing only the recommended treatments)
 
-## 6. Summary
+## Summary
 - plain language findings, caveats, suggested next steps
 ```
 
