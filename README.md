@@ -66,10 +66,10 @@ Two options:
 
 ```bash
 uv run python Scrapers/scrape_corpus.py --months 6 --comments
-# Outputs: data/subreddit_posts.json + data/users/*.json
+# Outputs: output/subreddit_posts.json + output/users/*.json
 ```
 
-Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/README.md) for all flags, time estimates, and user history options.
+Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/README.md) for all flags, time estimates, and user history options. Note: the scraper writes to `output/`, not `data/`.
 
 | Flag | Description |
 |------|-------------|
@@ -81,13 +81,13 @@ Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/REA
 
 **Option B — Arctic Shift bulk download** (faster for large datasets):
 
-Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform:
+Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform using the `transform_arctic_shift.py` script (available on the `shaun/scrapers_update` branch):
 
 ```bash
 uv run python Scrapers/transform_arctic_shift.py \
     --posts r_covidlonghaulers_posts_6_months.jsonl \
     --comments r_covidlonghaulers_comments_6_months.jsonl \
-    --output data/subreddit_posts.json
+    --output output/subreddit_posts.json
 ```
 
 Supports `.zst` compressed files. Works with any subreddit — not hardcoded.
@@ -97,7 +97,7 @@ Supports `.zst` compressed files. Works with any subreddit — not hardcoded.
 ```bash
 sqlite3 data/posts.db < schema.sql
 uv run python src/import_posts.py \
-    --reddit-posts data/subreddit_posts.json \
+    --reddit-posts output/subreddit_posts.json \
     --output-db data/posts.db
 ```
 
@@ -114,12 +114,12 @@ This runs three stages automatically:
 2. **Canonicalize** — LLM merges synonyms (e.g., "low dose naltrexone" + "ldn" + "naltrexone")
 3. **Classify** — LLM classifies each user's sentiment toward each drug (positive/negative/mixed/neutral)
 
-Results are written to the `treatment_reports` table in the SQLite database.
+Results are written to the `treatment_reports` table in the SQLite database. Intermediate files (`tagged_mentions.json`) are saved to `--output-dir` and used for crash recovery — if the pipeline is interrupted, it resumes from the last saved checkpoint.
 
 | Flag | Description |
 |------|-------------|
 | `--db` | Path to SQLite database with posts imported (required) |
-| `--output-dir` | Directory for intermediate files (required) |
+| `--output-dir` | Directory for intermediate files — `tagged_mentions.json` saved here (required) |
 | `--limit N` | Process only the first N posts (default: all) |
 | `--reclassify` | Re-run classification for all pairs, even those already in the DB |
 | `--skip-canonicalize` | Skip synonym normalization |
@@ -174,7 +174,7 @@ The drug sentiment pipeline reads posts from SQLite and produces a sentiment dat
 
 **Extract** (`src/pipeline/extract.py`) — Asks a fast model to identify all drugs/supplements/interventions in each post. Batches 20 texts per call with automatic retry on mismatch. Saves incrementally every 5 batches. Output: `tagged_mentions.json`.
 
-**Canonicalize** (`src/pipeline/canonicalize.py`) — Sends all unique drug names to a fast model in batches and merges true synonyms (e.g., "pepcid" -> "famotidine"). Only collapses true synonyms — does NOT merge a specific drug into a broader category. Populates the `treatment` table. Output: updated `tagged_mentions.json` + `canonical_map.json`.
+**Canonicalize** (`src/pipeline/canonicalize.py`) — Sends all unique drug names to a fast model in batches and merges true synonyms (e.g., "pepcid" -> "famotidine"). Only collapses true synonyms — does NOT merge a specific drug into a broader category. Populates the `treatment` table. Output: updated `tagged_mentions.json` with canonical names applied.
 
 **Classify** (`src/pipeline/classify.py`) — Two-stage process:
 1. Fast model prefilter: "does this author express personal experience with this drug?" Rejects questions and research discussions.
