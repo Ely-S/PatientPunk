@@ -7,9 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import anthropic
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent.parent / ".env")  # project root .env
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"

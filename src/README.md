@@ -12,8 +12,6 @@ The pipeline reads posts from a SQLite database and produces a sentiment databas
 
 A key design principle: **reply chain context is preserved**. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from upstream comments via the parent chain).
 
-(In progress) extracts demographic data for each user, including age, gender, and location. For each user, when available, it extracts their conditions, the onset and recovery time, and severity.
-
 ---
 
 ## Setup
@@ -116,29 +114,6 @@ The pipeline is designed to resume after interruptions:
 - **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
 - **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
-
-### Standalone — Demographics (`extract_demographics_conditions.py`)
-
-Not part of the main pipeline — run separately. Groups posts by user, sends them to a fast model, and extracts demographics and conditions. Not currently used downstream by the treatment pipeline — the two are independent.
-
-In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
-
-```bash
-python src/extract_demographics_conditions.py --db data/posts.db
-```
-
-| Flag | Description |
-|------|-------------|
-| `--db` | Path to SQLite database (required) |
-| `--limit N` | Limit to N users (default: all) |
-| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
-| `--max-chars N` | Max characters per post (default: 500) |
-
----
-
-Use `--reclassify` to force re-classification of all pairs. Old results are preserved with their original `run_id` — nothing is deleted.
-
----
 
 ## Output
 
