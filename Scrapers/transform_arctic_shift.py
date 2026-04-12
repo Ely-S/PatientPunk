@@ -23,6 +23,7 @@ and Polina's src/run_pipeline.py).
 
 import argparse
 import hashlib
+import io
 import json
 import sys
 from collections import defaultdict
@@ -54,7 +55,6 @@ def open_ndjson(path: Path):
         with open(path, "rb") as fh:
             dctx = zstd.ZstdDecompressor()
             with dctx.stream_reader(fh) as reader:
-                import io
                 text_stream = io.TextIOWrapper(reader, encoding="utf-8")
                 for line in text_stream:
                     line = line.strip()
@@ -168,7 +168,13 @@ Examples:
     output: list[dict] = []
     duplicates = 0
 
-    for post_id, p in sorted(posts_by_id.items(), key=lambda x: x[1].get("created_utc", 0)):
+    def _sort_key(item):
+        ts = item[1].get("created_utc", "")
+        if isinstance(ts, (int, float)):
+            return str(ts)
+        return str(ts) if ts else ""
+
+    for post_id, p in sorted(posts_by_id.items(), key=_sort_key):
         author = (p.get("author") or "").lower()
         title = (p.get("title") or "").strip().lower()
         dedup_key = (author, title)

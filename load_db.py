@@ -19,15 +19,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "variable_extraction"))
 
-from patientpunk.db import (
-    init_db,
-    load_corpus,
-    load_extractions,
-    load_sentiment,
-    query_treatment_outcomes,
-    list_drugs,
-    list_conditions,
-)
+try:
+    from patientpunk.db import (
+        init_db,
+        load_corpus,
+        load_extractions,
+        load_sentiment,
+        query_treatment_outcomes,
+        list_drugs,
+        list_conditions,
+    )
+except ImportError:
+    sys.exit(
+        "ERROR: variable_extraction/patientpunk/ package not found.\n"
+        "This loader requires the variable_extraction package.\n"
+        "See: https://github.com/Ely-S/PatientPunk/tree/shaun/presentation/variable_extraction"
+    )
 
 HERE = Path(__file__).parent
 
