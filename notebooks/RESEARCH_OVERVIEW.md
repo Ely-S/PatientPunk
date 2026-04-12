@@ -4,7 +4,9 @@
 
 Seven research questions across three patient communities, each demonstrating a different capability of the PatientPunk analysis pipeline.
 
-**Long COVID** (r/covidlonghaulers — 2,827 users, 6,815 treatment reports)
+**Note on sample size:** These analyses use 1-month snapshots of communities with years of available data. The results are preliminary — designed to demonstrate the pipeline's capabilities, not to serve as definitive research. Running the pipeline on 6-month or multi-year datasets would dramatically increase statistical power and confidence. The findings below are signals worth investigating, not conclusions.
+
+**Long COVID** (r/covidlonghaulers — 2,827 users, 6,815 treatment reports, 1-month sample)
 
 1. **Which treatments have the best outcomes?** — Broad survey ranking all treatments by community sentiment. Finds LDN, magnesium, and electrolytes at the top; SSRIs at the bottom.
 
