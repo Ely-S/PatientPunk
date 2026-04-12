@@ -263,7 +263,7 @@ def run_classification(
             for entry, d in batch:
                 try:
                     msg = format_entry(entry, id_to_text, config.max_upstream_chars)
-                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
+                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
                     raw = llm_call(
                         client, msg, model=MODEL_STRONG,
                         system=prompts[d], max_tokens=50,

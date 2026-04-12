@@ -118,4 +118,4 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
     the author is NOT expressing experience with {name}.
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
-Respond ONLY with JSON: {{"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"..."}}"""
