@@ -30,9 +30,9 @@ To reproduce any notebook, open Claude Code in this project directory and ask th
 
 **Database:** `polina_onemonth.db` (same 80 POTS users)
 
-**Question:** Following up on the preliminary POTS analysis: what is the optimal treatment strategy for Long COVID POTS?
+**Question:** Notebook 2 found that POTS patients try twice as many treatments but report worse outcomes — yet those on 3+ treatments do dramatically better than monotherapy. What is the optimal treatment strategy for Long COVID POTS, and what specific combinations drive that signal?
 
-**Demonstrates:** Targeted follow-up investigation. Takes findings from NB2 (polypharmacy signal, first-line underperformance) and drills into treatment stacking, combination analysis, and the optimal number of concurrent treatments. Shows the tool can handle a research workflow where one analysis motivates the next.
+**Demonstrates:** Targeted follow-up investigation. Directly references Notebook 2's findings as motivation, then drills into treatment stacking, combination analysis, and the optimal number of concurrent treatments. Shows the tool can handle a research workflow where one analysis motivates the next.
 
 ---
 
