@@ -141,11 +141,9 @@ Add `--limit 20 --no-discover` for a quick demo run (skips the LLM field-discove
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
 
-Builds a treatment outcome database in three stages:
+General-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in the corpus. Automatically discovers every drug/supplement/intervention mentioned — including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic" — normalizes synonyms, and classifies how each author feels about each treatment, without any hardcoded drug list.
 
-1. **Extract** — Haiku identifies all drugs, supplements, and interventions per post. Drug mentions propagate to replies via the parent chain.
-2. **Canonicalize** — Collapses synonyms ("low dose naltrexone", "LDN" → one entry). Populates the `treatment` table.
-3. **Classify** — Haiku prefilters for personal experience; Sonnet classifies sentiment (`positive` / `negative` / `mixed` / `neutral`) and signal strength. Writes incrementally — safe to interrupt and resume.
+A key design principle: **reply chain context is preserved**. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from upstream comments). A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post.
 
 ```bash
 uv run python src/run_pipeline.py \
@@ -166,6 +164,85 @@ Add `--limit 50` for a quick demo run.
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 
 Steps 3a and 3b are independent — run in either order. Both key on `author_hash` (SHA-256 of username).
+
+---
+
+## Drug Sentiment Pipeline — Internals
+
+### Extract (`pipeline/extract.py`)
+
+Reads posts/comments from the `posts` table. Asks Haiku to identify all drugs, supplements, and interventions mentioned — specific drugs, brand names, abbreviations, drug categories ("beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
+
+**Upstream context:** For each comment, `drugs_context` is built by walking up the parent chain (up to `--max-upstream-depth` hops) and collecting all `drugs_direct` from upstream posts. This ensures a reply to an LDN thread carries LDN in context even if it doesn't name it.
+
+**Output:** `tagged_mentions.json`
+
+### Canonicalize (`pipeline/canonicalize.py`)
+
+Collects all unique drug names from `tagged_mentions.json`, sends them to a fast model in batches, and merges true synonyms (`"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
+
+**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
+
+Also populates the `treatment` table. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe. Can be skipped with `--skip-canonicalize`.
+
+### Classify (`pipeline/classify.py`)
+
+Two-stage process to minimize API cost:
+
+1. **Haiku prefilter** — "does this author express personal experience with this drug?" Batches 20 items per call. Rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
+2. **Sonnet classifier** — classifies sentiment and signal strength. Batches 5 items per drug. System prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream text = "ldn". Upstream comment text is included so replies like *"I love it too"* resolve correctly.
+
+**Output:** Rows in `treatment_reports`, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id`.
+
+| Column | Values |
+|--------|--------|
+| `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
+| `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
+
+---
+
+## Data Overwriting
+
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, timestamp, git commit hash, extraction type, and config. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id` so results are traceable to the exact run that produced them.
+
+Re-running does not delete old data. The classify step skips `(post_id, drug_id)` pairs already in `treatment_reports`. Use `--reclassify` to force re-classification — old results are preserved with their original `run_id` alongside the new ones.
+
+---
+
+## Crash Recovery
+
+- **Extract:** Cached in `tagged_mentions.json`; already-extracted entries are skipped on re-run. Saves every 5 batches.
+- **Canonicalize:** Re-runs fully (cheap — fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
+- **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
+
+---
+
+## Output
+
+Results live in the `treatment_reports` table:
+
+```sql
+-- All reports for a specific drug
+SELECT tr.*, t.canonical_name
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+WHERE t.canonical_name = 'ldn';
+
+-- Sentiment breakdown per drug
+SELECT t.canonical_name, tr.sentiment, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name, tr.sentiment
+ORDER BY t.canonical_name, n DESC;
+
+-- Top drugs by report count
+SELECT t.canonical_name, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name
+ORDER BY n DESC
+LIMIT 20;
+```
 
 ---
 
