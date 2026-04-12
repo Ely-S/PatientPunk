@@ -157,7 +157,7 @@ for i, t1 in enumerate(texts):
 
 If overlap is detected after execution, fix the code and re-execute. **Retry up to 2 times.** Common fixes: use `adjustText` library (`from adjustText import adjust_text`), manually offset y-coordinates, reduce font size, rotate labels, or switch to a table for dense data. If 2 retries still produce overlap, switch to a different chart type that doesn't require point labels (e.g., a ranked table instead of a labeled scatter).
 
-**Common overlap scenarios:** scatter plot annotations clustering at similar x/y values; slope chart labels at endpoints; colorbar ticks overlapping annotations; axis titles colliding with tick labels.
+**Common overlap scenarios:** scatter plot annotations clustering at similar x/y values; slope chart labels at endpoints; colorbar ticks overlapping annotations; axis titles colliding with tick labels; **legends overlapping data lines or points** — always place legends in a dedicated space (below chart, above chart, or in a cleared corner) never floating over plotted data.
 
 **Diverging bar charts — CRITICAL stacking order (gets wrong often):**
 
