@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import json
 import re
+import itertools
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -245,11 +246,10 @@ def run_classification(
     drug_counter: Counter = Counter()
     done, total = 0, len(to_classify)
 
-    # Build all classify batches across all drugs
-    all_batches: list[list[tuple[dict, str]]] = []
-    for drug, items in by_drug.items():
-        for i in range(0, len(items), BATCH_SIZE):
-            all_batches.append(items[i:i + BATCH_SIZE])
+    def _batch_iter():
+        for items in by_drug.values():
+            for i in range(0, len(items), BATCH_SIZE):
+                yield items[i:i + BATCH_SIZE]
 
     def _classify_one_batch(batch):
         """Classify a single batch, with per-item fallback on failure."""
@@ -264,7 +264,7 @@ def run_classification(
             for entry, d in batch:
                 try:
                     msg = format_entry(entry, id_to_text, config.max_upstream_chars)
-                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"...","signal":"..."}'
+                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
                     raw = llm_call(
                         client, msg, model=MODEL_STRONG,
                         system=prompts[d], max_tokens=50,
@@ -275,10 +275,23 @@ def run_classification(
                     results.append(ClassificationResult(sentiment="neutral", signal="n/a"))
             return batch, results
 
+    # Bounded submission: at most workers * 2 futures in flight at once.
+    # As each completes the next batch is submitted (backpressure).
+    batch_iter = _batch_iter()
+    max_inflight = max(config.workers * 2, 1)
+
     with ThreadPoolExecutor(max_workers=config.workers) as pool:
-        futures = {pool.submit(_classify_one_batch, batch): batch for batch in all_batches}
-        for future in as_completed(futures):
+        pending: dict[Future, list] = {}
+
+        for batch in itertools.islice(batch_iter, max_inflight):
+            f = pool.submit(_classify_one_batch, batch)
+            pending[f] = batch
+
+        while pending:
+            future = next(as_completed(pending))
+            pending.pop(future)
             batch, results = future.result()
+
             for (entry, drug), result in zip(batch, results):
                 if result.signal != "n/a":
                     classified += 1
@@ -290,6 +303,11 @@ def run_classification(
                         )
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
+
+            next_batch = next(batch_iter, None)
+            if next_batch is not None:
+                f = pool.submit(_classify_one_batch, next_batch)
+                pending[f] = next_batch
 
     # Final stats
     log.info(f"{classified} sentiment records across {len(drug_counter)} drugs.")

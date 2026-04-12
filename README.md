@@ -156,7 +156,7 @@ Steps 3a and 3b are independent — run in either order. Both are keyed on `auth
 
 ### Step 1 — Extract (`pipeline/extract.py`)
 
-Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (10 texts per call) with automatic retry on any output count mismatch — splits into smaller sub-batches and retries, up to 2 levels of recursion. Any mismatch is treated as a failure; results are never silently truncated or padded. Saves after every completed batch.
+Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (10 texts per call) with automatic retry on any output count mismatch — splits into smaller sub-batches and retries, up to 2 levels of recursion. Any mismatch is treated as a failure; results are never silently truncated or padded. Saves to `tagged_mentions.json` every 1000 items.
 
 **Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name. 
 
@@ -176,7 +176,7 @@ Can be skipped with `--skip-canonicalize` (raw drug names inserted into the trea
 
 For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?"), research discussions, and off-topic replies. Results cached to `prefilter_results.json` — skipped on re-run.
 
 2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
 
@@ -203,7 +203,7 @@ Re-running the pipeline does not delete old data. The classify step skips `(post
 
 The pipeline is designed to resume after interruptions:
 
-- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
+- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 1000 items.
 - **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
 
