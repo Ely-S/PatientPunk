@@ -81,6 +81,17 @@ Where `N` is the next sequential integer (check existing notebooks first).
 ### Notebook structure
 
 ```
+## Abstract
+- 3-5 sentence summary of the question, key finding, method, sample size,
+  and main recommendation. Written so someone can read ONLY this and know
+  the answer. Example:
+  "We analyzed 297 Long COVID patients reporting fatigue across 2,082
+  treatment reports. Low-dose naltrexone (LDN) showed the strongest
+  signal: 72% positive outcomes (n=79, p=0.002). Magnesium, CoQ10,
+  and creatine also showed promising results with smaller samples.
+  SSRIs were the only treatment class with net negative sentiment.
+  These findings reflect self-reported community data, not clinical trials."
+
 ## 1. Setup
 - imports, db path
 
@@ -93,7 +104,10 @@ Where `N` is the next sequential integer (check existing notebooks first).
 ## 4. Visualization
 - charts with labeled axes and titles
 
-## 5. Summary
+## 5. Recommendations
+- tiered by evidence strength (Strong / Moderate / Preliminary)
+
+## 6. Summary
 - plain language findings, caveats, suggested next steps
 ```
 
