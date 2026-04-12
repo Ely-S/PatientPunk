@@ -183,14 +183,14 @@ Collects all unique drug names from `tagged_mentions.json`, sends them to a fast
 
 **Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
 
-Also populates the `treatment` table. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe. Can be skipped with `--skip-canonicalize`.
+Also populates the `treatment` table. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe. Can be skipped with `--skip-canonicalize` (raw drug names are inserted into the treatment table with no aliases).
 
 ### Classify (`pipeline/classify.py`)
 
 Two-stage process to minimize API cost:
 
 1. **Haiku prefilter** — "does this author express personal experience with this drug?" Batches 20 items per call. Rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
-2. **Sonnet classifier** — classifies sentiment and signal strength. Batches 5 items per drug. System prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream text = "ldn". Upstream comment text is included so replies like *"I love it too"* resolve correctly.
+2. **Sonnet classifier** — classifies sentiment and signal strength. Batches 5 items per drug. System prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream text = "ldn". The subreddit name is read from the database and injected into the prompt. Upstream comment text is included so replies like *"I love it too"* resolve correctly.
 
 **Output:** Rows in `treatment_reports`, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id`.
 
@@ -206,6 +206,8 @@ Two-stage process to minimize API cost:
 Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, timestamp, git commit hash, extraction type, and config. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id` so results are traceable to the exact run that produced them.
 
 Re-running does not delete old data. The classify step skips `(post_id, drug_id)` pairs already in `treatment_reports`. Use `--reclassify` to force re-classification — old results are preserved with their original `run_id` alongside the new ones.
+
+Demographics uses `INSERT OR REPLACE` on `user_profiles`, keyed on `(user_id, run_id)`, so re-running with the same run overwrites that run's results while different runs produce separate rows.
 
 ---
 
