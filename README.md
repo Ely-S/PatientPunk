@@ -20,7 +20,7 @@ A patient or researcher can ask:
 
 > *"Do other patients with ME/CFS, severe neuroinflammation, and brain fog report positive outcomes with LDN treatment?"*
 
-And get back a research report based on the avaliable data, with such statistics as:
+And get back a research report based on the available data, with such statistics as:
 
 > **64% positive outcome · 20% negative outcome · 16% no effect**
 > *(based on 312 patient reports)*
