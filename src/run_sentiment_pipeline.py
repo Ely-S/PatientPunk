@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_pipeline.py — Run the full drug mention database pipeline.
+run_sentiment_pipeline.py — Run the full drug sentiment database pipeline.
 
 Steps:
   1. extract      — Extract drug mentions from posts → tagged_mentions.json
@@ -8,9 +8,9 @@ Steps:
   3. classify     — Classify sentiment for each entry×drug → treatment_reports table
 
 Usage:
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs --skip-canonicalize
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs --limit 50
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --skip-canonicalize
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
 import sys

@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from import_posts import import_reddit_posts
-from run_pipeline import run_pipeline
+from run_sentiment_pipeline import run_pipeline
 from extract_demographics_conditions import run_demographics
 from utilities import PipelineConfig, get_client
 
