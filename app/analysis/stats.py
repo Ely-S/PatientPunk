@@ -27,8 +27,8 @@ Usage:
 
 from __future__ import annotations
 
-import math
 import os
+from typing import Literal
 import sqlite3
 import tempfile
 import warnings
@@ -79,7 +79,7 @@ class AnalysisWarning:
     message  : human-readable explanation with specific numbers
     """
     code: str
-    severity: str       # "caveat" | "caution" | "unreliable"
+    severity: Literal["caveat", "caution", "unreliable"]
     message: str
 
     def to_dict(self) -> dict:
@@ -543,7 +543,7 @@ def summarize_drug(df: pd.DataFrame, drug_name: str) -> SingleDrugSummary | None
         pct_negative=round((df["category"] == "negative").sum() / n * 100, 1),
         mean_sentiment=round(df["avg_sentiment"].mean(), 3),
         median_sentiment=round(df["avg_sentiment"].median(), 3),
-        std_sentiment=round(df["avg_sentiment"].std(), 3),
+        std_sentiment=round(df["avg_sentiment"].std(), 3) if len(df) > 1 else 0.0,
     )
 
 
@@ -829,7 +829,7 @@ def run_logit(
             predictors=[], pseudo_r2=0.0, aic=0.0,
             n_obs=len(model_df), n_events=n_events,
             converged=False,
-            warnings=[f"Model failed to fit: {e}"],
+            warnings=[_warn("model_failed", "unreliable", f"Model failed to fit: {e}")],
         )
     if not converged:
         result_warnings.append(_warn("non_convergence", "unreliable", "Logistic regression did not fully converge."))
@@ -952,7 +952,7 @@ def run_ols(
         return OLSResult(
             predictors=[], r_squared=0.0, adj_r_squared=0.0,
             f_statistic=0.0, f_p_value=1.0, n_obs=len(model_df),
-            warnings=[f"OLS failed to fit: {e}"],
+            warnings=[_warn("model_failed", "unreliable", f"OLS failed to fit: {e}")],
         )
 
     with warnings.catch_warnings():
@@ -1423,7 +1423,7 @@ def run_survival(
             n_users=n_users, n_events=n_events,
             n_censored=n_users - n_events,
             median_time_days=None,
-            warnings=[f"Cox PH failed to fit: {e}"],
+            warnings=[_warn("model_failed", "unreliable", f"Cox PH failed to fit: {e}")],
         )
 
     # Extract per-predictor results

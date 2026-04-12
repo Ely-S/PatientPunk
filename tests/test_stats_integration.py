@@ -30,8 +30,6 @@ from app.analysis.stats import (
     run_kruskal_wallis,
     run_logit,
     run_ols,
-    run_spearman,
-    run_time_trend,
     summarize_drug,
 )
 
@@ -45,7 +43,7 @@ CREATE TABLE IF NOT EXISTS treatment (id INTEGER PRIMARY KEY, canonical_name TEX
 CREATE TABLE IF NOT EXISTS extraction_runs (run_id INTEGER PRIMARY KEY, run_at INTEGER NOT NULL, model TEXT NOT NULL, config TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT NOT NULL, run_id INTEGER NOT NULL, age_bucket TEXT, sex TEXT, location TEXT, PRIMARY KEY (user_id, run_id));
 CREATE TABLE IF NOT EXISTS conditions (condition_id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, user_id TEXT NOT NULL, post_id TEXT, condition_type TEXT, condition_name TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS treatment_reports (report_id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, post_id TEXT NOT NULL, user_id TEXT, drug_id INTEGER NOT NULL, sentiment REAL NOT NULL, signal_strength REAL NOT NULL, sentiment_raw TEXT);
+CREATE TABLE IF NOT EXISTS treatment_reports (report_id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, post_id TEXT NOT NULL, user_id TEXT, drug_id INTEGER NOT NULL, sentiment TEXT NOT NULL, signal_strength REAL NOT NULL, sentiment_raw TEXT);
 """
 
 
