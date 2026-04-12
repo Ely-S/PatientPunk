@@ -44,6 +44,8 @@ Build the analysis as a story with five beats:
 
 Each section's opening markdown cell must connect to the previous section with a brief factual transition — not a rhetorical flourish. Good: "POTS patients report worse outcomes overall (mean 0.18 vs 0.39). Which treatments buck that trend?" Bad: "Having painted the broad strokes, we now zoom in to examine..." 
 
+**No circular comparisons.** Never compare a subgroup to a superset that contains it ("monotherapy users do worse than the broader community" — the broader community IS those users plus multi-treatment users). If you split a population into groups A and B, you can compare A to B, but not A to "the overall population" since the overall population is just A+B. This sounds insightful but is mathematically trivial.
+
 **No aphorisms, epigrams, or inspirational framing.** Lines like "Statistics tell us *what*; quotes tell us *why*", "The numbers above describe *rates*, but quotes illustrate the lived experience behind those numbers", or "The numbers speak, but the patients speak louder" are filler. Write plain, direct prose. The data is interesting enough without dressing it up. If a sentence exists only to justify the section's existence rather than convey information, delete it. A section header and a brief factual introduction ("Quotes illustrating these findings:") is sufficient.
 
 ### Required elements
