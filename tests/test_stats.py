@@ -147,37 +147,38 @@ def conn():
     db.execute("INSERT INTO treatment (id, canonical_name) VALUES (2, 'test_drug_b')")
     db.execute("INSERT INTO treatment (id, canonical_name) VALUES (3, 'test_drug_c')")
 
-    # Drug A: 20 users, sentiment mostly positive (1.0)
+    # Drug A: 20 users, sentiment mostly positive
+    # Sentiment stored as strings — the stats engine CASE expression converts to numeric
     for i in range(20):
         uid = f"user_{i:02d}"
-        sentiment = 1.0 if i < 16 else -1.0  # 16 positive, 4 negative = 80%
+        sentiment = "positive" if i < 16 else "negative"  # 16 positive, 4 negative = 80%
         post_month = i % 6
         pid = f"post_{uid}_m{post_month}"
         db.execute(
             "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
-            " VALUES (1, ?, ?, 1, ?, 1.0)",
+            " VALUES (1, ?, ?, 1, ?, 'strong')",
             (pid, uid, sentiment),
         )
 
-    # Drug B: 15 users, sentiment mostly negative (-1.0)
+    # Drug B: 15 users, sentiment mostly negative
     for i in range(15):
         uid = f"user_{i:02d}"
-        sentiment = -1.0 if i < 12 else 1.0  # 3 positive, 12 negative = 20%
+        sentiment = "negative" if i < 12 else "positive"  # 3 positive, 12 negative = 20%
         pid = f"post_{uid}_m{(i+1)%6}"
         db.execute(
             "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
-            " VALUES (1, ?, ?, 2, ?, 1.0)",
+            " VALUES (1, ?, ?, 2, ?, 'strong')",
             (pid, uid, sentiment),
         )
 
     # Drug C: 10 users, mixed sentiment
     for i in range(10):
         uid = f"user_{i:02d}"
-        sentiment = 0.5  # all mixed
+        sentiment = "mixed"  # all mixed
         pid = f"post_{uid}_m{(i+2)%6}"
         db.execute(
             "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
-            " VALUES (1, ?, ?, 3, ?, 1.0)",
+            " VALUES (1, ?, ?, 3, ?, 'strong')",
             (pid, uid, sentiment),
         )
 
@@ -207,19 +208,18 @@ def conn():
             (uid,),
         )
 
-    # Time trend data: Drug A with improving sentiment over months
-    # Add extra time-specific reports for trend testing
+    # Time trend data: Drug with sentiment improving over months
+    # Maps: month 0-1 → negative, 2-3 → mixed, 4-5 → positive
+    trend_sentiments = ["negative", "negative", "mixed", "mixed", "positive", "positive"]
     for m in range(6):
         uid = f"user_{20 + m:02d}" if m < 4 else f"user_{m:02d}"
         pid = f"post_{uid}_m{m}"
-        # Sentiment increases from -1.0 to 1.0 over 6 months
-        sentiment = -1.0 + (m / 5) * 2.0
-        # Use a dedicated drug for trend testing so we don't pollute drug_a
+        sentiment = trend_sentiments[m]
         if m == 0:
             db.execute("INSERT INTO treatment (id, canonical_name) VALUES (4, 'trend_drug')")
         db.execute(
             "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
-            " VALUES (1, ?, ?, 4, ?, 1.0)",
+            " VALUES (1, ?, ?, 4, ?, 'strong')",
             (pid, uid, sentiment),
         )
 

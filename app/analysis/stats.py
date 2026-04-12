@@ -1132,7 +1132,8 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
     Returns None if fewer than 3 months of data.
     """
     sql = """
-        SELECT p.post_date, tr.sentiment
+        SELECT p.post_date,
+               CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         JOIN posts p ON p.post_id = tr.post_id
@@ -1279,7 +1280,8 @@ def _build_survival_data(
 
     # Get treatment reports with dates for this drug
     report_sql = """
-        SELECT tr.user_id, tr.post_id, tr.sentiment
+        SELECT tr.user_id, tr.post_id,
+               CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'weak' THEN 0.25 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
