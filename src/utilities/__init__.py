@@ -6,6 +6,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+# Load .env from project root. override=False so explicitly-exported
+# env vars always win over .env file values. Root is the single source
+# of truth; src/.env is a fallback only if root doesn't exist.
+_root_env = Path(__file__).parent.parent.parent / ".env"
+_src_env = Path(__file__).parent.parent / ".env"
+if _root_env.exists():
+    load_dotenv(_root_env, override=False)
+elif _src_env.exists():
+    load_dotenv(_src_env, override=False)
+
 import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
@@ -39,9 +50,45 @@ log = logging.getLogger("pipeline")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 
-# ── Models ───────────────────────────────────────────────────────────────────
-MODEL_FAST = "claude-haiku-4-5-20251001"
-MODEL_STRONG = "claude-sonnet-4-6"
+# ── Models + Provider ────────────────────────────────────────────────────────
+# Provider is auto-detected from which API key is set, unless overridden:
+#   OPENROUTER_API_KEY set → openrouter (default models: anthropic/claude-*)
+#   ANTHROPIC_API_KEY set  → anthropic  (default models: claude-*-20251001)
+#   LLM_PROVIDER=...       → explicit override
+#
+# Override models in .env:
+#   MODEL_FAST=google/gemini-2.0-flash
+#   MODEL_STRONG=openai/gpt-4o
+# Any model supported by your provider works.
+_PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX"}
+
+_has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_KEYS
+_has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
+
+# Auto-detect provider from available keys, or use explicit override
+_explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
+if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
+    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
+if _explicit_provider:
+    LLM_PROVIDER = _explicit_provider
+elif _has_openrouter:
+    LLM_PROVIDER = "openrouter"
+elif _has_anthropic:
+    LLM_PROVIDER = "anthropic"
+else:
+    LLM_PROVIDER = "anthropic"  # default for backward compatibility
+
+if LLM_PROVIDER == "openrouter":
+    _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
+    _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
+    _API_BASE = "https://openrouter.ai/api"
+else:
+    _DEFAULT_FAST = "claude-haiku-4-5-20251001"
+    _DEFAULT_STRONG = "claude-sonnet-4-6"
+    _API_BASE = None
+
+MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
+MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 
 # ── Git ──────────────────────────────────────────────────────────────────────
@@ -59,10 +106,32 @@ def get_git_commit() -> str:
 
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        sys.exit("ERROR: ANTHROPIC_API_KEY not set.")
-    return anthropic.Anthropic(api_key=api_key)
+    """Return a configured Anthropic client (direct or via OpenRouter).
+
+    Key selection is tied to the provider:
+      openrouter → requires OPENROUTER_API_KEY
+      anthropic  → requires ANTHROPIC_API_KEY
+    """
+    if LLM_PROVIDER == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        key_name = "OPENROUTER_API_KEY"
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key_name = "ANTHROPIC_API_KEY"
+
+    if not api_key or api_key in _PLACEHOLDER_KEYS:
+        sys.exit(
+            f"{key_name} not set (provider={LLM_PROVIDER}).\n"
+            f"  Add {key_name}=... to .env\n"
+            f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
+        )
+
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+
+    kwargs: dict = {"api_key": api_key}
+    if _API_BASE:
+        kwargs["base_url"] = _API_BASE
+    return anthropic.Anthropic(**kwargs)
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────

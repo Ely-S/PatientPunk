@@ -20,8 +20,64 @@ A key design principle: **reply chain context is preserved**. A short reply like
 
 ```bash
 pip install -r src/requirements.txt
+```
+
+### LLM Provider
+
+The pipeline supports two providers: **Anthropic** (direct) and **OpenRouter** (any model).
+
+**Option A — Anthropic (default):**
+```bash
 export ANTHROPIC_API_KEY=your_key_here
 ```
+
+**Option B — OpenRouter:**
+```bash
+export OPENROUTER_API_KEY=your_key_here
+```
+
+You can also put these in a `.env` file in the project root — the pipeline loads it automatically.
+
+The provider is auto-detected from whichever key is set. To force a specific provider:
+```bash
+export LLM_PROVIDER=openrouter   # or "anthropic"
+```
+
+### Using non-Anthropic models (Qwen, Llama, Gemini, etc.)
+
+Any model available on [OpenRouter](https://openrouter.ai/models) can be used. Set the `MODEL_FAST` and `MODEL_STRONG` environment variables to the OpenRouter model ID:
+
+```bash
+# Step 1: Set your OpenRouter key
+export OPENROUTER_API_KEY=your_key_here
+
+# Step 2: Pick a model from https://openrouter.ai/models
+#         Use the model ID exactly as shown on OpenRouter.
+export MODEL_FAST="qwen/qwen-2.5-7b-instruct"
+export MODEL_STRONG="qwen/qwen-2.5-7b-instruct"
+
+# Step 3: Run the pipeline as normal
+python src/run_pipeline.py \
+  --db data/posts.db \
+  --output-dir outputs
+```
+
+That's it. The pipeline uses `MODEL_FAST` for extraction and prefiltering (high volume, cheap) and `MODEL_STRONG` for sentiment classification (lower volume, needs accuracy). You can set them to the same model or use a smaller model for fast and a larger one for strong.
+
+**Tested models:**
+
+| Model | Cost | Notes |
+|-------|------|-------|
+| `anthropic/claude-haiku-4.5` | $0.80/1M | Default fast model. Best JSON reliability. |
+| `anthropic/claude-sonnet-4.6` | $3.00/1M | Default strong model. Best classification quality. |
+| `qwen/qwen-2.5-7b-instruct` | $0.04/1M | 20x cheaper. Works end-to-end but more batch-size mismatches (triggers fallback retries). |
+| `qwen/qwen-2.5-72b-instruct` | $0.12/1M | Good balance of cost and quality. |
+
+**Tips:**
+- Start with `--limit 50` to test a new model cheaply before running on the full dataset
+- Smaller models produce more JSON parsing errors — the pipeline handles these gracefully (retries individually, then skips)
+- Check the output for "Mismatch" and "Batch failed" lines to gauge reliability
+- The `--reclassify` flag re-runs classification from scratch, useful when switching models
 
 ---
 
