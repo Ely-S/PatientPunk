@@ -46,6 +46,8 @@ Each section's opening markdown cell must connect to the previous section with a
 
 **No circular comparisons.** Never compare a subgroup to a superset that contains it ("monotherapy users do worse than the broader community" — the broader community IS those users plus multi-treatment users). If you split a population into groups A and B, you can compare A to B, but not A to "the overall population" since the overall population is just A+B. This sounds insightful but is mathematically trivial.
 
+**Every claim must be consistent with its own numbers.** If you write "32% positive — barely above the 50% baseline," that is wrong: 32% is below 50%, not above it. Before writing any interpretive sentence, check the direction: is the number higher or lower than the comparison? Does "outperform" match a higher rate? Does "underperform" match a lower rate? This sounds obvious but LLMs routinely write template phrases ("above baseline", "better than chance") without verifying the arithmetic. Read your own numbers.
+
 **No aphorisms, epigrams, or inspirational framing.** Lines like "Statistics tell us *what*; quotes tell us *why*", "The numbers above describe *rates*, but quotes illustrate the lived experience behind those numbers", or "The numbers speak, but the patients speak louder" are filler. Write plain, direct prose. The data is interesting enough without dressing it up. If a sentence exists only to justify the section's existence rather than convey information, delete it. A section header and a brief factual introduction ("Quotes illustrating these findings:") is sufficient.
 
 ### Required elements
