@@ -52,6 +52,8 @@ Each section's opening markdown cell must connect to the previous section with a
 
 **Every claim must be consistent with its own numbers.** If you write "32% positive — barely above the 50% baseline," that is wrong: 32% is below 50%, not above it. Before writing any interpretive sentence, check the direction: is the number higher or lower than the comparison? Does "outperform" match a higher rate? Does "underperform" match a lower rate? This sounds obvious but LLMs routinely write template phrases ("above baseline", "better than chance") without verifying the arithmetic. Read your own numbers.
 
+**Uncertainty and negative findings are valuable.** "We found no significant difference between these groups" is a finding, not a failure. "The data is insufficient to answer this question" is honest, not weak. "This treatment shows no benefit over chance" protects patients from wasting time and money. Never spin a null result into a positive one, never bury non-significant comparisons, and never omit a treatment from results because it performed poorly. The notebook's job is to report what the data shows, including — especially — when it shows nothing.
+
 **No aphorisms, epigrams, or inspirational framing.** Lines like "Statistics tell us *what*; quotes tell us *why*", "The numbers above describe *rates*, but quotes illustrate the lived experience behind those numbers", or "The numbers speak, but the patients speak louder" are filler. Write plain, direct prose. The data is interesting enough without dressing it up. If a sentence exists only to justify the section's existence rather than convey information, delete it. A section header and a brief factual introduction ("Quotes illustrating these findings:") is sufficient.
 
 ### Required elements
