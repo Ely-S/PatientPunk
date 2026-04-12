@@ -226,8 +226,11 @@ def run_classification(
                         if not passed:
                             filtered.add((entry["id"], drug))
                     done_pf += len(batch)
-                    prefilter_path.write_text(json.dumps(cached_pf))
+                    done_pf += len(batch)
+                    if done_pf % (PREFILTER_BATCH_SIZE * 10) == 0:
+                        prefilter_path.write_text(json.dumps(cached_pf))
                     log.info(f"Prefiltered {done_pf}/{len(uncached)}...")
+            prefilter_path.write_text(json.dumps(cached_pf))
 
     # Only classify entries that passed prefilter
     to_classify = [(e, d) for e, d in to_do if (e["id"], d) not in filtered]
