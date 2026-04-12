@@ -36,11 +36,44 @@ cd PatientPunk
 uv sync
 
 cp Scrapers/demographic_extraction/.env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=<your key>
-export ANTHROPIC_API_KEY=<your key>
 ```
 
 All pipeline commands are prefixed with `uv run`. Run tests with `uv run pytest -v`.
+
+### LLM Provider
+
+The pipeline supports two providers: **Anthropic** (direct) and **OpenRouter** (any model).
+
+**Option A — Anthropic (default):**
+```bash
+export ANTHROPIC_API_KEY=your_key_here
+```
+
+**Option B — OpenRouter:**
+```bash
+export OPENROUTER_API_KEY=your_key_here
+```
+
+You can also put these in a `.env` file in the project root — the pipeline loads it automatically.
+
+The provider is auto-detected from whichever key is set. To force a specific provider:
+```bash
+export LLM_PROVIDER=openrouter   # or "anthropic"
+```
+
+### Using non-Anthropic models (Qwen, Llama, Gemini, etc.)
+
+Any model available on [OpenRouter](https://openrouter.ai/models) can be used. Set the `MODEL_FAST` and `MODEL_STRONG` environment variables to the OpenRouter model ID:
+
+```bash
+# Step 1: Set your OpenRouter key
+export OPENROUTER_API_KEY=your_key_here
+
+# Step 2: Pick a model from https://openrouter.ai/models
+#         Use the model ID exactly as shown on OpenRouter.
+export MODEL_FAST="qwen/qwen-2.5-7b-instruct"
+export MODEL_STRONG="qwen/qwen-2.5-7b-instruct"
+```
 
 ---
 
