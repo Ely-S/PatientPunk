@@ -188,7 +188,7 @@ ax.barh(y,  positive_pct, left=0,           color=GREEN)  # positive right of ce
 If you plot negative first and mixed second, mixed ends up on the far left outside negative — **this is wrong and misrepresents the data.**
 
 **Confidence intervals and error bars:**
-- **Every bar chart comparing groups must have error bars** (95% CI or SEM). No exceptions. A bar chart without error bars invites false comparisons. If matplotlib makes error bars difficult for a particular chart type, switch to a forest plot (dot + CI) which shows uncertainty by design.
+- **Every bar chart comparing groups must have error bars** (95% CI or SEM). No exceptions. A bar chart without error bars invites false comparisons. If matplotlib makes error bars difficult for a particular chart type, switch to a forest plot (dot + CI) which shows uncertainty by design. **Error bars must be applied symmetrically** — if the positive bars have CIs, the negative bars must too. Showing uncertainty on one direction but not the other implies false precision.
 - When comparing groups with different sample sizes, the error bars make the uncertainty visible — n=49 will have wider bars than n=1055, and the reader can eyeball whether the difference is reliable.
 - If all group CIs overlap substantially, say so explicitly. Do not present overlapping CIs as a meaningful difference.
 
