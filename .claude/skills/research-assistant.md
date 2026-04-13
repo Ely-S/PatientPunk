@@ -1,6 +1,6 @@
 ---
 name: research-assistant
-description: Research assistant — structured workflow with statistical freedom. Generates reproducible Jupyter notebooks from patient community data.
+description: Use this skill whenever the user says "run the research assistant skill", asks to generate a research notebook, analyze a patient community database, run a research question against PatientPunk data, or requests analysis involving .db files. Also triggers on drug comparisons, treatment outcome questions, or community sentiment analysis. Generates reproducible Jupyter notebooks with statistical tests, charts, patient quotes, and HTML export.
 ---
 
 # Research Assistant v2
