@@ -30,7 +30,7 @@ def db(tmp_path_factory: pytest.TempPathFactory) -> DB:
     path = tmp_path_factory.mktemp("db") / "test.db"
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA.read_text())
+    conn.executescript(SCHEMA.read_text(encoding="utf-8"))
     return DB(conn=conn, path=path)
 
 

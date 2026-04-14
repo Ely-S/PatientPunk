@@ -83,8 +83,8 @@ CREATE TABLE treatment_reports (
     post_id         TEXT NOT NULL REFERENCES posts(post_id),
     user_id         TEXT REFERENCES users(user_id),
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
-    sentiment       TEXT NOT NULL,
-    signal_strength TEXT NOT NULL
+    sentiment       TEXT NOT NULL CHECK (sentiment IN ('positive', 'negative', 'mixed', 'neutral')),
+    signal_strength TEXT NOT NULL CHECK (signal_strength IN ('strong', 'moderate', 'weak', 'n/a'))
 );
 
 CREATE INDEX idx_tr_post ON treatment_reports(post_id);
