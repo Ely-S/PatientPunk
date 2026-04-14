@@ -7795,212 +7795,256 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3a35a289">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a97b92f5">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e98ecdf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=edbbf82c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>Research Question:</strong> "What predicts negative treatment outcomes in the Long COVID community?"</p>
+<p><strong>Research Question:</strong> "What predicts a positive vs negative abortion experience? Is it the method, the support system, or the clinical environment?"</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543b92b9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=577b2011">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>In a 1-month sample of r/covidlonghaulers (2,827 users, 6,815 treatment reports), we investigate which treatments, co-occurring conditions, and patient characteristics predict negative outcomes. SSRIs are the worst-performing commonly prescribed treatment class (negative rate 2–3x the community baseline), while micronutrient stacks (magnesium, CoQ10, electrolytes) have the lowest risk. Co-occurring POTS and PEM independently predict worse treatment response in logistic regression. A treatment co-occurrence analysis reveals that users reporting negative outcomes cluster around specific drug combinations — suggesting that treatment interaction, not just individual drug choice, shapes outcomes. NNT analysis shows that switching from SSRIs to micronutrients would prevent one negative outcome for every 3–5 patients. These findings suggest that Long COVID treatment selection should account for comorbidity profile and combination effects, not just the target symptom.</p>
+<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>This analysis examines 2,052 users' posts from r/abortion (March 13 -- April 12, 2026) to identify what predicts whether someone describes their abortion experience positively or negatively. Using text-based theme extraction across three hypothesized predictor categories -- method (medical vs surgical), support system (partner, family, friend, alone), and clinical environment (staff quality, setting) -- we find that <strong>the clinical environment is the strongest differentiator</strong>: users who describe positive staff interactions report relief at nearly double the rate of those who describe negative interactions. Method matters less than expected, and social support, while ubiquitous in the data, shows a more complex relationship with emotional outcomes than simple "supported = good" logic would predict. These findings suggest that for patients weighing their options, the quality of the clinical interaction may matter more than which procedure they choose.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d48ba4c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7aceb200">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Data-Landscape">Data Landscape<a class="anchor-link" href="#Data-Landscape">¶</a></h2><p>Before analyzing what predicts failure, we need to understand what "negative" means in this community — how common it is, what its distribution looks like at the user level, and whether negativity is concentrated in a few prolific posters or broadly distributed.</p>
+<h2 id="1.-Data-Exploration">1. Data Exploration<a class="anchor-link" href="#1.-Data-Exploration">¶</a></h2><p>Data covers: <strong>2026-03-13 to 2026-04-12 (1 month)</strong>. This dataset contains 2,052 unique users and 9,885 posts from r/abortion. Treatment reports (1,272 from 562 users) are available but sparse for the research question -- most are about medications (misoprostol, mifepristone, ibuprofen) rather than the experiential factors we care about. The real signal lives in <code>body_text</code>, where users describe their experiences in detail.</p>
+<p><strong>Approach:</strong> We extract experiential themes from post text using keyword groups, then compare emotional outcome rates across three predictor categories. We handle the well-known negation problem (24% of "regret" mentions are actually "no regret" or "don't regret") by using a negation-aware classifier.</p>
+<p><strong>Causal-context exclusions:</strong> Birth control (34 users, 79% negative) and Plan B (25 reports, 92% negative) are excluded from treatment analyses because their negative sentiment reflects why users are in this community (contraceptive failure), not a treatment response to abortion.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=575f13a2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e843914d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc71134c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d4bc1a4">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reports are not independent — one user can file many. We aggregate to one data point per user: their average sentiment across all treatments tried.</p>
+<h2 id="2.-The-Emotional-Landscape-of-r/abortion">2. The Emotional Landscape of r/abortion<a class="anchor-link" href="#2.-The-Emotional-Landscape-of-r/abortion">¶</a></h2><p>Before testing what predicts a positive or negative experience, we need to understand the baseline: what themes dominate this community's discourse, and how many users can we classify into positive, negative, or mixed experiences?</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e6a6fd3d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=65b1b278">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbba3adf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e1ccb8c9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Which-Treatments-Predict-Negative-Outcomes?">Which Treatments Predict Negative Outcomes?<a class="anchor-link" href="#Which-Treatments-Predict-Negative-Outcomes?">¶</a></h2><p>With the baseline established, we now rank individual treatments by their user-level negative outcome rate. Treatments filtered to n≥20 users for reliable estimates. Generic terms ("supplements", "medication") and vaccines (which reflect perceived causation, not treatment failure) are excluded.</p>
+<p><strong>What this chart shows:</strong> Fear/anxiety and pain dominate the community's emotional vocabulary -- these are universal experiences that appear regardless of whether the overall experience is positive or negative. Among outcome-indicating emotions, regret (negation-aware, excluding "no regret" / "don't regret" patterns) and easy/smooth experience appear at comparable rates, suggesting this community captures a genuine range of experiences rather than skewing toward one end.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e47d9da1">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e25b1371">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1638a93">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d1199f8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=868fa25c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The forest plot above identifies the high-risk treatments. But how large is the gap between the worst and best treatment classes? We compare SSRIs (selective serotonin reuptake inhibitors — antidepressants commonly prescribed for Long COVID) against micronutrients (magnesium, CoQ10, electrolytes, quercetin, B12, vitamin D) in a direct head-to-head.</p>
+<h2 id="3.-Does-the-Method-Matter?-Medical-vs-Surgical">3. Does the Method Matter? Medical vs Surgical<a class="anchor-link" href="#3.-Does-the-Method-Matter?-Medical-vs-Surgical">¶</a></h2><p>The first hypothesis: the type of abortion (medical/medication at home vs surgical in a clinic) predicts whether the experience is described positively or negatively. Medical abortions involve taking mifepristone and misoprostol, typically at home. Surgical abortions (aspiration or D&amp;E, dilation and evacuation) are performed in a clinic or hospital, often with sedation.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3d8ff940">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=6fe8803f">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=676ad88f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=174e4da9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">Do Co-occurring Conditions Predict Worse Outcomes?<a class="anchor-link" href="#Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">¶</a></h2><p>SSRIs underperform micronutrients at the treatment level. But some patients may be predisposed to negative outcomes regardless of what they take. Long COVID patients frequently report comorbid POTS (postural orthostatic tachycardia syndrome), MCAS (mast cell activation syndrome), ME/CFS (myalgic encephalomyelitis/chronic fatigue syndrome), and PEM (post-exertional malaise). Do these conditions independently predict worse treatment response?</p>
+<p><strong>Plain-language interpretation:</strong> Method alone is a weak predictor of experience valence. Both medical and surgical patients describe their experiences in similar emotional terms. This is practically useful: patients choosing between methods can base the decision on medical factors, personal comfort, and access rather than worrying that one path is inherently more traumatic.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4151eb8d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=87be7da2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9f71646c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The condition analysis confirms that comorbidity profile matters. But conditions and treatments are confounded — POTS patients take different drugs than the general population. To isolate independent predictors, we need a multivariate model.</p>
+<h2 id="4.-Does-the-Support-System-Matter?">4. Does the Support System Matter?<a class="anchor-link" href="#4.-Does-the-Support-System-Matter?">¶</a></h2><p>The second hypothesis: having social support (partner, family, friends) predicts a more positive experience, while going through it alone predicts a more negative one. We compare four support categories. Note that these are not mutually exclusive -- a user who mentions their partner may also mention family.</p>
 </div>
 </div>
 </div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=bc3ac915">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=feadc960">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fe6c3a8c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Does-Polypharmacy-Predict-Negative-Outcomes?">Does Polypharmacy Predict Negative Outcomes?<a class="anchor-link" href="#Does-Polypharmacy-Predict-Negative-Outcomes?">¶</a></h2><p>Notebook 3 found that 4–6 concurrent treatments was the sweet spot for POTS patients. Does the same pattern hold when we look specifically at negative outcomes?</p>
+<p><strong>Plain-language interpretation:</strong> The support system story is more nuanced than expected. Users who mention being alone do not consistently report worse experiences than those who mention partners, family, or friends. This may reflect a confound: users who mention their partner or family are often describing complex relational dynamics (telling a partner, navigating family disapproval) rather than simply having support. The word "alone" sometimes appears in empowering contexts rather than as distress.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=13b0cef9">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=af444a11">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2c9bf72b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Treatment-Co-occurrence-Among-Negative-Outcome-Users">Treatment Co-occurrence Among Negative-Outcome Users<a class="anchor-link" href="#Treatment-Co-occurrence-Among-Negative-Outcome-Users">¶</a></h2><p>Which treatments do negative-outcome users take together? A co-occurrence heatmap reveals whether certain combinations cluster among patients who fare worst.</p>
+<h2 id="5.-Does-the-Clinical-Environment-Matter?">5. Does the Clinical Environment Matter?<a class="anchor-link" href="#5.-Does-the-Clinical-Environment-Matter?">¶</a></h2><p>The third hypothesis: the quality of the clinical interaction -- kind vs judgmental staff, comfortable vs hostile setting -- predicts experience valence. This is where text mining picks up signal that treatment reports miss, because staff quality is not a "drug" but it is a treatment modifier.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1ed116bc">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=6fbd66ff">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9ed072af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f4ddeda6">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Multivariate-Model:-Independent-Predictors">Multivariate Model: Independent Predictors<a class="anchor-link" href="#Multivariate-Model:-Independent-Predictors">¶</a></h2><p>Individual treatment and condition analyses can be confounded. SSRIs might look bad because they are prescribed to sicker patients. POTS might look bad because POTS patients try riskier drugs. A logistic regression lets us test which factors independently predict negative outcomes, controlling for the others.</p>
+<p><strong>Plain-language interpretation:</strong> Clinical environment emerges as the most powerful predictor of experience valence. Users who describe positive staff interactions (kind, gentle, caring providers) report positive experiences at substantially higher rates than those who describe negative interactions (rude, judgmental, dismissive staff). The setting itself (at-home vs in-clinic) matters less than the quality of the human interaction within that setting.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3f2398c5">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f4dcc082">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be439386">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0f719cb4">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>The analysis above tells a clean story: SSRIs bad, micronutrients good, comorbidities make everything harder. But several results complicate this narrative in ways worth flagging.</p>
+<h2 id="6.-Head-to-Head:-Which-Predictor-Wins?">6. Head-to-Head: Which Predictor Wins?<a class="anchor-link" href="#6.-Head-to-Head:-Which-Predictor-Wins?">¶</a></h2><p>We have tested each predictor independently. Now we compare them directly using logistic regression with all three predictor categories as covariates, then examine a co-occurrence heatmap.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dc90d7da">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6ac3df6">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=92bd666f">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d1432ae">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=737e027e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from users who reported negative treatment outcomes, selected to illustrate the patterns identified above. Quote sampling is algorithmic and may not be representative.</p>
+<p>The logistic regression shows which factors independently predict experience valence after controlling for the others. Next, we examine how these factors co-occur.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ea2afe77">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1c2533bd">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a85cc931">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=659a0e35">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2>
+<p><strong>What the heatmap shows:</strong> Positive staff descriptions correlate with comfort and relief. Regret and guilt strongly co-occur. Fear/anxiety is broadly distributed across all method and support categories, suggesting it is a universal feature of the experience rather than a predictor of outcome. Notably, "alone" does not strongly anti-correlate with positive emotions, reinforcing the finding that isolation is not a simple negative predictor.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a189e3e0">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8d2760ee">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db25a780">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3ae552c7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>Negative treatment outcomes in the Long COVID community are not random. They cluster predictably around three axes, each independently confirmed:</p>
-<p><strong>Treatment class is the strongest predictor.</strong> SSRIs produce the highest negative outcome rates among commonly prescribed treatments — 2–3x the community baseline — even after controlling for comorbidities and polypharmacy in multivariate analysis. Micronutrient stacks (magnesium, CoQ10, electrolytes, quercetin) produce the lowest negative rates and the best NNT profile. This gap is large, statistically significant, and survives multiple sensitivity checks. A patient asking "what should I try first for Long COVID?" has a clear empirical answer: start with micronutrients before considering prescription interventions. This is not anti-medication — LDN is a prescription drug and performs excellently. It is specifically SSRIs that underperform.</p>
-<p><strong>Comorbidity profile independently shapes treatment response.</strong> Patients with POTS, PEM, or ME/CFS report worse outcomes across the board, not because they try different treatments, but because they get less benefit from the same ones. The logistic regression confirms this is not an artifact of drug choice. Treatment protocols for Long COVID should ask "what else does this patient have?" before selecting interventions.</p>
-<p><strong>Dose and combination effects matter as much as the compound.</strong> Low-dose naltrexone is a top performer; standard naltrexone is mediocre — same molecule, different dose, opposite outcomes. The co-occurrence heatmap reveals that negative outcomes cluster around specific drug combinations, not just individual drugs. And monotherapy is the worst-performing approach: patients on 3+ concurrent treatments fare significantly better.</p>
-<p><strong>The clearest actionable finding:</strong> SSRIs should not be first-line for Long COVID symptoms. They carry the highest negative outcome risk, they do not improve with polypharmacy the way other treatments do, and they underperform supplements that cost a fraction of the price. Patients already taking SSRIs for pre-existing depression should continue them — but prescribing SSRIs <em>for</em> Long COVID appears net harmful in this community's experience.</p>
+<h2 id="7.-Sensitivity-Check">7. Sensitivity Check<a class="anchor-link" href="#7.-Sensitivity-Check">¶</a></h2><p>Does the main finding (clinical environment is the strongest predictor) hold when restricted to users with longer, more detailed posts (body_text &gt; 200 characters)?</p>
 </div>
 </div>
 </div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=72b40737">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f9bd2af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=635ce3d4">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Research-Limitations">Research Limitations<a class="anchor-link" href="#Research-Limitations">¶</a></h2><ol>
-<li><strong>Selection bias:</strong> Reddit users skew young, tech-savvy, and English-speaking. This community is not representative of all Long COVID patients.</li>
-<li><strong>Reporting bias:</strong> Users with strong experiences (positive or negative) are more likely to post. Moderate, unremarkable outcomes are underrepresented.</li>
-<li><strong>Survivorship bias:</strong> Users who recovered may leave the community. Those who remain are disproportionately treatment-resistant, inflating negative rates.</li>
-<li><strong>Recall bias:</strong> Users report retrospectively with variable delay between treatment and post.</li>
-<li><strong>Confounding:</strong> We cannot control for disease severity, illness duration, dosing protocols, treatment adherence, or prescriber expertise. SSRIs may be prescribed to sicker or more desperate patients, inflating their negative rate — though the logistic regression partially addresses this by controlling for comorbidity count.</li>
-<li><strong>No control group:</strong> All comparisons are within the community. There is no untreated baseline, making it impossible to distinguish "this treatment doesn't work" from "this treatment works but not enough."</li>
-<li><strong>Sentiment ≠ efficacy:</strong> User-reported sentiment captures subjective experience, not objective clinical improvement. A treatment that causes unpleasant side effects but improves biomarkers would score negatively here.</li>
-<li><strong>Temporal snapshot:</strong> One month of data. Treatments with delayed benefits (weeks to months before improvement) may appear ineffective in a short observation window. SSRIs typically require 4–6 weeks to reach full effect, which could partially explain their poor showing.</li>
-</ol>
+<h2 id="8.-Counterintuitive-Findings-Worth-Investigating">8. Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#8.-Counterintuitive-Findings-Worth-Investigating">¶</a></h2>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1c6ae96">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=67f3c951">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4f1dafaa">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="9.-Geographic-Context">9. Geographic Context<a class="anchor-link" href="#9.-Geographic-Context">¶</a></h2><p>The r/abortion community includes users from multiple regions (identified via post flair). Do experience patterns vary geographically?</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4b42af0e">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=65372453">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="10.-What-Patients-Are-Saying-(experimental)">10. What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#10.-What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quantitative patterns tell us what correlates with positive or negative experiences. The posts themselves capture nuance that keyword counts miss. Below are representative quotes illustrating the key findings.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=0833d964">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fb7ca347">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="11.-Recommendations">11. Recommendations<a class="anchor-link" href="#11.-Recommendations">¶</a></h2><p>Based on the analysis, we organize findings into evidence tiers based on sample size and statistical significance.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=eb392b14">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=40b7be8d">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="12.-Conclusion">12. Conclusion<a class="anchor-link" href="#12.-Conclusion">¶</a></h2>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=7bd883d8">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=21cc77f2">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="13.-Research-Limitations">13. Research Limitations<a class="anchor-link" href="#13.-Research-Limitations">¶</a></h2><p>All findings should be interpreted in the context of the following biases inherent to community-sourced health data:</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ff9da1ee">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=b1c4a5cf">
 </div>
 </main>
 </body>

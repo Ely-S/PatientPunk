@@ -7795,212 +7795,287 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3a35a289">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=02b35ee1">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e98ecdf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6eaeb6ab">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>Research Question:</strong> "What predicts negative treatment outcomes in the Long COVID community?"</p>
+<p><strong>Research Question:</strong> "What is the best way to reduce fatigue in Long COVID?"</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543b92b9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fd0b32c2">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>In a 1-month sample of r/covidlonghaulers (2,827 users, 6,815 treatment reports), we investigate which treatments, co-occurring conditions, and patient characteristics predict negative outcomes. SSRIs are the worst-performing commonly prescribed treatment class (negative rate 2–3x the community baseline), while micronutrient stacks (magnesium, CoQ10, electrolytes) have the lowest risk. Co-occurring POTS and PEM independently predict worse treatment response in logistic regression. A treatment co-occurrence analysis reveals that users reporting negative outcomes cluster around specific drug combinations — suggesting that treatment interaction, not just individual drug choice, shapes outcomes. NNT analysis shows that switching from SSRIs to micronutrients would prevent one negative outcome for every 3–5 patients. These findings suggest that Long COVID treatment selection should account for comorbidity profile and combination effects, not just the target symptom.</p>
+<h1 id="Fatigue-Treatments-in-Long-COVID:-A-Community-Evidence-Analysis">Fatigue Treatments in Long COVID: A Community Evidence Analysis<a class="anchor-link" href="#Fatigue-Treatments-in-Long-COVID:-A-Community-Evidence-Analysis">¶</a></h1><p><strong>Abstract:</strong> Among 585 users in r/covidlonghaulers who discussed fatigue, tiredness, or exhaustion during March-April 2026, 386 also filed treatment reports covering 35+ therapies. Magnesium-based supplements and CoQ10 (coenzyme Q10, a mitochondrial support supplement) emerged as the top-performing treatments with positive rates exceeding 90%, while creatine and B12 showed strong results for energy-specific complaints. SSRIs (selective serotonin reuptake inhibitors) performed notably poorly among fatigue reporters, with only 30% positive sentiment -- well below the community baseline of 68%. LDN (low dose naltrexone), the community's most-discussed treatment overall, remained effective but showed reduced efficacy specifically in fatigue-focused posts compared to its general performance. These findings suggest that mitochondrial and nutritional support strategies outperform neuropsychiatric approaches for Long COVID fatigue, though sample sizes warrant caution for several promising treatments.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d48ba4c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=daa452f2">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Data-Landscape">Data Landscape<a class="anchor-link" href="#Data-Landscape">¶</a></h2><p>Before analyzing what predicts failure, we need to understand what "negative" means in this community — how common it is, what its distribution looks like at the user level, and whether negativity is concentrated in a few prolific posters or broadly distributed.</p>
+<h2 id="Data-Exploration">Data Exploration<a class="anchor-link" href="#Data-Exploration">¶</a></h2><p>This analysis draws from the r/covidlonghaulers subreddit, one of the largest online communities for Long COVID patients. We identify fatigue reporters as users whose posts mention "fatigue," "tired," or "exhaustion" and analyze their treatment experiences.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=575f13a2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=0441d924">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc71134c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=837b499d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reports are not independent — one user can file many. We aggregate to one data point per user: their average sentiment across all treatments tried.</p>
+<p>Fatigue is the most commonly discussed symptom in this community -- over 20% of all users mention it explicitly. The 386 fatigue reporters who also have treatment data give us sufficient sample sizes for the top 15-20 treatments.</p>
+<p><strong>Methodology note:</strong> We use two cohort definitions throughout this analysis. The <em>broad cohort</em> includes all treatment reports from users who ever mentioned fatigue in any post. The <em>narrow cohort</em> restricts to treatment reports extracted from posts that themselves discuss fatigue or energy. The narrow cohort better captures fatigue-specific treatment experiences but has smaller sample sizes.</p>
+<p><strong>Filtering applied:</strong> Generic terms (supplements, medication, etc.) are excluded as non-actionable. Vaccines are excluded as causal-context contamination -- in this community, vaccines are discussed as a perceived cause of Long COVID, not as a treatment. Duplicates are merged where appropriate (pepcid/famotidine, tirzepatide/zepbound).</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e6a6fd3d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbba3adf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5b1fb521">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Which-Treatments-Predict-Negative-Outcomes?">Which Treatments Predict Negative Outcomes?<a class="anchor-link" href="#Which-Treatments-Predict-Negative-Outcomes?">¶</a></h2><p>With the baseline established, we now rank individual treatments by their user-level negative outcome rate. Treatments filtered to n≥20 users for reliable estimates. Generic terms ("supplements", "medication") and vaccines (which reflect perceived causation, not treatment failure) are excluded.</p>
+<h2 id="Baseline:-The-Treatment-Landscape-for-Fatigue-Reporters">Baseline: The Treatment Landscape for Fatigue Reporters<a class="anchor-link" href="#Baseline:-The-Treatment-Landscape-for-Fatigue-Reporters">¶</a></h2><p>Before evaluating individual treatments, we need to understand the overall picture. How does the fatigue cohort compare to the broader community in treatment outcomes?</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e47d9da1">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e25b1371">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=fa2668ce">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d1199f8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2b4903f4">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The forest plot above identifies the high-risk treatments. But how large is the gap between the worst and best treatment classes? We compare SSRIs (selective serotonin reuptake inhibitors — antidepressants commonly prescribed for Long COVID) against micronutrients (magnesium, CoQ10, electrolytes, quercetin, B12, vitamin D) in a direct head-to-head.</p>
+<h2 id="Core-Analysis:-Ranking-Fatigue-Treatments">Core Analysis: Ranking Fatigue Treatments<a class="anchor-link" href="#Core-Analysis:-Ranking-Fatigue-Treatments">¶</a></h2><p>The fatigue cohort's overall treatment response is similar to the broader community. The interesting question is which <em>specific</em> treatments work best for fatigue. We rank treatments by Wilson score lower bound -- a conservative estimate that penalizes small sample sizes, preventing a treatment tried by 3 people (all positive) from outranking one tried by 50 people with 80% positive.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3d8ff940">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4d1f1fa2">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=676ad88f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5832a939">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">Do Co-occurring Conditions Predict Worse Outcomes?<a class="anchor-link" href="#Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">¶</a></h2><p>SSRIs underperform micronutrients at the treatment level. But some patients may be predisposed to negative outcomes regardless of what they take. Long COVID patients frequently report comorbid POTS (postural orthostatic tachycardia syndrome), MCAS (mast cell activation syndrome), ME/CFS (myalgic encephalomyelitis/chronic fatigue syndrome), and PEM (post-exertional malaise). Do these conditions independently predict worse treatment response?</p>
+<p>The table above shows user-level outcomes: each user's reports for a given treatment are averaged into a single score, then classified as positive (&gt;0.7), negative (&lt;-0.3), or mixed/neutral. This prevents prolific posters from dominating the results.</p>
+<p><strong>NNT (Number Needed to Treat)</strong> tells you how many patients would need to try a treatment for one additional person to report benefit beyond the baseline rate. Lower is better -- an NNT of 3 means roughly 1 in 3 additional patients benefits.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4151eb8d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=833dc6aa">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=87be7da2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=77ab3b18">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The condition analysis confirms that comorbidity profile matters. But conditions and treatments are confounded — POTS patients take different drugs than the general population. To isolate independent predictors, we need a multivariate model.</p>
+<p><strong>Key takeaway:</strong> Magnesium leads the ranking with a 90%+ positive rate and tight confidence intervals, followed by B12, creatine, and B vitamins. These are all nutritional/mitochondrial support treatments. The red dashed line marks the cohort baseline positive rate. Treatments whose entire confidence interval falls above the baseline are reliably outperforming average community expectations.</p>
+<p>Note that LDN (low dose naltrexone), despite being the most-discussed treatment by far (93 users), ranks in the middle tier -- its large sample size gives us high confidence that its ~65% positive rate is real, but it does not dominate the fatigue-specific rankings.</p>
 </div>
 </div>
 </div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4dc76bc9">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=feadc960">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f218e03">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Does-Polypharmacy-Predict-Negative-Outcomes?">Does Polypharmacy Predict Negative Outcomes?<a class="anchor-link" href="#Does-Polypharmacy-Predict-Negative-Outcomes?">¶</a></h2><p>Notebook 3 found that 4–6 concurrent treatments was the sweet spot for POTS patients. Does the same pattern hold when we look specifically at negative outcomes?</p>
+<p><strong>Key takeaway:</strong> Magnesium and B vitamins show almost no negative reports -- their risk profile is extremely favorable. SSRIs stand out as the only top-discussed treatment with more negative than positive outcomes among fatigue reporters. Nicotine and famotidine show substantial mixed/neutral segments, suggesting inconsistent experiences.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=13b0cef9">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=af444a11">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=37f04d33">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Treatment-Co-occurrence-Among-Negative-Outcome-Users">Treatment Co-occurrence Among Negative-Outcome Users<a class="anchor-link" href="#Treatment-Co-occurrence-Among-Negative-Outcome-Users">¶</a></h2><p>Which treatments do negative-outcome users take together? A co-occurrence heatmap reveals whether certain combinations cluster among patients who fare worst.</p>
+<h2 id="Statistical-Validation:-Do-the-Top-Treatments-Beat-Baseline?">Statistical Validation: Do the Top Treatments Beat Baseline?<a class="anchor-link" href="#Statistical-Validation:-Do-the-Top-Treatments-Beat-Baseline?">¶</a></h2><p>Ranking treatments by positive rate is informative but insufficient. We need to test whether each treatment's positive rate significantly exceeds what we would expect by chance (50% baseline, since reports could be positive or negative).</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1ed116bc">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=92fcc322">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9ed072af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f1026586">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Multivariate-Model:-Independent-Predictors">Multivariate Model: Independent Predictors<a class="anchor-link" href="#Multivariate-Model:-Independent-Predictors">¶</a></h2><p>Individual treatment and condition analyses can be confounded. SSRIs might look bad because they are prescribed to sicker patients. POTS might look bad because POTS patients try riskier drugs. A logistic regression lets us test which factors independently predict negative outcomes, controlling for the others.</p>
+<p><strong>Plain-language verdict:</strong> The green-highlighted treatments significantly outperform the 50% chance baseline. Among the top performers, magnesium (Cohen's h &gt; 0.8) shows a <em>large</em> effect size -- this is not a marginal finding. Creatine and B12 show medium-to-large effects. Treatments highlighted in red did not reach significance, meaning we cannot reliably say they help more than half of patients who try them.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3f2398c5">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f4dcc082">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be439386">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=11ed771f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>The analysis above tells a clean story: SSRIs bad, micronutrients good, comorbidities make everything harder. But several results complicate this narrative in ways worth flagging.</p>
+<h2 id="Treatment-Categories:-Which-Approach-Works-Best?">Treatment Categories: Which Approach Works Best?<a class="anchor-link" href="#Treatment-Categories:-Which-Approach-Works-Best?">¶</a></h2><p>Individual treatments tell part of the story. Grouping by mechanism can reveal whether an entire class of treatments works for fatigue.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dc90d7da">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6ac3df6">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=36c0a0a6">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d1432ae">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b1c7d09a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from users who reported negative treatment outcomes, selected to illustrate the patterns identified above. Quote sampling is algorithmic and may not be representative.</p>
+<p>Vitamins/minerals and mitochondrial support treatments clearly outperform other categories for fatigue reporters. Neurological treatments (SSRIs, beta blockers) underperform -- a finding consistent with the hypothesis that Long COVID fatigue has a metabolic rather than purely neuropsychiatric origin.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ea2afe77">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a85cc931">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8a427540">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2>
+<h2 id="Fatigue-Specific-Context:-Do-Treatments-Perform-Differently-in-Fatigue-Posts?">Fatigue-Specific Context: Do Treatments Perform Differently in Fatigue Posts?<a class="anchor-link" href="#Fatigue-Specific-Context:-Do-Treatments-Perform-Differently-in-Fatigue-Posts?">¶</a></h2><p>Some users discuss treatments for fatigue specifically; others mention treatments alongside fatigue without directly linking them. Comparing outcomes in fatigue-specific posts to overall user outcomes reveals which treatments are genuinely targeted at fatigue.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a189e3e0">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8d2760ee">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e8394e64">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db25a780">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=65c8967b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>Negative treatment outcomes in the Long COVID community are not random. They cluster predictably around three axes, each independently confirmed:</p>
-<p><strong>Treatment class is the strongest predictor.</strong> SSRIs produce the highest negative outcome rates among commonly prescribed treatments — 2–3x the community baseline — even after controlling for comorbidities and polypharmacy in multivariate analysis. Micronutrient stacks (magnesium, CoQ10, electrolytes, quercetin) produce the lowest negative rates and the best NNT profile. This gap is large, statistically significant, and survives multiple sensitivity checks. A patient asking "what should I try first for Long COVID?" has a clear empirical answer: start with micronutrients before considering prescription interventions. This is not anti-medication — LDN is a prescription drug and performs excellently. It is specifically SSRIs that underperform.</p>
-<p><strong>Comorbidity profile independently shapes treatment response.</strong> Patients with POTS, PEM, or ME/CFS report worse outcomes across the board, not because they try different treatments, but because they get less benefit from the same ones. The logistic regression confirms this is not an artifact of drug choice. Treatment protocols for Long COVID should ask "what else does this patient have?" before selecting interventions.</p>
-<p><strong>Dose and combination effects matter as much as the compound.</strong> Low-dose naltrexone is a top performer; standard naltrexone is mediocre — same molecule, different dose, opposite outcomes. The co-occurrence heatmap reveals that negative outcomes cluster around specific drug combinations, not just individual drugs. And monotherapy is the worst-performing approach: patients on 3+ concurrent treatments fare significantly better.</p>
-<p><strong>The clearest actionable finding:</strong> SSRIs should not be first-line for Long COVID symptoms. They carry the highest negative outcome risk, they do not improve with polypharmacy the way other treatments do, and they underperform supplements that cost a fraction of the price. Patients already taking SSRIs for pre-existing depression should continue them — but prescribing SSRIs <em>for</em> Long COVID appears net harmful in this community's experience.</p>
+<p><strong>Key takeaway:</strong> The "Difference" column reveals which treatments perform differently in fatigue-specific contexts. Treatments with positive differences (green) may be particularly effective for fatigue. Treatments with negative differences (red) may be discussed for other symptoms and perform worse when fatigue is the primary concern.</p>
+<p>Note that LDN shows a notable drop in fatigue-specific posts compared to its broad profile -- suggesting its general positive reputation may come from symptom domains other than fatigue (such as pain or brain fog). Conversely, magnesium and creatine maintain or improve their performance in fatigue-specific contexts.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f9bd2af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bab2540d">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Subgroup-Analysis:-Fatigue-With-vs.-Without-PEM">Subgroup Analysis: Fatigue With vs. Without PEM<a class="anchor-link" href="#Subgroup-Analysis:-Fatigue-With-vs.-Without-PEM">¶</a></h2><p>PEM (post-exertional malaise) -- the worsening of symptoms after physical or mental activity -- is a defining feature of ME/CFS-type Long COVID. Do patients with PEM respond differently to fatigue treatments than those without?</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8490484c">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c061753b">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The PEM subgroup analysis is limited by small within-group sizes. Most treatments show similar performance regardless of PEM status, though individual exceptions deserve attention in future studies with larger samples.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d3ff9618">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>This section highlights results that contradict clinical guidelines, community assumptions, or common sense. These are not conclusions -- they are patterns that warrant further investigation.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a40b3411">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b05c524f">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>The following quotes are drawn from posts where users discussed specific treatments in the context of fatigue or energy. Each quote contains a specific treatment outcome relevant to the claim in its category header.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f617f0bc">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ccaacf59">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2><p>Based on sample size, statistical significance, and effect size, treatments are grouped into three evidence tiers. <strong>Strong</strong> recommendations have n&gt;=30, p&lt;0.05, and a meaningful effect size. <strong>Moderate</strong> recommendations have n&gt;=15 or p&lt;0.10. <strong>Preliminary</strong> recommendations have n&lt;15 and require more data.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=67f45bf3">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8d297d77">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>The data from 585 Long COVID patients who reported fatigue paints a clear picture: <strong>nutritional and mitochondrial support treatments outperform pharmaceutical approaches for managing fatigue.</strong> Magnesium, B vitamins, CoQ10, creatine, and B12 consistently show positive rates above 80%, with tight confidence intervals and meaningful effect sizes. These are inexpensive, widely available, and low-risk -- a combination that makes them practical first-line options for patients managing fatigue.</p>
+<p>The most surprising finding is the underperformance of SSRIs. Despite being commonly prescribed for fatigue (often framed as depression-driven), this community reports a 30% positive rate for SSRIs in fatigue-specific contexts -- statistically worse than chance. This does not mean SSRIs are useless for Long COVID (they may help with anxiety, mood, or MCAS-related symptoms), but it suggests that prescribing them <em>specifically for fatigue</em> is not supported by community experience. Patients who have been told their fatigue is "just depression" may find this data validating.</p>
+<p>LDN, the community's most-discussed treatment, occupies an interesting middle ground. With 93 users in the fatigue cohort, we have high confidence in its ~65% positive rate -- solid but not exceptional for fatigue specifically. Its reputation as a Long COVID treatment may be driven by benefits in other symptom domains. For fatigue specifically, patients should consider it as a moderate-tier option rather than a first choice.</p>
+<p><strong>Based on this data, a patient asking about fatigue reduction should consider starting with magnesium and CoQ10 as low-cost, low-risk options with the strongest community evidence. B12 and creatine are strong additions for energy support. Patients whose fatigue is accompanied by PEM should be cautious about activity-dependent treatments and may benefit from the mitochondrial support pathway (CoQ10, creatine, NAD+). SSRIs should be approached with realistic expectations for fatigue specifically -- their benefits for Long COVID likely lie elsewhere.</strong></p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bbf31852">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Research-Limitations">Research Limitations<a class="anchor-link" href="#Research-Limitations">¶</a></h2><ol>
-<li><strong>Selection bias:</strong> Reddit users skew young, tech-savvy, and English-speaking. This community is not representative of all Long COVID patients.</li>
-<li><strong>Reporting bias:</strong> Users with strong experiences (positive or negative) are more likely to post. Moderate, unremarkable outcomes are underrepresented.</li>
-<li><strong>Survivorship bias:</strong> Users who recovered may leave the community. Those who remain are disproportionately treatment-resistant, inflating negative rates.</li>
-<li><strong>Recall bias:</strong> Users report retrospectively with variable delay between treatment and post.</li>
-<li><strong>Confounding:</strong> We cannot control for disease severity, illness duration, dosing protocols, treatment adherence, or prescriber expertise. SSRIs may be prescribed to sicker or more desperate patients, inflating their negative rate — though the logistic regression partially addresses this by controlling for comorbidity count.</li>
-<li><strong>No control group:</strong> All comparisons are within the community. There is no untreated baseline, making it impossible to distinguish "this treatment doesn't work" from "this treatment works but not enough."</li>
-<li><strong>Sentiment ≠ efficacy:</strong> User-reported sentiment captures subjective experience, not objective clinical improvement. A treatment that causes unpleasant side effects but improves biomarkers would score negatively here.</li>
-<li><strong>Temporal snapshot:</strong> One month of data. Treatments with delayed benefits (weeks to months before improvement) may appear ineffective in a short observation window. SSRIs typically require 4–6 weeks to reach full effect, which could partially explain their poor showing.</li>
+<li><p><strong>Selection bias:</strong> Reddit users are not representative of all Long COVID patients. They skew younger, more tech-savvy, and more proactive about self-treatment. Patients who improve and leave the community are underrepresented.</p>
+</li>
+<li><p><strong>Reporting bias:</strong> Users are more likely to post about treatments that had dramatic effects (positive or negative) than about treatments that did nothing. This inflates both positive and negative rates relative to true population effects.</p>
+</li>
+<li><p><strong>Survivorship bias:</strong> We only see posts from patients still engaged in the community. Those who recovered fully (or deteriorated severely) are absent from the data, potentially biasing our treatment efficacy estimates.</p>
+</li>
+<li><p><strong>Recall bias:</strong> Treatment reports may be colored by current symptom state. A user having a bad day may retrospectively rate past treatments more negatively.</p>
+</li>
+<li><p><strong>Confounding:</strong> Most patients try multiple treatments simultaneously. A positive report for magnesium may coincide with starting LDN the same week. We cannot isolate individual treatment effects from observational data.</p>
+</li>
+<li><p><strong>No control group:</strong> There is no placebo arm. Some positive reports may reflect natural disease course, placebo effect, or regression to the mean. The 50% baseline used in binomial tests is an approximation.</p>
+</li>
+<li><p><strong>Sentiment vs. efficacy:</strong> Our outcome measure is user sentiment about a treatment, not objective clinical improvement. A user may report "positive" because a treatment reduced fatigue from debilitating to moderate -- or because it simply did not make things worse. Sentiment is a proxy, not a clinical endpoint.</p>
+</li>
+<li><p><strong>Temporal snapshot:</strong> This data covers one month (March-April 2026). Treatment popularity, availability, and community sentiment shift over time. These findings reflect a specific moment in the Long COVID treatment landscape.</p>
+</li>
 </ol>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1c6ae96">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=5951fc62">
 </div>
 </main>
 </body>

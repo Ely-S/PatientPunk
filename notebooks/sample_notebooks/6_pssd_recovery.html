@@ -7795,212 +7795,321 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3a35a289">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=254a8ebf">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e98ecdf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bb137955">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>Research Question:</strong> "What predicts negative treatment outcomes in the Long COVID community?"</p>
+<p><strong>Research Question:</strong> "What treatments improve PSSD (Post-SSRI Sexual Dysfunction) once people have it?"</p>
+<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>This analysis examines 902 treatment reports from 220 unique users in r/PSSD over a one-month period (March 12 -- April 11, 2026) to identify which interventions the community reports as helpful for recovering from PSSD. After filtering causative drugs (SSRIs, SNRIs, finasteride) and generic terms, 44 distinct recovery-focused treatments remain. Antihistamines and mast-cell stabilizers emerge as the most promising class, with loratadine (67% positive, n=5), ketotifen (67% positive, n=3), and cyproheptadine (43% positive, n=6) all showing above-baseline positive rates. Dopaminergic agents show mixed results: bupropion (48% positive, n=18) is the most-reported recovery treatment but its benefits appear dose-dependent. The ketogenic diet (100% positive, n=5) and microdosing psychedelics (88% positive, n=5) show striking early signals but with very small samples. Treatments are grouped by mechanism of action to help patients and clinicians identify therapeutic strategies rather than individual drugs.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543b92b9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0a24a91a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>In a 1-month sample of r/covidlonghaulers (2,827 users, 6,815 treatment reports), we investigate which treatments, co-occurring conditions, and patient characteristics predict negative outcomes. SSRIs are the worst-performing commonly prescribed treatment class (negative rate 2–3x the community baseline), while micronutrient stacks (magnesium, CoQ10, electrolytes) have the lowest risk. Co-occurring POTS and PEM independently predict worse treatment response in logistic regression. A treatment co-occurrence analysis reveals that users reporting negative outcomes cluster around specific drug combinations — suggesting that treatment interaction, not just individual drug choice, shapes outcomes. NNT analysis shows that switching from SSRIs to micronutrients would prevent one negative outcome for every 3–5 patients. These findings suggest that Long COVID treatment selection should account for comorbidity profile and combination effects, not just the target symptom.</p>
+<h2 id="Data-Exploration">Data Exploration<a class="anchor-link" href="#Data-Exploration">¶</a></h2><p>Data covers: 2026-03-12 to 2026-04-11 (1 month). Source: r/PSSD subreddit.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total users</td>
+<td>500</td>
+</tr>
+<tr>
+<td>Total posts</td>
+<td>2,532</td>
+</tr>
+<tr>
+<td>Treatment reports</td>
+<td>902</td>
+</tr>
+<tr>
+<td>Unique reporters</td>
+<td>220</td>
+</tr>
+<tr>
+<td>Unique drugs mentioned</td>
+<td>245</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PSSD (Post-SSRI Sexual Dysfunction)</strong> is a condition where sexual side effects from serotonergic antidepressants persist after discontinuation. The r/PSSD community discusses causative drugs (which caused their condition) and recovery treatments (which they try to improve symptoms). This analysis focuses exclusively on recovery treatments.</p>
 </div>
 </div>
 </div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d22580b2">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d48ba4c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=147131d3">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Data-Landscape">Data Landscape<a class="anchor-link" href="#Data-Landscape">¶</a></h2><p>Before analyzing what predicts failure, we need to understand what "negative" means in this community — how common it is, what its distribution looks like at the user level, and whether negativity is concentrated in a few prolific posters or broadly distributed.</p>
+<h2 id="Filtering-and-Methodology">Filtering and Methodology<a class="anchor-link" href="#Filtering-and-Methodology">¶</a></h2><p><strong>Causative drugs excluded:</strong> SSRIs (sertraline, fluoxetine, paroxetine, escitalopram, citalopram, vortioxetine, lexapro/escitalopram, prozac/fluoxetine), SNRIs (duloxetine, venlafaxine), finasteride, atomoxetine, brintellix, olanzapine, and antipsychotics. These drugs are discussed in r/PSSD as the <em>cause</em> of the condition, not as treatments. Their overwhelmingly negative sentiment (93% negative on average) reflects causation context, not treatment response.</p>
+<p><strong>Generic terms excluded:</strong> "antidepressant", "supplements", "medication", "treatment", "therapy", "drug" -- these are categories, not actionable treatments.</p>
+<p><strong>Duplicates merged:</strong> dextromethorphan/dxm, weed/cannabis/marijuana, cyproheptadine/ciproheptadine, 75mg/bupropion (75mg references bupropion dosing).</p>
+<p><strong>Mechanism groupings:</strong> Treatments are assigned to 10 mechanistic categories (Dopaminergic, Serotonin Antagonists, Antihistamines/Mast Cell, Psychedelics, PDE5 Inhibitors, Hormonal, Opioid Modulators, Diet/Lifestyle, Supplements, Other Pharmaceuticals) based on primary pharmacological action. Some drugs could fit multiple categories (e.g., cyproheptadine is both a serotonin antagonist and antihistamine); we assigned based on the mechanism most relevant to PSSD recovery literature.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=575f13a2">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc71134c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5d0068f9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reports are not independent — one user can file many. We aggregate to one data point per user: their average sentiment across all treatments tried.</p>
+<h2 id="Baseline:-What-Does-the-Recovery-Landscape-Look-Like?">Baseline: What Does the Recovery Landscape Look Like?<a class="anchor-link" href="#Baseline:-What-Does-the-Recovery-Landscape-Look-Like?">¶</a></h2><p>Before examining individual treatments, we need to understand the overall picture. What proportion of recovery attempts result in positive reports? This baseline sets expectations for what "good" looks like in this community.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e6a6fd3d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4bb573d5">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=c3f468a9">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbba3adf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2c92b9d8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Which-Treatments-Predict-Negative-Outcomes?">Which Treatments Predict Negative Outcomes?<a class="anchor-link" href="#Which-Treatments-Predict-Negative-Outcomes?">¶</a></h2><p>With the baseline established, we now rank individual treatments by their user-level negative outcome rate. Treatments filtered to n≥20 users for reliable estimates. Generic terms ("supplements", "medication") and vaccines (which reflect perceived causation, not treatment failure) are excluded.</p>
+<p><strong>What this means:</strong> This chart shows how each mechanism group performs across all users who tried treatments in that category. Antihistamines/mast cell stabilizers and diet/lifestyle interventions show the highest positive rates, while hormonal treatments and supplements have the lowest. The baseline positive rate for all recovery treatments combined provides the benchmark -- any mechanism group performing above this baseline warrants closer examination.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e47d9da1">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e25b1371">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d1199f8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1efef5af">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The forest plot above identifies the high-risk treatments. But how large is the gap between the worst and best treatment classes? We compare SSRIs (selective serotonin reuptake inhibitors — antidepressants commonly prescribed for Long COVID) against micronutrients (magnesium, CoQ10, electrolytes, quercetin, B12, vitamin D) in a direct head-to-head.</p>
+<h2 id="Core-Analysis:-Which-Individual-Treatments-Show-Promise?">Core Analysis: Which Individual Treatments Show Promise?<a class="anchor-link" href="#Core-Analysis:-Which-Individual-Treatments-Show-Promise?">¶</a></h2><p>With the mechanism-level landscape established, we now examine individual treatments with at least 3 user reports. Each treatment is tested against the community baseline positive rate using a binomial test, with Wilson score confidence intervals to account for small samples.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3d8ff940">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=0af68dd6">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=676ad88f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0af8bae1">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">Do Co-occurring Conditions Predict Worse Outcomes?<a class="anchor-link" href="#Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">¶</a></h2><p>SSRIs underperform micronutrients at the treatment level. But some patients may be predisposed to negative outcomes regardless of what they take. Long COVID patients frequently report comorbid POTS (postural orthostatic tachycardia syndrome), MCAS (mast cell activation syndrome), ME/CFS (myalgic encephalomyelitis/chronic fatigue syndrome), and PEM (post-exertional malaise). Do these conditions independently predict worse treatment response?</p>
+<p><strong>How to read this table:</strong> Each row is a treatment tried by at least 3 distinct users. The positive rate is the fraction of users whose average sentiment was positive. The Wilson 95% CI accounts for small sample sizes -- wide intervals mean the true positive rate could be much higher or lower. The p-value tests whether the positive rate exceeds the community baseline. NNT (Number Needed to Treat) estimates how many people would need to try the treatment for one additional person to report benefit beyond baseline.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4151eb8d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f931c1d2">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=87be7da2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3e4323d1">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The condition analysis confirms that comorbidity profile matters. But conditions and treatments are confounded — POTS patients take different drugs than the general population. To isolate independent predictors, we need a multivariate model.</p>
+<p><strong>What this means:</strong> Each dot represents a treatment's positive rate, with horizontal lines showing the 95% confidence interval. Dot size reflects sample size. The dashed blue line marks the community baseline. Treatments to the right of the baseline are performing better than average. Notice how treatments with very small samples (n=3-5) have extremely wide confidence intervals -- their position on this chart is suggestive but unreliable. The most credible signals come from treatments with both high positive rates AND reasonable sample sizes (narrower intervals).</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=feadc960">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b3f50e9a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Does-Polypharmacy-Predict-Negative-Outcomes?">Does Polypharmacy Predict Negative Outcomes?<a class="anchor-link" href="#Does-Polypharmacy-Predict-Negative-Outcomes?">¶</a></h2><p>Notebook 3 found that 4–6 concurrent treatments was the sweet spot for POTS patients. Does the same pattern hold when we look specifically at negative outcomes?</p>
+<h2 id="Mechanism-Deep-Dive:-Grouping-Treatments-by-How-They-Work">Mechanism Deep Dive: Grouping Treatments by How They Work<a class="anchor-link" href="#Mechanism-Deep-Dive:-Grouping-Treatments-by-How-They-Work">¶</a></h2><p>Individual drug comparisons are noisy with these sample sizes. Grouping by mechanism aggregates evidence and reveals whether an entire pharmacological strategy shows promise -- which is more actionable than knowing a single drug's positive rate.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=13b0cef9">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f55198f7">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=af444a11">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2dd4e5f9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Treatment-Co-occurrence-Among-Negative-Outcome-Users">Treatment Co-occurrence Among Negative-Outcome Users<a class="anchor-link" href="#Treatment-Co-occurrence-Among-Negative-Outcome-Users">¶</a></h2><p>Which treatments do negative-outcome users take together? A co-occurrence heatmap reveals whether certain combinations cluster among patients who fare worst.</p>
+<p><strong>What this means:</strong> This table tests whether each mechanism group performs differently from the community baseline. Groups with low p-values have statistically distinguishable performance. Note that groups with very few trials have wide confidence intervals and limited statistical power.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1ed116bc">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=2c3f1790">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9ed072af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=326a4352">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Multivariate-Model:-Independent-Predictors">Multivariate Model: Independent Predictors<a class="anchor-link" href="#Multivariate-Model:-Independent-Predictors">¶</a></h2><p>Individual treatment and condition analyses can be confounded. SSRIs might look bad because they are prescribed to sicker patients. POTS might look bad because POTS patients try riskier drugs. A logistic regression lets us test which factors independently predict negative outcomes, controlling for the others.</p>
+<p><strong>What this means:</strong> This heatmap lets you scan across mechanism groups to see which individual treatments drive the group's performance. Green cells indicate higher positive rates; red cells indicate lower. Empty cells mean a treatment does not belong to that mechanism group. Within Antihistamines/Mast Cell, most treatments cluster green. Within Dopaminergic, there is high variance -- bupropion stands out but several others underperform.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3f2398c5">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f4dcc082">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be439386">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=95d96744">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>The analysis above tells a clean story: SSRIs bad, micronutrients good, comorbidities make everything harder. But several results complicate this narrative in ways worth flagging.</p>
+<h2 id="Bupropion:-The-Most-Reported-Recovery-Treatment">Bupropion: The Most-Reported Recovery Treatment<a class="anchor-link" href="#Bupropion:-The-Most-Reported-Recovery-Treatment">¶</a></h2><p>Bupropion (Wellbutrin) is the most frequently discussed recovery treatment with 18+ users. As a norepinephrine-dopamine reuptake inhibitor (NDRI), it has a different mechanism from the SSRIs that caused PSSD. Its 48% positive rate makes it the highest-evidence treatment in this dataset. But does this hold up to closer scrutiny?</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dc90d7da">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6ac3df6">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=91b1ecac">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d1432ae">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0fcead15">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from users who reported negative treatment outcomes, selected to illustrate the patterns identified above. Quote sampling is algorithmic and may not be representative.</p>
+<p>The antihistamine/mast cell class showed the strongest group-level signal. One widely shared recovery story in this dataset describes a protocol combining loratadine, ketotifen, famotidine, LDN, and a single dose of liposomal quercetin. Several users reference this approach. Let us compare the individual antihistamines.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ea2afe77">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=2867c2e0">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a85cc931">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9052bdba">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2>
+<p>Dopaminergic agents represent the largest mechanism group with the most user reports. Bupropion dominates, but cabergoline and pramipexole also appear. How do they compare within the class?</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a189e3e0">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8d2760ee">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=7381ff6a">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db25a780">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c5ce4848">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>Negative treatment outcomes in the Long COVID community are not random. They cluster predictably around three axes, each independently confirmed:</p>
-<p><strong>Treatment class is the strongest predictor.</strong> SSRIs produce the highest negative outcome rates among commonly prescribed treatments — 2–3x the community baseline — even after controlling for comorbidities and polypharmacy in multivariate analysis. Micronutrient stacks (magnesium, CoQ10, electrolytes, quercetin) produce the lowest negative rates and the best NNT profile. This gap is large, statistically significant, and survives multiple sensitivity checks. A patient asking "what should I try first for Long COVID?" has a clear empirical answer: start with micronutrients before considering prescription interventions. This is not anti-medication — LDN is a prescription drug and performs excellently. It is specifically SSRIs that underperform.</p>
-<p><strong>Comorbidity profile independently shapes treatment response.</strong> Patients with POTS, PEM, or ME/CFS report worse outcomes across the board, not because they try different treatments, but because they get less benefit from the same ones. The logistic regression confirms this is not an artifact of drug choice. Treatment protocols for Long COVID should ask "what else does this patient have?" before selecting interventions.</p>
-<p><strong>Dose and combination effects matter as much as the compound.</strong> Low-dose naltrexone is a top performer; standard naltrexone is mediocre — same molecule, different dose, opposite outcomes. The co-occurrence heatmap reveals that negative outcomes cluster around specific drug combinations, not just individual drugs. And monotherapy is the worst-performing approach: patients on 3+ concurrent treatments fare significantly better.</p>
-<p><strong>The clearest actionable finding:</strong> SSRIs should not be first-line for Long COVID symptoms. They carry the highest negative outcome risk, they do not improve with polypharmacy the way other treatments do, and they underperform supplements that cost a fraction of the price. Patients already taking SSRIs for pre-existing depression should continue them — but prescribing SSRIs <em>for</em> Long COVID appears net harmful in this community's experience.</p>
+<p><strong>What this means:</strong> Within the dopaminergic class, there is substantial variation. Bupropion and cabergoline show the strongest signals, while generic "d2 agonist" and "dopaminergic drugs" mentions (which may overlap with specific drugs) perform worse. The confidence intervals are wide for all drugs except bupropion, making it difficult to rank them reliably. The key takeaway: dopaminergic augmentation as a strategy shows promise, but drug choice within the class matters.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f9bd2af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d77f4451">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Emerging-Signals:-Diet,-Lifestyle,-and-Psychedelics">Emerging Signals: Diet, Lifestyle, and Psychedelics<a class="anchor-link" href="#Emerging-Signals:-Diet,-Lifestyle,-and-Psychedelics">¶</a></h2><p>Two non-pharmaceutical categories show unexpectedly high positive rates despite small samples. The ketogenic diet (5 users, 100% positive) and psychedelic microdosing (5 users, 88% positive) stand out, but their small n demands extreme caution.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d2e9356e">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d68934a1">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>What this means:</strong> The ketogenic diet's perfect positive rate is striking but based on only 5 users -- the Wilson 95% CI extends down to roughly 57%, meaning the true rate could be much lower. Microdosing psychedelics shows a similar pattern. These are not evidence of efficacy; they are signals worth investigating in larger samples. Low dose naltrexone (LDN), despite only 3 reports, is notable because all are positive and it has an emerging evidence base in autoimmune conditions.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=53a5df63">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d23507c3">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b66e3026">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>The following quotes are drawn from posts by users who reported on top recovery treatments. Each quote contains a specific treatment outcome and is dated for context.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=852cc185">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1a99f9a8">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2><p>Treatments are classified by evidence strength: <strong>Strong</strong> (n &gt;= 30, p &lt; 0.05), <strong>Moderate</strong> (n &gt;= 15 or p &lt; 0.10), <strong>Preliminary</strong> (n &lt; 15). The positive rate, confidence interval, and mechanism group are shown for context.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a5c1d861">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0ba28366">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>The r/PSSD community's one-month snapshot reveals a recovery landscape dominated by trial and error, with a community baseline positive rate that falls well below 50%. Most treatments people try do not help, which aligns with the clinical reality that PSSD remains poorly understood and has no established treatment protocol.</p>
+<p>That said, several signal clusters emerge. <strong>Antihistamines and mast cell stabilizers</strong> represent the most coherent recovery strategy in this data. The convergence of loratadine, ketotifen, cyproheptadine, quercetin, and LDN around the mast cell hypothesis -- and the existence of at least one detailed recovery account using a combined mast cell protocol -- gives this class face validity beyond what the numbers alone provide. A patient asking "what should I try?" would find the antihistamine class the most promising starting point based on this data.</p>
+<p><strong>Bupropion</strong> is the single most evidence-supported individual treatment, with the largest sample size and a positive rate that is meaningfully above baseline. Its dopaminergic mechanism provides a clear pharmacological rationale for PSSD (replacing dopaminergic tone suppressed by serotonergic drugs). However, dose matters: the community reports suggest low doses (75-150mg) are more helpful than high doses (300mg), which may worsen anhedonia. A patient considering bupropion should start low and monitor closely.</p>
+<p><strong>The ketogenic diet and psychedelic microdosing</strong> show the most striking raw numbers but the weakest evidence base. Their perfect or near-perfect positive rates in samples of 5 users are likely inflated by small-n noise and reporting bias (people who did not benefit may not post about it). These deserve further investigation -- particularly the ketogenic diet, which has no serious safety concerns -- but should not be presented as established treatments.</p>
+<p>The most important finding may be the counterintuitive one: <strong>cyproheptadine's polarizing response pattern</strong> suggests that PSSD is not a single condition but a syndrome with subtypes. If serotonin receptor antagonism helps exactly half of patients and fails the other half, the field may benefit more from subtyping patients than from testing more drugs. Future research should investigate what distinguishes cyproheptadine responders from non-responders.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e071db17">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Research-Limitations">Research Limitations<a class="anchor-link" href="#Research-Limitations">¶</a></h2><ol>
-<li><strong>Selection bias:</strong> Reddit users skew young, tech-savvy, and English-speaking. This community is not representative of all Long COVID patients.</li>
-<li><strong>Reporting bias:</strong> Users with strong experiences (positive or negative) are more likely to post. Moderate, unremarkable outcomes are underrepresented.</li>
-<li><strong>Survivorship bias:</strong> Users who recovered may leave the community. Those who remain are disproportionately treatment-resistant, inflating negative rates.</li>
-<li><strong>Recall bias:</strong> Users report retrospectively with variable delay between treatment and post.</li>
-<li><strong>Confounding:</strong> We cannot control for disease severity, illness duration, dosing protocols, treatment adherence, or prescriber expertise. SSRIs may be prescribed to sicker or more desperate patients, inflating their negative rate — though the logistic regression partially addresses this by controlling for comorbidity count.</li>
-<li><strong>No control group:</strong> All comparisons are within the community. There is no untreated baseline, making it impossible to distinguish "this treatment doesn't work" from "this treatment works but not enough."</li>
-<li><strong>Sentiment ≠ efficacy:</strong> User-reported sentiment captures subjective experience, not objective clinical improvement. A treatment that causes unpleasant side effects but improves biomarkers would score negatively here.</li>
-<li><strong>Temporal snapshot:</strong> One month of data. Treatments with delayed benefits (weeks to months before improvement) may appear ineffective in a short observation window. SSRIs typically require 4–6 weeks to reach full effect, which could partially explain their poor showing.</li>
+<li><p><strong>Selection bias:</strong> Reddit users skew younger, male, English-speaking, and tech-savvy. The r/PSSD community is a self-selected group of people sufficiently affected and motivated to seek online support. Results do not generalize to all PSSD patients.</p>
+</li>
+<li><p><strong>Reporting bias:</strong> Users are more likely to post about dramatic experiences (recovery stories, severe side effects) than about treatments that had no effect. This inflates both the positive and negative tails while underrepresenting null outcomes.</p>
+</li>
+<li><p><strong>Survivorship bias:</strong> Users who recover may leave the community, reducing their representation in ongoing discussions. Conversely, users who worsen may become more active posters. Long-term recovery rates may be underestimated.</p>
+</li>
+<li><p><strong>Recall bias:</strong> Treatment reports are retrospective self-assessments, not contemporaneous clinical observations. Users may misattribute improvement to the wrong treatment, especially when trying multiple interventions simultaneously.</p>
+</li>
+<li><p><strong>Confounding:</strong> Many users try multiple treatments concurrently or sequentially. Positive outcomes attributed to one drug may reflect the combined effect of several, natural recovery over time, or placebo response. We cannot isolate individual treatment effects.</p>
+</li>
+<li><p><strong>No control group:</strong> There is no untreated comparison group. The baseline positive rate includes natural recovery, placebo effects, and regression to the mean. We cannot determine what proportion of "positive" outcomes would have occurred without treatment.</p>
+</li>
+<li><p><strong>Sentiment vs. efficacy:</strong> Our outcome measure is sentiment extracted from text, not clinical endpoints. A "positive" sentiment report may reflect partial improvement, hopeful expectation, or relief at trying something new -- not necessarily objective sexual function recovery.</p>
+</li>
+<li><p><strong>Temporal snapshot:</strong> One month of data (March-April 2026) may not capture seasonal patterns, evolving community opinions, or treatments that require longer observation periods. Conclusions are provisional and may not replicate in a different time window.</p>
+</li>
 </ol>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1c6ae96">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=b67010d4">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=bfab0b58">
 </div>
 </main>
 </body>

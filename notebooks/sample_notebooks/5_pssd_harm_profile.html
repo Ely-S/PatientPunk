@@ -7795,212 +7795,221 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3a35a289">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ecbe9ab6">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e98ecdf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=59b4b86c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>Research Question:</strong> "What predicts negative treatment outcomes in the Long COVID community?"</p>
+<p><strong>Research Question:</strong> "Which SSRIs cause the worst PSSD (Post-SSRI Sexual Dysfunction), and what predicts a more severe case?"</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543b92b9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=362cf464">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>In a 1-month sample of r/covidlonghaulers (2,827 users, 6,815 treatment reports), we investigate which treatments, co-occurring conditions, and patient characteristics predict negative outcomes. SSRIs are the worst-performing commonly prescribed treatment class (negative rate 2–3x the community baseline), while micronutrient stacks (magnesium, CoQ10, electrolytes) have the lowest risk. Co-occurring POTS and PEM independently predict worse treatment response in logistic regression. A treatment co-occurrence analysis reveals that users reporting negative outcomes cluster around specific drug combinations — suggesting that treatment interaction, not just individual drug choice, shapes outcomes. NNT analysis shows that switching from SSRIs to micronutrients would prevent one negative outcome for every 3–5 patients. These findings suggest that Long COVID treatment selection should account for comorbidity profile and combination effects, not just the target symptom.</p>
+<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>This analysis examines r/PSSD community data to identify which specific SSRIs are most frequently implicated in PSSD (Post-SSRI Sexual Dysfunction — persistent sexual and neurological side effects that continue after discontinuing antidepressants) and what factors predict more severe outcomes. Using 902 treatment reports from 220 unique reporters (March–April 2026), we compare individual SSRIs by negative sentiment rate, symptom breadth (text-mined from post narratives), and report signal strength. <strong>Sertraline and paroxetine emerge as the most negatively reported SSRIs</strong>, with 100% negative user-level sentiment and the broadest symptom profiles. Predictors of severity include strong signal-strength reports, mention of genital numbness or anhedonia, and polypharmacy history. These findings reflect community reporting patterns, not controlled clinical data.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d48ba4c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f36b05c8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Data-Landscape">Data Landscape<a class="anchor-link" href="#Data-Landscape">¶</a></h2><p>Before analyzing what predicts failure, we need to understand what "negative" means in this community — how common it is, what its distribution looks like at the user level, and whether negativity is concentrated in a few prolific posters or broadly distributed.</p>
+<h2 id="1.-Data-Landscape">1. Data Landscape<a class="anchor-link" href="#1.-Data-Landscape">¶</a></h2><p>Before examining which SSRIs cause the most harm, we need to understand what the r/PSSD community looks like and how much data we have per drug. PSSD is a condition where sexual dysfunction, emotional blunting, and other neurological symptoms persist long after stopping an SSRI or SNRI. The community’s treatment reports are overwhelmingly negative — this is expected, since people join r/PSSD because they were harmed.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=575f13a2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=24053b55">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=44b3fcd4">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc71134c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f7cb1aa7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reports are not independent — one user can file many. We aggregate to one data point per user: their average sentiment across all treatments tried.</p>
+<p><strong>What this means:</strong> 62% of all treatment reports in r/PSSD carry negative sentiment. This baseline is critical context — the community exists because members were harmed by medications, so negative sentiment is the norm, not the exception. Our analysis focuses on which SSRIs cluster at the extreme end of this already-negative distribution.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e6a6fd3d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbba3adf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc5e2644">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Which-Treatments-Predict-Negative-Outcomes?">Which Treatments Predict Negative Outcomes?<a class="anchor-link" href="#Which-Treatments-Predict-Negative-Outcomes?">¶</a></h2><p>With the baseline established, we now rank individual treatments by their user-level negative outcome rate. Treatments filtered to n≥20 users for reliable estimates. Generic terms ("supplements", "medication") and vaccines (which reflect perceived causation, not treatment failure) are excluded.</p>
+<h2 id="2.-Which-SSRIs-Are-Reported-as-Most-Harmful?">2. Which SSRIs Are Reported as Most Harmful?<a class="anchor-link" href="#2.-Which-SSRIs-Are-Reported-as-Most-Harmful?">¶</a></h2><p>The overall picture is bleak, but not all SSRIs are reported equally. We merged brand-name and generic duplicates (lexapro/escitalopram, prozac/fluoxetine) and excluded the generic category label "ssri" to compare individual drugs head-to-head. For each SSRI, we computed the user-level negative rate: what proportion of unique users who reported on that drug had a negative experience?</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e47d9da1">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e25b1371">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f3f283d1">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=9973f75d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e618ed9d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d1199f8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1534f90b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The forest plot above identifies the high-risk treatments. But how large is the gap between the worst and best treatment classes? We compare SSRIs (selective serotonin reuptake inhibitors — antidepressants commonly prescribed for Long COVID) against micronutrients (magnesium, CoQ10, electrolytes, quercetin, B12, vitamin D) in a direct head-to-head.</p>
+<p><strong>Key finding:</strong> Sertraline and paroxetine anchor the extreme end with 100% user-level negative outcomes — no user who reported on these drugs had a positive experience with them in this community. However, paroxetine’s small sample (n=7) limits its reliability. Among drugs with larger samples, sertraline (n=39) stands out as the most consistently negatively reported SSRI. Vortioxetine (Trintellix) also shows 100% negative reports but with only 8 users.</p>
+<p>Escitalopram (merged with its brand name Lexapro) has the "best" profile among SSRIs here — still 73% negative, but with some positive reports. This relative advantage over sertraline is explored statistically above.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3d8ff940">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=676ad88f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4e379092">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">Do Co-occurring Conditions Predict Worse Outcomes?<a class="anchor-link" href="#Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">¶</a></h2><p>SSRIs underperform micronutrients at the treatment level. But some patients may be predisposed to negative outcomes regardless of what they take. Long COVID patients frequently report comorbid POTS (postural orthostatic tachycardia syndrome), MCAS (mast cell activation syndrome), ME/CFS (myalgic encephalomyelitis/chronic fatigue syndrome), and PEM (post-exertional malaise). Do these conditions independently predict worse treatment response?</p>
+<h2 id="3.-Symptom-Breadth:-Which-SSRIs-Produce-the-Widest-Harm?">3. Symptom Breadth: Which SSRIs Produce the Widest Harm?<a class="anchor-link" href="#3.-Symptom-Breadth:-Which-SSRIs-Produce-the-Widest-Harm?">¶</a></h2><p>A negative sentiment report tells us someone had a bad experience. But PSSD manifests across multiple domains — sexual (genital numbness, libido loss, anorgasmia), emotional (anhedonia, emotional blunting), and cognitive (brain fog). We text-mined post narratives to measure how many symptom domains each SSRI’s users mention, producing a harm breadth profile.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4151eb8d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=b70476a8">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a2dc013f">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=87be7da2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8a81424a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The condition analysis confirms that comorbidity profile matters. But conditions and treatments are confounded — POTS patients take different drugs than the general population. To isolate independent predictors, we need a multivariate model.</p>
+<p><strong>What this means:</strong> The composite harm score combines three dimensions: how uniformly negative reports are (40% weight), how many symptom domains users mention in their posts (30%), and what proportion of reports are tagged as strong-signal evidence (30%). Citalopram and paroxetine score highest on this composite despite smaller samples, suggesting concentrated harm when these drugs do cause PSSD. Sertraline’s massive user base (n=39) combined with its 100% negative rate makes it the most reliably harmful in this dataset.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=feadc960">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=86042a96">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Does-Polypharmacy-Predict-Negative-Outcomes?">Does Polypharmacy Predict Negative Outcomes?<a class="anchor-link" href="#Does-Polypharmacy-Predict-Negative-Outcomes?">¶</a></h2><p>Notebook 3 found that 4–6 concurrent treatments was the sweet spot for POTS patients. Does the same pattern hold when we look specifically at negative outcomes?</p>
+<h2 id="4.-What-Predicts-a-More-Severe-Case?">4. What Predicts a More Severe Case?<a class="anchor-link" href="#4.-What-Predicts-a-More-Severe-Case?">¶</a></h2><p>Not all PSSD cases are equal. Some users describe mild libido reduction that improves over months; others report total genital numbness, emotional death, and cognitive collapse lasting years. We examined three potential predictors of severity: signal strength of the report, polypharmacy history (exposure to multiple medications), and which specific symptoms appear in a user’s posts.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=13b0cef9">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=29109a09">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=60406296">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=aa88f5dd">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=af444a11">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f4a07b93">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Treatment-Co-occurrence-Among-Negative-Outcome-Users">Treatment Co-occurrence Among Negative-Outcome Users<a class="anchor-link" href="#Treatment-Co-occurrence-Among-Negative-Outcome-Users">¶</a></h2><p>Which treatments do negative-outcome users take together? A co-occurrence heatmap reveals whether certain combinations cluster among patients who fare worst.</p>
+<p><strong>Interpreting symptom predictors:</strong> This analysis tests whether mentioning a specific symptom domain in posts correlates with worse user-level sentiment scores. A significant result does not mean the symptom causes worse PSSD — it means users who describe that symptom also tend to report worse overall outcomes. This could reflect genuine severity (genital numbness IS a marker of severe PSSD) or verbosity bias (users with worse PSSD write more detailed descriptions).</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1ed116bc">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9ed072af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9e9733c0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Multivariate-Model:-Independent-Predictors">Multivariate Model: Independent Predictors<a class="anchor-link" href="#Multivariate-Model:-Independent-Predictors">¶</a></h2><p>Individual treatment and condition analyses can be confounded. SSRIs might look bad because they are prescribed to sicker patients. POTS might look bad because POTS patients try riskier drugs. A logistic regression lets us test which factors independently predict negative outcomes, controlling for the others.</p>
+<h2 id="5.-Robustness-Check">5. Robustness Check<a class="anchor-link" href="#5.-Robustness-Check">¶</a></h2><p>Do the main findings hold when we restrict to strong-signal reports only? This filters out ambiguous or weak references to medications.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3f2398c5">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f4dcc082">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=58877210">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be439386">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c1ca6a69">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>The analysis above tells a clean story: SSRIs bad, micronutrients good, comorbidities make everything harder. But several results complicate this narrative in ways worth flagging.</p>
+<h2 id="6.-Counterintuitive-Findings-Worth-Investigating">6. Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#6.-Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>We actively searched for patterns that contradict community assumptions or clinical expectations.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dc90d7da">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6ac3df6">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=27854169">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d1432ae">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3df3ae8e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from users who reported negative treatment outcomes, selected to illustrate the patterns identified above. Quote sampling is algorithmic and may not be representative.</p>
+<h2 id="7.-What-Patients-Are-Saying-(experimental)">7. What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#7.-What-Patients-Are-Saying-(experimental)">¶</a></h2><p>The quantitative analysis shows which SSRIs are reported as most harmful and what predicts severity. Below are quotes from community members that illustrate the human cost behind the statistics. Each quote was selected because it contains a specific treatment outcome.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ea2afe77">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=da4efb75">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a85cc931">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6c93e152">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2>
+<h2 id="8.-Harm-Assessment-by-Evidence-Tier">8. Harm Assessment by Evidence Tier<a class="anchor-link" href="#8.-Harm-Assessment-by-Evidence-Tier">¶</a></h2><p>The following tiers classify how confident we are in each SSRI’s PSSD risk profile, based on sample size and statistical strength. This is framed as harm assessment, not treatment recommendation — the question is which drugs carry the most documented risk, not which to take.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a189e3e0">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8d2760ee">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4f7efa17">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=aac34703">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db25a780">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6ed8dc3f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>Negative treatment outcomes in the Long COVID community are not random. They cluster predictably around three axes, each independently confirmed:</p>
-<p><strong>Treatment class is the strongest predictor.</strong> SSRIs produce the highest negative outcome rates among commonly prescribed treatments — 2–3x the community baseline — even after controlling for comorbidities and polypharmacy in multivariate analysis. Micronutrient stacks (magnesium, CoQ10, electrolytes, quercetin) produce the lowest negative rates and the best NNT profile. This gap is large, statistically significant, and survives multiple sensitivity checks. A patient asking "what should I try first for Long COVID?" has a clear empirical answer: start with micronutrients before considering prescription interventions. This is not anti-medication — LDN is a prescription drug and performs excellently. It is specifically SSRIs that underperform.</p>
-<p><strong>Comorbidity profile independently shapes treatment response.</strong> Patients with POTS, PEM, or ME/CFS report worse outcomes across the board, not because they try different treatments, but because they get less benefit from the same ones. The logistic regression confirms this is not an artifact of drug choice. Treatment protocols for Long COVID should ask "what else does this patient have?" before selecting interventions.</p>
-<p><strong>Dose and combination effects matter as much as the compound.</strong> Low-dose naltrexone is a top performer; standard naltrexone is mediocre — same molecule, different dose, opposite outcomes. The co-occurrence heatmap reveals that negative outcomes cluster around specific drug combinations, not just individual drugs. And monotherapy is the worst-performing approach: patients on 3+ concurrent treatments fare significantly better.</p>
-<p><strong>The clearest actionable finding:</strong> SSRIs should not be first-line for Long COVID symptoms. They carry the highest negative outcome risk, they do not improve with polypharmacy the way other treatments do, and they underperform supplements that cost a fraction of the price. Patients already taking SSRIs for pre-existing depression should continue them — but prescribing SSRIs <em>for</em> Long COVID appears net harmful in this community's experience.</p>
+<h2 id="9.-Conclusion">9. Conclusion<a class="anchor-link" href="#9.-Conclusion">¶</a></h2><p>This analysis asked two questions: which SSRIs cause the worst PSSD, and what predicts a more severe case?</p>
+<p><strong>On the first question, sertraline is the standout.</strong> With 39 unique reporters and a 100% negative user-level outcome rate, it is both the most frequently cited cause of PSSD and the most uniformly harmful SSRI in this dataset. Paroxetine matches its 100% negative rate but has far fewer reporters (n=7) — its underrepresentation relative to its known pharmacological risk is itself a concerning finding that deserves further investigation. Escitalopram (including Lexapro) is the only SSRI with a meaningful minority of positive reports (18%), though 73% of its users still report negative outcomes.</p>
+<p><strong>On severity predictors, symptom presentation is more informative than medication history.</strong> Users who mention genital numbness, anhedonia, or emotional blunting in their posts tend to have worse user-level outcome scores. Polypharmacy (trying multiple medications) does not predict worse outcomes and may actually indicate users who are actively trying recovery treatments. Signal strength of the report (how clearly someone attributes their symptoms to a specific drug) is associated with worse outcomes, which makes clinical sense — people who can clearly link their symptoms to a specific medication likely had a more dramatic onset.</p>
+<p><strong>The vortioxetine finding deserves attention.</strong> A drug marketed on the basis of fewer sexual side effects showing 100% negative reports in a PSSD community, even at small n, suggests that the marketing narrative of "sexually-safer SSRIs" may not protect against persistent dysfunction. A patient weighing SSRI options should not assume that lower rates of acute sexual side effects translate to lower PSSD risk.</p>
+<p><strong>What remains unanswered:</strong> We cannot determine dose-response relationships (how dose or duration affect PSSD severity), genetic susceptibility factors, or why some users develop PSSD after brief exposures while others take SSRIs for years without persistent effects. The absence of paroxetine reports relative to its pharmacological profile is a gap that longitudinal or cross-platform data could address.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f9bd2af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=33d1455c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Research-Limitations">Research Limitations<a class="anchor-link" href="#Research-Limitations">¶</a></h2><ol>
-<li><strong>Selection bias:</strong> Reddit users skew young, tech-savvy, and English-speaking. This community is not representative of all Long COVID patients.</li>
-<li><strong>Reporting bias:</strong> Users with strong experiences (positive or negative) are more likely to post. Moderate, unremarkable outcomes are underrepresented.</li>
-<li><strong>Survivorship bias:</strong> Users who recovered may leave the community. Those who remain are disproportionately treatment-resistant, inflating negative rates.</li>
-<li><strong>Recall bias:</strong> Users report retrospectively with variable delay between treatment and post.</li>
-<li><strong>Confounding:</strong> We cannot control for disease severity, illness duration, dosing protocols, treatment adherence, or prescriber expertise. SSRIs may be prescribed to sicker or more desperate patients, inflating their negative rate — though the logistic regression partially addresses this by controlling for comorbidity count.</li>
-<li><strong>No control group:</strong> All comparisons are within the community. There is no untreated baseline, making it impossible to distinguish "this treatment doesn't work" from "this treatment works but not enough."</li>
-<li><strong>Sentiment ≠ efficacy:</strong> User-reported sentiment captures subjective experience, not objective clinical improvement. A treatment that causes unpleasant side effects but improves biomarkers would score negatively here.</li>
-<li><strong>Temporal snapshot:</strong> One month of data. Treatments with delayed benefits (weeks to months before improvement) may appear ineffective in a short observation window. SSRIs typically require 4–6 weeks to reach full effect, which could partially explain their poor showing.</li>
+<h2 id="10.-Research-Limitations">10. Research Limitations<a class="anchor-link" href="#10.-Research-Limitations">¶</a></h2><ol>
+<li><p><strong>Selection bias:</strong> r/PSSD members are a self-selected population of people who believe they were harmed by antidepressants. This dataset cannot estimate PSSD incidence — it can only characterize the experience of those who report it.</p>
+</li>
+<li><p><strong>Reporting bias:</strong> Users with more severe symptoms are more likely to post frequently and in greater detail. Mild cases are underrepresented. Users who recover may leave the community entirely.</p>
+</li>
+<li><p><strong>Survivorship bias:</strong> The community we observe are people still active on Reddit during the data window (March–April 2026). Those who recovered, gave up, or moved to other platforms are invisible to this analysis.</p>
+</li>
+<li><p><strong>Recall bias:</strong> Users describe past medication experiences from memory. Duration, dosing, and timeline details may be inaccurate. Attribution of symptoms to a specific drug may be incorrect when multiple medications were used.</p>
+</li>
+<li><p><strong>Confounding:</strong> Many users tried multiple SSRIs, making it difficult to attribute harm to a single drug. Co-occurring conditions (depression, anxiety) may independently affect sexual function and emotional experience.</p>
+</li>
+<li><p><strong>No control group:</strong> We have no comparison population of SSRI users who did NOT develop PSSD. The negative rates reported here are within-community rates, not population-level risk estimates.</p>
+</li>
+<li><p><strong>Sentiment vs efficacy:</strong> Our text-mining pipeline classifies post sentiment, not clinical outcomes. A "negative" report could mean "this didn’t help my PSSD" (treatment failure) or "this drug caused my PSSD" (harm attribution). Both are captured as negative sentiment. For this analysis (focused on harm/causation), the conflation is less problematic than in treatment-outcome studies.</p>
+</li>
+<li><p><strong>Temporal snapshot:</strong> This data covers approximately one month. Seasonal patterns, community dynamics, and viral posts can skew topic frequency. A single influential post about sertraline could amplify its representation.</p>
+</li>
 </ol>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1c6ae96">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=9079f642">
 </div>
 </main>
 </body>

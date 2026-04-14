@@ -7795,212 +7795,307 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3a35a289">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=b3f4a8e2">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e98ecdf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3240e5c5">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><strong>Research Question:</strong> "What predicts negative treatment outcomes in the Long COVID community?"</p>
+<p><strong>Research Question:</strong> "Notebook 2 found that POTS patients try twice as many treatments but report worse outcomes — yet those on 3+ treatments do dramatically better than monotherapy. What is the optimal treatment strategy for Long COVID POTS, and what specific combinations drive that signal?"</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=543b92b9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=76b3cc2b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>In a 1-month sample of r/covidlonghaulers (2,827 users, 6,815 treatment reports), we investigate which treatments, co-occurring conditions, and patient characteristics predict negative outcomes. SSRIs are the worst-performing commonly prescribed treatment class (negative rate 2–3x the community baseline), while micronutrient stacks (magnesium, CoQ10, electrolytes) have the lowest risk. Co-occurring POTS and PEM independently predict worse treatment response in logistic regression. A treatment co-occurrence analysis reveals that users reporting negative outcomes cluster around specific drug combinations — suggesting that treatment interaction, not just individual drug choice, shapes outcomes. NNT analysis shows that switching from SSRIs to micronutrients would prevent one negative outcome for every 3–5 patients. These findings suggest that Long COVID treatment selection should account for comorbidity profile and combination effects, not just the target symptom.</p>
+<h1 id="Optimal-Treatment-Strategy-for-Long-COVID-POTS:-A-Combination-Analysis">Optimal Treatment Strategy for Long COVID POTS: A Combination Analysis<a class="anchor-link" href="#Optimal-Treatment-Strategy-for-Long-COVID-POTS:-A-Combination-Analysis">¶</a></h1><h2 id="Abstract">Abstract<a class="anchor-link" href="#Abstract">¶</a></h2><p>Notebook 2 established that POTS patients in r/covidlonghaulers report worse outcomes overall but showed a striking paradox: users on 3+ treatments dramatically outperform monotherapy users. This follow-up analysis investigates <em>what</em> those successful multi-treatment users are taking. Among 52 POTS patients with treatment reports (March–April 2026), monotherapy users report a -0.39 mean sentiment score (n=9) versus +0.38 for 3+ treatment users (n=39, p=0.032, r=0.46). The signal is driven by specific treatment <em>category</em> combinations, not volume alone: Electrolyte/Mineral + Mitochondrial support appears in 9 users with 89% positive outcomes, while Antihistamine/MCAS + Vitamin combinations reach 78% positive rates. At the individual drug level, magnesium (100% positive, n=7), electrolytes (88% positive, n=6), N-acetylcysteine (86% positive, n=5), and LDN (67% positive, n=7) anchor the most successful regimens. Psychiatric medications as sole POTS interventions perform poorly (avg score -0.41, n=8). The data suggests POTS requires a multi-system approach targeting autonomic regulation, mast cell stabilization, and cellular energy simultaneously — single-target strategies consistently underperform.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d48ba4c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6fd005b8">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Data-Landscape">Data Landscape<a class="anchor-link" href="#Data-Landscape">¶</a></h2><p>Before analyzing what predicts failure, we need to understand what "negative" means in this community — how common it is, what its distribution looks like at the user level, and whether negativity is concentrated in a few prolific posters or broadly distributed.</p>
+<h2 id="1.-Data-Exploration-and-Cohort-Definition">1. Data Exploration and Cohort Definition<a class="anchor-link" href="#1.-Data-Exploration-and-Cohort-Definition">¶</a></h2><p>Data covers: <strong>2026-03-11 to 2026-04-10 (1 month)</strong> from r/covidlonghaulers.</p>
+<p>This analysis builds on Notebook 2's POTS cohort (users with extracted mentions of "pots" or "dysautonomia"). We focus exclusively on the 52 POTS users who have treatment reports, stratified by the number of distinct treatments they report.</p>
+<p><strong>Filtering:</strong> Generic terms ("supplements", "medication", etc.) and causal-context contaminants (vaccines) are excluded. Duplicate canonicals (e.g., famotidine/pepcid, vitamin d/d3) are merged where identified.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=575f13a2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=c51a7ed7">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cc71134c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=266a8239">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Reports are not independent — one user can file many. We aggregate to one data point per user: their average sentiment across all treatments tried.</p>
+<p>The table confirms Notebook 2's finding and sharpens it: POTS monotherapy users average -0.39 (strongly negative), while the jump to 3–4 treatments brings the average to +0.48 — an 0.87-point swing. Non-POTS users show no such cliff: their monotherapy users already start at +0.39. The question is whether this reflects selection (sicker patients try more things and eventually find what works) or a genuine multi-target synergy.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e6a6fd3d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=cbba3adf">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=70af7478">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Which-Treatments-Predict-Negative-Outcomes?">Which Treatments Predict Negative Outcomes?<a class="anchor-link" href="#Which-Treatments-Predict-Negative-Outcomes?">¶</a></h2><p>With the baseline established, we now rank individual treatments by their user-level negative outcome rate. Treatments filtered to n≥20 users for reliable estimates. Generic terms ("supplements", "medication") and vaccines (which reflect perceived causation, not treatment failure) are excluded.</p>
+<h2 id="2.-The-Dose-Response-Curve:-More-Treatments,-Better-Outcomes?">2. The Dose-Response Curve: More Treatments, Better Outcomes?<a class="anchor-link" href="#2.-The-Dose-Response-Curve:-More-Treatments,-Better-Outcomes?">¶</a></h2><p>The monotherapy-to-polypharmacy jump is the central finding from Notebook 2. Before dissecting <em>which</em> combinations drive it, we need to visualize the dose-response relationship and test whether it holds up statistically.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e47d9da1">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e25b1371">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=9802fbf7">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d1199f8">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a51086de">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The forest plot above identifies the high-risk treatments. But how large is the gap between the worst and best treatment classes? We compare SSRIs (selective serotonin reuptake inhibitors — antidepressants commonly prescribed for Long COVID) against micronutrients (magnesium, CoQ10, electrolytes, quercetin, B12, vitamin D) in a direct head-to-head.</p>
+<p><strong>What this means:</strong> POTS monotherapy is associated with strongly negative outcomes (mean score -0.39, n=9), while 3+ treatments jump to +0.38 (n=39). This is a large, statistically significant effect (Mann-Whitney p=0.032, r=0.46). The effect is much larger for POTS than for non-POTS users, whose monotherapy already starts in positive territory (+0.39). By the time POTS patients reach 3+ treatments, they nearly converge with non-POTS outcomes (p=0.055, borderline). In practical terms: a POTS patient on monotherapy has a 22% chance of reporting positive outcomes; at 3+ treatments, that rises to 60%. The NNT (number needed to treat) from monotherapy to 3+ combination therapy is approximately 2.6 — for every 3 POTS patients who expand from one treatment to three or more, one additional patient reports positive outcomes.</p>
+<p>The dose-response curve also reveals diminishing returns: the 3–4 treatment tier performs as well as 5–7, and the 8+ tier shows slightly lower average scores (though wide confidence intervals overlap). This suggests the benefit comes from reaching a <em>threshold</em> of multi-system coverage, not from maximizing treatment count.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3d8ff940">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=676ad88f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ad36eacd">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">Do Co-occurring Conditions Predict Worse Outcomes?<a class="anchor-link" href="#Do-Co-occurring-Conditions-Predict-Worse-Outcomes?">¶</a></h2><p>SSRIs underperform micronutrients at the treatment level. But some patients may be predisposed to negative outcomes regardless of what they take. Long COVID patients frequently report comorbid POTS (postural orthostatic tachycardia syndrome), MCAS (mast cell activation syndrome), ME/CFS (myalgic encephalomyelitis/chronic fatigue syndrome), and PEM (post-exertional malaise). Do these conditions independently predict worse treatment response?</p>
+<h2 id="3.-Which-Treatments-Drive-the-Combination-Signal?">3. Which Treatments Drive the Combination Signal?<a class="anchor-link" href="#3.-Which-Treatments-Drive-the-Combination-Signal?">¶</a></h2><p>The dose-response curve shows that <em>more is better</em> up to a point. But is this just a quantity effect (try enough things and something works) or are specific treatments driving the signal? We compare individual drug performance within the POTS cohort.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4151eb8d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=bb4d8b52">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=87be7da2">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=df2ae11c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The condition analysis confirms that comorbidity profile matters. But conditions and treatments are confounded — POTS patients take different drugs than the general population. To isolate independent predictors, we need a multivariate model.</p>
+<p><strong>What this means:</strong> Among POTS users, individual treatments show enormous variance. Magnesium (100% positive, n=7), electrolytes (88%, n=6), N-acetylcysteine (86%, n=5), and red light therapy (100%, n=4) consistently outperform. Low dose naltrexone (LDN, a low-dose opioid antagonist used off-label as an immune modulator) shows 67% positive. Meanwhile, nattokinase (a fibrinolytic enzyme popular in the community) underperforms at 25% positive despite 7 users trying it, and escitalopram (an SSRI) shows 0% positive among POTS users (n=4). These are small samples with wide confidence intervals, but the directional signals are consistent with the category-level analysis that follows.</p>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=feadc960">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3c44302e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Does-Polypharmacy-Predict-Negative-Outcomes?">Does Polypharmacy Predict Negative Outcomes?<a class="anchor-link" href="#Does-Polypharmacy-Predict-Negative-Outcomes?">¶</a></h2><p>Notebook 3 found that 4–6 concurrent treatments was the sweet spot for POTS patients. Does the same pattern hold when we look specifically at negative outcomes?</p>
+<h2 id="4.-Treatment-Category-Analysis:-Which-Systems-Need-Targeting?">4. Treatment Category Analysis: Which Systems Need Targeting?<a class="anchor-link" href="#4.-Treatment-Category-Analysis:-Which-Systems-Need-Targeting?">¶</a></h2><p>Individual drugs are noisy at this sample size. Grouping treatments into mechanistic categories reveals clearer patterns. We manually classify the top POTS treatments into categories based on their primary mechanism of action relevant to POTS pathophysiology.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=13b0cef9">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=53c0b4fd">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=af444a11">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=76f75482">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Treatment-Co-occurrence-Among-Negative-Outcome-Users">Treatment Co-occurrence Among Negative-Outcome Users<a class="anchor-link" href="#Treatment-Co-occurrence-Among-Negative-Outcome-Users">¶</a></h2><p>Which treatments do negative-outcome users take together? A co-occurrence heatmap reveals whether certain combinations cluster among patients who fare worst.</p>
+<p><strong>What this means:</strong> The category breakdown reveals a clear hierarchy. Electrolyte/Mineral support leads with 85% positive rate (n=13 users) and an average score of 0.69. Physical/Device therapies (100%, n=4) and GI Support (78%, n=6) also perform well, though with small samples. Mitochondrial support (66% positive, n=16) and Vitamins (68%, n=12) form a solid middle tier. Antihistamine/MCAS treatments — the most commonly tried category (n=24) — show a moderate 54% positive rate, suggesting they help some but not all POTS patients. Psychiatric medications perform worst at 13% positive (n=8), consistent with community reports that SSRIs are often prescribed for POTS but rarely help the underlying autonomic dysfunction.</p>
+<p>This hierarchy makes physiological sense: POTS involves blood volume dysregulation (electrolytes help), mitochondrial dysfunction (energy support helps), and mast cell activation (antihistamines partially help). Psychiatric medications address none of these mechanisms.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=1ed116bc">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9ed072af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=12607bbf">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Multivariate-Model:-Independent-Predictors">Multivariate Model: Independent Predictors<a class="anchor-link" href="#Multivariate-Model:-Independent-Predictors">¶</a></h2><p>Individual treatment and condition analyses can be confounded. SSRIs might look bad because they are prescribed to sicker patients. POTS might look bad because POTS patients try riskier drugs. A logistic regression lets us test which factors independently predict negative outcomes, controlling for the others.</p>
+<h2 id="5.-Which-Category-Combinations-Predict-Better-Outcomes?">5. Which Category Combinations Predict Better Outcomes?<a class="anchor-link" href="#5.-Which-Category-Combinations-Predict-Better-Outcomes?">¶</a></h2><p>If the benefit comes from multi-system targeting, specific <em>pairs</em> of treatment categories should outperform the population average. We analyze all category pairs used by 3+ POTS users.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=3f2398c5">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f4dcc082">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4d317ac2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=88aea251">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be439386">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2a25f6ee">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Counterintuitive-Findings-Worth-Investigating">Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>The analysis above tells a clean story: SSRIs bad, micronutrients good, comorbidities make everything harder. But several results complicate this narrative in ways worth flagging.</p>
+<p><strong>What this means:</strong> The heatmap reveals which multi-system approaches produce the best outcomes. Three combinations stand out:</p>
+<ol>
+<li><p><strong>Electrolyte/Mineral + Mitochondrial</strong> (n=9, avg score 0.53, 89% positive): This is the strongest-performing pair with adequate sample size. Patients combining magnesium/electrolytes with CoQ10/NAC/B-vitamins report overwhelmingly positive outcomes.</p>
+</li>
+<li><p><strong>Antihistamine/MCAS + Vitamin</strong> (n=9, avg 0.42, 78% positive) and <strong>Antihistamine/MCAS + Electrolyte/Mineral</strong> (n=9, avg 0.38, 78% positive): Antihistamines alone have moderate results, but combining them with nutritional support substantially improves outcomes.</p>
+</li>
+<li><p><strong>GI Support + Vitamin</strong> (n=3, avg 0.81, 100% positive) and <strong>Antihistamine/MCAS + Physical/Device</strong> (n=3, avg 0.75, 100% positive): Very high outcomes but too few users to draw conclusions. These are hypothesis-generating only.</p>
+</li>
+</ol>
+<p>The worst-performing combinations all involve Psychiatric medications, consistent with the single-category findings. Antihistamine/MCAS + Psychiatric (n=6, avg -0.18, 33% positive) performs substantially below the POTS average.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dc90d7da">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6ac3df6">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1d1432ae">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c7bf8507">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="What-Patients-Are-Saying-(experimental)">What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from users who reported negative treatment outcomes, selected to illustrate the patterns identified above. Quote sampling is algorithmic and may not be representative.</p>
+<p>The category-level analysis points to which <em>systems</em> to target. Now we look at specific drug pairs to identify the individual treatments anchoring those successful combinations.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=ea2afe77">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=38788009">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a85cc931">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c0f5c937">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Tiered-Recommendations">Tiered Recommendations<a class="anchor-link" href="#Tiered-Recommendations">¶</a></h2>
+<p><strong>What this means:</strong> The specific drug pairs confirm the category-level findings. The top-performing pairs consistently include magnesium, electrolyte, CoQ10, and vitamin D — anchoring the Electrolyte/Mineral + Mitochondrial combination. The magnesium + CoQ10 pair (n=3, avg 0.74, 100% positive) and magnesium + vitamin D pair (n=3, avg 0.61, 100% positive) are the strongest signals. The bottom-performing pairs involve escitalopram + SSRI combinations and cromolyn sodium + ketotifen, suggesting that doubling down within a single mechanism (two antihistamines, or an SSRI + an SSRI category) is less effective than diversifying across mechanisms.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=a189e3e0">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=8d2760ee">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db25a780">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bbefbc38">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Conclusion">Conclusion<a class="anchor-link" href="#Conclusion">¶</a></h2><p>Negative treatment outcomes in the Long COVID community are not random. They cluster predictably around three axes, each independently confirmed:</p>
-<p><strong>Treatment class is the strongest predictor.</strong> SSRIs produce the highest negative outcome rates among commonly prescribed treatments — 2–3x the community baseline — even after controlling for comorbidities and polypharmacy in multivariate analysis. Micronutrient stacks (magnesium, CoQ10, electrolytes, quercetin) produce the lowest negative rates and the best NNT profile. This gap is large, statistically significant, and survives multiple sensitivity checks. A patient asking "what should I try first for Long COVID?" has a clear empirical answer: start with micronutrients before considering prescription interventions. This is not anti-medication — LDN is a prescription drug and performs excellently. It is specifically SSRIs that underperform.</p>
-<p><strong>Comorbidity profile independently shapes treatment response.</strong> Patients with POTS, PEM, or ME/CFS report worse outcomes across the board, not because they try different treatments, but because they get less benefit from the same ones. The logistic regression confirms this is not an artifact of drug choice. Treatment protocols for Long COVID should ask "what else does this patient have?" before selecting interventions.</p>
-<p><strong>Dose and combination effects matter as much as the compound.</strong> Low-dose naltrexone is a top performer; standard naltrexone is mediocre — same molecule, different dose, opposite outcomes. The co-occurrence heatmap reveals that negative outcomes cluster around specific drug combinations, not just individual drugs. And monotherapy is the worst-performing approach: patients on 3+ concurrent treatments fare significantly better.</p>
-<p><strong>The clearest actionable finding:</strong> SSRIs should not be first-line for Long COVID symptoms. They carry the highest negative outcome risk, they do not improve with polypharmacy the way other treatments do, and they underperform supplements that cost a fraction of the price. Patients already taking SSRIs for pre-existing depression should continue them — but prescribing SSRIs <em>for</em> Long COVID appears net harmful in this community's experience.</p>
+<h2 id="6.-Counterintuitive-Findings-Worth-Investigating">6. Counterintuitive Findings Worth Investigating<a class="anchor-link" href="#6.-Counterintuitive-Findings-Worth-Investigating">¶</a></h2><p>Three findings from this analysis would likely surprise both clinicians and patients.</p>
 </div>
 </div>
 </div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=6cb4b38d">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7f9bd2af">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d9d7c19">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Research-Limitations">Research Limitations<a class="anchor-link" href="#Research-Limitations">¶</a></h2><ol>
-<li><strong>Selection bias:</strong> Reddit users skew young, tech-savvy, and English-speaking. This community is not representative of all Long COVID patients.</li>
-<li><strong>Reporting bias:</strong> Users with strong experiences (positive or negative) are more likely to post. Moderate, unremarkable outcomes are underrepresented.</li>
-<li><strong>Survivorship bias:</strong> Users who recovered may leave the community. Those who remain are disproportionately treatment-resistant, inflating negative rates.</li>
-<li><strong>Recall bias:</strong> Users report retrospectively with variable delay between treatment and post.</li>
-<li><strong>Confounding:</strong> We cannot control for disease severity, illness duration, dosing protocols, treatment adherence, or prescriber expertise. SSRIs may be prescribed to sicker or more desperate patients, inflating their negative rate — though the logistic regression partially addresses this by controlling for comorbidity count.</li>
-<li><strong>No control group:</strong> All comparisons are within the community. There is no untreated baseline, making it impossible to distinguish "this treatment doesn't work" from "this treatment works but not enough."</li>
-<li><strong>Sentiment ≠ efficacy:</strong> User-reported sentiment captures subjective experience, not objective clinical improvement. A treatment that causes unpleasant side effects but improves biomarkers would score negatively here.</li>
-<li><strong>Temporal snapshot:</strong> One month of data. Treatments with delayed benefits (weeks to months before improvement) may appear ineffective in a short observation window. SSRIs typically require 4–6 weeks to reach full effect, which could partially explain their poor showing.</li>
+<p><strong>1. Beta blockers — the clinical first-line treatment — underperform in this community.</strong> Beta blockers are the standard-of-care first-line treatment for POTS, yet in this data they show only 40% positive reports (n=4 users) compared to ivabradine's 100% (n=3 users). The sample sizes are too small for a reliable comparison, but the direction contradicts clinical guidelines. Possible explanations: beta blockers may genuinely work less well for Long COVID-induced POTS specifically (as opposed to other POTS etiologies), or this community may over-represent patients for whom beta blockers failed (motivating them to seek online support). Clinicians should investigate whether Long COVID POTS responds differently to first-line treatments than classical POTS.</p>
+<p><strong>2. Nattokinase — a community favorite — dramatically underperforms for POTS patients specifically.</strong> Nattokinase (a fibrinolytic enzyme from fermented soybeans) is one of the most-discussed treatments in r/covidlonghaulers, yet for POTS users it shows only 25% positive reports versus ~69% in non-POTS users. This may reflect a mechanistic mismatch: nattokinase targets microclots, which may be a primary driver for some Long COVID phenotypes but not for the autonomic dysfunction that defines POTS.</p>
+<p><strong>3. Magnesium — a simple, inexpensive supplement — is the top performer for POTS.</strong> With 100% positive reports among 7 POTS users, magnesium outperforms every pharmaceutical in the dataset. While the small sample size and reporting bias warrant caution, this is consistent with magnesium's known role in autonomic regulation and the high prevalence of magnesium deficiency in POTS patients. It outperforms its already-good results in the non-POTS population, suggesting POTS patients may have a particular need that magnesium addresses.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e415d1b7">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="7.-Sensitivity-Check">7. Sensitivity Check<a class="anchor-link" href="#7.-Sensitivity-Check">¶</a></h2><p>Does the monotherapy vs 3+ finding survive if we restrict to strong-signal reports only and drop the 3 most extreme users?</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4f31cb9e">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=64d8ac4c">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Robustness assessment:</strong> The core finding — that POTS monotherapy significantly underperforms 3+ treatment combinations — is tested under two conditions. When the 3 most extreme users are dropped, the direction and magnitude of the effect should be preserved even if statistical significance weakens due to reduced sample size. The strong-signal-only restriction further tests whether the finding depends on weak or ambiguous treatment mentions. These checks help distinguish a genuine multi-treatment benefit from a statistical artifact driven by a few outliers.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bd43a243">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="8.-What-Patients-Are-Saying-(experimental)">8. What Patients Are Saying <em>(experimental)</em><a class="anchor-link" href="#8.-What-Patients-Are-Saying-(experimental)">¶</a></h2><p>Quotes from POTS patients illustrating the multi-treatment experience. Each quote is from a user with extracted POTS/dysautonomia diagnosis whose posts mention specific treatment outcomes.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=4523dfb5">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=62ca7b4a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The qualitative evidence mirrors the quantitative findings. Patients describe partial responses from single treatments that plateau, successful combinations spanning different mechanisms (vitamin D + ketotifen, propranolol + ivabradine + ketotifen), and failures from same-class stacking (dual antihistamines without other support). The quote about LDN providing only 20% improvement as monotherapy but motivating further treatment search is a common pattern in this cohort — single agents provide partial relief that drives continued experimentation, and those who find complementary treatments across mechanism classes report the best outcomes.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=45f3a08e">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="9.-Tiered-Recommendations">9. Tiered Recommendations<a class="anchor-link" href="#9.-Tiered-Recommendations">¶</a></h2><p>Based on the evidence strength, we stratify treatment recommendations into three tiers. Tier thresholds: <strong>Strong</strong> (n&gt;=30 reports, p&lt;0.05), <strong>Moderate</strong> (n&gt;=15 reports or p&lt;0.10), <strong>Preliminary</strong> (n&lt;15 reports).</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=680b829d">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2d1f9dc8">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="10.-Conclusion">10. Conclusion<a class="anchor-link" href="#10.-Conclusion">¶</a></h2><p>The central finding of this analysis is that Long COVID POTS responds poorly to single-target treatment strategies and requires a multi-system approach. POTS monotherapy users report a mean sentiment score of -0.39 (essentially net-negative experiences), while users who combine 3 or more treatments across different mechanistic categories report +0.38 — nearly matching the non-POTS population. This is not just a "try enough things and something works" pattern: the benefit concentrates in specific category combinations rather than scaling linearly with treatment count. The 3–4 treatment tier performs as well as the 5–7 tier, suggesting the goal is multi-system coverage, not maximum polypharmacy.</p>
+<p>The optimal strategy, based on this community data, is a three-layer approach: (1) Electrolyte/mineral foundation (magnesium and electrolytes, which show the highest positive rates and address POTS blood volume dysregulation), (2) mitochondrial/energy support (CoQ10, NAC, B-vitamins — targeting the cellular energy deficits that may underlie post-viral autonomic dysfunction), and (3) a mechanism-appropriate targeted therapy (antihistamines for patients with MCAS overlap, LDN for immune modulation, or autonomic agents for heart rate control). The Electrolyte + Mitochondrial combination alone achieves 89% positive outcomes in 9 users — the highest rate of any adequately-sampled pairing.</p>
+<p>Two cautionary findings emerged. First, psychiatric medications (SSRIs/antidepressants) as the primary POTS intervention are associated with the worst outcomes in this dataset (13% positive, n=8). This does not mean SSRIs are harmful or useless for POTS patients — they may address comorbid mood symptoms — but they should not be the sole treatment strategy. Second, nattokinase, despite strong community endorsement, underperforms specifically for POTS users (25% positive vs 69% in non-POTS), suggesting its fibrinolytic mechanism may not address the autonomic dysfunction at POTS's core.</p>
+<p>The finding that surprised us most: magnesium — an inexpensive, widely available supplement — is the single best-performing treatment for POTS in this dataset, with 100% positive reports from 7 users. While the small sample demands caution, this is consistent with published evidence on magnesium deficiency in POTS and its role in autonomic regulation. A POTS patient starting treatment should consider magnesium supplementation as a low-risk, potentially high-reward starting point, then build outward to electrolytes, mitochondrial support, and mechanism-targeted therapies as needed.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=5f10dd28">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="11.-Research-Limitations">11. Research Limitations<a class="anchor-link" href="#11.-Research-Limitations">¶</a></h2><ol>
+<li><p><strong>Selection bias:</strong> r/covidlonghaulers users are self-selected and likely represent more severe, treatment-resistant cases. POTS users who responded well to first-line treatments may not be posting. The 88 POTS users in this dataset are not representative of all Long COVID POTS patients.</p>
+</li>
+<li><p><strong>Reporting bias:</strong> Users who had dramatic responses (positive or negative) are more likely to post about them. Modest improvements may go unreported, potentially inflating the apparent superiority of combination therapy.</p>
+</li>
+<li><p><strong>Survivorship bias:</strong> We only see users who are still active in the community. Those who found effective treatment and moved on, or those who became too ill to post, are invisible. The successful 3+ treatment users may represent survivors who had the resources and energy to keep trying.</p>
+</li>
+<li><p><strong>Recall bias:</strong> Users retrospectively describing their treatment journey may misremember timing, dosages, or which specific treatments helped. Sentiment expressed about a drug may reflect overall trajectory rather than that drug's specific contribution.</p>
+</li>
+<li><p><strong>Confounding:</strong> Users on 3+ treatments differ systematically from monotherapy users. They may have better healthcare access, more knowledgeable providers, higher health literacy, or different disease severity. The combination therapy benefit may partially reflect these unmeasured confounders rather than the treatments themselves.</p>
+</li>
+<li><p><strong>No control group:</strong> There is no untreated POTS comparison group. All reported outcomes are relative to other treatments, not to placebo. Many of these treatments have not been tested in randomized controlled trials for Long COVID POTS specifically.</p>
+</li>
+<li><p><strong>Sentiment vs efficacy:</strong> Community sentiment captures perceived benefit, not objective clinical improvement. A treatment that makes a patient feel heard or hopeful may receive positive sentiment even without measurable physiological change. Conversely, a treatment with side effects may receive negative sentiment despite providing long-term benefit.</p>
+</li>
+<li><p><strong>Temporal snapshot:</strong> One month of data (March–April 2026) captures a cross-section of ongoing treatment journeys. Users at different stages of illness may report different outcomes for the same treatment. Seasonal effects, concurrent infections, or community trends may influence reporting patterns during this window.</p>
+</li>
 </ol>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=f1c6ae96">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=b514848e">
 </div>
 </main>
 </body>
