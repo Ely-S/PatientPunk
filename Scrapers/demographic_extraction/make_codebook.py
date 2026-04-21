@@ -3,7 +3,7 @@
 
 Reads one base schema + one extension schema to collect field descriptions,
 confidence ratings, ICD-10 codes, and pattern counts. Optionally reads the
-output CSV to add real coverage stats and example values.
+records CSV to add real coverage stats and example values.
 
 Usage:
     # Minimal (schema only):
@@ -12,19 +12,19 @@ Usage:
     # Full (schema + CSV for coverage/examples):
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../output/records.csv
+        --csv    ../../output/records.csv
 
     # Markdown output instead of CSV:
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../output/records.csv \\
+        --csv    ../../output/records.csv \\
         --format markdown
 
     # Custom output path:
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../output/records.csv \\
-        --output ../output/codebook.csv
+        --csv    ../../output/records.csv \\
+        --output ../../output/codebook.csv
 
 Output columns:
     field, source, description, confidence, icd10, frequency_hint,
@@ -40,9 +40,9 @@ from collections import defaultdict
 from pathlib import Path
 
 
-DEFAULT_BASE_SCHEMA = Path(__file__).parent / "schemas" / "base_schema.json"
-DEFAULT_OUTPUT_CSV  = Path(__file__).parent.parent / "output" / "codebook.csv"
-DEFAULT_OUTPUT_MD   = Path(__file__).parent.parent / "output" / "codebook.md"
+DEFAULT_BASE_SCHEMA = Path(__file__).resolve().parent / "schemas" / "base_schema.json"
+DEFAULT_OUTPUT_CSV  = Path(__file__).resolve().parent.parent.parent / "output" / "codebook.csv"
+DEFAULT_OUTPUT_MD   = Path(__file__).resolve().parent.parent.parent / "output" / "codebook.md"
 
 # Meta columns written by records_to_csv.py -- skip them in the codebook
 META_COLUMNS = {"author_hash", "source", "post_id", "text_count",
@@ -257,10 +257,10 @@ Examples:
   python make_codebook.py --schema schemas/covidlonghaulers_schema.json
   python make_codebook.py \\
       --schema schemas/covidlonghaulers_schema.json \\
-      --csv    ../output/records.csv
+      --csv    ../../output/records.csv
   python make_codebook.py \\
       --schema schemas/covidlonghaulers_schema.json \\
-      --csv    ../output/records.csv \\
+      --csv    ../../output/records.csv \\
       --format markdown
         """,
     )
@@ -279,7 +279,7 @@ Examples:
     )
     parser.add_argument(
         "--output", type=Path, default=None,
-        help="Output path (default: ../output/codebook.csv or .md depending on --format)",
+        help="Output path (default: ../../output/codebook.csv or .md depending on --format)",
     )
     parser.add_argument(
         "--format", choices=["csv", "markdown"], default="csv",

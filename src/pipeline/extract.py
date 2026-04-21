@@ -123,7 +123,7 @@ def run_extraction(config: "PipelineConfig"):
 
     # Load existing tagged_mentions as cache
     if tagged_path.exists() and not config.reclassify:
-        existing = json.loads(tagged_path.read_text())
+        existing = json.loads(tagged_path.read_text(encoding="utf-8"))
         id_to_drugs = {e["id"]: e["drugs_direct"] for e in existing}
     else:
         id_to_drugs = {}

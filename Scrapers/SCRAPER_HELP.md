@@ -87,7 +87,7 @@ Every run goes through the same phases — flags control what happens in each.
 
 ## Output Files
 
-All output is written to `output/`.
+All output is written to `output/` at the project root.
 
 ```
 output/
@@ -161,8 +161,8 @@ giving up on that item.
 After scraping, run the full extraction pipeline with a single command:
 
 ```bash
-python demographic_extraction/run_pipeline.py \
-    --schema demographic_extraction/schemas/covidlonghaulers_schema.json
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
 ```
 
 This runs all five phases in sequence:
@@ -179,13 +179,13 @@ Outputs: `output/records.csv` and `output/codebook.csv`.
 
 ```bash
 # Free run (regex only, no API key needed):
-python demographic_extraction/run_pipeline.py \
-    --schema demographic_extraction/schemas/covidlonghaulers_schema.json \
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json \
     --no-llm --no-discover
 
 # Resume after a crash at phase 3:
-python demographic_extraction/run_pipeline.py \
-    --schema demographic_extraction/schemas/covidlonghaulers_schema.json \
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json \
     --start-at 3
 ```
 

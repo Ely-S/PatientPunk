@@ -790,7 +790,7 @@ Examples:
     )
     parser.add_argument(
         "--input-dir", type=Path,
-        default=Path(__file__).parent.parent / "output",
+        default=Path(__file__).resolve().parent.parent.parent / "output",
         help="Path to the output/ directory from scrape_corpus.py",
     )
     parser.add_argument(

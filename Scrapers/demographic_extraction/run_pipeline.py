@@ -18,7 +18,7 @@ Usage:
     python run_pipeline.py --schema schemas/covidlonghaulers_schema.json
 
     # Skip Phase 1 discovery (reuse saved candidates):
-    python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --candidates ../output/temp/phase1_candidates.json
+    python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --candidates ../../output/temp/phase1_candidates.json
 
     # Skip LLM steps entirely (regex only, free):
     python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --no-llm
@@ -45,8 +45,8 @@ import time
 from pathlib import Path
 
 
-HERE = Path(__file__).parent
-OUTPUT_DIR = HERE.parent / "output"
+HERE = Path(__file__).resolve().parent
+OUTPUT_DIR = HERE.parent.parent / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
 
 PHASE_NAMES = {
@@ -365,7 +365,7 @@ Examples:
 
   # Supply saved Phase 1 candidates explicitly
   python run_pipeline.py --schema schemas/covidlonghaulers_schema.json \\
-      --candidates ../output/temp/phase1_candidates.json
+      --candidates ../../output/temp/phase1_candidates.json
 
   # Free-only run (no API calls): regex + CSV + codebook
   python run_pipeline.py --schema schemas/covidlonghaulers_schema.json \\

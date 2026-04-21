@@ -40,7 +40,7 @@ def extract_demographics(client, texts: list[str], *, max_posts: int = 10, max_c
     try:
         result = parse_json_object(raw)
     except Exception as e:
-        logging.log_error(f"Failed to parse demographics: {raw}: {e}")
+        log.error(f"Failed to parse demographics: {raw}: {e}")
         return {"age_bucket": None, "sex": None, "location": None, "conditions": []}
     raw_conditions = result.get("conditions")
     conditions = raw_conditions if isinstance(raw_conditions, list) else []
