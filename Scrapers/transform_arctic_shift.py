@@ -122,7 +122,7 @@ Examples:
     )
     parser.add_argument("--posts", required=True, type=Path, help="Path to posts NDJSON file (.ndjson, .jsonl, or .zst)")
     parser.add_argument("--comments", required=True, type=Path, help="Path to comments NDJSON file (.ndjson, .jsonl, or .zst)")
-    parser.add_argument("--output", type=Path, default=Path("data/subreddit_posts.json"), help="Output path (default: data/subreddit_posts.json)")
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent.parent / "data" / "subreddit_posts.json", help="Output path (default: data/subreddit_posts.json)")
     parser.add_argument("--subreddit", default="covidlonghaulers", help="Subreddit name for filtering (default: covidlonghaulers)")
     args = parser.parse_args()
 
