@@ -39,7 +39,7 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     """Main canonicalization logic. Returns {raw_name: canonical_name}."""
     client = config.client
     tagged_path = config.path(TAGGED_MENTIONS)
-    tagged = json.loads(tagged_path.read_text())
+    tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
     all_drugs = sorted({d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])})
     log.info(f"{len(tagged)} entries, {len(all_drugs)} unique drug names.")
 
