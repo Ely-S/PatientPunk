@@ -28,15 +28,15 @@ Usage:
     python discover_fields.py --no-fill
 
     # Custom input path
-    python discover_fields.py --input-dir ../output/
+    python discover_fields.py --input-dir ../../output/
 
 Requires:
     pip install anthropic python-dotenv
 
 Output:
     schemas/discovered_{timestamp}.json                  # Generated extension schema
-    output/discovered_records_{schema_id}.json           # Full extraction results
-    output/discovered_field_report_{schema_id}.json      # Discovery report + coverage stats
+    output/discovered_records_{schema_id}.json             # Full extraction results
+    output/discovered_field_report_{schema_id}.json        # Discovery report + coverage stats
 """
 
 import argparse
@@ -1583,7 +1583,7 @@ Standalone workflow (no --schema):
   python discover_fields.py --limit 20 --no-fill         # cheap test run
   python discover_fields.py --workers 1                  # sequential (debug)
   python discover_fields.py --resume                     # continue interrupted Phase 4
-  python discover_fields.py --candidates output/phase1_candidates.json  # skip Phase 1
+  python discover_fields.py --candidates ../../output/phase1_candidates.json  # skip Phase 1
   python discover_fields.py --sample 50                  # random 50-item sample (diverse + cheap)
   python discover_fields.py --per-item-chars 0           # send full text per item (thorough)
 
@@ -1601,7 +1601,7 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
     )
     parser.add_argument(
         "--input-dir", type=Path,
-        default=Path(__file__).parent.parent / "output",
+        default=Path(__file__).resolve().parent.parent.parent / "output",
         help="Path to the output/ directory from scrape_corpus.py",
     )
     parser.add_argument(

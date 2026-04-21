@@ -6,7 +6,7 @@ biomedical signals from post and comment text using regex pattern matching.
 
 Usage:
     python extract_biomedical.py                            # base fields, default input path
-    python extract_biomedical.py --input-dir ../output/     # explicit input path
+    python extract_biomedical.py --input-dir ../../output/    # explicit input path
     python extract_biomedical.py --text "I'm a 34F with POTS"  # test single string
     python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
 
@@ -937,7 +937,7 @@ Examples:
   python extract_biomedical.py
   python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
   python extract_biomedical.py --text "34F with POTS, diagnosed after 3 years"
-  python extract_biomedical.py --input-dir /path/to/output
+  python extract_biomedical.py --input-dir /path/to/data
 
 Output:
   output/patientpunk_records_base.json         one v2.0 record per user/post
@@ -953,9 +953,9 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path(__file__).parent.parent / "output",
+        default=Path(__file__).resolve().parent.parent.parent / "output",
         help="Path to the output/ directory from scrape_corpus.py "
-             "(default: ../output/ relative to this script)",
+             "(default: <repo>/output/)",
     )
     parser.add_argument(
         "--text",
