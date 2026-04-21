@@ -44,7 +44,7 @@ def run_pipeline(config: PipelineConfig, *, skip_canonicalize: bool = False) -> 
         _banner("CANONICALIZE")
         run_canonicalization(config)
     else:
-        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text())
+        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text(encoding="utf-8"))
         all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
         count = upsert_treatments(config.db_path, all_drugs)
         log.info(f"{count} treatments in database (no aliases).")
