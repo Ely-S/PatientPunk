@@ -17,3 +17,4 @@ output/
 reddit_sample_data/outputs/
 data/
 *.zip
+*.db

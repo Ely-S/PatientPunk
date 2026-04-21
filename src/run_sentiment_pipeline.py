@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_pipeline.py — Run the full drug mention database pipeline.
+run_sentiment_pipeline.py — Run the full drug sentiment database pipeline.
 
 Steps:
   1. extract      — Extract drug mentions from posts → tagged_mentions.json
@@ -8,9 +8,9 @@ Steps:
   3. classify     — Classify sentiment for each entry×drug → treatment_reports table
 
 Usage:
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs --skip-canonicalize
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs --limit 50
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --skip-canonicalize
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
 import sys
@@ -44,7 +44,7 @@ def run_pipeline(config: PipelineConfig, *, skip_canonicalize: bool = False) -> 
         _banner("CANONICALIZE")
         run_canonicalization(config)
     else:
-        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text())
+        tagged = json.loads(config.path(TAGGED_MENTIONS).read_text(encoding="utf-8"))
         all_drugs = {d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", []) if d.strip()}
         count = upsert_treatments(config.db_path, all_drugs)
         log.info(f"{count} treatments in database (no aliases).")

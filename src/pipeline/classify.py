@@ -11,7 +11,7 @@ so progress is preserved across crashes. On re-run, pairs already in the databas
 are skipped unless --reclassify is set.
 
 Usage:
-    python src/run_pipeline.py --db data/posts.db --output-dir outputs
+    python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs
     # Or standalone (run from src/):
     python -m scripts.classify_sentiment --output-dir ../outputs
 """
@@ -135,7 +135,7 @@ def run_classification(
 
     tagged_path = config.path(TAGGED_MENTIONS)
 
-    tagged = json.loads(tagged_path.read_text())
+    tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
     log.info(f"Loaded {len(tagged)} tagged entries.")
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
