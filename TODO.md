@@ -43,6 +43,9 @@ The query interface is what turns the database into something a patient or resea
 - [ ] `query.py` CLI with `--drug`, `--condition`, `--sex`, `--age` filters
 - [ ] Optional minimal web UI (FastAPI or Flask)
 
+**Security:** 
+- [ ]Reddit posts are untrusted LLM input — guard against prompt injection and sentiment bias via Pydantic enum gates, cross-model diffing, and input sanitization. See previous session notes for full threat model.
+
 **Inductive Variable Finding** (low priority, blocked on pipeline unification)
 
 The prototype in `Scrapers/demographic_extraction/discover_fields.py` scans a corpus without a predefined schema and proposes candidate variables. In the new architecture this becomes a schema authoring tool: run it on an unfamiliar community, get a draft schema JSON, a researcher curates it, then standard extraction runs. This is the piece that makes PatientPunk genuinely self-bootstrapping for new research questions. It is scientifically an incredibly interesting addition to our system, but it has no stable floor to stand on until the unified pipeline is working. Do not touch this until the unification work is done. (SHAUN!  LOOKING AT YOU!  DON'T PLAY WITH THE TOY UNTIL YOU HAVE FINISHED CLEANING OUR ROOM)

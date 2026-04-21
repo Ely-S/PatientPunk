@@ -16,3 +16,4 @@ __pycache__/
 output/
 reddit_sample_data/outputs/
 *.zip
+/.pytest_cache/
