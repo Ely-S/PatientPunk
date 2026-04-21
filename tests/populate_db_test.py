@@ -1,9 +1,11 @@
 """Test that a fresh DB can be created from schema.sql and populated with sample data."""
 import json
+import re
 import sqlite3
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import NamedTuple
 
 import pytest
@@ -14,6 +16,73 @@ from import_posts import import_reddit_posts
 from run_sentiment_pipeline import run_pipeline
 from extract_demographics_conditions import run_demographics
 from utilities import PipelineConfig, get_client
+
+
+# ---------------------------------------------------------------------------
+# Fake Anthropic client for deterministic pipeline testing
+# ---------------------------------------------------------------------------
+#
+# The sentiment pipeline makes three kinds of LLM calls (extract, canonicalize,
+# prefilter+classify). Instead of hitting the real API in CI, we route by
+# prompt-content fingerprint and return canned JSON.
+#
+# Expected flow over sample_data.json (LDN discussion):
+#   extract     → Post1/Post2 mention LDN directly; comments don't.
+#                 Upstream context propagates LDN from Post1 to Comment1/2.
+#   canonicalize→ {"ldn": "ldn"} (only one drug).
+#   is_only_questions() drops Post1 ("Do you like LDN?") and Comment2
+#                 ("Have you tried the gym?") before prefilter.
+#   prefilter   → Post2 is an article (no personal experience) → no;
+#                 Comment1 ("I love it so much") → yes.
+#   classify    → one pair reaches classify: (Comment1, ldn)
+#                 → positive / strong.
+
+def _stub_response(messages, system):
+    prompt = messages[0]["content"] if messages else ""
+
+    # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
+    if "identify true synonyms" in prompt:
+        start = prompt.index("[")
+        end = prompt.rindex("]") + 1
+        names = json.loads(prompt[start:end])
+        return json.dumps({n: n for n in names})
+
+    # Prefilter: "Does the AUTHOR express personal experience" is in PREFILTER_PROMPT.
+    if "Does the AUTHOR express personal experience" in prompt:
+        blocks = re.split(r"--- \d+ ---", prompt)[1:]
+        return json.dumps(["yes" if "I love it" in b else "no" for b in blocks])
+
+    # Classify (batch): per classify_batch() in src/pipeline/classify.py.
+    if "Classify each entry separately" in prompt:
+        n = prompt.count("--- Entry ")
+        return json.dumps([{"sentiment": "positive", "signal": "strong"}] * n)
+
+    # Classify (per-item fallback): system prompt identifies it.
+    if system and "Classify Reddit posts/comments" in (
+        system if isinstance(system, str) else json.dumps(system)
+    ):
+        return json.dumps({"sentiment": "positive", "signal": "strong"})
+
+    # Extract: EXTRACT_PROMPT text fingerprint.
+    if "list all drugs, medications, supplements" in prompt:
+        blocks = re.split(r"--- \d+ ---", prompt)[1:]
+        return json.dumps([["ldn"] if "ldn" in b.lower() else [] for b in blocks])
+
+    return "[]"
+
+
+class _FakeMessages:
+    def create(self, *, messages, system=None, **_):
+        return SimpleNamespace(
+            content=[SimpleNamespace(text=_stub_response(messages, system))]
+        )
+
+
+class FakeAnthropic:
+    """Stand-in for anthropic.Anthropic — no network, deterministic responses."""
+
+    def __init__(self):
+        self.messages = _FakeMessages()
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 SAMPLE = Path(__file__).parent / "sample_data.json"
@@ -76,7 +145,7 @@ def test_extract_demographic_data(db: DB):
 def test_treatment_end2end_pipeline(db: DB):
     """Test that the treatment canonicalization pipeline works."""
     config = PipelineConfig(
-        client=get_client(),
+        client=FakeAnthropic(),
         output_dir=db.path.parent,
         db_path=db.path,
     )

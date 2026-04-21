@@ -2,6 +2,7 @@
 # Prompts for the drug mention pipeline
 
 # Used by extract_mentions.py
+# Note: in the future we may include diet and lifestyle changes. 
 EXTRACT_PROMPT = """\
 For each text below, list all drugs, medications, supplements, and medical interventions mentioned.
 Include brand names, generic names, abbreviations (e.g. LDN, LDA), informal names,
@@ -36,6 +37,8 @@ Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "f
 """
 
 # Used by classify_sentiment.py (prefilter step)
+# Note: in the future we may include diet and lifestyle changes. 
+# Additionally, we may want to change the semantics of the reply. 
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
 Does the AUTHOR express personal experience with the specified treatment?
