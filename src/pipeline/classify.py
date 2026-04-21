@@ -246,11 +246,6 @@ def run_classification(
     drug_counter: Counter = Counter()
     done, total = 0, len(to_classify)
 
-    def _batch_iter():
-        for items in by_drug.values():
-            for i in range(0, len(items), BATCH_SIZE):
-                yield items[i:i + BATCH_SIZE]
-
     def _classify_one_batch(batch):
         """Classify a single batch, with per-item fallback on failure."""
         drug = batch[0][1]
@@ -277,7 +272,7 @@ def run_classification(
 
     # Bounded submission: at most workers * 2 futures in flight at once.
     # As each completes the next batch is submitted (backpressure).
-    batch_iter = _batch_iter()
+    batch_iter = (batch for items in by_drug.values() for batch in itertools.batched(items, BATCH_SIZE))
     max_inflight = max(config.workers * 2, 1)
 
     with ThreadPoolExecutor(max_workers=config.workers) as pool:
