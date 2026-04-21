@@ -12,10 +12,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import extract_demographics_conditions
 from import_posts import import_reddit_posts
 from run_sentiment_pipeline import run_pipeline
 from extract_demographics_conditions import run_demographics
-from utilities import PipelineConfig, get_client
+from utilities import PipelineConfig
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,15 @@ from utilities import PipelineConfig, get_client
 
 def _stub_response(messages, system):
     prompt = messages[0]["content"] if messages else ""
+
+    # Demographics: fingerprint from DEMOGRAPHICS_PROMPT.
+    if "Given these Reddit posts by a single user" in prompt:
+        return json.dumps({
+            "age_bucket": None,
+            "sex": None,
+            "location": None,
+            "conditions": [],
+        })
 
     # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
     if "identify true synonyms" in prompt:
@@ -129,8 +139,9 @@ def test_populate_users_and_posts(db: DB):
     assert post_count ==  4
     assert user_count == 4
 
-def test_extract_demographic_data(db: DB):
+def test_extract_demographic_data(db: DB, monkeypatch):
     """Test that the demographic extraction pipeline works."""
+    monkeypatch.setattr(extract_demographics_conditions, "get_client", FakeAnthropic)
     run_demographics(db.path)
     user_profiles = db.conn.execute("SELECT * from user_profiles").fetchall()
     conditions = db.conn.execute("SELECT * FROM conditions").fetchall()
