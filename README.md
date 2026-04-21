@@ -189,10 +189,13 @@ Add `--limit 50` for a quick demo run.
 | `--db` | Path to SQLite database (required) |
 | `--output-dir` | Directory for intermediate files (required) |
 | `--limit N` | Process only the first N posts/comments (default: all) |
+| `--skip-extract` | Skip extraction step (use existing tagged_mentions.json) |
 | `--skip-canonicalize` | Skip synonym normalization |
+| `--skip-prefilter` | Skip prefilter, send all pairs directly to classifier |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
 | `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
+| `--workers N` | Parallel workers for LLM calls during extract/classify (default: 3, use 1 for sequential) |
 
 Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
 
@@ -202,7 +205,7 @@ Steps 3a and 3b are independent — run in either order. Both are keyed on `auth
 
 ### Step 1 — Extract (`pipeline/extract.py`)
 
-Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (20 texts per call) with automatic retry on mismatch (splits into smaller batches, up to 2 levels of recursion). Saves incrementally every 5 batches.
+Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (10 texts per call) with automatic retry on any output count mismatch — splits into smaller sub-batches and retries, up to 2 levels of recursion. Any mismatch is treated as a failure; results are never silently truncated or padded. Saves to `tagged_mentions.json` every 1000 items.
 
 **Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name. 
 
@@ -222,7 +225,7 @@ Can be skipped with `--skip-canonicalize` (raw drug names inserted into the trea
 
 For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?") and research discussions. Filtered entries are not persisted.
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?"), research discussions, and off-topic replies. Results cached to `prefilter_results.json` — skipped on re-run.
 
 2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
 
@@ -249,7 +252,7 @@ Re-running the pipeline does not delete old data. The classify step skips `(post
 
 The pipeline is designed to resume after interruptions:
 
-- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 5 batches.
+- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 1000 items.
 - **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
 

@@ -5,8 +5,10 @@ extract_mentions.py — Extract drug mentions from Reddit posts.
 Step 1 of the pipeline. Reads posts from SQLite and outputs tagged_mentions.json
 with drugs found in each post/comment (direct mentions + inherited from upstream comments).
 """
+import itertools
 import json
 from collections import Counter
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,8 +19,8 @@ if TYPE_CHECKING:
 from prompts.intervention_config import EXTRACT_PROMPT
 from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
 
-BATCH_SIZE = 20
-SAVE_EVERY = 5
+BATCH_SIZE = 10
+SAVE_EVERY = 50  # batches between checkpoint writes
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
@@ -130,7 +132,8 @@ def run_extraction(config: "PipelineConfig"):
              if item["id"] not in id_to_drugs and item["text"].strip()]
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
-    def save_tagged():
+    def save_tagged_atomic() -> list:
+        """Recompute upstream context and write atomically via a temp file."""
         upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged = [
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
@@ -138,31 +141,49 @@ def run_extraction(config: "PipelineConfig"):
             for item in all_items
             if id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"])
         ]
-        tagged_path.write_text(json.dumps(tagged, indent=2))
+        tmp = tagged_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(tagged, indent=2))
+        tmp.replace(tagged_path)
         return tagged
 
-    # Process in batches
+    # Bounded parallel extraction: at most workers * 4 futures in flight at once.
+    # As each future completes the next batch is submitted (backpressure).
+    # Checkpoint written every SAVE_EVERY completed batches.
+    all_batches = [to_do[i:i + BATCH_SIZE] for i in range(0, len(to_do), BATCH_SIZE)]
+    batch_iter = iter(all_batches)
+    done_ext = 0
     batches_since_save = 0
-    for i in range(0, len(to_do), BATCH_SIZE):
-        batch = to_do[i:i + BATCH_SIZE]
-        texts = [text for _, text in batch]
-        batch_results = extract_batch(client, texts)
-        for (item_id, _), drugs in zip(batch, batch_results):
-            flat = []
-            for d in (drugs or []):
-                if isinstance(d, str):
-                    flat.append(d.lower().strip())
-                elif isinstance(d, list):
-                    flat.extend(x.lower().strip() for x in d if isinstance(x, str))
-            id_to_drugs[item_id] = flat
+    max_inflight = max(config.workers * 4, 1)
 
-        batches_since_save += 1
-        if batches_since_save >= SAVE_EVERY:
-            save_tagged()
-            batches_since_save = 0
-        log.info(f"Extracted {min(i + BATCH_SIZE, len(to_do))}/{len(to_do)}...")
+    with ThreadPoolExecutor(max_workers=config.workers) as pool:
+        pending: dict[Future, list] = {}
 
-    tagged = save_tagged()
+        # Seed the pool
+        for batch in itertools.islice(batch_iter, max_inflight):
+            f = pool.submit(extract_batch, client, [t for _, t in batch])
+            pending[f] = batch
+
+        while pending:
+            future = next(as_completed(pending))
+            batch = pending.pop(future)
+
+            for (item_id, _), drugs in zip(batch, future.result()):
+                flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                id_to_drugs[item_id] = flat
+
+            done_ext += len(batch)
+            done_ext += len(batch)
+            if done_ext % (BATCH_SIZE * 100) == 0:
+                save_tagged()
+            log.info(f"Extracted {done_ext}/{len(to_do)}...")
+
+            # Submit next batch to keep pool saturated
+            next_batch = next(batch_iter, None)
+            if next_batch is not None:
+                f = pool.submit(extract_batch, client, [t for _, t in next_batch])
+                pending[f] = next_batch
+
+    tagged = save_tagged_atomic()
 
     drug_counts = Counter(d for e in tagged for d in e["drugs_direct"])
     log.info(f"{len(tagged)} entries tagged.")

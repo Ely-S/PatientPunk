@@ -2,11 +2,13 @@
 # Prompts for the drug mention pipeline
 
 # Used by extract_mentions.py
+# Note: in the future we may include diet and lifestyle changes. 
 EXTRACT_PROMPT = """\
 For each text below, list all drugs, medications, supplements, and medical interventions mentioned.
 Include brand names, generic names, abbreviations (e.g. LDN, LDA), informal names,
 drug categories (e.g. "antihistamines", "h1 blocker", "beta blocker"), enzymes/supplements
 (e.g. "DAO", "probiotics", "nattokinase"), and generic references (e.g. "an oral antibiotic").
+Do not include diet and lifestyle changes!!!
 Return ONLY a JSON array of arrays — one inner array per text, each containing lowercase strings.
 If none are mentioned, use an empty array [].
 Example: [["ldn", "low dose naltrexone"], ["h1 antihistamines", "dao", "nattokinase"], ["oral antibiotic", "probiotic"], []]
@@ -35,16 +37,19 @@ Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "f
 """
 
 # Used by classify_sentiment.py (prefilter step)
+# Note: in the future we may include diet and lifestyle changes. 
+# Additionally, we may want to change the semantics of the reply. 
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
 Does the AUTHOR express personal experience with the specified treatment?
-"Treatment" includes drugs, supplements, therapies, devices, lifestyle interventions,
-exercises, diets, and any health-related practice (e.g. infrared sauna, epsom salt baths,
-physical therapy).
-Also 'yes' if the reply implies it works by saying NOT doing it made things worse.
+"Treatment" includes drugs, supplements, but not diet and lifestyle changes!!!
+IMPORTANT: Use the "Replying to" context to resolve what the comment refers to.
+Short replies like "Helps me", "wasn't for me", "same here" count as YES if the
+upstream comment establishes the treatment and the reply expresses personal experience.
 Answer 'no' if:
 - The author is asking someone else if they have tried it (e.g. "Have you tried X?")
 - The author is discussing research, articles, or studies rather than personal use
+- The reply is just encouragement, thanks, or off-topic (e.g. "Congrats!", "Ok thanks")
 Return a JSON array of strings, each 'yes' or 'no', in order.
 """
 
