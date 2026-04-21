@@ -15,10 +15,10 @@ This script:
 Usage:
     python transform_arctic_shift.py --posts posts.ndjson --comments comments.ndjson
     python transform_arctic_shift.py --posts posts.zst --comments comments.zst
-    python transform_arctic_shift.py --posts posts.ndjson --comments comments.ndjson --output data/subreddit_posts.json
+    python transform_arctic_shift.py --posts posts.ndjson --comments comments.ndjson --output output/subreddit_posts.json
 
-The output is compatible with both pipelines (Shaun's variable_extraction
-and Polina's src/run_pipeline.py).
+The output is compatible with both pipelines (Scrapers/demographic_extraction/
+and src/run_pipeline.py).
 """
 
 import argparse
@@ -120,7 +120,7 @@ Examples:
     )
     parser.add_argument("--posts", required=True, type=Path, help="Path to posts NDJSON file (.ndjson, .jsonl, or .zst)")
     parser.add_argument("--comments", required=True, type=Path, help="Path to comments NDJSON file (.ndjson, .jsonl, or .zst)")
-    parser.add_argument("--output", type=Path, default=Path(__file__).parent.parent / "data" / "subreddit_posts.json", help="Output path (default: data/subreddit_posts.json)")
+    parser.add_argument("--output", type=Path, default=Path(__file__).parent.parent / "output" / "subreddit_posts.json", help="Output path (default: output/subreddit_posts.json)")
     parser.add_argument("--subreddit", default="covidlonghaulers", help="Subreddit name for filtering (default: covidlonghaulers)")
     args = parser.parse_args()
 

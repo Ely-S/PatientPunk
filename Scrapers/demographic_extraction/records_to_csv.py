@@ -11,12 +11,12 @@ Usage:
     python records_to_csv.py
 
     # Specific input / output
-    python records_to_csv.py --input ../../data/merged_records_base.json --output ../../data/records.csv
+    python records_to_csv.py --input ../../output/merged_records_base.json --output ../../output/records.csv
 
     # Combine base + discovered fields into one CSV
     python records_to_csv.py \\
-        --input ../../data/merged_records_base.json \\
-                ../../data/discovered_records_covidlonghaulers_v1.json
+        --input ../../output/merged_records_base.json \\
+                ../../output/discovered_records_covidlonghaulers_v1.json
 
     # Include provenance columns (age__provenance, conditions__provenance, …)
     python records_to_csv.py --provenance
@@ -36,8 +36,8 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_INPUT = Path(__file__).resolve().parent.parent.parent / "data" / "merged_records_base.json"
-DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "data" / "records.csv"
+DEFAULT_INPUT = Path(__file__).resolve().parent.parent.parent / "output" / "merged_records_base.json"
+DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent / "output" / "records.csv"
 
 # Metadata columns always written first
 META_COLUMNS = [
@@ -146,10 +146,10 @@ def main():
         epilog="""
 Examples:
   python records_to_csv.py
-  python records_to_csv.py --input ../../data/merged_records_base.json --output ../../data/records.csv
+  python records_to_csv.py --input ../../output/merged_records_base.json --output ../../output/records.csv
   python records_to_csv.py \\
-      --input ../../data/merged_records_base.json \\
-              ../../data/discovered_records_covidlonghaulers_v1.json
+      --input ../../output/merged_records_base.json \\
+              ../../output/discovered_records_covidlonghaulers_v1.json
   python records_to_csv.py --provenance
   python records_to_csv.py --sep "; "
 

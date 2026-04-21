@@ -33,7 +33,7 @@ REDDIT_USER_AGENT = "patientpunk-scraper/0.1 (corpus research)"
 SUBREDDIT = "covidlonghaulers"
 REQUEST_DELAY = 1.0       # seconds between Arctic Shift calls
 REDDIT_REQUEST_DELAY = 7  # seconds between Reddit calls (~10/min unauthenticated)
-OUTPUT_DIR = Path(__file__).parent.parent / "data"
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
 USERS_DIR = OUTPUT_DIR / "users"
 
 
@@ -112,7 +112,7 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
             print(f"    {label} — page {page} ({len(all_items)} items so far)...")
 
         data = arctic_get(endpoint, params)
-        items = data.get("data", [])
+        items = data.get("output", [])
         if not items:
             break
 
@@ -162,7 +162,7 @@ def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
 def fetch_full_post(post_id: str) -> dict | None:
     """Fetch full metadata for a single post by ID."""
     data = arctic_get("/api/posts/ids", {"ids": post_id})
-    items = data.get("data", [])
+    items = data.get("output", [])
     return items[0] if items else None
 
 
@@ -302,7 +302,7 @@ def fetch_reddit_profile(username: str) -> dict | None:
         print(f"    Could not fetch Reddit profile: {e}")
         return None
 
-    user_data = data.get("data", {})
+    user_data = data.get("output", {})
     if not user_data:
         return None
 
@@ -361,9 +361,9 @@ EXAMPLES
 
 OUTPUT
 ------
-  data/subreddit_posts.json       All posts in window (+ comments if --comments)
-  data/users/{hash}.json          One file per author (only with --user-histories)
-  data/corpus_metadata.json       Run summary and stats
+  output/subreddit_posts.json       All posts in window (+ comments if --comments)
+  output/users/{hash}.json          One file per author (only with --user-histories)
+  output/corpus_metadata.json       Run summary and stats
 
   All usernames are SHA-256 hashed. Raw usernames are never written to disk.
 

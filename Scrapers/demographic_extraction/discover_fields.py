@@ -28,15 +28,15 @@ Usage:
     python discover_fields.py --no-fill
 
     # Custom input path
-    python discover_fields.py --input-dir ../../data/
+    python discover_fields.py --input-dir ../../output/
 
 Requires:
     pip install anthropic python-dotenv
 
 Output:
     schemas/discovered_{timestamp}.json                  # Generated extension schema
-    data/discovered_records_{schema_id}.json             # Full extraction results
-    data/discovered_field_report_{schema_id}.json        # Discovery report + coverage stats
+    output/discovered_records_{schema_id}.json             # Full extraction results
+    output/discovered_field_report_{schema_id}.json        # Discovery report + coverage stats
 """
 
 import argparse
@@ -1583,15 +1583,15 @@ Standalone workflow (no --schema):
   python discover_fields.py --limit 20 --no-fill         # cheap test run
   python discover_fields.py --workers 1                  # sequential (debug)
   python discover_fields.py --resume                     # continue interrupted Phase 4
-  python discover_fields.py --candidates ../../data/phase1_candidates.json  # skip Phase 1
+  python discover_fields.py --candidates ../../output/phase1_candidates.json  # skip Phase 1
   python discover_fields.py --sample 50                  # random 50-item sample (diverse + cheap)
   python discover_fields.py --per-item-chars 0           # send full text per item (thorough)
 
 Output:
   --schema provided  : updates the schema file in place
   no --schema        : schemas/discovered_{timestamp}.json  (new file each run)
-  data/discovered_records_{schema_id}.json             extraction results (saved incrementally)
-  data/discovered_field_report_{schema_id}.json        coverage stats and report
+  output/discovered_records_{schema_id}.json             extraction results (saved incrementally)
+  output/discovered_field_report_{schema_id}.json        coverage stats and report
 
 All auto-discovered fields are tagged source: llm_discovered and _discovered_at (timestamp).
 
@@ -1601,8 +1601,8 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
     )
     parser.add_argument(
         "--input-dir", type=Path,
-        default=Path(__file__).resolve().parent.parent.parent / "data",
-        help="Path to the data/ directory from scrape_corpus.py",
+        default=Path(__file__).resolve().parent.parent.parent / "output",
+        help="Path to the output/ directory from scrape_corpus.py",
     )
     parser.add_argument(
         "--schema", type=Path, default=None,
@@ -1633,8 +1633,8 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         "--candidates", type=Path, default=None,
         help=(
             "Load Phase 1 candidates from a saved JSON file and skip Phase 1 entirely. "
-            "Phase 1 results are always saved to data/phase1_candidates.json after each run. "
-            "Note: run_pipeline.py auto-detects data/phase1_candidates.json and passes it "
+            "Phase 1 results are always saved to output/phase1_candidates.json after each run. "
+            "Note: run_pipeline.py auto-detects output/phase1_candidates.json and passes it "
             "automatically — use --candidates here to override or specify a different file."
         ),
     )

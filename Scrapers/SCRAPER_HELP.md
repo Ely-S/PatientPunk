@@ -87,10 +87,10 @@ Every run goes through the same phases — flags control what happens in each.
 
 ## Output Files
 
-All output is written to `data/` at the project root.
+All output is written to `output/` at the project root.
 
 ```
-data/
+output/
   subreddit_posts.json      # All posts in the time window (+ comments if --comments)
   users/
     {sha256_hash}.json      # One file per unique post author (only with --user-histories)
@@ -128,7 +128,7 @@ exist only in memory during the scrape and are never written to disk.
 To verify no raw usernames leaked into output:
 ```bash
 # Spot-check a known username
-grep -r "actual_username" ../data/   # should return nothing
+grep -r "actual_username" output/   # should return nothing
 ```
 
 ---
@@ -161,8 +161,8 @@ giving up on that item.
 After scraping, run the full extraction pipeline with a single command:
 
 ```bash
-python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
 ```
 
 This runs all five phases in sequence:
@@ -175,17 +175,17 @@ This runs all five phases in sequence:
 | 4 | `records_to_csv.py` | Flattens all records to a flat CSV |
 | 5 | `make_codebook.py` | Generates a data dictionary / codebook |
 
-Outputs: `data/records.csv` and `data/codebook.csv`.
+Outputs: `output/records.csv` and `output/codebook.csv`.
 
 ```bash
 # Free run (regex only, no API key needed):
-python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json \
     --no-llm --no-discover
 
 # Resume after a crash at phase 3:
-python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json \
     --start-at 3
 ```
 

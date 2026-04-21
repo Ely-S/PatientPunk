@@ -31,9 +31,9 @@ Requires:
     Copy .env.example to .env and add your Anthropic API key.
 
 Output:
-    data/llm_records_{schema_id}.json           # LLM extraction records
-    data/llm_field_suggestions_{schema_id}.json  # Suggested new fields
-    data/merged_records_{schema_id}.json         # Combined regex + LLM (--merge)
+    output/llm_records_{schema_id}.json           # LLM extraction records
+    output/llm_field_suggestions_{schema_id}.json  # Suggested new fields
+    output/merged_records_{schema_id}.json         # Combined regex + LLM (--merge)
 """
 
 import argparse
@@ -790,8 +790,8 @@ Examples:
     )
     parser.add_argument(
         "--input-dir", type=Path,
-        default=Path(__file__).resolve().parent.parent.parent / "data",
-        help="Path to the data/ directory from scrape_corpus.py",
+        default=Path(__file__).resolve().parent.parent.parent / "output",
+        help="Path to the output/ directory from scrape_corpus.py",
     )
     parser.add_argument(
         "--text", type=str, default=None,

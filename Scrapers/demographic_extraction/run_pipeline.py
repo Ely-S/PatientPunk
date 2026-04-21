@@ -10,7 +10,7 @@ Steps:
   4  records_to_csv.py       Flatten records to CSV
   5  make_codebook.py        Generate data dictionary
 
-Intermediate files are written to data/temp/ and wiped at the start of
+Intermediate files are written to output/temp/ and wiped at the start of
 each full run (--start-at 1). Pass --no-clean to skip the wipe.
 
 Usage:
@@ -18,7 +18,7 @@ Usage:
     python run_pipeline.py --schema schemas/covidlonghaulers_schema.json
 
     # Skip Phase 1 discovery (reuse saved candidates):
-    python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --candidates ../../data/temp/phase1_candidates.json
+    python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --candidates ../../output/temp/phase1_candidates.json
 
     # Skip LLM steps entirely (regex only, free):
     python run_pipeline.py --schema schemas/covidlonghaulers_schema.json --no-llm
@@ -46,7 +46,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-OUTPUT_DIR = HERE.parent.parent / "data"
+OUTPUT_DIR = HERE.parent.parent / "output"
 TEMP_DIR = OUTPUT_DIR / "temp"
 
 PHASE_NAMES = {
@@ -350,12 +350,12 @@ Phases:
   5  make_codebook.py        Generate data dictionary / codebook
 
 Intermediate files:
-  All intermediate files go to data/temp/ and are wiped at the start
+  All intermediate files go to output/temp/ and are wiped at the start
   of each full run (--start-at 1). Final outputs (records.csv, codebook.csv)
-  stay in data/. Pass --no-clean to keep intermediates from a prior run.
+  stay in output/. Pass --no-clean to keep intermediates from a prior run.
 
 Auto-detect behaviour:
-  If data/temp/phase1_candidates.json exists when step 3 runs, it is used
+  If output/temp/phase1_candidates.json exists when step 3 runs, it is used
   automatically (saves Phase 1 cost). A notice is printed. Pass --candidates
   to override the file used, or use --no-clean to preserve and reuse it.
 
@@ -365,7 +365,7 @@ Examples:
 
   # Supply saved Phase 1 candidates explicitly
   python run_pipeline.py --schema schemas/covidlonghaulers_schema.json \\
-      --candidates ../../data/temp/phase1_candidates.json
+      --candidates ../../output/temp/phase1_candidates.json
 
   # Free-only run (no API calls): regex + CSV + codebook
   python run_pipeline.py --schema schemas/covidlonghaulers_schema.json \\
@@ -404,14 +404,14 @@ Examples:
     parser.add_argument("--no-discover", action="store_true",
                         help="Skip phase 3 (discover_fields.py)")
     parser.add_argument("--no-clean", action="store_true",
-                        help="Skip wiping data/temp/ at the start. Useful when resuming "
+                        help="Skip wiping output/temp/ at the start. Useful when resuming "
                              "or reusing cached Phase 1 candidates.")
 
     # discover_fields options
     parser.add_argument("--candidates", type=Path, default=None,
                         help=(
                             "Path to a saved phase1_candidates.json — skips Stage 1 of "
-                            "discover_fields.py. If not supplied and data/temp/phase1_candidates.json "
+                            "discover_fields.py. If not supplied and output/temp/phase1_candidates.json "
                             "exists, it is used automatically (a notice is printed). "
                             "Pass --no-clean to preserve and reuse the cached candidates."
                         ))

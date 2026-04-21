@@ -5,10 +5,6 @@ trees, and author histories from r/covidlonghaulers using the
 [Arctic Shift](https://arctic-shift.photon-reddit.com) public API — **no
 Reddit API key required**.
 
-> **Looking for the extraction pipeline?** See
-> [`variable_extraction/README.md`](../variable_extraction/README.md)
-> for pipeline docs, CLI reference, architecture diagram, and library API.
-
 ---
 
 ## Quick Start
@@ -18,12 +14,12 @@ pip install -r requirements.txt
 python scrape_corpus.py --weeks 2 --comments
 ```
 
-Output goes to `data/` at the project root. Then run the extraction pipeline from the project root:
+Output goes to `output/` at the project root. Then run the extraction pipeline:
 
 ```bash
 cd ..
-python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json
+python Scrapers/demographic_extraction/run_pipeline.py \
+    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
 ```
 
 ---
@@ -62,7 +58,7 @@ See `SCRAPER_HELP.md` for time estimates and full documentation.
 ### Output
 
 ```
-data/          # project root
+output/          # project root
   subreddit_posts.json      # All posts in window (+ comments if --comments)
   users/
     {sha256_hash}.json      # One file per unique post author (--user-histories only)
@@ -86,4 +82,4 @@ All scripts use [Arctic Shift](https://arctic-shift.photon-reddit.com), a free p
 
 All usernames are SHA-256 hashed before being written to any output file. Raw usernames exist only in memory during the scrape.
 
-The `data/` directory and `.env` are gitignored by default.
+The `output/` directory and `.env` are gitignored by default.
