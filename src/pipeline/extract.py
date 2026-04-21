@@ -172,10 +172,9 @@ def run_extraction(config: "PipelineConfig"):
                 id_to_drugs[item_id] = flat
 
             done_ext += len(batch)
-            batches_since_save += 1
-            if batches_since_save >= SAVE_EVERY:
-                save_tagged_atomic()
-                batches_since_save = 0
+            done_ext += len(batch)
+            if done_ext % (BATCH_SIZE * 100) == 0:
+                save_tagged()
             log.info(f"Extracted {done_ext}/{len(to_do)}...")
 
             # Submit next batch to keep pool saturated
