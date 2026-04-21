@@ -48,6 +48,7 @@ All pipeline commands are prefixed with `uv run`. Run tests with `uv run pytest 
 ### LLM Provider
 
 The pipeline supports two providers: **Anthropic** (direct) and **OpenRouter** (any model).
+These can be set by the command line or (preferably) put them into the`.env` file in the project root — the pipeline loads it automatically.
 
 **Option A — Anthropic (default):**
 ```bash
@@ -79,7 +80,6 @@ MODEL_STRONG=qwen/qwen-2.5-7b-instruct
 Start with `--limit 50` to test a new model cheaply before running on the full dataset.
 
 
-You can also put these in a `.env` file in the project root — the pipeline loads it automatically.
 
 The provider is auto-detected from whichever key is set. To force a specific provider:
 ```bash
@@ -287,3 +287,12 @@ LIMIT 20;
 ## Built at
 
 Biotech Hackathon · San Francisco · April 4, 2026 · Frontier Tower
+
+```
+██████╗ ██╗ ██████╗     ██████╗ ██╗   ██╗███╗   ██╗██╗  ██╗
+██╔══██╗██║██╔═══██╗    ██╔══██╗██║   ██║████╗  ██║██║ ██╔╝
+██████╔╝██║██║   ██║    ██████╔╝██║   ██║██╔██╗ ██║█████╔╝
+██╔══██╗██║██║   ██║    ██╔═══╝ ██║   ██║██║╚██╗██║██╔═██╗
+██████╔╝██║╚██████╔╝    ██║     ╚██████╔╝██║ ╚████║██║  ██╗
+╚═════╝ ╚═╝ ╚═════╝     ╚═╝      ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝
+```
