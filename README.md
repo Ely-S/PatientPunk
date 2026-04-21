@@ -31,11 +31,16 @@ The pipeline also extracts demographic data for each user, including age bucket,
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 
 ```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install dependencies
 git clone https://github.com/Ely-S/PatientPunk.git
 cd PatientPunk
 uv sync
 
-cp Scrapers/demographic_extraction/.env.example .env
+# Set up your LLM API key
+cp .env.example .env
 ```
 
 All pipeline commands are prefixed with `uv run`. Run tests with `uv run pytest -v`.
@@ -43,6 +48,7 @@ All pipeline commands are prefixed with `uv run`. Run tests with `uv run pytest 
 ### LLM Provider
 
 The pipeline supports two providers: **Anthropic** (direct) and **OpenRouter** (any model).
+These can be set by the command line or (preferably) put them into the`.env` file in the project root — the pipeline loads it automatically.
 
 **Option A — Anthropic (default):**
 ```bash
@@ -54,7 +60,26 @@ export ANTHROPIC_API_KEY=your_key_here
 export OPENROUTER_API_KEY=your_key_here
 ```
 
-You can also put these in a `.env` file in the project root — the pipeline loads it automatically.
+Any model on [OpenRouter](https://openrouter.ai/models) works. Set `MODEL_FAST` and `MODEL_STRONG` in your `.env`:
+
+```bash
+OPENROUTER_API_KEY=your_key
+MODEL_FAST=qwen/qwen-2.5-7b-instruct
+MODEL_STRONG=qwen/qwen-2.5-7b-instruct
+```
+
+`MODEL_FAST` is used for extraction and prefiltering (high volume, cheap). `MODEL_STRONG` is used for sentiment classification (lower volume, needs accuracy).
+
+| Model | Cost | Notes |
+|-------|------|-------|
+| `anthropic/claude-haiku-4.5` | $0.80/1M | Default fast model. Best JSON reliability. |
+| `anthropic/claude-sonnet-4.6` | $3.00/1M | Default strong model. Best classification quality. |
+| `qwen/qwen-2.5-7b-instruct` | $0.04/1M | 20x cheaper. Works end-to-end but more batch retries. |
+| `qwen/qwen-2.5-72b-instruct` | $0.12/1M | Good balance of cost and quality. |
+
+Start with `--limit 50` to test a new model cheaply before running on the full dataset.
+
+
 
 The provider is auto-detected from whichever key is set. To force a specific provider:
 ```bash
@@ -79,7 +104,9 @@ export MODEL_STRONG="qwen/qwen-2.5-7b-instruct"
 
 ## Running the Pipeline
 
-### Step 1 — Scrape
+### Step 1 — Get the Reddit Data
+
+**Option A — Arctic Shift API**:
 
 Pulls posts from r/covidlonghaulers via the [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift) API — no Reddit API key required. Usernames are SHA-256 hashed before touching disk.
 
@@ -91,9 +118,31 @@ uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 #   output/corpus_metadata.json     run summary
 ```
 
-`--comments` fetches full reply trees. `--user-histories` scrapes each author's full Reddit history — useful because patients document their journeys across many communities.
+Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/README.md) for all flags, time estimates, and user history options. Note: the scraper writes to `output/`, not `data/`.
 
-### Step 2 — Import into database
+| Flag | Description |
+|------|-------------|
+| `--months N` | How many months back to scrape (default: 2) |
+| `--weeks N` | Alternative: weeks instead of months |
+| `--comments` | Fetch full comment trees (recommended) |
+| `--user-histories` | Scrape each author's full Reddit history (adds 2-4 hours) |
+| `--limit-posts N` | Stop after N posts (for testing) |
+
+**Option B — Arctic Shift bulk download** (faster for large datasets):
+
+Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform:
+
+```bash
+uv run python Scrapers/transform_arctic_shift.py \
+    --posts r_covidlonghaulers_posts_6_months.jsonl \
+    --comments r_covidlonghaulers_comments_6_months.jsonl \
+    --output output/subreddit_posts.json
+```
+
+Supports `.zst` compressed files. Works with any subreddit — not hardcoded.
+
+
+### Step 2 — Import into SQLite database
 
 ```bash
 mkdir -p data
