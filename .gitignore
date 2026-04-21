@@ -15,4 +15,5 @@ __pycache__/
 # Output / data
 output/
 reddit_sample_data/outputs/
+data/
 *.zip

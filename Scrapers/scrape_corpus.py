@@ -361,9 +361,9 @@ EXAMPLES
 
 OUTPUT
 ------
-  output/subreddit_posts.json     All posts in window (+ comments if --comments)
-  output/users/{hash}.json        One file per author (only with --user-histories)
-  output/corpus_metadata.json     Run summary and stats
+  data/subreddit_posts.json       All posts in window (+ comments if --comments)
+  data/users/{hash}.json          One file per author (only with --user-histories)
+  data/corpus_metadata.json       Run summary and stats
 
   All usernames are SHA-256 hashed. Raw usernames are never written to disk.
 

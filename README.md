@@ -170,7 +170,7 @@ uv run pytest -v
 
 ```bash
 python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
-# Outputs: Scrapers/output/subreddit_posts.json  +  Scrapers/output/users/*.json
+# Outputs: data/subreddit_posts.json  +  data/users/*.json
 ```
 
 ### Step 2a — Demographic extraction *(who are the patients?)*
@@ -178,7 +178,7 @@ python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 ```bash
 python Scrapers/demographic_extraction/run_pipeline.py \
     --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
-# Outputs: Scrapers/output/records.csv  +  Scrapers/output/codebook.csv
+# Outputs: data/records.csv  +  data/codebook.csv
 ```
 
 ### Step 2b — Drug sentiment *(what do they say about treatments?)*

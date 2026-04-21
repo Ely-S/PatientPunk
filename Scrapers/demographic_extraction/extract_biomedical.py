@@ -6,14 +6,14 @@ biomedical signals from post and comment text using regex pattern matching.
 
 Usage:
     python extract_biomedical.py                            # base fields, default input path
-    python extract_biomedical.py --input-dir ../output/     # explicit input path
+    python extract_biomedical.py --input-dir ../../data/    # explicit input path
     python extract_biomedical.py --text "I'm a 34F with POTS"  # test single string
     python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
 
 Output:
-    output/patientpunk_records_base.json          # v2.0 records (base fields only)
-    output/patientpunk_records_{schema_id}.json   # v2.0 records with extension fields
-    output/extraction_metadata_{schema_id}.json   # summary stats
+    data/patientpunk_records_base.json          # v2.0 records (base fields only)
+    data/patientpunk_records_{schema_id}.json   # v2.0 records with extension fields
+    data/extraction_metadata_{schema_id}.json   # summary stats
 """
 
 import argparse
@@ -937,12 +937,12 @@ Examples:
   python extract_biomedical.py
   python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
   python extract_biomedical.py --text "34F with POTS, diagnosed after 3 years"
-  python extract_biomedical.py --input-dir /path/to/output
+  python extract_biomedical.py --input-dir /path/to/data
 
 Output:
-  output/patientpunk_records_base.json         one v2.0 record per user/post
-  output/patientpunk_records_{schema_id}.json  with extension schema fields
-  output/extraction_metadata_{schema_id}.json  field hit counts and summary
+  data/patientpunk_records_base.json         one v2.0 record per user/post
+  data/patientpunk_records_{schema_id}.json  with extension schema fields
+  data/extraction_metadata_{schema_id}.json  field hit counts and summary
 
 Every base field is always present (null if not extracted). Conditions include
 ICD-10 candidates. All fields include provenance and confidence tiers.
@@ -953,9 +953,9 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path(__file__).parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py "
-             "(default: ../output/ relative to this script)",
+        default=Path(__file__).resolve().parent.parent.parent / "data",
+        help="Path to the data/ directory from scrape_corpus.py "
+             "(default: <repo>/data/)",
     )
     parser.add_argument(
         "--text",
@@ -975,7 +975,7 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
         type=Path,
         default=None,
         help="Directory for intermediate output files (default: {input-dir}/temp/). "
-             "Keeps output/ clean — only records.csv and codebook.csv stay at the top level.",
+             "Keeps data/ clean — only records.csv and codebook.csv stay at the top level.",
     )
     args = parser.parse_args()
 
