@@ -62,8 +62,9 @@ try:
 except ImportError:
     sys.exit("anthropic is required: pip install anthropic")
 
-load_dotenv(Path(__file__).parent / ".env")        # demographic_extraction/.env
-load_dotenv(Path(__file__).parent.parent / ".env")  # Scrapers/.env (fallback)
+load_dotenv(Path(__file__).parent / ".env")              # demographic_extraction/.env
+load_dotenv(Path(__file__).parent.parent / ".env")        # Scrapers/.env (fallback)
+load_dotenv(Path(__file__).parent.parent.parent / ".env") # project root .env (fallback)
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
