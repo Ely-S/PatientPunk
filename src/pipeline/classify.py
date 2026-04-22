@@ -227,7 +227,6 @@ def run_classification(
                         if not passed:
                             filtered.add((entry["id"], drug))
                     done_pf += len(batch)
-                    done_pf += len(batch)
                     if done_pf % (PREFILTER_BATCH_SIZE * 10) == 0:
                         prefilter_path.write_text(json.dumps(cached_pf))
                     log.info(f"Prefiltered {done_pf}/{len(uncached)}...")

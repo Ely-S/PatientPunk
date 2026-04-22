@@ -9,7 +9,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-COMMIT_EVERY = 5  # commit after this many writes
+COMMIT_EVERY = 50  # commit after this many writes
 
 
 def open_db(db_path: Path) -> sqlite3.Connection:

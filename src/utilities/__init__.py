@@ -129,7 +129,11 @@ def get_client() -> anthropic.Anthropic:
 
     log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
 
-    kwargs: dict = {"api_key": api_key}
+    kwargs: dict = {
+        "api_key": api_key,
+        "max_retries": 4,
+        "timeout": 60.0,
+    }
     if _API_BASE:
         kwargs["base_url"] = _API_BASE
     return anthropic.Anthropic(**kwargs)
