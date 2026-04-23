@@ -60,7 +60,7 @@ def run_targeted_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     import sys
     target = config.drug.strip().lower()
     if target not in HARDCODED_ALIASES:
-        sys.exit(f"--drug {target!r} has no hardcoded alias set. Known: {sorted(HARDCODED_ALIASES)}")
+        raise ValueError(f"--drug {target!r} has no hardcoded alias set. Known: {sorted(HARDCODED_ALIASES)}")
 
     aliases = [a.lower() for a in HARDCODED_ALIASES[target]]
     canon_map = {a: target for a in [*aliases, target]}
