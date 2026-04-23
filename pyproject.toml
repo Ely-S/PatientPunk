@@ -16,3 +16,4 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "Scrapers/demographic_extraction/tests"]
+pythonpath = ["src"]
