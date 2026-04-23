@@ -33,7 +33,7 @@ from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
     PipelineConfig, get_client, llm_call, parse_json_array, parse_json_object, log,
 )
-from utilities.db import load_synonyms, open_db
+from utilities.db import load_synonyms, open_db, post_text
 
 if TYPE_CHECKING:
     from utilities.db import ReportWriter
@@ -179,10 +179,7 @@ def run_classification(
                 list(missing),
             ).fetchall()
         for post_id, title, parent_id, body_text in rows:
-            id_to_text[post_id] = (
-                f"{title or ''} {body_text or ''}".strip()
-                if parent_id is None else (body_text or "")
-            )
+            id_to_text[post_id] = post_text(title, body_text, parent_id)
 
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}

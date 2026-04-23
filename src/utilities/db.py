@@ -12,6 +12,16 @@ from pathlib import Path
 COMMIT_EVERY = 50  # commit after this many writes
 
 
+def post_text(title: str | None, body_text: str | None, parent_id: str | None) -> str:
+    """Reconstruct display text for a post row.
+
+    Top-level posts (parent_id is None) combine title + body; replies use body only.
+    """
+    if parent_id is None:
+        return f"{title or ''} {body_text or ''}".strip()
+    return body_text or ""
+
+
 def open_db(db_path: Path) -> sqlite3.Connection:
     """Open a database connection with WAL journal mode.
 
