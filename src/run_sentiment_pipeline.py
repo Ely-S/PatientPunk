@@ -58,6 +58,7 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "reclassify": config.reclassify,
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
+        "drug": config.drug,
     }
 
     _banner("CLASSIFY")
@@ -81,6 +82,7 @@ def main():
     parser.add_argument("--skip-prefilter", action="store_true", help="Skip Haiku prefilter, send all pairs to Sonnet")
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
     parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
+    parser.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
     parser.add_argument(
         "--workers", type=int, default=3,
         help="Parallel workers for extract/classify (default: 3, use 1 for sequential). "
@@ -101,6 +103,7 @@ def main():
         max_upstream_chars=args.max_upstream_chars,
         max_upstream_depth=args.max_upstream_depth,
         workers=args.workers,
+        drug=args.drug,
     )
 
     run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=args.skip_prefilter)

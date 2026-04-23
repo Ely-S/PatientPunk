@@ -7,6 +7,7 @@ with drugs found in each post/comment (direct mentions + inherited from upstream
 """
 import itertools
 import json
+import re
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import lru_cache
@@ -21,6 +22,15 @@ from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, pars
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
+
+
+def is_only_questions(text: str) -> bool:
+    """Check if text contains only questions (or is empty)."""
+    text = text.strip()
+    if not text:
+        return True
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    return bool(sentences) and all(s.endswith('?') for s in sentences)
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
@@ -139,7 +149,8 @@ def run_extraction(config: "PipelineConfig"):
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
              "drugs_context": upstream_drugs.get(item["id"], [])}
             for item in all_items
-            if id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"])
+            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+            and not is_only_questions(item["text"])
         ]
         tmp = tagged_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(tagged, indent=2))

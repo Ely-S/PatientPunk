@@ -31,9 +31,13 @@ Rules:
   e.g. "ldn" and "low dose naltrexone" → same drug → merge.
 - Choose the most common/recognizable name as the canonical form.
 
-Return a JSON object mapping every input name to its canonical form.
-Every input name must appear as a key. If a name has no synonyms in the list, map it to itself.
-Example: {"ldn": "ldn", "low dose naltrexone": "ldn", "pepcid": "famotidine", "famotidine": "famotidine"}
+Return a JSON object containing ONLY synonym merges.
+For each group of synonymous names, map the non-canonical name(s) to the canonical form.
+Omit any name that has no synonyms in the list — it will be treated as canonical by default.
+The canonical form itself does NOT need to appear as a key unless it also maps to another canonical.
+Example input: ["ldn", "low dose naltrexone", "pepcid", "famotidine", "aspirin", "ibuprofen"]
+Example output: {"low dose naltrexone": "ldn", "pepcid": "famotidine"}
+(aspirin and ibuprofen are omitted because they have no synonyms in the input.)
 """
 
 # Used by classify_sentiment.py (prefilter step)
@@ -69,15 +73,25 @@ You are identifying whether the author has personally used or tried: {name}{syno
 sentiment: positive | negative | mixed | neutral
   positive = {name} helped them personally
   negative = {name} didn't help or made things worse
-  mixed    = genuinely conflicting outcomes (helped some symptoms but worsened others)
-             or the author explicitly can't decide whether it helped.
-             NOTE: partial improvement is still positive, not mixed.
-             "it helped but wasn't a miracle" = positive. "it helped X but worsened Y" = mixed.
+  mixed    = reserved for genuine ambiguity. Use ONLY when:
+             - a symptom actively WORSENED on one axis while improving on another,
+               e.g. "helped my fatigue but made my anxiety worse"
+             - OR the author explicitly cannot tell if it helped overall
+             NOT mixed — these are POSITIVE:
+             - side effects during benefit: "it helped but caused insomnia at first"
+             - dose-titration struggles: "4.5mg was bad, 3mg is good for me"
+             - some symptoms responded, others didn't improve: "works for inflammation, this foot pain is stubborn"
+             - partial improvement: "it helped but wasn't a miracle"
+             - using it "on and off" in a medication stack
   neutral  = the author has NOT personally used or tried {name} — includes:
              questions, advice to others, citing studies or statistics,
              discussing the evidence base, expressing opinions about the research
              or skepticism about efficacy WITHOUT reporting personal use,
-             posts about OTHER drugs that happen to appear in a {name} thread
+             posts about OTHER drugs that happen to appear in a {name} thread,
+             third-person framing ("works for some people", "many find it helpful")
+             WITHOUT a first-person outcome statement in this reply,
+             author has used {name} but this post/reply does not state whether it helped
+             (e.g. logistical questions about dosage, quitting, interactions)
 
   THE KEY QUESTION: has this person personally used or tried {name}?
   If no → neutral, regardless of how strong their opinion about the evidence is.

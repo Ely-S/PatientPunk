@@ -30,9 +30,9 @@ from utilities import PipelineConfig
 # Expected flow over sample_data.json (LDN discussion):
 #   extract     → Post1/Post2 mention LDN directly; comments don't.
 #                 Upstream context propagates LDN from Post1 to Comment1/2.
-#   canonicalize→ {"ldn": "ldn"} (only one drug).
 #   is_only_questions() drops Post1 ("Do you like LDN?") and Comment2
-#                 ("Have you tried the gym?") before prefilter.
+#                 ("Have you tried the gym?").
+#   canonicalize→ {"ldn": "ldn"} (only one drug).
 #   prefilter   → Post2 is an article (no personal experience) → no;
 #                 Comment1 ("I love it so much") → yes.
 #   classify    → one pair reaches classify: (Comment1, ldn)
@@ -52,8 +52,8 @@ def _stub_response(messages, system):
 
     # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
     if "identify true synonyms" in prompt:
-        start = prompt.index("[")
         end = prompt.rindex("]") + 1
+        start = prompt.rindex("[", 0, end)
         names = json.loads(prompt[start:end])
         return json.dumps({n: n for n in names})
 
@@ -81,11 +81,28 @@ def _stub_response(messages, system):
     return "[]"
 
 
+class _FakeStream:
+    def __init__(self, text):
+        self._text = text
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return SimpleNamespace(content=[SimpleNamespace(text=self._text)])
+
+
 class _FakeMessages:
     def create(self, *, messages, system=None, **_):
         return SimpleNamespace(
             content=[SimpleNamespace(text=_stub_response(messages, system))]
         )
+
+    def stream(self, *, messages, system=None, **_):
+        return _FakeStream(_stub_response(messages, system))
 
 
 class FakeAnthropic:

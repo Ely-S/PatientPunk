@@ -18,7 +18,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import itertools
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -34,21 +33,13 @@ from pydantic import ValidationError
 from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
-    TAGGED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
+    TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
     llm_call, parse_json_array, parse_json_object, log,
 )
 
 BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
 
-
-def is_only_questions(text: str) -> bool:
-    """Check if text contains only questions."""
-    text = text.strip()
-    if not text:
-        return True
-    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
-    return bool(sentences) and all(s.endswith('?') for s in sentences)
 
 def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format a single (entry, drug) item for the prefilter prompt."""
@@ -136,10 +127,11 @@ def run_classification(
     client = config.client
     limit = config.limit
 
-    tagged_path = config.path(TAGGED_MENTIONS)
+    canonicalized_path = config.path(CANONICALIZED_MENTIONS)
+    tagged_path = canonicalized_path if canonicalized_path.exists() else config.path(TAGGED_MENTIONS)
 
     tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
-    log.info(f"Loaded {len(tagged)} tagged entries.")
+    log.info(f"Loaded {len(tagged)} entries from {tagged_path.name}.")
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
@@ -152,12 +144,15 @@ def run_classification(
         synonyms_for = {}
         subreddit = "Long COVID"
 
-    id_to_text = {e["id"]: e["text"] for e in tagged}
+    target_drug = config.drug.strip().lower() if config.drug else None
+    if target_drug:
+        log.info(f"Restricting classification to drug: {target_drug!r}")
 
-    # Filter pure questions
-    before = len(tagged)
-    tagged = [e for e in tagged if not is_only_questions(e["text"])]
-    log.info(f"Filtered {before - len(tagged)} pure-question entries → {len(tagged)} remaining.")
+    # Parent-context lookup must include entries dropped upstream (e.g. question-only
+    # parents filtered in extract), so pull from the full corpus rather than `tagged`.
+    from pipeline.extract import load_posts_from_db
+    all_items, _ = load_posts_from_db(config.db_path)
+    id_to_text = {item["id"]: item["text"] for item in all_items}
 
     if limit:
         tagged = tagged[:limit]
@@ -172,6 +167,8 @@ def run_classification(
             entry.get("drugs_direct", []) + entry.get("drugs_context", []),
         ))
         for drug in all_drugs:
+            if target_drug is not None and drug != target_drug:
+                continue
             if (
                 not config.reclassify
                 and writer is not None

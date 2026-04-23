@@ -21,6 +21,7 @@ import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
+CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ class PipelineConfig:
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
+    drug: str | None = None                # If set, canonicalize + classify operate on this drug and its synonyms only
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -129,11 +131,7 @@ def get_client() -> anthropic.Anthropic:
 
     log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
 
-    kwargs: dict = {
-        "api_key": api_key,
-        "max_retries": 4,
-        "timeout": 60.0,
-    }
+    kwargs: dict = {"api_key": api_key}
     if _API_BASE:
         kwargs["base_url"] = _API_BASE
     return anthropic.Anthropic(**kwargs)
@@ -187,8 +185,23 @@ def llm_call(
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
+    retries: int = 2,
 ) -> str:
+    import time
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
-    return client.messages.create(**kwargs).content[0].text
+    for attempt in range(retries + 1):
+        try:
+            with client.messages.stream(**kwargs) as stream:
+                return stream.get_final_message().content[0].text
+        except anthropic.RateLimitError as e:
+            if attempt == retries:
+                raise
+            retry_after = float(e.response.headers.get("retry-after", 30)) if e.response else 30
+            log.warning(f"Rate limited; sleeping {retry_after:.0f}s then retry {attempt + 1}/{retries}...")
+            time.sleep(retry_after)
+        except (anthropic.APITimeoutError, anthropic.APIConnectionError) as e:
+            if attempt == retries:
+                raise
+            log.warning(f"LLM call failed ({type(e).__name__}); retry {attempt + 1}/{retries}...")
