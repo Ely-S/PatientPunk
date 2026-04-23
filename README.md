@@ -196,6 +196,30 @@ Add `--limit 50` for a quick demo run.
 | `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 | `--workers N` | Parallel workers for LLM calls during extract/classify (default: 3, use 1 for sequential) |
+| `--drug NAME` | Restrict extract + canonicalize + classify to one target drug and its synonyms. |
+
+#### Single-drug mode (`--drug`)
+
+When iterating on prompts or investigating one drug's results, restricting the pipeline to a single target skips almost all LLM cost. On the first run, the pipeline asks the strong model once for the target's common names, abbreviations, brand/generic names, and plausible misspellings (≤30), and caches the list to `outputs/aliases_<target>.json` (hand-editable JSON array). From that point:
+
+- **Extract** skips the LLM entirely. Every post/comment is regex-matched (word-boundary, case-insensitive) against the alias list — matches get `drugs_direct = [target]`, non-matches get `[]`. Upstream context (`drugs_context`) still propagates via the usual parent-chain walk, so a short reply under a matching parent is correctly tagged.
+- **Canonicalize** skips the batch synonym pass. It reuses the same alias cache to merge aliases → target, filters `canonicalized_mentions.json` to target-mentioning entries, and upserts only the target row to `treatment`.
+- **Classify** filters its work queue to `drug == target`.
+
+Net effect: one alias-lookup LLM call the first time, **zero** LLM calls for extract or canonicalize on subsequent runs — only the classify step spends tokens.
+
+```bash
+# First pass: extract + targeted canonicalize + classify on LDN only
+# (first-time LDN run fetches aliases once and caches to outputs/aliases_ldn.json)
+uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug ldn
+
+# Iterate on the classifier without re-running extract:
+# (reuses cached aliases_ldn.json — no extra LLM call)
+uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs \
+    --drug ldn --skip-extract --reclassify
+```
+
+To add or remove synonyms for a target, edit `outputs/aliases_<target>.json` directly and rerun — the cache is a plain JSON array of lowercase strings.
 
 Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
 
@@ -207,17 +231,23 @@ Steps 3a and 3b are independent — run in either order. Both are keyed on `auth
 
 Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (10 texts per call) with automatic retry on any output count mismatch — splits into smaller sub-batches and retries, up to 2 levels of recursion. Any mismatch is treated as a failure; results are never silently truncated or padded. Saves to `tagged_mentions.json` every 1000 items.
 
-**Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name. 
+**Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name.
+
+**Question-only filter:** Entries that are pure questions (e.g. "Has anyone tried LDN?", "What dose did you start on?") are dropped at extract time via `is_only_questions()`. They still contribute `drugs_direct` to children's upstream context, but don't themselves reach classify.
+
+**Targeted mode (`--drug`)**: the LLM extract step is replaced by a regex alias match against the cached `outputs/aliases_<target>.json` list. Every post/comment is matched case-insensitively at word boundaries; matches get `drugs_direct = [target]`, non-matches get `[]`. No tokens spent on extract. Upstream context propagation is unchanged.
 
 **Output:** `tagged_mentions.json` — intermediate file with drug mentions per entry.
 
 ### Step 2 — Canonicalize (`pipeline/canonicalize.py`)
 
-Collects all unique drug names from `tagged_mentions.json`, sends them to a fast model in batches, and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Rewrites `tagged_mentions.json` in place with canonical names.
+Collects all unique drug names from `tagged_mentions.json`, sends them to the strong model in a large single-pass batch (up to 3500 names), and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Writes a separate `canonicalized_mentions.json` — the original `tagged_mentions.json` is left untouched so you can rerun canonicalize without redoing extract.
 
-**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate).
+**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate). The prompt returns merges-only output (omitting identity mappings), so token usage scales with merge rate rather than name count.
 
 Also populates the `treatment` table from the drug names and canonical map. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe.
+
+With `--drug NAME`, canonicalize skips the batch synonym pass. Instead it calls `get_drug_aliases(NAME)` once (strong model asked for common names, abbreviations, brand/generic names, and plausible misspellings — up to 30), caches the result to `outputs/aliases_<NAME>.json`, and reuses the cache on later runs. All aliases merge into the target, `canonicalized_mentions.json` is filtered to entries mentioning the target, and only the target row is upserted to `treatment`. The cache file is plain JSON and can be hand-edited to add/remove synonyms.
 
 Can be skipped with `--skip-canonicalize` (raw drug names inserted into the treatment table with no aliases).
 
@@ -225,7 +255,9 @@ Can be skipped with `--skip-canonicalize` (raw drug names inserted into the trea
 
 For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
 
-1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects questions ("Have you tried X?"), research discussions, and off-topic replies. Results cached to `prefilter_results.json` — skipped on re-run.
+Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls back to `tagged_mentions.json`.
+
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects research discussions, off-topic replies, and author-doesn't-use-it cases. (Pure question posts are already dropped at extract time.) Results cached to `prefilter_results.json` — skipped on re-run.
 
 2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
 
@@ -253,7 +285,7 @@ Re-running the pipeline does not delete old data. The classify step skips `(post
 The pipeline is designed to resume after interruptions:
 
 - **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 1000 items.
-- **Canonicalize:** Re-runs fully (cheap fast model calls on drug names only). Treatment table uses `INSERT OR IGNORE`.
+- **Canonicalize:** Re-runs fully (single strong-model call on the unique drug name list; with `--drug` it's one LLM call the first time and zero on subsequent runs via the cached `aliases_<target>.json`). Treatment table uses `INSERT OR IGNORE`. Writes `canonicalized_mentions.json` separately, so rerunning canonicalize never invalidates `tagged_mentions.json`.
 - **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
 
 ---
