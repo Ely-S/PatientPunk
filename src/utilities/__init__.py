@@ -37,6 +37,7 @@ class PipelineConfig:
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
+    drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -183,6 +184,21 @@ def parse_json_object(raw: str) -> dict:
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────
+def resolve_aliases(config: "PipelineConfig") -> tuple[str, list[str]]:
+    """Return (target, aliases) for config.drug.
+
+    Uses config.drug_aliases if set (hand-curated list); otherwise falls back
+    to get_drug_aliases (LLM lookup + disk cache). Target is always included.
+    """
+    target = config.drug.strip().lower()
+    if config.drug_aliases is not None:
+        aliases = [a.lower().strip() for a in config.drug_aliases if a.strip()]
+        if target not in aliases:
+            aliases.append(target)
+        return target, aliases
+    return target, get_drug_aliases(config.client, target, config.path(f"aliases_{target}.json"))
+
+
 def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     """Return [drug, ...aliases] for filtering in --drug mode.
 
