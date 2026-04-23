@@ -6,7 +6,6 @@ Step 2 of the pipeline. Merges synonyms (e.g. "low dose naltrexone" → "ldn")
 and rewrites tagged_mentions.json with canonical names.
 """
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import json
 from pathlib import Path
@@ -44,22 +43,16 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     all_drugs = sorted({d for e in tagged for d in e.get("drugs_direct", []) + e.get("drugs_context", [])})
     log.info(f"{len(tagged)} entries, {len(all_drugs)} unique drug names.")
 
-    def _run_batch(batch: list[str]) -> dict[str, str]:
-        try:
-            return canonicalize_batch(client, batch)
-        except LLMParseError as e:
-            log.error(f"Canonicalize batch failed: {e}. Keeping raw names.")
-            return {name: name for name in batch}
-
-    batches = [all_drugs[i:i + BATCH_SIZE] for i in range(0, len(all_drugs), BATCH_SIZE)]
     canon_map = {}
-    done = 0
-    with ThreadPoolExecutor(max_workers=config.workers) as pool:
-        futures = {pool.submit(_run_batch, batch): batch for batch in batches}
-        for future in as_completed(futures):
-            canon_map.update(future.result())
-            done += len(futures[future])
-            log.info(f"Canonicalized {done}/{len(all_drugs)}...")
+    for i in range(0, len(all_drugs), BATCH_SIZE):
+        batch = all_drugs[i:i + BATCH_SIZE]
+        try:
+            canon_map.update(canonicalize_batch(client, batch))
+        except LLMParseError as e:
+            log.error(f"Batch {i} failed: {e}. Keeping raw names.")
+            for name in batch:
+                canon_map[name] = name
+        log.info(f"Canonicalized {min(i + BATCH_SIZE, len(all_drugs))}/{len(all_drugs)}...")
 
     # Log synonym groups
     groups: dict[str, list[str]] = {}
