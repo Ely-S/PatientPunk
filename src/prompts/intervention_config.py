@@ -40,6 +40,18 @@ Example output: {"low dose naltrexone": "ldn", "pepcid": "famotidine"}
 (aspirin and ibuprofen are omitted because they have no synonyms in the input.)
 """
 
+# Used by get_drug_aliases() in utilities/__init__.py — single-drug mode alias lookup
+def drug_aliases_prompt(target: str) -> str:
+    return (
+        f"List common names, abbreviations, brand names, generic names, "
+        f"and plausible misspellings/typos for the drug, supplement, or intervention "
+        f"'{target}'. Return ONLY a JSON array of lowercase strings — no prose. "
+        f"Include the canonical name. Only include names a reader might plausibly "
+        f"write for this exact substance; do not enumerate every dosage variant. "
+        f"Return at most 30 entries."
+    )
+
+
 # Used by classify_sentiment.py (prefilter step)
 # Note: in the future we may include diet and lifestyle changes. 
 # Additionally, we may want to change the semantics of the reply. 
