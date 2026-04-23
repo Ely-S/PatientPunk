@@ -17,16 +17,13 @@ Usage:
 """
 from __future__ import annotations
 
-import json
+import argparse
 import itertools
+import json
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from utilities.db import ReportWriter
-    from utilities import PipelineConfig
 
 from pydantic import ValidationError
 
@@ -34,11 +31,24 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, get_client, llm_call, parse_json_array, parse_json_object, log,
 )
+from utilities.db import load_synonyms, open_db
+
+if TYPE_CHECKING:
+    from utilities.db import ReportWriter
 
 BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
+
+
+def _pf_key(entry: dict, drug: str) -> str:
+    """Cache/filter key for a single (entry, drug) pair."""
+    return f"{entry['id']}:{drug}"
+
+
+def _is_yes(s: str) -> bool:
+    return str(s).strip().lower().startswith("yes")
 
 
 def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
@@ -51,38 +61,24 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
     return block
 
 
+def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
+    """Fallback single-item prefilter call."""
+    msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
+    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+
+
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
-    """Ask Haiku if each (entry, drug) pair expresses personal experience."""
-    blocks = [
-        _prefilter_block(i, entry, drug, id_to_text, max_upstream_chars)
-        for i, (entry, drug) in enumerate(items)
-    ]
+    """Ask fast model if each (entry, drug) pair expresses personal experience."""
+    blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
-
-
-    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10)
     try:
-        answers = parse_json_array(raw)
-    except LLMParseError as e:
-        log.warning(f"Prefilter parse failed: {e}. Falling back to individual calls.")
-        answers = []
-
-    if len(answers) == len(items):
-        return [str(a).strip().lower().startswith("yes") for a in answers]
-
-    log.warning(
-        f"Prefilter array length mismatch: expected {len(items)}, got {len(answers)}. "
-        "Falling back to individual calls."
-    )
-    return [
-        llm_call(
-            client,
-            PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, e, d, id_to_text, max_upstream_chars),
-            model=MODEL_FAST,
-            max_tokens=10,
-        ).strip().lower().startswith("yes")
-        for e, d in items
-    ]
+        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10))
+        if len(answers) != len(items):
+            raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
+        return [_is_yes(a) for a in answers]
+    except LLMParseError as err:
+        log.warning(f"Prefilter batch failed ({err}); falling back to individual calls.")
+        return [_prefilter_one(client, e, d, id_to_text, max_upstream_chars) for e, d in items]
 
 
 def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
@@ -112,6 +108,22 @@ def classify_batch(
     return [ClassificationResult.model_validate(r) for r in results]
 
 
+def _classify_one(
+    client, entry: dict, drug: str, id_to_text: dict, prompts: dict,
+    max_upstream_chars: int | None = None,
+) -> ClassificationResult:
+    """Fallback single-item classify call; returns a null result on failure."""
+    try:
+        msg = format_entry(entry, id_to_text, max_upstream_chars) + (
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
+        )
+        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50)
+        return ClassificationResult.model_validate(parse_json_object(raw))
+    except (LLMParseError, ValidationError) as e:
+        log.warning(f"Skipping {entry['id']}:{drug}: {e}")
+        return ClassificationResult(sentiment="neutral", signal="n/a")
+
+
 def run_classification(
     config: PipelineConfig,
     *,
@@ -135,7 +147,6 @@ def run_classification(
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
-        from utilities.db import load_synonyms, open_db
         synonyms_for = load_synonyms(config.db_path)
         with open_db(config.db_path) as conn:
             row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
@@ -148,14 +159,30 @@ def run_classification(
     if target_drug:
         log.info(f"Restricting classification to drug: {target_drug!r}")
 
-    # Parent-context lookup must include entries dropped upstream (e.g. question-only
-    # parents filtered in extract), so pull from the full corpus rather than `tagged`.
-    from pipeline.extract import load_posts_from_db
-    all_items, _ = load_posts_from_db(config.db_path)
-    id_to_text = {item["id"]: item["text"] for item in all_items}
-
     if limit:
         tagged = tagged[:limit]
+
+    # Parent-context lookup: start from entries in `tagged` (text already loaded),
+    # then backfill only parent_ids dropped upstream (e.g. question-only parents
+    # filtered in extract) with a single DB query.
+    id_to_text: dict[str, str] = {e["id"]: e["text"] for e in tagged}
+    missing = {
+        pid for e in tagged
+        if (pid := e.get("parent_id")) and pid not in id_to_text
+    }
+    if missing:
+        placeholders = ",".join("?" * len(missing))
+        with open_db(config.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT post_id, title, parent_id, body_text FROM posts "
+                f"WHERE post_id IN ({placeholders})",
+                list(missing),
+            ).fetchall()
+        for post_id, title, parent_id, body_text in rows:
+            id_to_text[post_id] = (
+                f"{title or ''} {body_text or ''}".strip()
+                if parent_id is None else (body_text or "")
+            )
 
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
@@ -163,9 +190,7 @@ def run_classification(
     skipped = 0
 
     for entry in tagged:
-        all_drugs = list(dict.fromkeys(
-            entry.get("drugs_direct", []) + entry.get("drugs_context", []),
-        ))
+        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
         for drug in all_drugs:
             if target_drug is not None and drug != target_drug:
                 continue
@@ -183,24 +208,27 @@ def run_classification(
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
-    # Prefilter with Haiku — results cached to prefilter_results.json
+    # Prefilter with fast model — results cached to prefilter_results.json
     prefilter_path = config.path("prefilter_results.json")
-    filtered: set[tuple[str, str]] = set()
+    filtered: set[str] = set()
     if skip_prefilter:
         log.info("Skipping prefilter, sending all pairs to classify...")
     else:
-        # Load cached prefilter results
-        cached_pf: dict[str, bool] = {}
-        if prefilter_path.exists():
-            cached_pf = json.loads(prefilter_path.read_text())
+        cached_pf: dict[str, bool] = (
+            json.loads(prefilter_path.read_text()) if prefilter_path.exists() else {}
+        )
+        if cached_pf:
             log.info(f"Loaded {len(cached_pf)} cached prefilter results.")
 
-        # Split into cached vs uncached
-        uncached = [(e, d) for e, d in to_do if f"{e['id']}:{d}" not in cached_pf]
+        # Single-pass split: cached → apply to filtered set; uncached → queue for LLM
+        uncached: list[tuple[dict, str]] = []
         for e, d in to_do:
-            key = f"{e['id']}:{d}"
-            if key in cached_pf and not cached_pf[key]:
-                filtered.add((e["id"], d))
+            key = _pf_key(e, d)
+            cached = cached_pf.get(key)
+            if cached is None:
+                uncached.append((e, d))
+            elif not cached:
+                filtered.add(key)
 
         log.info(f"Prefiltering {len(uncached)} uncached pairs ({len(to_do) - len(uncached)} cached)...")
 
@@ -219,10 +247,10 @@ def run_classification(
                     batch = futures[future]
                     results = future.result()
                     for (entry, drug), passed in zip(batch, results):
-                        key = f"{entry['id']}:{drug}"
+                        key = _pf_key(entry, drug)
                         cached_pf[key] = passed
                         if not passed:
-                            filtered.add((entry["id"], drug))
+                            filtered.add(key)
                     done_pf += len(batch)
                     if done_pf % (PREFILTER_BATCH_SIZE * 10) == 0:
                         prefilter_path.write_text(json.dumps(cached_pf))
@@ -230,7 +258,7 @@ def run_classification(
             prefilter_path.write_text(json.dumps(cached_pf))
 
     # Only classify entries that passed prefilter
-    to_classify = [(e, d) for e, d in to_do if (e["id"], d) not in filtered]
+    to_classify = [(e, d) for e, d in to_do if _pf_key(e, d) not in filtered]
     log.info(f"{len(filtered)} filtered out, {len(to_classify)} to classify...")
 
     # Group by drug for batching (shared system prompt per drug)
@@ -238,7 +266,6 @@ def run_classification(
     for e, d in to_classify:
         by_drug[d].append((e, d))
 
-    classified = 0
     drug_counter: Counter = Counter()
     done, total = 0, len(to_classify)
 
@@ -246,25 +273,13 @@ def run_classification(
         """Classify a single batch, with per-item fallback on failure."""
         drug = batch[0][1]
         try:
-            return batch, classify_batch(
-                client, batch, id_to_text, prompts, config.max_upstream_chars,
-            )
+            return batch, classify_batch(client, batch, id_to_text, prompts, config.max_upstream_chars)
         except (LLMParseError, ValidationError) as e:
-            log.warning(f"Batch failed for {drug}: {e}, retrying individually...")
-            results = []
-            for entry, d in batch:
-                try:
-                    msg = format_entry(entry, id_to_text, config.max_upstream_chars)
-                    msg += '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
-                    raw = llm_call(
-                        client, msg, model=MODEL_STRONG,
-                        system=prompts[d], max_tokens=50,
-                    )
-                    results.append(ClassificationResult.model_validate(parse_json_object(raw)))
-                except (LLMParseError, ValidationError) as e2:
-                    log.warning(f"Skipping {entry['id']}:{d}: {e2}")
-                    results.append(ClassificationResult(sentiment="neutral", signal="n/a"))
-            return batch, results
+            log.warning(f"Batch failed for {drug} ({e}); retrying individually...")
+            return batch, [
+                _classify_one(client, entry, d, id_to_text, prompts, config.max_upstream_chars)
+                for entry, d in batch
+            ]
 
     # Bounded submission: at most workers * 2 futures in flight at once.
     # As each completes the next batch is submitted (backpressure).
@@ -285,7 +300,6 @@ def run_classification(
 
             for (entry, drug), result in zip(batch, results):
                 if result.signal != "n/a":
-                    classified += 1
                     drug_counter[drug] += 1
                     if writer is not None:
                         writer.write_one(
@@ -301,7 +315,7 @@ def run_classification(
                 pending[f] = next_batch
 
     # Final stats
-    log.info(f"{classified} sentiment records across {len(drug_counter)} drugs.")
+    log.info(f"{sum(drug_counter.values())} sentiment records across {len(drug_counter)} drugs.")
     log.info("Top drugs:")
     for drug, count in drug_counter.most_common(10):
         log.info(f"  {drug:<30} {count}")
@@ -309,9 +323,6 @@ def run_classification(
 
 def main():
     """Standalone entry point (no database)."""
-    import argparse
-    from utilities import PipelineConfig, get_client
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
     parser.add_argument("--limit", type=int)
