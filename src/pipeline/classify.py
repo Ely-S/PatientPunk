@@ -33,7 +33,7 @@ from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
     PipelineConfig, get_client, llm_call, parse_json_array, parse_json_object, log,
 )
-from utilities.db import load_synonyms, open_db
+from utilities.db import load_synonyms, open_db, post_text
 
 if TYPE_CHECKING:
     from utilities.db import ReportWriter
@@ -99,9 +99,14 @@ def classify_batch(
     msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
     for i, (entry, _) in enumerate(items):
         msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
-    msg += f'Return ONLY a JSON array of {len(items)} objects, each with only "sentiment" (positive/negative/mixed/neutral) and "signal" (strong/moderate/weak/n/a).'
+    msg += (
+        f'Return ONLY a JSON array of {len(items)} objects, each with '
+        f'"sentiment" (positive/negative/mixed/neutral), '
+        f'"signal" (strong/moderate/weak/n/a), '
+        f'and "side_effects" (array of short lowercase symptom strings, or []).'
+    )
 
-    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50 * len(items))
+    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
@@ -115,9 +120,9 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a"}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
         )
-        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=50)
+        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100)
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
@@ -179,10 +184,7 @@ def run_classification(
                 list(missing),
             ).fetchall()
         for post_id, title, parent_id, body_text in rows:
-            id_to_text[post_id] = (
-                f"{title or ''} {body_text or ''}".strip()
-                if parent_id is None else (body_text or "")
-            )
+            id_to_text[post_id] = post_text(title, body_text, parent_id)
 
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
@@ -305,6 +307,7 @@ def run_classification(
                         writer.write_one(
                             post_id=entry["id"], drug=drug, author=entry["author"],
                             sentiment=result.sentiment, signal=result.signal,
+                            side_effects=result.side_effects,
                         )
             done += len(batch)
             log.info(f"Classified {done}/{total}...")

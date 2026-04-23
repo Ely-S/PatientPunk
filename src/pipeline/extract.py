@@ -22,6 +22,7 @@ from utilities import (
     TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
     get_drug_aliases, llm_call, parse_json_array, log,
 )
+from utilities.db import open_db, post_text
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
@@ -82,8 +83,6 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     Each item is a dict with keys: id, text, author, parent_id, post_title, created_utc.
     """
-    from utilities.db import open_db
-
     conn = open_db(db_path)
     rows = conn.execute(
         "SELECT post_id, title, parent_id, user_id, body_text, post_date "
@@ -116,7 +115,7 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     for post_id, title, parent_id, user_id, body_text, post_date in rows:
         id_to_parent[post_id] = parent_id
-        text = f"{title or ''} {body_text or ''}".strip() if parent_id is None else (body_text or "")
+        text = post_text(title, body_text, parent_id)
         items.append({
             "id": post_id, "text": text, "author": user_id,
             "parent_id": parent_id, "post_title": resolve_title(post_id),

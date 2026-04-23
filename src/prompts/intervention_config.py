@@ -145,6 +145,42 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
   - Reply discusses a DIFFERENT treatment or topic than {name} → neutral / n/a
     Even if {name} appears in upstream comments, if the reply has moved on to a different subject,
     the author is NOT expressing experience with {name}.
+    WATCH FOR SIMILAR-ABBREVIATION CONFUSION: drugs with similar names or abbreviations
+    (e.g. LDN = low-dose naltrexone vs LDA = low-dose abilify) often appear together in
+    the same thread. If the reply only discusses one of them, do NOT attribute it to the other.
+    e.g. parent mentions both LDN and LDA; reply says "I tried LDA at 0.02mg and everything was
+    worse" → if {name} is LDN, this is neutral/n/a (the reply is about LDA, not LDN).
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"..."}}"""
+side_effects: list of short lowercase strings naming any side effects the author attributes to {name}
+  Include only effects the author reports experiencing personally from {name} — not hypothetical,
+  not things they read about, not effects from other drugs.
+  Use the author's wording, trimmed to the symptom: "gave me insomnia" → "insomnia",
+  "made my anxiety way worse" → "anxiety", "brain fog got bad" → "brain fog".
+  Collapse obvious duplicates within a single entry. If none reported, use [].
+  This applies to positive/negative/mixed entries alike — a positive report can still list
+  tolerable side effects ("it helped but caused insomnia at first" → positive/strong, side_effects=["insomnia"]).
+
+  LIST FANOUT: when a symptom description applies to multiple drugs in a list, attribute it to
+  EVERY drug in that list, including {name} if it appears.
+  e.g. "Effexor, Pristiq, and Cymbalta all made me feel really bad" → if {name} is Cymbalta,
+  side_effects=["felt really bad"]. Do not drop {name} just because other drugs share the symptom.
+
+  GENERIC SIDE-EFFECT REFERENCES: when the author says they experienced side effects from {name}
+  but doesn't name a specific symptom, capture the phrase they used.
+  e.g. "couldn't tolerate the side effects" → ["side effects"], "I had a bad reaction" → ["bad reaction"],
+  "I reacted badly to it" → ["bad reaction"]. Do NOT invent a specific symptom if none was named.
+
+  INTERACTIONS: if a symptom arises only from combining {name} with another drug and {name} alone
+  is tolerated, side_effects=[] for {name}. Attribute the problem to the MODIFYING drug instead.
+  e.g. "I'm on Vyvanse and fluvoxamine enhances the effects, not in a positive way" →
+  side_effects=[] for Vyvanse (it was fine alone); the issue belongs on fluvoxamine.
+
+  CAUSE vs EFFECT: do NOT list symptoms caused by the CONDITION being treated, or by a DEFICIENCY
+  of {name}, as side effects of {name}. A side effect is something the drug/substance CAUSED in
+  the author, not something it was used to treat.
+  e.g. "vitamin D deficiency gave me depression before fixing it" → side_effects=[] for vitamin D
+  (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
+  e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
+
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[...]}}"""
