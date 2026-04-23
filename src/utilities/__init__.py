@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -221,23 +220,9 @@ def llm_call(
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
-    retries: int = 2,
 ) -> str:
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
-    for attempt in range(retries + 1):
-        try:
-            with client.messages.stream(**kwargs) as stream:
-                return stream.get_final_message().content[0].text
-        except anthropic.RateLimitError as e:
-            if attempt == retries:
-                raise
-            retry_after = float(e.response.headers.get("retry-after", 30)) if e.response else 30
-            log.warning(f"Rate limited; sleeping {retry_after:.0f}s then retry {attempt + 1}/{retries}...")
-            time.sleep(retry_after)
-        except (anthropic.APITimeoutError, anthropic.APIConnectionError) as e:
-            if attempt == retries:
-                raise
-            log.warning(f"LLM call failed ({type(e).__name__}); retry {attempt + 1}/{retries}...")
-            time.sleep(2 ** attempt)
+    with client.messages.stream(**kwargs) as stream:
+        return stream.get_final_message().content[0].text
