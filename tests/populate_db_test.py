@@ -115,6 +115,7 @@ class _FakeMessages:
         )
 
     def stream(self, *, messages, system=None, **_):
+        self._calls.append((messages, system))
         return _FakeStream(_stub_response(messages, system))
 
 
