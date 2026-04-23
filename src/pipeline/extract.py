@@ -18,7 +18,10 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from prompts.intervention_config import EXTRACT_PROMPT
-from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
+from utilities import (
+    TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
+    get_drug_aliases, llm_call, parse_json_array, log,
+)
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
@@ -34,7 +37,7 @@ def is_only_questions(text: str) -> bool:
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
-    """Ask Haiku to extract drug mentions from a batch of texts."""
+    """Ask fast model to extract drug mentions from a batch of texts."""
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
@@ -130,6 +133,33 @@ def run_extraction(config: "PipelineConfig"):
 
     all_items, id_to_parent = load_posts_from_db(config.db_path, config.limit)
     log.info(f"Loaded {len(all_items)} posts/comments from database.")
+
+    # --drug mode: skip the LLM entirely. Substring-match each post against
+    # the target drug + its aliases (fetched once, cached on disk).
+    if config.drug:
+        target = config.drug.strip().lower()
+        aliases = get_drug_aliases(client, target, config.path(f"aliases_{target}.json"))
+        pattern = re.compile(
+            r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b",
+            re.IGNORECASE,
+        )
+        id_to_drugs = {
+            item["id"]: ([target] if pattern.search(item["text"]) else [])
+            for item in all_items
+        }
+        log.info(f"Substring-matched {sum(1 for v in id_to_drugs.values() if v)} posts against aliases for {target!r}.")
+
+        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
+        tagged = [
+            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
+             "drugs_context": upstream_drugs.get(item["id"], [])}
+            for item in all_items
+            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+            and not is_only_questions(item["text"])
+        ]
+        tagged_path.write_text(json.dumps(tagged, indent=2))
+        log.info(f"Wrote {len(tagged)} entries to {tagged_path.name}.")
+        return
 
     # Load existing tagged_mentions as cache
     if tagged_path.exists() and not config.reclassify:

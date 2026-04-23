@@ -16,26 +16,12 @@ if TYPE_CHECKING:
 
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_STRONG, LLMParseError,
-    llm_call, parse_json_object, log,
+    get_drug_aliases, llm_call, parse_json_object, log,
 )
 from utilities.db import upsert_treatments
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
 BATCH_SIZE = 3500
-
-# Hardcoded alias sets for --drug mode. Keys are canonical names,
-# values are alternate names seen in the corpus.
-HARDCODED_ALIASES: dict[str, list[str]] = {
-    "ldn": [
-        "low dose naltrexone",
-        "low-dose naltrexone",
-        "naltrexone",
-        "dextro-naltrexone",
-        "low dose nalproxone",
-        "moderate-dose ldn",
-        "ultra low dose ldn",
-    ],
-}
 
 
 def canonicalize_batch(client, names: list[str], model=MODEL_STRONG) -> dict[str, str]:
@@ -56,22 +42,18 @@ def _canonicalize_entries(tagged: list[dict], canon_map: dict[str, str]) -> None
 
 
 def run_targeted_canonicalization(config: "PipelineConfig") -> dict[str, str]:
-    """Skip the LLM; use HARDCODED_ALIASES[target] to merge synonyms into target."""
-    import sys
+    """Skip the LLM synonym pass; use cached aliases to merge everything into target."""
     target = config.drug.strip().lower()
-    if target not in HARDCODED_ALIASES:
-        raise ValueError(f"--drug {target!r} has no hardcoded alias set. Known: {sorted(HARDCODED_ALIASES)}")
-
-    aliases = [a.lower() for a in HARDCODED_ALIASES[target]]
-    canon_map = {a: target for a in [*aliases, target]}
+    aliases = get_drug_aliases(config.client, target, config.path(f"aliases_{target}.json"))
+    canon_map = {a: target for a in aliases}
 
     tagged = json.loads(config.path(TAGGED_MENTIONS).read_text(encoding="utf-8"))
     _canonicalize_entries(tagged, canon_map)
 
     filtered = [e for e in tagged if target in e.get("drugs_direct", []) or target in e.get("drugs_context", [])]
     config.path(CANONICALIZED_MENTIONS).write_text(json.dumps(filtered, indent=2))
-    upsert_treatments(config.db_path, {target}, {target: aliases})
-    log.info(f"Targeted canonicalize: {target!r} ← {aliases} | kept {len(filtered)}/{len(tagged)} entries")
+    upsert_treatments(config.db_path, {target}, {target: [a for a in aliases if a != target]})
+    log.info(f"Targeted canonicalize: {target!r} ← {len(aliases)} aliases | kept {len(filtered)}/{len(tagged)} entries")
     return canon_map
 
 

@@ -172,6 +172,37 @@ def parse_json_object(raw: str) -> dict:
     return _parse_json(raw, "{", "}", "object")
 
 
+# ── Drug aliases ─────────────────────────────────────────────────────────────
+def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
+    """Return [drug, ...aliases] for filtering in --drug mode.
+
+    Asks the strong model once for common names, abbreviations, brand names,
+    and plausible misspellings. Result is cached to disk and editable by hand.
+    """
+    target = drug.strip().lower()
+    if cache_path.exists():
+        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text()) if a.strip()]
+        log.info(f"Loaded {len(aliases)} cached aliases for {target!r} from {cache_path.name}.")
+    else:
+        prompt = (
+            f"List common names, abbreviations, brand names, generic names, "
+            f"and plausible misspellings/typos for the drug, supplement, or intervention "
+            f"'{target}'. Return ONLY a JSON array of lowercase strings — no prose. "
+            f"Include the canonical name. Only include names a reader might plausibly "
+            f"write for this exact substance; do not enumerate every dosage variant. "
+            f"Return at most 30 entries."
+        )
+        raw = llm_call(client, prompt, model=MODEL_STRONG, max_tokens=2000)
+        aliases = [a.lower().strip() for a in parse_json_array(raw) if a.strip()]
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(aliases, indent=2))
+        log.info(f"Fetched {len(aliases)} aliases for {target!r}; cached to {cache_path.name}.")
+    if target not in aliases:
+        aliases.append(target)
+    log.info(f"Aliases for {target!r}: {', '.join(aliases)}")
+    return aliases
+
+
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
 def llm_call(
     client: anthropic.Anthropic,
