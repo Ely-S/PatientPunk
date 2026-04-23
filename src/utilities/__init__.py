@@ -2,8 +2,6 @@
 import json
 import logging
 import os
-import re
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -39,7 +37,7 @@ class PipelineConfig:
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
-    drug: str | None = None                # If set, canonicalize + classify operate on this drug and its synonyms only
+    drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -58,51 +56,49 @@ logging.getLogger("anthropic").setLevel(logging.WARNING)
 
 # ── Models + Provider ────────────────────────────────────────────────────────
 # Provider is auto-detected from which API key is set, unless overridden:
-#   OPENROUTER_API_KEY set → openrouter
-#   ANTHROPIC_API_KEY set  → anthropic
+#   OPENROUTER_API_KEY set → openrouter (default models: anthropic/claude-*)
+#   ANTHROPIC_API_KEY set  → anthropic  (default models: claude-*-20251001)
 #   LLM_PROVIDER=...       → explicit override
 #
-# Override models in .env via MODEL_FAST / MODEL_STRONG.
+# Override models in .env:
+#   MODEL_FAST=google/gemini-2.0-flash
+#   MODEL_STRONG=openai/gpt-4o
+# Any model supported by your provider works.
 _PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX"}
 
-PROVIDERS: dict[str, dict] = {
-    "openrouter": {
-        "key": "OPENROUTER_API_KEY",
-        "fast": "anthropic/claude-haiku-4.5",
-        "strong": "anthropic/claude-sonnet-4.6",
-        "base_url": "https://openrouter.ai/api",
-    },
-    "anthropic": {
-        "key": "ANTHROPIC_API_KEY",
-        "fast": "claude-haiku-4-5-20251001",
-        "strong": "claude-sonnet-4-6",
-        "base_url": None,
-    },
-}
+_has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_KEYS
+_has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
 
-
-def _valid_key(name: str) -> bool:
-    return os.environ.get(name, "") not in _PLACEHOLDER_KEYS
-
-
-_explicit = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
-if _explicit and _explicit not in PROVIDERS:
-    sys.exit(f"Unsupported LLM_PROVIDER={_explicit!r} (expected one of {sorted(PROVIDERS)})")
-if _explicit:
-    LLM_PROVIDER = _explicit
-elif _valid_key("OPENROUTER_API_KEY"):
+# Auto-detect provider from available keys, or use explicit override
+_explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
+if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
+    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
+if _explicit_provider:
+    LLM_PROVIDER = _explicit_provider
+elif _has_openrouter:
     LLM_PROVIDER = "openrouter"
-else:
+elif _has_anthropic:
     LLM_PROVIDER = "anthropic"
+else:
+    LLM_PROVIDER = "anthropic"  # default for backward compatibility
 
-_provider_cfg = PROVIDERS[LLM_PROVIDER]
-MODEL_FAST = os.environ.get("MODEL_FAST", _provider_cfg["fast"])
-MODEL_STRONG = os.environ.get("MODEL_STRONG", _provider_cfg["strong"])
+if LLM_PROVIDER == "openrouter":
+    _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
+    _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
+    _API_BASE = "https://openrouter.ai/api"
+else:
+    _DEFAULT_FAST = "claude-haiku-4-5-20251001"
+    _DEFAULT_STRONG = "claude-sonnet-4-6"
+    _API_BASE = None
+
+MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
+MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 
 # ── Git ──────────────────────────────────────────────────────────────────────
 def get_git_commit() -> str:
     """Return current git commit hash, or 'unknown'."""
+    import subprocess
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
@@ -114,36 +110,39 @@ def get_git_commit() -> str:
 
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
-    """Return a configured Anthropic client (direct or via OpenRouter)."""
-    key_name = _provider_cfg["key"]
-    if not _valid_key(key_name):
-        other = next(p for p in PROVIDERS if p != LLM_PROVIDER)
+    """Return a configured Anthropic client (direct or via OpenRouter).
+
+    Key selection is tied to the provider:
+      openrouter → requires OPENROUTER_API_KEY
+      anthropic  → requires ANTHROPIC_API_KEY
+    """
+    if LLM_PROVIDER == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        key_name = "OPENROUTER_API_KEY"
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key_name = "ANTHROPIC_API_KEY"
+
+    if not api_key or api_key in _PLACEHOLDER_KEYS:
         sys.exit(
             f"{key_name} not set (provider={LLM_PROVIDER}).\n"
             f"  Add {key_name}=... to .env\n"
-            f"  Or switch provider: LLM_PROVIDER={other}"
+            f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
         )
 
     log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
 
     kwargs: dict = {
-        "api_key": os.environ[key_name],
+        "api_key": api_key,
         "max_retries": 4,
         "timeout": 60.0,
     }
-    if _provider_cfg["base_url"]:
-        kwargs["base_url"] = _provider_cfg["base_url"]
+    if _API_BASE:
+        kwargs["base_url"] = _API_BASE
     return anthropic.Anthropic(**kwargs)
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────
-class LLMParseError(ValueError):
-    """LLM response could not be parsed as JSON."""
-
-
-_TRAILING_COMMA = re.compile(r",\s*([}\]])")
-
-
 def _strip_markdown(raw: str) -> str:
     if "```" in raw:
         raw = raw.split("```")[1]
@@ -152,11 +151,19 @@ def _strip_markdown(raw: str) -> str:
     return raw.strip()
 
 
-def _parse_json(raw: str, open_ch: str, close_ch: str, kind: str):
+class LLMParseError(ValueError):
+    """LLM response could not be parsed as JSON."""
+
+
+import re
+
+_TRAILING_COMMA = re.compile(r",\s*([}\]])")
+
+def parse_json_array(raw: str) -> list:
     raw = _strip_markdown(raw)
-    start, end = raw.find(open_ch), raw.rfind(close_ch) + 1
+    start, end = raw.find("["), raw.rfind("]") + 1
     if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON {kind} in response: {raw[:200]}")
+        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
     text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
         return json.loads(text)
@@ -164,12 +171,16 @@ def _parse_json(raw: str, open_ch: str, close_ch: str, kind: str):
         raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
-def parse_json_array(raw: str) -> list:
-    return _parse_json(raw, "[", "]", "array")
-
-
 def parse_json_object(raw: str) -> dict:
-    return _parse_json(raw, "{", "}", "object")
+    raw = _strip_markdown(raw)
+    start, end = raw.find("{"), raw.rfind("}") + 1
+    if start < 0 or end <= start:
+        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
+    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────
