@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_STRONG, LLMParseError,
-    get_drug_aliases, llm_call, parse_json_object, log,
+    resolve_aliases, llm_call, parse_json_object, log,
 )
 from utilities.db import upsert_treatments
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
@@ -43,8 +43,7 @@ def _canonicalize_entries(tagged: list[dict], canon_map: dict[str, str]) -> None
 
 def run_targeted_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     """Skip the LLM synonym pass; use cached aliases to merge everything into target."""
-    target = config.drug.strip().lower()
-    aliases = get_drug_aliases(config.client, target, config.path(f"aliases_{target}.json"))
+    target, aliases = resolve_aliases(config)
     canon_map = {a: target for a in aliases}
 
     tagged = json.loads(config.path(TAGGED_MENTIONS).read_text(encoding="utf-8"))
