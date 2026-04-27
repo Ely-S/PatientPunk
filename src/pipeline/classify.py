@@ -160,9 +160,12 @@ def run_classification(
         synonyms_for = {}
         subreddit = "Long COVID"
 
-    target_drug = config.drug.strip().lower() if config.drug else None
-    if target_drug:
-        log.info(f"Restricting classification to drug: {target_drug!r}")
+    target_aliases: set[str] | None = None
+    if config.drug:
+        target = config.drug.strip().lower()
+        source = config.drug_aliases if config.drug_aliases else synonyms_for.get(target, [])
+        target_aliases = {target} | {a.lower().strip() for a in source if a.strip()}
+        log.info(f"Restricting classification to: {sorted(target_aliases)}")
 
     if limit:
         tagged = tagged[:limit]
@@ -194,7 +197,7 @@ def run_classification(
     for entry in tagged:
         all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
         for drug in all_drugs:
-            if target_drug is not None and drug != target_drug:
+            if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
                 not config.reclassify

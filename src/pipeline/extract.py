@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from prompts.intervention_config import EXTRACT_PROMPT
 from utilities import (
     TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
-    get_drug_aliases, llm_call, parse_json_array, log,
+    resolve_aliases, llm_call, parse_json_array, log,
 )
 from utilities.db import open_db, post_text
 
@@ -136,8 +136,7 @@ def run_extraction(config: "PipelineConfig"):
     # --drug mode: skip the LLM entirely. Substring-match each post against
     # the target drug + its aliases (fetched once, cached on disk).
     if config.drug:
-        target = config.drug.strip().lower()
-        aliases = get_drug_aliases(client, target, config.path(f"aliases_{target}.json"))
+        target, aliases = resolve_aliases(config)
         pattern = re.compile(
             r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b",
             re.IGNORECASE,
