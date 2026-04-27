@@ -21,6 +21,7 @@ import anthropic
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
+CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ class PipelineConfig:
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
+    drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -180,6 +182,30 @@ def parse_json_object(raw: str) -> dict:
         raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
 
 
+# ── Drug aliases ─────────────────────────────────────────────────────────────
+def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
+    """Return [drug, ...aliases] for filtering in --drug mode.
+
+    Asks the strong model once for common names, abbreviations, brand names,
+    and plausible misspellings. Result is cached to disk and editable by hand.
+    """
+    from prompts.intervention_config import drug_aliases_prompt
+    target = drug.strip().lower()
+    if cache_path.exists():
+        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text()) if a.strip()]
+        log.info(f"Loaded {len(aliases)} cached aliases for {target!r} from {cache_path.name}.")
+    else:
+        raw = llm_call(client, drug_aliases_prompt(target), model=MODEL_STRONG, max_tokens=2000)
+        aliases = [a.lower().strip() for a in parse_json_array(raw) if a.strip()]
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(aliases, indent=2))
+        log.info(f"Fetched {len(aliases)} aliases for {target!r}; cached to {cache_path.name}.")
+    if target not in aliases:
+        aliases.append(target)
+    log.info(f"Aliases for {target!r}: {', '.join(aliases)}")
+    return aliases
+
+
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
 def llm_call(
     client: anthropic.Anthropic,
@@ -191,4 +217,5 @@ def llm_call(
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
-    return client.messages.create(**kwargs).content[0].text
+    with client.messages.stream(**kwargs) as stream:
+        return stream.get_final_message().content[0].text

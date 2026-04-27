@@ -7,6 +7,7 @@ with drugs found in each post/comment (direct mentions + inherited from upstream
 """
 import itertools
 import json
+import re
 from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import lru_cache
@@ -17,14 +18,27 @@ if TYPE_CHECKING:
     from utilities import PipelineConfig
 
 from prompts.intervention_config import EXTRACT_PROMPT
-from utilities import TAGGED_MENTIONS, MODEL_FAST, LLMParseError, llm_call, parse_json_array, log
+from utilities import (
+    TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
+    get_drug_aliases, llm_call, parse_json_array, log,
+)
+from utilities.db import open_db, post_text
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
 
 
+def is_only_questions(text: str) -> bool:
+    """Check if text contains only questions (or is empty)."""
+    text = text.strip()
+    if not text:
+        return True
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    return bool(sentences) and all(s.endswith('?') for s in sentences)
+
+
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
-    """Ask Haiku to extract drug mentions from a batch of texts."""
+    """Ask fast model to extract drug mentions from a batch of texts."""
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
@@ -69,8 +83,6 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     Each item is a dict with keys: id, text, author, parent_id, post_title, created_utc.
     """
-    from utilities.db import open_db
-
     conn = open_db(db_path)
     rows = conn.execute(
         "SELECT post_id, title, parent_id, user_id, body_text, post_date "
@@ -103,7 +115,7 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
 
     for post_id, title, parent_id, user_id, body_text, post_date in rows:
         id_to_parent[post_id] = parent_id
-        text = f"{title or ''} {body_text or ''}".strip() if parent_id is None else (body_text or "")
+        text = post_text(title, body_text, parent_id)
         items.append({
             "id": post_id, "text": text, "author": user_id,
             "parent_id": parent_id, "post_title": resolve_title(post_id),
@@ -120,6 +132,33 @@ def run_extraction(config: "PipelineConfig"):
 
     all_items, id_to_parent = load_posts_from_db(config.db_path, config.limit)
     log.info(f"Loaded {len(all_items)} posts/comments from database.")
+
+    # --drug mode: skip the LLM entirely. Substring-match each post against
+    # the target drug + its aliases (fetched once, cached on disk).
+    if config.drug:
+        target = config.drug.strip().lower()
+        aliases = get_drug_aliases(client, target, config.path(f"aliases_{target}.json"))
+        pattern = re.compile(
+            r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b",
+            re.IGNORECASE,
+        )
+        id_to_drugs = {
+            item["id"]: ([target] if pattern.search(item["text"]) else [])
+            for item in all_items
+        }
+        log.info(f"Substring-matched {sum(1 for v in id_to_drugs.values() if v)} posts against aliases for {target!r}.")
+
+        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
+        tagged = [
+            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
+             "drugs_context": upstream_drugs.get(item["id"], [])}
+            for item in all_items
+            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+            and not is_only_questions(item["text"])
+        ]
+        tagged_path.write_text(json.dumps(tagged, indent=2))
+        log.info(f"Wrote {len(tagged)} entries to {tagged_path.name}.")
+        return
 
     # Load existing tagged_mentions as cache
     if tagged_path.exists() and not config.reclassify:
@@ -139,7 +178,8 @@ def run_extraction(config: "PipelineConfig"):
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
              "drugs_context": upstream_drugs.get(item["id"], [])}
             for item in all_items
-            if id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"])
+            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+            and not is_only_questions(item["text"])
         ]
         tmp = tagged_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(tagged, indent=2))

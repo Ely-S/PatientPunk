@@ -12,6 +12,16 @@ from pathlib import Path
 COMMIT_EVERY = 50  # commit after this many writes
 
 
+def post_text(title: str | None, body_text: str | None, parent_id: str | None) -> str:
+    """Reconstruct display text for a post row.
+
+    Top-level posts (parent_id is None) combine title + body; replies use body only.
+    """
+    if parent_id is None:
+        return f"{title or ''} {body_text or ''}".strip()
+    return body_text or ""
+
+
 def open_db(db_path: Path) -> sqlite3.Connection:
     """Open a database connection with WAL journal mode.
 
@@ -83,6 +93,7 @@ class ReportWriter:
 
     def write_one(
         self, post_id: str, drug: str, author: str, sentiment: str, signal: str,
+        side_effects: list[str] | None = None,
     ) -> bool:
         """Insert a single result. Returns False if drug is unknown. Auto-commits periodically."""
         drug_id = self._drug_ids.get(drug.lower())
@@ -91,9 +102,12 @@ class ReportWriter:
 
         self._conn.execute(
             "INSERT INTO treatment_reports "
-            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (self.run_id, post_id, author, drug_id, sentiment, signal),
+            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength, side_effects) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                self.run_id, post_id, author, drug_id, sentiment, signal,
+                json.dumps(side_effects) if side_effects else None,
+            ),
         )
         self._pending += 1
         if self._pending >= COMMIT_EVERY:
