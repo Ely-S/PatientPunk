@@ -93,7 +93,7 @@ def main():
     )
     args = parser.parse_args()
 
-    drug_aliases = [l.strip() for l in Path(args.drug_file).read_text().splitlines() if l.strip()] if args.drug_file else None
+    drug_aliases = [l.strip() for l in Path(args.drug_file).read_text(encoding="utf-8").splitlines() if l.strip()] if args.drug_file else None
     drug = drug_aliases[0] if drug_aliases else args.drug
 
     output_dir = Path(args.output_dir)

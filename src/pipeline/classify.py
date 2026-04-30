@@ -31,7 +31,7 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    PipelineConfig, get_client, llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
 )
 from utilities.db import load_synonyms, open_db, post_text
 
@@ -162,9 +162,8 @@ def run_classification(
 
     target_aliases: set[str] | None = None
     if config.drug:
-        target = config.drug.strip().lower()
-        source = config.drug_aliases if config.drug_aliases else synonyms_for.get(target, [])
-        target_aliases = {target} | {a.lower().strip() for a in source if a.strip()}
+        target, aliases = resolve_aliases(config)
+        target_aliases = set(aliases)
         log.info(f"Restricting classification to: {sorted(target_aliases)}")
 
     if limit:

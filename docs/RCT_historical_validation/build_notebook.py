@@ -1,4 +1,4 @@
-﻿"""
+"""
 Notebook builder and executor for PatientPunk research notebooks.
 
 Usage:
