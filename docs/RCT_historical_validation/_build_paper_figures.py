@@ -325,6 +325,6 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 # BUILD + EXECUTE
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    nb = build_notebook(cells=cells, db_path="data/corpus_baseline_onemonth.db")
+    nb = build_notebook(cells=cells, db_path="../data/corpus_baseline_onemonth.db")
     html_path = execute_and_export(nb, "output/paper_figures")
     print(f"\nDone. Open {html_path} to view the results.")

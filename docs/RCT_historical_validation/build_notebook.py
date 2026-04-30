@@ -105,8 +105,8 @@ def build_notebook(cells, db_path="patientpunk.db", title=None):
         "name": "python3",
     }
 
-    # Resolve DB path to absolute with forward slashes (avoids Windows unicode escape issues)
-    db_path_resolved = Path(db_path).resolve().as_posix()
+    # Keep path as relative with forward slashes (avoids hardcoding local absolute paths)
+    db_path_resolved = Path(db_path).as_posix()
     # Inject setup cell (produces zero output)
     setup = SETUP_CODE.format(db_path=db_path_resolved)
     nb.cells.append(new_code_cell(source=setup))
