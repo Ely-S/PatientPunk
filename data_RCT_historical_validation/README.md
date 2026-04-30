@@ -8,7 +8,16 @@ These figures compare what people on r/covidlonghaulers said about 6 Long COVID 
 
 ---
 
-## Quick Start
+## Viewing the Results
+
+Pre-built outputs are included in `output/` — no setup required:
+- **`paper_figures.html`** — open in any browser to see all figures and tables
+- **`figure1.png`** — Figure 1 as a standalone image
+- `paper_figures_executed.ipynb` — executed notebook (open in Jupyter to explore)
+
+## Re-running the Analysis
+
+To regenerate everything from scratch, you need the underlying SQLite databases (~260 MB, not included in this repo). Contact the authors to obtain the data files, then place them in `data/`.
 
 ```bash
 # Prerequisites: Python 3.10+
@@ -17,12 +26,6 @@ pip install -r requirements.txt
 # Reproduce all figures
 python _build_paper_figures.py
 ```
-
-Output appears in `output/`:
-- `paper_figures.html` — rendered results (open in any browser)
-- `paper_figures.ipynb` — source notebook
-- `paper_figures_executed.ipynb` — executed notebook with all cell outputs
-- `figure1.png` — Figure 1 as a standalone image (150 dpi)
 
 ---
 
