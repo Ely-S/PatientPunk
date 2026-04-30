@@ -7,7 +7,7 @@ and Table 3 (per-drug response composition) from:
     "A Methodology for Gathering Real-World Evidence at Scale"
 
 Usage:
-    cd data_RCT_historical_validation/
+    cd docs/RCT_historical_validation/
     python _build_paper_figures.py
 
 Output:
