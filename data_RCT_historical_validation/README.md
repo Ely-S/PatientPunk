@@ -17,7 +17,28 @@ Pre-built outputs are included in `output/` — no setup required:
 
 ## Re-running the Analysis
 
-To regenerate everything from scratch, you need the underlying SQLite databases (~260 MB, not included in this repo). Contact the authors to obtain the data files, then place them in `data/`.
+To regenerate everything from scratch, you need the underlying SQLite databases (~260 MB, not included in this repo). Download them from the links below and place them in a `data/` subfolder.
+
+### Download the databases
+
+| File | Size | Download |
+|------|------|----------|
+| `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/famotidine_loratadine_prednisone_may_sept_2021.db) |
+| `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/paxlovid_pre_stop_pasc_4mo.db) |
+| `colchicine_naltrexone_year_2021.db` | 123 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/colchicine_naltrexone_year_2021.db) |
+| `naltrexone_jan_2022.db` | 15 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/naltrexone_jan_2022.db) |
+| `corpus_baseline_onemonth.db` | 12 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/corpus_baseline_onemonth.db) |
+
+The raw (pre-processed) Reddit JSON data is also available:
+
+| File | Download |
+|------|----------|
+| `famotidine_loratadine_prednisone_may_sept_2021.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/famotidine_loratadine_prednisone_may_sept_2021.json) |
+| `paxlovid_pre_stop_pasc_4mo.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/paxlovid_pre_stop_pasc_4mo.json) |
+| `colchicine_naltrexone_year_2021.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/colchicine_naltrexone_year_2021.json) |
+| `naltrexone_jan_2022.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/naltrexone_jan_2022.json) |
+
+### Reproduce
 
 ```bash
 # Prerequisites: Python 3.10+
