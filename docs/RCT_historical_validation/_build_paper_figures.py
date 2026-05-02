@@ -154,12 +154,13 @@ def epoch_eod(date_str):
 END_2022 = '2022-12-31'
 
 DRUG_CUTOFFS = {
-    'famotidine':  ('2021-06-06', 'Glynne et al. 2021 (medRxiv preprint, 7 Jun 2021)'),
-    'loratadine':  ('2021-06-06', 'Glynne et al. 2021 (medRxiv preprint, 7 Jun 2021)'),
-    'prednisone':  ('2021-10-25', 'Utrero-Rico et al. 2021 (Biomedicines, 26 Oct 2021)'),
-    'naltrexone':  ('2022-07-02', 'O′Kelly et al. 2022 (BBI Health, 3 Jul 2022)'),
-    'paxlovid':    ('2024-06-06', 'STOP-PASC / Geng et al. 2024 (JAMA Intern Med, 7 Jun 2024)'),
-    'colchicine':  ('2025-11-30', 'Bassi et al. 2025 (JAMA Intern Med, 1 Dec 2025)'),
+    # drug -> (cutoff_yyyy_mm_dd, paper_short, source_and_date)
+    'famotidine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
+    'loratadine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
+    'prednisone':  ('2021-10-25', 'Utrero-Rico et al. 2021',     'Biomedicines 2021-10-26'),
+    'naltrexone':  ('2022-07-02', 'O′Kelly et al. 2022',         'BBI Health 2022-07-03'),
+    'paxlovid':    ('2024-06-06', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
+    'colchicine':  ('2025-11-30', 'Bassi et al. 2025',           'JAMA Intern Med 2025-12-01'),
 }
 """))
 
@@ -167,7 +168,7 @@ DRUG_CUTOFFS = {
 # FIGURE 1: Data extraction + paired horizontal bar chart
 # ────────────────────────────────────────────────────────────────────
 cells.append(("code", r"""
-def _sentiment_breakdown(drug_label, sentiments, trial_dir, paper_ref):
+def _sentiment_breakdown(drug_label, sentiments, trial_dir, paper_short, source_date):
     n = len(sentiments)
     pos = sum(1 for s in sentiments if s == 'positive')
     neg = sum(1 for s in sentiments if s == 'negative')
@@ -178,7 +179,8 @@ def _sentiment_breakdown(drug_label, sentiments, trial_dir, paper_ref):
     nonr_lo, nonr_hi = wilson(nonr, n, alpha=0.05, method='wilson') if n else (0, 0)
     pval = binomtest(pos, n, 0.5, alternative='two-sided').pvalue if n else 1.0
     return {
-        'drug': drug_label, 'n': n, 'trial_dir': trial_dir, 'paper': paper_ref,
+        'drug': drug_label, 'n': n, 'trial_dir': trial_dir,
+        'paper': paper_short, 'source_date': source_date,
         'pos': pos, 'neg': neg, 'neu': neu, 'mix': mix, 'nonr': nonr,
         'pos_pct': pos/n*100 if n else 0,
         'pos_lo': pos_lo*100, 'pos_hi': pos_hi*100,
@@ -198,13 +200,13 @@ TRIAL_DIRS = {
 }
 
 resp_rows = []
-for drug, (pub_cutoff, paper) in DRUG_CUTOFFS.items():
+for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
     effective_cutoff = min(pub_cutoff, END_2022)
     cutoff_ts = epoch_eod(effective_cutoff)
     merged = merge_drug_across_dbs(drug, cutoff_ts)
     dedup = dedup_recent_then_strength(merged)
     sentiments = [s for _u, _d, s in dedup]
-    resp_rows.append(_sentiment_breakdown(drug, sentiments, TRIAL_DIRS[drug], paper))
+    resp_rows.append(_sentiment_breakdown(drug, sentiments, TRIAL_DIRS[drug], paper_short, source_date))
 
 resp_df = (pd.DataFrame(resp_rows)
            .sort_values('pos_pct', ascending=False)
@@ -303,7 +305,7 @@ cells.append(("code", r"""
 # Pulls user/report counts directly from the merged data so the table
 # auto-updates if the underlying DBs change.
 src_rows = []
-for drug, (pub_cutoff, paper) in DRUG_CUTOFFS.items():
+for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
     effective_cutoff = min(pub_cutoff, END_2022)
     cutoff_ts = epoch_eod(effective_cutoff)
     merged = merge_drug_across_dbs(drug, cutoff_ts)
@@ -317,7 +319,7 @@ for drug, (pub_cutoff, paper) in DRUG_CUTOFFS.items():
         'window_end': effective_cutoff,
         'unique_users': n_users,
         'treatment_reports': n_reports,
-        'comparator': paper,
+        'comparator': f"{paper_short} ({source_date})",
     })
 src_df = pd.DataFrame(src_rows)
 
@@ -354,8 +356,9 @@ display(HTML("<h3>Table 2 &mdash; Data sources by drug</h3>" + src_html))
 # ────────────────────────────────────────────────────────────────────
 cells.append(("code", r"""
 # ── Table 3: Response composition ──
-table_df = resp_df[['drug', 'paper', 'n', 'pos', 'pos_pct', 'pos_lo', 'pos_hi',
-                    'nonr', 'nonr_pct', 'nonr_lo', 'nonr_hi', 'pval']].copy()
+table_df = resp_df[['drug', 'paper', 'source_date', 'n', 'pos', 'pos_pct',
+                    'pos_lo', 'pos_hi', 'nonr', 'nonr_pct',
+                    'nonr_lo', 'nonr_hi', 'pval']].copy()
 
 def _fmt_pct(v): return f"{v:.1f}%"
 def _fmt_ci(lo, hi): return f"[{lo:.1f}%, {hi:.1f}%]"
@@ -370,17 +373,23 @@ table_df['% non-resp']        = table_df['nonr_pct'].apply(_fmt_pct)
 table_df['non-resp 95% CI']   = [_fmt_ci(lo, hi) for lo, hi in zip(table_df['nonr_lo'], table_df['nonr_hi'])]
 table_df['p (vs 50%)']        = table_df['pval'].apply(_fmt_p)
 
-display_table = table_df[['drug', 'paper', 'n',
+display_table = table_df[['drug', 'paper', 'source_date', 'n',
                           '% responders', 'responders 95% CI',
                           'nonr', '% non-resp', 'non-resp 95% CI',
-                          'p (vs 50%)']].rename(columns={'nonr': '-/0/~'})
+                          'p (vs 50%)']].rename(columns={
+                              'paper':        'Comparator paper',
+                              'source_date':  'Source / first public date',
+                              'nonr':         '-/0/~',
+                          })
 
 display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication data only)</h3>"
              "<p style='font-size:0.9em; color:#555;'>Each row: one (user, drug) per cell after the "
              "<i>most recent + signal-strength tiebreaker</i> dedup rule. "
              "Responders = positive sentiment; non-responders = negative + neutral + mixed. "
              "<i>p</i> values from a two-sided binomial test against the 50% null "
-             "(H&#8320;: P(responder) = 0.5).</p>"
+             "(H&#8320;: P(responder) = 0.5). The 'Source / first public date' column gives the "
+             "earliest publicly available release of the comparator paper "
+             "(medRxiv preprint where available, otherwise journal online-first).</p>"
              + display_table.to_html(index=False)))
 """))
 
