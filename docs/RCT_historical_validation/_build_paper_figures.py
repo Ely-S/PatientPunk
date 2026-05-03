@@ -54,7 +54,9 @@ This notebook reproduces **Figure 1**, **Table 2**, and **Table 3** from the pap
 **Method.** For each drug, we extract all treatment-sentiment reports from
 r/covidlonghaulers posts dated *before* the comparator paper was publicly
 available (medRxiv preprint or journal online-first, whichever came first).
-The analysis is restricted to data through end of 2022. Each user contributes
+The analysis is restricted to data through end of 2022. All classified
+reports come from a single self-sufficient SQLite database
+(`historical_validation_2020-07_to_2022-12.db`). Each user contributes
 exactly one data point per drug after deduplication: the **most recent report**
 wins, with **signal_strength** as the tiebreaker for posts on the same date
 (strong > moderate > weak > n/a). We then test whether the proportion of
@@ -71,20 +73,15 @@ from datetime import datetime, timezone
 from scipy.stats import binomtest
 from statsmodels.stats.proportion import proportion_confint as wilson
 
-# ── Connect to all analysis databases ──
-# Existing per-drug DBs (focused windows from the original pipeline runs)
-# plus the master_gap DB (2020-07-24 → 2022-12-31, all six target drugs).
+# ── Single self-sufficient analysis database ──
+# This DB contains every classified treatment_report needed to reproduce the
+# paper's figures and tables. Built by combining the master_gap pipeline run
+# (2020-07-24 → 2022-12-31, all six target drugs) with the small number of
+# additional classifications from earlier per-drug pipeline runs that were
+# not present in master_gap. See README for provenance details.
 DB_DIR = Path(DB_PATH).parent
-
-db_paths = {
-    "may_sept_2021":     DB_DIR / "famotidine_loratadine_prednisone_may_sept_2021.db",
-    "4mo_pre_stop_pasc": DB_DIR / "paxlovid_pre_stop_pasc_4mo.db",
-    "year_2021":         DB_DIR / "colchicine_naltrexone_year_2021.db",
-    "jan_2022":          DB_DIR / "naltrexone_jan_2022.db",
-    "polina_onemonth":   DB_DIR / "corpus_baseline_onemonth.db",
-    "master_gap":        DB_DIR / "master_gap_2020-07_to_2022-12.db",
-}
-slices = {k: sqlite3.connect(v.as_posix()) for k, v in db_paths.items() if v.exists()}
+COMBINED_DB = DB_DIR / "historical_validation_2020-07_to_2022-12.db"
+combined_conn = sqlite3.connect(COMBINED_DB.as_posix())
 
 # ── Signal-strength rank for tiebreaking ──
 # Higher = stronger evidence. 'n/a' is treated as lowest because it means the
@@ -92,10 +89,10 @@ slices = {k: sqlite3.connect(v.as_posix()) for k, v in db_paths.items() if v.exi
 # over an uncertain one when dates tie.
 SIG_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
 
-def fetch_drug_reports(conn, drug, cutoff_ts):
-    '''Pull all reports for a canonical drug from one DB, with post_date
-    and signal_strength, filtered to post_date <= cutoff_ts.'''
-    return conn.execute('''
+def fetch_drug_reports(drug, cutoff_ts):
+    '''Pull all reports for a canonical drug from the combined DB,
+    filtered to post_date <= cutoff_ts.'''
+    return combined_conn.execute('''
         SELECT tr.user_id,
                lower(t.canonical_name) AS drug,
                tr.sentiment,
@@ -110,30 +107,12 @@ def fetch_drug_reports(conn, drug, cutoff_ts):
           AND p.post_date <= ?
     ''', (drug, cutoff_ts)).fetchall()
 
-def merge_drug_across_dbs(drug, cutoff_ts):
-    '''Pull the drug's reports from every DB and dedupe on post_id.
-    The master_gap DB takes priority when the same post is classified
-    in multiple DBs (most recent pipeline run, consistent prompts).'''
-    rows_by_db = []
-    for label, conn in slices.items():
-        rows = fetch_drug_reports(conn, drug, cutoff_ts)
-        for r in rows:
-            rows_by_db.append((label, *r))
-    # Each row: (db_label, user_id, drug, sentiment, sig, post_date, post_id)
-    by_post = {}
-    for row in rows_by_db:
-        db_label, _uid, _drug, _sent, _sig, _d, post_id = row
-        if post_id in by_post and by_post[post_id][0] == "master_gap":
-            continue  # master_gap already wins
-        by_post[post_id] = row
-    return list(by_post.values())
-
 def dedup_recent_then_strength(rows):
     '''Per (user, drug): keep the most recent report; for same-date ties,
     keep the strongest signal.'''
     by_user = {}
     for row in rows:
-        _db, uid, drug, sent, sig, d, _pid = row
+        uid, drug, sent, sig, d, _pid = row
         date = d or 0
         sig_r = SIG_RANK.get(sig, 0)
         key = (uid, drug)
@@ -203,8 +182,8 @@ resp_rows = []
 for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
     effective_cutoff = min(pub_cutoff, END_2022)
     cutoff_ts = epoch_eod(effective_cutoff)
-    merged = merge_drug_across_dbs(drug, cutoff_ts)
-    dedup = dedup_recent_then_strength(merged)
+    rows = fetch_drug_reports(drug, cutoff_ts)
+    dedup = dedup_recent_then_strength(rows)
     sentiments = [s for _u, _d, s in dedup]
     resp_rows.append(_sentiment_breakdown(drug, sentiments, TRIAL_DIRS[drug], paper_short, source_date))
 
@@ -308,13 +287,12 @@ src_rows = []
 for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
     effective_cutoff = min(pub_cutoff, END_2022)
     cutoff_ts = epoch_eod(effective_cutoff)
-    merged = merge_drug_across_dbs(drug, cutoff_ts)
-    n_reports = len(merged)
-    n_users = len({(uid, dr) for _db, uid, dr, _s, _sg, _d, _p in merged})
-    dbs_used = sorted({row[0] for row in merged})
+    rows = fetch_drug_reports(drug, cutoff_ts)
+    n_reports = len(rows)
+    n_users = len({(uid, dr) for uid, dr, _s, _sg, _d, _p in rows})
     src_rows.append({
         'drug': drug,
-        'databases': ', '.join(dbs_used),
+        'databases': 'historical_validation_2020-07_to_2022-12.db',
         'window_start': '2020-07-24',
         'window_end': effective_cutoff,
         'unique_users': n_users,
@@ -326,7 +304,6 @@ src_df = pd.DataFrame(src_rows)
 src_html = "<table style='border-collapse:collapse; width:100%; font-size:0.85em; margin:12px 0;'>"
 src_html += ("<tr style='background:#34495e; color:white;'>"
              "<th style='padding:6px 10px;'>Drug</th>"
-             "<th style='padding:6px 10px;'>Databases used (deduped on post_id)</th>"
              "<th style='padding:6px 10px;'>Window</th>"
              "<th style='padding:6px 10px;'>Unique users</th>"
              "<th style='padding:6px 10px;'>Treatment reports</th>"
@@ -335,16 +312,16 @@ for i, (_, r) in enumerate(src_df.iterrows()):
     bg = '#fff' if i % 2 == 0 else '#f8f9fa'
     src_html += (f"<tr style='background:{bg};'>"
                  f"<td style='padding:6px 10px; font-weight:bold;'>{r['drug']}</td>"
-                 f"<td style='padding:6px 10px; font-size:0.85em;'>{r['databases']}</td>"
                  f"<td style='padding:6px 10px;'>{r['window_start']} → {r['window_end']}</td>"
                  f"<td style='padding:6px 10px; text-align:center;'>{r['unique_users']}</td>"
                  f"<td style='padding:6px 10px; text-align:center;'>{r['treatment_reports']}</td>"
                  f"<td style='padding:6px 10px; font-size:0.85em;'>{r['comparator']}</td></tr>")
 src_html += "</table>"
 src_html += ("<p style='font-size:0.85em; color:#777; margin-top:4px;'>"
-             "Unique users: distinct users with at least one classified report for this drug after merging "
-             "across DBs and deduping on post_id. Treatment reports: total post-level reports before per-user dedup. "
-             "When the same post is classified in multiple DBs, the master_gap classification takes priority. "
+             "All counts are drawn from a single SQLite database "
+             "(<code>historical_validation_2020-07_to_2022-12.db</code>) constructed for this paper. "
+             "Unique users: distinct users with at least one classified report for the drug. "
+             "Treatment reports: total post-level reports before per-user dedup. "
              "Window cap at end of 2022 applies to paxlovid and colchicine; for the other four drugs the "
              "comparator publication date is the binding cutoff.</p>")
 

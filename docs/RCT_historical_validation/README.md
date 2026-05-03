@@ -17,27 +17,60 @@ Pre-built outputs are included in `output/` — no setup required:
 
 ## Re-running the Analysis
 
-To regenerate everything from scratch, you need the underlying SQLite databases (~580 MB total, not included in this repo). Download them from the links below and place them in a `data/` subfolder.
+To regenerate the figures and tables, you only need **one database** (314 MB). Place it in a `data/` subfolder under this directory.
 
-### Download the databases
+### Required database
 
 | File | Size | Download |
 |------|------|----------|
-| `master_gap_2020-07_to_2022-12.db` | 314 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/master_gap_2020-07_to_2022-12.db) |
+| `historical_validation_2020-07_to_2022-12.db` | 314 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/historical_validation_2020-07_to_2022-12.db) |
+
+This single database contains every classified treatment report needed to reproduce the paper's figures and tables. See [Provenance of the analysis database](#provenance-of-the-analysis-database) below for how it was built.
+
+### Optional databases (for transparency, not required for reproduction)
+
+These are the source databases from the original per-drug pipeline runs. Their classifications are already merged into `historical_validation_2020-07_to_2022-12.db`. They are published here so reviewers can verify that no rows were lost or altered during merging.
+
+| File | Size | Download |
+|------|------|----------|
 | `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/famotidine_loratadine_prednisone_may_sept_2021.db) |
 | `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/paxlovid_pre_stop_pasc_4mo.db) |
 | `colchicine_naltrexone_year_2021.db` | 123 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/colchicine_naltrexone_year_2021.db) |
 | `naltrexone_jan_2022.db` | 15 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/naltrexone_jan_2022.db) |
 | `corpus_baseline_onemonth.db` | 12 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/corpus_baseline_onemonth.db) |
 
-The raw (pre-processed) Reddit JSON data is also available:
+### Raw Reddit JSON (input to the SQLite DBs)
+
+Pre-classification Reddit data — every post and every comment in the scrape windows with no filtering. Reviewers who want to verify that the SQLite DBs are faithful representations of the underlying scrape can rebuild the DBs from these JSON files using `src/import_posts.py`.
+
+| File | Size | Download |
+|------|------|----------|
+| `master_gap_2020-07_to_2022-12.json` | 361 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/master_gap_2020-07_to_2022-12.json) |
+| `famotidine_loratadine_prednisone_may_sept_2021.json` | 45 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/famotidine_loratadine_prednisone_may_sept_2021.json) |
+| `paxlovid_pre_stop_pasc_4mo.json` | 50 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/paxlovid_pre_stop_pasc_4mo.json) |
+| `colchicine_naltrexone_year_2021.json` | 107 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/colchicine_naltrexone_year_2021.json) |
+| `naltrexone_jan_2022.json` | 12 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/naltrexone_jan_2022.json) |
+
+### Per-drug merged + deduped CSVs (intermediate analysis outputs)
+
+These are the row-level data that underlie Figure 1 and Table 3, exported as CSV for transparency. Anyone with the SQLite DBs can regenerate them by running `scripts/merge_and_analyze_historical.py`, but they are also published directly so that reviewers can spot-check headline numbers without running any code.
+
+For each of the six target drugs, two CSVs:
+- `{drug}_reports_merged.csv` — all classified reports for the drug from all DBs combined, deduped on `post_id`, filtered to within the pre-publication window. One row per (DB-of-origin, post) pair.
+- `{drug}_reports_dedup.csv` — the same data after applying the per-(user, drug) "most recent + signal-strength tiebreaker" rule. One row per (user, drug); these are the rows directly counted into the % responders in Figure 1.
+
+Plus a one-row-per-drug summary:
+- `summary.csv` — the headline numbers (n, % responders, Wilson 95% CI, p-value vs 50%) for each drug.
 
 | File | Download |
 |------|----------|
-| `famotidine_loratadine_prednisone_may_sept_2021.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/famotidine_loratadine_prednisone_may_sept_2021.json) |
-| `paxlovid_pre_stop_pasc_4mo.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/paxlovid_pre_stop_pasc_4mo.json) |
-| `colchicine_naltrexone_year_2021.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/colchicine_naltrexone_year_2021.json) |
-| `naltrexone_jan_2022.json` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/naltrexone_jan_2022.json) |
+| `summary.csv` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/summary.csv) |
+| `famotidine_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/famotidine_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/famotidine_reports_dedup.csv) |
+| `loratadine_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/loratadine_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/loratadine_reports_dedup.csv) |
+| `prednisone_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/prednisone_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/prednisone_reports_dedup.csv) |
+| `naltrexone_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/naltrexone_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/naltrexone_reports_dedup.csv) |
+| `paxlovid_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/paxlovid_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/paxlovid_reports_dedup.csv) |
+| `colchicine_reports_merged.csv` / `_dedup.csv` | [merged](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/colchicine_reports_merged.csv) / [dedup](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/merged/colchicine_reports_dedup.csv) |
 
 ### Reproduce
 
@@ -108,9 +141,9 @@ For each drug, "pre-publication" is defined as the day before the comparator pap
 
 ## How the Analysis Works
 
-### Step 1: Merge all databases per drug
+### Step 1: Pull all reports per drug
 
-For each target drug, we pull every classified `treatment_report` row across all databases listed above. When the same post appears in multiple databases, we keep the master_gap version.
+For each target drug, we pull every classified `treatment_report` row from the combined SQLite database. No cross-DB merging is required at analysis time — the single database is self-sufficient (see *Provenance of the analysis database* above).
 
 ### Step 2: Filter to the pre-publication window
 
@@ -166,11 +199,17 @@ The pattern: every drug where the community clearly leaned positive (loratadine,
 
 ---
 
-## Master gap database
+## Provenance of the analysis database
 
-The `master_gap_2020-07_to_2022-12.db` database was built specifically for this analysis. The original per-drug pipelines were focused on narrower windows (covering about a year of pre-publication data each), but for the headline comparison we wanted all available pre-publication data for every drug. We re-scraped r/covidlonghaulers from inception (2020-07-24) through end of 2022 and ran the pipeline once per target drug using the `--drug` flag, which substring-filters posts against the drug's known aliases before extraction. This kept the LLM cost tractable (~$15 in OpenRouter API charges) and the wall time short (~2 hours) while producing classifications for all six drugs across the full window.
+The single database `historical_validation_2020-07_to_2022-12.db` was constructed for this analysis in two stages:
 
-The master_gap database is uploaded to S3 alongside the other databases — see the Download section above.
+1. **Master pipeline run.** We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, and ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). This step produced classifications for the bulk of relevant posts.
+
+2. **Backfill from earlier per-drug runs.** A small number of posts (~260 across the six drugs, roughly 3% of total) had been classified in earlier focused per-drug pipeline runs (`famotidine_loratadine_prednisone_may_sept_2021.db`, etc.) but were not picked up by the master pipeline's substring filter. To make this database self-sufficient, we copied those classifications into the combined database, leaving the original DBs unchanged. The merge is implemented in `scripts/build_combined_db.py`; rows from earlier runs are tagged with a synthetic `extraction_runs` row so the provenance is recoverable from the database itself.
+
+After this construction, the entire historical validation analysis can be reproduced from a single database — no merging across DBs at analysis time. We verified that running the analysis directly on the combined DB produces identical numbers to the merge-across-DBs approach used during methodological development.
+
+Both the combined database and the original per-drug DBs are uploaded to S3 — see the Download section above. Only the combined database is required to reproduce the figures and tables.
 
 ---
 
@@ -185,4 +224,4 @@ For reference, the databases were renamed from the original pipeline for clarity
 | `year_2021.db` | `colchicine_naltrexone_year_2021.db` |
 | `jan_2022.db` | `naltrexone_jan_2022.db` |
 | `polina_onemonth.db` | `corpus_baseline_onemonth.db` |
-| (new) | `master_gap_2020-07_to_2022-12.db` |
+| (new, combined for this paper) | `historical_validation_2020-07_to_2022-12.db` |

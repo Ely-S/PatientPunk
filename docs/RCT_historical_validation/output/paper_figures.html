@@ -7795,9 +7795,9 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=afe9f446">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=5bf703fd">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=101905a1">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=14f80b72">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7812,7 +7812,9 @@ a.anchor-link {
 <p><strong>Method.</strong> For each drug, we extract all treatment-sentiment reports from
 r/covidlonghaulers posts dated <em>before</em> the comparator paper was publicly
 available (medRxiv preprint or journal online-first, whichever came first).
-The analysis is restricted to data through end of 2022. Each user contributes
+The analysis is restricted to data through end of 2022. All classified
+reports come from a single self-sufficient SQLite database
+(<code>historical_validation_2020-07_to_2022-12.db</code>). Each user contributes
 exactly one data point per drug after deduplication: the <strong>most recent report</strong>
 wins, with <strong>signal_strength</strong> as the tiebreaker for posts on the same date
 (strong &gt; moderate &gt; weak &gt; n/a). We then test whether the proportion of
@@ -7821,8 +7823,8 @@ binomial test.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=5036f241">
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=92cbbef2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=2f751d53">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=6e01b726">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7836,7 +7838,7 @@ binomial test.</p>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3a7e0136">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=995083be">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7861,7 +7863,7 @@ the end-2022 cap is the binding cutoff.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=9cdf6059">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=76ef6933">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7869,12 +7871,12 @@ the end-2022 cap is the binding cutoff.</p>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
-<h3>Table 2 — Data sources by drug</h3><table style="border-collapse:collapse; width:100%; font-size:0.85em; margin:12px 0;"><tr style="background:#34495e; color:white;"><th style="padding:6px 10px;">Drug</th><th style="padding:6px 10px;">Databases used (deduped on post_id)</th><th style="padding:6px 10px;">Window</th><th style="padding:6px 10px;">Unique users</th><th style="padding:6px 10px;">Treatment reports</th><th style="padding:6px 10px;">Comparator paper</th></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">famotidine</td><td style="padding:6px 10px; font-size:0.85em;">master_gap, may_sept_2021</td><td style="padding:6px 10px;">2020-07-24 → 2021-06-06</td><td style="padding:6px 10px; text-align:center;">248</td><td style="padding:6px 10px; text-align:center;">733</td><td style="padding:6px 10px; font-size:0.85em;">Glynne et al. 2021 (medRxiv 2021-06-07)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">loratadine</td><td style="padding:6px 10px; font-size:0.85em;">master_gap, may_sept_2021</td><td style="padding:6px 10px;">2020-07-24 → 2021-06-06</td><td style="padding:6px 10px; text-align:center;">97</td><td style="padding:6px 10px; text-align:center;">205</td><td style="padding:6px 10px; font-size:0.85em;">Glynne et al. 2021 (medRxiv 2021-06-07)</td></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">prednisone</td><td style="padding:6px 10px; font-size:0.85em;">master_gap, may_sept_2021</td><td style="padding:6px 10px;">2020-07-24 → 2021-10-25</td><td style="padding:6px 10px; text-align:center;">418</td><td style="padding:6px 10px; text-align:center;">919</td><td style="padding:6px 10px; font-size:0.85em;">Utrero-Rico et al. 2021 (Biomedicines 2021-10-26)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">naltrexone</td><td style="padding:6px 10px; font-size:0.85em;">jan_2022, master_gap, year_2021</td><td style="padding:6px 10px;">2020-07-24 → 2022-07-02</td><td style="padding:6px 10px; text-align:center;">199</td><td style="padding:6px 10px; text-align:center;">680</td><td style="padding:6px 10px; font-size:0.85em;">O′Kelly et al. 2022 (BBI Health 2022-07-03)</td></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">paxlovid</td><td style="padding:6px 10px; font-size:0.85em;">master_gap</td><td style="padding:6px 10px;">2020-07-24 → 2022-12-31</td><td style="padding:6px 10px; text-align:center;">196</td><td style="padding:6px 10px; text-align:center;">488</td><td style="padding:6px 10px; font-size:0.85em;">Geng et al. 2024 (STOP-PASC) (JAMA Intern Med 2024-06-07)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">colchicine</td><td style="padding:6px 10px; font-size:0.85em;">jan_2022, master_gap, year_2021</td><td style="padding:6px 10px;">2020-07-24 → 2022-12-31</td><td style="padding:6px 10px; text-align:center;">114</td><td style="padding:6px 10px; text-align:center;">252</td><td style="padding:6px 10px; font-size:0.85em;">Bassi et al. 2025 (JAMA Intern Med 2025-12-01)</td></tr></table><p style="font-size:0.85em; color:#777; margin-top:4px;">Unique users: distinct users with at least one classified report for this drug after merging across DBs and deduping on post_id. Treatment reports: total post-level reports before per-user dedup. When the same post is classified in multiple DBs, the master_gap classification takes priority. Window cap at end of 2022 applies to paxlovid and colchicine; for the other four drugs the comparator publication date is the binding cutoff.</p>
+<h3>Table 2 — Data sources by drug</h3><table style="border-collapse:collapse; width:100%; font-size:0.85em; margin:12px 0;"><tr style="background:#34495e; color:white;"><th style="padding:6px 10px;">Drug</th><th style="padding:6px 10px;">Window</th><th style="padding:6px 10px;">Unique users</th><th style="padding:6px 10px;">Treatment reports</th><th style="padding:6px 10px;">Comparator paper</th></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">famotidine</td><td style="padding:6px 10px;">2020-07-24 → 2021-06-06</td><td style="padding:6px 10px; text-align:center;">248</td><td style="padding:6px 10px; text-align:center;">733</td><td style="padding:6px 10px; font-size:0.85em;">Glynne et al. 2021 (medRxiv 2021-06-07)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">loratadine</td><td style="padding:6px 10px;">2020-07-24 → 2021-06-06</td><td style="padding:6px 10px; text-align:center;">97</td><td style="padding:6px 10px; text-align:center;">205</td><td style="padding:6px 10px; font-size:0.85em;">Glynne et al. 2021 (medRxiv 2021-06-07)</td></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">prednisone</td><td style="padding:6px 10px;">2020-07-24 → 2021-10-25</td><td style="padding:6px 10px; text-align:center;">418</td><td style="padding:6px 10px; text-align:center;">919</td><td style="padding:6px 10px; font-size:0.85em;">Utrero-Rico et al. 2021 (Biomedicines 2021-10-26)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">naltrexone</td><td style="padding:6px 10px;">2020-07-24 → 2022-07-02</td><td style="padding:6px 10px; text-align:center;">199</td><td style="padding:6px 10px; text-align:center;">680</td><td style="padding:6px 10px; font-size:0.85em;">O′Kelly et al. 2022 (BBI Health 2022-07-03)</td></tr><tr style="background:#fff;"><td style="padding:6px 10px; font-weight:bold;">paxlovid</td><td style="padding:6px 10px;">2020-07-24 → 2022-12-31</td><td style="padding:6px 10px; text-align:center;">196</td><td style="padding:6px 10px; text-align:center;">488</td><td style="padding:6px 10px; font-size:0.85em;">Geng et al. 2024 (STOP-PASC) (JAMA Intern Med 2024-06-07)</td></tr><tr style="background:#f8f9fa;"><td style="padding:6px 10px; font-weight:bold;">colchicine</td><td style="padding:6px 10px;">2020-07-24 → 2022-12-31</td><td style="padding:6px 10px; text-align:center;">114</td><td style="padding:6px 10px; text-align:center;">252</td><td style="padding:6px 10px; font-size:0.85em;">Bassi et al. 2025 (JAMA Intern Med 2025-12-01)</td></tr></table><p style="font-size:0.85em; color:#777; margin-top:4px;">All counts are drawn from a single SQLite database (<code>historical_validation_2020-07_to_2022-12.db</code>) constructed for this paper. Unique users: distinct users with at least one classified report for the drug. Treatment reports: total post-level reports before per-user dedup. Window cap at end of 2022 applies to paxlovid and colchicine; for the other four drugs the comparator publication date is the binding cutoff.</p>
 </div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=83e7573a">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=ae99ebd9">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
