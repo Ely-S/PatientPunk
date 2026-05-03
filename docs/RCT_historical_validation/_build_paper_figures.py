@@ -74,14 +74,29 @@ from scipy.stats import binomtest
 from statsmodels.stats.proportion import proportion_confint as wilson
 
 # ── Single self-sufficient analysis database ──
-# This DB contains every classified treatment_report needed to reproduce the
-# paper's figures and tables. Built by combining the master_gap pipeline run
-# (2020-07-24 → 2022-12-31, all six target drugs) with the small number of
-# additional classifications from earlier per-drug pipeline runs that were
-# not present in master_gap. See README for provenance details.
+# Direct output of one master pipeline run covering 2020-07-24 to 2022-12-31
+# across all six target drugs. See README "Provenance" section for details.
 DB_DIR = Path(DB_PATH).parent
 COMBINED_DB = DB_DIR / "historical_validation_2020-07_to_2022-12.db"
 combined_conn = sqlite3.connect(COMBINED_DB.as_posix())
+
+# ── Integrity check: every treatment_report's user_id must match its post's ──
+# An earlier (now-deleted) backfill script copied report rows from older DBs
+# whose username-hashing differed from this DB's, producing report-level
+# user_ids that did not match the same post's user_id. That breaks per-user
+# dedup. We assert there are zero such mismatches; build fails loudly if any
+# reappear.
+_n_mismatch = combined_conn.execute(
+    'SELECT COUNT(*) FROM treatment_reports tr '
+    'JOIN posts p ON tr.post_id = p.post_id '
+    'WHERE tr.user_id != p.user_id'
+).fetchone()[0]
+assert _n_mismatch == 0, (
+    f"DB integrity check failed: {_n_mismatch} treatment_reports rows have "
+    "user_id != posts.user_id for the same post_id. The DB has cross-DB "
+    "backfill contamination and must be rebuilt from a clean pipeline run."
+)
+print(f"DB integrity check: {_n_mismatch} mismatched user_ids (must be 0). PASS.")
 
 # ── Signal-strength rank for tiebreaking ──
 # Higher = stronger evidence. 'n/a' is treated as lowest because it means the
@@ -464,6 +479,8 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # Notebook executes with cwd = output/, so DB paths must be relative to that.
-    nb = build_notebook(cells=cells, db_path="../data/corpus_baseline_onemonth.db")
+    # Point at the analysis DB so build_notebook.py's setup-cell sqlite3.connect()
+    # opens the real file rather than silently creating a 0-byte placeholder.
+    nb = build_notebook(cells=cells, db_path="../data/historical_validation_2020-07_to_2022-12.db")
     html_path = execute_and_export(nb, "output/paper_figures")
     print(f"\nDone. Open {html_path} to view the results.")
