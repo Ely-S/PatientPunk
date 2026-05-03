@@ -150,8 +150,8 @@ For each drug, "pre-publication" is defined as the day before the comparator pap
 | famotidine, loratadine | 2021-06-06 | Glynne et al., medRxiv preprint 2021-06-07 |
 | prednisone | 2021-10-25 | Utrero-Rico et al., *Biomedicines* online 2021-10-26 |
 | naltrexone | 2022-07-02 | O'Kelly et al., *BBI Health* online 2022-07-03 |
-| paxlovid | 2024-06-06 | STOP-PASC / Geng et al., *JAMA Intern Med* 2024-06-07 |
-| colchicine | 2025-11-30 | Bassi et al., *JAMA Intern Med* 2025-12-01 |
+| paxlovid | 2024-06-06 | STOP-PASC / Geng et al., *JAMA Intern Med* online 2024-06-07 |
+| colchicine | 2025-10-19 | Bassi et al., *JAMA Intern Med* online 2025-10-20 (print issue: 2025-12-01) |
 
 **End-of-2022 cap.** This analysis additionally restricts all per-drug data to posts dated on or before 2022-12-31. For famotidine, loratadine, prednisone, and naltrexone the comparator publication is the binding cutoff and the cap has no effect. For paxlovid and colchicine the cap is binding — their primary numbers reflect approximately 1.5 to 2.5 years of data ending in late 2022.
 
@@ -162,6 +162,17 @@ For each drug, "pre-publication" is defined as the day before the comparator pap
 ### Step 1: Pull all reports per drug
 
 For each target drug, we pull every classified `treatment_report` row from the combined SQLite database. No cross-DB merging is required at analysis time — the single database is self-sufficient (see *Provenance of the analysis database* above).
+
+### Step 1a: Deleted-user exclusion
+
+Reddit replaces the author field with `[deleted]` or `[removed]` when the original commenter deletes their account or has it removed by moderators. Our import pipeline maps both of these to a single placeholder user_id, the literal string `"deleted"`. After import, 52,603 of the 731,526 posts in the database carry that placeholder; 122 of the 7,687 classified treatment reports come from those posts.
+
+**Policy: we exclude every post with `user_id = "deleted"` from per-user analysis.** The reasoning:
+
+- Those 52,603 posts come from many distinct real users we cannot identify. Treating them as one pseudo-user would give the entire deleted population a single vote per drug, badly distorting per-user dedup. Treating each deleted post as its own anonymous user would inflate sample sizes with non-random ban/withdrawal artefacts, since accounts get deleted for reasons (spam, hostility, voluntary departure) that are not independent of drug-experience sentiment.
+- We verified empirically that excluding deleted-user reports shifts each drug's headline number by at most 0.5 percentage points and 1 unit of `n`. No headline conclusion changes.
+
+The build script applies this filter directly in the SQL query (`AND p.user_id != 'deleted'`), so it propagates to Figure 0, Figure 1, Table 2, Table 3, and the published per-drug CSVs uniformly.
 
 ### Step 2: Filter to the pre-publication window
 
@@ -206,12 +217,12 @@ If everything ran correctly, Table 3 should show these values:
 
 | Drug | n (users) | % Responders | 95% CI | p-value | Trial Result |
 |------|-----------|--------------|--------|---------|--------------|
-| loratadine | 91  | 81.3% | [72.1, 88.0] | < 0.0001 | positive |
-| famotidine | 233 | 77.3% | [71.5, 82.2] | < 0.0001 | positive |
-| naltrexone | 155 | 65.8% | [58.0, 72.8] |   0.0001 | positive |
-| colchicine | 92  | 54.3% | [44.2, 64.1] |   0.47   | null |
+| loratadine | 90  | 81.1% | [71.8, 87.9] | < 0.0001 | positive |
+| famotidine | 232 | 77.2% | [71.3, 82.1] | < 0.0001 | positive |
+| naltrexone | 154 | 65.6% | [57.8, 72.6] |   0.0001 | positive |
 | paxlovid   | 196 | 54.1% | [47.1, 60.9] |   0.28   | null |
-| prednisone | 344 | 48.8% | [43.6, 54.1] |   0.71   | null |
+| colchicine | 91  | 53.8% | [43.7, 63.7] |   0.53   | null |
+| prednisone | 343 | 48.7% | [43.4, 54.0] |   0.67   | null |
 
 The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — every comparison reaches p ≤ 0.0001. Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
 

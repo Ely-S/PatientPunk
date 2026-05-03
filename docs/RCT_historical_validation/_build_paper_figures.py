@@ -56,9 +56,14 @@ r/covidlonghaulers posts dated *before* the comparator paper was publicly
 available (medRxiv preprint or journal online-first, whichever came first).
 The analysis is restricted to data through end of 2022. All classified
 reports come from a single self-sufficient SQLite database
-(`historical_validation_2020-07_to_2022-12.db`). Each user contributes
-exactly one data point per drug after deduplication: the **most recent report**
-wins, with **signal_strength** as the tiebreaker for posts on the same date
+(`historical_validation_2020-07_to_2022-12.db`). Posts where the Reddit
+author field was `[deleted]` or `[removed]` (mapped to the placeholder
+user_id `"deleted"`) are excluded from per-user analysis: those posts come
+from many distinct real users whose accounts no longer exist, and
+collapsing them under one pseudo-user would give that whole population
+one vote per drug. Each remaining user contributes exactly one data point
+per drug after deduplication: the **most recent report** wins, with
+**signal_strength** as the tiebreaker for posts on the same date
 (strong > moderate > weak > n/a). We then test whether the proportion of
 responders (positive sentiment) differs from a 50% null using a two-sided
 binomial test.
@@ -106,7 +111,16 @@ SIG_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
 
 def fetch_drug_reports(drug, cutoff_ts):
     '''Pull all reports for a canonical drug from the combined DB,
-    filtered to post_date <= cutoff_ts.'''
+    filtered to post_date <= cutoff_ts.
+
+    Excludes posts where p.user_id = "deleted" (the placeholder assigned
+    when the Reddit author field is "[deleted]" or "[removed]"). Those
+    posts come from many distinct real users whose accounts no longer
+    exist; collapsing them under one pseudo-user would give that whole
+    population a single vote per drug, while treating each as its own
+    user would inflate sample sizes with non-random ban/withdrawal
+    artefacts. Excluding is the defensible compromise. See README,
+    "Deleted-user exclusion policy" for details.'''
     return combined_conn.execute('''
         SELECT tr.user_id,
                lower(t.canonical_name) AS drug,
@@ -120,6 +134,7 @@ def fetch_drug_reports(drug, cutoff_ts):
         WHERE lower(t.canonical_name) = ?
           AND p.post_date IS NOT NULL
           AND p.post_date <= ?
+          AND p.user_id != 'deleted'
     ''', (drug, cutoff_ts)).fetchall()
 
 def dedup_recent_then_strength(rows):
@@ -154,7 +169,7 @@ DRUG_CUTOFFS = {
     'prednisone':  ('2021-10-25', 'Utrero-Rico et al. 2021',     'Biomedicines 2021-10-26'),
     'naltrexone':  ('2022-07-02', 'O′Kelly et al. 2022',         'BBI Health 2022-07-03'),
     'paxlovid':    ('2024-06-06', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
-    'colchicine':  ('2025-11-30', 'Bassi et al. 2025',           'JAMA Intern Med 2025-12-01'),
+    'colchicine':  ('2025-10-19', 'Bassi et al. 2025',           'JAMA Intern Med 2025-10-20'),
 }
 """))
 
