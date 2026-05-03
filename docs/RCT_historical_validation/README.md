@@ -124,7 +124,7 @@ The build writes `output/paper_figures.html`, `output/figure1.png`, and the exec
 
 **What's in each database:** Every database has the same schema — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together.
 
-**Why one combined DB plus the originals:** The combined database was constructed for this paper by merging classifications from a master pipeline run (covering 2020-07-24 → 2022-12-31, all six drugs) with a small number of additional classifications from the earlier per-drug pipeline runs that the master run's substring filter missed (~3% of total). The original per-drug DBs are preserved on S3 unchanged so reviewers can independently verify the merge. See *Provenance of the analysis database* below for the full construction.
+**Why one combined DB plus the originals:** The combined database is the direct output of one master pipeline run covering 2020-07-24 → 2022-12-31 across all six target drugs. The earlier per-drug databases are kept on S3 for transparency and predate this analysis; their classifications are *not* merged into the combined DB because the older runs use a different username-hashing convention (merging would produce internally inconsistent user IDs and break dedup). See *Provenance of the analysis database* below for details.
 
 ---
 
@@ -193,28 +193,24 @@ If everything ran correctly, Table 3 should show these values:
 
 | Drug | n (users) | % Responders | 95% CI | p-value | Trial Result |
 |------|-----------|--------------|--------|---------|--------------|
-| loratadine | 97 | 80.4% | [71.4, 87.1] | < 0.0001 | positive |
-| famotidine | 248 | 76.6% | [71.0, 81.5] | < 0.0001 | positive |
-| naltrexone | 199 | 64.8% | [58.0, 71.1] | < 0.0001 | positive |
-| colchicine | 114 | 57.0% | [47.8, 65.7] | 0.16 | null |
-| paxlovid | 196 | 54.1% | [47.1, 60.9] | 0.28 | null |
-| prednisone | 418 | 49.3% | [44.5, 54.1] | 0.81 | null |
+| loratadine | 91  | 81.3% | [72.1, 88.0] | < 0.0001 | positive |
+| famotidine | 233 | 77.3% | [71.5, 82.2] | < 0.0001 | positive |
+| naltrexone | 155 | 65.8% | [58.0, 72.8] |   0.0001 | positive |
+| colchicine | 92  | 54.3% | [44.2, 64.1] |   0.47   | null |
+| paxlovid   | 196 | 54.1% | [47.1, 60.9] |   0.28   | null |
+| prednisone | 344 | 48.8% | [43.6, 54.1] |   0.71   | null |
 
-The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — and every comparison reaches p < 0.0001. Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
+The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — every comparison reaches p ≤ 0.0001. Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
 
 ---
 
 ## Provenance of the analysis database
 
-The single database `historical_validation_2020-07_to_2022-12.db` was constructed for this analysis in two stages:
+The single database `historical_validation_2020-07_to_2022-12.db` is the direct output of one master pipeline run. We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, then ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). The resulting database has internally consistent user IDs (every `treatment_reports.user_id` matches its `posts.user_id`) and is the sole source of truth for every figure and table in the paper.
 
-1. **Master pipeline run.** We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, and ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). This step produced classifications for the bulk of relevant posts.
+We do **not** merge classifications from the older focused per-drug databases into this combined database. Those older databases (still published on S3 for transparency) hash usernames differently — copying their treatment-report rows into a database built with our current hashing convention would produce mismatches between report-level and post-level user IDs, breaking dedup. The earlier per-drug runs do contain a small number of classifications (~260 rows, ~3% of total) that the master substring filter missed for prednisone, naltrexone, and colchicine. We accept that data loss in exchange for a single, internally consistent database.
 
-2. **Backfill from earlier per-drug runs.** A small number of posts (~260 across the six drugs, roughly 3% of total) had been classified in earlier focused per-drug pipeline runs (`famotidine_loratadine_prednisone_may_sept_2021.db`, etc.) but were not picked up by the master pipeline's substring filter. To make this database self-sufficient, we copied those classifications into the combined database, leaving the original DBs unchanged. The merge is implemented in `scripts/build_combined_db.py`; rows from earlier runs are tagged with a synthetic `extraction_runs` row so the provenance is recoverable from the database itself.
-
-After this construction, the entire historical validation analysis can be reproduced from a single database — no merging across DBs at analysis time. We verified that running the analysis directly on the combined DB produces identical numbers to the merge-across-DBs approach used during methodological development.
-
-Both the combined database and the original per-drug DBs are uploaded to S3 — see the Download section above. Only the combined database is required to reproduce the figures and tables.
+The original per-drug databases are still uploaded to S3 for transparency, so reviewers can independently audit how much classified data each one contained. They are not required to reproduce the figures and tables.
 
 ---
 
