@@ -93,8 +93,31 @@ def main():
     )
     args = parser.parse_args()
 
-    drug_aliases = [l.strip() for l in Path(args.drug_file).read_text(encoding="utf-8").splitlines() if l.strip()] if args.drug_file else None
-    drug = drug_aliases[0] if drug_aliases else args.drug
+    # --drug-file: a hand-curated alias list, first non-blank line is the
+    # canonical target. Validate aggressively so an empty / unreadable file
+    # doesn't silently disable targeting and fall back to a full-corpus run.
+    drug = args.drug
+    drug_aliases = None
+    if args.drug_file:
+        drug_file_path = Path(args.drug_file)
+        try:
+            raw_lines = drug_file_path.read_text(encoding="utf-8").splitlines()
+        except OSError as e:
+            parser.error(f"cannot read --drug-file {drug_file_path}: {e}")
+        # Strip whitespace, drop blank lines, de-dup while preserving order.
+        seen: set[str] = set()
+        drug_aliases = []
+        for line in raw_lines:
+            s = line.strip()
+            if s and s not in seen:
+                seen.add(s)
+                drug_aliases.append(s)
+        if not drug_aliases:
+            parser.error(
+                f"--drug-file {drug_file_path} contains no non-blank lines; "
+                "it must contain at least the canonical drug name on the first line."
+            )
+        drug = drug_aliases[0]
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
