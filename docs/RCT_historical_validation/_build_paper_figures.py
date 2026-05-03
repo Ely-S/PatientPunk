@@ -167,7 +167,7 @@ DRUG_CUTOFFS = {
     'famotidine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
     'loratadine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
     'prednisone':  ('2021-10-25', 'Utrero-Rico et al. 2021',     'Biomedicines 2021-10-26'),
-    'naltrexone':  ('2022-07-02', 'O′Kelly et al. 2022',         'BBI Health 2022-07-03'),
+    'naltrexone':  ('2022-07-02', "O'Kelly et al. 2022",         'BBI Health 2022-07-03'),
     'paxlovid':    ('2024-06-06', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
     'colchicine':  ('2025-10-19', 'Bassi et al. 2025',           'JAMA Intern Med 2025-10-20'),
 }

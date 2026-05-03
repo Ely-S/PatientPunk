@@ -66,7 +66,7 @@ Pre-classification Reddit data — every post and every comment in the scrape wi
 
 ### Per-drug merged + deduped CSVs (intermediate analysis outputs)
 
-These are the row-level data underlying Figure 1 and Table 3, exported as CSV for transparency. They are derivable directly from the combined database, but are also published as static files so reviewers can spot-check headline numbers without running any code.
+These are the row-level data underlying Figure 1 and Table 3, exported as CSV for transparency. They are derivable directly from the combined database — `scripts/dump_per_drug_csvs.py` regenerates them locally from `data/historical_validation/historical_validation_2020-07_to_2022-12.db` — but are also published as static files so reviewers can spot-check headline numbers without running any code.
 
 For each of the six target drugs, two CSVs:
 - `{drug}_reports_merged.csv` — all classified reports for the drug pulled from the combined database, filtered to within the pre-publication window. One row per post.
