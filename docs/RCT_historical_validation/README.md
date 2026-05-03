@@ -40,29 +40,13 @@ Get-FileHash data\historical_validation_2020-07_to_2022-12.db -Algorithm SHA256
 
 The expected hash is `FA67BE6D10FFE0B98365390A5223F6DFBC708360E830C725B74B443337AB4952`. The build script also runs an internal integrity check at startup that fails fast if any `treatment_reports.user_id` does not match the corresponding `posts.user_id` (the bug that an earlier, now-removed backfill script introduced).
 
-### Optional databases (for transparency, not required for reproduction)
+### Raw Reddit JSON (input to the SQLite DB)
 
-These are the source databases from the original per-drug pipeline runs. Their classifications are already merged into `historical_validation_2020-07_to_2022-12.db`. They are published here so reviewers can verify that no rows were lost or altered during merging.
-
-| File | Size | Download |
-|------|------|----------|
-| `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/famotidine_loratadine_prednisone_may_sept_2021.db) |
-| `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/paxlovid_pre_stop_pasc_4mo.db) |
-| `colchicine_naltrexone_year_2021.db` | 123 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/colchicine_naltrexone_year_2021.db) |
-| `naltrexone_jan_2022.db` | 15 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/naltrexone_jan_2022.db) |
-| `corpus_baseline_onemonth.db` | 12 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/corpus_baseline_onemonth.db) |
-
-### Raw Reddit JSON (input to the SQLite DBs)
-
-Pre-classification Reddit data — every post and every comment in the scrape windows with no filtering. Reviewers who want to verify that the SQLite DBs are faithful representations of the underlying scrape can rebuild the DBs from these JSON files using `src/import_posts.py`.
+Pre-classification Reddit data — every post and every comment in the scrape window with no filtering. Reviewers who want to verify that the SQLite DB is a faithful representation of the underlying scrape can rebuild it from this JSON file using `src/import_posts.py`.
 
 | File | Size | Download |
 |------|------|----------|
 | `historical_validation_2020-07_to_2022-12.json` | 361 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/historical_validation_2020-07_to_2022-12.json) |
-| `famotidine_loratadine_prednisone_may_sept_2021.json` | 45 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/famotidine_loratadine_prednisone_may_sept_2021.json) |
-| `paxlovid_pre_stop_pasc_4mo.json` | 50 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/paxlovid_pre_stop_pasc_4mo.json) |
-| `colchicine_naltrexone_year_2021.json` | 107 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/colchicine_naltrexone_year_2021.json) |
-| `naltrexone_jan_2022.json` | 12 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/naltrexone_jan_2022.json) |
 
 ### Per-drug merged + deduped CSVs (intermediate analysis outputs)
 
@@ -124,36 +108,29 @@ The build writes `output/paper_figures.html`, `output/figure1.png`, and the exec
 | `build_notebook.py` | A helper that `_build_paper_figures.py` uses to create and execute Jupyter notebooks. You don't need to touch this. |
 | `requirements.txt` | Python packages needed. Install with `pip install -r requirements.txt`. |
 
-### Databases
+### Database
 
 | File | Size | Drugs covered | Date Range | Role in this analysis |
 |------|------|---------------|------------|-----------------------|
 | `historical_validation_2020-07_to_2022-12.db` | 314 MB | all 6 drugs | Jul 2020 – Dec 2022 | **Required.** The single self-sufficient analysis database. All figures and tables in this paper are produced from this one DB. |
-| `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | famotidine, loratadine, prednisone | May – Dec 2021 | *Optional, transparency only.* Original focused pipeline run for the Glynne and Utrero-Rico comparators. All its in-window classifications are already present in the combined DB. |
-| `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | paxlovid | Mar – Jun 2024 | *Optional, transparency only.* 4 months of discussion ending at the STOP-PASC publication. Outside the end-2022 analysis cap, so not used for the paper's primary numbers; published for transparency. |
-| `colchicine_naltrexone_year_2021.db` | 123 MB | colchicine, naltrexone (partial) | Jan – Dec 2021 | *Optional, transparency only.* All its in-window classifications are already present in the combined DB. |
-| `naltrexone_jan_2022.db` | 15 MB | naltrexone (partial) | Jan 2022 | *Optional, transparency only.* All its in-window classifications are already present in the combined DB. |
-| `corpus_baseline_onemonth.db` | 12 MB | all drugs | One-month sample | *Optional, context only.* A broad sample used to characterize the overall positive-sentiment rate across all drugs on the subreddit. Not directly required for Figure 1 / Table 3. |
 
-**What's in each database:** Every database has the same schema — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together.
-
-**Why one combined DB plus the originals:** The combined database is the direct output of one master pipeline run covering 2020-07-24 → 2022-12-31 across all six target drugs. The earlier per-drug databases are kept on S3 for transparency and predate this analysis; their classifications are *not* merged into the combined DB because the older runs use a different username-hashing convention (merging would produce internally inconsistent user IDs and break dedup). See *Provenance of the analysis database* below for details.
+**What's in the database:** It has four tables — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together. See *Provenance of the analysis database* below for how the database was built.
 
 ---
 
 ## Pre-publication cutoffs
 
-For each drug, "pre-publication" is defined as the day before the comparator paper was first publicly released. Where a medRxiv preprint preceded the journal publication, the preprint date is the binding cutoff. Cutoffs:
+For each drug, "pre-publication" is defined by a strict-less-than predicate on `post_date`: a post is included iff its UTC timestamp is **strictly before midnight UTC of the comparator paper's publication date** (i.e., `post_date < epoch_midnight(pub_date)`). Where a medRxiv preprint preceded the journal publication, the preprint date is the binding cutoff. Cutoffs:
 
-| Drug | Cutoff | Source |
-|------|--------|--------|
-| famotidine, loratadine | 2021-06-06 | Glynne et al., medRxiv preprint 2021-06-07 |
-| prednisone | 2021-10-25 | Utrero-Rico et al., *Biomedicines* online 2021-10-26 |
-| naltrexone | 2022-07-02 | O'Kelly et al., *BBI Health* online 2022-07-03 |
-| paxlovid | 2024-06-06 | STOP-PASC / Geng et al., *JAMA Intern Med* online 2024-06-07 |
-| colchicine | 2025-10-19 | Bassi et al., *JAMA Intern Med* online 2025-10-20 (print issue: 2025-12-01) |
+| Drug | Publication date (exclusive upper bound) | Last day actually included | Source |
+|------|------------------------------------------|----------------------------|--------|
+| famotidine, loratadine | 2021-06-07 | 2021-06-06 | Glynne et al., medRxiv preprint 2021-06-07 |
+| prednisone | 2021-10-26 | 2021-10-25 | Utrero-Rico et al., *Biomedicines* online 2021-10-26 |
+| naltrexone | 2022-07-03 | 2022-07-02 | O'Kelly et al., *BBI Health* online 2022-07-03 |
+| paxlovid | 2024-06-07 | 2022-12-31 (capped) | STOP-PASC / Geng et al., *JAMA Intern Med* online 2024-06-07 |
+| colchicine | 2025-10-20 | 2022-12-31 (capped) | Bassi et al., *JAMA Intern Med* online 2025-10-20 (print issue: 2025-12-01) |
 
-**End-of-2022 cap.** This analysis additionally restricts all per-drug data to posts dated on or before 2022-12-31. For famotidine, loratadine, prednisone, and naltrexone the comparator publication is the binding cutoff and the cap has no effect. For paxlovid and colchicine the cap is binding — their primary numbers reflect approximately 1.5 to 2.5 years of data ending in late 2022.
+**End-of-2022 cap.** This analysis additionally restricts all per-drug data to posts dated strictly before 2023-01-01 UTC. For famotidine, loratadine, prednisone, and naltrexone the comparator publication is the binding cutoff and the cap has no effect. For paxlovid and colchicine the cap is binding — their primary numbers reflect approximately 1.5 to 2.5 years of data ending December 31, 2022.
 
 ---
 
@@ -176,7 +153,7 @@ The build script applies this filter directly in the SQL query (`AND p.user_id !
 
 ### Step 2: Filter to the pre-publication window
 
-Posts dated after the drug's pre-publication cutoff (or after end of 2022, whichever is earlier) are dropped.
+The SQL predicate is literally `p.post_date < window_end_exclusive_in_unix_seconds`, where `window_end_exclusive` is the midnight-UTC timestamp of the comparator paper's publication date (or 2023-01-01, whichever is earlier). Any post on or after the publication date is excluded by construction; the last day of data actually included is the day before the publication date.
 
 ### Step 3: One vote per user per drug — "most recent + signal-strength tiebreaker" dedup
 
@@ -230,23 +207,4 @@ The pattern: every drug where the community clearly leaned positive (loratadine,
 
 ## Provenance of the analysis database
 
-The single database `historical_validation_2020-07_to_2022-12.db` is the direct output of one master pipeline run. We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, then ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). The resulting database has internally consistent user IDs (every `treatment_reports.user_id` matches its `posts.user_id`) and is the sole source of truth for every figure and table in the paper.
-
-We do **not** merge classifications from the older focused per-drug databases into this combined database. Those older databases (still published on S3 for transparency) hash usernames differently — copying their treatment-report rows into a database built with our current hashing convention would produce mismatches between report-level and post-level user IDs, breaking dedup. The earlier per-drug runs do contain a small number of classifications (~260 rows, ~3% of total) that the master substring filter missed for prednisone, naltrexone, and colchicine. We accept that data loss in exchange for a single, internally consistent database.
-
-The original per-drug databases are still uploaded to S3 for transparency, so reviewers can independently audit how much classified data each one contained. They are not required to reproduce the figures and tables.
-
----
-
-## Original Database Names
-
-For reference, the databases were renamed from the original pipeline for clarity:
-
-| Original | Renamed To |
-|----------|------------|
-| `may_sept_2021.db` | `famotidine_loratadine_prednisone_may_sept_2021.db` |
-| `4mo_pre_stop_pasc.db` | `paxlovid_pre_stop_pasc_4mo.db` |
-| `year_2021.db` | `colchicine_naltrexone_year_2021.db` |
-| `jan_2022.db` | `naltrexone_jan_2022.db` |
-| `polina_onemonth.db` | `corpus_baseline_onemonth.db` |
-| (new, combined for this paper) | `historical_validation_2020-07_to_2022-12.db` |
+The database `historical_validation_2020-07_to_2022-12.db` is the direct output of one master pipeline run. We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, then ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). The resulting database has internally consistent user IDs (every `treatment_reports.user_id` matches its `posts.user_id`) — verified by the build script's startup integrity check — and is the sole source of truth for every figure and table in the paper.

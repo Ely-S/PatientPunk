@@ -7795,9 +7795,9 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=77458e76">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=e7949672">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=15b9b539">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=41ff04ea">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7810,9 +7810,14 @@ a.anchor-link {
 <li><strong>Table 3</strong>: Per-drug response composition with Wilson 95% CIs and binomial test p-values</li>
 </ul>
 <p><strong>Method.</strong> For each drug, we extract all treatment-sentiment reports from
-r/covidlonghaulers posts dated <em>before</em> the comparator paper was publicly
-available (medRxiv preprint or journal online-first, whichever came first).
-The analysis is restricted to data through end of 2022. All classified
+r/covidlonghaulers posts whose <code>post_date</code> is strictly before the
+comparator paper's first public release (medRxiv preprint or journal
+online-first, whichever came first). The SQL predicate is literally
+<code>p.post_date &lt; pub_date_in_unix_seconds</code>, where <code>pub_date</code> is the
+midnight-UTC timestamp of the publication date — so any post on or
+after the publication date is excluded by construction. The analysis
+is additionally capped at end of 2022 (i.e., posts on or after
+2023-01-01 are excluded) for paxlovid and colchicine. All classified
 reports come from a single self-sufficient SQLite database
 (<code>historical_validation_2020-07_to_2022-12.db</code>). Posts where the Reddit
 author field was <code>[deleted]</code> or <code>[removed]</code> (mapped to the placeholder
@@ -7828,7 +7833,7 @@ binomial test.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=5806aa64">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=1e4ea4fb">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7842,9 +7847,9 @@ binomial test.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=dbda8111">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=06787d52">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=741ab6ab">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=abd45126">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7857,7 +7862,7 @@ the raw user count contributing to that segment.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=ac1185b1">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=194cf06c">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7871,7 +7876,7 @@ the raw user count contributing to that segment.</p>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bd7c5671">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8d21ae65">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7885,7 +7890,7 @@ null effect.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=6488ee15">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=c984f9dc">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7899,7 +7904,7 @@ null effect.</p>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=96cad5cd">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e43d41e5">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7924,7 +7929,7 @@ the end-2022 cap is the binding cutoff.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=4af1a487">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=6ffe939b">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7937,7 +7942,7 @@ the end-2022 cap is the binding cutoff.</p>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=bb065d84">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=c4fbecc6">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>

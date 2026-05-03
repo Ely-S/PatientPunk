@@ -10,7 +10,7 @@ Usage:
             ("code", "df = pd.read_sql('SELECT * FROM treatment', conn)\\ndisplay(df.head(10))"),
             ("md", "**What this means:** ..."),
         ],
-        db_path="polina_onemonth.db",
+        db_path="historical_validation_2020-07_to_2022-12.db",
         title="My Analysis",
     )
 

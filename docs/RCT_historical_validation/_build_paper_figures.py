@@ -52,9 +52,14 @@ This notebook reproduces **Figure 1**, **Table 2**, and **Table 3** from the pap
 - **Table 3**: Per-drug response composition with Wilson 95% CIs and binomial test p-values
 
 **Method.** For each drug, we extract all treatment-sentiment reports from
-r/covidlonghaulers posts dated *before* the comparator paper was publicly
-available (medRxiv preprint or journal online-first, whichever came first).
-The analysis is restricted to data through end of 2022. All classified
+r/covidlonghaulers posts whose `post_date` is strictly before the
+comparator paper's first public release (medRxiv preprint or journal
+online-first, whichever came first). The SQL predicate is literally
+`p.post_date < pub_date_in_unix_seconds`, where `pub_date` is the
+midnight-UTC timestamp of the publication date — so any post on or
+after the publication date is excluded by construction. The analysis
+is additionally capped at end of 2022 (i.e., posts on or after
+2023-01-01 are excluded) for paxlovid and colchicine. All classified
 reports come from a single self-sufficient SQLite database
 (`historical_validation_2020-07_to_2022-12.db`). Posts where the Reddit
 author field was `[deleted]` or `[removed]` (mapped to the placeholder
@@ -109,9 +114,12 @@ print(f"DB integrity check: {_n_mismatch} mismatched user_ids (must be 0). PASS.
 # over an uncertain one when dates tie.
 SIG_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
 
-def fetch_drug_reports(drug, cutoff_ts):
-    '''Pull all reports for a canonical drug from the combined DB,
-    filtered to post_date <= cutoff_ts.
+def fetch_drug_reports(drug, window_end_exclusive_ts):
+    '''Pull all reports for a canonical drug whose post_date is strictly
+    before window_end_exclusive_ts. The exclusive upper bound is the
+    publication date of the comparator paper (or 2023-01-01 if the
+    end-of-2022 cap binds), so that "pre-publication" maps directly to
+    p.post_date < publication_date_in_unix_seconds.
 
     Excludes posts where p.user_id = "deleted" (the placeholder assigned
     when the Reddit author field is "[deleted]" or "[removed]"). Those
@@ -133,9 +141,9 @@ def fetch_drug_reports(drug, cutoff_ts):
         JOIN posts     p ON tr.post_id = p.post_id
         WHERE lower(t.canonical_name) = ?
           AND p.post_date IS NOT NULL
-          AND p.post_date <= ?
+          AND p.post_date < ?
           AND p.user_id != 'deleted'
-    ''', (drug, cutoff_ts)).fetchall()
+    ''', (drug, window_end_exclusive_ts)).fetchall()
 
 def dedup_recent_then_strength(rows):
     '''Per (user, drug): keep the most recent report; for same-date ties,
@@ -154,22 +162,26 @@ def dedup_recent_then_strength(rows):
             by_user[key] = (date, sig_r, sent)
     return [(uid_drug[0], uid_drug[1], v[2]) for uid_drug, v in by_user.items()]
 
-def epoch_eod(date_str):
+def epoch_midnight(date_str):
+    '''UTC-midnight Unix timestamp for the given YYYY-MM-DD.'''
     return int(datetime.strptime(date_str, '%Y-%m-%d').replace(
-        tzinfo=timezone.utc, hour=23, minute=59, second=59).timestamp())
+        tzinfo=timezone.utc).timestamp())
 
-# Pre-publication cutoffs are the day BEFORE the earliest public release.
-# Effective cutoff is min(pub_cutoff, end-of-2022) per the analysis design.
-END_2022 = '2022-12-31'
+# Each drug's exclusive window upper bound is the publication date itself.
+# The SQL predicate is "post_date < pub_date_midnight_utc", so any post on or
+# after the publication date is excluded. The analysis additionally caps at
+# end-of-2022 (i.e. excludes 2023-01-01 onward) for paxlovid and colchicine,
+# whose comparator papers landed in 2024 and 2025.
+END_2022_EXCLUSIVE = '2023-01-01'
 
 DRUG_CUTOFFS = {
-    # drug -> (cutoff_yyyy_mm_dd, paper_short, source_and_date)
-    'famotidine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
-    'loratadine':  ('2021-06-06', 'Glynne et al. 2021',          'medRxiv 2021-06-07'),
-    'prednisone':  ('2021-10-25', 'Utrero-Rico et al. 2021',     'Biomedicines 2021-10-26'),
-    'naltrexone':  ('2022-07-02', "O'Kelly et al. 2022",         'BBI Health 2022-07-03'),
-    'paxlovid':    ('2024-06-06', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
-    'colchicine':  ('2025-10-19', 'Bassi et al. 2025',           'JAMA Intern Med 2025-10-20'),
+    # drug -> (publication_date_yyyy_mm_dd, paper_short, source_and_date)
+    'famotidine':  ('2021-06-07', 'Glynne et al. 2021',           'medRxiv 2021-06-07'),
+    'loratadine':  ('2021-06-07', 'Glynne et al. 2021',           'medRxiv 2021-06-07'),
+    'prednisone':  ('2021-10-26', 'Utrero-Rico et al. 2021',      'Biomedicines 2021-10-26'),
+    'naltrexone':  ('2022-07-03', "O'Kelly et al. 2022",          'BBI Health 2022-07-03'),
+    'paxlovid':    ('2024-06-07', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
+    'colchicine':  ('2025-10-20', 'Bassi et al. 2025',            'JAMA Intern Med 2025-10-20'),
 }
 """))
 
@@ -209,9 +221,9 @@ TRIAL_DIRS = {
 }
 
 resp_rows = []
-for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
-    effective_cutoff = min(pub_cutoff, END_2022)
-    cutoff_ts = epoch_eod(effective_cutoff)
+for drug, (pub_date, paper_short, source_date) in DRUG_CUTOFFS.items():
+    window_end_exclusive = min(pub_date, END_2022_EXCLUSIVE)
+    cutoff_ts = epoch_midnight(window_end_exclusive)
     rows = fetch_drug_reports(drug, cutoff_ts)
     dedup = dedup_recent_then_strength(rows)
     sentiments = [s for _u, _d, s in dedup]
@@ -402,10 +414,17 @@ cells.append(("code", r"""
 # ── Table 2: Data sources by drug ──
 # Pulls user/report counts directly from the merged data so the table
 # auto-updates if the underlying DBs change.
+def _last_included_date(window_end_exclusive_str):
+    '''Return the last date (YYYY-MM-DD) actually included given a strict-<
+    upper bound at midnight on the given date, e.g. "2021-06-07" -> "2021-06-06".'''
+    from datetime import timedelta
+    d = datetime.strptime(window_end_exclusive_str, '%Y-%m-%d') - timedelta(days=1)
+    return d.strftime('%Y-%m-%d')
+
 src_rows = []
-for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
-    effective_cutoff = min(pub_cutoff, END_2022)
-    cutoff_ts = epoch_eod(effective_cutoff)
+for drug, (pub_date, paper_short, source_date) in DRUG_CUTOFFS.items():
+    window_end_exclusive = min(pub_date, END_2022_EXCLUSIVE)
+    cutoff_ts = epoch_midnight(window_end_exclusive)
     rows = fetch_drug_reports(drug, cutoff_ts)
     n_reports = len(rows)
     n_users = len({(uid, dr) for uid, dr, _s, _sg, _d, _p in rows})
@@ -413,7 +432,7 @@ for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
         'drug': drug,
         'databases': 'historical_validation_2020-07_to_2022-12.db',
         'window_start': '2020-07-24',
-        'window_end': effective_cutoff,
+        'window_end': _last_included_date(window_end_exclusive),
         'unique_users': n_users,
         'treatment_reports': n_reports,
         'comparator': f"{paper_short} ({source_date})",
