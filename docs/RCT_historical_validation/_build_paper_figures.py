@@ -144,7 +144,7 @@ DRUG_CUTOFFS = {
 """))
 
 # ────────────────────────────────────────────────────────────────────
-# FIGURE 1: Data extraction + paired horizontal bar chart
+# DATA EXTRACTION (produces resp_df used by Figure 0, Figure 1, Table 3)
 # ────────────────────────────────────────────────────────────────────
 cells.append(("code", r"""
 def _sentiment_breakdown(drug_label, sentiments, trial_dir, paper_short, source_date):
@@ -190,11 +190,99 @@ for drug, (pub_cutoff, paper_short, source_date) in DRUG_CUTOFFS.items():
 resp_df = (pd.DataFrame(resp_rows)
            .sort_values('pos_pct', ascending=False)
            .reset_index(drop=True))
+"""))
 
+
+# ────────────────────────────────────────────────────────────────────
+# FIGURE 0: Full sentiment breakdown per drug (stacked bar)
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Figure 0 — Full sentiment breakdown per drug
+
+Figure 1 collapses the four sentiment classes into a binary responder vs. non-responder split.
+Figure 0 retains the full four-way breakdown (positive / mixed / neutral / negative) so the
+shape of the non-responder bucket is visible. Per-segment labels show both the percentage and
+the raw user count contributing to that segment."""))
+
+cells.append(("code", r"""
+# ── Figure 0: Stacked horizontal bar of full sentiment breakdown ──
+cats   = ['positive', 'mixed', 'neutral', 'negative']
+colors = ['#2ecc71',  '#f39c12', '#95a5a6', '#e74c3c']
+
+pcts = pd.DataFrame({
+    'drug':     resp_df['drug'],
+    'trial':    resp_df['trial_dir'],
+    'positive': resp_df['pos'] / resp_df['n'] * 100,
+    'mixed':    resp_df['mix'] / resp_df['n'] * 100,
+    'neutral':  resp_df['neu'] / resp_df['n'] * 100,
+    'negative': resp_df['neg'] / resp_df['n'] * 100,
+})
+raw = {'positive': resp_df['pos'].values, 'mixed': resp_df['mix'].values,
+       'neutral':  resp_df['neu'].values, 'negative': resp_df['neg'].values}
+
+BAR_H          = 0.45
+LABEL_Y_OFFSET = BAR_H / 2 + 0.05  # below each bar
+
+fig, ax = plt.subplots(figsize=(16, 12))
+y = np.arange(len(pcts))[::-1]
+
+# Stacked horizontal bars
+left = np.zeros(len(pcts))
+for cat, color in zip(cats, colors):
+    vals = pcts[cat].values
+    ax.barh(y, vals, left=left, height=BAR_H, color=color, label=cat,
+            edgecolor='white', linewidth=0.4)
+    left += vals
+
+# Per-segment labels (% and raw n) below each bar segment
+for row_i, yi in enumerate(y):
+    left_x = 0.0
+    for cat in cats:
+        pct = pcts[cat].values[row_i]
+        n   = raw[cat][row_i]
+        cx  = left_x + pct / 2
+        if pct > 0:
+            ax.text(cx, yi - LABEL_Y_OFFSET, f"{pct:.0f}%\n(n={n})",
+                    ha='center', va='top', fontsize=15, color='#222',
+                    linespacing=1.3)
+        left_x += pct
+
+# Y labels: drug + trial-direction tag
+ax.set_yticks(y)
+ax.set_yticklabels(
+    [f"{r['drug']}  [{'+ trial' if r['trial'] == '+' else 'null trial'}]"
+     for _, r in pcts.iterrows()],
+    fontsize=18,
+)
+ax.set_xlabel('Patient-reported outcomes (% of users)', fontsize=18)
+ax.set_xlim(0, 100)
+ax.set_ylim(y.min() - 1.8, y.max() + 0.6)
+ax.set_title('Figure 0 — Full sentiment breakdown per drug',
+             fontsize=20, fontweight='bold')
+ax.legend(loc='lower right', fontsize=14)
+ax.tick_params(axis='x', labelsize=14)
+ax.grid(axis='x', alpha=0.3)
+plt.tight_layout()
+plt.savefig('figure0.png', dpi=150, bbox_inches='tight')
+plt.show()
+"""))
+
+
+# ────────────────────────────────────────────────────────────────────
+# FIGURE 1: Paired horizontal bar chart (responders vs non-responders)
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Figure 1 — Pre-publication community sentiment: responders vs non-responders
+
+Figure 1 collapses the four-way sentiment breakdown into a binary split: responders
+(positive sentiment) vs. non-responders (negative + neutral + mixed). Each bar
+shows the percentage with its 95% Wilson confidence interval; the right margin
+labels each drug with whether the comparator clinical trial found a positive or
+null effect."""))
+
+cells.append(("code", r"""
 # ── Figure 1: Paired horizontal bars with trial-direction tags ──
 from matplotlib.patches import Patch
 
-fig, ax = plt.subplots(figsize=(12, 5.5))
+fig, ax = plt.subplots(figsize=(13.5, 6.8))
 y = np.arange(len(resp_df))[::-1]
 bar_h = 0.36
 
@@ -219,18 +307,19 @@ ax.errorbar(resp_df['nonr_pct'], y + bar_h/2,
 # Value labels on bars
 for i, r in resp_df.iterrows():
     ax.text(r['pos_pct'] + 1.5, y[i] - bar_h/2, f"{r['pos_pct']:.0f}%",
-            va='center', ha='left', fontsize=9, fontweight='bold')
+            va='center', ha='left', fontsize=11, fontweight='bold')
     ax.text(r['nonr_pct'] + 1.5, y[i] + bar_h/2, f"{r['nonr_pct']:.0f}%",
-            va='center', ha='left', fontsize=9, fontweight='bold')
+            va='center', ha='left', fontsize=11, fontweight='bold')
 
 ax.set_yticks(y)
-ax.set_yticklabels([f"{r['drug']}\n(n={r['n']})" for _, r in resp_df.iterrows()], fontsize=10)
+ax.set_yticklabels([f"{r['drug']}\n(n={r['n']})" for _, r in resp_df.iterrows()], fontsize=12)
 ax.set_xlim(0, max(resp_df['pos_hi'].max(), resp_df['nonr_hi'].max()) + 22)
-ax.set_xlabel('% of users (95% Wilson CI)', fontsize=11)
+ax.set_xlabel('% of users (95% Wilson CI)', fontsize=12)
+ax.tick_params(axis='x', labelsize=11)
 ax.axvline(50, color='gray', ls=':', lw=0.8)
-ax.set_title('Pre-publication community sentiment: responders vs non-responders by drug\n'
+ax.set_title('Figure 1 — Pre-publication community sentiment: responders vs non-responders by drug\n'
              'Dedup: most recent report; signal-strength tiebreaker for same-date posts',
-             fontsize=12, fontweight='bold')
+             fontsize=14, fontweight='bold')
 ax.grid(axis='x', alpha=0.3)
 
 # Trial-direction tags in the right margin
@@ -241,7 +330,7 @@ TAG_STYLE = {
 for i, r in resp_df.iterrows():
     label, color = TAG_STYLE.get(r['trial_dir'], (f"trial: {r['trial_dir']}", '#7f8c8d'))
     ax.text(1.01, y[i], label, transform=ax.get_yaxis_transform(),
-            va='center', ha='left', fontsize=9.5, family='monospace',
+            va='center', ha='left', fontsize=11, family='sans-serif',
             color=color, fontweight='bold')
 
 legend_elems = [
@@ -252,8 +341,8 @@ legend_elems = [
     Patch(facecolor='#27ae60', label='trial: positive'),
     Patch(facecolor='#c0392b', label='trial: null'),
 ]
-ax.legend(handles=legend_elems, loc='lower center', bbox_to_anchor=(0.5, -0.32),
-          ncol=4, fontsize=9, frameon=True)
+ax.legend(handles=legend_elems, loc='lower center', bbox_to_anchor=(0.5, -0.28),
+          ncol=4, fontsize=10, frameon=True)
 plt.tight_layout()
 plt.savefig('figure1.png', dpi=150, bbox_inches='tight')
 plt.show()
