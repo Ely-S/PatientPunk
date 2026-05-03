@@ -45,7 +45,7 @@ Pre-classification Reddit data — every post and every comment in the scrape wi
 
 | File | Size | Download |
 |------|------|----------|
-| `master_gap_2020-07_to_2022-12.json` | 361 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/master_gap_2020-07_to_2022-12.json) |
+| `historical_validation_2020-07_to_2022-12.json` | 361 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/historical_validation_2020-07_to_2022-12.json) |
 | `famotidine_loratadine_prednisone_may_sept_2021.json` | 45 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/famotidine_loratadine_prednisone_may_sept_2021.json) |
 | `paxlovid_pre_stop_pasc_4mo.json` | 50 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/paxlovid_pre_stop_pasc_4mo.json) |
 | `colchicine_naltrexone_year_2021.json` | 107 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/colchicine_naltrexone_year_2021.json) |
@@ -53,10 +53,10 @@ Pre-classification Reddit data — every post and every comment in the scrape wi
 
 ### Per-drug merged + deduped CSVs (intermediate analysis outputs)
 
-These are the row-level data that underlie Figure 1 and Table 3, exported as CSV for transparency. Anyone with the SQLite DBs can regenerate them by running `scripts/merge_and_analyze_historical.py`, but they are also published directly so that reviewers can spot-check headline numbers without running any code.
+These are the row-level data underlying Figure 1 and Table 3, exported as CSV for transparency. They are derivable directly from the combined database, but are also published as static files so reviewers can spot-check headline numbers without running any code.
 
 For each of the six target drugs, two CSVs:
-- `{drug}_reports_merged.csv` — all classified reports for the drug from all DBs combined, deduped on `post_id`, filtered to within the pre-publication window. One row per (DB-of-origin, post) pair.
+- `{drug}_reports_merged.csv` — all classified reports for the drug pulled from the combined database, filtered to within the pre-publication window. One row per post.
 - `{drug}_reports_dedup.csv` — the same data after applying the per-(user, drug) "most recent + signal-strength tiebreaker" rule. One row per (user, drug); these are the rows directly counted into the % responders in Figure 1.
 
 Plus a one-row-per-drug summary:
@@ -78,9 +78,16 @@ Plus a one-row-per-drug summary:
 # Prerequisites: Python 3.10+
 pip install -r requirements.txt
 
+# Download the single required database (~314 MB)
+mkdir -p data
+curl -L -o data/historical_validation_2020-07_to_2022-12.db \
+    https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/historical_validation_2020-07_to_2022-12.db
+
 # Reproduce all figures
 python _build_paper_figures.py
 ```
+
+The build writes `output/paper_figures.html`, `output/figure1.png`, and the executed notebook. Open `output/paper_figures.html` in any browser.
 
 ---
 
@@ -89,7 +96,7 @@ python _build_paper_figures.py
 | Output | What it shows |
 |--------|---------------|
 | **Figure 1** | A horizontal bar chart showing, for each drug, what percentage of users reported a positive experience (green) vs. everything else (red). Error bars show the range of plausible values. The right margin labels each drug with whether the clinical trial found it effective ("trial: positive") or not ("trial: null"). |
-| **Table 2** | Where the data came from: which databases, what date range, how many users/reports per drug, and which trial it's being compared to. |
+| **Table 2** | Where the data came from: the date range, how many users and reports per drug, and which clinical trial each drug is being compared against. |
 | **Table 3** | The numbers behind Figure 1 in table form: for each drug, the sample size, the percentage who responded positively, the confidence interval around that percentage, and a p-value testing whether it's meaningfully different from a coin flip (50/50). |
 
 ---
@@ -100,26 +107,24 @@ python _build_paper_figures.py
 
 | File | What it does |
 |------|--------------|
-| `_build_paper_figures.py` | The main script. Reads the databases, runs the analysis, and produces a Jupyter notebook with Figure 1, Table 2, and Table 3. Run this to reproduce everything. |
+| `_build_paper_figures.py` | The main script. Reads the combined database, runs the analysis, and produces a Jupyter notebook with Figure 1, Table 2, and Table 3. Run this to reproduce everything. |
 | `build_notebook.py` | A helper that `_build_paper_figures.py` uses to create and execute Jupyter notebooks. You don't need to touch this. |
 | `requirements.txt` | Python packages needed. Install with `pip install -r requirements.txt`. |
 
 ### Databases
 
-All databases are **full, unmodified copies** of the SQLite databases used in the analysis. They are included in full so you can verify that nothing was excluded or filtered at the database level. All data was scraped from the public subreddit r/covidlonghaulers.
+| File | Size | Drugs covered | Date Range | Role in this analysis |
+|------|------|---------------|------------|-----------------------|
+| `historical_validation_2020-07_to_2022-12.db` | 314 MB | all 6 drugs | Jul 2020 – Dec 2022 | **Required.** The single self-sufficient analysis database. All figures and tables in this paper are produced from this one DB. |
+| `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | famotidine, loratadine, prednisone | May – Dec 2021 | *Optional, transparency only.* Original focused pipeline run for the Glynne and Utrero-Rico comparators. All its in-window classifications are already present in the combined DB. |
+| `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | paxlovid | Mar – Jun 2024 | *Optional, transparency only.* 4 months of discussion ending at the STOP-PASC publication. Outside the end-2022 analysis cap, so not used for the paper's primary numbers; published for transparency. |
+| `colchicine_naltrexone_year_2021.db` | 123 MB | colchicine, naltrexone (partial) | Jan – Dec 2021 | *Optional, transparency only.* All its in-window classifications are already present in the combined DB. |
+| `naltrexone_jan_2022.db` | 15 MB | naltrexone (partial) | Jan 2022 | *Optional, transparency only.* All its in-window classifications are already present in the combined DB. |
+| `corpus_baseline_onemonth.db` | 12 MB | all drugs | One-month sample | *Optional, context only.* A broad sample used to characterize the overall positive-sentiment rate across all drugs on the subreddit. Not directly required for Figure 1 / Table 3. |
 
-| File | Size | Drugs covered | Date Range | Why this window |
-|------|------|---------------|------------|-----------------|
-| `master_gap_2020-07_to_2022-12.db` | 314 MB | all 6 drugs | Jul 2020 – Dec 2022 | Built specifically for this analysis: covers the entire pre-publication window for each drug from the corpus inception through end of 2022. The pipeline was run once with `--drug` per target drug, leveraging substring-prefiltering for efficiency. |
-| `famotidine_loratadine_prednisone_may_sept_2021.db` | 51 MB | famotidine, loratadine, prednisone | May – Dec 2021 | Original focused window for Glynne (June 2021 preprint) and Utrero-Rico (Oct 2021) comparators. Also contains cetirizine, which is excluded from the analysis because there is no direct comparator trial. |
-| `paxlovid_pre_stop_pasc_4mo.db` | 59 MB | paxlovid | Mar – Jun 2024 | 4 months of discussion ending at the STOP-PASC trial publication (Jun 2024). Outside the end-2022 cap used in this analysis, so currently unused for paxlovid's primary numbers. |
-| `colchicine_naltrexone_year_2021.db` | 123 MB | colchicine, naltrexone (partial) | Jan – Dec 2021 | Full year 2021. Pre-dates Bassi et al. (Dec 2025) for colchicine and provides the first portion of naltrexone data. |
-| `naltrexone_jan_2022.db` | 15 MB | naltrexone (partial) | Jan 2022 | Extends naltrexone coverage through Jan 2022, before O'Kelly et al. (Jul 2022). Combined with the year_2021 database above. |
-| `corpus_baseline_onemonth.db` | 12 MB | all drugs | One-month sample | A broad sample used to compute the overall positive rate across all drugs on the subreddit, for context. |
+**What's in each database:** Every database has the same schema — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together.
 
-**What's in each database:** Every database has the same structure — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together.
-
-**Why multiple databases:** The original pipeline was run multiple times with different time windows and `--drug` filters. To reproduce the paper's figures we merge across all of them, deduping on `post_id` so each post is counted exactly once. When the same post appears in multiple databases, the `master_gap` classification takes priority (most recent pipeline run, consistent prompts).
+**Why one combined DB plus the originals:** The combined database was constructed for this paper by merging classifications from a master pipeline run (covering 2020-07-24 → 2022-12-31, all six drugs) with a small number of additional classifications from the earlier per-drug pipeline runs that the master run's substring filter missed (~3% of total). The original per-drug DBs are preserved on S3 unchanged so reviewers can independently verify the merge. See *Provenance of the analysis database* below for the full construction.
 
 ---
 
