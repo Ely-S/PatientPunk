@@ -11,7 +11,11 @@ For each of the six target drugs:
 Plus a one-row-per-drug summary:
   - summary.csv                - n, %positive, Wilson 95% CI, p-value vs 50%
 
-Outputs land in data/historical_validation/merged/.
+By default, reads the DB from
+  <repo-root>/data/historical_validation/historical_validation_2020-07_to_2022-12.db
+and writes outputs to
+  <repo-root>/data/historical_validation/merged/.
+Both can be overridden via --db and --out.
 
 This is the CLEAN replacement for the earlier merge_and_analyze_historical.py
 script: there is no cross-DB merging — the single combined database is the
@@ -19,6 +23,7 @@ sole source of truth.
 """
 from __future__ import annotations
 
+import argparse
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -31,9 +36,11 @@ from statsmodels.stats.proportion import proportion_confint
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-ROOT = Path("C:/Users/scgee/OneDrive/Documents/Projects/PatientPunk")
-DB   = ROOT / "data/historical_validation/historical_validation_2020-07_to_2022-12.db"
-OUT  = ROOT / "data/historical_validation/merged"
+# Repo-relative defaults: this file lives at <repo>/scripts/dump_per_drug_csvs.py,
+# so parents[1] is the repo root regardless of where the script is invoked from.
+REPO_ROOT   = Path(__file__).resolve().parents[1]
+DEFAULT_DB  = REPO_ROOT / "data" / "historical_validation" / "historical_validation_2020-07_to_2022-12.db"
+DEFAULT_OUT = REPO_ROOT / "data" / "historical_validation" / "merged"
 
 # Each drug's "cutoff" here is the publication date of the comparator paper.
 # The SQL predicate is "post_date < epoch_midnight(cutoff)", so any post on or
@@ -57,7 +64,7 @@ def epoch_midnight(date_str: str) -> int:
         tzinfo=timezone.utc).timestamp())
 
 
-def fetch_reports(drug: str, window_end_exclusive_ts: int) -> pd.DataFrame:
+def fetch_reports(db_path: Path, drug: str, window_end_exclusive_ts: int) -> pd.DataFrame:
     """Pulls reports with post_date strictly before the given midnight epoch
     (the publication date, or 2023-01-01 if the end-2022 cap binds).
 
@@ -65,7 +72,7 @@ def fetch_reports(drug: str, window_end_exclusive_ts: int) -> pd.DataFrame:
     `[removed]` Reddit authors) are excluded — those rows come from many
     distinct real users we cannot identify, and collapsing them under one
     pseudo-user would give the entire deleted population one vote per drug."""
-    with sqlite3.connect(DB.as_posix()) as conn:
+    with sqlite3.connect(db_path.as_posix()) as conn:
         return pd.read_sql_query("""
             SELECT tr.user_id,
                    lower(t.canonical_name) AS drug,
@@ -127,9 +134,44 @@ def stats_row(df: pd.DataFrame, drug: str, info: dict) -> dict:
     }
 
 
-def main():
-    OUT.mkdir(parents=True, exist_ok=True)
-    print(f"Source DB: {DB.relative_to(ROOT)}")
+def _try_relative(path: Path, anchor: Path) -> Path:
+    """Display path relative to anchor when possible, else absolute."""
+    try:
+        return path.resolve().relative_to(anchor)
+    except ValueError:
+        return path
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--db", type=Path, default=DEFAULT_DB,
+        help=f"Path to the analysis SQLite DB. "
+             f"Default: {_try_relative(DEFAULT_DB, REPO_ROOT)}",
+    )
+    parser.add_argument(
+        "--out", type=Path, default=DEFAULT_OUT,
+        help=f"Directory to write per-drug CSVs and summary.csv. "
+             f"Default: {_try_relative(DEFAULT_OUT, REPO_ROOT)}",
+    )
+    args = parser.parse_args(argv)
+    db: Path = args.db
+    out: Path = args.out
+
+    # Fail fast on a missing DB instead of silently creating a 0-byte file via
+    # sqlite3.connect on a path that doesn't exist.
+    if not db.exists():
+        sys.exit(
+            f"ERROR: analysis DB not found at {db}\n"
+            f"Pass --db to override the default, or download the DB to that path. "
+            f"See docs/RCT_historical_validation/README.md for download instructions."
+        )
+
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"Source DB: {_try_relative(db, REPO_ROOT)}")
     print()
     print(f"{'drug':<12} {'trial':<6} {'pub_date':<12} {'win_end_excl':<14} "
           f"{'n':>5} {'pos':>5} {'%pos':>6} {'95% CI':>20} {'p':>9}")
@@ -139,10 +181,10 @@ def main():
     for drug, info in DRUGS.items():
         window_end_exclusive = min(info["pub_date"], END_2022_EXCLUSIVE)
         cutoff_ts = epoch_midnight(window_end_exclusive)
-        merged = fetch_reports(drug, cutoff_ts)
+        merged = fetch_reports(db, drug, cutoff_ts)
         deduped = dedup_recent_then_strength(merged)
-        merged.to_csv(OUT / f"{drug}_reports_merged.csv", index=False)
-        deduped.to_csv(OUT / f"{drug}_reports_dedup.csv",  index=False)
+        merged.to_csv(out / f"{drug}_reports_merged.csv", index=False)
+        deduped.to_csv(out / f"{drug}_reports_dedup.csv", index=False)
 
         s = stats_row(deduped, drug, info)
         rows.append(s)
@@ -151,9 +193,9 @@ def main():
               f"{s['window_end_exclusive']:<14} {s['n']:>5} {s['pos']:>5} "
               f"{s['pos_pct']:>5.1f}% {ci:>20} {s['p_vs_50']:>9.4f}")
 
-    pd.DataFrame(rows).to_csv(OUT / "summary.csv", index=False)
+    pd.DataFrame(rows).to_csv(out / "summary.csv", index=False)
     print()
-    print(f"Wrote per-drug CSVs and summary.csv to {OUT.relative_to(ROOT)}/")
+    print(f"Wrote per-drug CSVs and summary.csv to {_try_relative(out, REPO_ROOT)}/")
 
 
 if __name__ == "__main__":
