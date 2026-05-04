@@ -1,0 +1,301 @@
+sample_id,source_post_id,stratum,ai_drug_count,ai_drugs,ai_sentiments,ai_signal_strengths,keyword_match
+irr-pilot-001,t1_oehll2z,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-002,t1_odu5bzu,no_ai_drug_random,0,,,,no
+irr-pilot-003,t1_oa2rtgg,ai_found_drug,1,taurine,positive,weak,yes
+irr-pilot-004,t1_oa7qp79,ai_found_drug,1,low dose naltrexone,positive,moderate,yes
+irr-pilot-005,t1_ob1c8yf,no_ai_drug_random,0,,,,no
+irr-pilot-006,t1_obwwg1t,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-007,t3_1rvtar1,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-008,t1_oa3ayz8,ai_found_drug,2,taurine|n-acetylcysteine,negative|negative,strong|moderate,yes
+irr-pilot-009,t1_oa2e0vc,ai_found_drug,1,ablation,negative,weak,yes
+irr-pilot-010,t1_oeih0qu,ai_found_drug,1,pepcid,positive,weak,yes
+irr-pilot-011,t3_1rrvcad,ai_found_drug,1,weed,mixed,moderate,no
+irr-pilot-012,t1_oa90fdi,ai_found_drug,4,allegra|cimetidine|famotidine|antihistamines,positive|positive|mixed|mixed,weak|weak|moderate|moderate,yes
+irr-pilot-013,t1_oamlfs5,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-014,t1_oa5gu2n,ai_found_drug,1,z pak,negative,weak,no
+irr-pilot-015,t1_oa2ooq3,ai_found_drug,2,peptides|bpc-157,negative|negative,strong|moderate,yes
+irr-pilot-016,t1_oaavyr0,ai_found_drug,1,intravenous immunoglobulin,mixed,moderate,no
+irr-pilot-017,t1_oe0u9dn,no_ai_drug_random,0,,,,no
+irr-pilot-018,t1_oc4487a,no_ai_drug_random,0,,,,no
+irr-pilot-019,t1_obc5nmb,ai_found_drug,1,pepcid,negative,moderate,yes
+irr-pilot-020,t1_oekg5by,no_ai_drug_random,0,,,,no
+irr-pilot-021,t1_oa2twig,ai_found_drug,1,taurine,negative,moderate,yes
+irr-pilot-022,t1_oa5kp0j,ai_found_drug,1,prednisone,positive,moderate,yes
+irr-pilot-023,t1_ocou425,no_ai_drug_random,0,,,,no
+irr-pilot-024,t1_oc9v8rr,no_ai_drug_random,0,,,,no
+irr-pilot-025,t1_odwaduc,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-026,t1_oaavm9u,ai_found_drug,3,broad spectrum antibiotics|fecal microbiota transplant|antibiotics,positive|positive|positive,weak|weak|weak,no
+irr-pilot-027,t3_1s0hic1,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-028,t1_oecorfd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-029,t1_oablltj,no_ai_drug_random,0,,,,no
+irr-pilot-030,t1_of9skx5,no_ai_drug_random,0,,,,no
+irr-pilot-031,t1_obh54go,no_ai_drug_random,0,,,,no
+irr-pilot-032,t1_oa1bqfj,ai_found_drug,1,low dose naltrexone,negative,moderate,yes
+irr-pilot-033,t1_ob09v2q,no_ai_drug_random,0,,,,no
+irr-pilot-034,t1_oa5ysqt,ai_found_drug,1,ivermectin,mixed,strong,yes
+irr-pilot-035,t1_oag3wfz,no_ai_drug_random,0,,,,no
+irr-pilot-036,t1_oaye3z7,ai_found_drug,1,taurine,negative,strong,yes
+irr-pilot-037,t1_oa1defx,ai_found_drug,1,low dose naltrexone,negative,moderate,no
+irr-pilot-038,t1_oezyt0p,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-039,t1_o9ykeur,ai_found_drug,1,taurine,positive,weak,no
+irr-pilot-040,t1_oa3d8x6,ai_found_drug,1,taurine,positive,moderate,yes
+irr-pilot-041,t1_oa1m0ln,ai_found_drug,1,hydroxyzine,weak,weak,yes
+irr-pilot-042,t1_o9znq0q,ai_found_drug,2,heavy cream|green tea,positive|positive,strong|weak,yes
+irr-pilot-043,t1_odz4ujb,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-044,t1_ocfp3mf,no_ai_drug_random,0,,,,no
+irr-pilot-045,t1_oasw6tv,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-046,t1_of9mcri,ai_found_drug,1,pepcid,positive,weak,yes
+irr-pilot-047,t1_oa72qfl,ai_found_drug,1,low amine diet,positive,strong,no
+irr-pilot-048,t1_od1qwcn,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-049,t1_oa31clh,ai_found_drug,3,pregabalin|lyrica|disease modifying therapy,negative|negative|negative,weak|weak|moderate,yes
+irr-pilot-050,t1_oa00xeu,ai_found_drug,5,glp-1|peptides|ss-31|kpv|tirzepatide,negative|positive|positive|positive|negative,moderate|strong|strong|strong|moderate,no
+irr-pilot-051,t1_ofdqtcc,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-052,t1_odzne9b,ai_found_drug,1,pepcid,negative,strong,yes
+irr-pilot-053,t1_oa80txw,ai_found_drug,1,low dose naltrexone,negative,weak,yes
+irr-pilot-054,t1_oa4a3z9,ai_found_drug,1,intravenous immunoglobulin,mixed,weak,no
+irr-pilot-055,t3_1ses60l,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-056,t1_o9y0b5k,ai_found_drug,2,vitamin b12|ferritin,positive|positive,moderate|moderate,yes
+irr-pilot-057,t1_oa705e6,ai_found_drug,4,sodium chloride|potassium chloride|ketogenic diet|magnesium,positive|positive|positive|positive,weak|weak|strong|weak,yes
+irr-pilot-058,t1_o9xybmh,ai_found_drug,2,aspirin|ibuprofen,positive|positive,moderate|moderate,yes
+irr-pilot-059,t1_oa6an4i,ai_found_drug,1,mucinex,positive,strong,no
+irr-pilot-060,t1_oa5cbk4,ai_found_drug,1,vitamin d,negative,moderate,yes
+irr-pilot-061,t1_ock7qqa,no_ai_drug_random,0,,,,no
+irr-pilot-062,t1_obf24tg,no_ai_drug_random,0,,,,no
+irr-pilot-063,t1_oa1opd9,ai_found_drug,2,muscle relaxer|beta blocker,negative|negative,moderate|moderate,no
+irr-pilot-064,t1_ocmwhp5,ai_found_drug,1,taurine,positive,weak,yes
+irr-pilot-065,t1_oco3b4t,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-066,t1_oa3wd08,ai_found_drug,1,iron,negative,strong,yes
+irr-pilot-067,t1_oc4ppkw,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-068,t1_ob8c2qb,no_ai_drug_random,0,,,,no
+irr-pilot-069,t1_oaz7xla,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-070,t3_1rt20cb,ai_found_drug,2,zyrtec|famotidine,negative|negative,moderate|moderate,yes
+irr-pilot-071,t1_oa18t8h,ai_found_drug,1,peptides,positive,weak,yes
+irr-pilot-072,t1_obwtkjq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-073,t3_1rt087d,ai_found_drug,2,functional medicine|acupuncture,positive|negative,strong|strong,no
+irr-pilot-074,t1_oa4lhm4,ai_found_drug,1,low dose naltrexone,mixed,strong,yes
+irr-pilot-075,t1_odwa711,ai_found_drug,1,pepcid,negative,strong,no
+irr-pilot-076,t1_oc3d0xd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-077,t1_oa7y2e6,ai_found_drug,2,taurine|nicotine,positive|positive,strong|strong,no
+irr-pilot-078,t1_oevtowl,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-079,t1_oce6tz5,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-080,t3_1rtzedd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-081,t1_of2e5wf,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-082,t1_oc1lr4n,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-083,t1_ofbg03g,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-084,t1_ob3qa3m,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-085,t1_obhwaxl,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-086,t3_1s3k1au,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-087,t1_oe1ee69,no_ai_drug_random,0,,,,no
+irr-pilot-088,t1_oezirg2,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-089,t1_oby15ip,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-090,t1_occf1eb,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-091,t1_oaaxcru,ai_found_drug,1,vancomycin,positive,weak,no
+irr-pilot-092,t1_oferqmq,no_ai_drug_random,0,,,,no
+irr-pilot-093,t1_oe062xh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-094,t1_oa7yub8,ai_found_drug,1,magnesium,positive,strong,yes
+irr-pilot-095,t1_oa4ox5h,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-096,t1_oaau858,ai_found_drug,1,fasting,mixed,weak,no
+irr-pilot-097,t3_1rra5h9,ai_found_drug,2,antibiotics|olmesartan,negative|negative,weak|strong,yes
+irr-pilot-098,t1_octklsq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-099,t1_oaau6sw,ai_found_drug,1,tirzepatide,negative,strong,no
+irr-pilot-100,t1_oax3xe3,no_ai_drug_random,0,,,,no
+irr-pilot-101,t1_oaxyxpr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-102,t1_o9z9erq,ai_found_drug,1,antihistamines,negative,moderate,yes
+irr-pilot-103,t3_1sd3rz7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-104,t1_oa198id,ai_found_drug,2,glp-1|low dose naltrexone,mixed|positive,moderate|weak,yes
+irr-pilot-105,t1_oeidbpe,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-106,t1_oannj72,no_ai_drug_random,0,,,,no
+irr-pilot-107,t1_oa6758c,ai_found_drug,2,mirtazapine|antidepressants,positive|positive,strong|strong,yes
+irr-pilot-108,t1_oavi1a9,no_ai_drug_random,0,,,,no
+irr-pilot-109,t1_oabhljo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-110,t1_ocfc55s,ai_found_drug,1,compounded ketotifen,negative,strong,no
+irr-pilot-111,t1_odj46t8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-112,t1_oa2n2pm,ai_found_drug,3,bpc-157|ghk-cu|kpv,positive|positive|positive,weak|weak|weak,no
+irr-pilot-113,t1_odq7e9f,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-114,t1_oa33y99,ai_found_drug,1,peptides,positive,weak,yes
+irr-pilot-115,t1_odyueua,ai_found_drug,1,taurine,positive,weak,yes
+irr-pilot-116,t1_oejfkwi,ai_found_drug,1,pepcid,positive,strong,no
+irr-pilot-117,t1_oa1y9dz,ai_found_drug,1,antihistamines,positive,moderate,yes
+irr-pilot-118,t1_oa7q0k7,ai_found_drug,1,low dose naltrexone,positive,weak,yes
+irr-pilot-119,t1_oaqt81o,no_ai_drug_random,0,,,,no
+irr-pilot-120,t1_oa4pcxj,ai_found_drug,2,low dose naltrexone|vitamin d,positive|negative,strong|weak,no
+irr-pilot-121,t1_oc9w79e,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-122,t1_oa453zk,ai_found_drug,1,ferrous fumarate,negative,strong,yes
+irr-pilot-123,t1_ofg6e3d,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-124,t1_oa3l1bz,ai_found_drug,1,taurine,positive,strong,yes
+irr-pilot-125,t1_oa0b899,ai_found_drug,4,escitalopram|ssri|fluoxetine|antihistamines,mixed|positive|positive|weak,moderate|strong|strong|weak,yes
+irr-pilot-126,t1_oaho3lo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-127,t1_oahxc0n,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-128,t1_obiatz4,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-129,t1_ob2fd9i,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-130,t1_of4668p,no_ai_drug_random,0,,,,no
+irr-pilot-131,t1_oeor5nz,ai_found_drug,1,pepcid,positive,weak,no
+irr-pilot-132,t1_odcp8se,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-133,t1_obh2e1m,ai_found_drug,1,taurine,negative,moderate,yes
+irr-pilot-134,t1_oa3u7sw,ai_found_drug,2,glp-1|peptides,negative|negative,strong|strong,no
+irr-pilot-135,t3_1s0lgma,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-136,t1_oc53swa,ai_found_drug,1,pepcid,positive,weak,yes
+irr-pilot-137,t1_oc7qg7o,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-138,t1_obsmwd7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-139,t1_oa0fv0b,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-140,t1_oa4tkzy,ai_found_drug,1,vitamin d,positive,weak,yes
+irr-pilot-141,t1_oaam2w1,ai_found_drug,2,zinc|magnesium,positive|positive,moderate|weak,yes
+irr-pilot-142,t1_oeoyvmj,ai_found_drug,1,pepcid,negative,moderate,yes
+irr-pilot-143,t1_oa2uvc0,ai_found_drug,1,glp-1,mixed,moderate,yes
+irr-pilot-144,t1_of0c6fh,no_ai_drug_random,0,,,,no
+irr-pilot-145,t1_odhwgm3,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-146,t1_oa96pod,ai_found_drug,2,intermittent fasting|vision therapy,positive|positive,weak|weak,no
+irr-pilot-147,t1_of1xhce,no_ai_drug_random,0,,,,no
+irr-pilot-148,t1_oa4zlh0,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-149,t1_oa3f50f,ai_found_drug,3,glp-1|bpc-157|mots-c,positive|negative|negative,weak|moderate|moderate,yes
+irr-pilot-150,t1_oex1ri6,no_ai_drug_random,0,,,,no
+irr-pilot-151,t1_oa4ccte,ai_found_drug,1,low dose naltrexone,mixed,strong,yes
+irr-pilot-152,t1_och35yk,no_ai_drug_random,0,,,,no
+irr-pilot-153,t3_1sgqdk3,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-154,t1_oa2r9kb,ai_found_drug,9,taurine|wellbutrin|b complex|curcumin|omega-3|n-acetylcysteine|guanfacine|low dose naltrexone|vitamin d,positive|positive|positive|positive|positive|positive|positive|positive|positive,weak|weak|weak|weak|weak|weak|weak|weak|weak,yes
+irr-pilot-155,t1_oe91oim,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-156,t1_obaj8rn,no_ai_drug_random,0,,,,no
+irr-pilot-157,t1_oa4mkfr,ai_found_drug,1,ssri,positive,weak,yes
+irr-pilot-158,t1_ocrmblx,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-159,t1_od5xuik,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-160,t1_od5x7hh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-161,t1_oc5ela8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-162,t1_o9zhktm,ai_found_drug,1,electrolytes,positive,weak,yes
+irr-pilot-163,t1_o9yxrsb,ai_found_drug,1,caffeine,negative,weak,no
+irr-pilot-164,t1_oa03fsm,ai_found_drug,1,a/o treatments,negative,strong,no
+irr-pilot-165,t1_oe5m5aa,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-166,t1_oa81q8u,ai_found_drug,6,vitamin k2|vitamin c|zinc|whey protein|coq10|quercetin,positive|weak|weak|positive|positive|positive,weak|weak|weak|weak|weak|weak,no
+irr-pilot-167,t1_of163ez,no_ai_drug_random,0,,,,no
+irr-pilot-168,t1_of273tq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-169,t1_oc85eg7,no_ai_drug_random,0,,,,no
+irr-pilot-170,t1_obqnez7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-171,t1_oa6yhoe,ai_found_drug,4,medication|mast cell stabilizer|antihistamines|ketotifen,positive|positive|positive|positive,strong|strong|strong|strong,yes
+irr-pilot-172,t1_oa1jjmz,no_ai_drug_random,0,,,,no
+irr-pilot-173,t3_1rwa205,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-174,t1_oa5bzge,ai_found_drug,1,virgin coconut oil,positive,strong,no
+irr-pilot-175,t1_ob6yoi4,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-176,t1_oaiodwg,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-177,t1_oat3lys,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-178,t1_oa96v21,ai_found_drug,2,sildenafil|l-citrulline,weak|positive,weak|weak,yes
+irr-pilot-179,t1_o9yogu7,ai_found_drug,1,low dose naltrexone,negative,moderate,yes
+irr-pilot-180,t1_o9xja64,ai_found_drug,2,vitamin d|ferritin,negative|negative,strong|moderate,no
+irr-pilot-181,t1_o9zskm0,ai_found_drug,3,folate|b12|ferritin,positive|positive|positive,strong|strong|strong,yes
+irr-pilot-182,t1_oa2ue77,ai_found_drug,1,taurine,negative,moderate,no
+irr-pilot-183,t1_od3hugg,no_ai_drug_random,0,,,,no
+irr-pilot-184,t1_odtq0ve,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-185,t3_1ru8fur,ai_found_drug,1,pepcid,negative,strong,no
+irr-pilot-186,t1_oae5dtd,no_ai_drug_random,0,,,,no
+irr-pilot-187,t1_oa720d8,ai_found_drug,1,mucinex,positive,weak,no
+irr-pilot-188,t1_oav04vi,no_ai_drug_random,0,,,,no
+irr-pilot-189,t1_oa76yku,ai_found_drug,1,intravenous immunoglobulin,mixed,strong,no
+irr-pilot-190,t1_oc3ru2f,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-191,t1_oa6sxwb,ai_found_drug,2,protein|salt,positive|positive,weak|weak,no
+irr-pilot-192,t1_oa32q4m,ai_found_drug,1,kpv,positive,weak,yes
+irr-pilot-193,t1_obzeqdk,no_ai_drug_random,0,,,,no
+irr-pilot-194,t1_oa6cwl3,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-195,t1_oekppar,no_ai_drug_random,0,,,,no
+irr-pilot-196,t1_occ02q7,no_ai_drug_random,0,,,,no
+irr-pilot-197,t1_obohy08,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-198,t1_oa2wub9,ai_found_drug,1,taurine,positive,strong,yes
+irr-pilot-199,t1_oewf6sg,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-200,t1_o9ylcpv,no_ai_drug_random,0,,,,no
+irr-pilot-201,t1_od2bkbf,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-202,t1_oe6ax51,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-203,t1_oa5qjnc,ai_found_drug,1,vitamin d,positive,weak,no
+irr-pilot-204,t1_oe1lc9w,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-205,t1_oab53go,ai_found_drug,3,vowst fmt|fecal microbiota transplant|antibiotics,negative|negative|mixed,strong|strong|moderate,no
+irr-pilot-206,t1_oa6hqgy,ai_found_drug,1,spermidine,positive,moderate,no
+irr-pilot-207,t1_oa2fjkl,ai_found_drug,1,taurine,positive,weak,yes
+irr-pilot-208,t1_o9ycceg,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-209,t1_oa44e5d,ai_found_drug,1,low dose naltrexone,negative,moderate,yes
+irr-pilot-210,t1_oepezqw,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-211,t1_o9y710g,ai_found_drug,1,progesterone,mixed,weak,no
+irr-pilot-212,t1_oa2431p,ai_found_drug,2,local anesthetic|stellate ganglion block,positive|positive,weak|moderate,no
+irr-pilot-213,t1_oa9l1d8,ai_found_drug,1,tirzepatide,positive,strong,yes
+irr-pilot-214,t1_oa0fuko,ai_found_drug,3,calcium akg|mast cell stabilizer|ketotifen,positive|positive|positive,weak|strong|weak,yes
+irr-pilot-215,t3_1rsrfe2,ai_found_drug,1,acupuncture,positive,weak,no
+irr-pilot-216,t1_odx2k7f,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-217,t1_obeoyvy,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-218,t1_obqunzp,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-219,t1_oa3m30z,ai_found_drug,1,pyridostigmine,positive,strong,no
+irr-pilot-220,t1_oa3c1ma,ai_found_drug,1,nad+glutathione,positive,weak,yes
+irr-pilot-221,t1_ob9b8vm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-222,t1_oa40a8o,ai_found_drug,7,peptides|bpc-157|ghk-cu|nad+|mots-c|kpv|tirzepatide,negative|negative|negative|negative|negative|negative|negative,strong|strong|moderate|weak|strong|weak|strong,yes
+irr-pilot-223,t1_odifv40,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-224,t1_of846dl,no_ai_drug_random,0,,,,no
+irr-pilot-225,t1_oa5nget,ai_found_drug,3,azithromycin|z pak|antibiotics,positive|positive|positive,weak|weak|strong,no
+irr-pilot-226,t1_oa13hl7,ai_found_drug,8,peptides|bpc-157|ghk-cu|nad+|ss-31|mots-c|kpv|tirzepatide,mixed|negative|positive|positive|positive|positive|positive|positive,strong|strong|weak|weak|weak|weak|weak|weak,no
+irr-pilot-227,t1_odsk56h,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-228,t1_odx09t4,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-229,t1_oamwinp,ai_found_drug,1,pepcid,mixed,moderate,yes
+irr-pilot-230,t1_oavkzfu,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-231,t1_od4zn1f,no_ai_drug_random,0,,,,no
+irr-pilot-232,t1_ocpf70u,no_ai_drug_random,0,,,,no
+irr-pilot-233,t1_obh40a7,no_ai_drug_random,0,,,,no
+irr-pilot-234,t1_oefxfer,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-235,t1_oa6p1tf,ai_found_drug,1,iron,neutral,weak,yes
+irr-pilot-236,t1_oeilbik,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-237,t1_o9xpw0s,ai_found_drug,1,solaray,positive,moderate,yes
+irr-pilot-238,t1_o9x86ds,ai_found_drug,2,compounded ketotifen|pepcid,positive|positive,strong|strong,yes
+irr-pilot-239,t1_oajfpl5,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-240,t1_oaa1x7k,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-241,t1_oa5russ,ai_found_drug,1,taurine,positive,strong,no
+irr-pilot-242,t1_oakvcyb,no_ai_drug_random,0,,,,no
+irr-pilot-243,t3_1rr78uq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-244,t1_oem4kio,no_ai_drug_random,0,,,,no
+irr-pilot-245,t1_oemch8j,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-246,t1_oaa0j22,ai_found_drug,1,acupuncture,positive,weak,no
+irr-pilot-247,t1_oeireky,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-248,t1_oa3khq9,ai_found_drug,1,tirzepatide,positive,strong,no
+irr-pilot-249,t1_oamz3as,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-250,t1_oa4l9yx,ai_found_drug,1,low dose naltrexone,positive,strong,yes
+irr-pilot-251,t1_oa5m8re,ai_found_drug,1,ivermectin,positive,strong,yes
+irr-pilot-252,t1_oa9f91m,ai_found_drug,1,tirzepatide,mixed,moderate,yes
+irr-pilot-253,t1_oa5cmod,ai_found_drug,2,abilify|antidepressants,negative|negative,moderate|moderate,no
+irr-pilot-254,t1_oa6gyw2,ai_found_drug,1,ssri,negative,strong,no
+irr-pilot-255,t3_1s9y02a,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-256,t1_oce7in6,no_ai_drug_random,0,,,,no
+irr-pilot-257,t1_oao5dat,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-258,t1_od2neub,no_ai_drug_random,0,,,,no
+irr-pilot-259,t1_oe5hjw7,no_ai_drug_random,0,,,,no
+irr-pilot-260,t1_oabpjgn,no_ai_drug_random,0,,,,no
+irr-pilot-261,t3_1rr8wk3,ai_found_drug,3,antihistamines|mast cell stabilizer|oral steroids,negative|negative|negative,strong|strong|moderate,yes
+irr-pilot-262,t1_oedxgqv,no_ai_drug_random,0,,,,no
+irr-pilot-263,t1_oa3sky8,ai_found_drug,1,antihistamines,positive,weak,no
+irr-pilot-264,t1_odcfwdn,no_ai_drug_random,0,,,,no
+irr-pilot-265,t1_oa2wpkj,ai_found_drug,1,stellate ganglion block,mixed,strong,no
+irr-pilot-266,t1_oa3pge5,ai_found_drug,1,peptides,positive,weak,yes
+irr-pilot-267,t1_oaca0ep,no_ai_drug_random,0,,,,no
+irr-pilot-268,t1_oantrrw,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-269,t3_1sc53fy,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-270,t1_oaylrri,ai_found_drug,1,pepcid,positive,weak,no
+irr-pilot-271,t1_obw8kor,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-272,t1_oa83qug,ai_found_drug,5,opiates|kratom|hydrocortisone|dexamethasone|steroid,positive|positive|positive|positive|positive,weak|weak|weak|weak|weak,no
+irr-pilot-273,t1_oa0szdp,ai_found_drug,1,peptides,positive,strong,no
+irr-pilot-274,t1_ob36n8d,no_ai_drug_random,0,,,,no
+irr-pilot-275,t1_obggh77,ai_found_drug,1,taurine,positive,weak,no
+irr-pilot-276,t1_o9y2a7y,ai_found_drug,1,electrolytes,mixed,moderate,yes
+irr-pilot-277,t1_obpiidy,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-278,t1_ob7v1fg,no_ai_drug_random,0,,,,no
+irr-pilot-279,t1_oad4g3p,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-280,t1_oeackzv,no_ai_drug_random,0,,,,no
+irr-pilot-281,t1_oa2fjgw,ai_found_drug,2,local anesthetic|stellate ganglion block,positive|positive,strong|strong,no
+irr-pilot-282,t1_oa53rcq,ai_found_drug,1,taurine,positive,weak,yes
+irr-pilot-283,t3_1rstwvp,ai_found_drug,1,tirzepatide,mixed,strong,yes
+irr-pilot-284,t1_of9xail,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-285,t1_oab496q,ai_found_drug,2,vitamin b12|b12,positive|positive,weak|weak,yes
+irr-pilot-286,t1_oa1jj49,ai_found_drug,2,vitamin d|ferritin,positive|positive,weak|weak,no
+irr-pilot-287,t1_oa3zgqy,ai_found_drug,7,peptides|bpc-157|ghk-cu|nad+|ss-31|mots-c|kpv,mixed|negative|negative|negative|negative|negative|negative,moderate|strong|moderate|weak|moderate|strong|weak,no
+irr-pilot-288,t1_oaasov3,ai_found_drug,1,fasting,negative,strong,no
+irr-pilot-289,t1_oa732ms,ai_found_drug,3,laser therapy|hyperbaric oxygen therapy|medication,positive|positive|positive,weak|weak|strong,yes
+irr-pilot-290,t1_odwn8k0,no_ai_drug_random,0,,,,no
+irr-pilot-291,t1_obucsiu,no_ai_drug_random,0,,,,no
+irr-pilot-292,t1_oa03495,ai_found_drug,6,red light therapy|stellate ganglion block|hyperbaric oxygen therapy|peptides|ss-31|kpv,positive|positive|positive|positive|positive|positive,strong|weak|strong|strong|strong|strong,yes
+irr-pilot-293,t1_od0etjb,no_ai_drug_random,0,,,,no
+irr-pilot-294,t1_od6wup8,no_ai_drug_random,0,,,,no
+irr-pilot-295,t1_ocly707,no_ai_drug_random,0,,,,no
+irr-pilot-296,t1_odhyz0z,ai_found_drug,1,pepcid,mixed,weak,yes
+irr-pilot-297,t1_oc58du0,ai_found_drug,1,pepcid,positive,strong,yes
+irr-pilot-298,t1_ocv9zlm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-299,t1_oa1lbmc,ai_found_drug,4,vitamin b1|b1|vitamin d|ferritin,positive|positive|positive|positive,strong|strong|strong|strong,yes
+irr-pilot-300,t1_oapf9pu,no_ai_drug_random,0,,,,no

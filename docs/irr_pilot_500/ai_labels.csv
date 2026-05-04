@@ -1,0 +1,501 @@
+sample_id,source_post_id,stratum,ai_drug_count,ai_drugs,ai_sentiments,ai_signal_strengths,keyword_match
+irr-pilot-001,hmgly79,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-002,hnhtxcu,no_ai_drug_random,0,,,,no
+irr-pilot-003,hp09t7w,no_ai_drug_random,0,,,,no
+irr-pilot-004,hktqlme,ai_found_drug,2,statins|ivermectin,positive|mixed,moderate|weak,yes
+irr-pilot-005,ho1pocl,ai_found_drug,3,alpha lipoic acid|cymbalta|potassium,positive|positive|positive,weak|moderate|moderate,yes
+irr-pilot-006,hivvonz,ai_found_drug,3,methylphenidate|ritalin|glutamine,mixed|mixed|negative,weak|weak|strong,yes
+irr-pilot-007,r0jlwo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-008,hmutmtg,ai_found_drug,2,vitamins|supplements,positive|mixed,strong|strong,yes
+irr-pilot-009,hjpekyp,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-010,hkauece,no_ai_drug_random,0,,,,no
+irr-pilot-011,hiytu9j,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-012,hky5vqr,ai_found_drug,3,taurine|l-theanine|melatonin,positive|positive|positive,strong|strong|moderate,yes
+irr-pilot-013,rsxc91,no_ai_drug_random,0,,,,no
+irr-pilot-014,rcr7gz,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-015,hptx60g,ai_found_drug,1,nicotine,positive,strong,yes
+irr-pilot-016,hoq941e,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-017,hp6fxec,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-018,hqkf2ei,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-019,hnx7k3u,no_ai_drug_random,0,,,,no
+irr-pilot-020,hnc601f,ai_found_drug,2,omega-3|claritin,negative|negative,strong|strong,yes
+irr-pilot-021,hm67tx8,ai_found_drug,1,vaccine,positive,strong,yes
+irr-pilot-022,hkm283s,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-023,ho00ywj,ai_found_drug,2,abilify|mirtazapine,negative|negative,moderate|moderate,no
+irr-pilot-024,hoy4wat,ai_found_drug,2,nystatin|antibiotics,positive|negative,moderate|strong,yes
+irr-pilot-025,hmzu29e,no_ai_drug_random,0,,,,no
+irr-pilot-026,hllda23,ai_found_drug,1,ct contrast dye,negative,moderate,no
+irr-pilot-027,hm6fso4,ai_found_drug,2,pediatric vaccine|vaccine,positive|positive,moderate|strong,no
+irr-pilot-028,hkfxhus,no_ai_drug_random,0,,,,no
+irr-pilot-029,hko25wr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-030,rsar1a,no_ai_drug_random,0,,,,no
+irr-pilot-031,hj632ga,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-032,hoe2zbq,no_ai_drug_random,0,,,,no
+irr-pilot-033,hq0pree,no_ai_drug_random,0,,,,no
+irr-pilot-034,qxfmld,ai_found_drug,1,narcotics,positive,weak,yes
+irr-pilot-035,hnpsu9d,ai_found_drug,1,fexofenadine,positive,strong,yes
+irr-pilot-036,hj1rqim,no_ai_drug_random,0,,,,no
+irr-pilot-037,hnjkzq4,ai_found_drug,1,vaccine,mixed,strong,no
+irr-pilot-038,ho562ye,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-039,hoamm1t,no_ai_drug_random,0,,,,no
+irr-pilot-040,hlwtl6t,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-041,hq17jwl,no_ai_drug_random,0,,,,no
+irr-pilot-042,hpgiqnb,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-043,ho59ahz,ai_found_drug,1,adderall,positive,moderate,yes
+irr-pilot-044,hn3gcea,ai_found_drug,1,cymbalta,negative,strong,yes
+irr-pilot-045,hnh0wge,ai_found_drug,2,atenolol|metoprolol,positive|negative,weak|strong,no
+irr-pilot-046,hkyoxzc,no_ai_drug_random,0,,,,no
+irr-pilot-047,hoyczpo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-048,qpqqfr,ai_found_drug,1,black seed oil,positive,strong,yes
+irr-pilot-049,hkmh5r2,ai_found_drug,4,sertraline|zoloft|fluoxetine|ssri,negative|negative|neutral|negative,strong|strong|weak|moderate,yes
+irr-pilot-050,hnglev0,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-051,hpzhxrp,ai_found_drug,2,diuretic|magnesium,negative|positive,strong|strong,yes
+irr-pilot-052,hpah3r5,ai_found_drug,1,non drowsy antihistamines,positive,moderate,no
+irr-pilot-053,hoek8qm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-054,hjokw0j,no_ai_drug_random,0,,,,no
+irr-pilot-055,hp2rdbu,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-056,hjcwcwo,ai_found_drug,1,serrapeptase,positive,weak,yes
+irr-pilot-057,how93jt,ai_found_drug,1,ginkgo biloba,neutral,weak,yes
+irr-pilot-058,hq2i1jr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-059,hjm13ld,ai_found_drug,2,pfizer|vaccine,positive|positive,moderate|moderate,no
+irr-pilot-060,hkev99r,ai_found_drug,1,aloe vera juice,positive,weak,no
+irr-pilot-061,hq22gmq,no_ai_drug_random,0,,,,no
+irr-pilot-062,hmh7jry,ai_found_drug,3,nebulizer|albuterol|inhaler,positive|positive|positive,strong|strong|moderate,no
+irr-pilot-063,hmt8oln,no_ai_drug_random,0,,,,no
+irr-pilot-064,hpls4ok,no_ai_drug_random,0,,,,no
+irr-pilot-065,hjypwqn,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-066,r292d1,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-067,homuics,ai_found_drug,1,pfizer,mixed,weak,no
+irr-pilot-068,hj3c5pr,ai_found_drug,2,vaccine|pfizer vaccine,negative|negative,strong|strong,yes
+irr-pilot-069,hlpix1f,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-070,hq3wm91,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-071,hpeen1q,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-072,hoky50o,ai_found_drug,1,heart ablation procedure,positive,weak,no
+irr-pilot-073,rb6u52,no_ai_drug_random,0,,,,no
+irr-pilot-074,hnqlqh9,ai_found_drug,2,alpha blocker|ssri,negative|negative,weak|strong,yes
+irr-pilot-075,hnftqo7,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-076,hncgjfg,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-077,hnm1bsd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-078,hm4kkhv,no_ai_drug_random,0,,,,no
+irr-pilot-079,hmmr1zz,ai_found_drug,2,damiana|blue vervain,positive|positive,strong|strong,no
+irr-pilot-080,hmxp30x,ai_found_drug,2,medication|probiotics,positive|positive,moderate|weak,no
+irr-pilot-081,hq1f80s,no_ai_drug_random,0,,,,no
+irr-pilot-082,hqf82eu,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-083,hpx18sk,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-084,hm7uzj0,ai_found_drug,1,vaccine,negative,strong,yes
+irr-pilot-085,hprtr23,ai_found_drug,1,metoprolol,positive,moderate,no
+irr-pilot-086,hq57pji,ai_found_drug,1,beta blockers,positive,moderate,yes
+irr-pilot-087,hl9yan1,ai_found_drug,1,nattokinase,negative,weak,yes
+irr-pilot-088,hjg5hdo,no_ai_drug_random,0,,,,no
+irr-pilot-089,hmlethy,ai_found_drug,2,powerade zero|electrolytes,negative|negative,weak|moderate,no
+irr-pilot-090,hppdbmm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-091,hmegi2l,ai_found_drug,1,omeprazole,negative,weak,yes
+irr-pilot-092,hk3wydk,ai_found_drug,1,vaccine,negative,weak,yes
+irr-pilot-093,hmpoau8,ai_found_drug,1,pfizer,mixed,strong,yes
+irr-pilot-094,hj8tb79,no_ai_drug_random,0,,,,no
+irr-pilot-095,hjcs7pi,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-096,hp8wj4c,no_ai_drug_random,0,,,,no
+irr-pilot-097,howwqu8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-098,hklhcx9,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-099,hnmuuwo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-100,hkw2bl6,ai_found_drug,3,lumbrokinase|serrapeptase|nattokinase,positive|positive|positive,strong|strong|strong,yes
+irr-pilot-101,hnmmy02,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-102,hn3quji,no_ai_drug_random,0,,,,no
+irr-pilot-103,hqqlz07,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-104,hj43t22,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-105,r89epc,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-106,hmgn2k6,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-107,hm1qup3,ai_found_drug,1,moderna vaccine,negative,strong,no
+irr-pilot-108,hns77ph,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-109,hjfrwkv,no_ai_drug_random,0,,,,no
+irr-pilot-110,hn7f69s,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-111,hlyhwme,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-112,hphmgfz,no_ai_drug_random,0,,,,no
+irr-pilot-113,hqa4mep,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-114,hnw89o7,ai_found_drug,1,prednisone,positive,moderate,yes
+irr-pilot-115,hnsr9iv,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-116,hqlqg2b,ai_found_drug,1,effexor,negative,strong,yes
+irr-pilot-117,hk4svp7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-118,hokyty9,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-119,hne5cw3,no_ai_drug_random,0,,,,no
+irr-pilot-120,ho0r6m5,ai_found_drug,3,sertraline|zoloft|ssri,mixed|positive|positive,strong|weak|strong,yes
+irr-pilot-121,hk29yk5,ai_found_drug,2,acetaminophen|tylenol,negative|negative,strong|strong,yes
+irr-pilot-122,hp2earf,ai_found_drug,2,pain relief|medication,positive|positive,moderate|weak,no
+irr-pilot-123,hn1t8ig,ai_found_drug,4,vitamin a|vitamin k|vitamin e|vitamin d,positive|positive|positive|positive,strong|strong|strong|strong,no
+irr-pilot-124,hov083a,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-125,hol82el,ai_found_drug,2,serrapeptase|nattokinase,positive|positive,strong|strong,yes
+irr-pilot-126,hn7tqy3,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-127,hp7z0e5,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-128,hn50jy3,ai_found_drug,1,gabapentin,positive,moderate,yes
+irr-pilot-129,hp689zz,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-130,hnxydsy,ai_found_drug,1,vitamins,negative,moderate,yes
+irr-pilot-131,hl6yarr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-132,hjfhuep,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-133,hq15x76,no_ai_drug_random,0,,,,no
+irr-pilot-134,hqig9tm,ai_found_drug,3,bronchodilators|inhalers|albuterol,negative|negative|negative,strong|strong|strong,yes
+irr-pilot-135,hmwcm1f,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-136,hlas9ju,ai_found_drug,2,h1 antihistamines|hydroxyzine,positive|positive,strong|strong,no
+irr-pilot-137,hq78qvk,ai_found_drug,2,tea|mullein,positive|positive,strong|strong,no
+irr-pilot-138,hp03ig5,ai_found_drug,2,super strength turmeric|turmeric,positive|positive,weak|weak,yes
+irr-pilot-139,hq896p6,no_ai_drug_random,0,,,,no
+irr-pilot-140,hkv64op,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-141,hqk96b0,ai_found_drug,1,maraviroc,positive,weak,yes
+irr-pilot-142,hlyl7fb,no_ai_drug_random,0,,,,no
+irr-pilot-143,hluw2tn,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-144,hogkw02,no_ai_drug_random,0,,,,no
+irr-pilot-145,hq92r3o,no_ai_drug_random,0,,,,no
+irr-pilot-146,hoph1vk,ai_found_drug,1,nattokinase,positive,moderate,no
+irr-pilot-147,hlluypw,ai_found_drug,9,goji berry|cloves|beet powder|star anise|elderberry|hibiscus|spirulina|turmeric|supplements,positive|positive|positive|positive|positive|positive|positive|positive|positive,weak|weak|weak|weak|weak|weak|weak|weak|weak,no
+irr-pilot-148,hpw7dmg,ai_found_drug,2,fluconazole|vitamin d3,positive|positive,strong|strong,yes
+irr-pilot-149,hl5t3of,ai_found_drug,1,inhalers,positive,weak,no
+irr-pilot-150,hk95pnu,ai_found_drug,2,flu shot|pfizer,negative|negative,moderate|weak,no
+irr-pilot-151,hofzsmb,no_ai_drug_random,0,,,,no
+irr-pilot-152,hnsdy9j,ai_found_drug,1,aspirin,positive,moderate,yes
+irr-pilot-153,hkdxxnb,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-154,hqkmdou,ai_found_drug,1,lidocaine,negative,strong,yes
+irr-pilot-155,hkbcokm,ai_found_drug,1,serrapeptase,positive,weak,no
+irr-pilot-156,hq2mtrj,ai_found_drug,1,amitriptyline,positive,strong,yes
+irr-pilot-157,hoxamz7,no_ai_drug_random,0,,,,no
+irr-pilot-158,hjg5k9r,no_ai_drug_random,0,,,,no
+irr-pilot-159,hjesb5r,no_ai_drug_random,0,,,,no
+irr-pilot-160,hmut3nu,ai_found_drug,1,vaccine,positive,strong,no
+irr-pilot-161,hoxjpk7,ai_found_drug,8,infrared light therapy|red light therapy|acetaminophen|cbg|tylenol|vitamin d|diphenhydramine|cbd,positive|positive|positive|positive|positive|positive|positive|positive,weak|weak|moderate|strong|moderate|weak|weak|strong,yes
+irr-pilot-162,hkcsva7,ai_found_drug,1,choline,positive,strong,no
+irr-pilot-163,hjdmtmv,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-164,hl5bnc6,no_ai_drug_random,0,,,,no
+irr-pilot-165,hl1julp,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-166,hpqecjj,no_ai_drug_random,0,,,,no
+irr-pilot-167,hkretro,ai_found_drug,3,nuun tablets|trioral|electrolytes,positive|positive|positive,strong|strong|strong,no
+irr-pilot-168,hm1c51a,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-169,hnulvrw,ai_found_drug,3,statins|magnesium|pfizer vaccine,positive|positive|positive,moderate|weak|weak,yes
+irr-pilot-170,hjes95o,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-171,hl4etgy,no_ai_drug_random,0,,,,no
+irr-pilot-172,hl9jq96,no_ai_drug_random,0,,,,no
+irr-pilot-173,hkjfplb,ai_found_drug,1,nasal spray,positive,strong,no
+irr-pilot-174,hmjf2g8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-175,hlttvfi,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-176,hk0ecnx,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-177,hoviccf,no_ai_drug_random,0,,,,no
+irr-pilot-178,hk2bkgm,ai_found_drug,1,ppis,negative,strong,no
+irr-pilot-179,hnnl9fj,no_ai_drug_random,0,,,,no
+irr-pilot-180,hkdzk02,ai_found_drug,1,pfizer,negative,strong,no
+irr-pilot-181,ro1rmx,no_ai_drug_random,0,,,,no
+irr-pilot-182,hk2mpe9,ai_found_drug,1,vaccine,mixed,strong,no
+irr-pilot-183,hkzdcdd,ai_found_drug,2,antacid|famotidine,positive|positive,weak|weak,yes
+irr-pilot-184,hqfwdg5,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-185,hqcptir,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-186,hlapbgy,ai_found_drug,4,cannabinoid|cbc|gabapentin|cbd,positive|positive|negative|negative,strong|strong|strong|strong,yes
+irr-pilot-187,hpdyw2p,no_ai_drug_random,0,,,,no
+irr-pilot-188,hj95lcl,ai_found_drug,1,coq10,positive,strong,yes
+irr-pilot-189,hkwxzxy,ai_found_drug,1,antiviral,positive,strong,no
+irr-pilot-190,hp58yku,no_ai_drug_random,0,,,,no
+irr-pilot-191,hngnwyz,ai_found_drug,2,grass fed butter|ghee,positive|positive,strong|strong,yes
+irr-pilot-192,hl2hxes,ai_found_drug,5,pain relief pm|acetaminophen|hydroxyzine|melatonin|antihistamine,positive|positive|positive|negative|positive,weak|weak|moderate|weak|moderate,yes
+irr-pilot-193,hkw5ihf,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-194,hk4vvf8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-195,hnqp0mb,no_ai_drug_random,0,,,,no
+irr-pilot-196,hpvklvh,ai_found_drug,3,sativa|indica|edibles,positive|negative|positive,strong|strong|strong,no
+irr-pilot-197,hov0wcn,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-198,hmh4yef,ai_found_drug,1,supplements,positive,weak,yes
+irr-pilot-199,hn5wxgh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-200,hpbdpj8,ai_found_drug,1,drugs,positive,strong,no
+irr-pilot-201,hp2lb12,ai_found_drug,1,magnesium,negative,weak,yes
+irr-pilot-202,hor5lz8,ai_found_drug,2,low dose prednisone|prednisone,positive|positive,strong|strong,yes
+irr-pilot-203,hnfajah,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-204,hjo5qrq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-205,hjgojpw,ai_found_drug,1,antibiotics,negative,strong,no
+irr-pilot-206,hk0upwi,ai_found_drug,1,antibiotics,negative,strong,yes
+irr-pilot-207,hql8kea,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-208,hovepi5,no_ai_drug_random,0,,,,no
+irr-pilot-209,hm40y1l,ai_found_drug,2,albuterol|inhaler,positive|positive,moderate|moderate,no
+irr-pilot-210,hjss401,ai_found_drug,1,claritin,negative,strong,yes
+irr-pilot-211,hnaf2qt,no_ai_drug_random,0,,,,no
+irr-pilot-212,hmtgcfm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-213,hlhrpjl,ai_found_drug,1,fexofenadine,positive,strong,yes
+irr-pilot-214,hlcm5qq,ai_found_drug,1,shot,negative,weak,no
+irr-pilot-215,hkq023p,no_ai_drug_random,0,,,,no
+irr-pilot-216,hnkwot2,ai_found_drug,1,ox bile salts,positive,strong,no
+irr-pilot-217,hjke2l2,no_ai_drug_random,0,,,,no
+irr-pilot-218,hnhcdqg,ai_found_drug,1,gabapentin,positive,moderate,yes
+irr-pilot-219,ho77f0o,ai_found_drug,1,tyrosine,positive,moderate,yes
+irr-pilot-220,hm6rorz,ai_found_drug,1,heat pad,positive,moderate,yes
+irr-pilot-221,hkdpv7h,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-222,hmmn1lm,ai_found_drug,10,oregano oil|eyebright|nettle|yellow dock|seamoss|bladderwrack|feverfew|burdock root|damiana|blue vervain,positive|positive|positive|positive|positive|positive|positive|positive|positive|positive,weak|weak|weak|weak|weak|weak|strong|weak|strong|strong,no
+irr-pilot-223,hpfz374,ai_found_drug,1,glasses,positive,moderate,no
+irr-pilot-224,hkayt5h,no_ai_drug_random,0,,,,no
+irr-pilot-225,hk2mhuc,ai_found_drug,1,vaccine,positive,strong,no
+irr-pilot-226,hou5oa8,ai_found_drug,2,atenolol|ssri,positive|positive,weak|strong,yes
+irr-pilot-227,hptm28k,no_ai_drug_random,0,,,,no
+irr-pilot-228,hk6sw3f,ai_found_drug,1,taurine,positive,weak,no
+irr-pilot-229,hleq99k,ai_found_drug,1,gaba,positive,moderate,yes
+irr-pilot-230,hm978sh,ai_found_drug,3,coconut milk|coconut cream|coconut oil,positive|positive|positive,moderate|moderate|moderate,no
+irr-pilot-231,hk6p7mg,ai_found_drug,1,medication,positive,moderate,yes
+irr-pilot-232,hqppenv,no_ai_drug_random,0,,,,no
+irr-pilot-233,hl30m8g,no_ai_drug_random,0,,,,no
+irr-pilot-234,hlnk7v2,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-235,hoauz2f,ai_found_drug,2,inflammation killer|steroids,positive|mixed,moderate|moderate,no
+irr-pilot-236,hjsktny,ai_found_drug,2,motion sickness pills|meclizine,positive|positive,strong|weak,no
+irr-pilot-237,hlxtx7y,ai_found_drug,1,blood pressure meds,positive,weak,no
+irr-pilot-238,hqqmsjs,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-239,hq41yhp,ai_found_drug,1,nac,positive,strong,yes
+irr-pilot-240,hkidr8y,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-241,hiy8ic6,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-242,hpq2t3k,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-243,hnvn0cb,ai_found_drug,1,metoprolol,positive,weak,yes
+irr-pilot-244,hopbji8,ai_found_drug,1,antibiotics,negative,moderate,no
+irr-pilot-245,hmcb6mk,no_ai_drug_random,0,,,,no
+irr-pilot-246,hj8qvmp,no_ai_drug_random,0,,,,no
+irr-pilot-247,hk0wmz6,ai_found_drug,1,melatonin,negative,strong,yes
+irr-pilot-248,hqji9de,ai_found_drug,1,ibuprofen,positive,weak,yes
+irr-pilot-249,hjtmd0d,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-250,hordmmv,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-251,hj9ijv2,ai_found_drug,1,nasal spray,mixed,weak,no
+irr-pilot-252,hjt3213,ai_found_drug,2,tums|omeprazole,positive|positive,weak|weak,no
+irr-pilot-253,hnb2sty,ai_found_drug,2,famotidine|h2 blocker,mixed|mixed,moderate|moderate,yes
+irr-pilot-254,hlq0y7g,ai_found_drug,1,metoclopramide,positive,strong,yes
+irr-pilot-255,hlzmq5s,ai_found_drug,1,omeprazole,negative,strong,yes
+irr-pilot-256,hjznxqr,no_ai_drug_random,0,,,,no
+irr-pilot-257,hq7lc7g,no_ai_drug_random,0,,,,no
+irr-pilot-258,hkrfxsv,no_ai_drug_random,0,,,,no
+irr-pilot-259,hp9mz88,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-260,hqpjf2h,ai_found_drug,1,vitamin b12,negative,moderate,yes
+irr-pilot-261,hox2ph0,ai_found_drug,1,pfizer vaccine,neutral,weak,no
+irr-pilot-262,hmpnnso,ai_found_drug,1,flu shot,positive,strong,no
+irr-pilot-263,hpq35wx,ai_found_drug,3,inhalers|famotidine|fexofenadine,negative|positive|positive,strong|strong|strong,yes
+irr-pilot-264,hqgv5xi,ai_found_drug,2,aspirin|antihistamine,positive|positive,strong|moderate,yes
+irr-pilot-265,ho82ri7,ai_found_drug,1,pfizer,negative,moderate,no
+irr-pilot-266,hk3opyh,ai_found_drug,1,mrna vaccine,positive,moderate,no
+irr-pilot-267,hnwxg3z,ai_found_drug,1,tylenol,positive,strong,yes
+irr-pilot-268,hq3rf5a,ai_found_drug,2,steroids|prednisone,positive|positive,strong|strong,yes
+irr-pilot-269,hmlkwnp,no_ai_drug_random,0,,,,no
+irr-pilot-270,hotpn09,ai_found_drug,1,metoprolol,positive,moderate,no
+irr-pilot-271,qrap3v,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-272,hjm675f,ai_found_drug,1,melatonin,positive,moderate,yes
+irr-pilot-273,hpx6ad7,ai_found_drug,1,pfizer,mixed,strong,yes
+irr-pilot-274,hn625kj,ai_found_drug,1,therapist,positive,moderate,yes
+irr-pilot-275,hpixpz9,no_ai_drug_random,0,,,,no
+irr-pilot-276,hndfnfq,ai_found_drug,1,methylprednisolone,positive,strong,yes
+irr-pilot-277,hn5jp21,no_ai_drug_random,0,,,,no
+irr-pilot-278,hjynovb,ai_found_drug,1,potassium,positive,weak,no
+irr-pilot-279,hmxsily,ai_found_drug,1,edibles,positive,moderate,no
+irr-pilot-280,hql6meo,ai_found_drug,1,blood pressure medication,positive,moderate,no
+irr-pilot-281,hk6ft3m,ai_found_drug,3,oral rehydration solution|liquid iv|trioral,positive|positive|positive,strong|strong|strong,no
+irr-pilot-282,hkauntx,ai_found_drug,1,low histamine probiotic,positive,strong,yes
+irr-pilot-283,hqevxfy,ai_found_drug,1,natural antihistamine,positive,weak,yes
+irr-pilot-284,hq7nk3l,ai_found_drug,1,phgg,positive,strong,no
+irr-pilot-285,hp75h8r,ai_found_drug,1,shilajit,positive,weak,no
+irr-pilot-286,hkr4vsn,ai_found_drug,1,antihistamine,positive,weak,yes
+irr-pilot-287,hmh340e,ai_found_drug,1,inhaler,mixed,moderate,yes
+irr-pilot-288,hn5qqmu,ai_found_drug,1,pt,positive,weak,yes
+irr-pilot-289,hq2vuc8,ai_found_drug,1,melatonin,negative,strong,yes
+irr-pilot-290,hnhbihd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-291,raav77,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-292,hm0ogwk,ai_found_drug,2,anti-autoimmune|low dose naltrexone,positive|positive,strong|strong,yes
+irr-pilot-293,hlegr9u,ai_found_drug,1,vaccine,mixed,moderate,yes
+irr-pilot-294,hjmdrfx,no_ai_drug_random,0,,,,no
+irr-pilot-295,hmrtjgy,ai_found_drug,6,mct oil|frankincense essential oil|brain vitamins|acai|antioxidants|vitamin c,positive|positive|positive|positive|positive|positive,weak|strong|weak|weak|weak|weak,yes
+irr-pilot-296,hl9shch,ai_found_drug,1,nac,negative,strong,yes
+irr-pilot-297,hlbs5va,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-298,qlnee1,ai_found_drug,1,amoxicillin,negative,strong,yes
+irr-pilot-299,hkvtc0w,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-300,hjpbq5w,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-301,hl6ae7f,ai_found_drug,1,pfizer,mixed,strong,no
+irr-pilot-302,hke4j40,ai_found_drug,2,vitamin|niacin,positive|positive,moderate|weak,yes
+irr-pilot-303,hk5jojx,no_ai_drug_random,0,,,,no
+irr-pilot-304,hqmxafj,no_ai_drug_random,0,,,,no
+irr-pilot-305,rhvzj0,ai_found_drug,1,thc,negative,strong,no
+irr-pilot-306,hkxrp25,no_ai_drug_random,0,,,,no
+irr-pilot-307,hki82tg,no_ai_drug_random,0,,,,no
+irr-pilot-308,hoxelzl,no_ai_drug_random,0,,,,no
+irr-pilot-309,hpd4hsv,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-310,hoc4gbw,no_ai_drug_random,0,,,,no
+irr-pilot-311,hqne416,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-312,hjybeqh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-313,hjgt65h,no_ai_drug_random,0,,,,no
+irr-pilot-314,hpxqyfy,ai_found_drug,2,high dose vitamin d|vitamin d,positive|positive,strong|strong,yes
+irr-pilot-315,hpuxvl7,ai_found_drug,1,vaccine,negative,weak,yes
+irr-pilot-316,ho29jly,no_ai_drug_random,0,,,,no
+irr-pilot-317,hpi7wzd,ai_found_drug,1,supplements,positive,weak,no
+irr-pilot-318,hnc9j6p,ai_found_drug,1,hops,positive,weak,no
+irr-pilot-319,hpdpxot,ai_found_drug,1,famotidine,positive,strong,yes
+irr-pilot-320,hkhxc4k,ai_found_drug,1,moderna vaccine,negative,strong,no
+irr-pilot-321,hpo210w,ai_found_drug,1,pfizer,negative,strong,no
+irr-pilot-322,hqgs85w,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-323,hl0sek3,ai_found_drug,1,supplements,mixed,weak,yes
+irr-pilot-324,ho871vr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-325,ho69i3n,ai_found_drug,1,factor de transferencia,negative,moderate,no
+irr-pilot-326,hk2n092,ai_found_drug,1,vaccine,mixed,moderate,no
+irr-pilot-327,hj7utsd,ai_found_drug,2,glutathione|nac,negative|positive,moderate|weak,yes
+irr-pilot-328,hof3728,ai_found_drug,1,spironolactone,negative,weak,no
+irr-pilot-329,hkb8aq1,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-330,ho7fuo9,no_ai_drug_random,0,,,,no
+irr-pilot-331,hqf6uz7,ai_found_drug,1,intermittent fasting,positive,moderate,no
+irr-pilot-332,hjjrg63,ai_found_drug,1,psychiatric medical intervention,positive,moderate,no
+irr-pilot-333,hj001w5,ai_found_drug,1,allergy meds,negative,strong,no
+irr-pilot-334,hkeolpx,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-335,hk68isr,ai_found_drug,1,ibuprofen,positive,strong,yes
+irr-pilot-336,hmm9xe8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-337,hmu8678,ai_found_drug,1,pfizer vaccine,negative,strong,yes
+irr-pilot-338,hkubpl8,no_ai_drug_random,0,,,,no
+irr-pilot-339,hox2sr2,ai_found_drug,1,panic attack medication,negative,strong,yes
+irr-pilot-340,hk3bsya,ai_found_drug,1,medication,positive,weak,no
+irr-pilot-341,hlqkygd,ai_found_drug,1,miralax,positive,strong,no
+irr-pilot-342,hplo4tr,no_ai_drug_random,0,,,,no
+irr-pilot-343,hqgrrh6,no_ai_drug_random,0,,,,no
+irr-pilot-344,hnmu5fx,ai_found_drug,1,bentyl,positive,strong,yes
+irr-pilot-345,hk19p3j,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-346,hp2qnc1,no_ai_drug_random,0,,,,no
+irr-pilot-347,hj1c74n,ai_found_drug,1,pfizer,positive,weak,no
+irr-pilot-348,hq57fkf,ai_found_drug,1,nac,mixed,moderate,yes
+irr-pilot-349,hq2js1y,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-350,hpc5iht,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-351,hlzlksn,no_ai_drug_random,0,,,,no
+irr-pilot-352,hk48e4x,ai_found_drug,1,vaccine,negative,weak,no
+irr-pilot-353,hkfq8qb,ai_found_drug,6,cordyceps|arginine|chamomile|ashwagandha|supplements|glutamine,positive|positive|positive|positive|positive|positive,weak|weak|weak|weak|moderate|weak,no
+irr-pilot-354,hmugq9k,ai_found_drug,1,acupuncture,positive,strong,no
+irr-pilot-355,hq1ty0f,ai_found_drug,1,rubber mouthguard,negative,strong,no
+irr-pilot-356,hkz97sw,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-357,hq1n120,ai_found_drug,2,ibguard|peppermint oil,positive|positive,strong|strong,yes
+irr-pilot-358,qrzr6n,ai_found_drug,1,clindamycin,negative,strong,no
+irr-pilot-359,hpzhlri,no_ai_drug_random,0,,,,no
+irr-pilot-360,reblr0,ai_found_drug,2,pneumonia treatment|pfizer vaccine,positive|positive,weak|strong,no
+irr-pilot-361,hmyh12t,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-362,hl06vi8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-363,hkyjs2m,ai_found_drug,1,local anesthetic,positive,strong,no
+irr-pilot-364,hnhsrko,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-365,hk921fg,no_ai_drug_random,0,,,,no
+irr-pilot-366,hlc540k,no_ai_drug_random,0,,,,no
+irr-pilot-367,hnxbx8k,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-368,hpddhwz,ai_found_drug,1,alcohol,negative,strong,no
+irr-pilot-369,hn02qa2,ai_found_drug,1,wellbutrin,positive,moderate,yes
+irr-pilot-370,rirnle,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-371,hq9tip6,ai_found_drug,1,melatonin,positive,strong,yes
+irr-pilot-372,qpdvjb,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-373,hp2nhjm,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-374,hk7ukfw,ai_found_drug,1,coq10,mixed,strong,yes
+irr-pilot-375,hlltr1m,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-376,hjb8ekx,no_ai_drug_random,0,,,,no
+irr-pilot-377,hq8llut,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-378,hmov5k9,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-379,houxltk,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-380,r47hhe,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-381,ho5f3ko,ai_found_drug,2,l-theanine|cbd,positive|positive,weak|strong,yes
+irr-pilot-382,hjtzkba,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-383,hmgnajq,ai_found_drug,2,immune renew|andrographis,positive|positive,moderate|weak,no
+irr-pilot-384,ho4vra7,ai_found_drug,1,dental injections,positive,weak,no
+irr-pilot-385,hmfpv9j,no_ai_drug_random,0,,,,no
+irr-pilot-386,hjojmub,ai_found_drug,1,h2 anti-histamine,positive,moderate,no
+irr-pilot-387,hkt3k1b,ai_found_drug,5,balance one probiotics|just thrive probiotics|h2 blocker|claritin|antihistamine,positive|positive|positive|positive|positive,weak|moderate|strong|strong|strong,yes
+irr-pilot-388,hpbsfg2,ai_found_drug,1,supplements,positive,moderate,no
+irr-pilot-389,hq8hwr9,ai_found_drug,1,electrolytes,positive,moderate,no
+irr-pilot-390,hlcxk7i,ai_found_drug,1,pfizer,negative,weak,yes
+irr-pilot-391,hmqibrm,ai_found_drug,1,peptides,positive,strong,no
+irr-pilot-392,hn4udmw,ai_found_drug,1,vaccine,positive,strong,no
+irr-pilot-393,hqixi7v,ai_found_drug,1,liquid electrolytes,positive,weak,no
+irr-pilot-394,hmjr2fh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-395,hprhi8m,ai_found_drug,3,coconut oil|vitamin k2|vitamin d3,positive|positive|positive,strong|strong|strong,no
+irr-pilot-396,hmhj2zx,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-397,hpw5rus,no_ai_drug_random,0,,,,no
+irr-pilot-398,ho27uq8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-399,hl5ew8y,ai_found_drug,3,alvesco|steroid|albuterol,positive|positive|positive,moderate|moderate|weak,yes
+irr-pilot-400,hq7gu7i,no_ai_drug_random,0,,,,no
+irr-pilot-401,hkow4pa,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-402,hocyifl,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-403,hp6ctia,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-404,hlfoko5,ai_found_drug,5,rutin|monolaurin|quercetin|supplements|valtrex,negative|positive|positive|negative|negative,strong|weak|weak|moderate|moderate,yes
+irr-pilot-405,hl62qco,ai_found_drug,2,snri|ssri,negative|negative,strong|strong,yes
+irr-pilot-406,hmqauqr,no_ai_drug_random,0,,,,no
+irr-pilot-407,holdnce,ai_found_drug,1,serenagen,positive,strong,no
+irr-pilot-408,hpbcpkp,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-409,hk7ui7q,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-410,hn9jh1t,ai_found_drug,1,beta blockers,positive,strong,yes
+irr-pilot-411,hoaahvu,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-412,hpba4e7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-413,hjeckde,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-414,hlci3nz,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-415,hm4ipa5,ai_found_drug,1,cetirizine,positive,strong,yes
+irr-pilot-416,hoi4q64,ai_found_drug,1,magnesium,positive,weak,yes
+irr-pilot-417,hp0x3a2,ai_found_drug,5,collagen|vitamin d|probiotics|fish oil|magnesium,positive|positive|positive|positive|positive,weak|weak|weak|weak|weak,yes
+irr-pilot-418,hkg6sog,ai_found_drug,1,azithromycin,positive,strong,yes
+irr-pilot-419,hngadqf,ai_found_drug,4,stinging nettle|moringa|quercetin|cetirizine,positive|positive|positive|negative,weak|weak|weak|moderate,no
+irr-pilot-420,hpv27yt,no_ai_drug_random,0,,,,no
+irr-pilot-421,hngvcrt,no_ai_drug_random,0,,,,no
+irr-pilot-422,r6ndi0,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-423,hksku4t,no_ai_drug_random,0,,,,no
+irr-pilot-424,hmz6akb,ai_found_drug,2,vitamins|supplements,positive|positive,weak|weak,yes
+irr-pilot-425,hneaqrz,ai_found_drug,1,gaba,positive,strong,yes
+irr-pilot-426,hjv7j8m,ai_found_drug,1,pfizer,negative,strong,yes
+irr-pilot-427,hlj59e6,no_ai_drug_random,0,,,,no
+irr-pilot-428,hmbt5hd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-429,hncgad4,ai_found_drug,1,flccc regimen,positive,strong,no
+irr-pilot-430,hpry0zn,ai_found_drug,1,fluconazole,negative,strong,yes
+irr-pilot-431,hmcxx2c,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-432,hka2izf,ai_found_drug,2,dip|cigarettes,negative|mixed,moderate|strong,no
+irr-pilot-433,hjivpjn,ai_found_drug,1,aspirin,positive,weak,yes
+irr-pilot-434,hmta1ra,ai_found_drug,1,pfizer vaccine,positive,moderate,yes
+irr-pilot-435,ho1ejye,no_ai_drug_random,0,,,,no
+irr-pilot-436,hmgo2xs,ai_found_drug,1,prednisone,positive,strong,yes
+irr-pilot-437,ho234n8,ai_found_drug,1,uppers,positive,strong,yes
+irr-pilot-438,hjg907n,ai_found_drug,1,wellbutrin,positive,moderate,yes
+irr-pilot-439,hkxby00,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-440,hnhar1a,ai_found_drug,3,naproxen|nsaids|ibuprofen,positive|positive|positive,weak|weak|weak,yes
+irr-pilot-441,hpzcjfo,ai_found_drug,1,vitamin d,positive,strong,yes
+irr-pilot-442,hqqms0f,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-443,hlfls1b,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-444,hmcv8y7,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-445,hn9xocy,ai_found_drug,2,bilberry|quercetin,positive|positive,weak|weak,yes
+irr-pilot-446,hoojkjo,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-447,hk5fkcd,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-448,hiyc00y,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-449,hkm1pid,ai_found_drug,1,vaccine,negative,strong,no
+irr-pilot-450,hj8ytdh,ai_found_drug,1,supplements,positive,weak,no
+irr-pilot-451,hqg3ckn,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-452,hp8h88a,ai_found_drug,1,caffeine,negative,strong,yes
+irr-pilot-453,hpq85j6,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-454,hlk5vuk,ai_found_drug,1,parasym plus,positive,moderate,yes
+irr-pilot-455,hobypwe,ai_found_drug,3,branched chain amino acids|bcaas|gaba,positive|mixed|positive,weak|weak|strong,yes
+irr-pilot-456,hpruj0k,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-457,hlbytfd,ai_found_drug,1,lexapro,negative,weak,yes
+irr-pilot-458,hjodzdg,ai_found_drug,3,iv|glutathione|vitamin c,negative|negative|negative,strong|moderate|strong,yes
+irr-pilot-459,hjbywx8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-460,r6t42l,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-461,hk5jfzr,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-462,hjclk5i,ai_found_drug,2,flu shot|vaccine,negative|negative,strong|strong,no
+irr-pilot-463,hq749zc,ai_found_drug,1,nac,mixed,weak,yes
+irr-pilot-464,hnbsyfe,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-465,rq76bi,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-466,hoxxmwe,no_ai_drug_random,0,,,,no
+irr-pilot-467,hlut1yb,ai_found_drug,1,flu shot,negative,strong,yes
+irr-pilot-468,hq3ujbh,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-469,hjguhs3,ai_found_drug,2,pravastatin|coq10,positive|positive,strong|weak,yes
+irr-pilot-470,houqr5z,ai_found_drug,1,150mg a day,mixed,strong,yes
+irr-pilot-471,hqhf0b5,ai_found_drug,1,magnesium,positive,moderate,yes
+irr-pilot-472,hq0p2g5,ai_found_drug,2,astrazeneca vaccine|pfizer vaccine,positive|positive,weak|weak,no
+irr-pilot-473,hn3r2ig,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-474,hp2jduu,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-475,hj2rql3,ai_found_drug,1,vitamin d,positive,strong,yes
+irr-pilot-476,hnk3iwf,ai_found_drug,1,supplements,positive,strong,no
+irr-pilot-477,hl7dlb6,no_ai_drug_random,0,,,,no
+irr-pilot-478,hk2slq6,no_ai_drug_random,0,,,,no
+irr-pilot-479,hpk0fkx,ai_found_drug,2,diuretic|magnesium,negative|positive,strong|strong,yes
+irr-pilot-480,hqi088w,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-481,hkqj03a,ai_found_drug,2,cetirizine|antihistamine,positive|positive,strong|strong,yes
+irr-pilot-482,hog0w9z,no_ai_drug_random,0,,,,no
+irr-pilot-483,hjaxgk0,no_ai_drug_random,0,,,,no
+irr-pilot-484,ho6ck1j,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-485,hqo84zr,no_ai_drug_random,0,,,,no
+irr-pilot-486,hor2beq,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-487,hlp4kos,ai_found_drug,2,meds|supplements,negative|negative,strong|strong,yes
+irr-pilot-488,hjngy3y,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-489,hmtbc4s,ai_found_drug,2,h1 blocker|h2 blocker,positive|positive,weak|weak,yes
+irr-pilot-490,hq5b19u,no_ai_drug_random,0,,,,no
+irr-pilot-491,hkvmj0x,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-492,hlcjmrs,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-493,hoxx51v,ai_found_drug,1,pfizer,negative,strong,yes
+irr-pilot-494,hjzqezg,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-495,hpa1h6p,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-496,hnrbnu8,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-497,hpfi08n,no_ai_drug_keyword_match,0,,,,yes
+irr-pilot-498,hpurneb,no_ai_drug_random,0,,,,no
+irr-pilot-499,hqhzth9,no_ai_drug_random,0,,,,no
+irr-pilot-500,ho96tv4,ai_found_drug,1,brivudine,positive,strong,no
