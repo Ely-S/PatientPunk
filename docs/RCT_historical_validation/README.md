@@ -197,6 +197,56 @@ study; spot-checked, none discuss the paired RCT result. The community's
 pre-publication discussion is empirically free of paired-trial
 contamination at the cutoff boundary.
 
+## Drug aliases used in extraction
+
+The full list of brand names, generic names, abbreviations, misspellings,
+and class synonyms that the pipeline substring-matched against during
+extraction is published as a tracked artifact:
+
+**[`DRUG_ALIASES.md`](./DRUG_ALIASES.md)** — 170 aliases across the six
+target drugs, plus heuristic flags for short / multi-word / likely-
+misspelling entries and a cross-drug collision check (no collisions).
+
+### What it is
+
+`DRUG_ALIASES.md` is a human-readable export of the `treatment.aliases`
+JSON column from the analysis SQLite DB. Every pipeline run's `--drug`
+substring filter and every canonicalization mapping operate against
+this list, so it is the load-bearing input to V4 (drug mention
+extraction) and V5 (canonicalization). Publishing it as a static file
+lets reviewers audit precision/recall coverage without running any code.
+
+### How it was made
+
+During the pipeline's canonicalization step (`src/pipeline/canonicalize.py`),
+Claude Sonnet 4.6 was queried with `drug_aliases_prompt(target_drug)`
+(defined in `src/utilities/__init__.py`) once per target drug. The model
+returned a list of brand names, generic names, abbreviations, common
+misspellings, and class synonyms; that JSON list was stored in
+`treatment.aliases` at pipeline-run time. Subsequent pipeline steps
+substring-match against this list, and the analysis-time SQL joins on
+`canonical_name` to roll up all alias variants into a single per-drug
+count.
+
+The aliases were generated **automatically by an LLM and have not been
+manually adjudicated** against the V5 acceptance criteria. The
+"V5 reviewer notes" section of `DRUG_ALIASES.md` flags entries worth a
+closer look (e.g., `prednisolone` listed under prednisone — different
+active molecule; `loratab` listed under loratadine — Lortab is a
+hydrocodone brand, likely an LLM error; class-level terms like
+`steroid`, `h2 blocker`). The historical-validation analysis used the
+list as-is; any edit would require regenerating per-drug counts.
+
+### Regenerating
+
+```bash
+python scripts/dump_drug_aliases.py \
+    --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \
+    --out docs/RCT_historical_validation/DRUG_ALIASES.md
+```
+
+Deterministic given the DB content; safe to re-run.
+
 ---
 
 ## How the Analysis Works
