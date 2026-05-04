@@ -62,8 +62,65 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     return [[] for _ in texts]
 
 
+def _detect_parent_cycles(id_to_parent: dict) -> None:
+    """Raise ValueError if id_to_parent contains any cycle.
+
+    The upstream-mentioned-drugs recursion below assumes id_to_parent is a
+    forest (each node has at most one parent and chains terminate). A cycle
+    in malformed imported data would cause the recursion to memoize on
+    (eid, remaining) and still never terminate (cache stores final values,
+    not in-progress visits). Detect once up front and fail loudly.
+
+    Iterative DFS with white/gray/black coloring; O(N).
+    """
+    UNVISITED, VISITING, DONE = 0, 1, 2
+    color = {}
+    for start in id_to_parent:
+        if color.get(start, UNVISITED) != UNVISITED:
+            continue
+        stack = [start]
+        path = []
+        while stack:
+            node = stack[-1]
+            c = color.get(node, UNVISITED)
+            if c == UNVISITED:
+                color[node] = VISITING
+                path.append(node)
+                parent = id_to_parent.get(node)
+                if parent and parent in id_to_parent:
+                    pcol = color.get(parent, UNVISITED)
+                    if pcol == VISITING:
+                        # back-edge into the active path -> cycle
+                        i = path.index(parent)
+                        raise ValueError(
+                            "parent_id cycle detected: "
+                            + " -> ".join(path[i:] + [parent])
+                        )
+                    if pcol == UNVISITED:
+                        stack.append(parent)
+                        continue
+                # parent missing, NULL, or already DONE -> this node is finished
+                color[node] = DONE
+                if path and path[-1] == node:
+                    path.pop()
+                stack.pop()
+            else:
+                if path and path[-1] == node:
+                    path.pop()
+                stack.pop()
+                color[node] = DONE
+
+
 def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_depth: int | None = None) -> dict[str, list[str]]:
-    """Pre-compute upstream mentioned drugs with memoization. max_depth=None means unlimited."""
+    """Pre-compute upstream mentioned drugs with memoization. max_depth=None means unlimited.
+
+    Performs cycle detection on id_to_parent before traversal, so a cycle in
+    malformed data raises ValueError instead of recursing forever (the
+    lru_cache memoization wouldn't catch a cycle because it stores final
+    values, not in-progress visits).
+    """
+    _detect_parent_cycles(id_to_parent)
+
     @lru_cache(maxsize=None)
     def upstream(eid: str, remaining: int | None) -> tuple[str, ...]:
         if remaining == 0:

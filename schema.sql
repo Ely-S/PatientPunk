@@ -25,6 +25,7 @@ CREATE TABLE posts (
 
 CREATE INDEX idx_posts_user ON posts(user_id);
 CREATE INDEX idx_posts_date ON posts(post_date);
+CREATE INDEX idx_posts_parent ON posts(parent_id);
 
 -- ══════════════════════════════════════════════════════
 -- LAYER 2: Configuration

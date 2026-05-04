@@ -1,15 +1,15 @@
 {
-  "build_timestamp_utc": "2026-05-04T17:34:13.852420+00:00",
+  "build_timestamp_utc": "2026-05-04T17:56:14.844563+00:00",
   "build_script": "_build_paper_figures.py",
   "git": {
-    "commit": "1562239d9c2f57e7557219ded23b6441aa65e8d3",
+    "commit": "132c04a23f2ecc9141145eee48c74ce17c0ed8fc",
     "dirty": true
   },
   "db": {
     "path": "C:\\Users\\scgee\\OneDrive\\Documents\\Projects\\PatientPunk\\docs\\RCT_historical_validation\\data\\historical_validation_2020-07_to_2022-12.db",
     "filename": "historical_validation_2020-07_to_2022-12.db",
-    "sha256": "fa67be6d10ffe0b98365390a5223f6dfbc708360e830c725b74b443337ab4952",
-    "size_bytes": 328540160
+    "sha256": "c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4",
+    "size_bytes": 326344704
   },
   "models": {
     "fast": "anthropic/claude-haiku-4.5",

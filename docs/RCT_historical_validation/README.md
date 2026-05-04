@@ -23,7 +23,7 @@ To regenerate the figures and tables, you only need **one database** (314 MB). P
 
 | File | Size | SHA-256 | Download |
 |------|------|---------|----------|
-| `historical_validation_2020-07_to_2022-12.db` | 313 MB | `FA67BE6D10FFE0B98365390A5223F6DFBC708360E830C725B74B443337AB4952` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/historical_validation_2020-07_to_2022-12.db) |
+| `historical_validation_2020-07_to_2022-12.db` | 311 MB | `c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/historical_validation_2020-07_to_2022-12.db) |
 
 This single database contains every classified treatment report needed to reproduce the paper's figures and tables. See [Provenance of the analysis database](#provenance-of-the-analysis-database) below for how it was built.
 
@@ -38,7 +38,7 @@ sha256sum  data/historical_validation_2020-07_to_2022-12.db
 Get-FileHash data\historical_validation_2020-07_to_2022-12.db -Algorithm SHA256
 ```
 
-The expected hash is `FA67BE6D10FFE0B98365390A5223F6DFBC708360E830C725B74B443337AB4952`. The build script also runs an internal integrity check at startup that fails fast if any `treatment_reports.user_id` does not match the corresponding `posts.user_id` (the bug that an earlier, now-removed backfill script introduced).
+The expected hash is `c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4`. The build script also runs an internal integrity check at startup that fails fast if any `treatment_reports.user_id` does not match the corresponding `posts.user_id` (the bug that an earlier, now-removed backfill script introduced). It additionally asserts every classified report's `post_date` falls strictly before the documented per-drug window end (V2 audit).
 
 ### Raw Reddit JSON (input to the SQLite DB)
 
