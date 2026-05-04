@@ -717,6 +717,139 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 """))
 
 # ────────────────────────────────────────────────────────────────────
+# DEDUP AUDIT (V7) — raw vs unique-user counts + class-change sensitivity
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Dedup audit (V7)
+
+For each drug we report:
+
+- **Raw reports**: total `treatment_reports` rows in-window (pre-dedup).
+- **Unique users**: `COUNT(DISTINCT user_id)` over the same set — this is
+  the `n` that appears in Figure 1 / Table 3 after dedup.
+- **Multi-report users**: users with ≥2 in-window reports for this drug.
+  Dedup only matters for these.
+- **Mixed-signal users**: multi-report users whose reports contain *both*
+  positive and non-positive labels — the population where the dedup rule
+  choice actually changes the class assignment.
+- **Flipped under alternative rules**: how many users would land in a
+  different responder/non-responder bucket if we used "majority sentiment"
+  or "any-positive ⇒ positive" instead of our "most-recent + signal-strength
+  tiebreaker" rule. This is the dedup-rule sensitivity check.
+
+A small flip count (relative to total users) means the headline numbers
+are robust to the choice of dedup rule. A large flip count would mean the
+analysis is sensitive to dedup methodology and we should be more careful
+about justifying the rule."""))
+
+cells.append(("code", r"""
+import collections as _coll
+
+_audit_rows = []
+for _drug, (_pub_date, _paper_short, _source_date) in DRUG_CUTOFFS.items():
+    _win_end_excl = min(_pub_date, END_2022_EXCLUSIVE)
+    _cutoff_ts = epoch_midnight(_win_end_excl)
+    _rows = fetch_drug_reports(_drug, _cutoff_ts)
+    _n_raw = len(_rows)
+
+    # Group by user
+    _by_user = _coll.defaultdict(list)
+    for _uid, _d, _sent, _sig, _date, _pid in _rows:
+        _by_user[_uid].append({'sent': _sent, 'sig': _sig, 'date': _date or 0})
+
+    _n_users = len(_by_user)
+    _multi = {u: rs for u, rs in _by_user.items() if len(rs) > 1}
+    _n_multi = len(_multi)
+    _n_mixed = sum(
+        1 for rs in _multi.values()
+        if any(r['sent'] == 'positive' for r in rs)
+        and any(r['sent'] != 'positive' for r in rs)
+    )
+
+    # Apply our dedup rule and count flips against alternatives
+    _n_pos_dedup = 0
+    _flip_majority = 0
+    _flip_any_pos = 0
+    for _uid, _rs in _by_user.items():
+        _rs_sorted = sorted(
+            _rs,
+            key=lambda r: (r['date'], SIG_RANK.get(r['sig'], 0)),
+            reverse=True,
+        )
+        _chosen_pos = (_rs_sorted[0]['sent'] == 'positive')
+        if _chosen_pos:
+            _n_pos_dedup += 1
+        if len(_rs) > 1:
+            _n_pos = sum(1 for r in _rs if r['sent'] == 'positive')
+            _majority_pos = _n_pos > len(_rs) / 2
+            _any_pos = _n_pos > 0
+            if _majority_pos != _chosen_pos:
+                _flip_majority += 1
+            if _any_pos != _chosen_pos:
+                _flip_any_pos += 1
+
+    _audit_rows.append({
+        'drug': _drug,
+        'raw_reports': _n_raw,
+        'unique_users': _n_users,
+        'multi_report_users': _n_multi,
+        'mixed_signal_users': _n_mixed,
+        'final_n_pos': _n_pos_dedup,
+        'final_n_nonpos': _n_users - _n_pos_dedup,
+        'flip_majority': _flip_majority,
+        'flip_any_pos': _flip_any_pos,
+    })
+
+_rows_html = []
+for _r in _audit_rows:
+    _flip_pct_maj = (100 * _r['flip_majority'] / _r['unique_users']) if _r['unique_users'] else 0
+    _flip_pct_any = (100 * _r['flip_any_pos'] / _r['unique_users']) if _r['unique_users'] else 0
+    _rows_html.append(
+        f"<tr>"
+        f"<td style='padding:4px 8px; font-weight:bold;'>{_r['drug']}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['raw_reports']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['unique_users']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['multi_report_users']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['mixed_signal_users']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['final_n_pos']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['flip_majority']} "
+            f"<span style='color:#777;'>({_flip_pct_maj:.1f}%)</span></td>"
+        f"<td style='padding:4px 8px; text-align:right;'>{_r['flip_any_pos']} "
+            f"<span style='color:#777;'>({_flip_pct_any:.1f}%)</span></td>"
+        f"</tr>"
+    )
+_table = (
+    "<table style='border-collapse:collapse; width:100%; font-size:0.9em; margin:8px 0;'>"
+    "<tr style='background:#34495e; color:white;'>"
+    "<th style='padding:6px 10px;'>drug</th>"
+    "<th style='padding:6px 10px;'>raw reports</th>"
+    "<th style='padding:6px 10px;'>unique users</th>"
+    "<th style='padding:6px 10px;'>multi-report users</th>"
+    "<th style='padding:6px 10px;'>mixed-signal users</th>"
+    "<th style='padding:6px 10px;'>final n (pos)</th>"
+    "<th style='padding:6px 10px;'>flips: majority rule</th>"
+    "<th style='padding:6px 10px;'>flips: any-positive rule</th>"
+    "</tr>"
+    + "".join(_rows_html)
+    + "</table>"
+    + "<p style='font-size:0.85em; color:#777; margin-top:4px;'>"
+      "<i>flips: majority rule</i> = users who would have landed in a different "
+      "responder bucket under the rule \"majority of reports\" instead of "
+      "\"most recent + signal-strength tiebreaker.\" "
+      "<i>flips: any-positive rule</i> = same but under the rule \"any positive "
+      "report → responder.\" Smaller is more robust.</p>"
+)
+display(HTML("<h3>V7 Dedup audit &mdash; raw vs unique counts + rule sensitivity</h3>" + _table))
+
+# Print to stdout for build-log visibility
+print(f"V7 dedup audit: {len(_audit_rows)} drugs audited.")
+for _r in _audit_rows:
+    print(f"  {_r['drug']:<12} raw={_r['raw_reports']:>4} users={_r['unique_users']:>4} "
+          f"multi={_r['multi_report_users']:>3} mixed={_r['mixed_signal_users']:>3} "
+          f"flip(maj)={_r['flip_majority']:>3} flip(any+)={_r['flip_any_pos']:>3}")
+"""))
+
+
+# ────────────────────────────────────────────────────────────────────
 # WINDOW VERIFICATION (V2) — actual MIN/MAX(post_date) per drug + assert
 # ────────────────────────────────────────────────────────────────────
 cells.append(("md", """## Window verification (V2)
