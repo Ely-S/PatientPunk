@@ -1,4 +1,4 @@
-# Coding Instructions — PatientPunk IRR Pilot (v1.4)
+# Coding Instructions — PatientPunk IRR Pilot (v1.5)
 
 **Workflow:**
 1. Open `reading_packet.html` in a browser — this has all 300 posts rendered as cards, each labeled with its `sample_id`.
@@ -22,10 +22,13 @@ Rules below are adapted from the AI pipeline's prompts. Disagreement between cod
 | `sentiment` | `positive` / `negative` / `mixed` / `neutral` | Author's sentiment about THIS DRUG specifically. Only filled when `personal_use = yes`. Use `neutral` only when personal use is unclear or the author explicitly takes no position despite using the drug. |
 | `signal_strength` | `strong` / `moderate` / `weak` / `n/a` | **About the post:** how emphatic/specific/quantified is the author's report on this drug? Use `n/a` when `personal_use = no`. |
 | `confidence` | 1–5 | **About your coding:** how sure are you the labels you picked are right? Always filled, even when `personal_use = no`. |
+| `side_effects_reported` | `yes` / `no` | Does the author report any side effects they personally experienced from THIS DRUG? Only filled when `personal_use = yes`; leave blank when `personal_use = no`. |
+| `side_effects_description` | free text | Brief description of what side effects, if any. Leave blank if `side_effects_reported = no` or `personal_use = no`. |
 | `notes` | free text | Reasoning, ambiguity flags, anything worth recording (optional) |
 
-> **⚠️ STOP rule.** If `personal_use = no`, leave `sentiment` and
-> `signal_strength` blank (or set to `n/a`) and move on. The classifier and
+> **⚠️ STOP rule.** If `personal_use = no`, leave `sentiment`,
+> `signal_strength`, `side_effects_reported`, and `side_effects_description`
+> blank (or set to `n/a` where applicable) and move on. The classifier and
 > the analysis only count personal-use reports, so non-personal-use rows
 > contribute to inter-coder reliability on the `personal_use` decision and
 > nothing further.
@@ -40,17 +43,17 @@ Rules below are adapted from the AI pipeline's prompts. Disagreement between cod
 
 ## Multi-drug example (read this first)
 
-Sample `irr-pilot-003` says: *"I'm on LDN and magnesium. About 40% better than a year ago."*
+Sample `irr-pilot-003` says: *"I'm on LDN and magnesium. LDN gave me insomnia first 2 weeks but settled. About 40% better than a year ago."*
 
 Two rows, both with `sample_id = irr-pilot-003`:
 
-| sample_id | coder_id | drug_mention_verbatim | personal_use | sentiment | signal_strength | confidence | notes |
-|---|---|---|---|---|---|---|---|
-| irr-pilot-003 | eli | LDN | yes | positive | weak | 4 | in stack |
-| irr-pilot-003 | eli | magnesium | yes | positive | weak | 4 | in stack |
+| sample_id | coder_id | drug_mention_verbatim | personal_use | sentiment | signal_strength | confidence | side_effects_reported | side_effects_description | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| irr-pilot-003 | eli | LDN | yes | positive | strong | 4 | yes | insomnia first 2 weeks | in stack |
+| irr-pilot-003 | eli | magnesium | yes | positive | weak | 4 | no | | in stack |
 
 Same sample_id, one row per drug, each drug gets its own per-drug
-`personal_use` / `sentiment` / `signal_strength`.
+`personal_use` / `sentiment` / `signal_strength` / `side_effects_*`.
 
 ---
 
@@ -114,15 +117,47 @@ Use the full range — **5** unambiguous, **3** reasonable people could disagree
 
 ---
 
+## Step 6 — side effects (per drug, only when personal_use = yes)
+
+### `side_effects_reported` (yes / no)
+
+**`yes`** when the author personally reports any side effect they experienced from THIS DRUG specifically. Includes:
+
+- Physical side effects ("Paxlovid gave me terrible metallic taste")
+- Mental/mood side effects ("SSRI made me emotionally numb")
+- Dose-titration issues attributed to the drug
+- Discontinuation because of intolerable side effects
+
+**`no`** when:
+- No side effects mentioned for this drug
+- Side effects mentioned hypothetically or for other people
+- Side effects implied but not attributed to this specific drug
+
+Leave **blank** when `personal_use = no`.
+
+### `side_effects_description` (free text)
+
+Short phrase capturing what side effects, if any. Examples:
+
+- "metallic taste, diarrhea during 5-day course"
+- "insomnia first week"
+- "moon face, weight gain on long-term use"
+
+Leave blank if `side_effects_reported = no` or `personal_use = no`.
+
+**Important — do NOT conflate side effects with lack of efficacy.** "Didn't work" is a negative `sentiment` but not a side effect. Side effects are distinct adverse experiences.
+
+---
+
 ## Special cases
 
-**Causal-context drugs** — author blames a treatment for causing their condition (e.g., "the Moderna shot is what gave me long COVID"): `personal_use = yes` (they did receive it), `sentiment = negative`, `signal_strength = weak`, `notes = causal-context`.
+**Causal-context drugs** — author blames a treatment for causing their condition (e.g., "the Moderna shot is what gave me long COVID"): `personal_use = yes` (they did receive it), `sentiment = negative`, `signal_strength = weak`, side_effects_reported per the actual experience described, `notes = causal-context`.
 
-**Multi-drug stacks** — one row per drug. Each gets its own `personal_use` and (if yes) its own sentiment based on what the author says about that specific drug. If overall improvement is mentioned but no drug is specifically credited, default to `personal_use = yes` / `positive` / `weak` per drug.
+**Multi-drug stacks** — one row per drug. Each gets its own `personal_use` and (if yes) its own sentiment + side-effects based on what the author says about that specific drug. If overall improvement is mentioned but no drug is specifically credited, default to `personal_use = yes` / `positive` / `weak` / no side effects per drug.
 
-**Questions / advice / hearsay** — `personal_use = no`, sentiment / signal_strength blank.
+**Questions / advice / hearsay** — `personal_use = no`; sentiment, signal_strength, side_effects fields blank.
 
-**No treatments mentioned at all** — single row with `drug_mention_verbatim = NONE`, `personal_use` blank, other annotation fields blank, `confidence = 5`.
+**No treatments mentioned at all** — single row with `drug_mention_verbatim = NONE`, all other annotation fields blank, `confidence = 5`.
 
 **Irrelevant mentions** (drug mentioned only in a subreddit name, URL, signature) — don't code.
 
@@ -130,41 +165,43 @@ Use the full range — **5** unambiguous, **3** reasonable people could disagree
 
 ## Worked examples
 
-**1 — personal use, positive, strong:**
+Format: `drug / personal_use / sentiment / signal_strength / confidence / side_effects_reported / side_effects_description / notes`
+
+**1 — personal use, positive, strong, no side effects:**
 *"I started LDN 4.5mg 6 months ago and my fatigue dropped by probably 70%."*
-→ LDN / yes / positive / strong / 5 / *quantified improvement*
+→ LDN / yes / positive / strong / 5 / no / (blank) / *quantified improvement*
 
 **2 — multi-drug stack (one row per drug):**
-*"I'm on LDN, H1 blockers, and magnesium. Probably 40% better than a year ago."*
+*"I'm on LDN, H1 blockers, and magnesium. Probably 40% better than a year ago. LDN made me jittery the first week."*
 → Three rows, same sample_id:
-- LDN / yes / positive / weak / 4 / in stack
-- H1 blockers / yes / positive / weak / 4 / in stack
-- magnesium / yes / positive / weak / 4 / in stack
+- LDN / yes / positive / weak / 4 / yes / "jittery first week" / in stack
+- H1 blockers / yes / positive / weak / 4 / no / (blank) / in stack
+- magnesium / yes / positive / weak / 4 / no / (blank) / in stack
 
 **3 — question, no personal use:**
 *"Has anyone tried paxlovid late — like, more than 5 days after onset?"*
-→ paxlovid / no / (blank) / n/a / 5 / *question to others*
+→ paxlovid / no / (blank) / n/a / 5 / (blank) / (blank) / *question to others*
 
-**4 — mixed:**
+**4 — mixed with side effect:**
 *"LDN definitely helped my pain — but tanked my sleep for the first 2 months. Still worth it."*
-→ LDN / yes / mixed / strong / 5 / *helped pain, hurt sleep*
+→ LDN / yes / mixed / strong / 5 / yes / "sleep disruption first 2 months" / *helped pain, hurt sleep*
 
 **5 — causal-context:**
 *"I was fine until my second Pfizer shot. That's when everything started."*
-→ Pfizer / yes / negative / weak / 4 / *causal-context*
+→ Pfizer / yes / negative / weak / 4 / no / (blank) / *causal-context*
 
-**6 — negative:**
-*"Took Paxlovid for 5 days. Didn't notice any improvement."*
-→ Paxlovid / yes / negative / strong / 5 / *no perceived effect*
+**6 — negative, side-effect-driven:**
+*"Took Paxlovid for 5 days. Terrible metallic taste, couldn't finish. Didn't notice any improvement either."*
+→ Paxlovid / yes / negative / strong / 5 / yes / "metallic taste, stopped early" / *no perceived effect*
 
 **7 — no drugs:**
 *"Today was really rough. Spent most of the day in bed."*
-→ NONE / (blank) / (blank) / (blank) / 5 / *no drug mentioned*
+→ NONE / (blank) / (blank) / (blank) / 5 / (blank) / (blank) / *no drug mentioned*
 
 **8 — reply without personal use:**
 Parent: "LDN has been a game-changer for my PEM."
 Reply: "How did you get your doctor to prescribe it?"
-→ LDN / no / (blank) / n/a / 5 / *reply doesn't express personal use*
+→ LDN / no / (blank) / n/a / 5 / (blank) / (blank) / *reply doesn't express personal use*
 
 ---
 
@@ -178,8 +215,10 @@ Code blind — don't look at AI coder outputs, don't discuss with other coders u
 For each drug in the post:
 
 personal_use = ?
-├── no  (question / hearsay / advice / hypothetical /  → no  / sentiment blank
-│       reply doesn't express personal use)              / signal_strength = n/a
+├── no  (question / hearsay / advice / hypothetical /  → no
+│       reply doesn't express personal use)              / sentiment blank
+│                                                        / signal_strength = n/a
+│                                                        / side_effects_* blank
 │                                                        / record confidence
 │
 └── yes  (author describes own experience)             → yes / fill all below
@@ -196,17 +235,23 @@ personal_use = ?
            ├── simple affirm or deny, no detail         → moderate
            └── in a stack, no specific credit           → weak
 
+           side_effects_reported = ?
+           ├── author describes adverse experience
+           │     from THIS drug                         → yes (+ describe)
+           └── no side effects mentioned for this drug  → no
+
            confidence = 1..5
            (always — including for personal_use = no)
 ```
 
 ---
 
-## What changed from v1.3
+## What changed from v1.3 / v1.4
 
-- **Replaced per-drug side-effects fields with a per-drug `personal_use` flag.** Side-effects coding (`side_effects_reported` and `side_effects_description` columns) was dropped. The `personal_use` column was added to make the personal-use determination explicit rather than encoded implicitly via `sentiment = neutral`.
-- **Sentiment now applies only when `personal_use = yes`.** When `personal_use = no`, sentiment and signal_strength are blank (or `n/a`).
-- **Single-schema templates.** Both the 300-pilot and 500-pilot `coder_output_template.csv` files now share the same column set: `sample_id, coder_id, drug_mention_verbatim, personal_use, sentiment, signal_strength, confidence, notes`.
-- Updated worked examples and decision tree.
+- **v1.4 (draft, never shipped) experimentally dropped `side_effects_reported` and `side_effects_description` in favour of just adding `personal_use`.** Reviewer feedback was to keep the side-effects pair in addition to the new `personal_use` column.
+- **v1.5 is the union:** `personal_use` (added in v1.4) is kept, AND `side_effects_reported` / `side_effects_description` (from v1.3) are kept. Final schema has 10 coder-filled columns: `sample_id, coder_id, drug_mention_verbatim, personal_use, sentiment, signal_strength, confidence, side_effects_reported, side_effects_description, notes`.
+- **`personal_use` gates everything else.** When `personal_use = no`, sentiment, signal_strength, side_effects_reported, and side_effects_description are all blank (or `n/a` where applicable). Confidence is always recorded.
+- **Single-schema templates.** Both the 300-pilot and 500-pilot `coder_output_template.csv` files share the v1.5 schema.
+- Updated worked examples (8 cases, all show the side-effects columns) and decision tree (now includes the side-effects branch).
 
-*v1.4 · pilot run with explicit `personal_use` column, no per-drug side-effects dimension. Matches `coder_output_template.csv` schema in both `docs/irr_pilot/` and `docs/irr_pilot_500/`.*
+*v1.5 · pilot run with explicit `personal_use` flag plus per-drug side-effects dimension. Matches `coder_output_template.csv` schema in both `docs/irr_pilot/` and `docs/irr_pilot_500/`.*
