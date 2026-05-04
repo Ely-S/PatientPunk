@@ -323,6 +323,8 @@ For each drug, we run a **two-sided binomial test** against a 50% null. The p-va
 - A small p-value (e.g., < 0.05) means the community signal is unlikely to be random.
 - A large p-value (e.g., > 0.5) means we can't reject the null — the community was roughly split.
 
+Wilson CIs come from `statsmodels.stats.proportion.proportion_confint(method="wilson")` and binomial p-values from `scipy.stats.binomtest`; the same numbers are independently reproduced via the alternate aggregation path in `scripts/dump_per_drug_csvs.py`.
+
 ### Step 7: Only data from before the trial published
 
 This is the key constraint. For each drug, we only count posts from **before** the relevant clinical trial was first publicly available. This ensures the community signal couldn't have been influenced by trial results — it's genuinely predictive, not reactive.
