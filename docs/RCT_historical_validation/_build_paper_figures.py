@@ -305,6 +305,20 @@ DRUG_CUTOFFS = {
     'paxlovid':    ('2024-06-07', 'Geng et al. 2024 (STOP-PASC)', 'JAMA Intern Med 2024-06-07'),
     'colchicine':  ('2025-10-20', 'Bassi et al. 2025',            'JAMA Intern Med 2025-10-20'),
 }
+
+# Frozen expected outputs — used by the V10 build-time assertion below.
+# Source of these values: dump_per_drug_csvs.py output against the canonical
+# DB on 2026-05-04 (commit 1562239 era, pre-V3 rebuild — re-verified
+# unchanged after the rebuild). If the DB content changes legitimately, this
+# dict and the README's "Expected Output" table must be updated together.
+EXPECTED_OUTPUTS = {
+    'famotidine': {'n': 232, 'pos': 179, 'pos_pct': 77.155, 'p': 3.565e-17},
+    'loratadine': {'n':  90, 'pos':  73, 'pos_pct': 81.111, 'p': 1.948e-9 },
+    'prednisone': {'n': 343, 'pos': 167, 'pos_pct': 48.688, 'p': 0.6658   },
+    'naltrexone': {'n': 154, 'pos': 101, 'pos_pct': 65.584, 'p': 1.358e-4 },
+    'paxlovid':   {'n': 196, 'pos': 106, 'pos_pct': 54.082, 'p': 0.2839   },
+    'colchicine': {'n':  91, 'pos':  49, 'pos_pct': 53.846, 'p': 0.5296   },
+}
 """))
 
 # ────────────────────────────────────────────────────────────────────
@@ -354,6 +368,78 @@ for drug, (pub_date, paper_short, source_date) in DRUG_CUTOFFS.items():
 resp_df = (pd.DataFrame(resp_rows)
            .sort_values('pos_pct', ascending=False)
            .reset_index(drop=True))
+"""))
+
+
+# ────────────────────────────────────────────────────────────────────
+# EXPECTED-OUTPUT ASSERTION (V10) — fail build on numerical drift
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Expected-output assertion (V10)
+
+The cell below compares the freshly-computed `resp_df` against a frozen
+expected-output table (defined as `EXPECTED_OUTPUTS` in the setup cell).
+Build fails on any drift outside rounding tolerance — so a future
+analytical change that silently shifts a number can't slip through.
+
+The check is intentionally strict on integer counts (`n`, `pos`) and
+loose on rounding (`pos_pct` to 0.05pp, `p` relative tolerance 1e-3 for
+non-tiny p-values; for p < 1e-4 we just check the order of magnitude
+matches). Update `EXPECTED_OUTPUTS` *and* the README's "Expected Output"
+table together if the analytical pipeline legitimately changes."""))
+
+cells.append(("code", r"""
+_violations = []
+for _, _row in resp_df.iterrows():
+    _drug = _row['drug']
+    _exp = EXPECTED_OUTPUTS.get(_drug)
+    if _exp is None:
+        _violations.append(f"{_drug}: no entry in EXPECTED_OUTPUTS — extend the frozen table.")
+        continue
+    if int(_row['n']) != _exp['n']:
+        _violations.append(f"{_drug}: n {int(_row['n'])} != expected {_exp['n']}")
+    if int(_row['pos']) != _exp['pos']:
+        _violations.append(f"{_drug}: pos {int(_row['pos'])} != expected {_exp['pos']}")
+    if abs(_row['pos_pct'] - _exp['pos_pct']) > 0.05:
+        _violations.append(
+            f"{_drug}: pos_pct {_row['pos_pct']:.3f} differs from expected "
+            f"{_exp['pos_pct']:.3f} by more than 0.05pp"
+        )
+    _p_actual = float(_row['pval'])
+    _p_expected = _exp['p']
+    if _p_expected < 1e-4:
+        # Tiny p-values: just check actual is also small (within ~1 order of magnitude)
+        if not (_p_actual < 10 * _p_expected):
+            _violations.append(
+                f"{_drug}: p {_p_actual:.3g} far from expected tiny {_p_expected:.3g}"
+            )
+    else:
+        _rel = abs(_p_actual - _p_expected) / _p_expected
+        if _rel > 1e-3:
+            _violations.append(
+                f"{_drug}: p {_p_actual:.4f} differs from expected {_p_expected:.4f} "
+                f"(relative drift {_rel:.4f} > 0.001)"
+            )
+
+# Also assert no missing or unexpected drugs
+_actual_drugs = set(resp_df['drug'])
+_expected_drugs = set(EXPECTED_OUTPUTS)
+_missing = _expected_drugs - _actual_drugs
+_extra   = _actual_drugs - _expected_drugs
+if _missing:
+    _violations.append(f"missing drugs in resp_df: {sorted(_missing)}")
+if _extra:
+    _violations.append(f"unexpected drugs in resp_df not in EXPECTED_OUTPUTS: {sorted(_extra)}")
+
+if _violations:
+    raise AssertionError(
+        "V10 expected-output drift FAILED:\n"
+        + "\n".join("  - " + v for v in _violations)
+        + "\n\nIf this drift is intentional, update EXPECTED_OUTPUTS in "
+          "_build_paper_figures.py AND the README's \"Expected Output\" "
+          "table together."
+    )
+
+print(f"V10 expected-output assertion: all {len(EXPECTED_OUTPUTS)} drugs match the frozen table. PASS.")
 """))
 
 

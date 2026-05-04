@@ -7,3 +7,4 @@ statsmodels
 nbformat
 nbconvert
 ipykernel
+ipython
