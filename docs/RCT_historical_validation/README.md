@@ -94,6 +94,38 @@ python _build_paper_figures.py
 
 The build writes `output/paper_figures.html`, `output/figure1.png`, and the executed notebook. Open `output/paper_figures.html` in any browser.
 
+### Verify (single-command V&V check)
+
+For reviewers who want a one-shot "is everything as it should be?" gate without running the full notebook build:
+
+```bash
+python verify.py
+```
+
+`verify.py` runs every build-time V&V assertion in one shot and prints a `[PASS]`/`[FAIL]` line per check, exiting with status 0 if all pass and 1 otherwise. Specifically it checks:
+
+- **V1: DB integrity** — every `treatment_reports.user_id` matches the corresponding `posts.user_id` (zero mismatches).
+- **V1: DB SHA-256** — the local DB matches the SHA-256 published in this README (`c50fcacd…`).
+- **V2: Per-drug window** — every classified report falls strictly before its drug's pre-publication cutoff; no NULL `post_date` rows.
+- **V3: Thread reconstruction** — zero dangling `parent_id` values, zero cycles in the parent edge graph.
+- **V7: Dedup audit** *(informational)* — per-drug raw / unique-user / multi-report / mixed-signal counts and dedup-rule sensitivity (flips under "majority" and "any-positive" alternative rules).
+- **V10: Expected-output assertion** — every drug's `n` / `pos` / `pos_pct` / `p` matches the frozen expected table within rounding tolerance.
+
+Output looks like:
+
+```
+[PASS]  V1: DB integrity                   treatment_reports.user_id mismatches: 0 (must be 0)
+[PASS]  V1: DB SHA-256                     actual c50fcacd…  expected c50fcacd…
+[PASS]  V2: Per-drug window                6/6 drugs in-window, 0 NULL post_dates
+[PASS]  V3: Thread reconstruction          731,526 posts (47,442 submissions, 684,084 comments), 0 orphans, 0 cycles
+[INFO]  V7: Dedup audit (informational)    see per-drug breakdown below
+[PASS]  V10: Expected-output assertion     6/6 drugs match the frozen expected table
+
+ALL 5 CHECKS PASSED.
+```
+
+If anything fails, the relevant violation is shown inline. The same assertions also fire as part of the full notebook build (`_build_paper_figures.py`), so `verify.py` is a faster path to the same answer.
+
 ---
 
 ## What This Reproduces
