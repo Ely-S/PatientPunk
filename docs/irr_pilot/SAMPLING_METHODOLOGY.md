@@ -1,23 +1,27 @@
 # IRR Pilot 300 — Sampling Methodology
 
 This document describes how the original 300-unit inter-coder reliability (IRR)
-sample in this directory was drawn. It applies to the files in this folder:
+sample in this directory was drawn. It applies to the tracked artifacts in
+this folder:
 
-- `coding_input.csv` — the 300 sampled units, distributed to coders
-- `ai_labels.csv` — analyst-only file with stratum labels and AI-pipeline output
-  for each sample
-- `coder_output_template.csv` — empty form for coders to fill in
-- `CODING_INSTRUCTIONS.md` / `CODING_INSTRUCTIONS.pdf` — codebook distributed
-  alongside the coding sheet
-- `reading_packet.html` — the same 300 samples rendered as browser-readable
-  cards (max 2-hop upstream chain per comment)
-- `irr_pilot_for_coders.zip` — combined coder-facing bundle
+- [`coding_input.csv`](./coding_input.csv) — the 300 sampled units,
+  distributed to coders (one row per sample, columns: sample_id, subreddit,
+  post_date, unit_type, title, parent_context, post_text)
+- [`ai_labels.csv`](./ai_labels.csv) — analyst-only file with stratum labels
+  and AI-pipeline output for each sample (columns: sample_id, source_post_id,
+  stratum, ai_drug_count, ai_drugs, ai_sentiments, ai_signal_strengths,
+  keyword_match)
+- [`coder_output_template.csv`](./coder_output_template.csv) — empty form
+  for coders to fill in (one row per sample_id, blank fields)
+- [`CODING_INSTRUCTIONS.md`](./CODING_INSTRUCTIONS.md) /
+  [`CODING_INSTRUCTIONS.pdf`](./CODING_INSTRUCTIONS.pdf) — codebook
+  distributed alongside the coding sheet
 
 This is the *original* IRR pilot. A larger 500-unit pilot was drawn later
 under the same procedure with `seed=43`; see
-`data/irr_pilot_500/SAMPLING_METHODOLOGY.md`. The two pilots cover
-non-overlapping windows of r/covidlonghaulers and use different seeds, so no
-codable unit can appear in both.
+[`docs/irr_pilot_500/SAMPLING_METHODOLOGY.md`](../irr_pilot_500/SAMPLING_METHODOLOGY.md).
+The two pilots cover non-overlapping windows of r/covidlonghaulers and use
+different seeds, so no codable unit can appear in both.
 
 Reproducibility script: `scripts/sample_for_coding.py` (in the project
 repository).

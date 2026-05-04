@@ -1,14 +1,27 @@
 # IRR Pilot 500 — Sampling Methodology
 
 This document describes how the 500-unit inter-coder reliability (IRR) sample
-in this directory was drawn. It applies to the files in this folder:
+in this directory was drawn. It applies to the tracked artifacts in this
+folder:
 
-- `coding_input.csv` — the 500 sampled units, distributed to coders
-- `ai_labels.csv` — analyst-only file with stratum labels and AI-pipeline output
-  for each sample
-- `coder_output_template.csv` — empty form for coders to fill in
-- `source/` — the underlying source data (filtered JSON, SQLite DB, AI pipeline
-  outputs) from which the sample was drawn
+- [`coding_input.csv`](./coding_input.csv) — the 500 sampled units,
+  distributed to coders (one row per sample, columns: sample_id, subreddit,
+  post_date, unit_type, title, parent_context, post_text)
+- [`ai_labels.csv`](./ai_labels.csv) — analyst-only file with stratum labels
+  and AI-pipeline output for each sample (columns: sample_id, source_post_id,
+  stratum, ai_drug_count, ai_drugs, ai_sentiments, ai_signal_strengths,
+  keyword_match)
+- [`coder_output_template.csv`](./coder_output_template.csv) — empty form for
+  coders to fill in (one row per sample_id, blank fields)
+
+The codebook used by this pilot is the same as the one used for the original
+300-sample pilot: see [`../irr_pilot/CODING_INSTRUCTIONS.md`](../irr_pilot/CODING_INSTRUCTIONS.md)
+(or the PDF version). It is **not** duplicated in this folder.
+
+The underlying source data (filtered JSON, SQLite DB, AI pipeline outputs)
+from which this sample was drawn lives outside git in
+`data/irr_pilot_500/source/` (large; not redistributed). The reproducibility
+section at the bottom shows how to regenerate it.
 
 Reproducibility scripts: `scripts/convert_jsonl_to_source.py` and
 `scripts/sample_for_coding.py` (in the project repository).
