@@ -7,9 +7,8 @@ against. Source of truth is the SQLite DB; this script just renders it.
 
 Each pipeline run wrote the alias list into `treatment.aliases` (a JSON
 column) via Claude Sonnet 4.6 and the `drug_aliases_prompt()` prompt at
-canonicalization time. To audit V4 ("no high-frequency synonym/brand/
-abbreviation/misspelling missing") and V5 ("all target-drug aliases
-manually reviewed"), reviewers need to see this list directly.
+canonicalization time. Reviewers auditing drug-extraction precision/recall and canonicalization
+alias coverage need to see this list directly.
 
 Usage:
     python scripts/dump_drug_aliases.py \\
@@ -76,7 +75,7 @@ def main():
     lines.append("This file is a static export of the `treatment.aliases` column from")
     lines.append("the analysis SQLite DB. The lists are what every pipeline run")
     lines.append("substring-matched posts and comments against during the extraction")
-    lines.append("step (V4) and what every canonicalization step normalized to (V5).")
+    lines.append("step and what every canonicalization step normalized to.")
     lines.append("Reviewers can audit these lists directly without running anything.")
     lines.append("")
     lines.append("## How these aliases were generated")
@@ -89,9 +88,9 @@ def main():
     lines.append("was inserted as JSON into `treatment.aliases` at run time and joined")
     lines.append("on by the SQL queries that produce Figure 1, Table 2, and Table 3.")
     lines.append("")
-    lines.append("These aliases were generated **automatically**. They have NOT been")
-    lines.append("manually adjudicated against the V5 acceptance criteria. The lists")
-    lines.append("below are an input to V5 review, not its output.")
+    lines.append("These aliases were generated **automatically by an LLM** and have")
+    lines.append("not been manually adjudicated. The lists below are an input to a")
+    lines.append("manual alias review, not its output.")
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -159,10 +158,10 @@ def main():
     lines.append("")
     lines.append("---")
     lines.append("")
-    lines.append("## V5 reviewer notes (manual)")
+    lines.append("## Reviewer notes (manual)")
     lines.append("")
     lines.append("These are observations from a reading-pass over the alias lists,")
-    lines.append("intended as starting points for the formal V5 review — not")
+    lines.append("intended as starting points for review — not")
     lines.append("adjudicated corrections. The historical-validation analysis used the")
     lines.append("alias list as-is; any change here would require regenerating per-drug")
     lines.append("counts.")
@@ -190,8 +189,8 @@ def main():
     lines.append("alias list, re-run canonicalization, re-run classification, regenerate")
     lines.append("the analysis DB and figures. None of this changes the headline")
     lines.append("conclusion (every drug's responder rate stays in its current bucket")
-    lines.append("when individual ambiguous aliases are removed) but it is part of the")
-    lines.append("V5 acceptance criterion that all aliases be manually reviewed.")
+    lines.append("when individual ambiguous aliases are removed) but it is the open")
+    lines.append("methodology task of manually reviewing every alias before publication.")
     lines.append("")
     lines.append("## Reproducibility")
     lines.append("")

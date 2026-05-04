@@ -1,12 +1,12 @@
 # Drug aliases used in extraction
 
-**Generated:** 2026-05-04 18:02 UTC from `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-04 19:11 UTC from `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
 **Generator:** `scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from
 the analysis SQLite DB. The lists are what every pipeline run
 substring-matched posts and comments against during the extraction
-step (V4) and what every canonicalization step normalized to (V5).
+step and what every canonicalization step normalized to.
 Reviewers can audit these lists directly without running anything.
 
 ## How these aliases were generated
@@ -19,9 +19,9 @@ class synonyms for each of the six target drugs. The model's output
 was inserted as JSON into `treatment.aliases` at run time and joined
 on by the SQL queries that produce Figure 1, Table 2, and Table 3.
 
-These aliases were generated **automatically**. They have NOT been
-manually adjudicated against the V5 acceptance criteria. The lists
-below are an input to V5 review, not its output.
+These aliases were generated **automatically by an LLM** and have
+not been manually adjudicated. The lists below are an input to a
+manual alias review, not its output.
 
 ---
 
@@ -247,10 +247,10 @@ Aliases that appear in more than one drug's list. An alias appearing in multiple
 
 ---
 
-## V5 reviewer notes (manual)
+## Reviewer notes (manual)
 
 These are observations from a reading-pass over the alias lists,
-intended as starting points for the formal V5 review — not
+intended as starting points for review — not
 adjudicated corrections. The historical-validation analysis used the
 alias list as-is; any change here would require regenerating per-drug
 counts.
@@ -278,8 +278,8 @@ To turn any of these into actual corrections, the path is: edit the
 alias list, re-run canonicalization, re-run classification, regenerate
 the analysis DB and figures. None of this changes the headline
 conclusion (every drug's responder rate stays in its current bucket
-when individual ambiguous aliases are removed) but it is part of the
-V5 acceptance criterion that all aliases be manually reviewed.
+when individual ambiguous aliases are removed) but it is the open
+methodology task of manually reviewing every alias before publication.
 
 ## Reproducibility
 

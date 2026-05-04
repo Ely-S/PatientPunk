@@ -4,8 +4,7 @@ Rebuild the historical-validation analysis DB so parent_id is preserved.
 Background: src/import_posts.py originally inserted comment.parent_id verbatim
 ('t3_<id>' or 't1_<id>'), then nulled any value that didn't match a post_id.
 Since post_ids are stored bare, every parent_id ended up dangling and was
-silently NULL'd, destroying thread structure. This was discovered during the
-V3 audit. The fix (a 1-line prefix strip in import_posts.py) is in place; this
+silently NULL'd, destroying thread structure. This was discovered during a thread-reconstruction audit. The fix (a 1-line prefix strip in import_posts.py) is in place; this
 script applies the fix to the existing analysis DB without losing the
 expensive LLM classifications.
 

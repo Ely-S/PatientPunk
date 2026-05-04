@@ -1,6 +1,6 @@
-# V7 Deduplication Sample Audit
+# Deduplication Sample Audit
 
-**Generated:** 2026-05-04 18:15 UTC
+**Generated:** 2026-05-04 19:10 UTC
 **DB:** `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
 **Sample seed:** 42  
 **Per-drug sample size:** 6  
@@ -15,7 +15,7 @@ systematically picking against the user's settled view.
 
 If you find a case where the retained row looks like a poor
 representation of the user's overall opinion, that's a
-methodology finding worth raising in V7 review.
+methodology finding worth raising in review.
 
 ---
 

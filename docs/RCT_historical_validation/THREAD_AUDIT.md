@@ -1,6 +1,6 @@
-# V3 Thread Reconstruction Audit
+# Thread Reconstruction Audit
 
-**Run at:** 2026-05-04 17:53 UTC  
+**Run at:** 2026-05-04 19:10 UTC  
 **DB:** `data\historical_validation\historical_validation_2020-07_to_2022-12.db`  
 **Sample seed:** 42  
 **Sample size:** 50

@@ -1,7 +1,7 @@
 """
-V3 thread-reconstruction audit.
+Thread-reconstruction audit.
 
-Runs the V3 audit checks against any analysis DB that has parent_id preserved
+Runs the thread-audit checks against any analysis DB that has parent_id preserved
 (so this works against the rebuilt historical-validation DB, but not against
 the older DBs that pre-dated the import_posts.strip_reddit_prefix fix).
 
@@ -18,9 +18,9 @@ Checks performed:
      is found. Should NEVER find one in healthy data.
 
 Usage:
-    python scripts/v3_thread_audit.py \\
+    python scripts/thread_audit.py \\
         --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \\
-        --out docs/RCT_historical_validation/V3_THREAD_AUDIT.md
+        --out docs/RCT_historical_validation/THREAD_AUDIT.md
 
 Pass --seed for reproducibility of the 50-chain sample.
 """
@@ -164,7 +164,7 @@ def main():
     # ── Build the markdown report
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = []
-    lines.append(f"# V3 Thread Reconstruction Audit\n")
+    lines.append(f"# Thread Reconstruction Audit\n")
     lines.append(f"**Run at:** {now_iso}  ")
     lines.append(f"**DB:** `{args.db}`  ")
     lines.append(f"**Sample seed:** {args.seed}  ")
@@ -230,7 +230,7 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("\n".join(lines), encoding="utf-8")
     conn.close()
-    print(f"Wrote V3 audit report: {args.out}")
+    print(f"Wrote thread audit report: {args.out}")
     print(f"  Posts: {n_total:,}  Submissions: {n_subs:,}  Comments: {n_comments:,}")
     print(f"  Orphans: {n_orphans}  Cycles: {len(cycles)}  "
           f"Sample complete: {n_complete}/{len(sample_ids)}  "

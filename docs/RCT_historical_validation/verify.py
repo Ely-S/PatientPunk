@@ -3,22 +3,22 @@
 Single-command reproducibility verification for the RCT historical
 validation paper.
 
-Runs every build-time V&V assertion in one shot and prints a PASS/FAIL
+Runs every build-time assertion in one shot and prints a PASS/FAIL
 summary. Intended for reviewers who want a one-command "is everything
 as it should be?" gate without spinning up a Jupyter notebook build.
 
 What this checks:
 
-  V1: DB integrity (treatment_reports.user_id matches posts.user_id)
-  V1: DB SHA-256 matches the value published in the README
-  V2: Per-drug post_date window (every included report strictly < cutoff;
-       zero NULL post_dates)
-  V3: Thread reconstruction (zero dangling parent_ids, zero cycles in
-       the parent edge graph)
-  V7: Dedup audit (informational — raw vs unique-user counts, plus
-       sensitivity to alternative dedup rules; never fails)
-  V10: Expected-output assertion (every drug's n / pos / pos_pct / p
-       matches the frozen expected table within rounding tolerance)
+  - DB integrity (treatment_reports.user_id matches posts.user_id)
+  - DB SHA-256 matches the value published in the README
+  - Per-drug post_date window (every included report strictly < cutoff;
+    zero NULL post_dates)
+  - Thread reconstruction (zero dangling parent_ids, zero cycles in
+    the parent edge graph)
+  - Dedup audit (informational — raw vs unique-user counts, plus
+    sensitivity to alternative dedup rules; never fails)
+  - Expected-output assertion (every drug's n / pos / pos_pct / p
+    matches the frozen expected table within rounding tolerance)
 
 Usage:
 
@@ -154,7 +154,7 @@ def check_db_integrity(conn) -> CheckResult:
         "WHERE tr.user_id != p.user_id"
     ).fetchone()[0]
     return CheckResult(
-        name="V1: DB integrity",
+        name="DB integrity",
         passed=(n_mismatch == 0),
         summary=f"treatment_reports.user_id mismatches: {n_mismatch} (must be 0)",
     )
@@ -172,7 +172,7 @@ def check_db_sha256(db_path: Path) -> CheckResult:
         f"expected: {EXPECTED_DB_SHA256}",
     ]
     return CheckResult(
-        name="V1: DB SHA-256",
+        name="DB SHA-256",
         passed=matches,
         summary=f"actual {actual[:16]}…  expected {EXPECTED_DB_SHA256[:16]}…",
         details=details,
@@ -211,7 +211,7 @@ def check_window_per_drug(conn) -> CheckResult:
             violations.append(f"{drug}: {n_null} NULL post_dates entered the per-drug query")
         summary_bits.append(f"{drug}={n}")
     return CheckResult(
-        name="V2: Per-drug window",
+        name="Per-drug window",
         passed=(not violations),
         summary=("6/6 drugs in-window, 0 NULL post_dates"
                  if not violations else f"{len(violations)} violation(s)"),
@@ -238,7 +238,7 @@ def check_thread_reconstruction(conn) -> CheckResult:
         first = " -> ".join(cycles[0][:6]) + ("…" if len(cycles[0]) > 6 else "")
         details.append(f"{len(cycles)} cycle(s) detected; first: {first}")
     return CheckResult(
-        name="V3: Thread reconstruction",
+        name="Thread reconstruction",
         passed=passed,
         summary=(f"{n_total:,} posts ({n_subs:,} submissions, {n_comments:,} comments), "
                  f"{n_orphans} orphans, {len(cycles)} cycles"),
@@ -283,7 +283,7 @@ def check_dedup_audit(conn) -> CheckResult:
             f"mixed={n_mixed} flip(maj)={flip_majority} flip(any+)={flip_any_pos}"
         )
     return CheckResult(
-        name="V7: Dedup audit (informational)",
+        name="Dedup audit (informational)",
         passed=True,
         summary="see per-drug breakdown below",
         details=bits,
@@ -342,7 +342,7 @@ def check_expected_outputs(conn) -> CheckResult:
                 )
         matched.append(f"{drug}: n={n} pos={pos} pos_pct={pos_pct:.3f} p={pval:.4g}")
     return CheckResult(
-        name="V10: Expected-output assertion",
+        name="Expected-output assertion",
         passed=(not violations),
         summary=(f"{len(matched)}/{len(EXPECTED_OUTPUTS)} drugs match the frozen expected table"
                  if not violations else f"{len(violations)} drift violation(s)"),

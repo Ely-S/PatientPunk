@@ -38,7 +38,7 @@ sha256sum  data/historical_validation_2020-07_to_2022-12.db
 Get-FileHash data\historical_validation_2020-07_to_2022-12.db -Algorithm SHA256
 ```
 
-The expected hash is `c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4`. The build script also runs an internal integrity check at startup that fails fast if any `treatment_reports.user_id` does not match the corresponding `posts.user_id` (the bug that an earlier, now-removed backfill script introduced). It additionally asserts every classified report's `post_date` falls strictly before the documented per-drug window end (V2 audit).
+The expected hash is `c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4`. The build script also runs an internal integrity check at startup that fails fast if any `treatment_reports.user_id` does not match the corresponding `posts.user_id` (the bug that an earlier, now-removed backfill script introduced). It additionally asserts every classified report's `post_date` falls strictly before the documented per-drug window end.
 
 ### Raw Reddit JSON (input to the SQLite DB)
 
@@ -49,6 +49,8 @@ Pre-classification Reddit data — every post and every comment in the scrape wi
 | `historical_validation_2020-07_to_2022-12.json` | 361 MB (378,221,044 bytes) | `298d5bc719fb42b87169c28207ad509d17c94300d1c5e3b66370e98a79abfe6a` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/historical_validation_2020-07_to_2022-12.json) |
 
 **Contents:** 47,434 top-level posts + 684,092 comments = 731,526 entries total. All-entries date range 2020-07-24 18:58 UTC → 2022-12-31 23:58 UTC.
+
+> **Note on a small post-vs-comment count discrepancy.** When this JSON is imported into the analysis SQLite DB, the audit tools (`verify.py`, `THREAD_AUDIT.md`) report **47,442** rows with `parent_id IS NULL` ("submissions") and **684,084** rows with `parent_id IS NOT NULL` ("comments") — same 731,526 total, but split differently from the JSON-level count above. The 8-row delta is a known scrape-window edge effect: 8 comments fall *inside* the 2020-07-24 → 2022-12-31 window but their parent post is *outside* it (the parent existed before the scrape window began). The import script's dangling-parent cleanup correctly nulls those 8 parent_ids — so they end up indistinguishable from submissions when classified by `parent_id IS NULL`. Both numbers are correct; they just describe different stages.
 
 **First post:** `hx7q8g` ("r/covidlonghaulers Lounge"), 2020-07-24 18:58:21 UTC — the subreddit's anchor "Lounge" thread, which is the earliest post in r/covidlonghaulers.
 
@@ -94,7 +96,7 @@ python _build_paper_figures.py
 
 The build writes `output/paper_figures.html`, `output/figure1.png`, and the executed notebook. Open `output/paper_figures.html` in any browser.
 
-### Verify (single-command V&V check)
+### Verify (one-command sanity check)
 
 For reviewers who want a one-shot "is everything as it should be?" gate without running the full notebook build:
 
@@ -102,24 +104,24 @@ For reviewers who want a one-shot "is everything as it should be?" gate without 
 python verify.py
 ```
 
-`verify.py` runs every build-time V&V assertion in one shot and prints a `[PASS]`/`[FAIL]` line per check, exiting with status 0 if all pass and 1 otherwise. Specifically it checks:
+`verify.py` runs every build-time assertion and prints a `[PASS]`/`[FAIL]` line per check, exiting with status 0 if all pass and 1 otherwise. Specifically it checks:
 
-- **V1: DB integrity** — every `treatment_reports.user_id` matches the corresponding `posts.user_id` (zero mismatches).
-- **V1: DB SHA-256** — the local DB matches the SHA-256 published in this README (`c50fcacd…`).
-- **V2: Per-drug window** — every classified report falls strictly before its drug's pre-publication cutoff; no NULL `post_date` rows.
-- **V3: Thread reconstruction** — zero dangling `parent_id` values, zero cycles in the parent edge graph.
-- **V7: Dedup audit** *(informational)* — per-drug raw / unique-user / multi-report / mixed-signal counts and dedup-rule sensitivity (flips under "majority" and "any-positive" alternative rules).
-- **V10: Expected-output assertion** — every drug's `n` / `pos` / `pos_pct` / `p` matches the frozen expected table within rounding tolerance.
+- **DB integrity** — every `treatment_reports.user_id` matches the corresponding `posts.user_id` (zero mismatches).
+- **DB SHA-256** — the local DB matches the SHA-256 published in this README (`c50fcacd…`).
+- **Per-drug window** — every classified report falls strictly before its drug's pre-publication cutoff; no NULL `post_date` rows.
+- **Thread reconstruction** — zero dangling `parent_id` values, zero cycles in the parent edge graph.
+- **Dedup audit** *(informational)* — per-drug raw / unique-user / multi-report / mixed-signal counts and dedup-rule sensitivity (flips under "majority" and "any-positive" alternative rules).
+- **Expected-output assertion** — every drug's `n` / `pos` / `pos_pct` / `p` matches the frozen expected table within rounding tolerance.
 
 Output looks like:
 
 ```
-[PASS]  V1: DB integrity                   treatment_reports.user_id mismatches: 0 (must be 0)
-[PASS]  V1: DB SHA-256                     actual c50fcacd…  expected c50fcacd…
-[PASS]  V2: Per-drug window                6/6 drugs in-window, 0 NULL post_dates
-[PASS]  V3: Thread reconstruction          731,526 posts (47,442 submissions, 684,084 comments), 0 orphans, 0 cycles
-[INFO]  V7: Dedup audit (informational)    see per-drug breakdown below
-[PASS]  V10: Expected-output assertion     6/6 drugs match the frozen expected table
+[PASS]  DB integrity                   treatment_reports.user_id mismatches: 0 (must be 0)
+[PASS]  DB SHA-256                     actual c50fcacd…  expected c50fcacd…
+[PASS]  Per-drug window                6/6 drugs in-window, 0 NULL post_dates
+[PASS]  Thread reconstruction          731,526 posts (47,442 submissions, 684,084 comments), 0 orphans, 0 cycles
+[INFO]  Dedup audit (informational)    see per-drug breakdown below
+[PASS]  Expected-output assertion      6/6 drugs match the frozen expected table
 
 ALL 5 CHECKS PASSED.
 ```
@@ -244,9 +246,9 @@ misspelling entries and a cross-drug collision check (no collisions).
 `DRUG_ALIASES.md` is a human-readable export of the `treatment.aliases`
 JSON column from the analysis SQLite DB. Every pipeline run's `--drug`
 substring filter and every canonicalization mapping operate against
-this list, so it is the load-bearing input to V4 (drug mention
-extraction) and V5 (canonicalization). Publishing it as a static file
-lets reviewers audit precision/recall coverage without running any code.
+this list, so it is the load-bearing input to drug mention extraction
+and canonicalization. Publishing it as a static file lets reviewers
+audit precision/recall coverage without running any code.
 
 ### How it was made
 
@@ -261,13 +263,13 @@ substring-match against this list, and the analysis-time SQL joins on
 count.
 
 The aliases were generated **automatically by an LLM and have not been
-manually adjudicated** against the V5 acceptance criteria. The
-"V5 reviewer notes" section of `DRUG_ALIASES.md` flags entries worth a
-closer look (e.g., `prednisolone` listed under prednisone — different
-active molecule; `loratab` listed under loratadine — Lortab is a
-hydrocodone brand, likely an LLM error; class-level terms like
-`steroid`, `h2 blocker`). The historical-validation analysis used the
-list as-is; any edit would require regenerating per-drug counts.
+manually adjudicated.** The "Reviewer notes" section of
+`DRUG_ALIASES.md` flags entries worth a closer look (e.g., `prednisolone`
+listed under prednisone — different active molecule; `loratab` listed
+under loratadine — Lortab is a hydrocodone brand, likely an LLM error;
+class-level terms like `steroid`, `h2 blocker`). The historical-validation
+analysis used the list as-is; any edit would require regenerating
+per-drug counts.
 
 ### Regenerating
 
@@ -279,10 +281,10 @@ python scripts/dump_drug_aliases.py \
 
 Deterministic given the DB content; safe to re-run.
 
-## Dedup audit (V7)
+## Dedup audit
 
-Two complementary outputs cover the V7 audit ("does the per-(user, drug)
-deduplication rule actually behave as advertised?"):
+Two complementary outputs cover the audit question "does the per-(user, drug)
+deduplication rule actually behave as advertised?":
 
 1. **Build-time audit cell** in the executed notebook reports, per drug:
    raw treatment_reports count, distinct user count, multi-report users,
@@ -298,12 +300,12 @@ deduplication rule actually behave as advertised?"):
    mean the analysis is dedup-rule-sensitive and the rule choice would
    need stronger justification.
 
-2. **[`V7_DEDUP_AUDIT.md`](./V7_DEDUP_AUDIT.md)** — a static export of
+2. **[`DEDUP_AUDIT.md`](./DEDUP_AUDIT.md)** — a static export of
    36 sampled multi-report (user, drug) pairs (6 per drug, biased toward
    mixed-signal users where the rule choice matters most), showing every
    candidate report with the rule's retained pick marked. For reviewers
    to spot-check whether the "most recent + signal-strength tiebreaker"
-   rule picked sensibly. Generated by `scripts/v7_dedup_sample_audit.py`.
+   rule picked sensibly. Generated by `scripts/dedup_sample_audit.py`.
 
 ---
 

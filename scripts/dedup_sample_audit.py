@@ -1,5 +1,5 @@
 """
-V7 dedup-sample audit.
+Dedup-sample audit.
 
 Samples multi-report (user, drug) pairs from the analysis DB and renders
 each candidate report alongside the one the dedup rule retained, so a
@@ -14,9 +14,9 @@ clearly marked. The pool is restricted to the same in-window /
 non-deleted-user filter the analysis uses.
 
 Usage:
-    python scripts/v7_dedup_sample_audit.py \\
+    python scripts/dedup_sample_audit.py \\
         --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \\
-        --out docs/RCT_historical_validation/V7_DEDUP_AUDIT.md
+        --out docs/RCT_historical_validation/DEDUP_AUDIT.md
 """
 from __future__ import annotations
 import argparse
@@ -77,7 +77,7 @@ def main():
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     lines = []
-    lines.append("# V7 Deduplication Sample Audit")
+    lines.append("# Deduplication Sample Audit")
     lines.append("")
     lines.append(f"**Generated:** {now_iso}")
     lines.append(f"**DB:** `{args.db}`")
@@ -94,7 +94,7 @@ def main():
     lines.append("")
     lines.append("If you find a case where the retained row looks like a poor")
     lines.append("representation of the user's overall opinion, that's a")
-    lines.append("methodology finding worth raising in V7 review.")
+    lines.append("methodology finding worth raising in review.")
     lines.append("")
     lines.append("---")
     lines.append("")

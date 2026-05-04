@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(__file__) or ".")
 from build_notebook import build_notebook, execute_and_export
 
 # ────────────────────────────────────────────────────────────────────
-# PROVENANCE MANIFEST HELPERS (V1)
+# PROVENANCE MANIFEST HELPERS
 # ────────────────────────────────────────────────────────────────────
 # Used at the end of the build to write output/provenance.json — a
 # machine-readable record of git commit, DB SHA-256, model names, and
@@ -308,7 +308,7 @@ DRUG_CUTOFFS = {
 
 # Frozen expected outputs — used by the V10 build-time assertion below.
 # Source of these values: dump_per_drug_csvs.py output against the canonical
-# DB on 2026-05-04 (commit 1562239 era, pre-V3 rebuild — re-verified
+# DB on 2026-05-04 (commit 1562239 era, pre-rebuild — re-verified
 # unchanged after the rebuild). If the DB content changes legitimately, this
 # dict and the README's "Expected Output" table must be updated together.
 EXPECTED_OUTPUTS = {
@@ -372,9 +372,9 @@ resp_df = (pd.DataFrame(resp_rows)
 
 
 # ────────────────────────────────────────────────────────────────────
-# EXPECTED-OUTPUT ASSERTION (V10) — fail build on numerical drift
+# EXPECTED-OUTPUT ASSERTION — fail build on numerical drift
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Expected-output assertion (V10)
+cells.append(("md", """## Expected-output assertion
 
 The cell below compares the freshly-computed `resp_df` against a frozen
 expected-output table (defined as `EXPECTED_OUTPUTS` in the setup cell).
@@ -717,9 +717,9 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 """))
 
 # ────────────────────────────────────────────────────────────────────
-# DEDUP AUDIT (V7) — raw vs unique-user counts + class-change sensitivity
+# DEDUP AUDIT — raw vs unique-user counts + class-change sensitivity
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Dedup audit (V7)
+cells.append(("md", """## Dedup audit
 
 For each drug we report:
 
@@ -838,10 +838,10 @@ _table = (
       "<i>flips: any-positive rule</i> = same but under the rule \"any positive "
       "report → responder.\" Smaller is more robust.</p>"
 )
-display(HTML("<h3>V7 Dedup audit &mdash; raw vs unique counts + rule sensitivity</h3>" + _table))
+display(HTML("<h3>Dedup audit &mdash; raw vs unique counts + rule sensitivity</h3>" + _table))
 
 # Print to stdout for build-log visibility
-print(f"V7 dedup audit: {len(_audit_rows)} drugs audited.")
+print(f"Dedup audit: {len(_audit_rows)} drugs audited.")
 for _r in _audit_rows:
     print(f"  {_r['drug']:<12} raw={_r['raw_reports']:>4} users={_r['unique_users']:>4} "
           f"multi={_r['multi_report_users']:>3} mixed={_r['mixed_signal_users']:>3} "
@@ -850,9 +850,9 @@ for _r in _audit_rows:
 
 
 # ────────────────────────────────────────────────────────────────────
-# WINDOW VERIFICATION (V2) — actual MIN/MAX(post_date) per drug + assert
+# WINDOW VERIFICATION — actual MIN/MAX(post_date) per drug + assert
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Window verification (V2)
+cells.append(("md", """## Window verification
 
 For each drug we report the actual `MIN(p.post_date)` and `MAX(p.post_date)`
 of the classified reports the analysis includes. The `MAX` must be strictly
@@ -956,14 +956,14 @@ display(HTML(_table))
 # Fail loud if anything escaped the window
 if _violations:
     raise AssertionError(
-        "V2 window verification FAILED:\n" + "\n".join("  - " + v for v in _violations)
+        "Window verification FAILED:\n" + "\n".join("  - " + v for v in _violations)
     )
-print("V2 window verification: all 6 drugs in-window, 0 NULL post_dates. PASS.")
+print("Window verification: all 6 drugs in-window, 0 NULL post_dates. PASS.")
 """))
 
 
 # ────────────────────────────────────────────────────────────────────
-# PROVENANCE (V1) — display extraction_runs in the executed notebook
+# PROVENANCE — display extraction_runs in the executed notebook
 # ────────────────────────────────────────────────────────────────────
 cells.append(("md", """## Pipeline provenance — `extraction_runs`
 
@@ -1044,7 +1044,7 @@ if __name__ == "__main__":
     nb = build_notebook(cells=cells, db_path="../data/historical_validation_2020-07_to_2022-12.db")
     html_path = execute_and_export(nb, "output/paper_figures")
 
-    # V1 provenance: write machine-readable manifest tying this output to a
+    # Provenance: write machine-readable manifest tying this output to a
     # specific code revision, DB SHA-256, model env, and pipeline-run set.
     write_provenance_manifest(DB_PATH, OUTPUT_DIR)
 
