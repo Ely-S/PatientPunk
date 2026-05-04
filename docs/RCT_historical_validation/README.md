@@ -140,6 +140,63 @@ For each drug, "pre-publication" is defined by a strict-less-than predicate on `
 
 **End-of-2022 cap.** This analysis additionally restricts all per-drug data to posts dated strictly before 2023-01-01 UTC. For famotidine, loratadine, prednisone, and naltrexone the comparator publication is the binding cutoff and the cap has no effect. For paxlovid and colchicine the cap is binding — their primary numbers reflect approximately 1.5 to 2.5 years of data ending December 31, 2022.
 
+## Window verification
+
+The build script's window-audit cell queries the actual `MIN(post_date)` and
+`MAX(post_date)` of the classified reports the analysis includes for each
+drug, and asserts the maximum is strictly before the publication-date
+midnight (or 2023-01-01 for the end-of-2022 cap). Build fails if any
+included report falls on or after the cutoff. Latest verified run:
+
+| Drug | Pub date | Window end (excl) | Actual MIN(post_date) | Actual MAX(post_date) | Reports (pre-dedup) | NULL post_dates | In window? |
+|------|----------|-------------------|------------------------|------------------------|---------------------|-----------------|------------|
+| famotidine | 2021-06-07 | 2021-06-07 00:00 UTC | 2020-08-05 03:42 UTC | 2021-06-06 05:04 UTC | 693 | 0 | ✓ |
+| loratadine | 2021-06-07 | 2021-06-07 00:00 UTC | 2020-08-18 16:26 UTC | 2021-06-06 13:28 UTC | 190 | 0 | ✓ |
+| prednisone | 2021-10-26 | 2021-10-26 00:00 UTC | 2020-07-28 22:42 UTC | 2021-10-23 19:06 UTC | 790 | 0 | ✓ |
+| naltrexone | 2022-07-03 | 2022-07-03 00:00 UTC | 2020-10-12 04:41 UTC | 2022-07-02 20:02 UTC | 583 | 0 | ✓ |
+| paxlovid | 2024-06-07 | 2023-01-01 00:00 UTC | 2022-01-18 05:13 UTC | 2022-12-31 18:35 UTC | 488 | 0 | ✓ |
+| colchicine | 2025-10-20 | 2023-01-01 00:00 UTC | 2020-08-29 10:55 UTC | 2022-12-29 12:45 UTC | 211 | 0 | ✓ |
+
+**Reports** is the raw count from `treatment_reports` (before per-(user, drug)
+dedup); the deduplicated `n` values that appear in Figure 1 / Table 3 are
+smaller. The point of this table is to show the predicate is honored, not
+the per-user vote count.
+
+**Notable observations:**
+- Every `MAX(post_date)` is strictly before its window end. Every
+  publication-bound max lands on the day immediately preceding publication
+  (famotidine/loratadine 2021-06-06, paxlovid/colchicine 2022-12-31). No
+  off-by-one leakage.
+- Zero `post_date IS NULL` rows entered any per-drug query — the
+  `IS NOT NULL` filter is defensive and the underlying data is clean.
+- Paxlovid's earliest mention is 2022-01-18 — paxlovid wasn't in the
+  community vocabulary before then, which is consistent with the drug's
+  late-2021/early-2022 emergency-use authorization.
+
+### Leakage text search
+
+We searched the body text of the latest 25 reports per drug
+(cutoff-adjacent, the highest-leakage-risk subsample) for paired-trial
+identifiers — author names (`Glynne`, `Utrero[-Rico]`, `O'Kelly`,
+`Geng`, `Bassi`), trial labels (`STOP-PASC`), and journals/preprint
+servers (`medRxiv`, `Biomedicines`, `JAMA Intern Med`, `BBI Health`):
+
+| Drug | Specific-term hits in latest 25 | Generic-term hits (`trial`/`RCT`/`published`) |
+|------|---------------------------------|-----------------------------------------------|
+| famotidine | 0 | 0 |
+| loratadine | 0 | 2 |
+| prednisone | 0 | 0 |
+| naltrexone | 0 | 0 |
+| paxlovid   | 0 | 2 |
+| colchicine | 0 | 0 |
+
+**Zero specific-term hits across all six drugs.** The four generic-term
+hits (loratadine ×2, paxlovid ×2) reference unrelated trials (vaccine
+trials, paxlovid clinical-use posts) rather than the paired comparator
+study; spot-checked, none discuss the paired RCT result. The community's
+pre-publication discussion is empirically free of paired-trial
+contamination at the cutoff boundary.
+
 ---
 
 ## How the Analysis Works

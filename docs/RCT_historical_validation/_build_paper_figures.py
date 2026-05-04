@@ -631,6 +631,119 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 """))
 
 # ────────────────────────────────────────────────────────────────────
+# WINDOW VERIFICATION (V2) — actual MIN/MAX(post_date) per drug + assert
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Window verification (V2)
+
+For each drug we report the actual `MIN(p.post_date)` and `MAX(p.post_date)`
+of the classified reports the analysis includes. The `MAX` must be strictly
+before `window_end_exclusive` (the publication-date midnight, or 2023-01-01
+for the end-of-2022 cap); the cell below asserts this and fails the build
+if any drug includes an out-of-window report. We also confirm zero
+`post_date IS NULL` rows enter the per-drug analysis.
+
+This complements the SQL predicate `p.post_date < window_end_exclusive_ts`
+in `fetch_drug_reports()` — that predicate *prevents* leakage; this audit
+*proves* it didn't leak."""))
+
+cells.append(("code", r"""
+from datetime import datetime as _dt, timezone as _tz
+
+_audit_rows = []
+_violations = []
+for _drug, (_pub_date, _paper_short, _source_date) in DRUG_CUTOFFS.items():
+    _win_end_excl = min(_pub_date, END_2022_EXCLUSIVE)
+    _cutoff_ts = epoch_midnight(_win_end_excl)
+    _row = combined_conn.execute('''
+        SELECT MIN(p.post_date), MAX(p.post_date), COUNT(*),
+               SUM(CASE WHEN p.post_date IS NULL THEN 1 ELSE 0 END)
+        FROM treatment_reports tr
+        JOIN treatment t ON tr.drug_id = t.id
+        JOIN posts p ON tr.post_id = p.post_id
+        WHERE lower(t.canonical_name) = ?
+          AND p.post_date IS NOT NULL
+          AND p.post_date < ?
+          AND p.user_id != 'deleted'
+    ''', (_drug, _cutoff_ts)).fetchone()
+    _mn, _mx, _n, _n_null = _row
+    # Also check rows that the IS NOT NULL filter excluded — should be 0
+    _null_check = combined_conn.execute('''
+        SELECT SUM(CASE WHEN p.post_date IS NULL THEN 1 ELSE 0 END)
+        FROM treatment_reports tr
+        JOIN treatment t ON tr.drug_id = t.id
+        JOIN posts p ON tr.post_id = p.post_id
+        WHERE lower(t.canonical_name) = ?
+          AND p.user_id != 'deleted'
+    ''', (_drug,)).fetchone()
+    _n_null_unfiltered = _null_check[0] or 0
+
+    # Assertions: max must be strictly < cutoff_ts; zero nulls
+    if _mx is not None and _mx >= _cutoff_ts:
+        _violations.append(
+            f"{_drug}: MAX(post_date) = {_dt.fromtimestamp(_mx, tz=_tz.utc).isoformat()} "
+            f">= window_end_exclusive ({_win_end_excl} 00:00 UTC). LEAKAGE."
+        )
+    if _n_null_unfiltered:
+        _violations.append(
+            f"{_drug}: {_n_null_unfiltered} treatment_reports rows have post_date IS NULL "
+            "(silently excluded by the IS NOT NULL filter). Investigate."
+        )
+
+    _audit_rows.append({
+        'drug': _drug,
+        'pub_date': _pub_date,
+        'win_end_excl': _win_end_excl,
+        'min_post_date': _dt.fromtimestamp(_mn, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _mn else '-',
+        'max_post_date': _dt.fromtimestamp(_mx, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _mx else '-',
+        'n_reports_pre_dedup': _n,
+        'n_post_date_null': _n_null_unfiltered,
+        'in_window': _mx is None or _mx < _cutoff_ts,
+    })
+
+# Render
+_rows_html = []
+for _r in _audit_rows:
+    _check = '&#10003;' if _r['in_window'] and _r['n_post_date_null'] == 0 else '&#10007;'
+    _color = '#27ae60' if _r['in_window'] and _r['n_post_date_null'] == 0 else '#c0392b'
+    _rows_html.append(
+        f"<tr>"
+        f"<td style='padding:4px 8px; font-weight:bold;'>{_r['drug']}</td>"
+        f"<td style='padding:4px 8px;'>{_r['pub_date']}</td>"
+        f"<td style='padding:4px 8px;'>{_r['win_end_excl']}</td>"
+        f"<td style='padding:4px 8px;'>{_r['min_post_date']}</td>"
+        f"<td style='padding:4px 8px;'>{_r['max_post_date']}</td>"
+        f"<td style='padding:4px 8px; text-align:center;'>{_r['n_reports_pre_dedup']:,}</td>"
+        f"<td style='padding:4px 8px; text-align:center;'>{_r['n_post_date_null']}</td>"
+        f"<td style='padding:4px 8px; text-align:center; color:{_color}; font-size:1.2em;'>{_check}</td>"
+        f"</tr>"
+    )
+_table = (
+    "<table style='border-collapse:collapse; width:100%; font-size:0.9em; margin:8px 0;'>"
+    "<tr style='background:#34495e; color:white;'>"
+    "<th style='padding:6px 10px;'>drug</th>"
+    "<th style='padding:6px 10px;'>pub_date</th>"
+    "<th style='padding:6px 10px;'>win_end_excl</th>"
+    "<th style='padding:6px 10px;'>actual min</th>"
+    "<th style='padding:6px 10px;'>actual max</th>"
+    "<th style='padding:6px 10px;'>n (pre-dedup)</th>"
+    "<th style='padding:6px 10px;'>nulls</th>"
+    "<th style='padding:6px 10px;'>in window?</th>"
+    "</tr>"
+    + "".join(_rows_html)
+    + "</table>"
+)
+display(HTML(_table))
+
+# Fail loud if anything escaped the window
+if _violations:
+    raise AssertionError(
+        "V2 window verification FAILED:\n" + "\n".join("  - " + v for v in _violations)
+    )
+print("V2 window verification: all 6 drugs in-window, 0 NULL post_dates. PASS.")
+"""))
+
+
+# ────────────────────────────────────────────────────────────────────
 # PROVENANCE (V1) — display extraction_runs in the executed notebook
 # ────────────────────────────────────────────────────────────────────
 cells.append(("md", """## Pipeline provenance — `extraction_runs`
