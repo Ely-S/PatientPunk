@@ -29,8 +29,12 @@ r/covidlonghaulers corpus (2026-03-11 → 2026-04-10), distributed to
 **Coded.** All 11 coders (2 human + 9 AI panel) returned outputs;
 Krippendorff's α was computed on `personal_use`, `sentiment`,
 `signal_strength`, and `drug_extracted`. The α report and per-coder
-output CSVs live outside this docs folder in `data/irr_pilot/`
-(gitignored).
+output CSVs (`human_coder_*.csv`, `ai_coder_*.csv`, `merged_long.csv`,
+`alpha_report.md`, `alpha_pairwise_*.csv`) live outside this docs folder
+in `data/irr_pilot/`, which is gitignored at the repo level.
+**Per-coder outputs are intentionally not redistributed** in this
+repo — coder identity is paired with coding decisions in those files,
+and we treat that pairing as private to the team.
 
 For the more recent 500-sample IRR pilot — drawn from the Nov–Dec 2021
 window matching the historical-validation paper's analysis window —
