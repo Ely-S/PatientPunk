@@ -44,9 +44,17 @@ The expected hash is `FA67BE6D10FFE0B98365390A5223F6DFBC708360E830C725B74B443337
 
 Pre-classification Reddit data — every post and every comment in the scrape window with no filtering. Reviewers who want to verify that the SQLite DB is a faithful representation of the underlying scrape can rebuild it from this JSON file using `src/import_posts.py`.
 
-| File | Size | Download |
-|------|------|----------|
-| `historical_validation_2020-07_to_2022-12.json` | 361 MB | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/historical_validation_2020-07_to_2022-12.json) |
+| File | Size | SHA-256 | Download |
+|------|------|---------|----------|
+| `historical_validation_2020-07_to_2022-12.json` | 361 MB (378,221,044 bytes) | `298d5bc719fb42b87169c28207ad509d17c94300d1c5e3b66370e98a79abfe6a` | [Download](https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/raw/historical_validation_2020-07_to_2022-12.json) |
+
+**Contents:** 47,434 top-level posts + 684,092 comments = 731,526 entries total. All-entries date range 2020-07-24 18:58 UTC → 2022-12-31 23:58 UTC.
+
+**First post:** `hx7q8g` ("r/covidlonghaulers Lounge"), 2020-07-24 18:58:21 UTC — the subreddit's anchor "Lounge" thread, which is the earliest post in r/covidlonghaulers.
+
+**Last post:** `1006rd2`, 2022-12-31 23:41:15 UTC — the most recent post strictly before 2023-01-01 UTC (matching the analysis's end-of-2022 cap).
+
+For provenance of how this JSON was acquired (Arctic Shift download, scrape date, conversion process), see [`ARCTIC_SHIFT_PROVENANCE.md`](./ARCTIC_SHIFT_PROVENANCE.md).
 
 ### Per-drug merged + deduped CSVs (intermediate analysis outputs)
 

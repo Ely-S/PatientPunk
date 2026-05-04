@@ -38,6 +38,128 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__) or ".")
 from build_notebook import build_notebook, execute_and_export
 
+# ────────────────────────────────────────────────────────────────────
+# PROVENANCE MANIFEST HELPERS (V1)
+# ────────────────────────────────────────────────────────────────────
+# Used at the end of the build to write output/provenance.json — a
+# machine-readable record of git commit, DB SHA-256, model names, and
+# extraction-run metadata. This is the build-time freeze that ties a
+# specific output artifact to a specific code revision and DB.
+import hashlib
+import json
+import sqlite3
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def _compute_db_sha256(db_path):
+    """SHA-256 of a SQLite DB file, streamed (works on multi-GB files)."""
+    h = hashlib.sha256()
+    with open(db_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _git_metadata():
+    """Best-effort current commit hash + working-tree dirty flag.
+
+    Returns a dict with 'commit' (sha or 'unknown') and 'dirty' (bool or
+    None if dirty state could not be determined). Loud warning if 'unknown'
+    so we never silently break the provenance chain.
+    """
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        try:
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            dirty = bool(status)
+        except Exception:
+            dirty = None
+        if dirty:
+            print(f"WARN: git working tree DIRTY at build time (commit {commit[:8]} + "
+                  "uncommitted changes). Provenance manifest records this; "
+                  "commit before treating outputs as reproducible.")
+        return {"commit": commit, "dirty": dirty}
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"WARN: could not resolve git commit ({type(e).__name__}); "
+              "provenance manifest will record 'unknown' for git_commit. "
+              "Reproducibility chain broken — install git and rerun from a clean checkout.")
+        return {"commit": "unknown", "dirty": None}
+
+
+def _read_extraction_runs(db_path):
+    """Pull all rows of the extraction_runs table; return None if absent."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_runs'"
+        )
+        if cur.fetchone() is None:
+            return None
+        cur = conn.execute(
+            "SELECT run_id, run_at, commit_hash, extraction_type, config "
+            "FROM extraction_runs ORDER BY run_id"
+        )
+        cols = [d[0] for d in cur.description]
+        rows = []
+        for r in cur.fetchall():
+            row = dict(zip(cols, r))
+            # config is stored as a JSON string; parse for readability
+            try:
+                row["config"] = json.loads(row["config"]) if row.get("config") else None
+            except Exception:
+                pass
+            # run_at is unix epoch; add ISO for readability
+            if isinstance(row.get("run_at"), int):
+                row["run_at_iso"] = datetime.fromtimestamp(
+                    row["run_at"], tz=timezone.utc
+                ).isoformat()
+            rows.append(row)
+        return rows
+    finally:
+        conn.close()
+
+
+def write_provenance_manifest(db_path, output_dir):
+    """Write a machine-readable provenance manifest to output_dir/provenance.json.
+
+    Captures the build-time freeze: git commit, DB SHA-256, model env, and the
+    full extraction_runs table content from the analysis DB. Returns the path
+    to the written manifest.
+    """
+    db_path = Path(db_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = {
+        "build_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "build_script": Path(__file__).name,
+        "git": _git_metadata(),
+        "db": {
+            "path": str(db_path),
+            "filename": db_path.name,
+            "sha256": _compute_db_sha256(db_path),
+            "size_bytes": db_path.stat().st_size,
+        },
+        "models": {
+            "fast": os.environ.get("MODEL_FAST", "anthropic/claude-haiku-4.5"),
+            "strong": os.environ.get("MODEL_STRONG", "anthropic/claude-sonnet-4.6"),
+        },
+        "extraction_runs": _read_extraction_runs(db_path),
+    }
+    out = output_dir / "provenance.json"
+    out.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+    print(f"Wrote provenance manifest: {out}")
+    return out
+
+
 cells = []
 
 # ────────────────────────────────────────────────────────────────────
@@ -509,12 +631,89 @@ display(HTML("<h3>Table 3 &mdash; Per-drug response composition (pre-publication
 """))
 
 # ────────────────────────────────────────────────────────────────────
+# PROVENANCE (V1) — display extraction_runs in the executed notebook
+# ────────────────────────────────────────────────────────────────────
+cells.append(("md", """## Pipeline provenance — `extraction_runs`
+
+This table is the build-DB's record of *which pipeline run produced every
+classified report it contains*. Each row links a `run_id` to the git commit
+that ran it, the run timestamp, and the run config (models used, target
+drug, etc.). The same `run_id` is foreign-keyed onto every
+`treatment_reports` row, so any number in Figure 1 / Table 3 can be traced
+back to the exact pipeline invocation that produced it.
+
+A machine-readable copy of this table — together with the build-time git
+commit, DB SHA-256, and model env — is also written to
+`output/provenance.json` at the end of the build."""))
+
+cells.append(("code", r"""
+import json as _json
+from datetime import datetime as _dt, timezone as _tz
+
+_runs = combined_conn.execute(
+    "SELECT run_id, run_at, commit_hash, extraction_type, config "
+    "FROM extraction_runs ORDER BY run_id"
+).fetchall()
+
+_rows_html = []
+for run_id, run_at, commit_hash, extraction_type, config in _runs:
+    run_at_iso = _dt.fromtimestamp(int(run_at), tz=_tz.utc).strftime("%Y-%m-%d %H:%M UTC") if run_at else ""
+    try:
+        cfg = _json.loads(config) if config else {}
+    except Exception:
+        cfg = {}
+    drug = cfg.get("drug") or "(all)"
+    fast = (cfg.get("models") or {}).get("fast", "")
+    strong = (cfg.get("models") or {}).get("strong", "")
+    _rows_html.append(
+        f"<tr>"
+        f"<td style='padding:4px 8px; text-align:center;'>{run_id}</td>"
+        f"<td style='padding:4px 8px;'>{run_at_iso}</td>"
+        f"<td style='padding:4px 8px; font-family:monospace; font-size:0.85em;'>{commit_hash[:10] if commit_hash else ''}</td>"
+        f"<td style='padding:4px 8px;'>{extraction_type or ''}</td>"
+        f"<td style='padding:4px 8px;'>{drug}</td>"
+        f"<td style='padding:4px 8px; font-size:0.85em;'>{fast}</td>"
+        f"<td style='padding:4px 8px; font-size:0.85em;'>{strong}</td>"
+        f"</tr>"
+    )
+
+_table = (
+    "<table style='border-collapse:collapse; width:100%; font-size:0.9em; margin:8px 0;'>"
+    "<tr style='background:#34495e; color:white;'>"
+    "<th style='padding:6px 10px;'>run_id</th>"
+    "<th style='padding:6px 10px;'>run_at</th>"
+    "<th style='padding:6px 10px;'>commit</th>"
+    "<th style='padding:6px 10px;'>type</th>"
+    "<th style='padding:6px 10px;'>drug</th>"
+    "<th style='padding:6px 10px;'>fast model</th>"
+    "<th style='padding:6px 10px;'>strong model</th>"
+    "</tr>"
+    + "".join(_rows_html)
+    + "</table>"
+    + f"<p style='font-size:0.85em; color:#777; margin-top:4px;'>"
+      f"{len(_runs)} pipeline run(s) in this DB. Every classified "
+      f"<code>treatment_report</code> row is foreign-keyed to one of these <code>run_id</code>s.</p>"
+)
+display(HTML("<h3>extraction_runs &mdash; pipeline provenance for this DB</h3>" + _table))
+"""))
+
+
+# ────────────────────────────────────────────────────────────────────
 # BUILD + EXECUTE
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # Notebook executes with cwd = output/, so DB paths must be relative to that.
     # Point at the analysis DB so build_notebook.py's setup-cell sqlite3.connect()
     # opens the real file rather than silently creating a 0-byte placeholder.
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    DB_PATH    = SCRIPT_DIR / "data" / "historical_validation_2020-07_to_2022-12.db"
+    OUTPUT_DIR = SCRIPT_DIR / "output"
+
     nb = build_notebook(cells=cells, db_path="../data/historical_validation_2020-07_to_2022-12.db")
     html_path = execute_and_export(nb, "output/paper_figures")
+
+    # V1 provenance: write machine-readable manifest tying this output to a
+    # specific code revision, DB SHA-256, model env, and pipeline-run set.
+    write_provenance_manifest(DB_PATH, OUTPUT_DIR)
+
     print(f"\nDone. Open {html_path} to view the results.")

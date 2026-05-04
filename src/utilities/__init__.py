@@ -97,14 +97,42 @@ MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 # ── Git ──────────────────────────────────────────────────────────────────────
 def get_git_commit() -> str:
-    """Return current git commit hash, or 'unknown'."""
+    """Return current git commit hash, or 'unknown' (with a loud warning).
+
+    If git metadata is unavailable we still return rather than raising — some
+    environments (CI containers, standalone notebook runs, downstream
+    consumers re-running the build with our DBs) legitimately won't have git
+    installed. But we log loudly so 'unknown' provenance can never enter the
+    audit trail silently."""
     import subprocess
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
         )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        commit = result.stdout.strip()
+        # Also flag dirty working tree so downstream consumers can see if the
+        # build was made from a non-clean checkout.
+        try:
+            dirty = subprocess.run(
+                ["git", "status", "--porcelain"], capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            if dirty:
+                log.warning(
+                    "Git working tree is DIRTY at build time (commit %s + uncommitted "
+                    "changes). Provenance manifest will include the commit hash but "
+                    "the actual code may differ. Commit before treating outputs as "
+                    "reproducible.", commit[:8],
+                )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass  # can't check dirty state, but we have the commit; proceed
+        return commit
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        log.warning(
+            "Could not resolve git commit hash (got %s). Provenance manifest "
+            "will record 'unknown' for git_commit; reproducibility chain broken. "
+            "If this is a release build, install git and rerun from a clean "
+            "checkout.", type(e).__name__,
+        )
         return "unknown"
 
 
