@@ -42,7 +42,7 @@ The expected hash is `c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fb
 
 ### Raw Reddit JSON (input to the SQLite DB)
 
-Pre-classification Reddit data — every post and every comment in the scrape window with no filtering. Reviewers who want to verify that the SQLite DB is a faithful representation of the underlying scrape can rebuild it from this JSON file using `src/import_posts.py`.
+Pre-classification Reddit data — every post and every comment in the scrape window with no filtering. Reviewers who want to verify that the **`users` and `posts` tables** of the analysis DB faithfully represent the underlying scrape can rebuild those tables from this JSON file using `src/import_posts.py`. Note: `import_posts.py` only rebuilds `users` + `posts`. The `treatment_reports` table (LLM-extracted drug mentions, sentiment, and signal strength) is the frozen output of running `src/run_sentiment_pipeline.py` once per target drug — re-running it requires Anthropic API credentials and roughly two hours of wall time. The published SQLite DB is the frozen output of that full pipeline.
 
 | File | Size | SHA-256 | Download |
 |------|------|---------|----------|

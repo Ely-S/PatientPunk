@@ -1,6 +1,6 @@
 # Drug aliases used in extraction
 
-**Generated:** 2026-05-04 19:11 UTC from `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-04 19:15 UTC from `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
 **Generator:** `scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from
@@ -19,9 +19,18 @@ class synonyms for each of the six target drugs. The model's output
 was inserted as JSON into `treatment.aliases` at run time and joined
 on by the SQL queries that produce Figure 1, Table 2, and Table 3.
 
-These aliases were generated **automatically by an LLM** and have
-not been manually adjudicated. The lists below are an input to a
-manual alias review, not its output.
+### Epistemic status
+
+The alias lists are intentionally produced by the pipeline's LLM
+canonicalization step rather than being manually curated, because
+evaluating the LLM canonicalization step is part of the method this
+paper demonstrates. We treat alias generation as a pipeline output
+rather than a hand-authored input, and publish the generated aliases
+here so that dependency is fully auditable — reviewers can see exactly
+what the substring-match step ran against. The reviewer notes section
+below flags entries worth a closer look; corrections to those entries
+would propagate through canonicalization and classification, so any
+change requires regenerating per-drug counts.
 
 ---
 
