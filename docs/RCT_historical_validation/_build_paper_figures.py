@@ -805,8 +805,12 @@ table_df = resp_df[['drug', 'paper', 'source_date', 'n', 'pos', 'pos_pct',
 def _fmt_pct(v): return f"{v:.1f}%"
 def _fmt_ci(lo, hi): return f"[{lo:.1f}%, {hi:.1f}%]"
 def _fmt_p(v):
-    if v < 0.0001:  return "<0.0001"
-    if v < 0.001:   return f"{v:.4f}"
+    # Scientific notation for p < 0.001 (e.g. 3.57e-17), three decimal
+    # places otherwise (e.g. 0.284). Normalize exponent to drop the
+    # leading zero on single-digit exponents (1.95e-9 not 1.95e-09).
+    if v < 0.001:
+        import re as _re
+        return _re.sub(r'e([+-])0(\d)$', r'e\1\2', f"{v:.2e}")
     return f"{v:.3f}"
 
 table_df['% responders']      = table_df['pos_pct'].apply(_fmt_pct)

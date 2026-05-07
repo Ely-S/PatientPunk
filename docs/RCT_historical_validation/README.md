@@ -417,12 +417,14 @@ If everything ran correctly, Table 3 should show these values:
 
 | Drug | n (users) | % Responders | 95% CI | p-value | Trial Result |
 |------|-----------|--------------|--------|---------|--------------|
-| loratadine | 90  | 81.1% | [71.8, 87.9] | < 0.0001 | positive |
-| famotidine | 232 | 77.2% | [71.3, 82.1] | < 0.0001 | positive |
-| naltrexone | 154 | 65.6% | [57.8, 72.6] |   0.0001 | positive |
-| paxlovid   | 196 | 54.1% | [47.1, 60.9] |   0.28   | null |
-| colchicine | 91  | 53.8% | [43.7, 63.7] |   0.53   | null |
-| prednisone | 343 | 48.7% | [43.4, 54.0] |   0.67   | null |
+| loratadine | 90  | 81.1% | [71.8, 87.9] | 1.95e-9  | positive |
+| famotidine | 232 | 77.2% | [71.3, 82.1] | 3.56e-17 | positive |
+| naltrexone | 154 | 65.6% | [57.8, 72.6] | 1.36e-4  | positive |
+| paxlovid   | 196 | 54.1% | [47.1, 60.9] | 0.284    | null |
+| colchicine | 91  | 53.8% | [43.7, 63.7] | 0.530    | null |
+| prednisone | 343 | 48.7% | [43.4, 54.0] | 0.666    | null |
+
+p-values < 0.001 are shown in scientific notation; p-values ≥ 0.001 in three-decimal form. The same formatter is applied in the notebook's Table 3.
 
 The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — every comparison reaches p < 0.001 (loratadine and famotidine reach p < 1e-9). Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
 
