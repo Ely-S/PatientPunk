@@ -22,6 +22,14 @@ from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
 from pathlib import Path
 
 
+# ── Default DB-resolution block ─────────────────────────────────────────────
+# Callers can override this by passing `db_path_block=` to build_notebook().
+# The default is the simple "literal path" form preserved for backward
+# compatibility with other notebooks in the repo.
+DEFAULT_DB_PATH_BLOCK = '''DB_PATH = "{db_path}"
+conn = sqlite3.connect(DB_PATH)'''
+
+
 # ── Standard setup code injected into every notebook ────────────────────────
 SETUP_CODE = '''import warnings
 warnings.filterwarnings("ignore")
@@ -36,8 +44,7 @@ from scipy.stats import binomtest, mannwhitneyu, fisher_exact, kruskal
 from IPython.display import display, HTML, Markdown
 
 # ── Database connection ──
-DB_PATH = "{db_path}"
-conn = sqlite3.connect(DB_PATH)
+{db_path_block}
 
 # ── Sentiment mapping ──
 SENTIMENT_SCORE = {{"positive": 1.0, "mixed": 0.5, "neutral": 0.0, "negative": -1.0}}
@@ -87,12 +94,18 @@ COLORS = {{"positive": "#2ecc71", "mixed/neutral": "#95a5a6", "negative": "#e74c
 '''
 
 
-def build_notebook(cells, db_path="patientpunk.db", title=None):
+def build_notebook(cells, db_path="patientpunk.db", db_path_block=None, title=None):
     """Build a valid Jupyter notebook from a list of (type, source) tuples.
 
     Args:
         cells: list of ("md", source_string) or ("code", source_string) tuples
-        db_path: path to SQLite database (injected into setup cell)
+        db_path: path to SQLite database (injected into setup cell as a string
+                 literal). Ignored if db_path_block is provided.
+        db_path_block: raw Python source that defines `DB_PATH` and `conn`.
+                       Use this when callers need richer resolution than a
+                       hard-coded literal — e.g., the RCT validation package
+                       embeds its anchor-based resolver here so the notebook
+                       finds its DB regardless of cwd.
         title: optional — not used in the notebook, just for reference
 
     Returns:
@@ -105,10 +118,12 @@ def build_notebook(cells, db_path="patientpunk.db", title=None):
         "name": "python3",
     }
 
-    # Keep path as relative with forward slashes (avoids hardcoding local absolute paths)
-    db_path_resolved = Path(db_path).as_posix()
+    if db_path_block is None:
+        # Keep path as posix (forward slashes) so the notebook is portable
+        db_path_resolved = Path(db_path).as_posix()
+        db_path_block = DEFAULT_DB_PATH_BLOCK.format(db_path=db_path_resolved)
     # Inject setup cell (produces zero output)
-    setup = SETUP_CODE.format(db_path=db_path_resolved)
+    setup = SETUP_CODE.format(db_path_block=db_path_block)
     nb.cells.append(new_code_cell(source=setup))
 
     # Add user cells

@@ -11,11 +11,10 @@ For each of the six target drugs:
 Plus a one-row-per-drug summary:
   - summary.csv                - n, %positive, Wilson 95% CI, p-value vs 50%
 
-By default, reads the DB from
-  <repo-root>/data/historical_validation/historical_validation_2020-07_to_2022-12.db
-and writes outputs to
-  <repo-root>/data/historical_validation/merged/.
-Both can be overridden via --db and --out.
+By default, reads the DB via the canonical resolver in
+`docs/RCT_historical_validation/paths.py` (env var `RCT_DB_PATH` →
+package-anchor walk-up) and writes outputs into a `merged/` subdirectory of
+the package's `data/` folder. Both can be overridden via --db and --out.
 
 This is the CLEAN replacement for the earlier merge_and_analyze_historical.py
 script: there is no cross-DB merging — the single combined database is the
@@ -36,11 +35,19 @@ from statsmodels.stats.proportion import proportion_confint
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# Repo-relative defaults: this file lives at <repo>/scripts/dump_per_drug_csvs.py,
-# so parents[1] is the repo root regardless of where the script is invoked from.
-REPO_ROOT   = Path(__file__).resolve().parents[1]
-DEFAULT_DB  = REPO_ROOT / "data" / "historical_validation" / "historical_validation_2020-07_to_2022-12.db"
-DEFAULT_OUT = REPO_ROOT / "data" / "historical_validation" / "merged"
+# This script lives at <repo>/scripts/dump_per_drug_csvs.py. The RCT
+# validation package — including paths.py, the canonical DB resolver — lives
+# at <repo>/docs/RCT_historical_validation/. We bootstrap sys.path to import
+# it so this script and the in-package entry points share one resolver.
+_REPO_ROOT      = Path(__file__).resolve().parents[1]
+_RCT_PKG        = _REPO_ROOT / "docs" / "RCT_historical_validation"
+if str(_RCT_PKG) not in sys.path:
+    sys.path.insert(0, str(_RCT_PKG))
+from paths import (  # noqa: E402
+    PathResolutionError,
+    db_path as resolve_db_path,
+    data_dir as resolve_data_dir,
+)
 
 # Each drug's "cutoff" here is the publication date of the comparator paper.
 # The SQL predicate is "post_date < epoch_midnight(cutoff)", so any post on or
@@ -148,30 +155,42 @@ def main(argv: list[str] | None = None) -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--db", type=Path, default=DEFAULT_DB,
-        help=f"Path to the analysis SQLite DB. "
-             f"Default: {_try_relative(DEFAULT_DB, REPO_ROOT)}",
+        "--db", type=Path, default=None,
+        help=("Path to the analysis SQLite DB. If omitted, paths.py resolves it: "
+              "RCT_DB_PATH env var → anchor walk-up to the package root."),
     )
     parser.add_argument(
-        "--out", type=Path, default=DEFAULT_OUT,
-        help=f"Directory to write per-drug CSVs and summary.csv. "
-             f"Default: {_try_relative(DEFAULT_OUT, REPO_ROOT)}",
+        "--out", type=Path, default=None,
+        help=("Directory to write per-drug CSVs and summary.csv. "
+              "If omitted, defaults to <package_root>/data/merged/."),
     )
     args = parser.parse_args(argv)
-    db: Path = args.db
-    out: Path = args.out
 
-    # Fail fast on a missing DB instead of silently creating a 0-byte file via
-    # sqlite3.connect on a path that doesn't exist.
-    if not db.exists():
-        sys.exit(
-            f"ERROR: analysis DB not found at {db}\n"
-            f"Pass --db to override the default, or download the DB to that path. "
-            f"See docs/RCT_historical_validation/README.md for download instructions."
-        )
+    # ── Resolve DB ──
+    if args.db is not None:
+        db: Path = args.db.resolve()
+        if not db.exists():
+            sys.exit(
+                f"ERROR: analysis DB not found at {db}\n"
+                f"See docs/RCT_historical_validation/README.md for download instructions."
+            )
+    else:
+        try:
+            db = resolve_db_path()
+        except PathResolutionError as e:
+            sys.exit(f"ERROR: {e}")
+
+    # ── Resolve output dir ──
+    if args.out is not None:
+        out: Path = args.out
+    else:
+        try:
+            out = resolve_data_dir() / "merged"
+        except PathResolutionError as e:
+            sys.exit(f"ERROR: {e}")
 
     out.mkdir(parents=True, exist_ok=True)
-    print(f"Source DB: {_try_relative(db, REPO_ROOT)}")
+    print(f"Source DB: {_try_relative(db, _REPO_ROOT)}")
     print()
     print(f"{'drug':<12} {'trial':<6} {'pub_date':<12} {'win_end_excl':<14} "
           f"{'n':>5} {'pos':>5} {'%pos':>6} {'95% CI':>20} {'p':>9}")
@@ -195,7 +214,7 @@ def main(argv: list[str] | None = None) -> None:
 
     pd.DataFrame(rows).to_csv(out / "summary.csv", index=False)
     print()
-    print(f"Wrote per-drug CSVs and summary.csv to {_try_relative(out, REPO_ROOT)}/")
+    print(f"Wrote per-drug CSVs and summary.csv to {_try_relative(out, _REPO_ROOT)}/")
 
 
 if __name__ == "__main__":

@@ -36,10 +36,19 @@ from __future__ import annotations
 import argparse
 import collections
 import hashlib
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Make sibling module `paths` importable when verify.py is invoked from
+# any cwd. paths.py lives next to this file at the package root.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import (  # noqa: E402
+    PathResolutionError,
+    db_path as resolve_db_path,
+)
 
 # ── Constants — must stay in sync with _build_paper_figures.py ─────────────
 
@@ -354,26 +363,48 @@ def check_expected_outputs(conn) -> CheckResult:
 
 def main(argv: list[str] | None = None) -> int:
     script_dir = Path(__file__).resolve().parent
-    default_db = script_dir / "data" / "historical_validation_2020-07_to_2022-12.db"
 
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--db", type=Path, default=default_db,
-                    help=f"Analysis DB path. Default: {default_db.relative_to(script_dir.parent.parent) if script_dir.parent.parent in default_db.parents else default_db}")
+    ap.add_argument(
+        "--db", type=Path, default=None,
+        help=("Analysis DB path. If omitted, paths.py resolves it: "
+              "RCT_DB_PATH env var → anchor walk-up to package root."),
+    )
     args = ap.parse_args(argv)
 
-    if not args.db.exists():
-        print(f"ERROR: DB not found at {args.db}", file=sys.stderr)
-        print(f"       Download from S3 (URL in README) and rerun.", file=sys.stderr)
-        return 2
+    # Track how the DB path was determined so we can surface it to the
+    # reviewer. A stale RCT_DB_PATH from a previous shell session is a real
+    # source of confusion; printing the resolution mode makes it obvious.
+    if args.db is not None:
+        if not args.db.exists():
+            print(f"ERROR: DB not found at {args.db}", file=sys.stderr)
+            print("       Download from S3 (URL in README) and rerun.", file=sys.stderr)
+            return 2
+        db_resolved = args.db.resolve()
+        resolution_mode = "--db CLI flag"
+    elif os.environ.get("RCT_DB_PATH"):
+        try:
+            db_resolved = resolve_db_path(start=script_dir)
+        except PathResolutionError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        resolution_mode = f"RCT_DB_PATH={os.environ['RCT_DB_PATH']!r}"
+    else:
+        try:
+            db_resolved = resolve_db_path(start=script_dir)
+        except PathResolutionError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        resolution_mode = "package anchor (default)"
 
-    conn = sqlite3.connect(str(args.db))
+    conn = sqlite3.connect(str(db_resolved))
     try:
         results = [
             check_db_integrity(conn),
-            check_db_sha256(args.db),
+            check_db_sha256(db_resolved),
             check_window_per_drug(conn),
             check_thread_reconstruction(conn),
             check_dedup_audit(conn),
@@ -387,7 +418,8 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 68)
     print(" RCT historical validation — reproducibility verification")
     print("=" * 68)
-    print(f" DB: {args.db}")
+    print(f" DB: {db_resolved}")
+    print(f" DB resolution: {resolution_mode}")
     print(f" Run at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print()
 

@@ -12,10 +12,12 @@ alias coverage need to see this list directly.
 
 Usage:
     python scripts/dump_drug_aliases.py \\
-        --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \\
+        --db docs/RCT_historical_validation/data/historical_validation_2020-07_to_2022-12.db \\
         --out docs/RCT_historical_validation/DRUG_ALIASES.md
 
-Re-running with the same DB produces an identical markdown file.
+Re-running with the same DB reproduces the same alias content
+(deterministic ordering); only the `Generated` timestamp at the top
+of the file changes.
 """
 from __future__ import annotations
 import argparse
@@ -69,7 +71,7 @@ def main():
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = []
     lines.append("# Drug aliases used in extraction\n")
-    lines.append(f"**Generated:** {now} from `{args.db}`")
+    lines.append(f"**Generated:** {now} from `{args.db.as_posix()}`")
     lines.append("**Generator:** `scripts/dump_drug_aliases.py`")
     lines.append("")
     lines.append("This file is a static export of the `treatment.aliases` column from")
@@ -207,7 +209,8 @@ def main():
     lines.append("```")
     lines.append(f"python scripts/dump_drug_aliases.py --db {args.db} --out {args.out}")
     lines.append("```")
-    lines.append("against the same DB produces an identical file (deterministic ordering).")
+    lines.append("against the same DB reproduces the same alias content (deterministic")
+    lines.append("ordering); only the `Generated` timestamp at the top of this file changes.")
     lines.append("If the DB's `treatment.aliases` content changes, this file should be")
     lines.append("regenerated and committed alongside the DB.")
 

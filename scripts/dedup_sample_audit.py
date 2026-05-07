@@ -5,8 +5,11 @@ Samples multi-report (user, drug) pairs from the analysis DB and renders
 each candidate report alongside the one the dedup rule retained, so a
 reviewer can spot-check whether the rule picked sensibly.
 
-Dedup rule under audit: "most recent post wins; signal_strength breaks
-ties on the same date (strong > moderate > weak > n/a)."
+Dedup rule under audit: "most recent post wins (by full UTC timestamp);
+signal_strength breaks ties on the same UTC timestamp (strong > moderate
+> weak > n/a). Exact-timestamp ties are rare in practice, so signal
+strength acts as a near-vestigial tiebreaker — most decisions reduce
+to 'most recent post wins'."
 
 Output: a markdown file with one section per drug, showing N sampled
 multi-report users and their full report list with the retained row
@@ -15,7 +18,7 @@ non-deleted-user filter the analysis uses.
 
 Usage:
     python scripts/dedup_sample_audit.py \\
-        --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \\
+        --db docs/RCT_historical_validation/data/historical_validation_2020-07_to_2022-12.db \\
         --out docs/RCT_historical_validation/DEDUP_AUDIT.md
 """
 from __future__ import annotations
@@ -76,11 +79,16 @@ def main():
     rng = random.Random(args.seed)
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    # Render the DB path with forward slashes so the audit file reads the same
+    # on every platform (the script may run on Windows but reviewers may read
+    # the file on Linux / macOS).
+    db_display = args.db.as_posix()
+
     lines = []
     lines.append("# Deduplication Sample Audit")
     lines.append("")
     lines.append(f"**Generated:** {now_iso}")
-    lines.append(f"**DB:** `{args.db}`")
+    lines.append(f"**DB:** `{db_display}`")
     lines.append(f"**Sample seed:** {args.seed}  ")
     lines.append(f"**Per-drug sample size:** {args.per_drug}  ")
     lines.append("")
@@ -88,9 +96,12 @@ def main():
     lines.append("analysis DB and shows each user's full set of reports for that")
     lines.append("drug, with the report retained by the dedup rule clearly marked")
     lines.append("(`** RETAINED **` row). The audit is for reviewers to spot-check")
-    lines.append("that the rule \"most recent post wins; signal_strength breaks")
-    lines.append("ties on the same date\" picked sensibly — i.e., that we're not")
-    lines.append("systematically picking against the user's settled view.")
+    lines.append("that the rule \"most recent post wins (by full UTC timestamp);")
+    lines.append("signal_strength breaks ties on the same UTC timestamp\" picked")
+    lines.append("sensibly — i.e., that we're not systematically picking against")
+    lines.append("the user's settled view. Exact-timestamp ties are rare, so the")
+    lines.append("signal-strength tiebreaker fires only occasionally; most picks")
+    lines.append("are simply the most-recent post.")
     lines.append("")
     lines.append("If you find a case where the retained row looks like a poor")
     lines.append("representation of the user's overall opinion, that's a")
@@ -172,10 +183,11 @@ def main():
     lines.append("## Reproducibility")
     lines.append("")
     lines.append(
-        f"Re-running `scripts/v7_dedup_sample_audit.py --db <db> --out <out> "
+        f"Re-running `scripts/dedup_sample_audit.py --db <db> --out <out> "
         f"--seed {args.seed} --per-drug {args.per_drug}` against the same DB "
-        f"produces an identical file. Total sampled (user, drug) pairs: "
-        f"**{total_sampled}**."
+        f"reproduces the same sampled rows, aside from the `Generated` "
+        f"timestamp at the top of this file. Total sampled (user, drug) "
+        f"pairs: **{total_sampled}**."
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

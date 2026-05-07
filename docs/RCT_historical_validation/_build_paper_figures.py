@@ -14,9 +14,11 @@ publicly released (medRxiv preprint or journal online-first, whichever came
 first). Pre-publication windows are capped at end of 2022 in this analysis.
 
 Per-(user, drug) deduplication rule:
-    1) Most recent report wins (post_date desc).
-    2) Signal-strength is the tiebreaker for posts on the same date
-       (strong > moderate > weak > n/a).
+    1) Most recent report wins (full UTC timestamp, descending).
+    2) Signal-strength is the tiebreaker on exact-timestamp ties
+       (strong > moderate > weak > n/a). Such ties are rare, so this
+       step acts as a near-vestigial tiebreaker — the rule reduces in
+       practice to "most recent post wins."
 
 We then test whether the proportion of responders (positive sentiment)
 differs from a 50% null using a two-sided binomial test, and report the
@@ -37,6 +39,7 @@ Output
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__) or ".")
 from build_notebook import build_notebook, execute_and_export
+from paths import db_path as resolve_db_path, output_dir as resolve_output_dir, find_package_root
 
 # ────────────────────────────────────────────────────────────────────
 # PROVENANCE MANIFEST HELPERS
@@ -94,6 +97,21 @@ def _git_metadata():
         return {"commit": "unknown", "dirty": None}
 
 
+def _normalize_path_separators(value):
+    """Convert Windows backslashes to forward slashes inside a config value.
+    Path-like fields in extraction_runs.config get serialized with whatever
+    separator the OS used at extraction time (typically Windows '\\'); we
+    normalize for readability and cross-platform consistency. Non-path
+    values pass through unchanged."""
+    if isinstance(value, str) and "\\" in value:
+        return value.replace("\\", "/")
+    if isinstance(value, dict):
+        return {k: _normalize_path_separators(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_normalize_path_separators(v) for v in value]
+    return value
+
+
 def _read_extraction_runs(db_path):
     """Pull all rows of the extraction_runs table; return None if absent."""
     conn = sqlite3.connect(str(db_path))
@@ -116,6 +134,9 @@ def _read_extraction_runs(db_path):
                 row["config"] = json.loads(row["config"]) if row.get("config") else None
             except Exception:
                 pass
+            # Normalize Windows backslashes in any string values inside config
+            # (typically config.output_dir from the original Windows extraction).
+            row["config"] = _normalize_path_separators(row.get("config"))
             # run_at is unix epoch; add ISO for readability
             if isinstance(row.get("run_at"), int):
                 row["run_at_iso"] = datetime.fromtimestamp(
@@ -127,23 +148,39 @@ def _read_extraction_runs(db_path):
         conn.close()
 
 
-def write_provenance_manifest(db_path, output_dir):
+def write_provenance_manifest(db_path, output_dir, package_root=None):
     """Write a machine-readable provenance manifest to output_dir/provenance.json.
 
     Captures the build-time freeze: git commit, DB SHA-256, model env, and the
     full extraction_runs table content from the analysis DB. Returns the path
     to the written manifest.
+
+    The recorded DB path is package-relative (e.g. "data/historical_validation_*.db"),
+    not absolute, so manifests don't leak machine-specific user paths.
     """
     db_path = Path(db_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if package_root is None:
+        # Best-effort: walk up from db_path's parent
+        package_root = find_package_root(start=db_path.parent)
+    package_root = Path(package_root).resolve()
+    try:
+        rel_db = str(db_path.resolve().relative_to(package_root).as_posix())
+    except ValueError:
+        # DB lives outside the package (e.g. RCT_DB_PATH env var pointed elsewhere).
+        # Record just the filename rather than a leaky absolute path.
+        rel_db = db_path.name
 
     manifest = {
         "build_timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "build_script": Path(__file__).name,
         "git": _git_metadata(),
         "db": {
-            "path": str(db_path),
+            # Package-relative path. Absolute paths would leak personal info
+            # (e.g. C:\Users\<name>\...) and aren't portable across reviewers.
+            "path": rel_db,
             "filename": db_path.name,
             "sha256": _compute_db_sha256(db_path),
             "size_bytes": db_path.stat().st_size,
@@ -189,9 +226,12 @@ user_id `"deleted"`) are excluded from per-user analysis: those posts come
 from many distinct real users whose accounts no longer exist, and
 collapsing them under one pseudo-user would give that whole population
 one vote per drug. Each remaining user contributes exactly one data point
-per drug after deduplication: the **most recent report** wins, with
-**signal_strength** as the tiebreaker for posts on the same date
-(strong > moderate > weak > n/a). We then test whether the proportion of
+per drug after deduplication: the **most recent report** wins (by full
+UTC timestamp), with **signal_strength** as the tiebreaker on exact
+timestamp ties (strong > moderate > weak > n/a). Exact-timestamp ties
+are rare, so the tiebreaker fires only occasionally — the rule
+reduces in practice to "most recent post wins."
+We then test whether the proportion of
 responders (positive sentiment) differs from a 50% null using a two-sided
 binomial test.
 """))
@@ -268,8 +308,9 @@ def fetch_drug_reports(drug, window_end_exclusive_ts):
     ''', (drug, window_end_exclusive_ts)).fetchall()
 
 def dedup_recent_then_strength(rows):
-    '''Per (user, drug): keep the most recent report; for same-date ties,
-    keep the strongest signal.'''
+    '''Per (user, drug): keep the most recent report (by full UTC
+    timestamp); on exact-timestamp ties, keep the strongest signal.
+    Such ties are rare, so the tiebreaker is near-vestigial.'''
     by_user = {}
     for row in rows:
         uid, drug, sent, sig, d, _pid = row
@@ -520,79 +561,97 @@ plt.show()
 # ────────────────────────────────────────────────────────────────────
 # FIGURE 1: Paired horizontal bar chart (responders vs non-responders)
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Figure 1 — Pre-publication community sentiment: responders vs non-responders
+cells.append(("md", """## Figure 1 — Forest plot: responders and non-responders by drug
 
 Figure 1 collapses the four-way sentiment breakdown into a binary split: responders
-(positive sentiment) vs. non-responders (negative + neutral + mixed). Each bar
-shows the percentage with its 95% Wilson confidence interval; the right margin
-labels each drug with whether the comparator clinical trial found a positive or
-null effect."""))
+(positive sentiment) vs. non-responders (negative + neutral + mixed). Each drug
+contributes two points to the forest plot — a green circle for the **responder**
+rate and a red square for the **non-responder** rate — both with their 95% Wilson
+confidence intervals. The row label gives the drug, the comparator trial outcome
+(`[+ trial]` vs `[null trial]`), the paper citation, and the sample size."""))
 
 cells.append(("code", r"""
-# ── Figure 1: Paired horizontal bars with trial-direction tags ──
-from matplotlib.patches import Patch
+# ── Figure 1: Forest plot of % responders + % non-responders with 95% Wilson CIs ──
+from matplotlib.lines import Line2D
 
-fig, ax = plt.subplots(figsize=(13.5, 6.8))
-y = np.arange(len(resp_df))[::-1]
-bar_h = 0.36
+GREEN = '#27ae60'
+RED   = '#c0392b'
+OFFSET = 0.22  # vertical separation between responder and non-responder markers
 
-# Responder bars (green)
-ax.barh(y - bar_h/2, resp_df['pos_pct'], height=bar_h,
-        color='#2ecc71', edgecolor='black', linewidth=0.5,
-        label='% responders (positive)')
-ax.errorbar(resp_df['pos_pct'], y - bar_h/2,
-            xerr=[resp_df['pos_pct'] - resp_df['pos_lo'],
-                  resp_df['pos_hi'] - resp_df['pos_pct']],
-            fmt='none', ecolor='#1e1e1e', elinewidth=1.2, capsize=3.5, capthick=1.2)
+fig, ax = plt.subplots(figsize=(13, 7.5))
+y_center = np.arange(len(resp_df))[::-1].astype(float)
+y_resp = y_center + OFFSET
+y_nonr = y_center - OFFSET
 
-# Non-responder bars (red)
-ax.barh(y + bar_h/2, resp_df['nonr_pct'], height=bar_h,
-        color='#e74c3c', edgecolor='black', linewidth=0.5,
-        label='% non-responders (neg + neu + mix)')
-ax.errorbar(resp_df['nonr_pct'], y + bar_h/2,
-            xerr=[resp_df['nonr_pct'] - resp_df['nonr_lo'],
-                  resp_df['nonr_hi'] - resp_df['nonr_pct']],
-            fmt='none', ecolor='#1e1e1e', elinewidth=1.2, capsize=3.5, capthick=1.2)
+# Responders: green circles + CI line
+ax.errorbar(
+    resp_df['pos_pct'], y_resp,
+    xerr=[resp_df['pos_pct'] - resp_df['pos_lo'],
+          resp_df['pos_hi'] - resp_df['pos_pct']],
+    fmt='o', markersize=8, color=GREEN, ecolor=GREEN,
+    elinewidth=1.6, capsize=0, label='% responders (positive)',
+)
 
-# Value labels on bars
+# Non-responders: red squares + CI line
+ax.errorbar(
+    resp_df['nonr_pct'], y_nonr,
+    xerr=[resp_df['nonr_pct'] - resp_df['nonr_lo'],
+          resp_df['nonr_hi'] - resp_df['nonr_pct']],
+    fmt='s', markersize=8, color=RED, ecolor=RED,
+    elinewidth=1.6, capsize=0, label='% non-responders (neg + neu + mix)',
+)
+
+# Value labels at the right end of each CI
 for i, r in resp_df.iterrows():
-    ax.text(r['pos_pct'] + 1.5, y[i] - bar_h/2, f"{r['pos_pct']:.0f}%",
-            va='center', ha='left', fontsize=11, fontweight='bold')
-    ax.text(r['nonr_pct'] + 1.5, y[i] + bar_h/2, f"{r['nonr_pct']:.0f}%",
-            va='center', ha='left', fontsize=11, fontweight='bold')
+    ax.text(r['pos_hi']  + 1.2, y_resp[i], f"{r['pos_pct']:.0f}%",
+            color=GREEN, va='center', ha='left', fontsize=11)
+    ax.text(r['nonr_hi'] + 1.2, y_nonr[i], f"{r['nonr_pct']:.0f}%",
+            color=RED, va='center', ha='left', fontsize=11)
 
-ax.set_yticks(y)
-ax.set_yticklabels([f"{r['drug']}\n(n={r['n']})" for _, r in resp_df.iterrows()], fontsize=12)
-ax.set_xlim(0, max(resp_df['pos_hi'].max(), resp_df['nonr_hi'].max()) + 22)
+# Y-tick labels: drug + trial outcome tag (line 1), paper + n (line 2)
+def _trial_tag(td):
+    return '+ trial' if td == '+' else ('null trial' if td == '0' else f'{td} trial')
+
+ax.set_yticks(y_center)
+ax.set_yticklabels(
+    [f"{r['drug']}  [{_trial_tag(r['trial_dir'])}]\n{r['paper']}  (n={r['n']})"
+     for _, r in resp_df.iterrows()],
+    fontsize=11,
+)
+
+# Visual separators between drug groups (horizontal lines at half-integer y positions)
+for k in range(1, len(resp_df)):
+    ax.axhline(len(resp_df) - 1 - k + 0.5, color='#dddddd', lw=0.7, zorder=0)
+
+# Y range: leave half a row of padding top and bottom
+ax.set_ylim(-0.6, len(resp_df) - 0.4)
+
+# X axis
+ax.set_xlim(0, 100)
 ax.set_xlabel('% of users (95% Wilson CI)', fontsize=12)
 ax.tick_params(axis='x', labelsize=11)
-ax.axvline(50, color='gray', ls=':', lw=0.8)
-ax.set_title('Figure 1 — Pre-publication community sentiment: responders vs non-responders by drug\n'
-             'Dedup: most recent report; signal-strength tiebreaker for same-date posts',
-             fontsize=14, fontweight='bold')
-ax.grid(axis='x', alpha=0.3)
+ax.set_xticks([0, 25, 50, 75, 100])
 
-# Trial-direction tags in the right margin
-TAG_STYLE = {
-    '+': ('trial: positive', '#27ae60'),
-    '0': ('trial: null',     '#c0392b'),
-}
-for i, r in resp_df.iterrows():
-    label, color = TAG_STYLE.get(r['trial_dir'], (f"trial: {r['trial_dir']}", '#7f8c8d'))
-    ax.text(1.01, y[i], label, transform=ax.get_yaxis_transform(),
-            va='center', ha='left', fontsize=11, family='sans-serif',
-            color=color, fontweight='bold')
+# Subtle null reference at 50%
+ax.axvline(50, color='gray', ls=':', lw=0.8, zorder=0)
+
+ax.set_title('Figure 1 — Forest plot: responders and non-responders by drug\n'
+             '95% Wilson CIs. Trial outcome tagged in the row label.',
+             fontsize=14, fontweight='bold', pad=12)
+
+ax.grid(axis='x', alpha=0.3, zorder=0)
+ax.set_axisbelow(True)
+for spine in ('top', 'right'):
+    ax.spines[spine].set_visible(False)
 
 legend_elems = [
-    Patch(facecolor='#2ecc71', edgecolor='black', linewidth=0.5,
-          label='% responders (positive)'),
-    Patch(facecolor='#e74c3c', edgecolor='black', linewidth=0.5,
-          label='% non-responders (neg + neu + mix)'),
-    Patch(facecolor='#27ae60', label='trial: positive'),
-    Patch(facecolor='#c0392b', label='trial: null'),
+    Line2D([0], [0], marker='o', linestyle='-', color=GREEN, markersize=8,
+           label='% responders (positive)'),
+    Line2D([0], [0], marker='s', linestyle='-', color=RED, markersize=8,
+           label='% non-responders (neg + neu + mix)'),
 ]
-ax.legend(handles=legend_elems, loc='lower center', bbox_to_anchor=(0.5, -0.28),
-          ncol=4, fontsize=10, frameon=True)
+ax.legend(handles=legend_elems, loc='lower right', fontsize=10, frameon=True)
+
 plt.tight_layout()
 plt.savefig('figure1.png', dpi=150, bbox_inches='tight')
 plt.show()
@@ -608,9 +667,11 @@ cells.append(("md", """## Data sources and methodology
 - **Non-responder**: user's selected report has any other sentiment (negative, neutral, or mixed).
 
 **Per-(user, drug) deduplication rule:**
-- Most recent post wins (post_date descending).
-- For posts on the same date, the report with stronger `signal_strength`
-  wins (strong > moderate > weak > n/a).
+- Most recent post wins (full UTC timestamp, descending).
+- On exact-timestamp ties, the report with stronger `signal_strength`
+  wins (strong > moderate > weak > n/a). Such ties are rare, so this
+  step is a near-vestigial tiebreaker — the rule reduces in practice
+  to "most recent post wins."
 
 **Window cap:** all data is restricted to posts from the corpus inception
 (2020-07-24) through end of 2022 (2022-12-31). For famotidine, loratadine,
@@ -1033,19 +1094,78 @@ display(HTML("<h3>extraction_runs &mdash; pipeline provenance for this DB</h3>" 
 # ────────────────────────────────────────────────────────────────────
 # BUILD + EXECUTE
 # ────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    # Notebook executes with cwd = output/, so DB paths must be relative to that.
-    # Point at the analysis DB so build_notebook.py's setup-cell sqlite3.connect()
-    # opens the real file rather than silently creating a 0-byte placeholder.
-    SCRIPT_DIR = Path(__file__).resolve().parent
-    DB_PATH    = SCRIPT_DIR / "data" / "historical_validation_2020-07_to_2022-12.db"
-    OUTPUT_DIR = SCRIPT_DIR / "output"
+# DB-resolver code embedded in the notebook's setup cell. The notebook
+# is a built artifact that may be opened from any cwd (workspace root in
+# VS Code, notebook dir in Jupyter Lab, repo root via nbconvert), so the
+# path can't be a static literal. This snippet is a self-contained
+# inlining of paths.py's resolution logic — anchored on PACKAGE_MARKERS,
+# with the RCT_DB_PATH env var as escape hatch. Reviewers see exactly
+# how the path is found rather than having to chase imports.
+NOTEBOOK_DB_RESOLVER = '''import os
+from pathlib import Path
 
-    nb = build_notebook(cells=cells, db_path="../data/historical_validation_2020-07_to_2022-12.db")
-    html_path = execute_and_export(nb, "output/paper_figures")
+_DB_FILENAME = "historical_validation_2020-07_to_2022-12.db"
+_PACKAGE_MARKERS = ("_build_paper_figures.py", "verify.py")
+_ENV_VAR = "RCT_DB_PATH"
+
+
+def _resolve_db_path():
+    """Locate the analysis DB. Order: RCT_DB_PATH env var, then anchor walk
+    up from cwd looking for a directory containing both PACKAGE_MARKERS.
+    Mirrors paths.py:db_path() so behaviour is identical inside and outside
+    the notebook."""
+    env = os.environ.get(_ENV_VAR)
+    if env:
+        p = Path(env).expanduser().resolve()
+        if not p.is_file():
+            raise RuntimeError(
+                f"{_ENV_VAR}={env!r} is set but does not point to an existing file. "
+                f"Resolved to: {p}"
+            )
+        return p
+    p = Path.cwd().resolve()
+    searched = []
+    while True:
+        searched.append(str(p))
+        if all((p / m).is_file() for m in _PACKAGE_MARKERS):
+            db = p / "data" / _DB_FILENAME
+            if db.is_file():
+                return db
+            raise RuntimeError(
+                f"Found package root at {p} but DB is missing.\\n"
+                f"Expected: {db}\\n"
+                f"Set {_ENV_VAR}=/absolute/path/to/{_DB_FILENAME} to override."
+            )
+        if p.parent == p:
+            break
+        p = p.parent
+    raise RuntimeError(
+        "Could not locate the RCT historical validation package root.\\n"
+        f"Searched: {searched}\\n"
+        f"Set {_ENV_VAR}=/absolute/path/to/{_DB_FILENAME} or cd into "
+        f"docs/RCT_historical_validation/."
+    )
+
+
+DB_PATH = str(_resolve_db_path())
+conn = sqlite3.connect(DB_PATH)
+print(f"DB_PATH resolved to: {DB_PATH}")'''
+
+
+if __name__ == "__main__":
+    # Both the build script and the notebook find the DB via paths.py logic.
+    # Anchored on the script's own location, so it works no matter what cwd
+    # the user invokes us from.
+    SCRIPT_DIR  = Path(__file__).resolve().parent
+    DB_PATH     = resolve_db_path(start=SCRIPT_DIR)
+    PKG_ROOT    = find_package_root(start=SCRIPT_DIR)
+    OUTPUT_DIR  = resolve_output_dir(start=SCRIPT_DIR)
+
+    nb = build_notebook(cells=cells, db_path_block=NOTEBOOK_DB_RESOLVER)
+    html_path = execute_and_export(nb, str(OUTPUT_DIR / "paper_figures"))
 
     # Provenance: write machine-readable manifest tying this output to a
     # specific code revision, DB SHA-256, model env, and pipeline-run set.
-    write_provenance_manifest(DB_PATH, OUTPUT_DIR)
+    write_provenance_manifest(DB_PATH, OUTPUT_DIR, package_root=PKG_ROOT)
 
     print(f"\nDone. Open {html_path} to view the results.")

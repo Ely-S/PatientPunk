@@ -128,6 +128,31 @@ ALL 5 CHECKS PASSED.
 
 If anything fails, the relevant violation is shown inline. The same assertions also fire as part of the full notebook build (`_build_paper_figures.py`), so `verify.py` is a faster path to the same answer.
 
+### Path resolution
+
+All four entry points (`_build_paper_figures.py`, `verify.py`, the executed notebook, `scripts/dump_per_drug_csvs.py`) find the analysis DB through the same canonical resolver in `paths.py`. The resolution chain is:
+
+1. **`RCT_DB_PATH`** environment variable, if set.
+2. Otherwise: walk up from the current working directory (or, for scripts, the script's own directory) looking for a directory that contains both `_build_paper_figures.py` and `verify.py`. That's the package root. The DB is then `<package_root>/data/historical_validation_2020-07_to_2022-12.db`.
+3. If neither resolves, a `PathResolutionError` is raised with the searched paths and the env-var escape hatch.
+
+This means reviewers can run the scripts and open the notebook from any working directory — VS Code workspace root, Jupyter Lab launched from the notebook directory, the repository root via `nbconvert`, or anywhere else — without editing paths or `cd`-ing first.
+
+To use a DB at a non-default location (e.g. a network share or a stripped-down test variant), set `RCT_DB_PATH`:
+
+```bash
+# Linux / macOS
+export RCT_DB_PATH=/path/to/historical_validation_2020-07_to_2022-12.db
+
+# Windows (PowerShell)
+$env:RCT_DB_PATH = "C:\path\to\historical_validation_2020-07_to_2022-12.db"
+
+python verify.py            # uses RCT_DB_PATH
+python _build_paper_figures.py
+```
+
+The resolution logic is implemented in `paths.py` (single source of truth, ~130 LOC). The notebook embeds an inlined copy of the resolver in its first cell so reviewers can read exactly how the DB is found without chasing imports.
+
 ---
 
 ## What This Reproduces
@@ -147,6 +172,8 @@ If anything fails, the relevant violation is shown inline. The same assertions a
 | File | What it does |
 |------|--------------|
 | `_build_paper_figures.py` | The main script. Reads the combined database, runs the analysis, and produces a Jupyter notebook with Figure 1, Table 2, and Table 3. Run this to reproduce everything. |
+| `verify.py` | One-command reproducibility gate: runs every build-time assertion (DB integrity, SHA-256, per-drug window, thread reconstruction, expected outputs) and prints PASS/FAIL. |
+| `paths.py` | Canonical DB-path resolver. Implements `RCT_DB_PATH` env var → marker-based anchor walk-up. Imported by every other script and inlined into the notebook. See *Path resolution* above. |
 | `build_notebook.py` | A helper that `_build_paper_figures.py` uses to create and execute Jupyter notebooks. You don't need to touch this. |
 | `requirements.txt` | Python packages needed. Install with `pip install -r requirements.txt`. |
 
@@ -334,8 +361,8 @@ The SQL predicate is literally `p.post_date < window_end_exclusive_in_unix_secon
 
 Many users mention the same drug multiple times across different posts. To avoid counting one person's opinion multiple times, each user contributes exactly **one data point per drug**. The rule:
 
-1. **Most recent post wins** (post_date descending). The patient's settled view at their latest post is the canonical answer.
-2. **For posts on the same date, the strongest signal wins** (strong > moderate > weak > n/a). Ties on date are broken by which report was more confident.
+1. **Most recent post wins** (full UTC timestamp, descending). The patient's settled view at their latest post is the canonical answer.
+2. **On exact-timestamp ties, the strongest signal wins** (strong > moderate > weak > n/a). The sort key is `(post_date_epoch_seconds, signal_rank)` reverse-sorted, so this tiebreaker fires only when two posts share the same UTC timestamp to the second — a rare event in practice. Most decisions reduce to "most recent post wins."
 
 This rule is symmetric on sentiment direction — a single positive report cannot override later non-positive reports the way an older "best-report" rule would.
 
@@ -378,10 +405,20 @@ If everything ran correctly, Table 3 should show these values:
 | colchicine | 91  | 53.8% | [43.7, 63.7] |   0.53   | null |
 | prednisone | 343 | 48.7% | [43.4, 54.0] |   0.67   | null |
 
-The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — every comparison reaches p ≤ 0.0001. Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
+The pattern: every drug where the community clearly leaned positive (loratadine, famotidine, naltrexone) corresponds to a trial that found a positive result — every comparison reaches p < 0.001 (loratadine and famotidine reach p < 1e-9). Every drug where the community was roughly split (colchicine, paxlovid, prednisone) corresponds to a trial that found no significant effect — none reach significance against the 50% null. All 6 directional comparisons match the eventual trial outcome.
 
 ---
 
 ## Provenance of the analysis database
 
 The database `historical_validation_2020-07_to_2022-12.db` is the direct output of one master pipeline run. We scraped r/covidlonghaulers from corpus inception (2020-07-24) through end of 2022 using the Arctic Shift archive, then ran the classification pipeline once per target drug using the `--drug` flag. The `--drug` flag substring-filters posts against the drug's known aliases before LLM extraction, which kept the API cost tractable (~$15 total across the six runs) and the wall time short (~2 hours). The resulting database has internally consistent user IDs (every `treatment_reports.user_id` matches its `posts.user_id`) — verified by the build script's startup integrity check — and is the sole source of truth for every figure and table in the paper.
+
+### Notes on `output/provenance.json`
+
+A few build-time artifacts in `provenance.json` deserve a reviewer-facing explanation:
+
+- **`git.dirty == true`** in committed builds. The file is regenerated on every build, and the build itself produces uncommitted changes (the regenerated `provenance.json`, `paper_figures.html`, etc.). Reaching `dirty == false` would require committing the build outputs in a separate commit, whose hash cannot itself appear inside the artifacts that commit captures — a chicken-and-egg constraint inherent to embedding build metadata in build outputs. The committed artifacts therefore carry a dirty flag; reviewers who want a clean-tree build can clone, run `python _build_paper_figures.py`, and inspect the regenerated files (numbers will be bit-identical).
+
+- **`extraction_runs[*].commit_hash` differs from `git.commit`.** The extraction commits (`16c2569b...`) are the revisions of the extraction pipeline that produced the classified DB rows; `git.commit` is the revision of *this* package at build time. The diff between them (commits between `16c2569b` and the current PR HEAD) consists of: (a) the strict-`<` SQL predicate reformalization (numerically identical to the predicate used at extraction time — same rows in/out), (b) the deleted-user exclusion and colchicine date correction (both flagged at the start of the README), (c) reviewer-facing audit/verification scripts (`verify.py`, `dedup_sample_audit.py`, `thread_audit.py`, etc.), and (d) the `import_posts.py` `parent_id` prefix fix (zero impact on per-drug counts because each pipeline run used `--drug` substring filter, so upstream-thread inheritance was a no-op even pre-fix; documented in the PR description). No alias-resolution or sentiment-classification logic was changed in this range.
+
+- **`extraction_runs[*].config.output_dir` paths.** The original extraction ran on Windows from a `master_gap/pipeline_output_<drug>` working directory — `master_gap` is the historical name for the corpus-wide pre-publication scrape that fed every per-drug pipeline run. These intermediate directories are not part of the reproducibility package; only the resulting database is. Path separators are normalized to forward slashes by the provenance writer for cross-platform readability.

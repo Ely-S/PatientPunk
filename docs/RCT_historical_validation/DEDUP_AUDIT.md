@@ -1,7 +1,7 @@
 # Deduplication Sample Audit
 
-**Generated:** 2026-05-04 19:10 UTC
-**DB:** `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-07 16:42 UTC
+**DB:** `data/historical_validation_2020-07_to_2022-12.db`
 **Sample seed:** 42  
 **Per-drug sample size:** 6  
 
@@ -9,9 +9,12 @@ This file samples multi-report (user, drug) pairs from the
 analysis DB and shows each user's full set of reports for that
 drug, with the report retained by the dedup rule clearly marked
 (`** RETAINED **` row). The audit is for reviewers to spot-check
-that the rule "most recent post wins; signal_strength breaks
-ties on the same date" picked sensibly — i.e., that we're not
-systematically picking against the user's settled view.
+that the rule "most recent post wins (by full UTC timestamp);
+signal_strength breaks ties on the same UTC timestamp" picked
+sensibly — i.e., that we're not systematically picking against
+the user's settled view. Exact-timestamp ties are rare, so the
+signal-strength tiebreaker fires only occasionally; most picks
+are simply the most-recent post.
 
 If you find a case where the retained row looks like a poor
 representation of the user's overall opinion, that's a
@@ -377,4 +380,4 @@ Showing 6 sampled users below.
 
 ## Reproducibility
 
-Re-running `scripts/v7_dedup_sample_audit.py --db <db> --out <out> --seed 42 --per-drug 6` against the same DB produces an identical file. Total sampled (user, drug) pairs: **36**.
+Re-running `scripts/dedup_sample_audit.py --db <db> --out <out> --seed 42 --per-drug 6` against the same DB reproduces the same sampled rows, aside from the `Generated` timestamp at the top of this file. Total sampled (user, drug) pairs: **36**.

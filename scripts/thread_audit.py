@@ -166,7 +166,7 @@ def main():
     lines = []
     lines.append(f"# Thread Reconstruction Audit\n")
     lines.append(f"**Run at:** {now_iso}  ")
-    lines.append(f"**DB:** `{args.db}`  ")
+    lines.append(f"**DB:** `{args.db.as_posix()}`  ")
     lines.append(f"**Sample seed:** {args.seed}  ")
     lines.append(f"**Sample size:** {args.n_chains}\n")
     lines.append("---\n")
@@ -224,7 +224,9 @@ def main():
     lines.append("## Reproducibility\n")
     lines.append(
         f"Re-running with the same `--db`, `--seed`, and same DB contents "
-        f"produces an identical report. The sample is deterministic given the seed."
+        f"reproduces the same sampled chains and counts; only the `Run at` "
+        f"timestamp at the top of this file changes. The sample is "
+        f"deterministic given the seed."
     )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

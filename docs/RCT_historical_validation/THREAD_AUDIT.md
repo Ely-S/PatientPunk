@@ -1,7 +1,7 @@
 # Thread Reconstruction Audit
 
-**Run at:** 2026-05-04 19:10 UTC  
-**DB:** `data\historical_validation\historical_validation_2020-07_to_2022-12.db`  
+**Run at:** 2026-05-07 16:45 UTC  
+**DB:** `data/historical_validation_2020-07_to_2022-12.db`  
 **Sample seed:** 42  
 **Sample size:** 50
 
@@ -55,4 +55,4 @@ All sampled chains complete, cycle-free, and timestamp-monotonic. PASS.
 
 ## Reproducibility
 
-Re-running with the same `--db`, `--seed`, and same DB contents produces an identical report. The sample is deterministic given the seed.
+Re-running with the same `--db`, `--seed`, and same DB contents reproduces the same sampled chains and counts; only the `Run at` timestamp at the top of this file changes. The sample is deterministic given the seed.

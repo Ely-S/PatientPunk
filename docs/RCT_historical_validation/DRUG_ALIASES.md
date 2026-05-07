@@ -1,6 +1,6 @@
 # Drug aliases used in extraction
 
-**Generated:** 2026-05-04 19:15 UTC from `data\historical_validation\historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-07 16:45 UTC from `data/historical_validation_2020-07_to_2022-12.db`
 **Generator:** `scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from
@@ -294,8 +294,9 @@ methodology task of manually reviewing every alias before publication.
 
 Re-running
 ```
-python scripts/dump_drug_aliases.py --db data\historical_validation\historical_validation_2020-07_to_2022-12.db --out docs\RCT_historical_validation\DRUG_ALIASES.md
+python scripts/dump_drug_aliases.py --db data\historical_validation_2020-07_to_2022-12.db --out DRUG_ALIASES.md
 ```
-against the same DB produces an identical file (deterministic ordering).
+against the same DB reproduces the same alias content (deterministic
+ordering); only the `Generated` timestamp at the top of this file changes.
 If the DB's `treatment.aliases` content changes, this file should be
 regenerated and committed alongside the DB.
