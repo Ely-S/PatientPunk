@@ -1,8 +1,8 @@
 {
-  "build_timestamp_utc": "2026-05-07T17:32:32.414255+00:00",
+  "build_timestamp_utc": "2026-05-07T17:46:53.847903+00:00",
   "build_script": "_build_paper_figures.py",
   "git": {
-    "commit": "665e910c80f755a92d7b050aebc6d1f69715435e",
+    "commit": "0e1f1878b49dad7d8064a85d3dba0f66b9cc0dcd",
     "dirty": true
   },
   "db": {

@@ -190,7 +190,19 @@ The resolution logic is implemented in `paths.py` (single source of truth, ~130 
 |------|------|---------------|------------|-----------------------|
 | `historical_validation_2020-07_to_2022-12.db` | 314 MB | all 6 drugs | Jul 2020 – Dec 2022 | **Required.** The single self-sufficient analysis database. All figures and tables in this paper are produced from this one DB. |
 
-**What's in the database:** It has four tables — `users`, `posts` (the Reddit posts), `treatment` (drug names and their known aliases/brand names), and `treatment_reports` (the extracted sentiment: did this user say positive, negative, neutral, or mixed things about this drug?). The analysis joins these tables together. See *Provenance of the analysis database* below for how the database was built.
+**What's in the database:** Seven tables (row counts as of the published SHA `c50fcacd…`):
+
+| Table | Rows | Role |
+|-------|-----:|------|
+| `posts` | 731,526 | Reddit posts (submissions + comments) inside the corpus window |
+| `users` | 27,710 | One row per unique user_id observed in `posts` |
+| `treatment_reports` | 7,687 | LLM-extracted (user, drug, sentiment, signal_strength) tuples — the analysis input |
+| `treatment` | 6 | One row per study drug; `aliases` JSON drives the substring-match step (see `DRUG_ALIASES.md`) |
+| `extraction_runs` | 6 | One row per pipeline run (one per drug); foreign-keyed from `treatment_reports.run_id`. Surfaced in `output/provenance.json` |
+| `conditions` | 0 (empty) | Reserved for cross-condition extensions; not used in this paper |
+| `user_profiles` | 0 (empty) | Reserved for derived per-user features; not used in this paper |
+
+The analysis joins `treatment_reports → treatment → posts → users`. See *Provenance of the analysis database* below for how the database was built.
 
 ---
 
@@ -425,6 +437,10 @@ The database `historical_validation_2020-07_to_2022-12.db` is the direct output 
 A few build-time artifacts in `provenance.json` deserve a reviewer-facing explanation:
 
 - **`git.dirty == true`** in committed builds. The file is regenerated on every build, and the build itself produces uncommitted changes (the regenerated `provenance.json`, `paper_figures.html`, etc.). Reaching `dirty == false` would require committing the build outputs in a separate commit, whose hash cannot itself appear inside the artifacts that commit captures — a chicken-and-egg constraint inherent to embedding build metadata in build outputs. The committed artifacts therefore carry a dirty flag; reviewers who want a clean-tree build can clone, run `python _build_paper_figures.py`, and inspect the regenerated files (numbers will be bit-identical).
+
+- **`git.commit` lags HEAD by exactly one commit in the committed artifacts.** Same chicken-and-egg constraint: the build runs at the working-tree state of commit *N*, records `git.commit = <SHA of N>` in `provenance.json`, and is then committed as commit *N+1*. The committed `provenance.json` therefore points at its own *parent* commit, not at itself. **The reviewer-regenerated `provenance.json` is the authoritative one** — re-run `python _build_paper_figures.py` against the latest PR head and the new `provenance.json` will record HEAD correctly (with `dirty: true` until you commit, at which point the regenerated file again lags by one commit).
+
+- **`git.commit == "outside-git"`** signals that the package was extracted or copied outside its source-controlled checkout (no git worktree, or the script file isn't tracked under the worktree git found). In that case the build deliberately refuses to record an unrelated repository's HEAD — silently writing the wrong commit would be worse than reporting `outside-git`. To capture a real commit, run from a clone of `Ely-S/PatientPunk` rather than a copy of the package.
 
 - **`extraction_runs[*].commit_hash` differs from `git.commit`.** The extraction commits (`16c2569b...`) are the revisions of the extraction pipeline that produced the classified DB rows; `git.commit` is the revision of *this* package at build time. The diff between them (commits between `16c2569b` and the current PR HEAD) consists of: (a) the strict-`<` SQL predicate reformalization (numerically identical to the predicate used at extraction time — same rows in/out), (b) the deleted-user exclusion and colchicine date correction (both flagged at the start of the README), (c) reviewer-facing audit/verification scripts (`verify.py`, `dedup_sample_audit.py`, `thread_audit.py`, etc.), and (d) the `import_posts.py` `parent_id` prefix fix (zero impact on per-drug counts because each pipeline run used `--drug` substring filter, so upstream-thread inheritance was a no-op even pre-fix; documented in the PR description). No alias-resolution or sentiment-classification logic was changed in this range.
 
