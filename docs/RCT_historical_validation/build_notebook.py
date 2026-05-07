@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats as sp_stats
 from scipy.stats import binomtest, mannwhitneyu, fisher_exact, kruskal
+from statsmodels.stats.proportion import proportion_confint
 from IPython.display import display, HTML, Markdown
 
 # ── Database connection ──
@@ -61,15 +62,14 @@ def classify_outcome(avg_score):
         return "negative"
     return "mixed/neutral"
 
-def wilson_ci(k, n, z=1.96):
-    """Wilson score confidence interval for a proportion."""
+def wilson_ci(k, n, alpha=0.05):
+    """Wilson score confidence interval for a binomial proportion.
+    Thin wrapper around statsmodels.stats.proportion.proportion_confint
+    so notebook code has the convenience name.
+    """
     if n == 0:
         return 0.0, 0.0
-    p = k / n
-    denom = 1 + z**2 / n
-    center = (p + z**2 / (2 * n)) / denom
-    margin = z * np.sqrt((p * (1 - p) + z**2 / (4 * n)) / n) / denom
-    return max(0, center - margin), min(1, center + margin)
+    return proportion_confint(k, n, alpha=alpha, method="wilson")
 
 def nnt(treatment_rate, baseline_rate):
     """Number needed to treat. Returns None if rates are equal or inverted."""

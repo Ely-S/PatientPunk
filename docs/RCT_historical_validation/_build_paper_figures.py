@@ -39,6 +39,7 @@ Output
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__) or ".")
 from build_notebook import build_notebook, execute_and_export
+import paths
 from paths import db_path as resolve_db_path, output_dir as resolve_output_dir, find_package_root
 
 # ────────────────────────────────────────────────────────────────────
@@ -287,9 +288,10 @@ from statsmodels.stats.proportion import proportion_confint as wilson
 # ── Single self-sufficient analysis database ──
 # Direct output of one master pipeline run covering 2020-07-24 to 2022-12-31
 # across all six target drugs. See README "Provenance" section for details.
-DB_DIR = Path(DB_PATH).parent
-COMBINED_DB = DB_DIR / "historical_validation_2020-07_to_2022-12.db"
-combined_conn = sqlite3.connect(COMBINED_DB.as_posix())
+# The setup cell injected by build_notebook already opened `conn` against
+# DB_PATH, which IS the combined DB; reuse that connection instead of
+# opening a second one (Gemini review M3).
+combined_conn = conn
 
 # ── Integrity check: every treatment_report's user_id must match its post's ──
 # An earlier (now-deleted) backfill script copied report rows from older DBs
@@ -1163,12 +1165,21 @@ display(HTML("<h3>extraction_runs &mdash; pipeline provenance for this DB</h3>" 
 # inlining of paths.py's resolution logic — anchored on PACKAGE_MARKERS,
 # with the RCT_DB_PATH env var as escape hatch. Reviewers see exactly
 # how the path is found rather than having to chase imports.
+#
+# The constants below are read FROM paths.py (DB_FILENAME, PACKAGE_MARKERS,
+# ENV_VAR) and interpolated into the template at build time, so any change
+# to those constants in paths.py automatically flows through to the
+# notebook's inlined resolver — no risk of the two drifting apart.
 NOTEBOOK_DB_RESOLVER = '''import os
 from pathlib import Path
 
-_DB_FILENAME = "historical_validation_2020-07_to_2022-12.db"
-_PACKAGE_MARKERS = ("_build_paper_figures.py", "verify.py")
-_ENV_VAR = "RCT_DB_PATH"
+_DB_FILENAME = "{db_filename}"
+_PACKAGE_MARKERS = {package_markers}
+_ENV_VAR = "{env_var}"'''.format(
+    db_filename=paths.DB_FILENAME,
+    package_markers=tuple(paths.PACKAGE_MARKERS),
+    env_var=paths.ENV_VAR,
+) + '''
 
 
 def _resolve_db_path():

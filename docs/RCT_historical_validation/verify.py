@@ -113,7 +113,17 @@ def _fetch_drug_reports(conn, drug, cutoff_ts):
 
 
 def _detect_cycles(parent_map: dict[str, str | None]) -> list[list[str]]:
-    """Return a list of cycle examples in the parent edge graph (empty = clean)."""
+    """Return a list of cycle examples in the parent edge graph (empty = clean).
+
+    The same iterative-DFS / white-gray-black-coloring logic lives in
+    ``src/utilities/graph.py:find_parent_cycles``; ``extract.py`` uses it
+    via a fail-fast wrapper. We duplicate it inline here on purpose so
+    the reproducibility package (``docs/RCT_historical_validation/``)
+    stays self-contained — it does NOT import from ``src/`` because
+    reviewers can extract the package and run ``verify.py`` without
+    pulling the full repo. Behavior must stay in sync with the shared
+    utility; if you change one, mirror the change here.
+    """
     UNVISITED, VISITING, DONE = 0, 1, 2
     color: dict[str, int] = {}
     cycles: list[list[str]] = []
@@ -304,7 +314,6 @@ def check_expected_outputs(conn) -> CheckResult:
     """V10: re-derive the same per-drug stats the build does, compare to
     EXPECTED_OUTPUTS. Same logic as the build's V10 cell, but standalone."""
     from scipy.stats import binomtest
-    from statsmodels.stats.proportion import proportion_confint as wilson  # noqa: F401
 
     violations: list[str] = []
     matched: list[str] = []

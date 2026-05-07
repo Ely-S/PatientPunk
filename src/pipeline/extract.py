@@ -23,6 +23,7 @@ from utilities import (
     resolve_aliases, llm_call, parse_json_array, log,
 )
 from utilities.db import open_db, post_text
+from utilities.graph import find_parent_cycles
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
@@ -71,44 +72,14 @@ def _detect_parent_cycles(id_to_parent: dict) -> None:
     (eid, remaining) and still never terminate (cache stores final values,
     not in-progress visits). Detect once up front and fail loudly.
 
-    Iterative DFS with white/gray/black coloring; O(N).
+    Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
+    this wrapper turns the first cycle into a fail-fast ValueError.
     """
-    UNVISITED, VISITING, DONE = 0, 1, 2
-    color = {}
-    for start in id_to_parent:
-        if color.get(start, UNVISITED) != UNVISITED:
-            continue
-        stack = [start]
-        path = []
-        while stack:
-            node = stack[-1]
-            c = color.get(node, UNVISITED)
-            if c == UNVISITED:
-                color[node] = VISITING
-                path.append(node)
-                parent = id_to_parent.get(node)
-                if parent and parent in id_to_parent:
-                    pcol = color.get(parent, UNVISITED)
-                    if pcol == VISITING:
-                        # back-edge into the active path -> cycle
-                        i = path.index(parent)
-                        raise ValueError(
-                            "parent_id cycle detected: "
-                            + " -> ".join(path[i:] + [parent])
-                        )
-                    if pcol == UNVISITED:
-                        stack.append(parent)
-                        continue
-                # parent missing, NULL, or already DONE -> this node is finished
-                color[node] = DONE
-                if path and path[-1] == node:
-                    path.pop()
-                stack.pop()
-            else:
-                if path and path[-1] == node:
-                    path.pop()
-                stack.pop()
-                color[node] = DONE
+    cycles = find_parent_cycles(id_to_parent)
+    if cycles:
+        raise ValueError(
+            "parent_id cycle detected: " + " -> ".join(cycles[0])
+        )
 
 
 def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_depth: int | None = None) -> dict[str, list[str]]:

@@ -208,7 +208,19 @@ def run_classification(
 
             to_do.append((entry, drug))
             if drug not in prompts:
-                prompts[drug] = system_prompt(drug, synonyms_for.get(drug), subreddit)
+                # In --drug mode (target_aliases populated), use the resolved
+                # alias set (minus the matched drug itself) as the synonym
+                # hint for the prompt. This ensures aliased mentions get full
+                # context even when the DB hasn't been canonicalized yet —
+                # synonyms_for is keyed by canonical name, so synonyms_for.get
+                # returns None for aliases like "LDN" or "low dose naltrexone".
+                # Without this fallback, classifier prompts for aliased
+                # mentions would lack the canonical-drug context.
+                if target_aliases is not None:
+                    syns = sorted(target_aliases - {drug})
+                else:
+                    syns = synonyms_for.get(drug)
+                prompts[drug] = system_prompt(drug, syns, subreddit)
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
@@ -219,7 +231,7 @@ def run_classification(
         log.info("Skipping prefilter, sending all pairs to classify...")
     else:
         cached_pf: dict[str, bool] = (
-            json.loads(prefilter_path.read_text()) if prefilter_path.exists() else {}
+            json.loads(prefilter_path.read_text(encoding="utf-8")) if prefilter_path.exists() else {}
         )
         if cached_pf:
             log.info(f"Loaded {len(cached_pf)} cached prefilter results.")

@@ -236,7 +236,7 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     from prompts.intervention_config import drug_aliases_prompt
     target = drug.strip().lower()
     if cache_path.exists():
-        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text()) if a.strip()]
+        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text(encoding="utf-8")) if a.strip()]
         log.info(f"Loaded {len(aliases)} cached aliases for {target!r} from {cache_path.name}.")
     else:
         raw = llm_call(client, drug_aliases_prompt(target), model=MODEL_STRONG, max_tokens=2000)
