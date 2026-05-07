@@ -1,6 +1,6 @@
 # Drug aliases used in extraction
 
-**Generated:** 2026-05-07 16:45 UTC from `data/historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-07 17:32 UTC from `data/historical_validation_2020-07_to_2022-12.db`
 **Generator:** `scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from
@@ -285,16 +285,20 @@ counts.
 
 To turn any of these into actual corrections, the path is: edit the
 alias list, re-run canonicalization, re-run classification, regenerate
-the analysis DB and figures. None of this changes the headline
-conclusion (every drug's responder rate stays in its current bucket
-when individual ambiguous aliases are removed) but it is the open
-methodology task of manually reviewing every alias before publication.
+the analysis DB and figures. We have **not** run a quantitative
+sensitivity analysis on individual flagged aliases (no per-alias
+ablation table is checked in), so this file should not be read as
+evidence that the headline numbers are robust to those choices —
+only that the choices themselves are documented and inspectable.
+Producing a per-drug sensitivity table (drop each flagged alias,
+re-run, report shifted n / pos / pos_pct) is the open methodology
+task before publication.
 
 ## Reproducibility
 
 Re-running
 ```
-python scripts/dump_drug_aliases.py --db data\historical_validation_2020-07_to_2022-12.db --out DRUG_ALIASES.md
+python scripts/dump_drug_aliases.py --db data/historical_validation_2020-07_to_2022-12.db --out DRUG_ALIASES.md
 ```
 against the same DB reproduces the same alias content (deterministic
 ordering); only the `Generated` timestamp at the top of this file changes.

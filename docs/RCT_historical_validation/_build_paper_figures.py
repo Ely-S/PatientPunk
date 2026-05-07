@@ -68,18 +68,48 @@ def _compute_db_sha256(db_path):
 def _git_metadata():
     """Best-effort current commit hash + working-tree dirty flag.
 
-    Returns a dict with 'commit' (sha or 'unknown') and 'dirty' (bool or
-    None if dirty state could not be determined). Loud warning if 'unknown'
-    so we never silently break the provenance chain.
+    Anchored to the package root (this script's directory), and validated:
+    we only return a commit hash if (a) git can resolve HEAD from inside
+    the package root AND (b) this script file is tracked under that
+    worktree. Otherwise we return 'outside-git' (or 'unknown' on
+    git-not-available).
+
+    Why so strict: if a reviewer extracts the package into an unrelated
+    git checkout (e.g., a personal scratch repo) and runs the build
+    there, an unanchored ``git rev-parse HEAD`` would silently record
+    that *other* repo's commit in provenance.json — which is worse than
+    no commit at all, because reviewers would trust it. We treat
+    'package not tracked here' as a structural break and surface it.
+
+    Returns a dict with 'commit' (sha, 'outside-git', or 'unknown') and
+    'dirty' (bool or None if dirty state could not be determined). Loud
+    warning whenever the chain breaks so we never silently mislead.
     """
+    pkg_root = Path(__file__).resolve().parent
     try:
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"],
+            cwd=str(pkg_root),
             capture_output=True, text=True, check=True,
         ).stdout.strip()
+        # Verify this script file is actually tracked in the worktree git
+        # found above. ls-files exits 1 if the path is not tracked.
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "_build_paper_figures.py"],
+            cwd=str(pkg_root),
+            capture_output=True, text=True,
+        )
+        if tracked.returncode != 0:
+            print(f"WARN: package directory is inside a git checkout (HEAD {commit[:8]}) "
+                  "but _build_paper_figures.py is NOT tracked there. The package was "
+                  "likely extracted/copied into an unrelated repo. Recording "
+                  "'outside-git' instead of the unrelated repo's commit — that "
+                  "would be misleading provenance.")
+            return {"commit": "outside-git", "dirty": None}
         try:
             status = subprocess.run(
                 ["git", "status", "--porcelain"],
+                cwd=str(pkg_root),
                 capture_output=True, text=True, check=True,
             ).stdout.strip()
             dirty = bool(status)
@@ -90,10 +120,19 @@ def _git_metadata():
                   "uncommitted changes). Provenance manifest records this; "
                   "commit before treating outputs as reproducible.")
         return {"commit": commit, "dirty": dirty}
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"WARN: could not resolve git commit ({type(e).__name__}); "
-              "provenance manifest will record 'unknown' for git_commit. "
-              "Reproducibility chain broken — install git and rerun from a clean checkout.")
+    except subprocess.CalledProcessError:
+        # git ran but returned non-zero — usually means pkg_root is not inside
+        # any git worktree (e.g., extracted into a plain directory).
+        print("WARN: package directory is not inside a git worktree; "
+              "provenance manifest records 'outside-git' for git_commit. "
+              "If you intend reproducible provenance, run from a checkout of "
+              "the source repo.")
+        return {"commit": "outside-git", "dirty": None}
+    except FileNotFoundError:
+        # git binary missing entirely.
+        print("WARN: git not found on PATH; provenance manifest records "
+              "'unknown' for git_commit. Install git and rerun from a clean "
+              "checkout to capture the build commit.")
         return {"commit": "unknown", "dirty": None}
 
 

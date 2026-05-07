@@ -86,9 +86,16 @@ Plus a one-row-per-drug summary:
 pip install -r requirements.txt
 
 # Download the single required database (~314 MB)
+# -f makes curl return non-zero on HTTP errors; without it curl would
+# silently write the error response body to the destination filename
+# and the next step would crash with a confusing SQLite error.
 mkdir -p data
-curl -L -o data/historical_validation_2020-07_to_2022-12.db \
+curl -fL -o data/historical_validation_2020-07_to_2022-12.db \
     https://patientpunk.s3.amazonaws.com/scientific_validation/rct_historical/processed/historical_validation_2020-07_to_2022-12.db
+
+# Sanity check the download immediately (catches HTTP errors that
+# slipped past curl, partial transfers, and any DB-content drift)
+python verify.py
 
 # Reproduce all figures
 python _build_paper_figures.py
