@@ -1,0 +1,128 @@
+{
+  "build_timestamp_utc": "2026-05-07T22:19:30.589424+00:00",
+  "build_script": "_build_paper_figures.py",
+  "git": {
+    "commit": "0d0f0e7e7dc8d26001522d6beda2b2120f13a1a0",
+    "dirty": true
+  },
+  "db": {
+    "path": "data/historical_validation_2020-07_to_2022-12.db",
+    "filename": "historical_validation_2020-07_to_2022-12.db",
+    "sha256": "c50fcacd7ce366f397152f5fe4dbb59d5eaf64ba32627faef91dad86fbf6c6f4",
+    "size_bytes": 326344704
+  },
+  "models": {
+    "fast": "anthropic/claude-haiku-4.5",
+    "strong": "anthropic/claude-sonnet-4.6"
+  },
+  "extraction_runs": [
+    {
+      "run_id": 1,
+      "run_at": 1777759720,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output",
+        "drug": "famotidine"
+      },
+      "run_at_iso": "2026-05-02T22:08:40+00:00"
+    },
+    {
+      "run_id": 2,
+      "run_at": 1777760555,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output_loratadine",
+        "drug": "loratadine"
+      },
+      "run_at_iso": "2026-05-02T22:22:35+00:00"
+    },
+    {
+      "run_id": 3,
+      "run_at": 1777760966,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output_prednisone",
+        "drug": "prednisone"
+      },
+      "run_at_iso": "2026-05-02T22:29:26+00:00"
+    },
+    {
+      "run_id": 4,
+      "run_at": 1777761597,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output_naltrexone",
+        "drug": "naltrexone"
+      },
+      "run_at_iso": "2026-05-02T22:39:57+00:00"
+    },
+    {
+      "run_id": 5,
+      "run_at": 1777762019,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output_paxlovid",
+        "drug": "paxlovid"
+      },
+      "run_at_iso": "2026-05-02T22:46:59+00:00"
+    },
+    {
+      "run_id": 6,
+      "run_at": 1777762275,
+      "commit_hash": "16c2569b0273e793f7d5f8894c912073a0a85753",
+      "extraction_type": "treatment_sentiment",
+      "config": {
+        "models": {
+          "fast": "anthropic/claude-haiku-4.5",
+          "strong": "anthropic/claude-sonnet-4.6"
+        },
+        "limit": 0,
+        "reclassify": false,
+        "skip_canonicalize": false,
+        "output_dir": "data/historical_validation/master_gap/pipeline_output_colchicine",
+        "drug": "colchicine"
+      },
+      "run_at_iso": "2026-05-02T22:51:15+00:00"
+    }
+  ]
+}

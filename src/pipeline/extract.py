@@ -20,9 +20,10 @@ if TYPE_CHECKING:
 from prompts.intervention_config import EXTRACT_PROMPT
 from utilities import (
     TAGGED_MENTIONS, MODEL_FAST, LLMParseError,
-    get_drug_aliases, llm_call, parse_json_array, log,
+    resolve_aliases, llm_call, parse_json_array, log,
 )
 from utilities.db import open_db, post_text
+from utilities.graph import find_parent_cycles
 
 BATCH_SIZE = 10
 SAVE_EVERY = 50  # batches between checkpoint writes
@@ -62,8 +63,35 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     return [[] for _ in texts]
 
 
+def _detect_parent_cycles(id_to_parent: dict) -> None:
+    """Raise ValueError if id_to_parent contains any cycle.
+
+    The upstream-mentioned-drugs recursion below assumes id_to_parent is a
+    forest (each node has at most one parent and chains terminate). A cycle
+    in malformed imported data would cause the recursion to memoize on
+    (eid, remaining) and still never terminate (cache stores final values,
+    not in-progress visits). Detect once up front and fail loudly.
+
+    Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
+    this wrapper turns the first cycle into a fail-fast ValueError.
+    """
+    cycles = find_parent_cycles(id_to_parent)
+    if cycles:
+        raise ValueError(
+            "parent_id cycle detected: " + " -> ".join(cycles[0])
+        )
+
+
 def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_depth: int | None = None) -> dict[str, list[str]]:
-    """Pre-compute upstream mentioned drugs with memoization. max_depth=None means unlimited."""
+    """Pre-compute upstream mentioned drugs with memoization. max_depth=None means unlimited.
+
+    Performs cycle detection on id_to_parent before traversal, so a cycle in
+    malformed data raises ValueError instead of recursing forever (the
+    lru_cache memoization wouldn't catch a cycle because it stores final
+    values, not in-progress visits).
+    """
+    _detect_parent_cycles(id_to_parent)
+
     @lru_cache(maxsize=None)
     def upstream(eid: str, remaining: int | None) -> tuple[str, ...]:
         if remaining == 0:
@@ -136,8 +164,7 @@ def run_extraction(config: "PipelineConfig"):
     # --drug mode: skip the LLM entirely. Substring-match each post against
     # the target drug + its aliases (fetched once, cached on disk).
     if config.drug:
-        target = config.drug.strip().lower()
-        aliases = get_drug_aliases(client, target, config.path(f"aliases_{target}.json"))
+        target, aliases = resolve_aliases(config)
         pattern = re.compile(
             r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b",
             re.IGNORECASE,
