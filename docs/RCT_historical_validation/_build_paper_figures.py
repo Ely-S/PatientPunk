@@ -729,6 +729,17 @@ def _last_included_date(window_end_exclusive_str):
     d = datetime.strptime(window_end_exclusive_str, '%Y-%m-%d') - timedelta(days=1)
     return d.strftime('%Y-%m-%d')
 
+def _count_posts_in_window(cutoff_ts):
+    '''Total posts in the corpus that pass the same baseline filter the
+    per-drug analysis applies (post_date present, non-deleted user). This
+    is the denominator the substring + LLM extraction was actually run
+    against, not raw row count.'''
+    return combined_conn.execute(
+        "SELECT COUNT(*) FROM posts "
+        "WHERE post_date IS NOT NULL AND post_date < ? AND user_id != 'deleted'",
+        (cutoff_ts,),
+    ).fetchone()[0]
+
 src_rows = []
 for drug, (pub_date, paper_short, source_date) in DRUG_CUTOFFS.items():
     window_end_exclusive = min(pub_date, END_2022_EXCLUSIVE)
@@ -736,11 +747,13 @@ for drug, (pub_date, paper_short, source_date) in DRUG_CUTOFFS.items():
     rows = fetch_drug_reports(drug, cutoff_ts)
     n_reports = len(rows)
     n_users = len({(uid, dr) for uid, dr, _s, _sg, _d, _p in rows})
+    n_total_posts = _count_posts_in_window(cutoff_ts)
     src_rows.append({
         'drug': drug,
         'databases': 'historical_validation_2020-07_to_2022-12.db',
         'window_start': '2020-07-24',
         'window_end': _last_included_date(window_end_exclusive),
+        'total_posts': n_total_posts,
         'unique_users': n_users,
         'treatment_reports': n_reports,
         'comparator': f"{paper_short} ({source_date})",
@@ -751,6 +764,7 @@ src_html = "<table style='border-collapse:collapse; width:100%; font-size:0.85em
 src_html += ("<tr style='background:#34495e; color:white;'>"
              "<th style='padding:6px 10px;'>Drug</th>"
              "<th style='padding:6px 10px;'>Window</th>"
+             "<th style='padding:6px 10px;'>Total posts</th>"
              "<th style='padding:6px 10px;'>Unique users</th>"
              "<th style='padding:6px 10px;'>Treatment reports</th>"
              "<th style='padding:6px 10px;'>Comparator paper</th></tr>")
@@ -759,15 +773,20 @@ for i, (_, r) in enumerate(src_df.iterrows()):
     src_html += (f"<tr style='background:{bg};'>"
                  f"<td style='padding:6px 10px; font-weight:bold;'>{r['drug']}</td>"
                  f"<td style='padding:6px 10px;'>{r['window_start']} → {r['window_end']}</td>"
-                 f"<td style='padding:6px 10px; text-align:center;'>{r['unique_users']}</td>"
-                 f"<td style='padding:6px 10px; text-align:center;'>{r['treatment_reports']}</td>"
+                 f"<td style='padding:6px 10px; text-align:right;'>{r['total_posts']:,}</td>"
+                 f"<td style='padding:6px 10px; text-align:right;'>{r['unique_users']:,}</td>"
+                 f"<td style='padding:6px 10px; text-align:right;'>{r['treatment_reports']:,}</td>"
                  f"<td style='padding:6px 10px; font-size:0.85em;'>{r['comparator']}</td></tr>")
 src_html += "</table>"
 src_html += ("<p style='font-size:0.85em; color:#777; margin-top:4px;'>"
              "All counts are drawn from a single SQLite database "
              "(<code>historical_validation_2020-07_to_2022-12.db</code>) constructed for this paper. "
-             "Unique users: distinct users with at least one classified report for the drug. "
-             "Treatment reports: total post-level reports before per-user dedup. "
+             "<b>Total posts:</b> all r/covidlonghaulers posts in the drug's window with non-NULL "
+             "<code>post_date</code> and non-deleted <code>user_id</code> — the denominator the "
+             "substring + LLM extraction ran against. "
+             "<b>Unique users:</b> distinct users with at least one classified report for the drug "
+             "(after deleted-user exclusion). "
+             "<b>Treatment reports:</b> total post-level classified reports before per-user dedup. "
              "Window cap at end of 2022 applies to paxlovid and colchicine; for the other four drugs the "
              "comparator publication date is the binding cutoff.</p>")
 
