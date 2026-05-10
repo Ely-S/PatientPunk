@@ -212,7 +212,7 @@ For each drug, "pre-publication" is defined by a strict-less-than predicate on `
 
 | Drug | Publication date (exclusive upper bound) | Last day actually included | Source |
 |------|------------------------------------------|----------------------------|--------|
-| famotidine, loratadine | 2021-06-07 | 2021-06-06 | Glynne et al., medRxiv preprint 2021-06-07 |
+| famotidine, loratadine | 2021-06-06 | 2021-06-05 | Glynne et al., medRxiv preprint 2021-06-06 |
 | prednisone | 2021-10-26 | 2021-10-25 | Utrero-Rico et al., *Biomedicines* online 2021-10-26 |
 | naltrexone | 2022-07-03 | 2022-07-02 | O'Kelly et al., *BBI Health* online 2022-07-03 |
 | paxlovid | 2024-06-07 | 2022-12-31 (capped) | STOP-PASC / Geng et al., *JAMA Intern Med* online 2024-06-07 |
@@ -230,8 +230,8 @@ included report falls on or after the cutoff. Latest verified run:
 
 | Drug | Pub date | Window end (excl) | Actual MIN(post_date) | Actual MAX(post_date) | Reports (pre-dedup) | NULL post_dates | In window? |
 |------|----------|-------------------|------------------------|------------------------|---------------------|-----------------|------------|
-| famotidine | 2021-06-07 | 2021-06-07 00:00 UTC | 2020-08-05 03:42 UTC | 2021-06-06 05:04 UTC | 693 | 0 | ✓ |
-| loratadine | 2021-06-07 | 2021-06-07 00:00 UTC | 2020-08-18 16:26 UTC | 2021-06-06 13:28 UTC | 190 | 0 | ✓ |
+| famotidine | 2021-06-06 | 2021-06-06 00:00 UTC | 2020-08-05 03:42 UTC | 2021-06-05 20:40 UTC | 692 | 0 | ✓ |
+| loratadine | 2021-06-06 | 2021-06-06 00:00 UTC | 2020-08-18 16:26 UTC | 2021-06-05 22:42 UTC | 188 | 0 | ✓ |
 | prednisone | 2021-10-26 | 2021-10-26 00:00 UTC | 2020-07-28 22:42 UTC | 2021-10-23 19:06 UTC | 790 | 0 | ✓ |
 | naltrexone | 2022-07-03 | 2022-07-03 00:00 UTC | 2020-10-12 04:41 UTC | 2022-07-02 20:02 UTC | 583 | 0 | ✓ |
 | paxlovid | 2024-06-07 | 2023-01-01 00:00 UTC | 2022-01-18 05:13 UTC | 2022-12-31 18:35 UTC | 488 | 0 | ✓ |
@@ -245,7 +245,7 @@ the per-user vote count.
 **Notable observations:**
 - Every `MAX(post_date)` is strictly before its window end. Every
   publication-bound max lands on the day immediately preceding publication
-  (famotidine/loratadine 2021-06-06, paxlovid/colchicine 2022-12-31). No
+  (famotidine/loratadine 2021-06-05, paxlovid/colchicine 2022-12-31). No
   off-by-one leakage.
 - Zero `post_date IS NULL` rows entered any per-drug query — the
   `IS NOT NULL` filter is defensive and the underlying data is clean.
@@ -417,8 +417,8 @@ If everything ran correctly, Table 3 should show these values:
 
 | Drug | n (users) | % Responders | 95% CI | p-value | Trial Result |
 |------|-----------|--------------|--------|---------|--------------|
-| loratadine | 90  | 81.1% | [71.8, 87.9] | 1.95e-9  | positive |
-| famotidine | 232 | 77.2% | [71.3, 82.1] | 3.56e-17 | positive |
+| loratadine | 89  | 80.9% | [71.5, 87.7] | 3.17e-9  | positive |
+| famotidine | 231 | 77.1% | [71.2, 82.0] | 5.51e-17 | positive |
 | naltrexone | 154 | 65.6% | [57.8, 72.6] | 1.36e-4  | positive |
 | paxlovid   | 196 | 54.1% | [47.1, 60.9] | 0.284    | null |
 | colchicine | 91  | 53.8% | [43.7, 63.7] | 0.530    | null |

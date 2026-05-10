@@ -31,8 +31,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DRUG_CUTOFFS = {
-    'famotidine':  ('2021-06-07', 'Glynne et al. 2021'),
-    'loratadine':  ('2021-06-07', 'Glynne et al. 2021'),
+    'famotidine':  ('2021-06-06', 'Glynne et al. 2022'),
+    'loratadine':  ('2021-06-06', 'Glynne et al. 2022'),
     'prednisone':  ('2021-10-26', 'Utrero-Rico et al. 2021'),
     'naltrexone':  ('2022-07-03', "O'Kelly et al. 2022"),
     'paxlovid':    ('2024-06-07', 'Geng et al. 2024 (STOP-PASC)'),

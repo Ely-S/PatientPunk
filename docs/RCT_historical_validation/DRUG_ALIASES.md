@@ -1,6 +1,6 @@
 # Drug aliases used in extraction
 
-**Generated:** 2026-05-07 17:32 UTC from `data/historical_validation_2020-07_to_2022-12.db`
+**Generated:** 2026-05-10 22:06 UTC from `data/historical_validation_2020-07_to_2022-12.db`
 **Generator:** `scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from

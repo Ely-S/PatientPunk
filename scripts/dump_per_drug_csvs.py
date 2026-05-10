@@ -54,8 +54,8 @@ from paths import (  # noqa: E402
 # after the publication date is excluded. The end-2022 cap (exclusive at
 # 2023-01-01) binds for paxlovid and colchicine.
 DRUGS = {
-    "famotidine":  {"pub_date": "2021-06-07", "trial_dir": "+", "paper": "Glynne et al. 2021"},
-    "loratadine":  {"pub_date": "2021-06-07", "trial_dir": "+", "paper": "Glynne et al. 2021"},
+    "famotidine":  {"pub_date": "2021-06-06", "trial_dir": "+", "paper": "Glynne et al. 2022"},
+    "loratadine":  {"pub_date": "2021-06-06", "trial_dir": "+", "paper": "Glynne et al. 2022"},
     "prednisone":  {"pub_date": "2021-10-26", "trial_dir": "0", "paper": "Utrero-Rico et al. 2021"},
     "naltrexone":  {"pub_date": "2022-07-03", "trial_dir": "+", "paper": "O'Kelly et al. 2022"},
     "paxlovid":    {"pub_date": "2024-06-07", "trial_dir": "0", "paper": "Geng et al. (STOP-PASC) 2024"},

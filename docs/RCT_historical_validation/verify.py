@@ -58,8 +58,8 @@ END_2022_EXCLUSIVE = "2023-01-01"
 
 DRUG_CUTOFFS = {
     # drug -> publication_date_yyyy_mm_dd
-    "famotidine": "2021-06-07",
-    "loratadine": "2021-06-07",
+    "famotidine": "2021-06-06",
+    "loratadine": "2021-06-06",
     "prednisone": "2021-10-26",
     "naltrexone": "2022-07-03",
     "paxlovid":   "2024-06-07",
@@ -69,8 +69,8 @@ DRUG_CUTOFFS = {
 SIG_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
 
 EXPECTED_OUTPUTS = {
-    "famotidine": {"n": 232, "pos": 179, "pos_pct": 77.155, "p": 3.565e-17},
-    "loratadine": {"n":  90, "pos":  73, "pos_pct": 81.111, "p": 1.948e-9},
+    "famotidine": {"n": 231, "pos": 178, "pos_pct": 77.056, "p": 5.513e-17},
+    "loratadine": {"n":  89, "pos":  72, "pos_pct": 80.899, "p": 3.173e-9},
     "prednisone": {"n": 343, "pos": 167, "pos_pct": 48.688, "p": 0.6658},
     "naltrexone": {"n": 154, "pos": 101, "pos_pct": 65.584, "p": 1.358e-4},
     "paxlovid":   {"n": 196, "pos": 106, "pos_pct": 54.082, "p": 0.2839},

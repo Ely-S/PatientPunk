@@ -1,6 +1,6 @@
 # Deduplication Sample Audit
 
-**Generated:** 2026-05-07 16:42 UTC
+**Generated:** 2026-05-10 22:06 UTC
 **DB:** `data/historical_validation_2020-07_to_2022-12.db`
 **Sample seed:** 42  
 **Per-drug sample size:** 6  
@@ -22,7 +22,7 @@ methodology finding worth raising in review.
 
 ---
 
-## famotidine (Glynne et al. 2021)
+## famotidine (Glynne et al. 2022)
 
 Multi-report users in this drug's window: **113** (of which **32** are mixed-signal — pos+nonpos).
 Showing 6 sampled users below.
@@ -89,7 +89,7 @@ Showing 6 sampled users below.
 
 ---
 
-## loratadine (Glynne et al. 2021)
+## loratadine (Glynne et al. 2022)
 
 Multi-report users in this drug's window: **39** (of which **9** are mixed-signal — pos+nonpos).
 Showing 6 sampled users below.
