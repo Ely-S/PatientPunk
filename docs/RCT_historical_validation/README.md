@@ -1,6 +1,6 @@
 # RCT Historical Validation — Reproducibility Package
 
-Reproduces **Figure 1**, **Table 2**, and **Table 3** from:
+Reproduces **Figure 1**, **Figure 2**, **Table 2**, and **Table 3** from:
 
 > *A Methodology for Gathering Real-World Evidence at Scale: Using NLP-Extracted Community Treatment Reports to Predict Clinical Trial Outcomes*
 
@@ -12,7 +12,8 @@ These figures compare what people on r/covidlonghaulers said about 6 Long COVID 
 
 Pre-built outputs are included in `output/` — no setup required:
 - **`paper_figures.html`** — open in any browser to see all figures and tables
-- **`figure1.png`** — Figure 1 as a standalone image
+- **`figure1.png`** — Figure 1 (full sentiment breakdown stacked bar) as a standalone image
+- **`figure2.png`** — Figure 2 (responder/non-responder forest plot) as a standalone image
 - `paper_figures_executed.ipynb` — executed notebook (open in Jupyter to explore)
 
 ## Re-running the Analysis
@@ -60,11 +61,11 @@ For provenance of how this JSON was acquired (Arctic Shift download, scrape date
 
 ### Per-drug merged + deduped CSVs (intermediate analysis outputs)
 
-These are the row-level data underlying Figure 1 and Table 3, exported as CSV for transparency. They are derivable directly from the combined database — `scripts/dump_per_drug_csvs.py` regenerates them locally from `data/historical_validation/historical_validation_2020-07_to_2022-12.db` — but are also published as static files so reviewers can spot-check headline numbers without running any code.
+These are the row-level data underlying Figure 2 and Table 3, exported as CSV for transparency. They are derivable directly from the combined database — `scripts/dump_per_drug_csvs.py` regenerates them locally from `data/historical_validation/historical_validation_2020-07_to_2022-12.db` — but are also published as static files so reviewers can spot-check headline numbers without running any code.
 
 For each of the six target drugs, two CSVs:
 - `{drug}_reports_merged.csv` — all classified reports for the drug pulled from the combined database, filtered to within the pre-publication window. One row per post.
-- `{drug}_reports_dedup.csv` — the same data after applying the per-(user, drug) "most recent + signal-strength tiebreaker" rule. One row per (user, drug); these are the rows directly counted into the % responders in Figure 1.
+- `{drug}_reports_dedup.csv` — the same data after applying the per-(user, drug) "most recent + signal-strength tiebreaker" rule. One row per (user, drug); these are the rows directly counted into the % responders in Figure 2.
 
 Plus a one-row-per-drug summary:
 - `summary.csv` — the headline numbers (n, % responders, Wilson 95% CI, p-value vs 50%) for each drug.
@@ -101,7 +102,7 @@ python verify.py
 python _build_paper_figures.py
 ```
 
-The build writes `output/paper_figures.html`, `output/figure1.png`, and the executed notebook. Open `output/paper_figures.html` in any browser.
+The build writes `output/paper_figures.html`, `output/figure1.png`, `output/figure2.png`, and the executed notebook. Open `output/paper_figures.html` in any browser.
 
 ### Verify (one-command sanity check)
 
@@ -166,9 +167,10 @@ The resolution logic is implemented in `paths.py` (single source of truth, ~130 
 
 | Output | What it shows |
 |--------|---------------|
-| **Figure 1** | A horizontal bar chart showing, for each drug, what percentage of users reported a positive experience (green) vs. everything else (red). Error bars show the range of plausible values. The right margin labels each drug with whether the clinical trial found it effective ("trial: positive") or not ("trial: null"). |
+| **Figure 1** | A stacked horizontal bar chart showing the full sentiment breakdown per drug — positive (green), mixed (orange), neutral (gray), and negative (red). This is the four-way view before the binary responder collapse used in Figure 2. |
+| **Figure 2** | A forest plot showing, for each drug, what percentage of users reported a positive experience (green circle) vs. everything else (red square). Error bars are 95% Wilson CIs. The row label includes the comparator clinical trial outcome ("[+ trial]" or "[null trial]"). |
 | **Table 2** | Where the data came from: the date range, how many users and reports per drug, and which clinical trial each drug is being compared against. |
-| **Table 3** | The numbers behind Figure 1 in table form: for each drug, the sample size, the percentage who responded positively, the confidence interval around that percentage, and a p-value testing whether it's meaningfully different from a coin flip (50/50). |
+| **Table 3** | The numbers behind Figure 2 in table form: for each drug, the sample size, the percentage who responded positively, the confidence interval around that percentage, and a p-value testing whether it's meaningfully different from a coin flip (50/50). |
 
 ---
 
@@ -178,7 +180,7 @@ The resolution logic is implemented in `paths.py` (single source of truth, ~130 
 
 | File | What it does |
 |------|--------------|
-| `_build_paper_figures.py` | The main script. Reads the combined database, runs the analysis, and produces a Jupyter notebook with Figure 1, Table 2, and Table 3. Run this to reproduce everything. |
+| `_build_paper_figures.py` | The main script. Reads the combined database, runs the analysis, and produces a Jupyter notebook with Figure 1, Figure 2, Table 2, and Table 3. Run this to reproduce everything. |
 | `verify.py` | One-command reproducibility gate: runs every build-time assertion (DB integrity, SHA-256, per-drug window, thread reconstruction, expected outputs) and prints PASS/FAIL. |
 | `paths.py` | Canonical DB-path resolver. Implements `RCT_DB_PATH` env var → marker-based anchor walk-up. Imported by every other script and inlined into the notebook. See *Path resolution* above. |
 | `build_notebook.py` | A helper that `_build_paper_figures.py` uses to create and execute Jupyter notebooks. You don't need to touch this. |
@@ -238,7 +240,7 @@ included report falls on or after the cutoff. Latest verified run:
 | colchicine | 2025-10-20 | 2023-01-01 00:00 UTC | 2020-08-29 10:55 UTC | 2022-12-29 12:45 UTC | 211 | 0 | ✓ |
 
 **Reports** is the raw count from `treatment_reports` (before per-(user, drug)
-dedup); the deduplicated `n` values that appear in Figure 1 / Table 3 are
+dedup); the deduplicated `n` values that appear in Figure 2 / Table 3 are
 smaller. The point of this table is to show the predicate is honored, not
 the per-user vote count.
 
@@ -370,7 +372,7 @@ Reddit replaces the author field with `[deleted]` or `[removed]` when the origin
 - Those 52,603 posts come from many distinct real users we cannot identify. Treating them as one pseudo-user would give the entire deleted population a single vote per drug, badly distorting per-user dedup. Treating each deleted post as its own anonymous user would inflate sample sizes with non-random ban/withdrawal artefacts, since accounts get deleted for reasons (spam, hostility, voluntary departure) that are not independent of drug-experience sentiment.
 - We verified empirically that excluding deleted-user reports shifts each drug's headline number by at most 0.5 percentage points and 1 unit of `n`. No headline conclusion changes.
 
-The build script applies this filter directly in the SQL query (`AND p.user_id != 'deleted'`), so it propagates to Figure 0, Figure 1, Table 2, Table 3, and the published per-drug CSVs uniformly.
+The build script applies this filter directly in the SQL query (`AND p.user_id != 'deleted'`), so it propagates to Figure 1, Figure 2, Table 2, Table 3, and the published per-drug CSVs uniformly.
 
 ### Step 2: Filter to the pre-publication window
 
@@ -392,7 +394,7 @@ This rule is symmetric on sentiment direction — a single positive report canno
 
 We group these because the question is simply: did the drug clearly help, or not?
 
-### Step 5: Confidence intervals (the error bars on Figure 1)
+### Step 5: Confidence intervals (the error bars on Figure 2)
 
 We report **Wilson score 95% confidence intervals** for each proportion. Wilson intervals work well at the boundaries (close to 0% or 100%) and with small samples, where the simpler "Wald" interval can produce nonsensical values.
 

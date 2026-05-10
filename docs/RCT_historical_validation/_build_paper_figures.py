@@ -1,8 +1,9 @@
 """
 Reproducibility build script for RCT historical validation paper.
 
-Generates Figure 1 (paired horizontal bar chart), Table 2 (data sources),
-and Table 3 (per-drug response composition) from:
+Generates Figure 1 (per-drug sentiment breakdown stacked bar),
+Figure 2 (forest plot: responders + non-responders with 95% Wilson CIs),
+Table 2 (data sources), and Table 3 (per-drug response composition) from:
 
     "A Methodology for Gathering Real-World Evidence at Scale"
 
@@ -34,7 +35,8 @@ Output
     output/paper_figures.ipynb            - source notebook
     output/paper_figures_executed.ipynb   - executed notebook
     output/paper_figures.html             - HTML export (code hidden)
-    output/figure1.png                    - Figure 1 standalone image
+    output/figure1.png                    - Figure 1 standalone image (stacked bar)
+    output/figure2.png                    - Figure 2 standalone image (forest plot)
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__) or ".")
@@ -244,9 +246,10 @@ cells = []
 # ────────────────────────────────────────────────────────────────────
 cells.append(("md", """# RCT Historical Validation — Reproducibility Figures
 
-This notebook reproduces **Figure 1**, **Table 2**, and **Table 3** from the paper.
+This notebook reproduces **Figure 1**, **Figure 2**, **Table 2**, and **Table 3** from the paper.
 
-- **Figure 1**: Pre-publication community sentiment — responders vs non-responders for 6 drugs
+- **Figure 1**: Per-drug full sentiment breakdown (positive / mixed / neutral / negative, stacked bar)
+- **Figure 2**: Pre-publication community sentiment — responders vs non-responders for 6 drugs (forest plot)
 - **Table 2**: Data sources by drug (databases, window, post/user/report counts)
 - **Table 3**: Per-drug response composition with Wilson 95% CIs and binomial test p-values
 
@@ -404,7 +407,7 @@ EXPECTED_OUTPUTS = {
 """))
 
 # ────────────────────────────────────────────────────────────────────
-# DATA EXTRACTION (produces resp_df used by Figure 0, Figure 1, Table 3)
+# DATA EXTRACTION (produces resp_df used by Figure 1, Figure 2, Table 3)
 # ────────────────────────────────────────────────────────────────────
 cells.append(("code", r"""
 def _sentiment_breakdown(drug_label, sentiments, trial_dir, paper_short, source_date):
@@ -528,15 +531,15 @@ print(f"V10 expected-output assertion: all {len(EXPECTED_OUTPUTS)} drugs match t
 # ────────────────────────────────────────────────────────────────────
 # FIGURE 0: Full sentiment breakdown per drug (stacked bar)
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Figure 0 — Full sentiment breakdown per drug
+cells.append(("md", """## Figure 1 — Full sentiment breakdown per drug
 
-Figure 1 collapses the four sentiment classes into a binary responder vs. non-responder split.
-Figure 0 retains the full four-way breakdown (positive / mixed / neutral / negative) so the
+Figure 2 collapses the four sentiment classes into a binary responder vs. non-responder split.
+Figure 1 retains the full four-way breakdown (positive / mixed / neutral / negative) so the
 shape of the non-responder bucket is visible. Per-segment labels show both the percentage and
 the raw user count contributing to that segment."""))
 
 cells.append(("code", r"""
-# ── Figure 0: Stacked horizontal bar of full sentiment breakdown ──
+# ── Figure 1: Stacked horizontal bar of full sentiment breakdown ──
 cats   = ['positive', 'mixed', 'neutral', 'negative']
 colors = ['#2ecc71',  '#f39c12', '#95a5a6', '#e74c3c']
 
@@ -588,13 +591,13 @@ ax.set_yticklabels(
 ax.set_xlabel('Patient-reported outcomes (% of users)', fontsize=18)
 ax.set_xlim(0, 100)
 ax.set_ylim(y.min() - 1.8, y.max() + 0.6)
-ax.set_title('Figure 0 — Full sentiment breakdown per drug',
+ax.set_title('Figure 1 — Full sentiment breakdown per drug',
              fontsize=20, fontweight='bold')
 ax.legend(loc='lower right', fontsize=14)
 ax.tick_params(axis='x', labelsize=14)
 ax.grid(axis='x', alpha=0.3)
 plt.tight_layout()
-plt.savefig('figure0.png', dpi=150, bbox_inches='tight')
+plt.savefig('figure1.png', dpi=150, bbox_inches='tight')
 plt.show()
 """))
 
@@ -602,9 +605,9 @@ plt.show()
 # ────────────────────────────────────────────────────────────────────
 # FIGURE 1: Paired horizontal bar chart (responders vs non-responders)
 # ────────────────────────────────────────────────────────────────────
-cells.append(("md", """## Figure 1 — Forest plot: responders and non-responders by drug
+cells.append(("md", """## Figure 2 — Forest plot: responders and non-responders by drug
 
-Figure 1 collapses the four-way sentiment breakdown into a binary split: responders
+Figure 2 collapses the four-way sentiment breakdown into a binary split: responders
 (positive sentiment) vs. non-responders (negative + neutral + mixed). Each drug
 contributes two points to the forest plot — a green circle for the **responder**
 rate and a red square for the **non-responder** rate — both with their 95% Wilson
@@ -612,7 +615,7 @@ confidence intervals. The row label gives the drug, the comparator trial outcome
 (`[+ trial]` vs `[null trial]`), the paper citation, and the sample size."""))
 
 cells.append(("code", r"""
-# ── Figure 1: Forest plot of % responders + % non-responders with 95% Wilson CIs ──
+# ── Figure 2: Forest plot of % responders + % non-responders with 95% Wilson CIs ──
 from matplotlib.lines import Line2D
 
 GREEN = '#27ae60'
@@ -676,7 +679,7 @@ ax.set_xticks([0, 25, 50, 75, 100])
 # Subtle null reference at 50%
 ax.axvline(50, color='gray', ls=':', lw=0.8, zorder=0)
 
-ax.set_title('Figure 1 — Forest plot: responders and non-responders by drug\n'
+ax.set_title('Figure 2 — Forest plot: responders and non-responders by drug\n'
              '95% Wilson CIs. Trial outcome tagged in the row label.',
              fontsize=14, fontweight='bold', pad=12)
 
@@ -694,7 +697,7 @@ legend_elems = [
 ax.legend(handles=legend_elems, loc='lower right', fontsize=10, frameon=True)
 
 plt.tight_layout()
-plt.savefig('figure1.png', dpi=150, bbox_inches='tight')
+plt.savefig('figure2.png', dpi=150, bbox_inches='tight')
 plt.show()
 """))
 
@@ -850,7 +853,7 @@ For each drug we report:
 
 - **Raw reports**: total `treatment_reports` rows in-window (pre-dedup).
 - **Unique users**: `COUNT(DISTINCT user_id)` over the same set — this is
-  the `n` that appears in Figure 1 / Table 3 after dedup.
+  the `n` that appears in Figure 2 / Table 3 after dedup.
 - **Multi-report users**: users with ≥2 in-window reports for this drug.
   Dedup only matters for these.
 - **Mixed-signal users**: multi-report users whose reports contain *both*
@@ -1096,7 +1099,7 @@ This table is the build-DB's record of *which pipeline run produced every
 classified report it contains*. Each row links a `run_id` to the git commit
 that ran it, the run timestamp, and the run config (models used, target
 drug, etc.). The same `run_id` is foreign-keyed onto every
-`treatment_reports` row, so any number in Figure 1 / Table 3 can be traced
+`treatment_reports` row, so any number in Figure 2 / Table 3 can be traced
 back to the exact pipeline invocation that produced it.
 
 A machine-readable copy of this table — together with the build-time git
