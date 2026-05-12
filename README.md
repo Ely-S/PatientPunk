@@ -90,16 +90,16 @@ export LLM_PROVIDER=dispersed
 export DISPERSED_PUBLIC_KEY=pk_...
 export DISPERSED_SECRET_KEY=sk_...
 export DISPERSED_RECIPE_FAST=<uuid>    # vLLM serving Qwen/Qwen3-8B
-export DISPERSED_RECIPE_STRONG=<uuid>  # vLLM serving Qwen/Qwen3-32B
+export DISPERSED_RECIPE_STRONG=<uuid>  # vLLM serving Qwen/Qwen3-14B
 export DISPERSED_FALLBACK=openrouter   # optional: fall back if a job can't start
 ```
 
-Defaults when `LLM_PROVIDER=dispersed`: `MODEL_FAST=Qwen/Qwen3-8B`, `MODEL_STRONG=Qwen/Qwen3-32B` — these must match what the vLLM server is loading (`vllm serve <model>`).
+Defaults when `LLM_PROVIDER=dispersed`: `MODEL_FAST=Qwen/Qwen3-8B`, `MODEL_STRONG=Qwen/Qwen3-14B` — these must match what the vLLM server is loading (`vllm serve <model>`). Dispersed currently caps single-job VRAM at 48 GB, so Qwen3-32B FP16 (~64 GB) doesn't fit; Qwen3-14B (~28 GB weights) leaves headroom for KV cache.
 
 **Recipe setup (one-time, via Dispersed UI):**
 - image `vllm/vllm-openai:latest`
 - fast recipe: ~16 GB VRAM, command `vllm serve Qwen/Qwen3-8B --port 8000`
-- strong recipe: ~64 GB VRAM, command `vllm serve Qwen/Qwen3-32B --port 8000`
+- strong recipe: ~32 GB VRAM, command `vllm serve Qwen/Qwen3-14B --port 8000`
 - copy each recipe's UUID into the env vars above
 
 The provider is auto-detected from whichever key is set (Dispersed is opt-in

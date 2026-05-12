@@ -105,8 +105,11 @@ elif LLM_PROVIDER == "dispersed":
     # vLLM model IDs as served by the Dispersed job recipes. The model name
     # passed to llm_call() must match what the vLLM server reports — this
     # is the same string used by `vllm serve <model>` to load the weights.
+    # Sized for Dispersed's 48 GB VRAM ceiling: Qwen3-8B fits comfortably,
+    # Qwen3-14B FP16 (~28 GB weights + KV cache) leaves headroom; Qwen3-32B
+    # would not fit at FP16 without quantization.
     _DEFAULT_FAST = "Qwen/Qwen3-8B"
-    _DEFAULT_STRONG = "Qwen/Qwen3-32B"
+    _DEFAULT_STRONG = "Qwen/Qwen3-14B"
     _API_BASE = None
 else:
     _DEFAULT_FAST = "claude-haiku-4-5-20251001"
