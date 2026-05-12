@@ -28,7 +28,10 @@ CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 @dataclass
 class PipelineConfig:
     """Shared configuration for all pipeline steps."""
-    client: anthropic.Anthropic
+    # Either an anthropic.Anthropic (used directly or via OpenRouter base_url)
+    # or a DispersedLLMClient — both expose `.messages.stream(...)` so the
+    # downstream pipeline code is provider-agnostic.
+    client: object
     output_dir: Path
     db_path: Path
     limit: int = 100
@@ -64,15 +67,27 @@ logging.getLogger("anthropic").setLevel(logging.WARNING)
 #   MODEL_FAST=google/gemini-2.0-flash
 #   MODEL_STRONG=openai/gpt-4o
 # Any model supported by your provider works.
-_PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX"}
+_PLACEHOLDER_KEYS = {"", "your_openrouter_key_here", "your_anthropic_key_here", "XXX",
+                     "your_dispersed_public_key_here", "your_dispersed_secret_key_here"}
 
 _has_openrouter = os.environ.get("OPENROUTER_API_KEY", "") not in _PLACEHOLDER_KEYS
 _has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS
+_has_dispersed = (
+    os.environ.get("DISPERSED_PUBLIC_KEY", "") not in _PLACEHOLDER_KEYS
+    and os.environ.get("DISPERSED_SECRET_KEY", "") not in _PLACEHOLDER_KEYS
+)
 
-# Auto-detect provider from available keys, or use explicit override
+# Auto-detect provider from available keys, or use explicit override.
+# `dispersed` is opt-in (never auto-selected) since it depends on a Dispersed
+# account + pre-existing job recipes; auto-selection here could surprise a
+# user who set keys but hasn't yet created recipes.
+_VALID_PROVIDERS = ("openrouter", "anthropic", "dispersed")
 _explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
-if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
-    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
+if _explicit_provider and _explicit_provider not in _VALID_PROVIDERS:
+    sys.exit(
+        f"Unsupported LLM_PROVIDER={_explicit_provider!r} "
+        f"(expected one of: {', '.join(_VALID_PROVIDERS)})"
+    )
 if _explicit_provider:
     LLM_PROVIDER = _explicit_provider
 elif _has_openrouter:
@@ -86,6 +101,13 @@ if LLM_PROVIDER == "openrouter":
     _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
     _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
     _API_BASE = "https://openrouter.ai/api"
+elif LLM_PROVIDER == "dispersed":
+    # vLLM model IDs as served by the Dispersed job recipes. The model name
+    # passed to llm_call() must match what the vLLM server reports — this
+    # is the same string used by `vllm serve <model>` to load the weights.
+    _DEFAULT_FAST = "Qwen/Qwen3-8B"
+    _DEFAULT_STRONG = "Qwen/Qwen3-32B"
+    _API_BASE = None
 else:
     _DEFAULT_FAST = "claude-haiku-4-5-20251001"
     _DEFAULT_STRONG = "claude-sonnet-4-6"
@@ -137,37 +159,89 @@ def get_git_commit() -> str:
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
-def get_client() -> anthropic.Anthropic:
-    """Return a configured Anthropic client (direct or via OpenRouter).
+def _make_anthropic_client(provider: str) -> anthropic.Anthropic:
+    """Build an Anthropic-SDK client (direct or via OpenRouter base_url)."""
+    if provider == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        key_name = "OPENROUTER_API_KEY"
+        api_base = "https://openrouter.ai/api"
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        key_name = "ANTHROPIC_API_KEY"
+        api_base = None
+
+    if not api_key or api_key in _PLACEHOLDER_KEYS:
+        sys.exit(
+            f"{key_name} not set (provider={provider}).\n"
+            f"  Add {key_name}=... to .env"
+        )
+    kwargs: dict = {"api_key": api_key, "max_retries": 4, "timeout": 60.0}
+    if api_base:
+        kwargs["base_url"] = api_base
+    return anthropic.Anthropic(**kwargs)
+
+
+def get_client():
+    """Return an LLM client matching the active provider.
+
+    Returns:
+      - anthropic.Anthropic when LLM_PROVIDER ∈ {anthropic, openrouter}
+      - DispersedLLMClient   when LLM_PROVIDER == dispersed
+
+    Both expose the same `client.messages.stream(...)` shape so llm_call()
+    works against either without branching.
 
     Key selection is tied to the provider:
       openrouter → requires OPENROUTER_API_KEY
       anthropic  → requires ANTHROPIC_API_KEY
+      dispersed  → requires DISPERSED_PUBLIC_KEY + DISPERSED_SECRET_KEY,
+                   plus DISPERSED_RECIPE_FAST and DISPERSED_RECIPE_STRONG
+                   recipe UUIDs (create them out-of-band via the Dispersed UI).
+                   Optionally DISPERSED_FALLBACK=openrouter|anthropic for
+                   graceful fallback when a job can't be brought up.
     """
-    if LLM_PROVIDER == "openrouter":
-        api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        key_name = "OPENROUTER_API_KEY"
-    else:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        key_name = "ANTHROPIC_API_KEY"
-
-    if not api_key or api_key in _PLACEHOLDER_KEYS:
-        sys.exit(
-            f"{key_name} not set (provider={LLM_PROVIDER}).\n"
-            f"  Add {key_name}=... to .env\n"
-            f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
-        )
-
     log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
 
-    kwargs: dict = {
-        "api_key": api_key,
-        "max_retries": 4,
-        "timeout": 60.0,
-    }
-    if _API_BASE:
-        kwargs["base_url"] = _API_BASE
-    return anthropic.Anthropic(**kwargs)
+    if LLM_PROVIDER == "dispersed":
+        # Imported lazily so a stale Dispersed env doesn't break anthropic-only runs.
+        from utilities.dispersed import DispersedAPIClient, DispersedLLMClient
+
+        pub = os.environ.get("DISPERSED_PUBLIC_KEY", "")
+        sec = os.environ.get("DISPERSED_SECRET_KEY", "")
+        if pub in _PLACEHOLDER_KEYS or sec in _PLACEHOLDER_KEYS:
+            sys.exit(
+                "DISPERSED_PUBLIC_KEY / DISPERSED_SECRET_KEY not set "
+                "(provider=dispersed).\n  Add both to .env."
+            )
+
+        recipe_fast = os.environ.get("DISPERSED_RECIPE_FAST", "").strip()
+        recipe_strong = os.environ.get("DISPERSED_RECIPE_STRONG", "").strip()
+        if not recipe_fast or not recipe_strong:
+            sys.exit(
+                "DISPERSED_RECIPE_FAST and DISPERSED_RECIPE_STRONG are required "
+                "(provider=dispersed). Create the recipes in the Dispersed UI "
+                "and add their UUIDs to .env."
+            )
+
+        recipe_map = {MODEL_FAST: recipe_fast, MODEL_STRONG: recipe_strong}
+
+        fallback_name = os.environ.get("DISPERSED_FALLBACK", "").strip().lower() or None
+        fallback_client = None
+        if fallback_name:
+            if fallback_name not in ("openrouter", "anthropic"):
+                sys.exit(
+                    f"Unsupported DISPERSED_FALLBACK={fallback_name!r} "
+                    f"(expected 'openrouter' or 'anthropic')"
+                )
+            log.info(f"Dispersed fallback enabled: {fallback_name}")
+            fallback_client = _make_anthropic_client(fallback_name)
+
+        api_client = DispersedAPIClient(pub, sec)
+        return DispersedLLMClient(
+            recipe_map, api_client, fallback_client=fallback_client,
+        )
+
+    return _make_anthropic_client(LLM_PROVIDER)
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────
@@ -252,12 +326,18 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
 def llm_call(
-    client: anthropic.Anthropic,
+    client,
     prompt: str,
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
+    """Send a single prompt and return the model's text reply.
+
+    Accepts either an anthropic.Anthropic (incl. OpenRouter via base_url)
+    or a DispersedLLMClient — both implement `.messages.stream(...)` with
+    the Anthropic shape, so this function doesn't branch on provider.
+    """
     kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
     if system:
         kwargs["system"] = system
