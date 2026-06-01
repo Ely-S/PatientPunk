@@ -42,6 +42,22 @@ def to_epoch(ts: str | int | None) -> int | None:
         return None
 
 
+def strip_reddit_prefix(reddit_id: str | None) -> str | None:
+    """Strip Reddit's `t1_` (comment) or `t3_` (submission) kind prefix.
+
+    Reddit's API serializes comment.parent_id as `t1_<id>` (parent is a comment)
+    or `t3_<id>` (parent is a submission), but post_id / comment_id themselves
+    are stored bare. Without stripping, the `parent_id NOT IN (SELECT post_id)`
+    cleanup below treats every prefixed parent_id as dangling and nulls it,
+    silently destroying thread structure on import.
+    """
+    if reddit_id is None:
+        return None
+    if reddit_id.startswith(("t1_", "t3_")):
+        return reddit_id[3:]
+    return reddit_id
+
+
 def extract_subreddit(url: str | None) -> str:
     if url and "/r/" in url:
         return url.split("/r/")[1].split("/")[0]
@@ -78,7 +94,8 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=comment.get("parent_id"), user_id=c_author,
+                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))

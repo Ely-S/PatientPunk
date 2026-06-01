@@ -37,6 +37,7 @@ class PipelineConfig:
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
+    drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -96,14 +97,42 @@ MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
 # ── Git ──────────────────────────────────────────────────────────────────────
 def get_git_commit() -> str:
-    """Return current git commit hash, or 'unknown'."""
+    """Return current git commit hash, or 'unknown' (with a loud warning).
+
+    If git metadata is unavailable we still return rather than raising — some
+    environments (CI containers, standalone notebook runs, downstream
+    consumers re-running the build with our DBs) legitimately won't have git
+    installed. But we log loudly so 'unknown' provenance can never enter the
+    audit trail silently."""
     import subprocess
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True,
         )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        commit = result.stdout.strip()
+        # Also flag dirty working tree so downstream consumers can see if the
+        # build was made from a non-clean checkout.
+        try:
+            dirty = subprocess.run(
+                ["git", "status", "--porcelain"], capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            if dirty:
+                log.warning(
+                    "Git working tree is DIRTY at build time (commit %s + uncommitted "
+                    "changes). Provenance manifest will include the commit hash but "
+                    "the actual code may differ. Commit before treating outputs as "
+                    "reproducible.", commit[:8],
+                )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass  # can't check dirty state, but we have the commit; proceed
+        return commit
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        log.warning(
+            "Could not resolve git commit hash (got %s). Provenance manifest "
+            "will record 'unknown' for git_commit; reproducibility chain broken. "
+            "If this is a release build, install git and rerun from a clean "
+            "checkout.", type(e).__name__,
+        )
         return "unknown"
 
 
@@ -183,6 +212,21 @@ def parse_json_object(raw: str) -> dict:
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────
+def resolve_aliases(config: "PipelineConfig") -> tuple[str, list[str]]:
+    """Return (target, aliases) for config.drug.
+
+    Uses config.drug_aliases if set (hand-curated list); otherwise falls back
+    to get_drug_aliases (LLM lookup + disk cache). Target is always included.
+    """
+    target = config.drug.strip().lower()
+    if config.drug_aliases is not None:
+        aliases = [a.lower().strip() for a in config.drug_aliases if a.strip()]
+        if target not in aliases:
+            aliases.append(target)
+        return target, aliases
+    return target, get_drug_aliases(config.client, target, config.path(f"aliases_{target}.json"))
+
+
 def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     """Return [drug, ...aliases] for filtering in --drug mode.
 
@@ -192,7 +236,7 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     from prompts.intervention_config import drug_aliases_prompt
     target = drug.strip().lower()
     if cache_path.exists():
-        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text()) if a.strip()]
+        aliases = [a.lower().strip() for a in json.loads(cache_path.read_text(encoding="utf-8")) if a.strip()]
         log.info(f"Loaded {len(aliases)} cached aliases for {target!r} from {cache_path.name}.")
     else:
         raw = llm_call(client, drug_aliases_prompt(target), model=MODEL_STRONG, max_tokens=2000)

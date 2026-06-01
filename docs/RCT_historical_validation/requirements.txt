@@ -1,0 +1,10 @@
+numpy
+pandas
+matplotlib
+seaborn
+scipy
+statsmodels
+nbformat
+nbconvert
+ipykernel
+ipython

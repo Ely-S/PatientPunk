@@ -31,7 +31,7 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    PipelineConfig, get_client, llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
 )
 from utilities.db import load_synonyms, open_db, post_text
 
@@ -160,9 +160,11 @@ def run_classification(
         synonyms_for = {}
         subreddit = "Long COVID"
 
-    target_drug = config.drug.strip().lower() if config.drug else None
-    if target_drug:
-        log.info(f"Restricting classification to drug: {target_drug!r}")
+    target_aliases: set[str] | None = None
+    if config.drug:
+        target, aliases = resolve_aliases(config)
+        target_aliases = set(aliases)
+        log.info(f"Restricting classification to: {sorted(target_aliases)}")
 
     if limit:
         tagged = tagged[:limit]
@@ -194,7 +196,7 @@ def run_classification(
     for entry in tagged:
         all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
         for drug in all_drugs:
-            if target_drug is not None and drug != target_drug:
+            if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
                 not config.reclassify
@@ -206,7 +208,19 @@ def run_classification(
 
             to_do.append((entry, drug))
             if drug not in prompts:
-                prompts[drug] = system_prompt(drug, synonyms_for.get(drug), subreddit)
+                # In --drug mode (target_aliases populated), use the resolved
+                # alias set (minus the matched drug itself) as the synonym
+                # hint for the prompt. This ensures aliased mentions get full
+                # context even when the DB hasn't been canonicalized yet —
+                # synonyms_for is keyed by canonical name, so synonyms_for.get
+                # returns None for aliases like "LDN" or "low dose naltrexone".
+                # Without this fallback, classifier prompts for aliased
+                # mentions would lack the canonical-drug context.
+                if target_aliases is not None:
+                    syns = sorted(target_aliases - {drug})
+                else:
+                    syns = synonyms_for.get(drug)
+                prompts[drug] = system_prompt(drug, syns, subreddit)
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
@@ -217,7 +231,7 @@ def run_classification(
         log.info("Skipping prefilter, sending all pairs to classify...")
     else:
         cached_pf: dict[str, bool] = (
-            json.loads(prefilter_path.read_text()) if prefilter_path.exists() else {}
+            json.loads(prefilter_path.read_text(encoding="utf-8")) if prefilter_path.exists() else {}
         )
         if cached_pf:
             log.info(f"Loaded {len(cached_pf)} cached prefilter results.")

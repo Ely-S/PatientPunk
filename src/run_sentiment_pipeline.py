@@ -82,7 +82,9 @@ def main():
     parser.add_argument("--skip-prefilter", action="store_true", help="Skip the fast-model prefilter; send all pairs to the strong model")
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
     parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
-    parser.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
+    drug_group = parser.add_mutually_exclusive_group()
+    drug_group.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
+    drug_group.add_argument("--drug-file", type=str, default=None, help="Text file of drug + aliases, one per line, first line canonical. Skips the LLM alias lookup.")
     parser.add_argument(
         "--workers", type=int, default=3,
         help="Parallel workers for extract/classify (default: 3, use 1 for sequential). "
@@ -90,6 +92,32 @@ def main():
              "drop to 3-4 if you see 30s+ stalls between log lines.",
     )
     args = parser.parse_args()
+
+    # --drug-file: a hand-curated alias list, first non-blank line is the
+    # canonical target. Validate aggressively so an empty / unreadable file
+    # doesn't silently disable targeting and fall back to a full-corpus run.
+    drug = args.drug
+    drug_aliases = None
+    if args.drug_file:
+        drug_file_path = Path(args.drug_file)
+        try:
+            raw_lines = drug_file_path.read_text(encoding="utf-8").splitlines()
+        except OSError as e:
+            parser.error(f"cannot read --drug-file {drug_file_path}: {e}")
+        # Strip whitespace, drop blank lines, de-dup while preserving order.
+        seen: set[str] = set()
+        drug_aliases = []
+        for line in raw_lines:
+            s = line.strip()
+            if s and s not in seen:
+                seen.add(s)
+                drug_aliases.append(s)
+        if not drug_aliases:
+            parser.error(
+                f"--drug-file {drug_file_path} contains no non-blank lines; "
+                "it must contain at least the canonical drug name on the first line."
+            )
+        drug = drug_aliases[0]
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -103,7 +131,8 @@ def main():
         max_upstream_chars=args.max_upstream_chars,
         max_upstream_depth=args.max_upstream_depth,
         workers=args.workers,
-        drug=args.drug,
+        drug=drug,
+        drug_aliases=drug_aliases,
     )
 
     run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=args.skip_prefilter)
