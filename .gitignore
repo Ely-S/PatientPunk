@@ -18,3 +18,7 @@ reddit_sample_data/outputs/
 data/
 *.zip
 *.db
+
+# local virtualenv + macOS cruft
+.venv/
+.DS_Store
