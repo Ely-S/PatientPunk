@@ -1,0 +1,32 @@
+{
+  "low-dose naltrexone (LDN)": {
+    "classified": 200,
+    "experiential": 103,
+    "neutral": 97,
+    "positive": 46,
+    "negative": 38,
+    "mixed": 19,
+    "pos_pct_of_experiential": 44.7,
+    "neg_pct_of_experiential": 36.9,
+    "mixed_pct_of_experiential": 18.4,
+    "pos_95ci_of_experiential": [
+      35.4,
+      54.3
+    ]
+  },
+  "pyridostigmine / Mestinon": {
+    "classified": 200,
+    "experiential": 78,
+    "neutral": 122,
+    "positive": 32,
+    "negative": 38,
+    "mixed": 8,
+    "pos_pct_of_experiential": 41.0,
+    "neg_pct_of_experiential": 48.7,
+    "mixed_pct_of_experiential": 10.3,
+    "pos_95ci_of_experiential": [
+      30.8,
+      52.1
+    ]
+  }
+}

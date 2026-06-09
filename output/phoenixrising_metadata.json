@@ -1,0 +1,17 @@
+{
+  "source": "Phoenix Rising ME/CFS Forums (forums.phoenixrising.me)",
+  "scraper": "scrape_phoenixrising.py",
+  "discovery": "thread-list:Scrapers/phoenixrising_targets.txt",
+  "threads_total_targeted": 276,
+  "threads_in_output": 276,
+  "total_replies": 4806,
+  "scrape_started_at": "2026-06-09T17:37:47.734668+00:00",
+  "scrape_finished_at": "2026-06-09T17:53:56.454563+00:00",
+  "robots_compliance": "Skips all robots.txt Disallow paths; only /threads/ and /sitemap*.xml fetched.",
+  "privacy": "All usernames SHA-256 hashed before write; raw usernames never persisted.",
+  "notes": {
+    "parent_linkage": "Replies that quote a post link to it; otherwise link to the thread OP.",
+    "body": "Quote blocks stripped from each post so only that author's words remain.",
+    "score": "Reaction/like count when present, else 0."
+  }
+}

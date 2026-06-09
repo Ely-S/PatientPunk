@@ -1,0 +1,284 @@
+[
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_000.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_000.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_001.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_001.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_002.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_002.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_003.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_003.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_004.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_004.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_005.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_005.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_006.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_006.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_007.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_007.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_008.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_008.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_009.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_009.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_010.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_010.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_011.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_011.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_012.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_012.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_013.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_013.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_014.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_014.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_015.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_015.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_016.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_016.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_017.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_017.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_018.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_018.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_019.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_019.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_020.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_020.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_021.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_021.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_022.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_022.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_023.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_023.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_024.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_024.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_025.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_025.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_026.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_026.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_027.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_027.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_028.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_028.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_029.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_029.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_030.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_030.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_031.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_031.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_032.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_032.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_033.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_033.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_034.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_034.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_035.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_035.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_036.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_036.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_037.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_037.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_038.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_038.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_039.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_039.json",
+    "n": 60
+  },
+  {
+    "drug": "ldn",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/ldn_040.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_ldn_040.json",
+    "n": 47
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_000.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_000.json",
+    "n": 60
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_001.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_001.json",
+    "n": 60
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_002.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_002.json",
+    "n": 60
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_003.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_003.json",
+    "n": 60
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_004.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_004.json",
+    "n": 60
+  },
+  {
+    "drug": "mestinon",
+    "in": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/mestinon_005.jsonl",
+    "out": "/Users/bennettshepard/Documents/PatientPunk/outputs/manual/full/labels_mestinon_005.json",
+    "n": 33
+  }
+]

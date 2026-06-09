@@ -1,0 +1,5 @@
+[
+{"id":"pr-714057","sentiment":"negative","signal":"weak","side_effects":["blurred vision"]},
+{"id":"pr-866019","sentiment":"neutral","signal":"n/a","side_effects":[]},
+{"id":"pr-866082","sentiment":"negative","signal":"moderate","side_effects":["bad reaction"],"conditions":["me/cfs"]}
+]
