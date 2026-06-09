@@ -96,23 +96,26 @@ patient voices rather than asserted.
 
 ## Sentiment classification — RESULTS (full census, in-session, no API)
 
-**Method.** **Every** direct-mention post was classified (full census, not a sample) against
-the rubric in `docs/ldn_notes.md` (positive / negative / mixed / neutral + signal + side
-effects), via 47 fan-out annotator agents. Per-post labels: `outputs/manual/full/labels_*.json`;
+**Method.** Threads were discovered two ways: (1) the forum sitemap, by drug name in the
+thread *title* (276 threads), and (2) external site-scoped web search, which surfaces threads
+that mention the drugs in the *body* but not the title (+17 threads). **Every** direct-mention
+post across all 293 threads was then classified (full census, not a sample) against the rubric
+in `docs/ldn_notes.md` (positive / negative / mixed / neutral + signal + side effects), via
+fan-out annotator agents. Per-post labels: `outputs/manual/full/labels_*.json`;
 summary: `outputs/manual/census_summary.json`.
 **Validation:** on the 400 posts also hand-labeled by the lead annotator, agreement was
 **84% exact (4-class), 90% positive-vs-not, 93% any-benefit-vs-not.**
 
 | | Low-dose naltrexone (LDN) | Pyridostigmine / Mestinon |
 |---|---|---|
-| Posts classified (full census) | 2,447 | 333 |
-| Expressed a personal experience | 1,126 (46%) | 127 (38%) |
-| **Positive** (of experiential) | **38%**  (95% CI 35–41%) | **42%**  (95% CI 34–50%) |
-| Mixed | 26% | 19% |
-| Negative | 37% | 39% |
-| **Positive-or-mixed (some benefit)** | **63%** | **61%** |
-| Top side effects | insomnia (119), fatigue (45), anxiety (36), nausea (32), headache (32), vivid dreams (25), depression (25) | muscle twitching (8), shortness of breath (6), nausea (6), chills (5), respiratory depression (4) |
-| Posts flagging 50 mg / full-dose (kept, not excluded) | 139 | 2 |
+| Posts classified (full census) | 2,493 | 386 |
+| Expressed a personal experience | 1,140 (46%) | 148 (38%) |
+| **Positive** (of experiential) | **38%**  (95% CI 35–41%) | **43%**  (95% CI 35–51%) |
+| Mixed | 25% | 18% |
+| Negative | 37% | 40% |
+| **Positive-or-mixed (some benefit)** | **63%** | **60%** |
+| Top side effects | insomnia (119), fatigue (45), anxiety (36), nausea (32), headache (32), vivid dreams (25), depression (25) | muscle twitching (8), chills (6), shortness of breath (6), respiratory depression (6), nausea (6) |
+| Posts flagging 50 mg / full-dose (kept, not excluded) | 146 | 5 |
 
 **Caveats specific to this classification (state these in the comment):**
 - Full census (not a sample) — 95% CIs are tight (±3 pts for LDN; ±8 for the smaller Mestinon
@@ -124,7 +127,7 @@ summary: `outputs/manual/census_summary.json`.
 - A few reports are secondhand (a member describing a relative).
 - Sentiment ≠ efficacy: people with strong experiences (good or bad) are likelier to post.
 
-**To upgrade to a full census** (all 2,447 / 333 posts) later via LLM, set `ANTHROPIC_API_KEY`
+**To re-run the classification** (all 2,493 / 386 posts) later via LLM, set `ANTHROPIC_API_KEY`
 (needs billing credit) or a local/free model, then:
 ```
 .venv/bin/python src/run_sentiment_pipeline.py --db data/phoenixrising.db \
@@ -132,3 +135,22 @@ summary: `outputs/manual/census_summary.json`.
 .venv/bin/python src/run_sentiment_pipeline.py --db data/phoenixrising.db \
     --output-dir outputs/pyridostigmine --drug-file drugs/pyridostigmine.txt --workers 4
 ```
+
+---
+
+## Broader-recall expansion (beyond thread titles)
+
+Title-based discovery (276 threads) was supplemented with **external site-scoped web search**
+to catch threads that discuss the drugs in the *body* but not the title — e.g. "recovery
+story" / "what treatments helped" / "treatments to explore" / dysautonomia threads, plus one
+**misspelled-title** thread ("Mestonin") the alias filter could never have matched. This added
+**17 threads / 770 posts**, yielding **+46 LDN and +53 Mestinon** new direct mentions.
+
+**Combined corpus: 293 threads** — LDN **2,493 posts / 529 participants**; pyridostigmine
+**386 posts / 119 participants** (2009–2026).
+
+**Robustness:** folding in these non-titled mentions left the sentiment split essentially
+unchanged (LDN 38% positive; pyridostigmine 42→43%; both ~60–63% positive-or-mixed) — i.e. the
+title-based core was **not** a biased sample. Caveat: external search is not exhaustive (it
+surfaces well-indexed body mentions, not every scattered one); a complete forum-wide census
+would require crawling all ~55k threads, so treat these as a floor.
