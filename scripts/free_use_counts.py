@@ -72,8 +72,9 @@ def main() -> None:
             for (pid, t, par, uid, b, pdate) in rows]
 
     total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    n_toplevel = sum(1 for r in rows if r[2] is None)  # top-level posts (~thread count)
     print(f"Corpus: {len(recs)} posts/comments, {total_users} unique participants, "
-          f"276 threads (Phoenix Rising ME/CFS forum).\n")
+          f"{n_toplevel} top-level posts (Phoenix Rising ME/CFS forum).\n")
 
     for label, aliases in DRUGS.items():
         rx = alias_regex(aliases)
