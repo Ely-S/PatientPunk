@@ -1,39 +1,39 @@
 {
   "low-dose naltrexone (LDN)": {
-    "candidate_posts": 2493,
-    "labeled": 2493,
+    "candidate_posts": 2516,
+    "labeled": 2516,
     "stragglers_unlabeled": 0,
-    "experiential": 1140,
-    "neutral": 1353,
-    "positive": 435,
-    "negative": 417,
-    "mixed": 288,
+    "experiential": 1144,
+    "neutral": 1372,
+    "positive": 437,
+    "negative": 418,
+    "mixed": 289,
     "pos_pct_exp": 38.2,
-    "neg_pct_exp": 36.6,
+    "neg_pct_exp": 36.5,
     "mixed_pct_exp": 25.3,
-    "pos_or_mixed_pct_exp": 63.4,
+    "pos_or_mixed_pct_exp": 63.5,
     "pos_95ci": [
       35.4,
       41.0
     ],
-    "posts_mentioning_50mg_or_fulldose": 146
+    "posts_mentioning_50mg_or_fulldose": 147
   },
   "pyridostigmine / Mestinon": {
-    "candidate_posts": 386,
-    "labeled": 386,
+    "candidate_posts": 389,
+    "labeled": 389,
     "stragglers_unlabeled": 0,
-    "experiential": 148,
-    "neutral": 238,
+    "experiential": 149,
+    "neutral": 240,
     "positive": 63,
-    "negative": 59,
+    "negative": 60,
     "mixed": 26,
-    "pos_pct_exp": 42.6,
-    "neg_pct_exp": 39.9,
-    "mixed_pct_exp": 17.6,
-    "pos_or_mixed_pct_exp": 60.1,
+    "pos_pct_exp": 42.3,
+    "neg_pct_exp": 40.3,
+    "mixed_pct_exp": 17.4,
+    "pos_or_mixed_pct_exp": 59.7,
     "pos_95ci": [
-      34.9,
-      50.6
+      34.6,
+      50.3
     ],
     "posts_mentioning_50mg_or_fulldose": 5
   },

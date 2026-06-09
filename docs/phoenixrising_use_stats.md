@@ -108,10 +108,10 @@ summary: `outputs/manual/census_summary.json`.
 
 | | Low-dose naltrexone (LDN) | Pyridostigmine / Mestinon |
 |---|---|---|
-| Posts classified (full census) | 2,493 | 386 |
-| Expressed a personal experience | 1,140 (46%) | 148 (38%) |
-| **Positive** (of experiential) | **38%**  (95% CI 35–41%) | **43%**  (95% CI 35–51%) |
-| Mixed | 25% | 18% |
+| Posts classified (full census) | 2,516 | 389 |
+| Expressed a personal experience | 1,144 (45%) | 149 (38%) |
+| **Positive** (of experiential) | **38%**  (95% CI 35–41%) | **42%**  (95% CI 35–50%) |
+| Mixed | 25% | 17% |
 | Negative | 37% | 40% |
 | **Positive-or-mixed (some benefit)** | **63%** | **60%** |
 | Top side effects | insomnia (119), fatigue (45), anxiety (36), nausea (32), headache (32), vivid dreams (25), depression (25) | muscle twitching (8), chills (6), shortness of breath (6), respiratory depression (6), nausea (6) |
@@ -140,17 +140,21 @@ summary: `outputs/manual/census_summary.json`.
 
 ## Broader-recall expansion (beyond thread titles)
 
-Title-based discovery (276 threads) was supplemented with **external site-scoped web search**
-to catch threads that discuss the drugs in the *body* but not the title — e.g. "recovery
-story" / "what treatments helped" / "treatments to explore" / dysautonomia threads, plus one
-**misspelled-title** thread ("Mestonin") the alias filter could never have matched. This added
-**17 threads / 770 posts**, yielding **+46 LDN and +53 Mestinon** new direct mentions.
+Title-based discovery (276 threads) was supplemented two ways to catch threads that discuss
+the drugs in the *body* but not the title: (1) **external site-scoped web search** — e.g.
+"recovery story" / "what treatments helped" / "treatments to explore" / dysautonomia threads,
+plus one **misspelled-title** thread ("Mestonin") the alias filter could never have matched
+(+17 threads); and (2) the forum's own **`/tags/` pages** (robots-allowed, deterministic — no
+AI), adding manually-tagged threads (+5). Together these added **22 threads / ~840 posts**,
+yielding **+69 LDN and +56 Mestinon** new direct mentions.
 
-**Combined corpus: 293 threads** — LDN **2,493 posts / 529 participants**; pyridostigmine
-**386 posts / 119 participants** (2009–2026).
+**Combined corpus: 298 threads** — LDN **2,516 posts / 534 participants**; pyridostigmine
+**389 posts / 121 participants** (2009–2026).
 
-**Robustness:** folding in these non-titled mentions left the sentiment split essentially
-unchanged (LDN 38% positive; pyridostigmine 42→43%; both ~60–63% positive-or-mixed) — i.e. the
-title-based core was **not** a biased sample. Caveat: external search is not exhaustive (it
-surfaces well-indexed body mentions, not every scattered one); a complete forum-wide census
-would require crawling all ~55k threads, so treat these as a floor.
+**Robustness:** across four expansions (title core → web search → tag pages) the sentiment
+split never moved (LDN held at 38% positive; pyridostigmine 42–43%; both ~60–63%
+positive-or-mixed), and validation held at 84/90/93 — strong evidence the title-based core was
+**not** a biased sample. Caveat: this is *near-complete*, not exhaustive — a literal forum-wide
+census would mean crawling all ~55k threads (several hours, heavy load on a small nonprofit
+forum, and — given the stability above — no expected change to the percentages), so treat
+these as a robust floor rather than a ceiling.
