@@ -1,0 +1,5 @@
+site:forums.phoenixrising.me Mestinon OR pyridostigmine OR Timespan
+site:forums.phoenixrising.me mestinon OR pyridostigmine OR "Pyridostigmine Bromide"
+site:forums.phoenixrising.me Mestinon OR Timespan
+site:forums.phoenixrising.me mestinon
+site:forums.phoenixrising.me "mestinon trial"
