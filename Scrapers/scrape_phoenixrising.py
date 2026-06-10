@@ -4,7 +4,8 @@
 Scrapes patient self-report threads from the Phoenix Rising ME/CFS forum
 (XenForo 2) and emits JSON in the SAME corpus schema as scrape_corpus.py,
 so the existing pipeline (import_posts.py -> run_sentiment_pipeline.py)
-ingests it unchanged.
+ingests it unchanged; the importer is configured to map this forum hostname
+to `phoenixrising` when no `--subreddit` override is provided.
 
 Mapping forum -> corpus:
     thread        -> one "post" object (the opening post / OP)
@@ -45,6 +46,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -75,7 +77,13 @@ LDN_KW = re.compile(r"(/|-)ldn(-|\.)", re.I)
 # ---------------------------------------------------------------------------
 
 def _check_robots(url: str) -> None:
-    path = url[len(BASE):] if url.startswith(BASE) else url
+    if "://" in url:
+        parsed = urllib.parse.urlsplit(url)
+        path = parsed.path
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+    else:
+        path = url
     for bad in ROBOTS_DISALLOW:
         if path.startswith(bad):
             raise ValueError(f"Refusing to fetch robots.txt-Disallowed path: {path}")
@@ -133,10 +141,13 @@ def discover_from_sitemap(delay: float) -> list[str]:
     for sm in sub_sitemaps:
         xml = fetch(sm, delay)
         for loc in re.findall(r"<loc>([^<]+)</loc>", xml):
-            if THREAD_RE.fullmatch(loc.strip() + ("" if loc.strip().endswith("/") else "")):
-                all_threads.add(loc.strip())
-            elif THREAD_RE.match(loc.strip()):
-                all_threads.add(THREAD_RE.match(loc.strip()).group(0))
+            normalized = loc.strip()
+            if normalized and not normalized.endswith("/"):
+                normalized += "/"
+            if THREAD_RE.fullmatch(normalized):
+                all_threads.add(normalized)
+            elif THREAD_RE.match(normalized):
+                all_threads.add(THREAD_RE.match(normalized).group(0))
     matched = sorted(u for u in all_threads if GENERIC_KW.search(u) or LDN_KW.search(u))
     print(f"  sitemap: {len(all_threads)} threads total, {len(matched)} drug-matched")
     return matched
@@ -271,9 +282,11 @@ def scrape_thread(url: str, delay: float, max_pages_cap: int) -> dict | None:
 
     op = posts[0]
     op_key = f"pr-{op['pid']}"
+    valid_ids = {f"pr-{p['pid']}" for p in posts}
     comments = []
     for p in posts[1:]:
-        parent = f"pr-{p['parent_pid']}" if p["parent_pid"] else op_key
+        quoted_parent = f"pr-{p['parent_pid']}" if p["parent_pid"] else None
+        parent = quoted_parent if quoted_parent in valid_ids else op_key
         comments.append({
             "comment_id": f"pr-{p['pid']}",
             "body": p["body"],
@@ -334,7 +347,10 @@ def main() -> None:
     done_ids: set[str] = set()
     if out_path.exists() and not args.no_resume:
         try:
-            existing = json.loads(out_path.read_text(encoding="utf-8"))
+            loaded = json.loads(out_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, list) or any(not isinstance(item, dict) for item in loaded):
+                raise ValueError(f"{out_path} does not contain a list of thread objects")
+            existing = loaded
             done_ids = {p.get("thread_id") for p in existing}
             print(f"  resume: {len(existing)} threads already in {out_path.name}")
         except (ValueError, OSError):

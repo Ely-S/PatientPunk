@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sqlite3
+import urllib.parse
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,10 @@ class PostRow(NamedTuple):
 from utilities.db import open_db
 
 log = logging.getLogger(__name__)
+ANON_USER_ID = "anon"
+SOURCE_NAME_BY_HOST = {
+    "forums.phoenixrising.me": "phoenixrising",
+}
 
 
 def to_epoch(ts: str | int | None) -> int | None:
@@ -58,29 +63,67 @@ def strip_reddit_prefix(reddit_id: str | None) -> str | None:
     return reddit_id
 
 
+def normalize_author(author_hash: str | None) -> str:
+    """Map missing/deleted authors to a stable sentinel user id."""
+    if author_hash is None or not str(author_hash).strip():
+        return ANON_USER_ID
+    return str(author_hash)
+
+
 def extract_subreddit(url: str | None) -> str:
     if url and "/r/" in url:
         return url.split("/r/")[1].split("/")[0]
     return None
 
 
+def infer_source_subreddit(url: str | None) -> str | None:
+    """Infer a configured source label from a Reddit URL or known hostname."""
+    subreddit = extract_subreddit(url)
+    if subreddit:
+        return subreddit
+    if not url:
+        return None
+    hostname = urllib.parse.urlsplit(url).hostname
+    if not hostname:
+        return None
+    return SOURCE_NAME_BY_HOST.get(hostname.lower())
+
+
 def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> None:
     """Import subreddit_posts.json into users + posts tables."""
     data = json.loads(input_path.read_text(encoding="utf-8"))
     now = int(datetime.now(timezone.utc).timestamp())
+    valid_ids = {
+        post["post_id"]
+        for post in data
+    } | {
+        comment["comment_id"]
+        for post in data
+        for comment in post.get("comments", [])
+    }
 
     users: list[UserRow] = []
     posts: list[PostRow] = []
     seen_users: set[str] = set()
+    anon_rows = 0
+    repaired_parent_rows = 0
 
-    def add_user(author: str, sub: str) -> None:
+    def add_user(author: str, sub: str | None) -> None:
         if author not in seen_users:
             seen_users.add(author)
             users.append(UserRow(author, sub, now))
 
     for post in data:
-        author = post["author_hash"]
-        sub = subreddit or extract_subreddit(post.get("url"))
+        author = normalize_author(post.get("author_hash"))
+        sub = subreddit or infer_source_subreddit(post.get("url"))
+        if not sub:
+            raise ValueError(
+                "Could not determine source_subreddit from post URL; "
+                "pass --subreddit explicitly or add the hostname to SOURCE_NAME_BY_HOST "
+                "for a configured non-Reddit source."
+            )
+        if author == ANON_USER_ID:
+            anon_rows += 1
 
         add_user(author, sub)
         posts.append(PostRow(
@@ -90,11 +133,19 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             scraped_at=now,
         ))
         for comment in post.get("comments", []):
-            c_author = comment["author_hash"]
+            c_author = normalize_author(comment.get("author_hash"))
+            if c_author == ANON_USER_ID:
+                anon_rows += 1
+            parent_id = strip_reddit_prefix(comment.get("parent_id"))
+            if parent_id is not None and parent_id not in valid_ids:
+                # Forum quote links can point to posts not present in the exported
+                # payload; attach those replies to the thread root instead.
+                parent_id = post["post_id"]
+                repaired_parent_rows += 1
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                parent_id=parent_id,
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
@@ -117,6 +168,10 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
         )
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+    if anon_rows:
+        log.info(f"Mapped {anon_rows} posts/comments with missing authors to {ANON_USER_ID!r}.")
+    if repaired_parent_rows:
+        log.info(f"Repaired {repaired_parent_rows} unresolved parent links before insert.")
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
 
 

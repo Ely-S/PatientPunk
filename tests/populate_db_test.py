@@ -9,7 +9,7 @@ from typing import NamedTuple
 import pytest
 
 import extract_demographics_conditions
-from import_posts import import_reddit_posts
+from import_posts import ANON_USER_ID, import_reddit_posts, infer_source_subreddit
 from run_sentiment_pipeline import run_pipeline
 from extract_demographics_conditions import run_demographics
 from utilities import PipelineConfig
@@ -149,14 +149,92 @@ class DB(NamedTuple):
     path: Path
 
 
+def _fresh_db(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.executescript(SCHEMA.read_text())
+    return conn
+
+
 @pytest.fixture(scope="class")
 def db(tmp_path_factory: pytest.TempPathFactory) -> DB:
     """On-disk DB initialised from schema.sql, shared across the test class."""
     path = tmp_path_factory.mktemp("db") / "test.db"
-    conn = sqlite3.connect(path, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA.read_text())
+    conn = _fresh_db(path)
     return DB(conn=conn, path=path)
+
+
+def test_import_maps_missing_authors_to_anon_and_repairs_missing_parent(tmp_path: Path):
+    db_path = tmp_path / "repair.db"
+    conn = _fresh_db(db_path)
+    payload = [
+        {
+            "post_id": "ThreadAnon",
+            "title": "LDN thread",
+            "body": "Trying LDN",
+            "author_hash": None,
+            "created_utc": "2026-04-04T22:31:34+00:00",
+            "score": 1,
+            "url": "",
+            "flair": None,
+            "comments": [
+                {
+                    "comment_id": "CommentAnon",
+                    "body": "same here",
+                    "author_hash": None,
+                    "created_utc": "2026-04-04T22:37:58+00:00",
+                    "score": 1,
+                    "parent_id": "MissingParent",
+                }
+            ],
+        }
+    ]
+    sample = tmp_path / "anon_sample.json"
+    sample.write_text(json.dumps(payload), encoding="utf-8")
+
+    import_reddit_posts(conn, sample, subreddit="test_subreddit")
+
+    assert conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+    assert conn.execute("SELECT user_id FROM users").fetchall() == [(ANON_USER_ID,)]
+    assert conn.execute(
+        "SELECT post_id, user_id, parent_id FROM posts ORDER BY post_id"
+    ).fetchall() == [
+        ("CommentAnon", ANON_USER_ID, "ThreadAnon"),
+        ("ThreadAnon", ANON_USER_ID, None),
+    ]
+
+
+def test_infer_source_subreddit_from_phoenix_hostname():
+    assert (
+        infer_source_subreddit(
+            "https://forums.phoenixrising.me/threads/example-thread.123/"
+        )
+        == "phoenixrising"
+    )
+
+
+def test_import_requires_configured_source_for_unknown_hostname(tmp_path: Path):
+    db_path = tmp_path / "unknown-source.db"
+    conn = _fresh_db(db_path)
+    payload = [
+        {
+            "post_id": "UnknownSource",
+            "title": "Unknown source",
+            "body": "Trying LDN",
+            "author_hash": "user1",
+            "created_utc": "2026-04-04T22:31:34+00:00",
+            "score": 1,
+            "url": "https://example.org/thread/1",
+            "flair": None,
+            "comments": [],
+        }
+    ]
+    sample = tmp_path / "unknown_source.json"
+    sample.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="SOURCE_NAME_BY_HOST"):
+        import_reddit_posts(conn, sample)
 
 
 class TestPopulateDbEndToEnd:
