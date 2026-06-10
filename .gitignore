@@ -16,3 +16,17 @@ __pycache__/
 output/
 reddit_sample_data/outputs/
 *.zip
+*.db
+output/*.json
+output/*.log
+data/*phoenixrising*.db
+data/*phoneixrising*.db
+Scrapers/users/
+reddit_sample_data/
+Scrapers/*_posts.json
+Scrapers/*_metadata.json
+Scrapers/output.zip
+
+# local virtualenv + macOS cruft
+.venv/
+.DS_Store
