@@ -7,33 +7,38 @@ candidate post we look up its census label; candidates without a label are
 written out as 'stragglers' to classify. Also validates against the 400
 hand-labels (gold set).
 
-    .venv/bin/python scripts/aggregate_census.py
+    .venv/bin/python scripts/aggregate_census.py --db data/phoenixrising.db
 """
 from __future__ import annotations
-import json, math, re, sqlite3
+import argparse, json, math, re, sqlite3
 from collections import Counter
 from pathlib import Path
 
-DB = "data/phoenixrising.db"
 MAN = Path("outputs/manual")
 FULL = MAN / "full"
 Z = 1.96
 
-# FINAL alias sets (per user). Revia/Vivitrol excluded (full-dose brands);
-# bare "naltrexone" included (forum context = LDN), full-dose flagged separately.
-ALIASES = {
-    "low-dose naltrexone (LDN)": ["naltrexone", "low dose naltrexone", "low-dose naltrexone",
-                                   "ldn", "ultra-low-dose naltrexone", "uldn", "low-dose ntx",
-                                   "ntx", "compounded naltrexone"],
-    "pyridostigmine / Mestinon": ["pyridostigmine", "mestinon", "pyridostigmine bromide",
-                                   "mestinon timespan", "regonol", "generic pyridostigmine",
-                                   "pyridostigmine er", "pyridostigmine cr"],
+DEFAULT_ALIAS_FILES = {
+    "low-dose naltrexone (LDN)": Path("drugs/naltrexone.txt"),
+    "pyridostigmine / Mestinon": Path("drugs/pyridostigmine.txt"),
 }
 # Full-dose (NOT low-dose) signals for naltrexone — flagged, reported separately.
 FULLDOSE_RE = re.compile(r"\b(revia|vivitrol|full[- ]?dose|50\s?mg|50 ?mg)\b", re.I)
 
 
 def alias_re(a): return re.compile(r"\b(?:" + "|".join(re.escape(x) for x in a) + r")\b", re.I)
+
+
+def read_alias_file(path: Path) -> list[str]:
+    aliases: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        aliases.append(line)
+    return list(dict.fromkeys(aliases))
+
+
 def wilson(k, n):
     if not n: return (0.0, 0.0)
     p = k / n; d = 1 + Z**2 / n
@@ -52,7 +57,11 @@ def load_loose(path: Path):
 
 
 def main():
-    conn = sqlite3.connect(DB)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True)
+    args = ap.parse_args()
+    aliases_by_label = {label: read_alias_file(path) for label, path in DEFAULT_ALIAS_FILES.items()}
+    conn = sqlite3.connect(args.db)
     rows = conn.execute("SELECT post_id,title,parent_id,user_id,body_text FROM posts").fetchall()
     conn.close()
     byid = {r[0]: r for r in rows}
@@ -80,7 +89,7 @@ def main():
     print()
 
     summary = {}
-    for label, aliases in ALIASES.items():
+    for label, aliases in aliases_by_label.items():
         rx = alias_re(aliases)
         cand_ids = [pid for pid, txt in text_by_id.items() if rx.search(txt)]
         labeled = [labelmap[i] for i in cand_ids if i in labelmap]

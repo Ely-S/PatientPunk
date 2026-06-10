@@ -9,14 +9,23 @@ from __future__ import annotations
 import argparse, json, re, sqlite3, datetime
 from pathlib import Path
 
-DRUGS = {
-    "ldn":      ["naltrexone", "low dose naltrexone", "low-dose naltrexone", "ldn",
-                 "naltrexona", "naltrexon", "naltrexene", "revia", "vivitrol"],
-    "mestinon": ["pyridostigmine", "mestinon", "pyridostigmine bromide", "pyridostigmin", "regonol"],
+DRUG_FILES = {
+    "ldn": Path("drugs/naltrexone.txt"),
+    "mestinon": Path("drugs/pyridostigmine.txt"),
 }
 
 
 def alias_re(a): return re.compile(r"\b(?:" + "|".join(re.escape(x) for x in a) + r")\b", re.I)
+
+
+def read_alias_file(path: Path) -> list[str]:
+    aliases: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        aliases.append(line)
+    return list(dict.fromkeys(aliases))
 
 
 def main():
@@ -44,7 +53,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
 
-    for name, aliases in DRUGS.items():
+    for name, alias_file in DRUG_FILES.items():
+        aliases = read_alias_file(alias_file)
         rx = alias_re(aliases)
         cand = [r for r in rows if rx.search(recon(r))]
         recs = []

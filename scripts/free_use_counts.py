@@ -19,13 +19,9 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-DRUGS = {
-    "low-dose naltrexone (LDN)": ["naltrexone", "low dose naltrexone", "low-dose naltrexone",
-                                   "ldn", "ultra-low-dose naltrexone", "uldn", "low-dose ntx",
-                                   "ntx", "compounded naltrexone"],
-    "pyridostigmine / Mestinon": ["pyridostigmine", "mestinon", "pyridostigmine bromide",
-                                   "mestinon timespan", "regonol", "generic pyridostigmine",
-                                   "pyridostigmine er", "pyridostigmine cr"],
+DEFAULT_DRUG_FILES = {
+    "low-dose naltrexone (LDN)": Path("drugs/naltrexone.txt"),
+    "pyridostigmine / Mestinon": Path("drugs/pyridostigmine.txt"),
 }
 
 # Barrier term groups (case-insensitive). Each maps to a regex.
@@ -51,6 +47,16 @@ def alias_regex(aliases: list[str]) -> re.Pattern:
     return re.compile(r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b", re.I)
 
 
+def read_alias_file(path: Path) -> list[str]:
+    aliases: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        aliases.append(line)
+    return list(dict.fromkeys(aliases))
+
+
 def reconstruct_text(title, body, parent_id) -> str:
     if parent_id is None:
         return f"{title or ''} {body or ''}".strip()
@@ -60,7 +66,14 @@ def reconstruct_text(title, body, parent_id) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
+    ap.add_argument("--ldn-drug-file", default=str(DEFAULT_DRUG_FILES["low-dose naltrexone (LDN)"]))
+    ap.add_argument("--mestinon-drug-file", default=str(DEFAULT_DRUG_FILES["pyridostigmine / Mestinon"]))
     args = ap.parse_args()
+
+    drugs = {
+        "low-dose naltrexone (LDN)": read_alias_file(Path(args.ldn_drug_file)),
+        "pyridostigmine / Mestinon": read_alias_file(Path(args.mestinon_drug_file)),
+    }
 
     conn = sqlite3.connect(args.db)
     rows = conn.execute(
@@ -76,7 +89,7 @@ def main() -> None:
     print(f"Corpus: {len(recs)} posts/comments, {total_users} unique participants, "
           f"{n_toplevel} top-level posts (Phoenix Rising ME/CFS forum).\n")
 
-    for label, aliases in DRUGS.items():
+    for label, aliases in drugs.items():
         rx = alias_regex(aliases)
         hits = [(pid, txt, uid, pdate) for (pid, txt, uid, pdate) in recs if rx.search(txt)]
         users = {uid for _, _, uid, _ in hits if uid}

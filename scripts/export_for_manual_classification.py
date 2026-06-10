@@ -10,16 +10,24 @@ import argparse, json, random, re, sqlite3, datetime
 from pathlib import Path
 
 DRUGS = {
-    "ldn":      (["naltrexone", "low dose naltrexone", "low-dose naltrexone", "ldn",
-                  "naltrexona", "naltrexon", "naltrexene", "revia", "vivitrol"], 200),
-    "mestinon": (["pyridostigmine", "mestinon", "pyridostigmine bromide",
-                  "pyridostigmin", "regonol"], 200),
+    "ldn": (Path("drugs/naltrexone.txt"), 200),
+    "mestinon": (Path("drugs/pyridostigmine.txt"), 200),
 }
 BATCH = 100
 SEED = 42
 
 
 def alias_re(aliases): return re.compile(r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b", re.I)
+
+
+def read_alias_file(path: Path) -> list[str]:
+    aliases: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        aliases.append(line)
+    return list(dict.fromkeys(aliases))
 
 
 def main():
@@ -42,7 +50,8 @@ def main():
         return (r[1] if r else "") or ""
 
     out = Path("outputs/manual"); out.mkdir(parents=True, exist_ok=True)
-    for name, (aliases, n) in DRUGS.items():
+    for name, (alias_file, n) in DRUGS.items():
+        aliases = read_alias_file(alias_file)
         rx = alias_re(aliases)
         cand = [r for r in rows if rx.search(recon(r))]
         random.seed(SEED)

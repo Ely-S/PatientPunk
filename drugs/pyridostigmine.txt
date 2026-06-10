@@ -9,3 +9,4 @@ pyridostigmine cr
 pyridostigmine extended-release
 pyridostigmine controlled-release
 pyridostigmin
+mestonin

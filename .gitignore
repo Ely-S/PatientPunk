@@ -31,3 +31,6 @@ Scrapers/output.zip
 # local virtualenv + macOS cruft
 .venv/
 .DS_Store
+
+# generated classification export artifacts
+outputs/manual/

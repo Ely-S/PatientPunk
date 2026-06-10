@@ -236,7 +236,7 @@ def load_search_queries(path: Path) -> list[str]:
 
 
 def discover_from_search_api(
-    query_file: Path,
+    query_files: list[Path],
     api_key: str,
     delay: float,
     max_pages: int = 3,
@@ -245,13 +245,16 @@ def discover_from_search_api(
     """Discover thread URLs via Brave Web Search API, scoped to forum domain."""
     # Query syntax reference:
     # https://api-dashboard.search.brave.com/documentation/resources/search-operators/index.html.md
-    queries = load_search_queries(query_file)
+    queries: list[str] = []
+    for qf in query_files:
+        queries.extend(load_search_queries(qf))
+    queries = list(dict.fromkeys(queries))
     if not queries:
-        raise ValueError(f"No queries found in {query_file}")
+        raise ValueError(f"No queries found in {query_files}")
     out: set[str] = set()
     for q in queries:
         scoped = q if "site:forums.phoenixrising.me" in q.lower() else f"site:forums.phoenixrising.me {q}"
-        print(f"  search: {q}")
+        print(f"  search: {scoped}")
         for page in range(max_pages):
             params = urllib.parse.urlencode(
                 {
@@ -468,70 +471,96 @@ def scrape_thread(url: str, delay: float, max_pages_cap: int, mention_rx: re.Pat
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Scrape Phoenix Rising threads into PatientPunk corpus JSON.")
-    src = ap.add_mutually_exclusive_group(required=True)
-    src.add_argument("--from-sitemap", action="store_true",
-                     help="Discover drug-matched threads via sitemap.xml (robots-clean).")
-    src.add_argument("--from-search-api", action="store_true",
-                     help="Discover candidate threads via external search API query set.")
-    src.add_argument("--thread-list", type=str,
-                     help="File of thread URLs, one per line.")
+    ap = argparse.ArgumentParser(
+        description="Scrape Phoenix Rising threads into PatientPunk corpus JSON.\n\n"
+                    "Two-step workflow:\n"
+                    "  Step 1 — collect URLs:  --from-search-api [--thread-list ...] --url-out targets.txt\n"
+                    "  Step 2 — scrape:        --thread-list targets.txt",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    # Discovery sources — all optional; combined when multiple are given.
+    ap.add_argument("--from-sitemap", action="store_true",
+                    help="Discover drug-keyword-matched threads from sitemap.xml.")
+    ap.add_argument("--from-search-api", action="store_true",
+                    help="Discover threads via Brave Search API query set.")
+    ap.add_argument("--thread-list", action="append", default=[], metavar="FILE",
+                    help="File of thread URLs (one per line). May be passed multiple times.")
+    # URL-collection mode: write consolidated list and exit without scraping.
+    ap.add_argument("--url-out", type=str, default="",
+                    help="Write deduplicated URL list to this file and exit (no scraping).")
+    # Search API options.
+    ap.add_argument("--search-query-file", action="append", default=[], metavar="FILE",
+                    help="Query file for --from-search-api. May be passed multiple times.")
+    ap.add_argument("--search-api-key", default="",
+                    help="Brave Search API key (or set BRAVE_SEARCH_API_KEY env var).")
+    ap.add_argument("--search-pages", type=int, default=3,
+                    help="Max result pages per query (max 10).")
+    ap.add_argument("--search-per-page", type=int, default=20,
+                    help="Results per search page (max 20).")
+    # Scraping options.
     ap.add_argument("--out", type=str, default=str(OUTPUT_DIR / "phoenixrising_posts.json"))
     ap.add_argument("--limit", type=int, default=0, help="Max threads to scrape (0 = all).")
     ap.add_argument("--delay", type=float, default=DEFAULT_DELAY, help="Seconds between requests.")
     ap.add_argument("--max-pages", type=int, default=500, help="Per-thread page cap.")
-    ap.add_argument("--search-query-file", default=str(DEFAULT_SEARCH_QUERY_FILE),
-                    help="Line-delimited search query file for --from-search-api.")
-    ap.add_argument("--search-api-key", default="",
-                    help="Brave Search API key (or set BRAVE_SEARCH_API_KEY env var).")
-    ap.add_argument("--search-pages", type=int, default=3,
-                    help="Max result pages per query for --from-search-api.")
-    ap.add_argument("--search-per-page", type=int, default=10,
-                    help="Results per search page for --from-search-api (max 20).")
     ap.add_argument("--drug-file", action="append", default=[],
-                    help="Alias file path; can be passed multiple times.")
+                    help="Alias file for --require-mention filter. May be passed multiple times.")
     ap.add_argument("--require-mention", action="store_true",
-                    help="Keep only threads with alias match in title/OP/replies (requires --drug-file).")
+                    help="Keep only threads where an alias match appears in content.")
     ap.add_argument("--no-resume", action="store_true",
                     help="Re-scrape threads already present in --out (default: skip them).")
     args = ap.parse_args()
 
+    if not args.from_sitemap and not args.from_search_api and not args.thread_list:
+        ap.error("Provide at least one source: --from-sitemap, --from-search-api, or --thread-list FILE")
     if args.require_mention and not args.drug_file:
-        ap.error("--require-mention needs at least one --drug-file alias list")
+        ap.error("--require-mention needs at least one --drug-file")
     mention_rx = alias_regex(load_aliases(args.drug_file)) if args.require_mention else None
 
-    started = datetime.now(timezone.utc).isoformat()
+    # --- Collect URLs from all sources ---
+    targets: list[str] = []
 
     if args.from_sitemap:
-        targets = discover_from_sitemap(args.delay)
-    elif args.from_search_api:
+        targets.extend(discover_from_sitemap(args.delay))
+
+    if args.from_search_api:
         api_key = args.search_api_key or os.environ.get("BRAVE_SEARCH_API_KEY", "")
         if not api_key:
-            ap.error("--from-search-api needs --search-api-key or BRAVE_SEARCH_API_KEY")
-        query_file = Path(args.search_query_file)
-        if not query_file.exists():
-            ap.error(f"--search-query-file not found: {query_file}")
-        if args.search_pages < 1:
-            ap.error("--search-pages must be >= 1")
-        if args.search_pages > 10:
-            ap.error("--search-pages must be <= 10 (Brave offset supports 0..9)")
+            ap.error("--from-search-api needs --search-api-key or BRAVE_SEARCH_API_KEY env var")
+        query_files = [Path(f) for f in args.search_query_file] if args.search_query_file else [DEFAULT_SEARCH_QUERY_FILE]
+        for qf in query_files:
+            if not qf.exists():
+                ap.error(f"--search-query-file not found: {qf}")
+        if not (1 <= args.search_pages <= 10):
+            ap.error("--search-pages must be 1–10")
         if not (1 <= args.search_per_page <= 20):
-            ap.error("--search-per-page must be between 1 and 20")
-        targets = discover_from_search_api(
-            query_file=query_file,
+            ap.error("--search-per-page must be 1–20")
+        targets.extend(discover_from_search_api(
+            query_files=query_files,
             api_key=api_key,
             delay=args.delay,
             max_pages=args.search_pages,
             per_page=args.search_per_page,
-        )
-    else:
-        targets = []
-        for ln in Path(args.thread_list).read_text(encoding="utf-8").splitlines():
+        ))
+
+    for list_file in args.thread_list:
+        for ln in Path(list_file).read_text(encoding="utf-8").splitlines():
             normalized = normalize_thread_url(ln)
             if normalized:
                 targets.append(normalized)
-        targets = list(dict.fromkeys(targets))
 
+    # Deduplicate while preserving order.
+    targets = list(dict.fromkeys(targets))
+
+    # --- URL-collection mode: write list and exit ---
+    if args.url_out:
+        url_out = Path(args.url_out)
+        url_out.parent.mkdir(parents=True, exist_ok=True)
+        url_out.write_text("\n".join(targets) + "\n", encoding="utf-8")
+        print(f"  Wrote {len(targets)} unique URLs to {url_out}")
+        return
+
+    # --- Scrape ---
+    started = datetime.now(timezone.utc).isoformat()
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -552,14 +581,18 @@ def main() -> None:
     if args.limit:
         todo = todo[:args.limit]
 
+    sources = (
+        (["sitemap"] if args.from_sitemap else [])
+        + (["search-api"] if args.from_search_api else [])
+        + [f"thread-list:{f}" for f in args.thread_list]
+    )
     print("=" * 60)
-    source_name = "sitemap" if args.from_sitemap else ("search-api" if args.from_search_api else args.thread_list)
-    print(f"  Source     : {source_name}")
+    print(f"  Sources    : {', '.join(sources)}")
     if args.from_search_api:
-        print(f"  Queries    : {args.search_query_file}")
+        print(f"  Queries    : {', '.join(str(f) for f in (args.search_query_file or [DEFAULT_SEARCH_QUERY_FILE]))}")
         print(f"  Search cfg : pages/query={args.search_pages}, per_page={args.search_per_page}")
     if args.require_mention:
-        print(f"  Mention RX : {len(args.drug_file)} alias file(s), keep mentioning threads only")
+        print(f"  Mention RX : {len(args.drug_file)} alias file(s)")
     print(f"  Targets    : {len(targets)}  |  to scrape now: {len(todo)}")
     print(f"  Delay      : {args.delay}s   |  Output: {out_path}")
     print("=" * 60)
@@ -567,28 +600,23 @@ def main() -> None:
     results = list(existing)
     total_comments = sum(len(p.get("comments", [])) for p in existing)
     for i, url in enumerate(todo, 1):
-        print(f"  [{i}/{len(todo)}] {url}")
+        print(f"  [{i}/{len(todo)}] {url}", flush=True)
         post = scrape_thread(url, args.delay, args.max_pages, mention_rx=mention_rx)
         if post is None:
             if args.require_mention:
-                print("        skipped (no alias mention found in thread content)")
+                print("        skipped (no alias mention found)", flush=True)
             continue
         results.append(post)
         total_comments += len(post["comments"])
-        # Incremental, crash-safe write after every thread.
         out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"        OP + {len(post['comments'])} replies over {post['pages']} page(s) — \"{post['title'][:60]}\"")
+        print(f"        OP + {len(post['comments'])} replies over {post['pages']} page(s) — \"{post['title'][:60]}\"", flush=True)
 
     finished = datetime.now(timezone.utc).isoformat()
     meta = {
         "source": "Phoenix Rising ME/CFS Forums (forums.phoenixrising.me)",
         "scraper": "scrape_phoenixrising.py",
-        "discovery": (
-            "sitemap"
-            if args.from_sitemap
-            else ("search-api:brave" if args.from_search_api else f"thread-list:{args.thread_list}")
-        ),
-        "search_query_file": args.search_query_file if args.from_search_api else None,
+        "discovery": sources,
+        "search_query_files": args.search_query_file if args.from_search_api else None,
         "search_pages": args.search_pages if args.from_search_api else None,
         "search_per_page": args.search_per_page if args.from_search_api else None,
         "require_mention": bool(args.require_mention),
