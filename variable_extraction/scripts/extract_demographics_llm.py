@@ -261,8 +261,8 @@ Examples:
     )
     parser.add_argument(
         "--output", type=Path,
-        default=Path(__file__).parent.parent.parent / "data" / "demographics.csv",
-        help="Output CSV file path (default: data/demographics.csv)",
+        default=Path(__file__).parent.parent.parent / "output" / "demographics.csv",
+        help="Output CSV file path (default: output/demographics.csv)",
     )
     parser.add_argument(
         "--workers", type=int, default=10,

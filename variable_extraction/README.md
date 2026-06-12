@@ -38,7 +38,7 @@ cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
 # 4. LLM-only demographics (age / sex / location, deductive + inductive)
-python main.py demographics --input-dir ../data
+python main.py demographics --input-dir ../output
 
 # 5. Inspect the schema without running anything
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
@@ -88,16 +88,16 @@ Supports two complementary coding modes:
 
 ```bash
 # Both deductive + inductive (default)
-python main.py demographics --input-dir ../data
+python main.py demographics --input-dir ../output
 
 # Deductive only
-python main.py demographics --input-dir ../data --mode deductive
+python main.py demographics --input-dir ../output --mode deductive
 
 # Inductive only (discover new categories)
-python main.py demographics --input-dir ../data --mode inductive
+python main.py demographics --input-dir ../output --mode inductive
 
 # User histories only (recommended — best coverage)
-python main.py demographics --input-dir ../data --users-only
+python main.py demographics --input-dir ../output --users-only
 ```
 
 ---
@@ -139,10 +139,10 @@ Use `--limit 10` for a cheap test run before committing to the full corpus.
 
 ### Intermediate files
 
-All intermediate JSON is written to `data/temp/` and wiped at the start of each full run.
+All intermediate JSON is written to `output/temp/` and wiped at the start of each full run.
 
 ```
-data/
+output/
 ├── records.csv
 ├── codebook.csv
 └── temp/
@@ -166,8 +166,8 @@ flowchart TD
     scrape["scrape_corpus.py<br/>Fetch posts · user histories · SHA-256 hash usernames"]:::script
 
     reddit & uhist --> scrape
-    scrape --> posts["data/subreddit_posts.json"]:::file
-    scrape --> ufiles["data/users/*.json"]:::file
+    scrape --> posts["output/subreddit_posts.json"]:::file
+    scrape --> ufiles["output/users/*.json"]:::file
 
     schema[/"schemas/covidlonghaulers_schema.json<br/>Read-only at runtime"/]:::schema
 
@@ -182,8 +182,8 @@ flowchart TD
     p3 --> t3[("temp/ discovered_records")]:::temp
     t3 --> p4["Phase 4 · records_to_csv.py<br/>Flatten nested JSON to wide CSV"]:::phase
     p4 --> p5["Phase 5 · make_codebook.py<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
-    p5 --> out1["data/records.csv"]:::out
-    p5 --> out2["data/codebook.csv"]:::out
+    p5 --> out1["output/records.csv"]:::out
+    p5 --> out2["output/codebook.csv"]:::out
 
     classDef src    fill:#FAECE7,stroke:#993C1D,color:#712B13
     classDef script fill:#EEEDFE,stroke:#534AB7,color:#3C3489
@@ -232,7 +232,7 @@ Fields accepted at ≥ 50% hit rate. All auto-discovered fields carry `source: "
 ```
 python main.py run --schema schemas/covidlonghaulers_schema.json [options]
 
-  --input-dir PATH      Corpus directory (default: ../data)
+  --input-dir PATH      Corpus directory (default: ../output)
   --temp-dir PATH       Intermediate files (default: {input-dir}/temp/)
   --start-at N          Resume from phase N (1–5)
   --no-llm              Skip Phase 2
@@ -254,7 +254,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
 ### `demographics` — LLM-only demographics
 
 ```
-python main.py demographics --input-dir ../data [options]
+python main.py demographics --input-dir ../output [options]
 
   --mode                deductive | inductive | both (default: both)
   --input-dir PATH      Corpus directory
@@ -277,7 +277,7 @@ python main.py inspect --schema schemas/covidlonghaulers_schema.json [options]
 ### `corpus` — corpus statistics
 
 ```
-python main.py corpus --input-dir ../data
+python main.py corpus --input-dir ../output
 # Prints: post count, user history count, total records
 ```
 
@@ -299,13 +299,13 @@ from patientpunk import CorpusLoader, Pipeline, PipelineConfig, DemographicCoder
 from pathlib import Path
 
 # Load corpus
-loader = CorpusLoader(Path("../data"))
+loader = CorpusLoader(Path("../output"))
 print(loader.post_count, loader.user_count)
 
 # Full pipeline
 config = PipelineConfig(
     schema_path=Path("schemas/covidlonghaulers_schema.json"),
-    input_dir=Path("../data"),
+    input_dir=Path("../output"),
     run_llm=True,
     discovery_mode=None,  # "auto" or "review" to enable
     limit=50,
@@ -315,7 +315,7 @@ print(result.ok, result.summary())
 
 # LLM-only demographics (deductive + inductive)
 coder = DemographicCoder(
-    input_dir=Path("../data"),
+    input_dir=Path("../output"),
     mode="both",
     include_users=True,
 )
@@ -326,7 +326,7 @@ coder.run()
 
 ## Outputs
 
-### `data/records.csv`
+### `output/records.csv`
 
 One row per user / subreddit post. Multi-value fields joined with `" | "`.
 
@@ -336,17 +336,17 @@ Key columns:
 - One column per schema field (`age`, `sex_gender`, `conditions`, ...)
 - With `--provenance`: additional `{field}__confidence` and `{field}__provenance` columns
 
-### `data/codebook.csv`
+### `output/codebook.csv`
 
 One row per field: field name, source, description, confidence tier, ICD-10 code,
 observed coverage %, example values.
 
-### `data/demographics_deductive.csv` (LLM-only, deductive)
+### `output/demographics_deductive.csv` (LLM-only, deductive)
 
 Columns: `author_hash`, `source_type`, `age`, `sex_gender`, `location_country`,
 `location_state`, `confidence`, `evidence`.
 
-### `data/demographics_inductive.json` + `demographics_codebook.json` (LLM-only, inductive)
+### `output/demographics_inductive.json` + `demographics_codebook.json` (LLM-only, inductive)
 
 Per-record discovered categories and aggregated frequency codebook.
 
@@ -432,7 +432,7 @@ variable_extraction/
 
 ### Data model — PatientPunk v2.0 record
 
-Every record written to `data/temp/patientpunk_records_*.json`:
+Every record written to `output/temp/patientpunk_records_*.json`:
 
 ```json
 {

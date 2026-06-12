@@ -1020,7 +1020,7 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path(__file__).parent.parent.parent / "data",
+        default=Path(__file__).parent.parent.parent / "output",
         help="Path to the output/ directory from scrape_corpus.py "
              "(default: ../output/ relative to this script)",
     )

@@ -12,7 +12,7 @@ propagation.
 Example
 -------
 >>> from patientpunk.extractors import BiomedicalExtractor
->>> extractor = BiomedicalExtractor(input_dir=Path("../data"), schema_path=Path("schemas/covidlonghaulers_schema.json"))
+>>> extractor = BiomedicalExtractor(input_dir=Path("../output"), schema_path=Path("schemas/covidlonghaulers_schema.json"))
 >>> result = extractor.run()
 >>> print(result.returncode, result.elapsed)
 """

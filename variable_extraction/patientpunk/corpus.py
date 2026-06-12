@@ -13,7 +13,7 @@ and yields :class:`CorpusRecord` objects suitable for extraction.
 
 Example
 -------
->>> loader = CorpusLoader(Path("../data"))
+>>> loader = CorpusLoader(Path("../output"))
 >>> for record in loader.iter_records(limit=5):
 ...     print(record.source, record.author_hash[:8], len(record.texts))
 """

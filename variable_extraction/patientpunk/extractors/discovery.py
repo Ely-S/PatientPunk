@@ -27,7 +27,7 @@ Output files
 Example
 -------
 >>> extractor = FieldDiscoveryExtractor(
-...     input_dir=Path("../data"),
+...     input_dir=Path("../output"),
 ...     schema_path=Path("schemas/covidlonghaulers_schema.json"),
 ...     workers=10,
 ...     limit=20,

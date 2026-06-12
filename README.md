@@ -1,172 +1,28 @@
 # PatientPunk
 
-## The Problem
+Reddit, patient forums, and social media overflow with firsthand patient reports: symptoms, treatments tried, outcomes, comorbidities, demographics. This signal disappears into forum threads. PatientPunk is the infrastructure to aggregate it, normalize it, and make it queryable at scale.
 
-Reddit, patient forums, and social media are overflowing with firsthand patient reports: symptoms, treatments tried, outcomes, comorbidities, demographics. This data is qualitative, unstructured, and largely invisible to researchers. Patients who have tried dozens of treatments and documented their journeys in detail have no way to contribute that knowledge to science at scale.
+Patient self-reports aren't soft evidence — they're the only source of ground truth for the lived experience of disease. No biomarker tells you whether someone can get out of bed. No clinical trial follows patients long enough to capture the years-long arc of ME/CFS or long COVID. Self-reported qualitative markers ("I crash after any exertion," "went from bedbound to functional on this protocol") are treated here as first-class fields — dimensions to slice and filter on, not noise to discard.
 
-Traditional clinical research has a structural blind spot: it relies on data it chooses to collect, from populations it chooses to study, on timelines measured in years and decades. Meanwhile, millions of patients are running informal experiments every day — trying treatments, tracking responses, reporting outcomes in plain language — and that signal disappears into forum threads.
+A researcher can ask:
 
-## Patient Reports Are Data
-
-The medical establishment has long treated patient self-reports as soft evidence — anecdote, noise, the kind of thing that gets filtered out before analysis begins. This is a mistake.
-
-Patient reports are the only source of ground truth for the lived experience of disease. No biomarker tells you whether someone can get out of bed. No lab value captures treatment-induced cognitive impairment. No clinical trial follows patients long enough to capture the years-long arc of a complex chronic illness. For conditions like ME/CFS, long COVID, POTS, and other poorly understood diseases, patient testimony is not a weak signal — it is often the *only* signal.
-
-The problem is not the quality of patient data. The problem is that we have never had the infrastructure to aggregate it, normalize it, and make it queryable at scale. PatientPunk is that infrastructure.
-
-## Why Qualitative Markers Matter
-
-Clinical research segments patients by diagnosis codes and lab values. But patients know things about themselves that never make it into their charts: how their symptoms cluster, how severity fluctuates, which comorbidities they believe are connected, what functional limitations look like day-to-day. These self-reported qualitative markers — "I crash after any exertion," "my symptoms are worse in the morning," "I went from bedbound to functional on this protocol" — contain signal that structured clinical data cannot capture.
-
-Segmenting by these markers is not a compromise. It is a research strategy.
-
-A patient who reports post-exertional malaise alongside brain fog and fatigue is a different cohort than one who reports the same diagnosis without PEM. A patient who self-identifies as a "slow responder" to LDN may have biology distinct from someone who saw results in the first week. These distinctions are invisible to standard ICD-10-based analysis. They are only visible if you take patient language seriously and build systems that can query it.
-
-PatientPunk treats self-reported qualitative markers as first-class fields — not as noise to be discarded, but as dimensions to slice and filter on. This is what makes patient-driven science possible.
-
-## What PatientPunk Does
-
-PatientPunk ingests patient-generated content from social media, normalizes it into structured records, and exposes it as queryable datasets for researchers and patient-driven scientists.
-
-A patient or researcher can ask:
-
-> *"Do other patients with ME/CFS, severe neuroinflammation, and brain fog report positive outcomes with LDN treatment?"*
+> *"Do patients with ME/CFS, neuroinflammation, and brain fog report positive outcomes with LDN?"*
 
 And get back:
 
-> **64% positive outcome · 20% negative outcome · 16% no effect**
-> *(based on 312 patient reports)*
+> **64% positive · 20% negative · 16% no effect** *(312 reports)*
 
 ---
 
-## Architecture
+## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                       INGESTION                         │
-│  (modular — Reddit, Twitter/X, patient forums, etc.)    │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                    NORMALIZATION                         │
-│  Posts stored in a normalized schema:                   │
-│  User entity · Post entity · source metadata            │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                 AI TRANSFORMATION                        │
-│  LLM-powered entity extraction · Symptom ontology       │
-│  mapping (MeSH / SNOMED) · Outcome scoring              │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                     DATABASE                            │
-│  User records · Post records ·                          │
-│  LLM outputs stored as structured JSON                  │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                      OUTPUTS                            │
-│  CSV exports · SQL queries · REST API · Research kits   │
-└─────────────────────────────────────────────────────────┘
-```
+**[View pipeline diagram](docs/pipeline_diagram.pdf)**
 
----
+The pipeline reads posts from a SQLite database and produces a sentiment database: for each post/comment × drug pair, did this author have a positive, negative, or mixed experience?
 
-## Key Features
+A key design principle: reply chain context is preserved. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both drugs_direct (mentioned in that post/comment) and drugs_context (inherited from upstream comments via the parent chain).
 
-- **Modular ingestion** — swap in new data sources (Reddit, forums, health apps) without changing downstream logic
-- **Symptom normalization** — maps patient language ("brain fog", "crushing fatigue") to standard medical ontologies
-- **Treatment outcome tracking** — classifies reported outcomes as positive, negative, neutral, or mixed
-- **Analysis engine with sanity checks** — statistical routines surface small-sample, sparse-table, censoring, convergence, and missing-data issues as structured warnings for downstream interpretation
-- **Cohort queries** — filter by condition profile, demographics, comorbidities, and treatment history
-- **Privacy-first** — no PII stored; usernames hashed; posts anonymized before storage
-- **Researcher-ready exports** — CSV, SQL dumps, and structured JSON for direct analysis
-
----
-
-## Analysis Layer
-
-The query-side analysis code lives in `app/analysis/stats.py`. It works on user-level aggregates and currently supports:
-
-- two-group comparisons
-- one-sample binomial checks
-- logistic and OLS regression
-- Kruskal-Wallis multi-group comparisons
-- monthly trend analysis
-- Cox proportional hazards survival analysis
-
-The analysis layer is intentionally warning-oriented. Most suspicious-but-usable situations do not raise exceptions. Instead they are attached to the returned result as `warnings` so the UI or downstream LLM can interpret them in context.
-
-Examples of situations that now emit warnings:
-
-- small or highly imbalanced sample sizes
-- sparse categorical tables
-- dropped rows from missing predictors
-- unstable or non-converged regression fits
-- flat outcomes with no variation
-- short or gappy trend series
-- heavy censoring or low event rates in survival analysis
-
-Hard failures are reserved for invalid inputs or genuinely unusable outputs, such as impossible parameter values.
-
-### Analysis test suite
-
-The focused regression and stress-test suite for the analysis engine is:
-
-```bash
-pytest tests/test_stats.py -q
-```
-
-This suite intentionally covers mixed timestamp storage, repeated profile runs, sparse regressions, heavy censoring, and warning propagation behavior.
-
----
-
-## Example Query
-
-```sql
-SELECT
-  t.canonical_name                                   AS treatment,
-  COUNT(*)                                           AS reports,
-  ROUND(AVG(tr.sentiment), 2)                        AS avg_sentiment,
-  SUM(CASE WHEN tr.sentiment > 0 THEN 1 ELSE 0 END)
-    * 100.0 / COUNT(*)                               AS pct_positive
-FROM treatment_reports tr
-JOIN treatment t ON t.id = tr.drug_id
-WHERE EXISTS (
-  SELECT 1 FROM conditions c
-  WHERE c.user_id = tr.user_id
-    AND c.condition_name = 'ME/CFS' COLLATE NOCASE
-)
-AND EXISTS (
-  SELECT 1 FROM conditions c
-  WHERE c.user_id = tr.user_id
-    AND c.condition_name = 'brain fog' COLLATE NOCASE
-)
-GROUP BY t.canonical_name
-ORDER BY reports DESC;
-```
-
----
-
-## Data Model
-
-The schema is organized into three layers:
-
-- **Layer 1 — Raw:** `users`, `posts` — scraped social media content
-- **Layer 2 — Configuration:** `treatment`, `extraction_runs` — lookup tables and run metadata
-- **Layer 3 — Extracted:** `user_profiles`, `conditions`, `treatment_reports` — LLM-extracted structured data
-
-**[View interactive schema diagram](schema_diagram_v5.html)** · **[schema.sql](schema.sql)**
-
----
-
-## Ethical Commitments
-
-- Data is used strictly for scientific and patient-benefit purposes
-- No re-identification of individuals
-- Opt-out mechanisms respected (deleted posts are purged)
-- Transparent about data provenance in all exports
+The pipeline also extracts demographic data for each user, including age bucket, sex, and location (in progress). For each user, when available, it extracts their conditions, onset and recovery time, and severity.
 
 ---
 
@@ -183,102 +39,331 @@ git clone https://github.com/Ely-S/PatientPunk.git
 cd PatientPunk
 uv sync
 
-# Copy env template and add your API key
-cp Scrapers/demographic_extraction/.env.example .env
-# Edit .env and set ANTHROPIC_API_KEY=<your key>
+# Set up your LLM API key
+cp .env.example .env
 ```
 
-To run any pipeline command, prefix it with `uv run`:
+All pipeline commands are prefixed with `uv run`. Run tests with `uv run pytest -v`.
 
+### LLM Provider
+
+The pipeline supports two providers: **Anthropic** (direct) and **OpenRouter** (any model).
+These can be set by the command line or (preferably) put them into the`.env` file in the project root — the pipeline loads it automatically.
+
+**Option A — Anthropic (default):**
 ```bash
-uv run python Scrapers/scrape_corpus.py --help
+export ANTHROPIC_API_KEY=your_key_here
 ```
 
-### Running tests
+**Option B — OpenRouter:**
+```bash
+export OPENROUTER_API_KEY=your_key_here
+```
+
+Any model on [OpenRouter](https://openrouter.ai/models) works. Set `MODEL_FAST` and `MODEL_STRONG` in your `.env`:
 
 ```bash
-uv run pytest -v
+OPENROUTER_API_KEY=your_key
+MODEL_FAST=qwen/qwen-2.5-7b-instruct
+MODEL_STRONG=qwen/qwen-2.5-7b-instruct
+```
+
+`MODEL_FAST` is used for extraction and prefiltering (high volume, cheap). `MODEL_STRONG` is used for sentiment classification (lower volume, needs accuracy).
+
+| Model | Cost | Notes |
+|-------|------|-------|
+| `anthropic/claude-haiku-4.5` | $0.80/1M | Default fast model. Best JSON reliability. |
+| `anthropic/claude-sonnet-4.6` | $3.00/1M | Default strong model. Best classification quality. |
+| `qwen/qwen-2.5-7b-instruct` | $0.04/1M | 20x cheaper. Works end-to-end but more batch retries. |
+| `qwen/qwen-2.5-72b-instruct` | $0.12/1M | Good balance of cost and quality. |
+
+Start with `--limit 50` to test a new model cheaply before running on the full dataset.
+
+
+
+The provider is auto-detected from whichever key is set. To force a specific provider:
+```bash
+export LLM_PROVIDER=openrouter   # or "anthropic"
+```
+
+### Using non-Anthropic models (Qwen, Llama, Gemini, etc.)
+
+Any model available on [OpenRouter](https://openrouter.ai/models) can be used. Set the `MODEL_FAST` and `MODEL_STRONG` environment variables to the OpenRouter model ID:
+
+```bash
+# Step 1: Set your OpenRouter key
+export OPENROUTER_API_KEY=your_key_here
+
+# Step 2: Pick a model from https://openrouter.ai/models
+#         Use the model ID exactly as shown on OpenRouter.
+export MODEL_FAST="qwen/qwen-2.5-7b-instruct"
+export MODEL_STRONG="qwen/qwen-2.5-7b-instruct"
 ```
 
 ---
 
 ## Running the Pipeline
 
-### Step 1 -- Scrape
+### Step 1 — Get the Reddit Data
+
+**Option A — Arctic Shift API**:
+
+Pulls posts from r/covidlonghaulers via the [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift) API — no Reddit API key required. Usernames are SHA-256 hashed before touching disk.
 
 ```bash
-# Quick test (80 posts, no comments or user histories)
-python Scrapers/scrape_corpus.py --weeks 2 --limit-posts 80
-
-# Full scrape (2 months of posts + comments + user histories)
-python Scrapers/scrape_corpus.py --months 2 --comments --user-histories
-# Outputs: data/subreddit_posts.json  +  data/users/*.json
+uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
+# Outputs:
+#   output/subreddit_posts.json     posts (+ comments if --comments)
+#   output/users/{hash}.json        per-author history (only with --user-histories)
+#   output/corpus_metadata.json     run summary
 ```
 
-### Step 2a -- Variable extraction *(who are the patients?)*
+Currently hardcoded to r/covidlonghaulers. See [Scrapers/README.md](Scrapers/README.md) for all flags, time estimates, and user history options. Note: the scraper writes to `output/`, not `data/`.
 
-Extracts 36+ demographic and clinical fields per record using regex + LLM backfill.
+| Flag | Description |
+|------|-------------|
+| `--months N` | How many months back to scrape (default: 2) |
+| `--weeks N` | Alternative: weeks instead of months |
+| `--comments` | Fetch full comment trees (recommended) |
+| `--user-histories` | Scrape each author's full Reddit history (adds 2-4 hours) |
+| `--limit-posts N` | Stop after N posts (for testing) |
+
+**Option B — Arctic Shift bulk download** (faster for large datasets):
+
+Download NDJSON files from [Arctic Shift](https://arctic-shift.photon-reddit.com/), then transform:
 
 ```bash
-# Default: regex extraction + LLM gap-fill (Phases 1-2-4-5)
+uv run python Scrapers/transform_arctic_shift.py \
+    --posts r_covidlonghaulers_posts_6_months.jsonl \
+    --comments r_covidlonghaulers_comments_6_months.jsonl \
+    --output output/subreddit_posts.json
+```
+
+Supports `.zst` compressed files. Works with any subreddit — not hardcoded.
+
+
+### Step 2 — Import into SQLite database
+
+```bash
+mkdir -p data
+sqlite3 data/posts.db < schema.sql
+uv run python src/import_posts.py \
+    --reddit-posts output/subreddit_posts.json \
+    --output-db data/posts.db
+```
+
+### Step 3a — Demographic extraction *(who are the patients?)*
+
+Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
+
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+
+```bash
+uv run python src/extract_demographics_conditions.py --db data/posts.db
+```
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database (required) |
+| `--limit N` | Limit to N users (default: all) |
+| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
+| `--max-chars N` | Max characters per post (default: 500) |
+
+
+### Step 3b — Drug sentiment *(what do they say about treatments?)*
+
+A general-purpose pipeline for building a sentiment database across all drugs and interventions mentioned in the corpus. It automatically discovers every drug/supplement/intervention mentioned — including categories like "antihistamines", enzymes like "DAO", and generic references like "an oral antibiotic" — normalizes synonyms, and classifies how each author feels about each treatment, without any hardcoded drug list.
+
+A key design principle: **reply chain context is preserved**. Each entry carries both `drugs_direct` (mentioned in that post/comment) and `drugs_context` (inherited from upstream comments). A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post.
+
+```bash
+uv run python src/run_sentiment_pipeline.py \
+    --db data/posts.db \
+    --output-dir outputs
+```
+
+Add `--limit 50` for a quick demo run.
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to SQLite database (required) |
+| `--output-dir` | Directory for intermediate files (required) |
+| `--limit N` | Process only the first N posts/comments (default: all) |
+| `--skip-extract` | Skip extraction step (use existing tagged_mentions.json) |
+| `--skip-canonicalize` | Skip synonym normalization |
+| `--skip-prefilter` | Skip prefilter, send all pairs directly to classifier |
+| `--reclassify` | Re-classify all pairs, even those already in the database |
+| `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
+| `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
+| `--workers N` | Parallel workers for LLM calls during extract/classify (default: 3, use 1 for sequential) |
+| `--drug NAME` | Restrict extract + canonicalize + classify to one target drug and its synonyms. |
+
+#### Single-drug mode (`--drug`)
+
+When iterating on prompts or investigating one drug's results, restricting the pipeline to a single target skips almost all LLM cost. On the first run, the pipeline asks the strong model once for the target's common names, abbreviations, brand/generic names, and plausible misspellings (≤30), and caches the list to `outputs/aliases_<target>.json` (hand-editable JSON array). From that point:
+
+- **Extract** skips the LLM entirely. Every post/comment is regex-matched (word-boundary, case-insensitive) against the alias list — matches get `drugs_direct = [target]`, non-matches get `[]`. Upstream context (`drugs_context`) still propagates via the usual parent-chain walk, so a short reply under a matching parent is correctly tagged.
+- **Canonicalize** skips the batch synonym pass. It reuses the same alias cache to merge aliases → target, filters `canonicalized_mentions.json` to target-mentioning entries, and upserts only the target row to `treatment`.
+- **Classify** filters its work queue to `drug == target`.
+
+Net effect: one alias-lookup LLM call the first time, **zero** LLM calls for extract or canonicalize on subsequent runs — only the classify step spends tokens.
+
+```bash
+# First pass: extract + targeted canonicalize + classify on LDN only
+# (first-time LDN run fetches aliases once and caches to outputs/aliases_ldn.json)
+uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug ldn
+
+# Iterate on the classifier without re-running extract:
+# (reuses cached aliases_ldn.json — no extra LLM call)
+uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs \
+    --drug ldn --skip-extract --reclassify
+```
+
+To add or remove synonyms for a target, edit `outputs/aliases_<target>.json` directly and rerun — the cache is a plain JSON array of lowercase strings.
+
+Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
+
+---
+
+## Drug Sentiment Pipeline — Internals
+
+### Step 1 — Extract (`pipeline/extract.py`)
+
+Reads posts/comments from the `posts` table in SQLite. Asks a fast model (e.g. Haiku) to identify all drugs/supplements/interventions mentioned. Extracts specific drugs, brand names, abbreviations, drug categories ("antihistamines", "beta blocker"), enzymes/supplements ("DAO", "probiotics"), and generic references ("an oral antibiotic"). Uses batching (10 texts per call) with automatic retry on any output count mismatch — splits into smaller sub-batches and retries, up to 2 levels of recursion. Any mismatch is treated as a failure; results are never silently truncated or padded. Saves to `tagged_mentions.json` every 1000 items.
+
+**Upstream context:** For each comment, `drugs_context` is computed by walking up the parent chain (up to the maximum number of steps specified) and collecting all `drugs_direct` from upstream comments. This ensures a reply to an LDN thread carries LDN in its context even if it doesn't mention LDN by name.
+
+**Question-only filter:** Entries that are pure questions (e.g. "Has anyone tried LDN?", "What dose did you start on?") are dropped at extract time via `is_only_questions()`. They still contribute `drugs_direct` to children's upstream context, but don't themselves reach classify.
+
+**Targeted mode (`--drug`)**: the LLM extract step is replaced by a regex alias match against the cached `outputs/aliases_<target>.json` list. Every post/comment is matched case-insensitively at word boundaries; matches get `drugs_direct = [target]`, non-matches get `[]`. No tokens spent on extract. Upstream context propagation is unchanged.
+
+**Output:** `tagged_mentions.json` — intermediate file with drug mentions per entry.
+
+### Step 2 — Canonicalize (`pipeline/canonicalize.py`)
+
+Collects all unique drug names from `tagged_mentions.json`, sends them to the strong model in a large single-pass batch (up to 3500 names), and merges true synonyms (e.g. `"low dose naltrexone"` → `"ldn"`, `"pepcid"` → `"famotidine"`). Writes a separate `canonicalized_mentions.json` — the original `tagged_mentions.json` is left untouched so you can rerun canonicalize without redoing extract.
+
+**Rule:** only collapses true synonyms — does NOT merge a specific drug into a broader category (e.g. `famotidine` and `antihistamines` stay separate). The prompt returns merges-only output (omitting identity mappings), so token usage scales with merge rate rather than name count.
+
+Also populates the `treatment` table from the drug names and canonical map. Each unique drug name becomes a row; aliases are stored as a JSON array. Uses `INSERT OR IGNORE` so re-runs are safe.
+
+With `--drug NAME`, canonicalize skips the batch synonym pass. Instead it calls `get_drug_aliases(NAME)` once (strong model asked for common names, abbreviations, brand/generic names, and plausible misspellings — up to 30), caches the result to `outputs/aliases_<NAME>.json`, and reuses the cache on later runs. All aliases merge into the target, `canonicalized_mentions.json` is filtered to entries mentioning the target, and only the target row is upserted to `treatment`. The cache file is plain JSON and can be hand-edited to add/remove synonyms.
+
+Can be skipped with `--skip-canonicalize` (raw drug names inserted into the treatment table with no aliases).
+
+### Step 3 — Classify (`pipeline/classify.py`)
+
+For each entry × drug pair, classifies the author's sentiment. Two-stage process to minimize API cost:
+
+Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls back to `tagged_mentions.json`.
+
+1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects research discussions, off-topic replies, and author-doesn't-use-it cases. (Pure question posts are already dropped at extract time.) Results cached to `prefilter_results.json` — skipped on re-run.
+
+2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
+
+**Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
+
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
+
+| Column | Values |
+|--------|--------|
+| `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
+| `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
+
+---
+
+## Run traceability
+
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
+
+Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
+
+---
+
+## Crash recovery
+
+The pipeline is designed to resume after interruptions:
+
+- **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 1000 items.
+- **Canonicalize:** Re-runs fully (single strong-model call on the unique drug name list; with `--drug` it's one LLM call the first time and zero on subsequent runs via the cached `aliases_<target>.json`). Treatment table uses `INSERT OR IGNORE`. Writes `canonicalized_mentions.json` separately, so rerunning canonicalize never invalidates `tagged_mentions.json`.
+- **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
+
+---
+
+## Output
+
+Results live in the `treatment_reports` table:
+
+```sql
+-- All reports for a specific drug
+SELECT tr.*, t.canonical_name
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+WHERE t.canonical_name = 'ldn';
+
+-- Sentiment breakdown per drug
+SELECT t.canonical_name, tr.sentiment, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name, tr.sentiment
+ORDER BY t.canonical_name, n DESC;
+
+-- Top drugs by report count
+SELECT t.canonical_name, COUNT(*) as n
+FROM treatment_reports tr
+JOIN treatment t ON tr.drug_id = t.id
+GROUP BY t.canonical_name
+ORDER BY n DESC
+LIMIT 20;
+```
+
+---
+
+## Variable Extraction (`variable_extraction/`)
+
+A second, complementary pipeline that extracts 36+ demographic and clinical
+fields per record using regex + LLM backfill, with optional **inductive field
+discovery** (finds new variables in the data rather than only filling a fixed
+schema). It is independent of the drug-sentiment pipeline above and joins on
+`author_hash`.
+
+```bash
+# Regex extraction + LLM gap-fill
 python variable_extraction/main.py run \
     --schema variable_extraction/schemas/covidlonghaulers_schema.json
 
-# With field discovery (finds new variables in the data)
+# Add inductive field discovery (proposes new variables found in the corpus)
 python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
-    --discover auto
+    --schema variable_extraction/schemas/covidlonghaulers_schema.json --discover auto
 
-# Regex only (no API key needed)
+# Regex only — no API key required
 python variable_extraction/main.py run \
-    --schema variable_extraction/schemas/covidlonghaulers_schema.json \
-    --no-llm
-# Outputs: data/records.csv  +  data/codebook.csv
+    --schema variable_extraction/schemas/covidlonghaulers_schema.json --no-llm
+# Outputs: output/records.csv + output/codebook.csv
 ```
 
-### Step 2b -- Demographics *(age, sex, location)*
+See [`variable_extraction/README.md`](variable_extraction/README.md) for the full
+CLI reference, architecture diagram, and library API.
 
-Dedicated LLM pass for demographic fields (deductive + inductive coding).
+---
+
+## Analysis Layer
+
+The query-side analysis code lives in `app/analysis/stats.py`. It works on
+user-level aggregates and supports two-group comparisons, one-sample binomial
+checks, logistic and OLS regression, Kruskal-Wallis multi-group comparisons,
+monthly trend analysis, and Cox proportional-hazards survival analysis.
+
+The layer is intentionally **warning-oriented**: most suspicious-but-usable
+situations (small or imbalanced samples, sparse categorical tables, dropped rows
+from missing predictors, non-converged fits, flat outcomes, gappy trend series,
+heavy censoring) do not raise — they are attached to the result as `warnings` so
+the UI or a downstream LLM can interpret them in context. Hard failures are
+reserved for invalid inputs or genuinely unusable outputs.
 
 ```bash
-python variable_extraction/main.py demographics --input-dir data --mode both
-# Outputs: data/demographics_deductive.csv  +  data/demographics_inductive.json
+pytest tests/test_stats.py -q   # regression + stress suite for the analysis engine
 ```
-
-### Step 2c -- Drug sentiment *(what do they say about treatments?)*
-
-```bash
-cd database_creation
-python extract_mentions.py --output-dir ../data/drug_pipeline
-python canonicalize.py --output-dir ../data/drug_pipeline
-python classify_sentiment.py --output-dir ../data/drug_pipeline
-# Output: data/drug_pipeline/sentiment_cache.json
-```
-
-Steps 2a-2c are independent -- run them in any order. All tag records with
-`author_hash` (SHA-256 of username) as the join key.
-
-See [`variable_extraction/README.md`](variable_extraction/README.md) for full
-CLI reference and library API.
-
-### Step 3 -- Combine into unified database
-
-```bash
-python load_db.py
-# Joins both pipelines into patientpunk.db via author_hash
-# Outputs: patientpunk.db + data/combined_treatment_outcomes.csv
-```
-
-### Latest run (316 records: 220 posts + 96 user histories)
-
-| Metric | Value |
-|---|---|
-| Treatment reports | 1,316 |
-| Unique drugs | 430 |
-| Sentiment | 70% positive, 21% negative, 9% mixed |
-| Demographics | age 30%, sex 46%, location 57% |
-| Conditions | 88 unique, 78% coverage |
-| Overall field fill rate | 47.2% |
 
 ---
 

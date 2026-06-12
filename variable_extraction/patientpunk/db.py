@@ -11,8 +11,8 @@ Usage:
     from patientpunk.db import query_treatment_outcomes
 
     conn = init_db(Path("patientpunk.db"))
-    load_corpus(conn, Path("data/"))
-    run_id = load_extractions(conn, Path("data/demographics.csv"))
+    load_corpus(conn, Path("output/"))
+    run_id = load_extractions(conn, Path("output/demographics.csv"))
     load_sentiment(conn, Path("outputs/sentiment_cache.json"),
                    Path("outputs/canonical_map.json"), run_id)
     df = query_treatment_outcomes(conn, drug="ldn", condition="POTS")

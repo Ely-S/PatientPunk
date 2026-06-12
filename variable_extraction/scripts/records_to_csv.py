@@ -38,8 +38,8 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_INPUT = Path(__file__).parent.parent.parent / "data" / "merged_records_base.json"
-DEFAULT_OUTPUT = Path(__file__).parent.parent.parent / "data" / "records.csv"
+DEFAULT_INPUT = Path(__file__).parent.parent.parent / "output" / "merged_records_base.json"
+DEFAULT_OUTPUT = Path(__file__).parent.parent.parent / "output" / "records.csv"
 
 # Metadata columns always written first
 META_COLUMNS = [

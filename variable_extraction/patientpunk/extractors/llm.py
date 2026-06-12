@@ -18,7 +18,7 @@ Output files (written to *temp_dir*)
 Example
 -------
 >>> extractor = LLMExtractor(
-...     input_dir=Path("../data"),
+...     input_dir=Path("../output"),
 ...     schema_path=Path("schemas/covidlonghaulers_schema.json"),
 ...     workers=10,
 ...     skip_threshold=0.7,

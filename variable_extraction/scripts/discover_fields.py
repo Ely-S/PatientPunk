@@ -1581,7 +1581,7 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
     )
     parser.add_argument(
         "--input-dir", type=Path,
-        default=Path(__file__).parent.parent.parent / "data",
+        default=Path(__file__).parent.parent.parent / "output",
         help="Path to the output/ directory from scrape_corpus.py",
     )
     parser.add_argument(

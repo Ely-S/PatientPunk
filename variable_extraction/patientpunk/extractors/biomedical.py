@@ -16,7 +16,7 @@ Output files (written to *temp_dir*)
 Example
 -------
 >>> extractor = BiomedicalExtractor(
-...     input_dir=Path("../data"),
+...     input_dir=Path("../output"),
 ...     schema_path=Path("schemas/covidlonghaulers_schema.json"),
 ... )
 >>> result = extractor.run()

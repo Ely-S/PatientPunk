@@ -50,7 +50,7 @@ class CodebookGenerator(BaseExporter):
         When provided, adds coverage percentage and example values to every
         field entry.
     output_path:
-        Output file path.  Defaults to ``../data/codebook.{csv|md}``.
+        Output file path.  Defaults to ``../output/codebook.{csv|md}``.
     fmt:
         Output format -- ``"csv"`` (default) or ``"markdown"``.
     max_examples:

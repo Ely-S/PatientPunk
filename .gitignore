@@ -17,6 +17,8 @@ dist/
 # provide download instructions in the README.
 data/
 !data/.gitkeep
+output/
+reddit_sample_data/outputs/
 *.zip
 
 # Scraped corpus data (user histories, subreddit posts)

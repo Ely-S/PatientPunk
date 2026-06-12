@@ -1318,7 +1318,7 @@ class TestDemographicCoderArgs:
         assert "--posts-only" not in args
 
     def test_repr(self, tmp_path):
-        coder = DemographicCoder(input_dir=tmp_path / "data")
+        coder = DemographicCoder(input_dir=tmp_path / "output")
         repr_str = repr(coder)
         assert "DemographicCoder" in repr_str
 

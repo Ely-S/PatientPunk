@@ -13,7 +13,7 @@ Example
 >>> from patientpunk.pipeline import Pipeline, PipelineConfig
 >>> config = PipelineConfig(
 ...     schema_path=Path("schemas/covidlonghaulers_schema.json"),
-...     input_dir=Path("../data"),
+...     input_dir=Path("../output"),
 ...     workers=10,
 ... )
 >>> pipeline = Pipeline(config)
@@ -64,7 +64,7 @@ class PipelineConfig(BaseModel):
 
     # Paths
     input_dir: Path = Field(
-        default_factory=lambda: PACKAGE_ROOT.parent / "data"
+        default_factory=lambda: PACKAGE_ROOT.parent / "output"
     )
     temp_dir: Path | None = None
 
