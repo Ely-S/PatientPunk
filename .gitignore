@@ -13,18 +13,22 @@ __pycache__/
 dist/
 .env
 
-# Runtime data — do not commit data files. Store them externally and
-# provide download instructions in the README.
+# Runtime data — do not commit data files. Store them externally
+# (PatientPunk_data/ + S3) and provide download instructions in the README.
 data/
 !data/.gitkeep
 output/
-reddit_sample_data/outputs/
 *.zip
 
-# Scraped corpus data (user histories, subreddit posts)
+# Sample / scraped corpus data (user histories, subreddit posts, extraction outputs)
+reddit_sample_data/
+reddit_posts_only/
 Scrapers/users/
 Scrapers/output/
 **/subreddit_posts.json
+
+# Dev scratch
+**/_manual_check_tmp/
 
 # Pipeline intermediate / temp files
 **/temp/

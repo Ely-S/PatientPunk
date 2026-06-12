@@ -1,7 +1,7 @@
 """Build demographics_comparison.csv.
 
 Compares three approaches for the same 100 subreddit posts:
-  - pipeline: regex + LLM gap-fill (data/records.csv)
+  - pipeline: regex + LLM gap-fill (output/records.csv)
   - llm_post: Haiku-only on the single post text
   - llm_user: Haiku-only on the full user history (where available)
 
@@ -22,7 +22,7 @@ ROOT = Path(__file__).parent.parent
 posts_raw = json.load((ROOT / "reddit_sample_data/subreddit_posts.json").open())
 post_to_hash = {post["post_id"]: post.get("author_hash") for post in posts_raw}
 
-with open(ROOT / "data/records.csv", encoding="utf-8") as records_csv:
+with open(ROOT / "output/records.csv", encoding="utf-8") as records_csv:
     pipeline = {row["post_id"]: row for row in csv.DictReader(records_csv)}
 
 llm_by_hash = {}   # subreddit_post rows, one per author_hash
