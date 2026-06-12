@@ -7,15 +7,17 @@ Loads output from both pipelines into a shared database keyed on author_hash,
 then exposes a single query function for treatment outcome analysis.
 
 Usage:
-    from patientpunk.db import init_db, load_corpus, load_extractions, load_sentiment
+    from patientpunk.db import init_db, load_extractions, load_variables
     from patientpunk.db import query_treatment_outcomes
 
-    conn = init_db(Path("patientpunk.db"))
-    load_corpus(conn, Path("output/"))
-    run_id = load_extractions(conn, Path("output/demographics.csv"))
-    load_sentiment(conn, Path("outputs/sentiment_cache.json"),
-                   Path("outputs/canonical_map.json"), run_id)
-    df = query_treatment_outcomes(conn, drug="ldn", condition="POTS")
+    conn = init_db(Path("patientpunk.db"))            # over a copy of posts.db
+    run_id = load_extractions(conn, Path("output/records.csv"))
+    load_variables(conn, Path("output/records.csv"), run_id)
+    rows = query_treatment_outcomes(conn, drug="ldn", condition="POTS")
+
+Drug sentiment (treatment / treatment_reports, with TEXT sentiment values) is
+written directly to the database by src/run_sentiment_pipeline.py; this module
+reads it for queries but no longer ingests a separate sentiment-cache file.
 """
 
 from __future__ import annotations
@@ -41,6 +43,14 @@ _SIGNAL_SCORE: dict[str, float] = {
     "moderate": 0.67,
     "weak":     0.33,
     "n/a":      0.0,
+}
+
+# Columns in records.csv that are metadata, not extracted variables.
+# Mirrors scripts/records_to_csv.py META_COLUMNS (+ source_type for the
+# demographics CSV).  Used by load_variables to decide which columns are data.
+VARIABLE_META_COLUMNS: set[str] = {
+    "author_hash", "source", "source_type", "post_id", "text_count",
+    "schema_id", "extraction_method", "extracted_at",
 }
 
 
@@ -71,11 +81,23 @@ def init_db(db_path: Path, schema_sql: Path | None = None) -> sqlite3.Connection
     return conn
 
 
-def _register_run(conn: sqlite3.Connection, model: str, config: dict) -> int:
-    """Insert an extraction_runs row and return its run_id."""
+def register_run(
+    conn: sqlite3.Connection,
+    extraction_type: str,
+    config: dict,
+    commit_hash: str = "unknown",
+) -> int:
+    """Insert an extraction_runs row and return its run_id.
+
+    Columns match schema.sql (run_at, commit_hash, extraction_type, config),
+    mirroring src/utilities/db.py's ReportWriter so both pipelines record run
+    provenance the same way.  (The previous version inserted a nonexistent
+    ``model`` column.)
+    """
     cur = conn.execute(
-        "INSERT INTO extraction_runs (run_at, model, config) VALUES (?, ?, ?)",
-        (int(time.time()), model, json.dumps(config)),
+        "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config)"
+        " VALUES (?, ?, ?, ?)",
+        (int(time.time()), commit_hash, extraction_type, json.dumps(config)),
     )
     conn.commit()
     return cur.lastrowid
@@ -156,7 +178,7 @@ def load_extractions(
     Returns the run_id used (creates one if not supplied).
     """
     if run_id is None:
-        run_id = _register_run(conn, "extraction_pipeline", {"source": str(csv_path)})
+        run_id = register_run(conn, "extraction_pipeline", {"source": str(csv_path)})
 
     with open(csv_path, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
@@ -242,6 +264,61 @@ def load_extractions(
     return run_id
 
 
+def load_variables(
+    conn: sqlite3.Connection,
+    csv_path: Path,
+    run_id: int,
+    skip_columns: set[str] | None = None,
+) -> int:
+    """Load every extracted variable column from records.csv into the EAV
+    ``variables`` table -- one row per non-empty, non-metadata cell.
+
+    Unlike :func:`load_extractions` (which maps only a fixed set of demographic
+    and condition columns), this preserves ALL columns -- including the
+    inductively-discovered variables -- so the full wide records.csv is queryable
+    inside the unified database.
+
+    Returns the number of EAV rows inserted.
+    """
+    skip = set(VARIABLE_META_COLUMNS)
+    if skip_columns:
+        skip |= set(skip_columns)
+
+    with open(csv_path, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        value_cols = [
+            c for c in fieldnames
+            if c not in skip
+            and not c.endswith("__provenance")
+            and not c.endswith("__confidence")
+        ]
+        inserted = 0
+        for row in reader:
+            author_hash = (row.get("author_hash") or "").strip()
+            if not author_hash:
+                continue
+            conn.execute(
+                "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
+                " VALUES (?, ?, ?)",
+                (author_hash, "covidlonghaulers", int(time.time())),
+            )
+            post_id = (row.get("post_id") or "").strip() or None
+            for col in value_cols:
+                value = (row.get(col) or "").strip()
+                if not value:
+                    continue
+                conn.execute(
+                    "INSERT INTO variables (run_id, user_id, post_id, field, value)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (run_id, author_hash, post_id, col, value),
+                )
+                inserted += 1
+
+    conn.commit()
+    return inserted
+
+
 def _bucketize_age(raw: str) -> str | None:
     """Convert a raw age string to a decade bucket like '30s'.
 
@@ -276,7 +353,7 @@ def load_conditions(
     Returns the run_id used.
     """
     if run_id is None:
-        run_id = _register_run(conn, "biomedical_regex+llm", {"source": str(merged_records_json)})
+        run_id = register_run(conn, "biomedical_regex+llm", {"source": str(merged_records_json)})
 
     records = json.loads(merged_records_json.read_text(encoding="utf-8"))
     inserted = 0
@@ -310,116 +387,6 @@ def load_conditions(
                 (run_id, author_hash or None, post_id, "illness", condition_name.lower()),
             )
             inserted += 1
-
-    conn.commit()
-    return run_id
-
-
-# ── ETL: Polina's pipeline ─────────────────────────────────────────────────────
-
-def load_sentiment(
-    conn: sqlite3.Connection,
-    sentiment_cache_json: Path,
-    canonical_map_json: Path | None = None,
-    run_id: int | None = None,
-) -> int:
-    """
-    Load sentiment_cache.json -> treatment + treatment_reports tables.
-
-    Cache keys are "{entry_id}:{drug_name}". Splits on the first colon only.
-    Entries with signal=n/a are already excluded from the cache by classify_sentiment.py.
-
-    Returns the run_id used.
-    """
-    if run_id is None:
-        run_id = _register_run(conn, "sentiment_classifier", {"source": str(sentiment_cache_json)})
-
-    cache = json.loads(sentiment_cache_json.read_text(encoding="utf-8"))
-
-    # Load canonical map if available (maps synonyms -> canonical name)
-    canonical: dict[str, str] = {}
-    if canonical_map_json and canonical_map_json.exists():
-        canonical = json.loads(canonical_map_json.read_text(encoding="utf-8"))
-
-    # Drug name -> db id cache (avoids repeated SELECTs)
-    drug_id_cache: dict[str, int] = {}
-
-    inserted = 0
-
-    for composite_key, entry in cache.items():
-        # ── KEY SPLIT ────────────────────────────────────────────────────────
-        # The key format is "entry_id:drug_name" -- split on first colon only
-        # so that drug names containing colons (rare but possible) survive.
-        if ":" not in composite_key:
-            continue
-        entry_id, drug_raw = composite_key.split(":", 1)
-
-        # Resolve canonical drug name
-        drug_name = canonical.get(drug_raw, drug_raw).strip().lower()
-        if not drug_name:
-            continue
-
-        # Ensure user + post/comment exist (sentiment entries can reference
-        # comments t1_... not in the posts table). posts.user_id is NOT NULL
-        # so we use a placeholder for deleted/missing authors.
-        author_hash = entry.get("author", "")
-        effective_user = author_hash or "__unknown__"
-        conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-            " VALUES (?, ?, ?)",
-            (effective_user, "covidlonghaulers", int(time.time())),
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO posts"
-            " (post_id, user_id, body_text, scraped_at)"
-            " VALUES (?, ?, ?, ?)",
-            (entry_id, effective_user, entry.get("text", ""), int(time.time())),
-        )
-
-        # Upsert treatment row
-        if drug_name not in drug_id_cache:
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO treatment (canonical_name) VALUES (?)",
-                (drug_name,),
-            )
-            conn.commit()
-            row = conn.execute(
-                "SELECT id FROM treatment WHERE canonical_name = ? COLLATE NOCASE",
-                (drug_name,),
-            ).fetchone()
-            drug_id_cache[drug_name] = row[0]
-
-        drug_id = drug_id_cache[drug_name]
-
-        sentiment_raw = entry.get("sentiment", "neutral")
-        signal_raw = entry.get("signal", "n/a")
-        sentiment_score = _SENTIMENT_SCORE.get(sentiment_raw, 0.0)
-        signal_score = _SIGNAL_SCORE.get(signal_raw, 0.0)
-
-        # Ensure user and post/comment entry exist (sentiment can come from
-        # comments t1_... which aren't in the posts table loaded from
-        # subreddit_posts.json -- insert stub rows to satisfy FKs).
-        if author_hash:
-            conn.execute(
-                "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-                " VALUES (?, ?, ?)",
-                (author_hash, "covidlonghaulers", int(time.time())),
-            )
-        conn.execute(
-            "INSERT INTO treatment_reports"
-            " (run_id, post_id, user_id, drug_id, sentiment, signal_strength, sentiment_raw)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                run_id,
-                entry_id,
-                effective_user,
-                drug_id,
-                sentiment_score,
-                signal_score,
-                json.dumps({"sentiment": sentiment_raw, "signal": signal_raw}),
-            ),
-        )
-        inserted += 1
 
     conn.commit()
     return run_id
@@ -489,20 +456,30 @@ def query_treatment_outcomes(
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
+    # Sentiment / signal are stored as TEXT (positive/negative/mixed/neutral,
+    # strong/moderate/weak/n/a) by src/run_sentiment_pipeline.py.  Build the
+    # numeric avg_* expressions from the shared score maps.
+    sent_case = "CASE tr.sentiment " + " ".join(
+        f"WHEN '{k}' THEN {v}" for k, v in _SENTIMENT_SCORE.items()
+    ) + " ELSE NULL END"
+    sig_case = "CASE tr.signal_strength " + " ".join(
+        f"WHEN '{k}' THEN {v}" for k, v in _SIGNAL_SCORE.items()
+    ) + " ELSE NULL END"
+
     sql = f"""
         SELECT
             t.canonical_name                                           AS drug,
             COUNT(*)                                                   AS n_reports,
-            ROUND(100.0 * SUM(CASE WHEN tr.sentiment > 0.7 THEN 1 ELSE 0 END) / COUNT(*), 1)
+            ROUND(100.0 * SUM(CASE WHEN tr.sentiment = 'positive' THEN 1 ELSE 0 END) / COUNT(*), 1)
                                                                        AS pct_positive,
-            ROUND(100.0 * SUM(CASE WHEN tr.sentiment < -0.7 THEN 1 ELSE 0 END) / COUNT(*), 1)
+            ROUND(100.0 * SUM(CASE WHEN tr.sentiment = 'negative' THEN 1 ELSE 0 END) / COUNT(*), 1)
                                                                        AS pct_negative,
-            ROUND(100.0 * SUM(CASE WHEN tr.sentiment BETWEEN 0.1 AND 0.7 THEN 1 ELSE 0 END)
-                  / COUNT(*), 1)                                        AS pct_mixed,
-            ROUND(100.0 * SUM(CASE WHEN tr.sentiment = 0.0 THEN 1 ELSE 0 END) / COUNT(*), 1)
+            ROUND(100.0 * SUM(CASE WHEN tr.sentiment = 'mixed' THEN 1 ELSE 0 END) / COUNT(*), 1)
+                                                                       AS pct_mixed,
+            ROUND(100.0 * SUM(CASE WHEN tr.sentiment = 'neutral' THEN 1 ELSE 0 END) / COUNT(*), 1)
                                                                        AS pct_neutral,
-            ROUND(AVG(tr.sentiment), 3)                                AS avg_sentiment,
-            ROUND(AVG(tr.signal_strength), 3)                         AS avg_signal
+            ROUND(AVG({sent_case}), 3)                                 AS avg_sentiment,
+            ROUND(AVG({sig_case}), 3)                                  AS avg_signal
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         {where_sql}

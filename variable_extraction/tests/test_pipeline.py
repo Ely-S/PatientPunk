@@ -52,6 +52,8 @@ from scripts.discover_fields import (
     parse_json_response,
     evaluate_patterns,
 )
+from scripts.extract_biomedical import compile_extension_patterns
+from scripts.make_codebook import build_field_registry
 
 
 # =============================================================================
@@ -481,3 +483,57 @@ class TestSchemaPatterns:
             assert matched, f"Expected '{field}' to match: {text!r}"
         else:
             assert not matched, f"Expected '{field}' NOT to match: {text!r}"
+
+
+# =============================================================================
+# compile_extension_patterns -- promoted-field Phase 1 gate
+# =============================================================================
+
+class TestCompileExtensionPatternsPromoted:
+    def test_raw_discovered_skipped(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": ["foo"]}}}
+        active, names = compile_extension_patterns(schema)
+        assert "d" not in active           # raw discovered field skipped by Phase 1
+
+    def test_promoted_compiled(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": ["foo"],
+                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
+        active, names = compile_extension_patterns(schema)
+        assert "d" in active and len(active["d"]) == 1
+
+    def test_promoted_llm_only_empty_patterns(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": [],
+                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
+        active, names = compile_extension_patterns(schema)
+        assert active["d"] == []           # empty pattern list, no error
+        assert "d" in names
+
+
+# =============================================================================
+# build_field_registry -- discovered-schema append + dedup
+# =============================================================================
+
+class TestBuildFieldRegistryDiscovered:
+    _BASE = {"base_fields": {"age": {"description": "a", "confidence": "high"}}}
+
+    def test_appends_discovered(self):
+        ext = {"extension_fields": {}}
+        disc = {"extension_fields": {
+            "newf": {"source": "llm_discovered", "description": "d",
+                     "confidence": "low", "patterns": []}}}
+        reg = build_field_registry(self._BASE, ext, disc)
+        fields = {r["field"]: r for r in reg}
+        assert fields["newf"]["source"] == "llm_discovered"
+
+    def test_dedup_curated_wins(self):
+        ext = {"extension_fields": {
+            "shared": {"source": "extension", "description": "curated", "patterns": []}}}
+        disc = {"extension_fields": {
+            "shared": {"source": "llm_discovered", "description": "disc", "patterns": []}}}
+        reg = build_field_registry(self._BASE, ext, disc)
+        shared = [r for r in reg if r["field"] == "shared"]
+        assert len(shared) == 1                       # not duplicated
+        assert shared[0]["source"] == "extension"     # curated entry wins

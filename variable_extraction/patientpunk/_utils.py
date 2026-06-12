@@ -180,6 +180,31 @@ def find_newest_glob(directory: Path, pattern: str) -> Path | None:
     return newest
 
 
+def find_discovery_reports(temp_dir: Path, base_schema_id: str) -> list[tuple[Path, dict]]:
+    """Return ``(report_path, report_dict)`` for every ``discovered_field_report_*.json``
+    in *temp_dir* whose ``pipeline_run.base_schema`` matches *base_schema_id*.
+
+    Malformed or non-matching reports are skipped.  This is the single source of
+    truth for locating a run's discovery output, used by the pipeline (to find
+    the discovered records and schema for Phase 4 / Phase 5) and by the ``promote``
+    command (to find the discovery run to merge into a curated schema).
+    """
+    matches: list[tuple[Path, dict]] = []
+    if not temp_dir.exists():
+        return matches
+    for report_path in temp_dir.glob("discovered_field_report_*.json"):
+        report = load_json(report_path)
+        if not isinstance(report, dict):
+            continue
+        run_meta = report.get("pipeline_run", {})
+        if not isinstance(run_meta, dict):
+            continue
+        if run_meta.get("base_schema") != base_schema_id:
+            continue
+        matches.append((report_path, report))
+    return matches
+
+
 def clean_temp_dir(temp_dir: Path, patterns: list[str]) -> list[str]:
     """
     Delete intermediate files matching any of *patterns* inside *temp_dir*.

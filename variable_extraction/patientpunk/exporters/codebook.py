@@ -59,6 +59,10 @@ class CodebookGenerator(BaseExporter):
         Multi-value separator used in the records CSV (default: ``" | "``).
     include_discovered:
         When *False*, exclude ``llm_discovered`` fields from the output.
+    discovered_schema_path:
+        Run's discovered-schema JSON (``temp/discovered_*.json``).  When provided,
+        its ``extension_fields`` are documented in the codebook even if they were
+        never merged into the curated schema.
     """
 
     _SCRIPT = "make_codebook.py"
@@ -74,6 +78,7 @@ class CodebookGenerator(BaseExporter):
         max_examples: int = 5,
         sep: str = " | ",
         include_discovered: bool = True,
+        discovered_schema_path: Path | None = None,
     ) -> None:
         super().__init__(
             input_dir=Path(schema_path).parent,
@@ -89,6 +94,9 @@ class CodebookGenerator(BaseExporter):
         self.max_examples = max_examples
         self.sep = sep
         self.include_discovered = include_discovered
+        self.discovered_schema_path = (
+            Path(discovered_schema_path) if discovered_schema_path else None
+        )
 
     def _build_args(self) -> list[str]:
         args = [
@@ -104,4 +112,6 @@ class CodebookGenerator(BaseExporter):
             args += ["--output", str(self.output_path)]
         if not self.include_discovered:
             args += ["--no-discovered"]
+        if self.discovered_schema_path:
+            args += ["--discovered-schema", str(self.discovered_schema_path)]
         return args

@@ -38,9 +38,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk._utils import (
     clean_temp_dir,
     csv_fill_rate,
+    find_discovery_reports,
     find_newest_glob,
     get_schema_id,
     load_json,
+)
+from patientpunk.promote import (
+    PromoteResult,
+    find_latest_discovery,
+    promote_discovered_fields,
+    resolve_discovered_schema,
 )
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
@@ -832,6 +839,19 @@ class TestCodebookGeneratorArgs:
         args = gen._build_args()
         assert "csv" in args
         assert "--no-discovered" not in args
+
+    def test_discovered_schema_arg(self, tmp_path):
+        gen = CodebookGenerator(
+            schema_path=tmp_path / "s.json",
+            discovered_schema_path=tmp_path / "discovered_x.json",
+        )
+        args = gen._build_args()
+        assert "--discovered-schema" in args
+        assert str(tmp_path / "discovered_x.json") in args
+        # absent when not provided
+        assert "--discovered-schema" not in CodebookGenerator(
+            schema_path=tmp_path / "s.json"
+        )._build_args()
 
 
 # =============================================================================
@@ -1650,3 +1670,204 @@ class TestCleanTempDirReturnedPaths:
         removed = clean_temp_dir(tmp_path, ["records*.json", "metadata*.json"])
         assert len(removed) == 2
         assert (tmp_path / "keep.txt").exists()
+
+
+# =============================================================================
+# promote -- discovery lookup + field promotion
+# =============================================================================
+
+def _write_discovery(temp_dir, base_schema_id, fields, suffix="x", stats=None):
+    """Write a discovered schema + matching report into temp_dir."""
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    schema_id = f"discovered_{suffix}"
+    disc_schema = {
+        "schema_id": schema_id,
+        "_base_schema": base_schema_id,
+        "include_base_fields": [],
+        "extension_fields": {
+            name: {
+                "description": f"desc {name}",
+                "confidence": "low",
+                "source": "llm_discovered",
+                "patterns": meta.get("patterns", []),
+                "llm_only": meta.get("llm_only", True),
+                "allowed_values": meta.get("allowed_values"),
+            }
+            for name, meta in fields.items()
+        },
+    }
+    schema_file = temp_dir / f"{schema_id}.json"
+    schema_file.write_text(json.dumps(disc_schema), encoding="utf-8")
+    report = {
+        "pipeline_run": {"base_schema": base_schema_id},
+        "schema_file": str(schema_file),
+        "records_file": str(temp_dir / f"discovered_records_{schema_id}.json"),
+        "field_stats": stats or {name: {"coverage": 0.5} for name in fields},
+    }
+    (temp_dir / f"discovered_field_report_{schema_id}.json").write_text(
+        json.dumps(report), encoding="utf-8")
+    return schema_file
+
+
+def _write_target_schema(path, schema_id="base_v1", extension_fields=None):
+    path.write_text(json.dumps({
+        "schema_id": schema_id,
+        "include_base_fields": [],
+        "extension_fields": extension_fields or {},
+    }), encoding="utf-8")
+    return path
+
+
+class TestFindDiscoveryReports:
+    def test_matches_base_schema(self, tmp_path):
+        _write_discovery(tmp_path, "schema_a", {"f1": {}}, suffix="a")
+        _write_discovery(tmp_path, "schema_b", {"f2": {}}, suffix="b")
+        matches = find_discovery_reports(tmp_path, "schema_a")
+        assert len(matches) == 1
+        assert matches[0][1]["pipeline_run"]["base_schema"] == "schema_a"
+
+    def test_no_match(self, tmp_path):
+        _write_discovery(tmp_path, "schema_a", {"f1": {}}, suffix="a")
+        assert find_discovery_reports(tmp_path, "schema_zzz") == []
+
+    def test_missing_dir(self, tmp_path):
+        assert find_discovery_reports(tmp_path / "nope", "schema_a") == []
+
+    def test_skips_malformed(self, tmp_path):
+        (tmp_path / "discovered_field_report_bad.json").write_text("not json{", encoding="utf-8")
+        assert find_discovery_reports(tmp_path, "schema_a") == []
+
+
+class TestPromote:
+    def test_adds_fields_verbatim_with_marker(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json")
+        disc = {"schema_id": "discovered_x", "extension_fields": {
+            "new_field": {"description": "d", "confidence": "low",
+                          "source": "llm_discovered", "patterns": ["foo"],
+                          "allowed_values": ["a", "b"], "research_value": "rv"}}}
+        result = promote_discovered_fields(target, disc, output_path=tmp_path / "out.json")
+        assert result.added == ["new_field"]
+        f = load_json(tmp_path / "out.json")["extension_fields"]["new_field"]
+        assert f["allowed_values"] == ["a", "b"]   # metadata preserved verbatim
+        assert f["research_value"] == "rv"
+        assert f["_promoted_at"]                    # promotion marker stamped
+        assert f["_promoted_from"] == "discovered_x"
+        # merged output parses via the Schema loader
+        schema = Schema.from_file(tmp_path / "out.json", base_path=BASE_SCHEMA)
+        assert "new_field" in schema.extension_fields
+
+    def test_skips_existing_unless_overwrite(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json", extension_fields={
+            "dup": {"description": "orig", "confidence": "high",
+                    "source": "extension", "patterns": []}})
+        disc = {"schema_id": "d", "extension_fields": {
+            "dup": {"description": "new", "confidence": "low",
+                    "source": "llm_discovered", "patterns": []}}}
+        r = promote_discovered_fields(target, disc, output_path=tmp_path / "o.json")
+        assert r.added == [] and r.skipped_existing == ["dup"]
+        assert load_json(tmp_path / "o.json")["extension_fields"]["dup"]["description"] == "orig"
+        r2 = promote_discovered_fields(target, disc, overwrite_existing=True,
+                                       output_path=tmp_path / "o2.json")
+        assert r2.added == ["dup"]
+        assert load_json(tmp_path / "o2.json")["extension_fields"]["dup"]["description"] == "new"
+
+    def test_min_coverage_filter(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json")
+        disc = {"schema_id": "d", "extension_fields": {
+            "hi": {"source": "llm_discovered", "patterns": []},
+            "lo": {"source": "llm_discovered", "patterns": []}}}
+        stats = {"hi": {"coverage": 0.5}, "lo": {"coverage": 0.05}}
+        r = promote_discovered_fields(target, disc, field_stats=stats, min_coverage=0.1,
+                                      output_path=tmp_path / "o.json")
+        assert r.added == ["hi"] and r.filtered_low_coverage == ["lo"]
+
+    def test_include_exclude(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json")
+        disc = {"schema_id": "d", "extension_fields": {
+            "a": {"source": "llm_discovered", "patterns": []},
+            "b": {"source": "llm_discovered", "patterns": []},
+            "c": {"source": "llm_discovered", "patterns": []}}}
+        r = promote_discovered_fields(target, disc, include={"a", "b"}, exclude={"b"},
+                                      output_path=tmp_path / "o.json")
+        assert r.added == ["a"]
+        assert set(r.filtered_not_selected) == {"b", "c"}
+
+    def test_dry_run_writes_nothing(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json")
+        disc = {"schema_id": "d", "extension_fields": {
+            "x": {"source": "llm_discovered", "patterns": []}}}
+        out = tmp_path / "o.json"
+        r = promote_discovered_fields(target, disc, output_path=out, dry_run=True)
+        assert r.added == ["x"] and r.output_path is None
+        assert not out.exists()
+
+    def test_default_in_place_when_no_output(self, tmp_path):
+        target = _write_target_schema(tmp_path / "t.json")
+        disc = {"schema_id": "d", "extension_fields": {
+            "x": {"source": "llm_discovered", "patterns": []}}}
+        r = promote_discovered_fields(target, disc, output_path=None)
+        assert r.output_path == target
+        assert "x" in load_json(target)["extension_fields"]
+
+    def test_find_latest_and_resolve(self, tmp_path):
+        temp = tmp_path / "temp"
+        _write_discovery(temp, "schema_a", {"f1": {}}, suffix="a")
+        latest = find_latest_discovery(temp, "schema_a")
+        assert latest is not None
+        disc_path = resolve_discovered_schema(latest[1], temp)
+        assert disc_path is not None and disc_path.exists()
+
+
+class TestPipelineFindDiscoveredSchema:
+    def _pipeline(self, tmp_path, schema_id):
+        schema_path = tmp_path / f"{schema_id}.json"
+        schema_path.write_text(json.dumps({"schema_id": schema_id, "extension_fields": {}}), encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        cfg = PipelineConfig(schema_path=schema_path, input_dir=tmp_path, temp_dir=temp_dir)
+        return Pipeline(cfg)
+
+    def test_resolves_matching_schema(self, tmp_path):
+        p = self._pipeline(tmp_path, "schema_a")
+        _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
+        found = p._find_discovered_schema()
+        assert found is not None and found.name == "discovered_a.json"
+
+    def test_ignores_other_schema(self, tmp_path):
+        p = self._pipeline(tmp_path, "schema_a")
+        _write_discovery(p._temp_dir, "schema_b", {"f1": {}}, suffix="b")
+        assert p._find_discovered_schema() is None
+
+    def test_none_when_empty(self, tmp_path):
+        p = self._pipeline(tmp_path, "schema_a")
+        assert p._find_discovered_schema() is None
+
+
+class TestPhase5DiscoveredSchemaWiring:
+    def _pipeline(self, tmp_path, include_discovered=True):
+        schema_path = tmp_path / "schema_a.json"
+        schema_path.write_text(json.dumps({"schema_id": "schema_a", "extension_fields": {}}), encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        (tmp_path / "records.csv").write_text("author_hash\n", encoding="utf-8")
+        cfg = PipelineConfig(schema_path=schema_path, input_dir=tmp_path, temp_dir=temp_dir,
+                             start_at=5, codebook_include_discovered=include_discovered)
+        return Pipeline(cfg)
+
+    def test_passes_discovered_schema(self, tmp_path):
+        p = self._pipeline(tmp_path, include_discovered=True)
+        _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
+        with patch("patientpunk.pipeline.CodebookGenerator") as MockGen:
+            MockGen.return_value.run.return_value = MagicMock()
+            p._run_phase_5()
+        kwargs = MockGen.call_args.kwargs
+        assert kwargs["discovered_schema_path"] is not None
+        assert kwargs["discovered_schema_path"].name == "discovered_a.json"
+
+    def test_no_discovered_when_flag_off(self, tmp_path):
+        p = self._pipeline(tmp_path, include_discovered=False)
+        _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
+        with patch("patientpunk.pipeline.CodebookGenerator") as MockGen:
+            MockGen.return_value.run.return_value = MagicMock()
+            p._run_phase_5()
+        assert MockGen.call_args.kwargs["discovered_schema_path"] is None

@@ -777,10 +777,12 @@ def compile_extension_patterns(schema: dict) -> tuple[dict, set]:
         else:  # replace
             active_patterns[field] = compiled
 
-    # Add entirely new extension fields (skip llm_discovered - those are handled
-    # by discover_fields.py Phase 3 which has timeout protection and per-text processing)
+    # Add entirely new extension fields.  Raw llm_discovered fields are skipped
+    # (handled by discover_fields.py Phase 3, which has timeout protection and
+    # per-text processing) -- UNLESS they have been promoted (_promoted_at), which
+    # makes them first-class regex fields like any other extension field.
     for field, defn in schema.get("extension_fields", {}).items():
-        if defn.get("source") == "llm_discovered":
+        if defn.get("source") == "llm_discovered" and not defn.get("_promoted_at"):
             continue
         active_patterns[field] = [re.compile(p, re.I) for p in defn["patterns"]]
 

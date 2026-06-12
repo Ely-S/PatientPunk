@@ -67,6 +67,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 from patientpunk import Pipeline, PipelineConfig, DemographicCoder, DemographicsExtractor
 from patientpunk.corpus import CorpusLoader
 from patientpunk.schema import Schema
+from patientpunk._utils import get_schema_id, load_json
+from patientpunk.promote import (
+    find_latest_discovery,
+    promote_discovered_fields,
+    resolve_discovered_schema,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +401,134 @@ def _cmd_export(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: promote
+# ---------------------------------------------------------------------------
+
+def _add_promote_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    promote_parser = sub.add_parser(
+        "promote",
+        help="Merge discovered fields into a curated schema.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Promote auto-discovered fields (from a prior `run --discover auto`) into a
+schema's extension_fields, so future runs extract AND LLM-fill them as
+first-class variables on any data.
+
+By default, finds the newest discovery report in temp/ whose base_schema matches
+--schema and writes the merged schema to a NEW file
+(schemas/{name}_promoted.json) -- the curated schema is never overwritten unless
+--in-place.
+
+Workflow:
+  python main.py run     --schema schemas/foo.json --discover auto    # discover
+  python main.py promote --schema schemas/foo.json --min-coverage 0.1 # promote
+  python main.py run     --schema schemas/foo_promoted.json           # fill any data
+        """,
+    )
+    promote_parser.add_argument("--schema", type=Path, required=True,
+                   help="Curated extension schema to merge discoveries into.")
+    promote_parser.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+                   help=f"Corpus / output directory (default: {_DEFAULT_INPUT_DIR})")
+    promote_parser.add_argument("--temp-dir", type=Path, default=None,
+                   help="Intermediate file directory (default: {input-dir}/temp/).")
+    promote_parser.add_argument("--discovered-schema", type=Path, default=None,
+                   help="Explicit discovered-schema JSON (skips temp/ report lookup).")
+    promote_parser.add_argument("--min-coverage", type=float, default=None,
+                   help="Only promote fields with discovery coverage >= this (0-1).")
+    promote_parser.add_argument("--fields", default=None,
+                   help="Comma-separated allowlist of field names to promote.")
+    promote_parser.add_argument("--exclude", default=None,
+                   help="Comma-separated field names to skip.")
+    out_group = promote_parser.add_mutually_exclusive_group()
+    out_group.add_argument("--output", type=Path, default=None,
+                   help="Output schema path (default: schemas/{name}_promoted.json).")
+    out_group.add_argument("--in-place", action="store_true",
+                   help="Overwrite the --schema file in place.")
+    promote_parser.add_argument("--overwrite-existing", action="store_true",
+                   help="Overwrite fields already present in the target schema.")
+    promote_parser.add_argument("--dry-run", action="store_true",
+                   help="Report what would be promoted without writing.")
+
+
+def _cmd_promote(args: argparse.Namespace) -> None:
+    schema_path = args.schema if args.schema.is_absolute() else _HERE / args.schema
+    if not schema_path.exists():
+        sys.exit(f"Schema not found: {schema_path}")
+
+    temp_dir = args.temp_dir or (args.input_dir / "temp")
+    schema_id = get_schema_id(schema_path)
+
+    field_stats: dict | None = None
+    if args.discovered_schema:
+        disc_path = (args.discovered_schema if args.discovered_schema.is_absolute()
+                     else _HERE / args.discovered_schema)
+        if not disc_path.exists():
+            sys.exit(f"Discovered schema not found: {disc_path}")
+        latest = find_latest_discovery(temp_dir, schema_id)
+        if latest:                       # use matching report for coverage stats
+            field_stats = latest[1].get("field_stats")
+    else:
+        latest = find_latest_discovery(temp_dir, schema_id)
+        if not latest:
+            sys.exit(
+                f"No discovery report found in {temp_dir} for schema_id '{schema_id}'.\n"
+                f"  Run discovery first: python main.py run --schema {args.schema} --discover auto"
+            )
+        report_path, report = latest
+        disc_path = resolve_discovered_schema(report, temp_dir)
+        if not disc_path:
+            sys.exit(f"Discovery report {report_path.name} has no resolvable schema_file.")
+        field_stats = report.get("field_stats")
+
+    discovered_schema = load_json(disc_path)
+    if not isinstance(discovered_schema, dict):
+        sys.exit(f"Discovered schema is not valid JSON: {disc_path}")
+
+    if args.in_place:
+        output_path = schema_path
+    elif args.output:
+        output_path = args.output if args.output.is_absolute() else _HERE / args.output
+    else:
+        output_path = schema_path.with_name(f"{schema_path.stem}_promoted.json")
+
+    include = {f.strip() for f in args.fields.split(",") if f.strip()} if args.fields else None
+    exclude = {f.strip() for f in args.exclude.split(",") if f.strip()} if args.exclude else None
+
+    result = promote_discovered_fields(
+        schema_path,
+        discovered_schema,
+        field_stats=field_stats,
+        min_coverage=args.min_coverage,
+        include=include,
+        exclude=exclude,
+        overwrite_existing=args.overwrite_existing,
+        output_path=output_path,
+        dry_run=args.dry_run,
+    )
+
+    print(f"\nDiscovered schema: {disc_path.name}")
+    print(f"Target schema:     {schema_path.name}")
+    print(f"\n{result.summary()}")
+    if result.added:
+        print(f"\n  Promoted fields ({len(result.added)}):")
+        for name in result.added:
+            cov = ""
+            if field_stats and isinstance(field_stats.get(name), dict):
+                c = field_stats[name].get("coverage")
+                if isinstance(c, (int, float)):
+                    cov = f"  (coverage {c * 100:.0f}%)"
+            print(f"    + {name}{cov}")
+    if result.skipped_existing:
+        print(f"\n  Skipped (already present): {', '.join(result.skipped_existing)}")
+    if args.dry_run:
+        print("\n  [dry-run] nothing written.")
+    else:
+        print(f"\n  Wrote: {result.output_path}")
+        print(f"  Next:  python main.py run --schema {result.output_path} --input-dir {args.input_dir}")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -412,6 +546,7 @@ Examples:
   python main.py inspect      --schema schemas/covidlonghaulers_schema.json
   python main.py corpus       --input-dir ../output
   python main.py export       --schema schemas/covidlonghaulers_schema.json --codebook-format markdown
+  python main.py promote      --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
         """,
     )
 
@@ -423,6 +558,7 @@ Examples:
     _add_inspect_parser(sub)
     _add_corpus_parser(sub)
     _add_export_parser(sub)
+    _add_promote_parser(sub)
 
     args = parser.parse_args()
 
@@ -432,6 +568,7 @@ Examples:
         "inspect":      _cmd_inspect,
         "corpus":       _cmd_corpus,
         "export":       _cmd_export,
+        "promote":      _cmd_promote,
     }
     dispatch[args.command](args)
 

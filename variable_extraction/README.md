@@ -223,6 +223,34 @@ flowchart TD
 
 Fields accepted at ≥ 50% hit rate. All auto-discovered fields carry `source: "llm_discovered"`.
 
+### Promoting discovered fields
+
+Discovery is deliberately non-destructive: discovered fields are written to a
+throwaway `temp/discovered_{timestamp}.json` and are **not** merged into your
+curated schema. They are populated in the run that discovers them, but a *later*
+run can't deliberately extract them, and Phase 1 regex skips raw `llm_discovered`
+fields for safety.
+
+`promote` is the explicit bridge — it merges selected discovered fields into a
+schema's `extension_fields` so future runs treat them as first-class variables
+(Phase 1 regex **and** Phase 2 LLM gap-fill) on **any** data:
+
+```bash
+# 1. Discover (populates discovered fields for this run only)
+python main.py run --schema schemas/covidlonghaulers_schema.json --discover auto
+
+# 2. Promote the ones worth keeping into a NEW schema (curated schema untouched)
+python main.py promote --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
+#    -> schemas/covidlonghaulers_schema_promoted.json
+
+# 3. Run with the promoted schema — discovered variables now fill on every record
+python main.py run --schema schemas/covidlonghaulers_schema_promoted.json
+```
+
+Promoted fields are stamped `_promoted_at` (which is what re-enables their Phase 1
+regex). The default `run` wipes `temp/` first, so stale discovery records from
+step 1 are not double-counted in step 3.
+
 ---
 
 ## CLI Reference
@@ -286,6 +314,21 @@ python main.py corpus --input-dir ../output
 ```
 python main.py export --schema schemas/covidlonghaulers_schema.json [options]
 # Re-generates records.csv and codebook.csv from existing temp/ files
+```
+
+### `promote` — merge discovered fields into a schema
+
+```
+python main.py promote --schema schemas/covidlonghaulers_schema.json [options]
+
+  --min-coverage F        Only promote fields with discovery coverage ≥ F (0–1)
+  --fields a,b,c          Allowlist of field names to promote
+  --exclude x,y           Field names to skip
+  --discovered-schema P   Explicit discovered-schema JSON (skips temp/ lookup)
+  --output PATH           Output schema (default: schemas/{name}_promoted.json)
+  --in-place              Overwrite the --schema file instead of writing a copy
+  --overwrite-existing    Replace fields already present in the target schema
+  --dry-run               Report what would be promoted without writing
 ```
 
 ---

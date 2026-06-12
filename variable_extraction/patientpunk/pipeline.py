@@ -29,7 +29,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_newest_glob, get_schema_id, load_json
+from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, load_json
 from .extractors import BiomedicalExtractor, ExtractorError, FieldDiscoveryExtractor, LLMExtractor
 from .exporters import CSVExporter, CodebookGenerator
 
@@ -377,17 +377,7 @@ class Pipeline:
         # base schema they were derived from. Use that when available to avoid
         # accidentally mixing discoveries from a different schema.
         matched_records: list[Path] = []
-        for report_path in self._temp_dir.glob("discovered_field_report_*.json"):
-            report = load_json(report_path)
-            if not isinstance(report, dict):
-                continue
-
-            run_meta = report.get("pipeline_run", {})
-            if not isinstance(run_meta, dict):
-                continue
-            if run_meta.get("base_schema") != self._schema_id:
-                continue
-
+        for _report_path, report in find_discovery_reports(self._temp_dir, self._schema_id):
             records_file = report.get("records_file")
             if not isinstance(records_file, str) or not records_file.strip():
                 continue
@@ -404,6 +394,27 @@ class Pipeline:
             return max(matched_records, key=lambda p: p.stat().st_mtime)
 
         return find_newest_glob(self._temp_dir, "discovered_records_*.json")
+
+    def _find_discovered_schema(self) -> Path | None:
+        """Return the discovered-schema JSON for the current base schema, if any.
+
+        Report-driven only: resolves ``schema_file`` from the newest matching
+        discovery report.  Unlike :meth:`_find_discovered_records` there is no
+        blind-glob fallback -- a bare ``discovered_*.json`` glob would also match
+        the report and records files and cannot be schema-verified.
+        """
+        reports = find_discovery_reports(self._temp_dir, self._schema_id)
+        reports.sort(key=lambda rp: rp[0].stat().st_mtime, reverse=True)
+        for _report_path, report in reports:
+            schema_file = report.get("schema_file")
+            if not isinstance(schema_file, str) or not schema_file.strip():
+                continue
+            schema_path = Path(schema_file)
+            if not schema_path.is_absolute():
+                schema_path = self._temp_dir / schema_path.name
+            if schema_path.exists():
+                return schema_path
+        return None
 
     def _run_phase_4(self) -> PhaseResult:
         """Phase 4 -- assemble input files and call CSVExporter."""
@@ -491,11 +502,22 @@ class Pipeline:
 
         self._print_phase_banner(phase, label)
         records_csv = self.config.input_dir / "records.csv"
+        # Discovered fields live in a separate timestamped schema in temp/ that
+        # Phase 5 would otherwise never see (the original curated schema knows
+        # nothing about them).  Surface it so the codebook documents discovered
+        # columns too.  Gated by the same --no-discovered flag as the CSV.
+        disc_schema = (
+            self._find_discovered_schema()
+            if self.config.codebook_include_discovered else None
+        )
+        if disc_schema:
+            print(f"  Including discovered schema: {disc_schema.name}")
         gen = CodebookGenerator(
             schema_path=self.config.schema_path,
             records_csv=records_csv if records_csv.exists() else None,
             fmt=self.config.codebook_format,
             include_discovered=self.config.codebook_include_discovered,
+            discovered_schema_path=disc_schema,
         )
 
         t0 = time.time()
