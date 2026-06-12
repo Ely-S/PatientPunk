@@ -732,7 +732,7 @@ def process_corpus(
 
                 if result is None or result.get("_failed"):
                     with print_lock:
-                        ah = result.get("author_hash", "?") if result else "?"
+                        ah = (result.get("author_hash") or "?") if result else "?"
                         print(f"  [{completed}/{total}] {ah[:12]} - PARSE FAILED")
                     failed += 1
                     continue
@@ -752,7 +752,7 @@ def process_corpus(
                     n_suggestions = len(result.get("suggested_fields", []))
 
                     with print_lock:
-                        ah = result["record_meta"].get("author_hash", "?")[:12]
+                        ah = (result["record_meta"].get("author_hash") or "?")[:12]
                         print(f"  [{completed}/{total}] {ah} - {n_fields} fields, {n_suggestions} suggestions")
 
                     if len(records) % SAVE_EVERY_N == 0:
