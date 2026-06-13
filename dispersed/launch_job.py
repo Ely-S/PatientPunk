@@ -47,7 +47,13 @@ def _nonce() -> str:
 
 def _signed_request(method: str, path: str, body: dict | None = None,
                     *, pk: str, sk: str, query: str = "") -> dict:
-    body_bytes = (json.dumps(body, separators=(",", ":")).encode()
+    # Must match the SDK's `JSON.stringify(canonicalJson(body))`: canonicalJson
+    # recursively sorts object keys, then stringify emits compact JSON. So:
+    # sort_keys=True (recursive), compact separators, ensure_ascii=False (JS does
+    # not \u-escape). The server recomputes bodySha256 the same way, so we both
+    # sign+send these exact canonical bytes.
+    body_bytes = (json.dumps(body, separators=(",", ":"), sort_keys=True,
+                             ensure_ascii=False).encode("utf-8")
                   if body is not None else b"")
     body_sha = hashlib.sha256(body_bytes).hexdigest()
     ts = str(int(time.time() * 1000))
@@ -79,6 +85,8 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default=None, help="Ollama model tag, e.g. qwen2.5:32b")
     ap.add_argument("--check", action="store_true",
                     help="Verify API auth with a read-only call and exit (no job, no billing).")
+    ap.add_argument("--stop", metavar="UUID", default=None,
+                    help="Cancel (stop) a running job by uuid and exit (stops billing).")
     ap.add_argument("--image", default="ollama/ollama", help="Server image (default: ollama/ollama).")
     ap.add_argument("--port", type=int, default=11434, help="Container port (Ollama: 11434).")
     ap.add_argument("--gpu-count", type=int, default=1)
@@ -107,6 +115,11 @@ def main(argv=None) -> int:
         else:
             count = 0
         print(f"  auth OK -- API reachable (jobs visible: {count})")
+        return 0
+    if args.stop:
+        r = _signed_request("PUT", f"/v1/jobs/{args.stop}/cancel",
+                            {"reason": "stopped via launch_job.py"}, pk=pk, sk=sk)
+        print(f"  cancel {args.stop} -> status: {r.get('status')}")
         return 0
     if not args.model:
         sys.exit("--model is required to launch (or use --check to verify auth only).")
