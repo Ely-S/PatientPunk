@@ -50,7 +50,7 @@ load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variab
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
 
-from patientpunk._utils import MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
@@ -172,6 +172,7 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
 
     response = client.messages.create(
         model=MODEL,
+        temperature=LLM_TEMPERATURE,
         max_tokens=len(items) * 300,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": msg}],

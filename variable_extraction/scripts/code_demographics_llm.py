@@ -64,7 +64,7 @@ from patientpunk.qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
-from patientpunk._utils import MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
 BATCH_SIZE = 10
@@ -249,6 +249,7 @@ def call_haiku(
     try:
         response = client.messages.create(
             model=MODEL,
+            temperature=LLM_TEMPERATURE,
             max_tokens=800,  # larger than deductive-only to allow discoveries
             system=[{
                 "type": "text",
@@ -321,6 +322,7 @@ def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: s
 
     response = client.messages.create(
         model=MODEL,
+        temperature=LLM_TEMPERATURE,
         max_tokens=len(items) * 800,
         system=[{
             "type": "text",

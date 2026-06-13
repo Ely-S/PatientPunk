@@ -73,7 +73,7 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import MODEL_FAST, get_llm_client, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
 MODEL = MODEL_FAST
 MAX_TOKENS = 4096
 MAX_TEXT_CHARS = 30_000
@@ -158,6 +158,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
         try:
             response = client.messages.create(
                 model=MODEL,
+                temperature=LLM_TEMPERATURE,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {

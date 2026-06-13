@@ -23,13 +23,14 @@ Example
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, load_json
+from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config, load_json
 from .extractors import BiomedicalExtractor, ExtractorError, FieldDiscoveryExtractor, LLMExtractor
 from .exporters import CSVExporter, CodebookGenerator
 
@@ -224,6 +225,19 @@ class Pipeline:
         # Clean intermediate files at the start of a full run
         if cfg.start_at == 1 and cfg.clean:
             self._clean_temp()
+
+        # Record the LLM configuration (model / provider / base_url / temperature)
+        # so every output is traceable to the model + settings that produced it.
+        prov = {**llm_config(), "schema_id": self._schema_id,
+                "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode}
+        try:
+            (cfg.input_dir / "llm_provenance.json").write_text(
+                json.dumps(prov, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+        print(f"  LLM config: provider={prov['provider']}  fast={prov['model_fast']}  "
+              f"strong={prov['model_strong']}  temp={prov['temperature']}"
+              + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
 
         # Phase 1 -- regex extraction
         result.phases.append(

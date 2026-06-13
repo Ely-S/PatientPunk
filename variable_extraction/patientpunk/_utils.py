@@ -46,50 +46,108 @@ PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 
 
 # ---------------------------------------------------------------------------
-# LLM client configuration (OpenRouter by default)
+# LLM client configuration
 # ---------------------------------------------------------------------------
-# OpenRouter is a proxy that lets you switch models without code changes.
-# Set OPENROUTER_API_KEY in .env. Falls back to ANTHROPIC_API_KEY if set.
+# Provider is auto-detected from which API key is set, unless overridden.  Every
+# knob is env-configurable, so the SAME pipeline runs against Anthropic,
+# OpenRouter, or a self-hosted / dispersed endpoint -- and runs are reproducible
+# (pinned model + temperature) and recorded (see llm_config()).
 #
-# To use Anthropic directly instead, set LLM_PROVIDER=anthropic in .env.
+#   LLM_PROVIDER     openrouter | anthropic        (default: auto-detect from keys)
+#   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / LLM_API_KEY   (LLM_API_KEY wins)
+#   LLM_BASE_URL     override the API base URL (point extraction at any
+#                    Anthropic-compatible endpoint, e.g. a dispersed node)
+#   MODEL_FAST / MODEL_STRONG   override the default models
+#   LLM_TEMPERATURE  sampling temperature (default 0.0 -- deterministic)
 
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter")
+_PLACEHOLDER_KEYS = {"", "XXX", "your_openrouter_key_here", "your_anthropic_key_here"}
 
-# Model names differ between providers
-if LLM_PROVIDER == "openrouter":
-    MODEL_FAST = "anthropic/claude-haiku-4.5"
-    MODEL_STRONG = "anthropic/claude-sonnet-4.6"
-    _API_BASE = "https://openrouter.ai/api"
-else:
-    MODEL_FAST = "claude-haiku-4-5-20251001"
-    MODEL_STRONG = "claude-sonnet-4-6"
-    _API_BASE = None  # use Anthropic default
+
+def _real_key(env: dict, name: str) -> str:
+    v = (env.get(name) or "").strip()
+    if v in _PLACEHOLDER_KEYS or v.startswith(("your_", "sk-ant-your-")):
+        return ""
+    return v
+
+
+def resolve_llm_config(env: dict | None = None) -> dict:
+    """Resolve the active LLM configuration from environment variables.
+
+    Pure (no side effects): returns ``provider``, ``model_fast``,
+    ``model_strong``, ``base_url``, ``temperature`` and ``api_key``.  Used both
+    to build the client and -- minus the key -- to record run provenance.
+    """
+    env = os.environ if env is None else env
+    or_key = _real_key(env, "OPENROUTER_API_KEY")
+    an_key = _real_key(env, "ANTHROPIC_API_KEY")
+
+    explicit = (env.get("LLM_PROVIDER") or "").strip().lower() or None
+    if explicit in ("openrouter", "anthropic"):
+        provider = explicit
+    elif or_key:
+        provider = "openrouter"
+    elif an_key:
+        provider = "anthropic"
+    else:
+        provider = "anthropic"  # default; get_llm_client() errors if no key
+
+    if provider == "openrouter":
+        default_fast, default_strong = "anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4.6"
+        default_base = "https://openrouter.ai/api"
+    else:
+        default_fast, default_strong = "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
+        default_base = None
+
+    api_key = (_real_key(env, "LLM_API_KEY")
+               or (or_key if provider == "openrouter" else an_key)
+               or or_key or an_key)
+    try:
+        temperature = float(env.get("LLM_TEMPERATURE", "0") or 0)
+    except ValueError:
+        temperature = 0.0
+
+    return {
+        "provider": provider,
+        "model_fast": (env.get("MODEL_FAST") or "").strip() or default_fast,
+        "model_strong": (env.get("MODEL_STRONG") or "").strip() or default_strong,
+        "base_url": (env.get("LLM_BASE_URL") or "").strip() or default_base,
+        "temperature": temperature,
+        "api_key": api_key,
+    }
+
+
+_CFG = resolve_llm_config()
+LLM_PROVIDER = _CFG["provider"]
+MODEL_FAST = _CFG["model_fast"]
+MODEL_STRONG = _CFG["model_strong"]
+LLM_TEMPERATURE = _CFG["temperature"]
+
+
+def llm_config() -> dict:
+    """Active LLM config for logging / provenance (re-read from env; no api_key)."""
+    cfg = resolve_llm_config()
+    cfg.pop("api_key", None)
+    return cfg
 
 
 def get_llm_client():
-    """Return a configured Anthropic client (direct or via OpenRouter).
+    """Return a configured Anthropic-SDK client -- Anthropic, OpenRouter, or any
+    Anthropic-compatible endpoint via ``LLM_BASE_URL`` (e.g. a dispersed node).
 
-    Reads API key from environment: OPENROUTER_API_KEY (preferred) or
-    ANTHROPIC_API_KEY (fallback). Exits with a clear message if neither is set.
+    Key precedence: ``LLM_API_KEY`` > ``OPENROUTER_API_KEY`` / ``ANTHROPIC_API_KEY``
+    (per provider).  Exits with a clear message if none is set.
     """
     try:
         import anthropic
     except ImportError:
         sys.exit("anthropic package required: pip install anthropic")
 
-    api_key = (
-        os.environ.get("OPENROUTER_API_KEY")
-        or os.environ.get("ANTHROPIC_API_KEY")
-        or ""
-    )
-    if not api_key or api_key.startswith("sk-ant-your-"):
-        sys.exit(
-            "API key not set. Add OPENROUTER_API_KEY or ANTHROPIC_API_KEY to .env"
-        )
-
-    kwargs: dict = {"api_key": api_key}
-    if _API_BASE:
-        kwargs["base_url"] = _API_BASE
+    cfg = resolve_llm_config()
+    if not cfg["api_key"]:
+        sys.exit("API key not set. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY.")
+    kwargs: dict = {"api_key": cfg["api_key"]}
+    if cfg["base_url"]:
+        kwargs["base_url"] = cfg["base_url"]
     return anthropic.Anthropic(**kwargs)
 
 

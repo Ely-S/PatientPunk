@@ -41,7 +41,9 @@ from patientpunk._utils import (
     find_discovery_reports,
     find_newest_glob,
     get_schema_id,
+    llm_config,
     load_json,
+    resolve_llm_config,
 )
 from patientpunk.promote import (
     PromoteResult,
@@ -2014,3 +2016,51 @@ class TestEvaluate:
         assert n == 2
         assert got[0]["source_text"] == "I am 34"
         assert got[0]["age"] == "" and got[0]["conditions"] == ""   # blank for the labeler
+
+
+# =============================================================================
+# LLM config resolution (endpoint / model / temperature)
+# =============================================================================
+
+class TestLLMConfig:
+    def test_default_anthropic_when_no_keys(self):
+        c = resolve_llm_config({})
+        assert c["provider"] == "anthropic"
+        assert c["model_fast"] == "claude-haiku-4-5-20251001"
+        assert c["base_url"] is None
+        assert c["temperature"] == 0.0
+
+    def test_openrouter_autodetect(self):
+        c = resolve_llm_config({"OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef123456"})
+        assert c["provider"] == "openrouter"
+        assert c["model_fast"].startswith("anthropic/")
+        assert c["base_url"] == "https://openrouter.ai/api"
+
+    def test_explicit_provider_overrides_autodetect(self):
+        c = resolve_llm_config({"OPENROUTER_API_KEY": "sk-or-v1-realkey-xyz", "LLM_PROVIDER": "anthropic"})
+        assert c["provider"] == "anthropic"
+
+    def test_model_overrides_honored(self):
+        c = resolve_llm_config({"ANTHROPIC_API_KEY": "sk-ant-realkey-abc",
+                                "MODEL_FAST": "meta-llama/llama-3.1-70b",
+                                "MODEL_STRONG": "qwen/qwen-2.5-72b"})
+        assert c["model_fast"] == "meta-llama/llama-3.1-70b"
+        assert c["model_strong"] == "qwen/qwen-2.5-72b"
+
+    def test_base_url_and_api_key_override(self):
+        c = resolve_llm_config({"LLM_BASE_URL": "https://node.example/api", "LLM_API_KEY": "k-dispersed"})
+        assert c["base_url"] == "https://node.example/api"
+        assert c["api_key"] == "k-dispersed"
+
+    def test_temperature_parse_and_fallback(self):
+        assert resolve_llm_config({"LLM_TEMPERATURE": "0.7"})["temperature"] == 0.7
+        assert resolve_llm_config({"LLM_TEMPERATURE": "junk"})["temperature"] == 0.0
+
+    def test_placeholder_keys_ignored(self):
+        c = resolve_llm_config({"OPENROUTER_API_KEY": "your_openrouter_key_here",
+                                "ANTHROPIC_API_KEY": "XXX"})
+        assert c["provider"] == "anthropic"   # no real key -> default
+        assert c["api_key"] == ""
+
+    def test_llm_config_excludes_api_key(self):
+        assert "api_key" not in llm_config()

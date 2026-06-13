@@ -116,7 +116,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # =============================================================================
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import MODEL_FAST, MODEL_STRONG
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -171,6 +171,7 @@ def call_model(
         try:
             response = client.messages.create(
                 model=model,
+                temperature=LLM_TEMPERATURE,
                 max_tokens=max_tokens,
                 system=[
                     {
