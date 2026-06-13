@@ -50,6 +50,7 @@ from patientpunk.promote import (
     resolve_discovered_schema,
 )
 from patientpunk.consolidate import ConsolidateResult, consolidate_schemas
+from patientpunk.evaluate import export_gold_template, score_extraction
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
 from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
@@ -1950,3 +1951,66 @@ class TestConsolidate:
         p.write_text(json.dumps(r.consolidated_schema), encoding="utf-8")
         schema = Schema.from_file(p, base_path=BASE_SCHEMA)
         assert "newvar" in schema.extension_fields
+
+
+# =============================================================================
+# evaluate -- per-field scoring of extraction vs reference
+# =============================================================================
+
+def _eval_rows(mapping: dict) -> dict:
+    """Build keyed records from {(author_hash, post_id): {field: value}}."""
+    out = {}
+    for k, v in mapping.items():
+        row = dict(v)
+        row["author_hash"], row["post_id"] = k[0], k[1]
+        out[k] = row
+    return out
+
+
+class TestEvaluate:
+    def test_perfect_match_order_insensitive(self):
+        ref = _eval_rows({("u1", "p1"): {"age": "34", "conditions": "pots | long covid"}})
+        cand = _eval_rows({("u1", "p1"): {"age": "34", "conditions": "long covid | pots"}})
+        r = score_extraction(ref, cand, fields=["age", "conditions"])
+        assert r.per_field["age"]["f1"] == 1.0
+        assert r.per_field["conditions"]["f1"] == 1.0
+        assert r.per_field["conditions"]["agreement_present"] == 1.0
+
+    def test_partial_overlap(self):
+        m = score_extraction(_eval_rows({("u1", "p1"): {"c": "a | b"}}),
+                             _eval_rows({("u1", "p1"): {"c": "a | x"}}),
+                             fields=["c"]).per_field["c"]
+        assert m["precision"] == 0.5 and m["recall"] == 0.5
+
+    def test_miss_lowers_recall(self):
+        m = score_extraction(_eval_rows({("u1", "p1"): {"c": "a"}}),
+                             _eval_rows({("u1", "p1"): {"c": ""}}),
+                             fields=["c"]).per_field["c"]
+        assert m["recall"] == 0.0 and m["ref_fill"] == 1 and m["cand_fill"] == 0
+
+    def test_overextraction_lowers_precision(self):
+        m = score_extraction(_eval_rows({("u1", "p1"): {"c": ""}}),
+                             _eval_rows({("u1", "p1"): {"c": "a"}}),
+                             fields=["c"]).per_field["c"]
+        assert m["precision"] == 0.0
+
+    def test_both_empty_excluded_from_agreement(self):
+        ref = _eval_rows({("u1", "p1"): {"c": ""}, ("u2", "p2"): {"c": "a"}})
+        cand = _eval_rows({("u1", "p1"): {"c": ""}, ("u2", "p2"): {"c": "a"}})
+        m = score_extraction(ref, cand, fields=["c"]).per_field["c"]
+        assert m["n_present"] == 1 and m["agreement_present"] == 1.0
+
+    def test_inner_join_on_key(self):
+        ref = _eval_rows({("u1", "p1"): {"c": "a"}, ("u2", "p2"): {"c": "b"}})
+        cand = _eval_rows({("u1", "p1"): {"c": "a"}})
+        assert score_extraction(ref, cand, fields=["c"]).n_matched == 1
+
+    def test_template_export_blank_with_text(self, tmp_path):
+        rows = _eval_rows({("u1", "p1"): {"age": "34"}, ("u2", "p2"): {"age": ""}})
+        out = tmp_path / "t.csv"
+        n = export_gold_template(rows, ["age", "conditions"], out,
+                                 corpus_text={"p1": "I am 34", "p2": "hello"})
+        got = list(csv.DictReader(open(out, encoding="utf-8")))
+        assert n == 2
+        assert got[0]["source_text"] == "I am 34"
+        assert got[0]["age"] == "" and got[0]["conditions"] == ""   # blank for the labeler

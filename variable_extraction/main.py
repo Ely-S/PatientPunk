@@ -74,6 +74,7 @@ from patientpunk.promote import (
     resolve_discovered_schema,
 )
 from patientpunk.consolidate import consolidate_schemas
+from patientpunk.evaluate import export_gold_template, load_records, score_extraction
 
 
 # ---------------------------------------------------------------------------
@@ -671,6 +672,120 @@ def _cmd_consolidate(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: validate
+# ---------------------------------------------------------------------------
+
+def _add_validate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    p = sub.add_parser(
+        "validate",
+        help="Score an extraction against a reference, per field (or export a gold template).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Per-field evaluation: score a CANDIDATE records.csv against a REFERENCE
+records.csv (gold human labels, or a trusted strong-model silver reference).
+Decide -- per field -- whether a cheaper model (e.g. on dispersed) is good
+enough before scaling.
+
+  python main.py validate --reference gold.csv --candidate cheap_model.csv
+
+Or export a blank gold-labeling sheet from a records.csv for a human to fill:
+
+  python main.py validate --export-template --records output/records.csv \\
+      --corpus output/subreddit_posts.json --n 150 --out gold_template.csv
+        """,
+    )
+    p.add_argument("--reference", type=Path, default=None, help="Reference (gold/silver) records.csv.")
+    p.add_argument("--candidate", type=Path, default=None, help="Candidate records.csv to score.")
+    p.add_argument("--export-template", action="store_true",
+                   help="Export a blank gold-labeling sheet instead of scoring.")
+    p.add_argument("--records", type=Path, default=None,
+                   help="(template mode) records.csv to sample rows from.")
+    p.add_argument("--corpus", type=Path, default=None,
+                   help="(template mode) subreddit_posts.json for inline source text.")
+    p.add_argument("--n", type=int, default=None, help="(template mode) number of rows to sample.")
+    p.add_argument("--fields", default=None,
+                   help="Comma-separated fields to score/label (default: all data fields).")
+    p.add_argument("--key", default="author_hash,post_id",
+                   help="Join key columns (default: author_hash,post_id).")
+    p.add_argument("--sep", default=" | ", help="Multi-value separator (default: ' | ').")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Write scorecard CSV (score mode) or template CSV (template mode).")
+
+
+def _cmd_validate(args: argparse.Namespace) -> None:
+    key = tuple(c.strip() for c in args.key.split(",") if c.strip())
+    fields = [f.strip() for f in args.fields.split(",") if f.strip()] if args.fields else None
+
+    if args.export_template:
+        records = args.records or (_DEFAULT_INPUT_DIR / "records.csv")
+        if not records.exists():
+            sys.exit(f"records not found: {records}")
+        rows, _ = load_records(records, key)
+        if not rows:
+            sys.exit(f"no rows in {records}")
+        if fields is None:
+            from patientpunk.evaluate import _data_fields
+            fields = _data_fields(next(iter(rows.values())))
+        corpus_text = None
+        if args.corpus and args.corpus.exists():
+            corpus_text = {}
+            data = load_json(args.corpus) or []
+
+            def _walk(node):
+                pid = node.get("post_id") or node.get("id")
+                txt = "\n".join(filter(None, [node.get("title", ""), node.get("body", ""), node.get("text", "")]))
+                if pid:
+                    corpus_text[pid] = txt
+                for c in node.get("comments") or []:
+                    _walk(c)
+
+            for post in (data if isinstance(data, list) else []):
+                _walk(post)
+        out = args.out or (_HERE.parent / "gold_template.csv")
+        n_written = export_gold_template(rows, fields, out, key=key, corpus_text=corpus_text, n=args.n)
+        print(f"  Wrote gold-labeling template: {out}  ({n_written} rows x {len(fields)} fields to label)")
+        print("  Fill the blank field columns with TRUE values, then score a model against it:")
+        print(f"    python main.py validate --reference {out} --candidate <model_output>.csv")
+        sys.exit(0)
+
+    # --- score mode ---
+    if not args.reference or not args.candidate:
+        sys.exit("Score mode needs --reference and --candidate (or use --export-template).")
+    if not args.reference.exists():
+        sys.exit(f"reference not found: {args.reference}")
+    if not args.candidate.exists():
+        sys.exit(f"candidate not found: {args.candidate}")
+
+    ref_rows, _ = load_records(args.reference, key)
+    cand_rows, _ = load_records(args.candidate, key)
+    result = score_extraction(ref_rows, cand_rows, fields=fields, sep=args.sep)
+
+    print(f"\nReference: {args.reference.name} ({result.n_reference} rows)")
+    print(f"Candidate: {args.candidate.name} ({result.n_candidate} rows)")
+    print(f"Matched on {','.join(key)}: {result.n_matched} rows\n")
+    scored = [(f, m) for f, m in result.per_field.items() if m["n_present"] > 0]
+    scored.sort(key=lambda fm: fm[1]["f1"])   # worst first -- surface the problems
+    print(f"  {'field':<40}{'f1':>6}{'prec':>6}{'rec':>6}{'agree':>7}{'n':>5}  ref/cand")
+    for f, m in scored:
+        print(f"  {f:<40}{m['f1']:>6.2f}{m['precision']:>6.2f}{m['recall']:>6.2f}"
+              f"{m['agreement_present']:>7.2f}{m['n_present']:>5}  {m['ref_fill']}/{m['cand_fill']}")
+    o = result.overall
+    print(f"\n  macro F1: {o['macro_f1']:.2f}   macro agreement: {o['macro_agreement']:.2f}   "
+          f"({o['n_fields_with_data']}/{o['n_fields_scored']} fields had data)")
+    if args.out:
+        import csv as _csv
+        with open(args.out, "w", newline="", encoding="utf-8") as fh:
+            w = _csv.writer(fh)
+            w.writerow(["field", "f1", "precision", "recall", "agreement_present",
+                        "n_present", "ref_fill", "cand_fill"])
+            for f, m in result.per_field.items():
+                w.writerow([f, m["f1"], m["precision"], m["recall"], m["agreement_present"],
+                            m["n_present"], m["ref_fill"], m["cand_fill"]])
+        print(f"  Wrote scorecard: {args.out}")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -690,6 +805,7 @@ Examples:
   python main.py export       --schema schemas/covidlonghaulers_schema.json --codebook-format markdown
   python main.py promote      --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
   python main.py consolidate  --inputs run1/temp/discovered_*.json run2/temp/discovered_*.json --min-runs 2
+  python main.py validate     --reference gold.csv --candidate model_output.csv
         """,
     )
 
@@ -703,6 +819,7 @@ Examples:
     _add_export_parser(sub)
     _add_promote_parser(sub)
     _add_consolidate_parser(sub)
+    _add_validate_parser(sub)
 
     args = parser.parse_args()
 
@@ -714,6 +831,7 @@ Examples:
         "export":       _cmd_export,
         "promote":      _cmd_promote,
         "consolidate":  _cmd_consolidate,
+        "validate":     _cmd_validate,
     }
     dispatch[args.command](args)
 

@@ -375,6 +375,26 @@ python main.py consolidate --inputs run1/temp/discovered_*.json run2/temp/discov
   --dry-run               Report the merge without writing
 ```
 
+### `validate` — score an extraction against a reference (per field)
+
+```
+python main.py validate --reference gold.csv --candidate model_output.csv [options]
+
+  --reference PATH        Gold/silver reference records.csv (true values)
+  --candidate PATH        Candidate records.csv to score (e.g. a cheaper model)
+  --fields a,b            Restrict to these fields (default: all data fields)
+  --key cols              Join key (default: author_hash,post_id)
+  --out PATH              Write the per-field scorecard CSV
+  --export-template       Instead, emit a blank gold-labeling sheet
+    --records / --corpus / --n      (template-mode inputs)
+```
+
+Use it to decide -- per field -- whether a cheaper / dispersed model is good
+enough **before** scaling: build a gold set (`--export-template`, hand-label the
+blanks), then score each candidate model against it. Metrics are multi-label
+precision / recall / F1 + exact-agreement, so single- and multi-value fields are
+handled uniformly.
+
 ---
 
 ## Library Reference
