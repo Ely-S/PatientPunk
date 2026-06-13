@@ -2240,3 +2240,65 @@ class TestAggregateByAuthor:
         from patientpunk.aggregate import read_posts
         with pytest.raises(FileNotFoundError):
             read_posts(tmp_path)
+
+
+class TestNormalize:
+    """Controlled-vocabulary normalization (patientpunk/normalize.py)."""
+
+    def test_condition_synonyms_collapse(self):
+        from patientpunk.normalize import normalize_value
+        for surface in ["ME/CFS", "mecfs", "CFS", "chronic fatigue syndrome"]:
+            assert normalize_value("conditions", surface) == "me_cfs"
+        for surface in ["POTS", "postural orthostatic tachycardia syndrome"]:
+            assert normalize_value("conditions", surface) == "pots"
+        assert normalize_value("conditions", "Long-COVID") == "long_covid"
+
+    def test_outcome_buckets(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("treatment_outcome", "helped") == "helped"
+        assert normalize_value("treatment_outcome", "made it worse") == "worsened"
+        for s in ["no effect", "no_effect", "didn't work", "no difference"]:
+            assert normalize_value("treatment_outcome", s) == "no_effect"
+
+    def test_percent_regex_rule(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("treatment_outcome", "60% better") == "helped"
+        assert normalize_value("symptom_trajectory", "90% recovered") == "recovered"
+        assert normalize_value("symptom_trajectory", "50% better") == "improving"
+
+    def test_functional_tier_and_rank(self):
+        from patientpunk.normalize import normalize_value, FUNCTIONAL_RANK
+        assert normalize_value("functional_status_tier", "bedridden") == "bedbound"
+        assert normalize_value("functional_status_tier", "wheelchair") == "mobility_limited"
+        assert FUNCTIONAL_RANK["bedbound"] > FUNCTIONAL_RANK["ambulatory_limited"]
+
+    def test_multivalue_dedup(self):
+        from patientpunk.normalize import normalize_cell
+        # "cfs" and "me/cfs" both map to me_cfs -> collapse to one
+        out = normalize_cell("conditions", "CFS | ME/CFS | POTS")
+        assert out == "me_cfs | pots"
+
+    def test_unmapped_passthrough_cleaned(self):
+        from patientpunk.normalize import normalize_value
+        # unknown condition is tidied (lowercased) but not dropped
+        assert normalize_value("conditions", "  Sarcoidosis ") == "sarcoidosis"
+        assert normalize_value("conditions", "[deleted]") == "deleted"
+
+    def test_records_normalization_and_drop(self):
+        from patientpunk.normalize import normalize_records, cardinality_report
+        rows = [
+            {"author_hash": "a", "conditions": "POTS | pots", "targeted_symptom_domain": "with pots"},
+            {"author_hash": "b", "conditions": "mecfs", "targeted_symptom_domain": "for pem"},
+        ]
+        out = normalize_records(rows)
+        assert out[0]["conditions"] == "pots"            # dedup + canonical
+        assert out[1]["conditions"] == "me_cfs"
+        assert out[0]["targeted_symptom_domain"] == ""   # dropped (too fragmented)
+        rep = cardinality_report(rows, out)
+        assert rep["conditions"][0] >= rep["conditions"][1]   # cardinality didn't grow
+
+    def test_keep_dropped_override(self):
+        from patientpunk.normalize import normalize_records
+        rows = [{"targeted_symptom_domain": "with pots"}]
+        out = normalize_records(rows, drop_fields=set())
+        assert out[0]["targeted_symptom_domain"] != ""   # kept when drop disabled

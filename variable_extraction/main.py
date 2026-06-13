@@ -84,6 +84,11 @@ from patientpunk.cluster_prep import (
     write_matrix,
 )
 from patientpunk.aggregate import aggregate_corpus_by_author, read_posts, write_corpus
+from patientpunk.normalize import (
+    DROP_FIELDS,
+    cardinality_report,
+    normalize_records,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -947,6 +952,67 @@ def _cmd_aggregate(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: normalize
+# ---------------------------------------------------------------------------
+
+def _add_normalize_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    p = sub.add_parser(
+        "normalize",
+        help="Collapse free-text backbone fields to a controlled vocabulary.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Map the dense free-text fields (conditions, treatment_outcome, symptom_trajectory,
+functional_status_tier, ...) onto a small curated vocabulary so cluster-prep
+encodes real signal instead of surface noise ("bedbound"/"bedridden",
+"helped"/"60% better" -> one value each). Writes a normalized records.csv and
+prints the before->after distinct-value collapse. Over-fragmented fields
+(targeted_symptom_domain) are blanked unless --keep-dropped.
+
+  python main.py normalize --records output/records.csv
+  python main.py cluster-prep --records output/records_normalized.csv --min-coverage 0.25
+        """,
+    )
+    p.add_argument("--records", type=Path, default=_DEFAULT_INPUT_DIR / "records.csv",
+                   help=f"records.csv to normalize (default: {_DEFAULT_INPUT_DIR / 'records.csv'}).")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Output CSV (default: <records>_normalized.csv).")
+    p.add_argument("--sep", default=" | ", help="Multi-value separator (default: ' | ').")
+    p.add_argument("--keep-dropped", action="store_true",
+                   help="Keep over-fragmented DROP_FIELDS instead of blanking them.")
+
+
+def _cmd_normalize(args: argparse.Namespace) -> None:
+    import csv
+    src = args.records
+    if not src.exists():
+        sys.exit(f"records not found: {src}")
+    with open(src, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        fields = reader.fieldnames
+        rows = list(reader)
+    if not rows:
+        sys.exit(f"no rows in {src}")
+
+    drop = set() if args.keep_dropped else None
+    norm = normalize_records(rows, sep=args.sep, drop_fields=drop)
+    rep = cardinality_report(rows, norm, sep=args.sep)
+    out = args.out or src.parent / f"{src.stem}_normalized.csv"
+    with open(out, "w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(norm)
+
+    blanked = set() if args.keep_dropped else DROP_FIELDS
+    print(f"\nNORMALIZE: {src}  ->  {out}")
+    print(f"  {len(rows)} rows; controlled-vocab collapse (distinct values, before -> after):")
+    for fld, (b, a) in sorted(rep.items(), key=lambda x: -(x[1][0] - x[1][1])):
+        tag = "   [blanked: too fragmented]" if fld in blanked else ""
+        print(f"    {fld:28} {b:4} -> {a:4}{tag}")
+    print(f"\n  next: python main.py cluster-prep --records {out} --min-coverage 0.25")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -984,6 +1050,7 @@ Examples:
     _add_validate_parser(sub)
     _add_cluster_prep_parser(sub)
     _add_aggregate_parser(sub)
+    _add_normalize_parser(sub)
 
     args = parser.parse_args()
 
@@ -998,6 +1065,7 @@ Examples:
         "validate":     _cmd_validate,
         "cluster-prep": _cmd_cluster_prep,
         "aggregate":    _cmd_aggregate,
+        "normalize":    _cmd_normalize,
     }
     dispatch[args.command](args)
 
