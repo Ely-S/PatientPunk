@@ -170,13 +170,24 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                 messages=[{"role": "user", "content": user_message}],
             )
             return response.content[0].text
-        except anthropic.RateLimitError:
-            if attempt == len(RETRY_DELAYS):
+        except Exception as e:
+            # Provider-agnostic retry: works whether the error is raised by the
+            # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
+            # Retry on rate limits (429) and transient 5xx / connection errors;
+            # on a non-transient error or the last attempt, re-raise so
+            # split_retry_batch can fall back to a smaller batch.
+            status = getattr(e, "status_code", None)
+            if status is None:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+            name = type(e).__name__
+            transient = (
+                status == 429
+                or (status is not None and 500 <= status < 600)
+                or "Connection" in name
+                or "Timeout" in name
+            )
+            if not transient or attempt == len(RETRY_DELAYS):
                 raise
-        except anthropic.APIStatusError as e:
-            if e.status_code >= 500 and attempt < len(RETRY_DELAYS):
-                continue
-            raise
     return ""
 
 
