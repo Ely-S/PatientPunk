@@ -184,6 +184,9 @@ def load_extractions(
         rows = list(csv.DictReader(f))
 
     conditions_inserted = 0
+    # post_ids valid for the conditions FK; per-patient/aggregated records carry
+    # synthetic post_ids (e.g. "agg_<hash>") absent from posts -> NULL those.
+    valid_posts = {r[0] for r in conn.execute("SELECT post_id FROM posts")}
     for row in rows:
         author_hash = (row.get("author_hash") or "").strip()
         if not author_hash:
@@ -248,6 +251,8 @@ def load_extractions(
         # Conditions -> conditions table (if column exists)
         conditions_raw = (row.get("conditions") or "").strip()
         post_id = (row.get("post_id") or "").strip() or None
+        if post_id is not None and post_id not in valid_posts:
+            post_id = None  # synthetic/aggregated id -> no FK target
         if conditions_raw:
             for condition_name in conditions_raw.split(" | "):
                 condition_name = condition_name.strip().lower()
