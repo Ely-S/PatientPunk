@@ -38,6 +38,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 # Root of the variable_extraction package tree.
 # All path resolution should reference this constant instead of
@@ -53,10 +54,12 @@ PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 # OpenRouter, or a self-hosted / dispersed endpoint -- and runs are reproducible
 # (pinned model + temperature) and recorded (see llm_config()).
 #
-#   LLM_PROVIDER     openrouter | anthropic        (default: auto-detect from keys)
+#   LLM_PROVIDER     openrouter | anthropic | openai   (default: auto-detect from keys)
+#                    openai -> OpenAI-compatible endpoint (vLLM / Ollama / etc.)
 #   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / LLM_API_KEY   (LLM_API_KEY wins)
-#   LLM_BASE_URL     override the API base URL (point extraction at any
-#                    Anthropic-compatible endpoint, e.g. a dispersed node)
+#   LLM_BASE_URL     override the API base URL (point extraction at any endpoint:
+#                    an Anthropic-compatible gateway, or an OpenAI-compatible
+#                    server like vLLM on a dispersed node with LLM_PROVIDER=openai)
 #   MODEL_FAST / MODEL_STRONG   override the default models
 #   LLM_TEMPERATURE  sampling temperature (default 0.0 -- deterministic)
 
@@ -82,7 +85,7 @@ def resolve_llm_config(env: dict | None = None) -> dict:
     an_key = _real_key(env, "ANTHROPIC_API_KEY")
 
     explicit = (env.get("LLM_PROVIDER") or "").strip().lower() or None
-    if explicit in ("openrouter", "anthropic"):
+    if explicit in ("openrouter", "anthropic", "openai"):
         provider = explicit
     elif or_key:
         provider = "openrouter"
@@ -94,6 +97,11 @@ def resolve_llm_config(env: dict | None = None) -> dict:
     if provider == "openrouter":
         default_fast, default_strong = "anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4.6"
         default_base = "https://openrouter.ai/api"
+    elif provider == "openai":
+        # OpenAI-compatible endpoint (vLLM / Ollama / ...).  Set MODEL_FAST and
+        # MODEL_STRONG to the served model id; base_url defaults to vLLM's.
+        default_fast, default_strong = "", ""
+        default_base = "http://localhost:8000/v1"
     else:
         default_fast, default_strong = "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
         default_base = None
@@ -130,19 +138,74 @@ def llm_config() -> dict:
     return cfg
 
 
-def get_llm_client():
-    """Return a configured Anthropic-SDK client -- Anthropic, OpenRouter, or any
-    Anthropic-compatible endpoint via ``LLM_BASE_URL`` (e.g. a dispersed node).
+# --- OpenAI-compatible adapter ------------------------------------------------
+# vLLM / Ollama / TGI and most self-hosted open-model servers speak the OpenAI
+# API. This thin adapter exposes the same ``.messages.create(...)`` surface as
+# the Anthropic SDK (translating the system prompt and reshaping the response),
+# so the extraction scripts work unchanged regardless of backend.
 
-    Key precedence: ``LLM_API_KEY`` > ``OPENROUTER_API_KEY`` / ``ANTHROPIC_API_KEY``
-    (per provider).  Exits with a clear message if none is set.
+class _AnthropicShapedResponse:
+    def __init__(self, text: str) -> None:
+        self.content = [SimpleNamespace(text=text)]
+        self.stop_reason = "end_turn"
+
+
+class _OpenAIMessages:
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def create(self, *, model, messages, max_tokens=1024, system=None,
+               temperature=0.0, **_ignored):
+        oai_messages = []
+        if system:
+            if isinstance(system, str):
+                sys_text = system
+            else:  # Anthropic-style list of {type,text,cache_control} blocks
+                sys_text = "\n".join(
+                    b.get("text", "") for b in system if isinstance(b, dict))
+            if sys_text.strip():
+                oai_messages.append({"role": "system", "content": sys_text})
+        for m in messages:
+            oai_messages.append({"role": m["role"], "content": m["content"]})
+        resp = self._client.chat.completions.create(
+            model=model, messages=oai_messages,
+            max_tokens=max_tokens, temperature=temperature,
+        )
+        return _AnthropicShapedResponse(resp.choices[0].message.content or "")
+
+
+class _OpenAIAdapter:
+    """Anthropic-SDK-shaped wrapper around an OpenAI-compatible client."""
+
+    def __init__(self, client) -> None:
+        self.messages = _OpenAIMessages(client)
+
+
+def get_llm_client():
+    """Return an LLM client whose ``.messages.create(...)`` matches the Anthropic
+    SDK, regardless of backend.
+
+    ``LLM_PROVIDER=openai`` routes to an OpenAI-compatible endpoint (vLLM /
+    Ollama / any self-hosted open model) via a thin adapter; otherwise the native
+    Anthropic SDK is used (Anthropic, OpenRouter, or any Anthropic-compatible
+    endpoint via ``LLM_BASE_URL``).  Key precedence: ``LLM_API_KEY`` > provider key.
     """
+    cfg = resolve_llm_config()
+
+    if cfg["provider"] == "openai":
+        try:
+            from openai import OpenAI
+        except ImportError:
+            sys.exit("openai package required for LLM_PROVIDER=openai: pip install openai")
+        # Self-hosted servers (vLLM/Ollama) often need no real key -> send a dummy.
+        client = OpenAI(api_key=cfg["api_key"] or "EMPTY",
+                        base_url=cfg["base_url"] or "http://localhost:8000/v1")
+        return _OpenAIAdapter(client)
+
     try:
         import anthropic
     except ImportError:
         sys.exit("anthropic package required: pip install anthropic")
-
-    cfg = resolve_llm_config()
     if not cfg["api_key"]:
         sys.exit("API key not set. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY.")
     kwargs: dict = {"api_key": cfg["api_key"]}

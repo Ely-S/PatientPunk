@@ -26,6 +26,9 @@ cluster = [
     "scikit-learn>=1.3",   # cluster-prep readiness report (silhouette); matrix builder works without it
     "numpy>=1.24",
 ]
+openai = [
+    "openai>=1.0",         # LLM_PROVIDER=openai: talk to vLLM / Ollama / any OpenAI-compatible endpoint
+]
 
 [tool.pytest.ini_options]
 testpaths = ["variable_extraction/tests", "tests"]

@@ -36,6 +36,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from patientpunk._utils import (
+    _OpenAIAdapter,
     clean_temp_dir,
     csv_fill_rate,
     find_discovery_reports,
@@ -2121,3 +2122,42 @@ class TestClusterPrep:
         rep = readiness_report(pids, names, X)
         assert rep["n_patients"] == 2 and rep["n_features"] == 2
         assert 0.0 <= rep["density"] <= 1.0
+
+
+# =============================================================================
+# OpenAI-compatible provider (dispersed / vLLM / Ollama)
+# =============================================================================
+
+class TestOpenAIProvider:
+    def test_resolve_openai_provider(self):
+        c = resolve_llm_config({"LLM_PROVIDER": "openai", "LLM_BASE_URL": "http://node:8000/v1",
+                                "MODEL_FAST": "Qwen/Qwen2.5-32B-Instruct"})
+        assert c["provider"] == "openai"
+        assert c["base_url"] == "http://node:8000/v1"
+        assert c["model_fast"] == "Qwen/Qwen2.5-32B-Instruct"
+
+    def test_resolve_openai_default_base(self):
+        c = resolve_llm_config({"LLM_PROVIDER": "openai"})
+        assert c["base_url"] == "http://localhost:8000/v1"
+
+    def test_adapter_translates_and_reshapes(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="EXTRACTED"))])
+        resp = _OpenAIAdapter(client).messages.create(
+            model="m", max_tokens=10, temperature=0,
+            system=[{"type": "text", "text": "SYS", "cache_control": {}}],
+            messages=[{"role": "user", "content": "hi"}])
+        assert resp.content[0].text == "EXTRACTED"            # Anthropic-shaped response
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert sent[0] == {"role": "system", "content": "SYS"}   # system flattened + roled
+        assert sent[1] == {"role": "user", "content": "hi"}
+
+    def test_adapter_string_system(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="x"))])
+        _OpenAIAdapter(client).messages.create(
+            model="m", system="PLAIN", messages=[{"role": "user", "content": "q"}])
+        sent = client.chat.completions.create.call_args.kwargs["messages"]
+        assert sent[0]["content"] == "PLAIN"
