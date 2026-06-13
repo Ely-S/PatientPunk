@@ -53,6 +53,12 @@ from patientpunk.promote import (
 )
 from patientpunk.consolidate import ConsolidateResult, consolidate_schemas
 from patientpunk.evaluate import export_gold_template, score_extraction
+from patientpunk.cluster_prep import (
+    aggregate_patients,
+    build_matrix,
+    readiness_report,
+    select_fields,
+)
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
 from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
@@ -2064,3 +2070,54 @@ class TestLLMConfig:
 
     def test_llm_config_excludes_api_key(self):
         assert "api_key" not in llm_config()
+
+
+# =============================================================================
+# cluster_prep -- per-patient matrix + clusterability
+# =============================================================================
+
+class TestClusterPrep:
+    ROWS = [
+        {"author_hash": "u1", "post_id": "p1", "conditions": "pots | long covid",
+         "supplement": "magnesium", "age": "34"},
+        {"author_hash": "u1", "post_id": "p2", "conditions": "mcas",
+         "supplement": "", "age": ""},   # same patient -> values union
+        {"author_hash": "u2", "post_id": "p3", "conditions": "long covid",
+         "supplement": "vitamin d | zinc", "age": ""},
+    ]
+
+    def test_aggregate_unions_per_patient(self):
+        pats, fields = aggregate_patients(self.ROWS)
+        assert set(pats) == {"u1", "u2"}
+        assert pats["u1"]["conditions"] == {"pots", "long covid", "mcas"}
+        assert "author_hash" not in fields and "post_id" not in fields
+
+    def test_select_fields_by_coverage(self):
+        pats, fields = aggregate_patients(self.ROWS)
+        kept, cov = select_fields(pats, fields, 0.75)
+        assert "conditions" in kept and "supplement" in kept   # both 100%
+        assert "age" not in kept                               # only u1 -> 50%
+
+    def test_build_presence(self):
+        pats, _ = aggregate_patients(self.ROWS)
+        pids, names, X = build_matrix(pats, ["conditions", "supplement"], encode="presence")
+        assert names == ["conditions", "supplement"]
+        assert len(pids) == 2 and all(len(r) == 2 for r in X)
+
+    def test_build_topk_adds_other_bucket(self):
+        pats, _ = aggregate_patients(self.ROWS)
+        pids, names, X = build_matrix(pats, ["conditions"], encode="topk", top_k=1)
+        assert sum(n.startswith("conditions=") for n in names) == 1   # only the top value
+        assert any(n == "conditions:other" for n in names)            # tail bucketed
+
+    def test_build_multihot_one_col_per_value(self):
+        pats, _ = aggregate_patients(self.ROWS)
+        pids, names, X = build_matrix(pats, ["supplement"], encode="multihot")
+        assert {n.split("=", 1)[1] for n in names} == {"magnesium", "vitamin d", "zinc"}
+
+    def test_readiness_report_basic_keys(self):
+        pats, _ = aggregate_patients(self.ROWS)
+        pids, names, X = build_matrix(pats, ["conditions", "supplement"], encode="presence")
+        rep = readiness_report(pids, names, X)
+        assert rep["n_patients"] == 2 and rep["n_features"] == 2
+        assert 0.0 <= rep["density"] <= 1.0

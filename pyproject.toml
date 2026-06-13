@@ -22,6 +22,10 @@ ui = [
     "streamlit>=1.30",
     "plotly>=5.18",
 ]
+cluster = [
+    "scikit-learn>=1.3",   # cluster-prep readiness report (silhouette); matrix builder works without it
+    "numpy>=1.24",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["variable_extraction/tests", "tests"]

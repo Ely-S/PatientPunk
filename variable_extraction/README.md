@@ -395,6 +395,25 @@ blanks), then score each candidate model against it. Metrics are multi-label
 precision / recall / F1 + exact-agreement, so single- and multi-value fields are
 handled uniformly.
 
+### `cluster-prep` — build a per-patient clustering-ready feature matrix
+
+```
+python main.py cluster-prep --records output/records.csv [options]
+
+  --key cols              Patient-unit column (default: author_hash)
+  --min-coverage F        Drop fields below this patient coverage (default: 0.25)
+  --encode MODE           presence | topk | multihot  (default: topk)
+  --top-k N               topk: values kept per field (default: 8)
+  --out PATH              Matrix CSV (default: <records dir>/feature_matrix.csv)
+  --no-report             Skip the clusterability report
+```
+
+Aggregates records to one row per patient, drops sparse fields, and encodes the
+rest with a controlled vocabulary (top-k values/field + an "other" bucket) --
+the biggest clusterability lever. Prints n / p-over-n / density / pairwise
+similarity / silhouette-by-k (needs `pip install 'patientpunk[cluster]'`) so you
+can tell whether the data is appropriate for clustering before you try.
+
 ---
 
 ## Library Reference

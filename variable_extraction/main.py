@@ -75,6 +75,14 @@ from patientpunk.promote import (
 )
 from patientpunk.consolidate import consolidate_schemas
 from patientpunk.evaluate import export_gold_template, load_records, score_extraction
+from patientpunk.cluster_prep import (
+    aggregate_patients,
+    build_matrix,
+    read_records,
+    readiness_report,
+    select_fields,
+    write_matrix,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -786,6 +794,99 @@ def _cmd_validate(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: cluster-prep
+# ---------------------------------------------------------------------------
+
+def _add_cluster_prep_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    p = sub.add_parser(
+        "cluster-prep",
+        help="Build a per-patient, clustering-ready feature matrix from records.csv.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Turn records.csv (per-record, wide, high-cardinality free-text) into a
+clustering-ready PER-PATIENT feature matrix:
+
+  aggregate by patient -> drop sparse fields (--min-coverage) -> encode with a
+  controlled vocabulary (top-k values/field + 'other') -> CSV + clusterability
+  report (n, p/n, density, pairwise similarity, silhouette by k).
+
+  python main.py cluster-prep --records output/records.csv --min-coverage 0.3 --top-k 8
+
+--encode topk (default) collapses cardinality to the top values per field -- the
+single biggest clusterability lever. Use --encode presence for the most
+aggressive collapse, multihot for none.
+        """,
+    )
+    p.add_argument("--records", type=Path, default=_DEFAULT_INPUT_DIR / "records.csv",
+                   help=f"Extraction records.csv (default: {_DEFAULT_INPUT_DIR / 'records.csv'}).")
+    p.add_argument("--key", default="author_hash",
+                   help="Patient-unit column (default: author_hash).")
+    p.add_argument("--min-coverage", type=float, default=0.25,
+                   help="Drop fields below this patient coverage (default: 0.25).")
+    p.add_argument("--encode", choices=["presence", "topk", "multihot"], default="topk",
+                   help="Encoding (default: topk = controlled vocabulary).")
+    p.add_argument("--top-k", type=int, default=8,
+                   help="topk: number of values kept per field (default: 8).")
+    p.add_argument("--fields", default=None, help="Restrict to these comma-separated fields.")
+    p.add_argument("--sep", default=" | ", help="Multi-value separator (default: ' | ').")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Matrix CSV (default: <records dir>/feature_matrix.csv).")
+    p.add_argument("--no-report", action="store_true", help="Skip the clusterability report.")
+
+
+def _cmd_cluster_prep(args: argparse.Namespace) -> None:
+    records = args.records
+    if not records.exists():
+        sys.exit(f"records not found: {records}")
+    rows = read_records(records)
+    if not rows:
+        sys.exit(f"no rows in {records}")
+
+    patients, all_fields = aggregate_patients(rows, key_col=args.key, sep=args.sep)
+    if not patients:
+        sys.exit(f"no patients found (is --key '{args.key}' a column in {records.name}?)")
+    fields = [f.strip() for f in args.fields.split(",") if f.strip()] if args.fields else all_fields
+    kept, _cov = select_fields(patients, fields, args.min_coverage)
+    if not kept:
+        sys.exit(f"no fields with >= {args.min_coverage:.0%} coverage; lower --min-coverage")
+    pids, names, X = build_matrix(patients, kept, encode=args.encode, top_k=args.top_k)
+
+    print(f"\nGRAIN:    {len(rows)} records -> {len(pids)} patients (by {args.key})")
+    print(f"FEATURES: {len(kept)}/{len(all_fields)} fields >= {args.min_coverage:.0%} coverage; "
+          f"encode={args.encode}" + (f" top_k={args.top_k}" if args.encode == "topk" else ""))
+    print(f"MATRIX:   {len(pids)} x {len(names)} features")
+
+    out = args.out or (records.parent / "feature_matrix.csv")
+    write_matrix(out, pids, names, X)
+    print(f"  Wrote: {out}")
+
+    if args.no_report:
+        sys.exit(0)
+
+    rep = readiness_report(pids, names, X)
+    print("\nCLUSTERABILITY:")
+    print(f"  n={rep['n_patients']}  features={rep['n_features']}  "
+          f"p/n={rep['p_over_n']}  density={rep['density'] * 100:.1f}%")
+    if not rep["sklearn"]:
+        print("  (install scikit-learn for similarity + silhouette: pip install 'patientpunk[cluster]')")
+    else:
+        print(f"  pairwise similarity: median={rep['similarity_median']}  mean={rep['similarity_mean']}")
+        sk = rep.get("silhouette_by_k", {})
+        if sk:
+            print("  silhouette by k:  " + "  ".join(f"k{k}={v:+.2f}" for k, v in sk.items()))
+            bs = rep["best_silhouette"]
+            verdict = ("STRONG structure" if bs >= 0.5 else
+                       "reasonable structure" if bs >= 0.25 else
+                       "WEAK / none -- not appropriate")
+            print(f"  best silhouette {bs:+.2f} at k={rep['best_k']}  ->  {verdict}")
+    if rep["p_over_n"] > 3:
+        print("  ! p/n > 3 (too many features per patient) -- raise --min-coverage / lower --top-k")
+    if rep["n_patients"] < 100:
+        print("  ! n < 100 patients -- too few for trustworthy subpopulations; scale the corpus")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -806,6 +907,7 @@ Examples:
   python main.py promote      --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
   python main.py consolidate  --inputs run1/temp/discovered_*.json run2/temp/discovered_*.json --min-runs 2
   python main.py validate     --reference gold.csv --candidate model_output.csv
+  python main.py cluster-prep --records output/records.csv --min-coverage 0.3 --top-k 8
         """,
     )
 
@@ -820,6 +922,7 @@ Examples:
     _add_promote_parser(sub)
     _add_consolidate_parser(sub)
     _add_validate_parser(sub)
+    _add_cluster_prep_parser(sub)
 
     args = parser.parse_args()
 
@@ -832,6 +935,7 @@ Examples:
         "promote":      _cmd_promote,
         "consolidate":  _cmd_consolidate,
         "validate":     _cmd_validate,
+        "cluster-prep": _cmd_cluster_prep,
     }
     dispatch[args.command](args)
 
