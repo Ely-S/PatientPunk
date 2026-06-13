@@ -49,6 +49,7 @@ from patientpunk.promote import (
     promote_discovered_fields,
     resolve_discovered_schema,
 )
+from patientpunk.consolidate import ConsolidateResult, consolidate_schemas
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
 from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
@@ -1871,3 +1872,81 @@ class TestPhase5DiscoveredSchemaWiring:
             MockGen.return_value.run.return_value = MagicMock()
             p._run_phase_5()
         assert MockGen.call_args.kwargs["discovered_schema_path"] is None
+
+
+# =============================================================================
+# consolidate -- merge discovered schemas across runs
+# =============================================================================
+
+def _disc_schema(fields: dict) -> dict:
+    """Build a discovered-schema dict. fields: name -> overrides dict."""
+    return {"schema_id": "d", "extension_fields": {
+        n: {"description": n, "confidence": "low", "source": "llm_discovered",
+            "patterns": d.get("patterns", []),
+            "hit_rate_at_discovery": d.get("hit", 0.0),
+            **({"allowed_values": d["allowed_values"]} if "allowed_values" in d else {})}
+        for n, d in fields.items()}}
+
+
+class TestConsolidate:
+    def test_suffix_synonym_merge(self):
+        r = consolidate_schemas([_disc_schema({"medication_trial_outcome_category": {}}),
+                                 _disc_schema({"medication_trial_outcome": {}})])
+        assert r.n_consolidated == 1
+        assert "medication_trial_outcome" in r.consolidated_schema["extension_fields"]
+
+    def test_token_jaccard_merge(self):
+        r = consolidate_schemas([_disc_schema({"supplement_type_used": {}}),
+                                 _disc_schema({"supplement_used": {}})], name_threshold=0.6)
+        assert r.n_consolidated == 1
+
+    def test_no_overmerge(self):
+        r = consolidate_schemas([_disc_schema({"supplement_type_used": {}}),
+                                 _disc_schema({"supplement_dosage_and_timing": {}})])
+        assert r.n_consolidated == 2
+
+    def test_transitive_grouping(self):
+        r = consolidate_schemas([
+            _disc_schema({"symptom_domain_category": {}}),
+            _disc_schema({"symptom_domain": {}}),
+            _disc_schema({"symptom_domain_targeted": {}}),
+        ], name_threshold=0.6)
+        assert r.n_consolidated == 1
+        only = next(iter(r.consolidated_schema["extension_fields"].values()))
+        assert only["_n_runs_seen"] == 3
+
+    def test_min_runs_filter(self):
+        r = consolidate_schemas([_disc_schema({"a": {}, "b": {}}),
+                                 _disc_schema({"a": {}})], min_runs=2)
+        assert set(r.consolidated_schema["extension_fields"]) == {"a"}
+        assert r.n_dropped_low_runs == 1
+
+    def test_n_runs_and_provenance(self):
+        r = consolidate_schemas([_disc_schema({"medication_trial_outcome_category": {}}),
+                                 _disc_schema({"medication_trial_outcome": {}})])
+        f = r.consolidated_schema["extension_fields"]["medication_trial_outcome"]
+        assert f["_n_runs_seen"] == 2
+        assert set(f["_consolidated_from"]) == {
+            "medication_trial_outcome_category", "medication_trial_outcome"}
+
+    def test_pattern_and_allowed_union(self):
+        r = consolidate_schemas([
+            _disc_schema({"x": {"patterns": [r"\ba\b"], "allowed_values": ["p", "q"]}}),
+            _disc_schema({"x": {"patterns": [r"\bb\b"], "allowed_values": ["q", "r"]}}),
+        ])
+        f = r.consolidated_schema["extension_fields"]["x"]
+        assert set(f["patterns"]) == {r"\ba\b", r"\bb\b"}
+        assert set(f["allowed_values"]) == {"p", "q", "r"}
+
+    def test_llm_group_fn_merges_no_token_overlap(self):
+        schemas = [_disc_schema({"med_response": {}}), _disc_schema({"drug_efficacy": {}})]
+        assert consolidate_schemas(schemas).n_consolidated == 2          # deterministic keeps apart
+        r = consolidate_schemas(schemas, llm_group_fn=lambda names: [["med_response", "drug_efficacy"]])
+        assert r.n_consolidated == 1                                     # llm edge merges them
+
+    def test_output_parses_via_schema_loader(self, tmp_path):
+        r = consolidate_schemas([_disc_schema({"newvar": {}})], base_schema_id="base_v1")
+        p = tmp_path / "c.json"
+        p.write_text(json.dumps(r.consolidated_schema), encoding="utf-8")
+        schema = Schema.from_file(p, base_path=BASE_SCHEMA)
+        assert "newvar" in schema.extension_fields

@@ -73,6 +73,7 @@ from patientpunk.promote import (
     promote_discovered_fields,
     resolve_discovered_schema,
 )
+from patientpunk.consolidate import consolidate_schemas
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +530,147 @@ def _cmd_promote(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: consolidate
+# ---------------------------------------------------------------------------
+
+def _build_llm_group_fn(schemas: list[dict]):
+    """Return ``fn(names) -> list[list[str]]`` that asks the strong model to group
+    semantically-synonymous variable names (for the optional --llm pass)."""
+    from patientpunk._utils import get_llm_client, MODEL_STRONG
+
+    descs: dict[str, str] = {}
+    for s in schemas:
+        for n, d in (s.get("extension_fields") or {}).items():
+            if isinstance(d, dict):
+                descs.setdefault(n, d.get("description", ""))
+
+    def group(names: list[str]) -> list[list[str]]:
+        client = get_llm_client()
+        listing = "\n".join(f"- {n}: {descs.get(n, '')[:140]}" for n in names)
+        prompt = (
+            "These are auto-discovered data variables; some are the SAME concept "
+            "under different names. Group ONLY true synonyms (same concept). Return "
+            "a JSON array of arrays of variable names; every name appears in exactly "
+            "one array; singletons are fine. No prose.\n\n" + listing
+        )
+        try:
+            resp = client.messages.create(
+                model=MODEL_STRONG, max_tokens=4000, temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = resp.content[0].text
+            start, end = text.find("["), text.rfind("]")
+            groups = json.loads(text[start:end + 1]) if start >= 0 else []
+            return [g for g in groups if isinstance(g, list) and len(g) > 1]
+        except Exception as exc:  # defensive: fall back to deterministic only
+            print(f"  ! LLM grouping failed ({exc}); using deterministic grouping only")
+            return []
+
+    return group
+
+
+def _add_consolidate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    p = sub.add_parser(
+        "consolidate",
+        help="Merge discovered schemas from multiple runs into one deduped schema.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Merge the discovered schemas from several discovery runs into ONE deduplicated
+emergent schema, collapsing naming drift (medication_trial_outcome_category /
+medication_trial_outcome / med_response -> one canonical field).
+
+Run AFTER discovering on multiple slices, BEFORE promote + deductive extraction:
+  for slice in ...: python main.py run --schema base.json --discover auto --input-dir <slice>
+  python main.py consolidate --inputs <slice1>/temp/discovered_*.json ... --min-runs 2
+  python main.py promote     --schema base.json --discovered-schema schemas/consolidated_schema.json
+  python main.py run         --schema base_promoted.json   # deductive, at scale
+
+--min-runs is the robustness knob: keep only concepts that re-emerged in >= N
+independent runs (high = tight clusterable core; 1 = keep the full emergent tail).
+        """,
+    )
+    p.add_argument("--inputs", type=Path, nargs="+", default=None,
+                   help="Discovered schema JSON files (default: glob {temp-dir}/discovered_*.json).")
+    p.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+                   help=f"Corpus / output dir, used to locate temp/ (default: {_DEFAULT_INPUT_DIR}).")
+    p.add_argument("--temp-dir", type=Path, default=None,
+                   help="Where discovered_*.json live (default: {input-dir}/temp/).")
+    p.add_argument("--name-threshold", type=float, default=0.6,
+                   help="Token-overlap threshold for merging near-synonym names (default 0.6).")
+    p.add_argument("--min-runs", type=int, default=1,
+                   help="Keep only concepts seen in >= this many discovery runs (robustness filter).")
+    p.add_argument("--llm", action="store_true",
+                   help="Add an LLM semantic-synonym pass (non-deterministic; uses MODEL_STRONG).")
+    p.add_argument("--base-schema-id", default=None,
+                   help="Recorded as _base_schema on the output (lineage).")
+    p.add_argument("--output", type=Path, default=None,
+                   help="Output schema (default: schemas/consolidated_schema.json).")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Report the merge without writing.")
+
+
+def _cmd_consolidate(args: argparse.Namespace) -> None:
+    if args.inputs:
+        paths = [p if p.is_absolute() else _HERE / p for p in args.inputs]
+    else:
+        temp_dir = args.temp_dir or (args.input_dir / "temp")
+        paths = sorted(
+            p for p in temp_dir.glob("discovered_*.json")
+            if "field_report" not in p.name and "records" not in p.name
+        )
+
+    schemas: list[dict] = []
+    for p in paths:
+        if not p.exists():
+            sys.exit(f"Not found: {p}")
+        d = load_json(p)
+        if isinstance(d, dict) and d.get("extension_fields") is not None:
+            schemas.append(d)
+        else:
+            print(f"  ! skipping (no extension_fields): {p.name}")
+
+    if not schemas:
+        sys.exit(
+            "No discovered schemas found.\n"
+            "  Run discovery on >=2 slices first: python main.py run --schema ... --discover auto"
+        )
+    if len(schemas) < 2:
+        print(f"  ! only {len(schemas)} schema -- consolidation is most useful across >=2 discovery runs")
+
+    llm_fn = _build_llm_group_fn(schemas) if args.llm else None
+    result = consolidate_schemas(
+        schemas,
+        name_threshold=args.name_threshold,
+        min_runs=args.min_runs,
+        base_schema_id=args.base_schema_id,
+        llm_group_fn=llm_fn,
+    )
+
+    print(f"\nInputs: {len(schemas)} discovered schema(s)")
+    print(result.summary())
+    multi = [m for m in result.merges if len(m["members"]) > 1]
+    if multi:
+        print(f"\n  Merged synonym groups ({len(multi)}):")
+        for m in multi:
+            others = [x for x in m["members"] if x != m["canonical"]]
+            print(f"    [{m['n_runs']}x] {m['canonical']}  <-  {', '.join(others)}")
+
+    out = args.output if args.output else (_DEFAULT_SCHEMA_DIR / "consolidated_schema.json")
+    if not out.is_absolute():
+        out = _HERE / out
+    if args.dry_run:
+        print("\n  [dry-run] nothing written.")
+    else:
+        out.write_text(
+            json.dumps(result.consolidated_schema, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"\n  Wrote: {out}  ({result.n_consolidated} fields)")
+        print(f"  Next:  python main.py promote --schema <base_schema> --discovered-schema {out}")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -547,6 +689,7 @@ Examples:
   python main.py corpus       --input-dir ../output
   python main.py export       --schema schemas/covidlonghaulers_schema.json --codebook-format markdown
   python main.py promote      --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
+  python main.py consolidate  --inputs run1/temp/discovered_*.json run2/temp/discovered_*.json --min-runs 2
         """,
     )
 
@@ -559,6 +702,7 @@ Examples:
     _add_corpus_parser(sub)
     _add_export_parser(sub)
     _add_promote_parser(sub)
+    _add_consolidate_parser(sub)
 
     args = parser.parse_args()
 
@@ -569,6 +713,7 @@ Examples:
         "corpus":       _cmd_corpus,
         "export":       _cmd_export,
         "promote":      _cmd_promote,
+        "consolidate":  _cmd_consolidate,
     }
     dispatch[args.command](args)
 

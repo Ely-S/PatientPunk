@@ -251,6 +251,37 @@ Promoted fields are stamped `_promoted_at` (which is what re-enables their Phase
 regex). The default `run` wipes `temp/` first, so stale discovery records from
 step 1 are not double-counted in step 3.
 
+### Consolidating across discovery runs
+
+Discovery is non-deterministic: run it on several slices and the same concept
+comes back under different names (`medication_trial_outcome_category` /
+`medication_trial_outcome` / `med_response`). Before promoting at scale,
+`consolidate` merges the per-run discovered schemas into one deduped emergent
+schema and tracks how many runs each concept survived in (`_n_runs_seen`):
+
+```bash
+# discover on several slices (each writes its own temp/discovered_*.json)
+for slice in slice_a slice_b slice_c; do
+  python main.py run --schema schemas/covidlonghaulers_schema.json --discover auto --input-dir $slice
+done
+
+# merge them; keep only concepts that re-emerged in >=2 runs (robustness)
+python main.py consolidate \
+    --inputs slice_a/temp/discovered_*.json slice_b/temp/discovered_*.json slice_c/temp/discovered_*.json \
+    --min-runs 2
+#   -> schemas/consolidated_schema.json
+
+# promote the consolidated schema into your base, then run deductively at scale
+python main.py promote --schema schemas/covidlonghaulers_schema.json \
+    --discovered-schema schemas/consolidated_schema.json
+python main.py run --schema schemas/covidlonghaulers_schema_promoted.json
+```
+
+Near-synonym names are merged deterministically (normalized-name + token overlap);
+`--llm` adds a semantic pass for synonyms that share no tokens. `--min-runs` is the
+key knob: high values keep a tight, stable feature set (good for clustering); `1`
+keeps the full emergent tail.
+
 ---
 
 ## CLI Reference
@@ -329,6 +360,19 @@ python main.py promote --schema schemas/covidlonghaulers_schema.json [options]
   --in-place              Overwrite the --schema file instead of writing a copy
   --overwrite-existing    Replace fields already present in the target schema
   --dry-run               Report what would be promoted without writing
+```
+
+### `consolidate` — merge discovered schemas from multiple runs
+
+```
+python main.py consolidate --inputs run1/temp/discovered_*.json run2/temp/discovered_*.json [options]
+
+  --inputs PATHS          Discovered schema JSONs (default: glob {temp-dir}/discovered_*.json)
+  --min-runs N            Keep only concepts seen in ≥ N runs (robustness filter)
+  --name-threshold F      Token-overlap threshold for synonym merge (default 0.6)
+  --llm                   Add an LLM semantic-synonym pass (non-deterministic)
+  --output PATH           Output schema (default: schemas/consolidated_schema.json)
+  --dry-run               Report the merge without writing
 ```
 
 ---
