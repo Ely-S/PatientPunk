@@ -45,3 +45,9 @@ Scrapers/output/
 
 # AI session continuity / handoff notes (local-only project state, not code)
 CONTINUITY.md
+
+# Run/scratch output dirs (data + intermediates — keep in PatientPunk_data/ + S3, never commit)
+output_*/
+compare/
+compare_par/
+outputs/
