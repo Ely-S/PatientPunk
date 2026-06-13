@@ -2161,3 +2161,82 @@ class TestOpenAIProvider:
             model="m", system="PLAIN", messages=[{"role": "user", "content": "q"}])
         sent = client.chat.completions.create.call_args.kwargs["messages"]
         assert sent[0]["content"] == "PLAIN"
+
+
+class TestAggregateByAuthor:
+    """Per-patient corpus aggregation (patientpunk/aggregate.py)."""
+
+    def _corpus(self):
+        # Author A: one post + a comment on their own post (= 2 items).
+        # Author B: a comment under A's post + own post + own comment (= 3 items).
+        # Author C: only a [removed] comment (-> not a patient).
+        return [
+            {"author_hash": "A", "post_id": "t3_1", "title": "T1", "body": "B1",
+             "comments": [
+                 {"author_hash": "B", "body": "b-comment-1"},
+                 {"author_hash": "A", "body": "a-self-comment"},
+                 {"author_hash": "C", "body": "[removed]"},
+             ]},
+            {"author_hash": "B", "post_id": "t3_2", "title": "", "body": "B-post",
+             "comments": [{"author_hash": "B", "body": "b-comment-2"}]},
+        ]
+
+    def test_segments_attributed_to_own_author(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        out, stats = aggregate_corpus_by_author(self._corpus(), min_items=1)
+        by = {p["author_hash"]: p for p in out}
+        assert by["A"]["n_items"] == 2
+        assert "T1" in by["A"]["body"] and "B1" in by["A"]["body"]
+        assert "a-self-comment" in by["A"]["body"]
+        assert by["B"]["n_items"] == 3
+        assert "b-comment-1" in by["B"]["body"]      # B's comment goes to B...
+        assert "b-comment-1" not in by["A"]["body"]  # ...not to post-author A
+        assert "C" not in by
+
+    def test_synthetic_post_shape_is_pipeline_consumable(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        from scripts.extract_biomedical import collect_texts_from_post
+        out, _ = aggregate_corpus_by_author(self._corpus(), min_items=1)
+        p = out[0]
+        assert p["post_id"].startswith("agg_")
+        assert p["comments"] == [] and p["title"] == "" and p["aggregated"] is True
+        texts = collect_texts_from_post(p)   # the pipeline must read the body back
+        assert texts and p["body"][:10] in texts[0]
+
+    def test_min_items_filter(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        out, stats = aggregate_corpus_by_author(self._corpus(), min_items=3)
+        assert {p["author_hash"] for p in out} == {"B"}   # only B has >= 3 items
+        assert stats["dropped_below_min"] == 1            # A had 2 items
+        assert stats["patients_out"] == 1
+
+    def test_skips_removed_deleted_empty(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        corpus = [{"author_hash": "X", "post_id": "p", "title": "", "body": "[deleted]",
+                   "comments": [{"author_hash": "X", "body": "[removed]"},
+                                {"author_hash": "X", "body": "   "}]}]
+        out, stats = aggregate_corpus_by_author(corpus, min_items=1)
+        assert out == [] and stats["patients_out"] == 0
+
+    def test_stats_counts(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        _, stats = aggregate_corpus_by_author(self._corpus(), min_items=1)
+        assert stats["in_posts"] == 2
+        assert stats["in_comments"] == 4
+        assert stats["authors_seen"] == 2        # A, B (C only had removed text)
+        assert stats["patients_out"] == 2
+
+    def test_read_write_roundtrip(self, tmp_path):
+        from patientpunk.aggregate import (
+            read_posts, write_corpus, aggregate_corpus_by_author)
+        (tmp_path / "subreddit_posts.json").write_text(
+            json.dumps(self._corpus()), encoding="utf-8")
+        out, _ = aggregate_corpus_by_author(read_posts(tmp_path), min_items=1)
+        dest = write_corpus(tmp_path / "pp", out)
+        reloaded = json.loads(dest.read_text(encoding="utf-8"))
+        assert {p["author_hash"] for p in reloaded} == {"A", "B"}
+
+    def test_missing_file_raises(self, tmp_path):
+        from patientpunk.aggregate import read_posts
+        with pytest.raises(FileNotFoundError):
+            read_posts(tmp_path)

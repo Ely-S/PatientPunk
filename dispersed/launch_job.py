@@ -133,13 +133,16 @@ def main(argv=None) -> int:
         except Exception:
             sys.exit("Could not detect public IP; pass --allowed-ip <cidr> explicitly.")
 
+    env: dict = {}
+    if "ollama" in args.image.lower():
+        # Ollama must bind all interfaces to be reachable via node_urls.
+        env["OLLAMA_HOST"] = f"0.0.0.0:{args.port}"
     docker_params: dict = {
         "image": args.image,
         "tag": "latest",
         "ports": [args.port],
         "allowed_ips": [allowed_ip],
-        # Ollama must bind all interfaces to be reachable via node_urls.
-        "env": {"OLLAMA_HOST": f"0.0.0.0:{args.port}"},
+        "env": env,
     }
     body: dict = {
         "task": "PERSISTENT",   # long-running query-responsive server
@@ -159,19 +162,24 @@ def main(argv=None) -> int:
         sys.exit(f"No job uuid in response: {created}")
     print(f"  job uuid: {uuid}  status: {created.get('status')}")
 
-    # Poll for node_urls (the reachable hostname/port).
-    print("  waiting for the job to be assigned + reachable (node_urls)...")
+    # Poll for node_urls -- it lives on the job-RUN, not the job object. The
+    # url's `port` is the EXTERNAL proxy port; `description` is the container
+    # port (str) we asked for, so match on that to pick the right mapping.
+    print("  waiting for a job-run with node_urls (reachable host:port)...")
     deadline = time.time() + args.poll_seconds
     node = None
     while time.time() < deadline:
         time.sleep(10)
-        job = _signed_request("GET", f"/v1/jobs/{uuid}", pk=pk, sk=sk)
-        status = job.get("status")
-        urls = job.get("node_urls") or []
+        runs = _signed_request("GET", "/v1/job-runs", pk=pk, sk=sk)
+        data = runs.get("data") if isinstance(runs, dict) else runs
+        run = next((r for r in (data or []) if r.get("job_uuid") == uuid), None)
+        status = run.get("status") if run else "?"
+        urls = (run or {}).get("node_urls") or []
         if urls:
-            node = next((u for u in urls if u.get("port") == args.port), urls[0])
+            node = next((u for u in urls if str(u.get("description")) == str(args.port)),
+                        urls[0])
             break
-        print(f"    status={status} ...")
+        print(f"    run status={status} ...")
     if not node:
         sys.exit(f"Timed out waiting for node_urls. Check job {uuid} in the console.")
 

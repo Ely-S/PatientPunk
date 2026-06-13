@@ -72,20 +72,36 @@ SERVER=vllm MODEL=Qwen/Qwen2.5-32B-Instruct bash bootstrap.sh   # or SERVER=olla
 
 ## After the model is reachable — the run sequence
 
+0. **Aggregate to per-patient (do this first for clustering).** Collapse the
+   posts+comments corpus into one synthetic post per author, so you extract once
+   per *patient* (the clustering unit) instead of once per *post* — several-fold
+   cheaper, and commenters become patients too. `--min-items` drops authors with
+   too little text to profile.
+   ```bash
+   python variable_extraction/main.py aggregate --input-dir output --out-dir output_perpatient --min-items 3
+   ```
 1. **Gate it (do not skip):** score the open model **per field** against your
    Claude reference on the gold set. Decide per-field whether it's good enough.
    ```bash
    python variable_extraction/main.py validate --reference gold.csv --candidate <model_run>.csv
    ```
-2. **Extract** (deductive, promoted schema) over the corpus:
+2. **Extract** (deductive, promoted schema) over the per-patient corpus:
    ```bash
-   python variable_extraction/main.py run --schema <promoted>.json --input-dir <corpus>
+   python variable_extraction/main.py run --schema <promoted>.json --input-dir output_perpatient
    ```
    `output/llm_provenance.json` records the model/endpoint/temperature for the run.
 3. **Build the clustering matrix + readiness check:**
    ```bash
-   python variable_extraction/main.py cluster-prep --records <corpus>/records.csv --min-coverage 0.3
+   python variable_extraction/main.py cluster-prep --records output_perpatient/records.csv --min-coverage 0.3
    ```
+
+**Throughput:** Ollama (Path A) force-serializes one request at a time (~83 s/record
+measured for qwen-32B). For any real-scale run use **Path B (vLLM)** — its continuous
+batching is the difference between ~8 h and ~1 h for a week of data. The GPU catalog
+tops out at a single 32 GB card (RTX 5090) / 24 GB (4090); there are no multi-GPU
+nodes, so serve a **quantized (AWQ) 32B** that fits one card (see `vllm.Dockerfile`).
+Note: `node_urls` (the reachable host:port) lives on the **job-run**, not the job —
+`launch_job.py` polls `/v1/job-runs` for it.
 
 ## Networking
 `node_urls` exposes the job's port to IPs in `allowed_ips`. To reach it off-box

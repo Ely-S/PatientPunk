@@ -83,6 +83,7 @@ from patientpunk.cluster_prep import (
     select_fields,
     write_matrix,
 )
+from patientpunk.aggregate import aggregate_corpus_by_author, read_posts, write_corpus
 
 
 # ---------------------------------------------------------------------------
@@ -887,6 +888,65 @@ def _cmd_cluster_prep(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: aggregate
+# ---------------------------------------------------------------------------
+
+def _add_aggregate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    p = sub.add_parser(
+        "aggregate",
+        help="Collapse a posts+comments corpus into one synthetic post per author (per-patient).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""
+Turn subreddit_posts.json (one record per POST, comments nested) into one
+synthetic post per AUTHOR -- a per-PATIENT corpus -- then run the normal pipeline
+on the output dir. Extracts once per patient instead of once per post: matches
+the clustering unit (cluster-prep aggregates per author anyway) and cuts LLM cost
+several-fold.
+
+Every text segment is attributed to ITS OWN author (a reply by B under A's post
+counts toward B), so commenters become patients too. --min-items drops authors
+with too little text to profile.
+
+  python main.py aggregate --input-dir output --out-dir output_perpatient --min-items 3
+  python main.py run --schema schemas/..._promoted.json --input-dir output_perpatient
+        """,
+    )
+    p.add_argument("--input-dir", type=Path, default=_DEFAULT_INPUT_DIR,
+                   help=f"Corpus with subreddit_posts.json (default: {_DEFAULT_INPUT_DIR}).")
+    p.add_argument("--out-dir", type=Path, default=None,
+                   help="Output corpus dir (default: <input-dir>_perpatient).")
+    p.add_argument("--min-items", type=int, default=1,
+                   help="Drop authors with fewer than this many text segments (default: 1).")
+    p.add_argument("--sep", default="\n\n---\n\n",
+                   help="Separator joining an author's segments (default: blank-line rule).")
+
+
+def _cmd_aggregate(args: argparse.Namespace) -> None:
+    in_dir = args.input_dir if args.input_dir.is_absolute() else _HERE.parent / args.input_dir
+    out_dir = args.out_dir or in_dir.parent / f"{in_dir.name}_perpatient"
+    try:
+        posts = read_posts(in_dir)
+    except FileNotFoundError as exc:
+        sys.exit(str(exc))
+
+    agg, stats = aggregate_corpus_by_author(posts, min_items=args.min_items, sep=args.sep)
+    if not agg:
+        sys.exit(f"no patients after aggregation (min_items={args.min_items}); lower --min-items")
+    out_file = write_corpus(out_dir, agg)
+
+    print(f"\nAGGREGATE (per-patient):  {in_dir}  ->  {out_dir}")
+    print(f"  in:   {stats['in_posts']} posts + {stats['in_comments']} comments "
+          f"({stats['authors_seen']} distinct authors)")
+    print(f"  out:  {stats['patients_out']} patients  "
+          f"(dropped {stats['dropped_below_min']} with < {stats['min_items']} items)")
+    print(f"  text: avg {stats['avg_items_per_patient']} items/patient, "
+          f"median {stats['median_body_chars']} chars, max {stats['max_body_chars']}")
+    print(f"  wrote {out_file}")
+    print(f"\n  next: python main.py run --schema <promoted>.json --input-dir {out_dir}")
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -923,6 +983,7 @@ Examples:
     _add_consolidate_parser(sub)
     _add_validate_parser(sub)
     _add_cluster_prep_parser(sub)
+    _add_aggregate_parser(sub)
 
     args = parser.parse_args()
 
@@ -936,6 +997,7 @@ Examples:
         "consolidate":  _cmd_consolidate,
         "validate":     _cmd_validate,
         "cluster-prep": _cmd_cluster_prep,
+        "aggregate":    _cmd_aggregate,
     }
     dispatch[args.command](args)
 
