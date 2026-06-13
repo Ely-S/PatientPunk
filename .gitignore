@@ -42,3 +42,6 @@ Scrapers/output/
 
 # Database files
 *.db
+
+# AI session continuity / handoff notes (local-only project state, not code)
+CONTINUITY.md
