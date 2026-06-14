@@ -229,10 +229,25 @@ def build_field_descriptions(schema: dict | None) -> dict[str, str]:
     return fields
 
 
-def build_system_prompt(field_descriptions: dict[str, str]) -> str:
+# Optional rule (off by default; enable with --group-guard / PP_GROUP_GUARD=1).
+# Stops the model from copying a collective outcome ("this stack helped") onto
+# every named treatment -- a measured source of `helped` inflation from stack
+# posts. Appended to the treatment_outcome guidance when enabled.
+GROUP_GUARD_RULE = (
+    "- GROUPED treatments: when several treatments are named together but only a "
+    "COLLECTIVE outcome is given (e.g. 'this stack helped', 'things are improving'), "
+    "do NOT copy that outcome onto each item. Use 'unknown' for any treatment whose "
+    "individual effect is not separately stated. Assign helped/no_effect/worsened ONLY "
+    "to a treatment the text attributes that outcome to specifically."
+)
+
+
+def build_system_prompt(field_descriptions: dict[str, str], *,
+                        group_guard: bool = False) -> str:
     fields_block = "\n".join(
         f"  - {field}: {desc}" for field, desc in sorted(field_descriptions.items())
     )
+    guard_block = f"\n{GROUP_GUARD_RULE}" if group_guard else ""
     return f"""You are a biomedical data extraction assistant for the PatientPunk research project.
 Your job is to read patient-authored text from Reddit and extract structured biomedical information.
 
@@ -255,7 +270,7 @@ FIELD-SPECIFIC RULES:
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
 - alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
-- treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.
+- treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
 
@@ -281,12 +296,14 @@ Include ALL schema fields. Use null when no evidence exists.
 For suggested_fields: 0-5 biomedically interesting observations that don't fit existing fields."""
 
 
-def build_gap_system_prompt(field_descriptions: dict[str, str], null_fields: list[str]) -> str:
+def build_gap_system_prompt(field_descriptions: dict[str, str], null_fields: list[str], *,
+                            group_guard: bool = False) -> str:
     """Focused prompt for --focus-gaps mode: only asks about fields regex missed."""
     gap_descs = {f: d for f, d in field_descriptions.items() if f in null_fields}
     fields_block = "\n".join(
         f"  - {field}: {desc}" for field, desc in sorted(gap_descs.items())
     )
+    guard_block = f"\n{GROUP_GUARD_RULE}" if group_guard else ""
     return f"""You are a biomedical data extraction assistant for the PatientPunk research project.
 Regex extraction already ran on this text. You are filling in ONLY the fields it missed.
 
@@ -302,7 +319,7 @@ EXTRACTION RULES:
 VALUE FORMAT RULES:
 - Each value MUST be 1-5 words. Never write sentences.
 - conditions: ONLY diagnosed conditions (POTS, ME/CFS, long COVID). NOT symptoms (brain fog, fatigue, pain).
-- treatment_outcome: "drug: outcome: symptom" where outcome is helped/no_effect/worsened/mixed/unknown and symptom is the affected symptom (omit if unstated). E.g. "LDN: helped: brain fog".
+- treatment_outcome: "drug: outcome: symptom" where outcome is helped/no_effect/worsened/mixed/unknown and symptom is the affected symptom (omit if unstated). E.g. "LDN: helped: brain fog".{guard_block}
 - functional_status_tier: ONLY one of: bedbound/housebound/severe/moderate/mild/mostly_functional.
 - social_impact: 1-3 word labels only (e.g., "isolation", "relationship strain").
 - alternative_treatments: Non-pharmaceutical only. Do NOT duplicate medications here.
@@ -635,13 +652,14 @@ def process_corpus(
     regex_index: dict | None = None,
     resume: bool = False,
     temp_dir: Path | None = None,
+    group_guard: bool = False,
 ) -> tuple[list[dict], list[dict]]:
     """Process the corpus concurrently through Haiku."""
-    system_prompt = build_system_prompt(field_descriptions)
+    system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
     field_names = list(field_descriptions.keys())
 
     def gap_system_prompt_fn(null_fields):
-        return build_gap_system_prompt(field_descriptions, null_fields)
+        return build_gap_system_prompt(field_descriptions, null_fields, group_guard=group_guard)
 
     users_dir = input_dir / "users"
     posts_file = input_dir / "subreddit_posts.json"
@@ -1155,6 +1173,12 @@ Examples:
         "--temp-dir", type=Path, default=None,
         help="Directory for intermediate output files (default: {input-dir}/temp/).",
     )
+    parser.add_argument(
+        "--group-guard", action="store_true",
+        help="Opt-in: tell the model NOT to copy a collective outcome ('this stack "
+             "helped') onto each treatment; un-attributed stack members become "
+             "'unknown'. Default off. Also enabled via PP_GROUP_GUARD=1.",
+    )
     args = parser.parse_args()
 
     # Load schema
@@ -1170,10 +1194,13 @@ Examples:
     field_descriptions = build_field_descriptions(schema)
     schema_id = schema["schema_id"] if schema else "base"
 
+    # Group-attribution guard: opt-in via flag or PP_GROUP_GUARD env var.
+    group_guard = args.group_guard or os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
+
     # Test mode
     if args.text:
         client = get_client()
-        system_prompt = build_system_prompt(field_descriptions)
+        system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
         user_message = build_user_message([args.text])
         print(f"Sending to {MODEL}...\n")
         raw = call_haiku(client, system_prompt, user_message)
@@ -1228,6 +1255,7 @@ Examples:
     print(f"  Focus gaps      : {'yes' if focus_gaps else 'no'}")
     print(f"  Merge           : {'yes' if do_merge else 'no'}")
     print(f"  Resume          : {'yes' if args.resume else 'no'}")
+    print(f"  Group guard     : {'on' if group_guard else 'off'}")
     print("=" * 60 + "\n")
 
     start_time = datetime.now(timezone.utc)
@@ -1244,6 +1272,7 @@ Examples:
         focus_gaps=focus_gaps,
         regex_index=regex_index,
         resume=args.resume,
+        group_guard=group_guard,
     )
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
