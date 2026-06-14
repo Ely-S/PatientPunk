@@ -109,7 +109,7 @@ BASE_FIELD_DESCRIPTIONS = {
     "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
     "age_at_onset": "Patient's age when illness began",
     "medications": "Current or past medications mentioned",
-    "treatment_outcome": "Response to specific treatments - MUST include both the treatment AND the outcome as a pair (e.g., 'LDN: helped brain fog', 'metoprolol: reduced heart rate but caused fatigue')",
+    "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
@@ -252,7 +252,7 @@ FIELD-SPECIFIC RULES:
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
 - alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
-- treatment_outcome: Use ONLY the format "drug: label" where label is one of: helped, no_effect, worsened, mixed, unknown. Example: "LDN: helped", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline here.
+- treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
 
@@ -299,7 +299,7 @@ EXTRACTION RULES:
 VALUE FORMAT RULES:
 - Each value MUST be 1-5 words. Never write sentences.
 - conditions: ONLY diagnosed conditions (POTS, ME/CFS, long COVID). NOT symptoms (brain fog, fatigue, pain).
-- treatment_outcome: ONLY "drug: label" where label is helped/no_effect/worsened/mixed/unknown.
+- treatment_outcome: "drug: outcome: symptom" where outcome is helped/no_effect/worsened/mixed/unknown and symptom is the affected symptom (omit if unstated). E.g. "LDN: helped: brain fog".
 - functional_status_tier: ONLY one of: bedbound/housebound/severe/moderate/mild/mostly_functional.
 - social_impact: 1-3 word labels only (e.g., "isolation", "relationship strain").
 - alternative_treatments: Non-pharmaceutical only. Do NOT duplicate medications here.
@@ -942,16 +942,10 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
             "back to normal": "mostly_functional",
             "fully functional": "mostly_functional",
         },
-        "treatment_outcome": {
-            "worked": "helped", "improved": "helped", "fixed": "helped",
-            "resolved": "helped", "cured": "helped", "effective": "helped",
-            "beneficial": "helped", "positive": "helped",
-            "didn't work": "no_effect", "no improvement": "no_effect",
-            "didn't help": "no_effect", "ineffective": "no_effect",
-            "no benefit": "no_effect", "no change": "no_effect",
-            "made worse": "worsened", "side effects": "worsened",
-            "adverse": "worsened", "negative": "worsened",
-        },
+        # treatment_outcome is handled separately below by a dedicated pass:
+        # its values are structured "drug: outcome: symptom" triples, not
+        # whole-string categories, so a flat map would never match the outcome
+        # token (and we must preserve the drug + symptom around it).
         "social_impact": {
             "isolated": "isolation", "alone": "isolation",
             "lonely": "isolation", "loneliness": "isolation",
@@ -1018,6 +1012,51 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                     seen.add(key)
                     canonical.append(normalized)
             field_data["values"] = canonical
+
+    # treatment_outcome: canonicalize ONLY the outcome token of each
+    # "drug: outcome[: symptom]" triple, preserving the drug and the symptom
+    # (re-added so drug x symptom heterogeneity stays analyzable downstream).
+    #
+    # The outcome synonym set deliberately EXCLUDES vague valence words
+    # ("positive", "beneficial", "negative"): mapping those onto helped/worsened
+    # imports the same positivity bias the DeepSeek sentiment pass already shows.
+    # An unresolved outcome word falls back to "unknown" rather than being
+    # guessed as helped -- we keep the drug-was-tried signal without asserting an
+    # efficacy direction on weak evidence.
+    _OUTCOME_SYNONYMS = {
+        "worked": "helped", "improved": "helped", "fixed": "helped",
+        "resolved": "helped", "cured": "helped", "effective": "helped",
+        "didn't work": "no_effect", "no improvement": "no_effect",
+        "didn't help": "no_effect", "ineffective": "no_effect",
+        "no benefit": "no_effect", "no change": "no_effect",
+        "made worse": "worsened", "side effects": "worsened",
+        "adverse": "worsened",
+    }
+    _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
+
+    for rec in merged:
+        field_data = rec.get("fields", {}).get("treatment_outcome", {})
+        values = field_data.get("values")
+        if not values:
+            continue
+        canonical = []
+        seen = set()
+        for v in values:
+            if not isinstance(v, str):
+                continue
+            parts = [p.strip() for p in v.split(":")]
+            if len(parts) < 2 or not parts[0]:
+                continue  # not a drug:outcome pair -- drop malformed
+            drug, outcome = parts[0], parts[1]
+            symptom = parts[2] if len(parts) > 2 else ""
+            outcome = _OUTCOME_SYNONYMS.get(outcome, outcome)
+            if outcome not in _OUTCOME_LABELS:
+                outcome = "unknown"
+            rejoined = f"{drug}: {outcome}" + (f": {symptom}" if symptom else "")
+            if rejoined not in seen:
+                seen.add(rejoined)
+                canonical.append(rejoined)
+        field_data["values"] = canonical
 
     return merged
 

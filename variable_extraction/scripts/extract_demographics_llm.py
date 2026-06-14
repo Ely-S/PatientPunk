@@ -174,7 +174,13 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         model=MODEL,
         temperature=LLM_TEMPERATURE,
         max_tokens=len(items) * 300,
-        system=SYSTEM_PROMPT,
+        system=[
+            {
+                "type": "text",
+                "text": SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[{"role": "user", "content": msg}],
     )
     raw = _strip_markdown_fences(response.content[0].text.strip())
