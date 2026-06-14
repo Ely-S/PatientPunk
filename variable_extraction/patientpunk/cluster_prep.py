@@ -36,9 +36,18 @@ def read_records(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
+# Carry-along columns kept for analysis but NOT clustered: the raw
+# "drug: outcome: symptom" triple (high-cardinality; the bucket lives in
+# treatment_outcome_label) and the decomposed drug / symptom names.
+_ANALYSIS_CARRY = {
+    "treatment_outcome", "treatment_outcome_drug", "treatment_outcome_symptom",
+}
+
+
 def _data_fields(header: list[str], meta: set[str]) -> list[str]:
     return [c for c in header
-            if c not in meta and not c.endswith(("__provenance", "__confidence"))]
+            if c not in meta and c not in _ANALYSIS_CARRY
+            and not c.endswith(("__provenance", "__confidence"))]
 
 
 def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",

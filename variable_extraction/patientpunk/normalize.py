@@ -70,6 +70,8 @@ FIELD_VOCAB: dict[str, dict[str, list[str]]] = {
                       "no benefit", "nothing", "neutral"],
         "worsened": ["worsened", "worse", "made it worse", "made worse", "negative",
                      "crashed", "bad reaction", "adverse"],
+        "mixed": ["mixed", "mixed results", "varied"],
+        "unknown": ["unknown", "unclear", "not sure"],
     },
     "symptom_trajectory": {
         "improving": ["improving", "improved", "getting better", "recovering"],
@@ -164,14 +166,80 @@ def normalize_cell(field: str, cell: str, sep: str = " | ") -> str:
     return sep.join(out)
 
 
+# ---------------------------------------------------------------------------
+# treatment_outcome decomposition
+#
+# treatment_outcome holds structured "drug: outcome[: symptom]" entries. A flat
+# collapse (the generic FIELD_VOCAB pass) would destroy the drug + symptom and
+# leave only the bucket -- fine for clustering, useless for analysis. So instead
+# we KEEP the raw triple in `treatment_outcome` and emit three derived columns,
+# letting the bucket (clustering) and the full pair (analysis) travel together:
+#   treatment_outcome_label   -> outcome bucket(s), deduped  (cluster-prep encodes this)
+#   treatment_outcome_drug    -> treatment name per entry    (analysis)
+#   treatment_outcome_symptom -> affected symptom per entry  (analysis)
+# ---------------------------------------------------------------------------
+TREATMENT_OUTCOME_RAW = "treatment_outcome"
+TREATMENT_OUTCOME_LABEL = "treatment_outcome_label"
+TREATMENT_OUTCOME_DRUG = "treatment_outcome_drug"
+TREATMENT_OUTCOME_SYMPTOM = "treatment_outcome_symptom"
+TREATMENT_OUTCOME_DERIVED = [
+    TREATMENT_OUTCOME_LABEL, TREATMENT_OUTCOME_DRUG, TREATMENT_OUTCOME_SYMPTOM,
+]
+_OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
+
+
+def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
+    """Split a 'drug: outcome[: symptom]' multi-value cell into parallel
+    label / drug / symptom columns (see module note above).
+
+    drug and symptom stay aligned per entry (use the raw ``treatment_outcome``
+    column for the full drug-outcome-symptom triple); label is the deduped
+    outcome-bucket set that cluster-prep encodes. Outcome tokens are mapped to
+    the controlled vocabulary; anything unrecognised becomes 'unknown' so the
+    label column stays low-cardinality.
+    """
+    drugs, symptoms, labels, seen = [], [], [], set()
+    for entry in (cell or "").split(sep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = [p.strip() for p in entry.split(":")]
+        drugs.append(parts[0])
+        symptoms.append(parts[2] if len(parts) > 2 else "")
+        raw_outcome = parts[1] if len(parts) > 1 else ""
+        if not raw_outcome:
+            continue
+        lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
+        if lbl not in _OUTCOME_LABELS:
+            lbl = "unknown"
+        if lbl not in seen:
+            seen.add(lbl)
+            labels.append(lbl)
+    return {
+        TREATMENT_OUTCOME_LABEL: sep.join(labels),
+        TREATMENT_OUTCOME_DRUG: sep.join(drugs),
+        TREATMENT_OUTCOME_SYMPTOM: sep.join(symptoms),
+    }
+
+
 def normalize_records(rows: list[dict], *, sep: str = " | ",
                       drop_fields: set[str] | None = None) -> list[dict]:
-    """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked."""
+    """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked.
+
+    ``treatment_outcome`` is special-cased: its raw "drug: outcome: symptom"
+    triples are preserved and decomposed into ``treatment_outcome_label`` /
+    ``_drug`` / ``_symptom`` (bucket for clustering travels alongside the full
+    pair for analysis) instead of being collapsed in place.
+    """
     drop = DROP_FIELDS if drop_fields is None else drop_fields
     out = []
     for r in rows:
         nr = dict(r)
+        if TREATMENT_OUTCOME_RAW in nr:
+            nr.update(decompose_treatment_outcome(nr.get(TREATMENT_OUTCOME_RAW, ""), sep))
         for f in FIELD_VOCAB:
+            if f == TREATMENT_OUTCOME_RAW:
+                continue  # keep raw triples; bucket lives in treatment_outcome_label
             if f in nr:
                 nr[f] = normalize_cell(f, nr.get(f, ""), sep)
         for f in drop:

@@ -86,6 +86,7 @@ from patientpunk.cluster_prep import (
 from patientpunk.aggregate import aggregate_corpus_by_author, read_posts, write_corpus
 from patientpunk.normalize import (
     DROP_FIELDS,
+    TREATMENT_OUTCOME_DERIVED,
     cardinality_report,
     normalize_records,
 )
@@ -996,9 +997,12 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     drop = set() if args.keep_dropped else None
     norm = normalize_records(rows, sep=args.sep, drop_fields=drop)
     rep = cardinality_report(rows, norm, sep=args.sep)
+    # Decomposition adds derived treatment_outcome columns -> extend the header.
+    out_fields = list(fields) + [c for c in TREATMENT_OUTCOME_DERIVED
+                                 if c not in fields and any(c in r for r in norm)]
     out = args.out or src.parent / f"{src.stem}_normalized.csv"
     with open(out, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
+        w = csv.DictWriter(f, fieldnames=out_fields)
         w.writeheader()
         w.writerows(norm)
 

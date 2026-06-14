@@ -2302,3 +2302,29 @@ class TestNormalize:
         rows = [{"targeted_symptom_domain": "with pots"}]
         out = normalize_records(rows, drop_fields=set())
         assert out[0]["targeted_symptom_domain"] != ""   # kept when drop disabled
+
+    def test_treatment_outcome_decompose_keeps_raw_and_splits(self):
+        from patientpunk.normalize import normalize_records
+        raw = "LDN: helped: brain fog | metoprolol: worsened: fatigue | B12: unknown"
+        out = normalize_records([{"author_hash": "a", "treatment_outcome": raw}])[0]
+        assert out["treatment_outcome"] == raw                       # raw triple preserved
+        assert out["treatment_outcome_label"] == "helped | worsened | unknown"  # bucket col
+        assert out["treatment_outcome_drug"] == "LDN | metoprolol | B12"
+        assert out["treatment_outcome_symptom"] == "brain fog | fatigue | "  # aligned per entry
+
+    def test_treatment_outcome_label_maps_and_dedups(self):
+        from patientpunk.normalize import decompose_treatment_outcome
+        # 'worked' -> helped (vocab); 'helped' dedups; 'positive' unrecognised -> unknown
+        d = decompose_treatment_outcome("ldn: worked | b12: helped | x: positive")
+        assert d["treatment_outcome_label"] == "helped | unknown"
+
+    def test_cluster_prep_uses_label_not_raw_triple(self):
+        from patientpunk.cluster_prep import _data_fields, DEFAULT_META
+        header = ["author_hash", "treatment_outcome", "treatment_outcome_label",
+                  "treatment_outcome_drug", "treatment_outcome_symptom", "conditions"]
+        fields = _data_fields(header, DEFAULT_META)
+        assert "treatment_outcome_label" in fields      # the bucket is the cluster feature
+        assert "treatment_outcome" not in fields         # raw triple excluded from clustering
+        assert "treatment_outcome_drug" not in fields
+        assert "treatment_outcome_symptom" not in fields
+        assert "conditions" in fields
