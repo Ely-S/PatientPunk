@@ -75,7 +75,10 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
 MODEL = MODEL_FAST
-MAX_TOKENS = 4096
+# 4096 truncated the JSON response on long user histories (verbose fields +
+# suggested_fields), causing PARSE FAILED and silently dropping ~half of the
+# most prolific posters. Haiku's hard output ceiling is 8192; use it.
+MAX_TOKENS = 8192
 MAX_TEXT_CHARS = 30_000
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
