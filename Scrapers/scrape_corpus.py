@@ -112,7 +112,9 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
             print(f"    {label} — page {page} ({len(all_items)} items so far)...")
 
         data = arctic_get(endpoint, params)
-        items = data.get("data", [])
+        # arctic_get raises on network/API failure; this guards only the rare
+        # HTTP-200-with-literal-null-body case (where resp.json() is None).
+        items = data.get("data", []) if data else []
         if not items:
             break
 
@@ -162,7 +164,7 @@ def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
 def fetch_full_post(post_id: str) -> dict | None:
     """Fetch full metadata for a single post by ID."""
     data = arctic_get("/api/posts/ids", {"ids": post_id})
-    items = data.get("data", [])
+    items = data.get("data", []) if data else []
     return items[0] if items else None
 
 
@@ -302,7 +304,7 @@ def fetch_reddit_profile(username: str) -> dict | None:
         print(f"    Could not fetch Reddit profile: {e}")
         return None
 
-    user_data = data.get("data", {})
+    user_data = data.get("data", {}) if data else {}
     if not user_data:
         return None
 
