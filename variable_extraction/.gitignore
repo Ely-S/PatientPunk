@@ -4,4 +4,3 @@
 **/*.pyc
 .pytest_cache/
 output/
-
