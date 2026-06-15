@@ -47,7 +47,13 @@ def categorize_sentiment(score: float) -> str:
         mixed     0.1 – 0.7
         neutral   0.0
         negative  < -0.7  (everything below mixed treated as negative)
+
+    None / NaN (no scoreable sentiment -- e.g. a user whose reports all had
+    unrecognised labels, so AVG returned NULL) maps to "neutral" rather than
+    crashing (None) or being misclassified as "negative" (NaN compares False).
     """
+    if score is None or score != score:   # None or NaN
+        return "neutral"
     if score > 0.7:
         return "positive"
     if score >= 0.1:
@@ -304,6 +310,10 @@ def get_user_sentiment(
 
     rows = conn.execute(_sent(sql), ordered_params).fetchall()
     df = pd.DataFrame(rows, columns=["user_id", "avg_sentiment", "n_posts"])
+    # A user whose reports all had unrecognised labels has AVG = NULL -> NaN here;
+    # they carry no scoreable sentiment, so drop them rather than feed NaN to
+    # categorize_sentiment (and skew downstream counts / comparisons).
+    df = df.dropna(subset=["avg_sentiment"]).reset_index(drop=True)
     if not df.empty:
         df["category"] = df["avg_sentiment"].map(categorize_sentiment)
     else:

@@ -2400,3 +2400,11 @@ class TestBatchExtraction:
         out = m._call_batch_raw(None, "sys", [{"user_message": "x"}])
         assert out[0]["fields"] == {"age": None}
         assert temps[:2] == [None, 0.7]   # escalated temperature after parse failure
+
+    def test_demographics_parse_single_line_fence(self):
+        # Regression: a single-line ```json{...}``` fence (no newline) must parse
+        # on the default single-record demographics path, not blank to None.
+        import scripts.extract_demographics_llm as d
+        assert d._parse_one_object('```json{"age": 34}```') == {"age": 34}
+        assert d._parse_one_object('```{"age": 5}```') == {"age": 5}
+        assert d._parse_one_object('```json\n{"age": 7}\n```') == {"age": 7}

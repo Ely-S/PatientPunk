@@ -150,13 +150,22 @@ def _make_empty_result(author_hash: str, source_type: str, evidence: str = "") -
 
 
 def _strip_markdown_fences(raw: str) -> str:
+    # Handles both multi-line fences (```json\n{...}\n```) and SINGLE-LINE
+    # fences (```json{...}```). The old splitlines() filter blanked the
+    # single-line form (its only line starts with ```), breaking the default
+    # single-record path; _parse_one_object's {...} span also handles oddities.
+    raw = raw.strip()
     if raw.startswith("```"):
-        lines = raw.splitlines()
-        raw = "\n".join(
-            l for l in lines
-            if not l.strip().startswith("```") and not l.strip() == "json"
-        )
-    return raw
+        nl = raw.find("\n")
+        if nl != -1:
+            raw = raw[nl + 1:]          # multi-line: drop the ```lang opening line
+        else:
+            raw = raw[3:]               # single-line: drop the opening ```
+            if raw[:4].lower() == "json":
+                raw = raw[4:]           # ... and the json language tag
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    return raw.strip()
 
 
 def _parse_one_object(text: str) -> dict | None:

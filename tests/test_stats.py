@@ -1227,3 +1227,25 @@ class TestTextLabelSentiment:
         assert cats["u2"] == "negative"
         assert cats["u3"] == "neutral"
         assert cats["u4"] == "mixed"
+
+    def test_categorize_handles_nan_and_none(self):
+        # Regression: unknown labels -> NULL -> NaN avg. categorize must not
+        # crash on None nor misclassify NaN as "negative".
+        from app.analysis.stats import categorize_sentiment
+        assert categorize_sentiment(float("nan")) == "neutral"
+        assert categorize_sentiment(None) == "neutral"
+
+    def test_unknown_label_user_dropped_not_misclassified(self):
+        # A user whose reports are all unrecognised labels has AVG = NULL; they
+        # should be dropped from the result, not surface as a NaN/negative row.
+        from app.analysis.stats import get_user_sentiment
+        conn = self._text_conn()
+        conn.execute(
+            "INSERT INTO treatment_reports "
+            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength) "
+            "VALUES (1, 'pX', 'u_unknown', 1, 'garbage_label', 'strong')"
+        )
+        conn.commit()
+        df = get_user_sentiment(conn, "low dose naltrexone")
+        assert "u_unknown" not in set(df["user_id"])      # dropped, not NaN/negative
+        assert not df["avg_sentiment"].isna().any()        # no NaN rows survive
