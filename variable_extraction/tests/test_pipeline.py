@@ -1,29 +1,53 @@
 """
 Tests for PatientPunk extraction pipeline utilities.
 
-No API calls are made — all tests cover pure functions only.
+No API calls are made -- all tests cover pure functions only.
+All imports come from ``patientpunk/scripts/discover_fields.py`` because the
+library wrappers launch those executable modules directly.
+
+Test sections
+-------------
+TestParseJsonResponse       parse_json_response() -- extract valid JSON from
+                            raw LLM output that may include markdown fences,
+                            prose preamble, or trailing text.
+
+TestPatternsAgainstExamples evaluate_patterns() -- run compiled regex patterns
+                            against example texts and return a hit/miss report.
+                            Used in Phase 3 Stage 2 to validate Sonnet-generated
+                            patterns before committing them to the schema.
+
+TestCollectTexts            collect_texts_from_post() / collect_texts_from_user()
+                            -- extract non-empty text segments from raw JSON
+                            post and user-history objects.
+
+TestMergeIntoSchema         merge_into_schema() -- merge a list of newly
+                            discovered field dicts into an existing extension
+                            schema without overwriting existing fields.
+
+TestSchemaPatterns          Smoke-tests against the real
+                            schemas/covidlonghaulers_schema.json: verifies
+                            every pattern compiles and spot-checks known texts.
+                            Skipped automatically if the schema file is absent.
 
 Run with:
-    cd Scrapers/demographic_extraction
+    cd Scrapers/variable_extraction
     python -m pytest tests/ -v
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-# Make the parent package importable
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from discover_fields import (
+from patientpunk.scripts.discover_fields import (
     collect_texts_from_post,
     collect_texts_from_user,
     merge_into_schema,
     parse_json_response,
     evaluate_patterns,
 )
+from patientpunk.scripts.extract_biomedical import compile_extension_patterns
+from patientpunk.scripts.make_codebook import build_field_registry
 
 
 # =============================================================================
@@ -66,6 +90,23 @@ class TestParseJsonResponse:
 
     def test_whitespace_stripped(self):
         assert parse_json_response('  {"k": 1}  ') == {"k": 1}
+
+    def test_json_object_embedded_after_label(self):
+        """JSON object appearing after a prose label should be extracted."""
+        text = 'The discovered fields are:\n{"field_name": "age"}\nEnd.'
+        result = parse_json_response(text)
+        assert result == {"field_name": "age"}
+
+    def test_deeply_nested_object(self):
+        data = {"a": {"b": {"c": {"d": [1, 2, 3]}}}}
+        assert parse_json_response(json.dumps(data)) == data
+
+    def test_integer_json_returns_none(self):
+        # A bare integer is valid JSON but not a useful LLM response object
+        # (behaviour depends on implementation -- just verify it doesn't crash)
+        result = parse_json_response("42")
+        # Either None or the integer 42; the key contract is no exception
+        assert result is None or result == 42
 
 
 # =============================================================================
@@ -139,6 +180,24 @@ class TestPatternsAgainstExamples:
         assert len(report["missed_examples"]) == 1
         assert report["missed_examples"][0]["text"] == "I have fibromyalgia"
 
+    def test_multiple_patterns_any_match_counts_as_hit(self):
+        """A hit from any pattern in the list should count the example as matched."""
+        patterns = [r"\bfemale\b", r"\bwoman\b"]
+        examples = [
+            {"text": "I am a woman with long COVID", "extracted_value": "woman"},
+            {"text": "I am female", "extracted_value": "female"},
+            {"text": "unknown gender", "extracted_value": ""},
+        ]
+        report = evaluate_patterns(patterns, examples)
+        assert report["hits"] == 2
+        assert report["misses"] == 1
+
+    def test_no_patterns_returns_all_misses(self):
+        examples = [{"text": "some text", "extracted_value": "something"}]
+        report = evaluate_patterns([], examples)
+        assert report["hits"] == 0
+        assert report["misses"] == 1
+
 
 # =============================================================================
 # collect_texts_from_user / collect_texts_from_post
@@ -185,6 +244,46 @@ class TestCollectTexts:
         post = {"title": "Title only", "body": "Body text"}
         texts = collect_texts_from_post(post)
         assert texts == ["Title only", "Body text"]
+
+    def test_post_with_removed_body_still_includes_comments(self):
+        """collect_texts_from_post collects all non-empty text including [removed];
+        filtering of sentinel strings is the CorpusLoader's responsibility."""
+        post = {
+            "title": "My post",
+            "body": "[removed]",
+            "comments": [{"body": "I have the same issue"}, {"body": ""}],
+        }
+        texts = collect_texts_from_post(post)
+        assert "My post" in texts
+        # [removed] is included at this level -- CorpusLoader filters it later
+        assert "[removed]" in texts
+        assert "I have the same issue" in texts
+        # Empty comment body should not appear
+        assert "" not in texts
+
+    def test_post_with_deleted_body_still_includes_comments(self):
+        post = {
+            "title": "Question",
+            "body": "[deleted]",
+            "comments": [{"body": "Try LDN"}, {"body": ""}],
+        }
+        texts = collect_texts_from_post(post)
+        assert "Question" in texts
+        assert "[deleted]" in texts   # filtering is CorpusLoader's job
+        assert "Try LDN" in texts
+
+    def test_user_no_posts_key(self):
+        """Users without a 'posts' key should still return comment texts."""
+        user = {"comments": [{"body": "Me too!"}, {"body": ""}]}
+        texts = collect_texts_from_user(user)
+        assert "Me too!" in texts
+
+    def test_user_no_comments_key(self):
+        """Users without a 'comments' key should still return post texts."""
+        user = {"posts": [{"title": "Title", "body": "Body"}]}
+        texts = collect_texts_from_user(user)
+        assert "Title" in texts
+        assert "Body" in texts
 
 
 # =============================================================================
@@ -290,9 +389,39 @@ class TestMergeIntoSchema:
         stored = updated["extension_fields"]["pattern_check"]["patterns"]
         assert stored == [r"\bfoo\b", r"\bbar\b"]
 
+    def test_schema_with_override_base_patterns_preserved(self):
+        """merge_into_schema must not clobber an existing override_base_patterns key."""
+        schema = {
+            "schema_id": "override_test",
+            "extension_fields": {},
+            "override_base_patterns": {
+                "age": {"patterns": [r"(\d+)\s*(?:year|yr)s?\s+old"]},
+            },
+        }
+        updated, added, _ = merge_into_schema(self._new_fields(), schema)
+        assert added == 2
+        # The override key must still be present and unchanged
+        assert "override_base_patterns" in updated
+        assert "age" in updated["override_base_patterns"]
+        assert updated["override_base_patterns"]["age"]["patterns"] == [
+            r"(\d+)\s*(?:year|yr)s?\s+old"
+        ]
+
+    def test_merge_preserves_other_top_level_keys(self):
+        """Arbitrary top-level keys in the schema should survive a merge."""
+        schema = {
+            "schema_id": "preserve_test",
+            "extension_fields": {},
+            "_target_subreddit": "r/longhaulers",
+            "version": "1.2.3",
+        }
+        updated, _, _ = merge_into_schema(self._new_fields(), schema)
+        assert updated["_target_subreddit"] == "r/longhaulers"
+        assert updated["version"] == "1.2.3"
+
 
 # =============================================================================
-# Schema pattern smoke tests — loads the real schema file and checks patterns
+# Schema pattern smoke tests -- loads the real schema file and checks patterns
 # compile and match their embedded example values
 # =============================================================================
 
@@ -348,3 +477,87 @@ class TestSchemaPatterns:
             assert matched, f"Expected '{field}' to match: {text!r}"
         else:
             assert not matched, f"Expected '{field}' NOT to match: {text!r}"
+
+
+# =============================================================================
+# compile_extension_patterns -- promoted-field Phase 1 gate
+# =============================================================================
+
+class TestCompileExtensionPatternsPromoted:
+    def test_raw_discovered_skipped(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": ["foo"]}}}
+        active, names = compile_extension_patterns(schema)
+        assert "d" not in active           # raw discovered field skipped by Phase 1
+
+    def test_promoted_compiled(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": ["foo"],
+                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
+        active, names = compile_extension_patterns(schema)
+        assert "d" in active and len(active["d"]) == 1
+
+    def test_promoted_llm_only_empty_patterns(self):
+        schema = {"extension_fields": {
+            "d": {"source": "llm_discovered", "patterns": [],
+                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
+        active, names = compile_extension_patterns(schema)
+        assert active["d"] == []           # empty pattern list, no error
+        assert "d" in names
+
+
+# =============================================================================
+# build_field_registry -- discovered-schema append + dedup
+# =============================================================================
+
+class TestBuildFieldRegistryDiscovered:
+    _BASE = {"base_fields": {"age": {"description": "a", "confidence": "high"}}}
+
+    def test_appends_discovered(self):
+        ext = {"extension_fields": {}}
+        disc = {"extension_fields": {
+            "newf": {"source": "llm_discovered", "description": "d",
+                     "confidence": "low", "patterns": []}}}
+        reg = build_field_registry(self._BASE, ext, disc)
+        fields = {r["field"]: r for r in reg}
+        assert fields["newf"]["source"] == "llm_discovered"
+
+    def test_dedup_curated_wins(self):
+        ext = {"extension_fields": {
+            "shared": {"source": "extension", "description": "curated", "patterns": []}}}
+        disc = {"extension_fields": {
+            "shared": {"source": "llm_discovered", "description": "disc", "patterns": []}}}
+        reg = build_field_registry(self._BASE, ext, disc)
+        shared = [r for r in reg if r["field"] == "shared"]
+        assert len(shared) == 1                       # not duplicated
+        assert shared[0]["source"] == "extension"     # curated entry wins
+
+
+class TestExtractorMissingScript:
+    """A missing extractor script should fail fast with an actionable error
+    rather than a cryptic interpreter "can't open file" exit code.
+    """
+
+    def _extractor(self, tmp_path):
+        from patientpunk.extractors import BiomedicalExtractor
+        ext = BiomedicalExtractor(input_dir=tmp_path, schema_path=SCHEMA_PATH)
+        # Point at a script that does not exist (simulates a broken install).
+        ext._script_path = tmp_path / "missing" / "extract_biomedical.py"
+        return ext
+
+    def test_raises_clear_error(self, tmp_path):
+        from patientpunk.extractors.base import ExtractorError
+        ext = self._extractor(tmp_path)
+        with pytest.raises(ExtractorError) as exc:
+            ext.run(raise_on_error=True)
+        assert exc.value.returncode == 127
+        msg = str(exc.value).lower()
+        assert "script not found" in msg
+        assert "patientpunk/scripts/" in msg
+
+    def test_no_raise_returns_127_with_message(self, tmp_path):
+        ext = self._extractor(tmp_path)
+        result = ext.run(raise_on_error=False)
+        assert result.returncode == 127
+        assert not result.ok
+        assert "script not found" in result.stderr.lower()

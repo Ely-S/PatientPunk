@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generate a codebook / data dictionary for PatientPunk CSV output.
+"""
+
 
 Reads one base schema + one extension schema to collect field descriptions,
 confidence ratings, ICD-10 codes, and pattern counts. Optionally reads the
-records CSV to add real coverage stats and example values.
+output CSV to add real coverage stats and example values.
 
 Usage:
     # Minimal (schema only):
@@ -12,25 +13,26 @@ Usage:
     # Full (schema + CSV for coverage/examples):
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../../output/records.csv
+        --csv    ../output/records.csv
 
     # Markdown output instead of CSV:
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../../output/records.csv \\
+        --csv    ../output/records.csv \\
         --format markdown
 
     # Custom output path:
     python make_codebook.py \\
         --schema schemas/covidlonghaulers_schema.json \\
-        --csv    ../../output/records.csv \\
-        --output ../../output/codebook.csv
+        --csv    ../output/records.csv \\
+        --output ../output/codebook.csv
 
 Output columns:
     field, source, description, confidence, icd10, frequency_hint,
     research_value, n_patterns, discovered_at,
     n_filled, coverage_pct, example_values
 """
+
 
 import argparse
 import csv
@@ -40,9 +42,9 @@ from collections import defaultdict
 from pathlib import Path
 
 
-DEFAULT_BASE_SCHEMA = Path(__file__).resolve().parent / "schemas" / "base_schema.json"
-DEFAULT_OUTPUT_CSV  = Path(__file__).resolve().parent.parent.parent / "output" / "codebook.csv"
-DEFAULT_OUTPUT_MD   = Path(__file__).resolve().parent.parent.parent / "output" / "codebook.md"
+DEFAULT_BASE_SCHEMA = Path(__file__).parent.parent / "schemas" / "base_schema.json"
+DEFAULT_OUTPUT_CSV  = Path(__file__).parent.parent.parent / "output" / "codebook.csv"
+DEFAULT_OUTPUT_MD   = Path(__file__).parent.parent.parent / "output" / "codebook.md"
 
 # Meta columns written by records_to_csv.py -- skip them in the codebook
 META_COLUMNS = {"author_hash", "source", "post_id", "text_count",
@@ -58,13 +60,31 @@ def load_json(path: Path) -> dict:
         return json.load(f)
 
 
-def build_field_registry(base_schema: dict, ext_schema: dict) -> list[dict]:
+def _ext_row(fname: str, fdata: dict) -> dict:
+    """Build one codebook registry row for an extension / discovered field."""
+    is_discovered = fdata.get("source") == "llm_discovered"
+    return {
+        "field":          fname,
+        "source":         "llm_discovered" if is_discovered else "extension",
+        "description":    fdata.get("description", ""),
+        "confidence":     fdata.get("confidence", ""),
+        "icd10":          fdata.get("icd10", ""),
+        "frequency_hint": fdata.get("frequency_hint", ""),
+        "research_value": fdata.get("research_value", ""),
+        "n_patterns":     len(fdata.get("patterns", [])),
+        "discovered_at":  fdata.get("_discovered_at", ""),
+    }
+
+
+def build_field_registry(base_schema: dict, ext_schema: dict,
+                         discovered_schema: dict | None = None) -> list[dict]:
     """
     Return an ordered list of field-info dicts covering all extractable fields:
       1. Base fields (always active)
       2. Base-optional fields activated by the extension schema
-      3. Extension fields (hand-written)
-      4. LLM-discovered extension fields
+      3. Extension fields (hand-written + promoted)
+      4. LLM-discovered extension fields from the run's discovered schema
+         (those not already present in the curated schema)
     """
     active_base_optional = set(ext_schema.get("include_base_fields", []))
     registry: list[dict] = []
@@ -100,20 +120,21 @@ def build_field_registry(base_schema: dict, ext_schema: dict) -> list[dict]:
                 "discovered_at":  "",
             })
 
-    # --- Extension fields ---
+    # --- Extension fields (hand-written + promoted) ---
+    seen_ext = set()
     for fname, fdata in ext_schema.get("extension_fields", {}).items():
-        is_discovered = fdata.get("source") == "llm_discovered"
-        registry.append({
-            "field":          fname,
-            "source":         "llm_discovered" if is_discovered else "extension",
-            "description":    fdata.get("description", ""),
-            "confidence":     fdata.get("confidence", ""),
-            "icd10":          fdata.get("icd10", ""),
-            "frequency_hint": fdata.get("frequency_hint", ""),
-            "research_value": fdata.get("research_value", ""),
-            "n_patterns":     len(fdata.get("patterns", [])),
-            "discovered_at":  fdata.get("_discovered_at", ""),
-        })
+        registry.append(_ext_row(fname, fdata))
+        seen_ext.add(fname)
+
+    # --- Discovered extension fields not already in the curated schema ---
+    # The run's discovered schema lives in temp/ and is never merged into the
+    # curated schema unless promoted, so without this Phase 5 would document zero
+    # discovered fields even though records.csv already contains their columns.
+    if discovered_schema:
+        for fname, fdata in discovered_schema.get("extension_fields", {}).items():
+            if fname in seen_ext:
+                continue
+            registry.append(_ext_row(fname, fdata))
 
     return registry
 
@@ -233,7 +254,7 @@ def write_codebook_md(rows: list[dict], output: Path, has_csv: bool) -> None:
         lines.append("\n---\n")
         lines.append("### LLM-Discovered Field Details\n")
         for row in discovered:
-            lines.append(f"**`{row['field']}`** — discovered {row.get('discovered_at','')[:10]}")
+            lines.append(f"**`{row['field']}`** - discovered {row.get('discovered_at','')[:10]}")
             if row.get("frequency_hint"):
                 lines.append(f"  - Frequency hint: {row['frequency_hint']}")
             if row.get("research_value"):
@@ -257,10 +278,10 @@ Examples:
   python make_codebook.py --schema schemas/covidlonghaulers_schema.json
   python make_codebook.py \\
       --schema schemas/covidlonghaulers_schema.json \\
-      --csv    ../../output/records.csv
+      --csv    ../output/records.csv
   python make_codebook.py \\
       --schema schemas/covidlonghaulers_schema.json \\
-      --csv    ../../output/records.csv \\
+      --csv    ../output/records.csv \\
       --format markdown
         """,
     )
@@ -279,7 +300,7 @@ Examples:
     )
     parser.add_argument(
         "--output", type=Path, default=None,
-        help="Output path (default: ../../output/codebook.csv or .md depending on --format)",
+        help="Output path (default: ../output/codebook.csv or .md depending on --format)",
     )
     parser.add_argument(
         "--format", choices=["csv", "markdown"], default="csv",
@@ -297,6 +318,12 @@ Examples:
         "--no-discovered", action="store_true",
         help="Exclude llm_discovered fields from the codebook output.",
     )
+    parser.add_argument(
+        "--discovered-schema", type=Path, default=None,
+        help="Discovered-schema JSON (temp/discovered_*.json) whose extension_fields "
+             "are appended so the codebook documents discovered columns too. "
+             "Warn-and-continue if missing/unreadable.",
+    )
     args = parser.parse_args()
 
     # Resolve output path
@@ -312,12 +339,22 @@ Examples:
     base_schema = load_json(args.base_schema)
     ext_schema  = load_json(args.schema)
 
+    discovered_schema = None
+    if args.discovered_schema:
+        if args.discovered_schema.exists():
+            discovered_schema = load_json(args.discovered_schema)
+            if not isinstance(discovered_schema, dict):
+                print(f"  ! discovered schema not valid JSON, ignoring: {args.discovered_schema}")
+                discovered_schema = None
+        else:
+            print(f"  ! discovered schema not found, ignoring: {args.discovered_schema}")
+
     schema_id = ext_schema.get("schema_id", args.schema.stem)
     print(f"Schema: {schema_id}")
     print(f"Base schema: {args.base_schema.name}\n")
 
     # Build registry
-    registry = build_field_registry(base_schema, ext_schema)
+    registry = build_field_registry(base_schema, ext_schema, discovered_schema)
     if args.no_discovered:
         n_hidden = sum(1 for r in registry if r["source"] == "llm_discovered")
         registry = [r for r in registry if r["source"] != "llm_discovered"]
