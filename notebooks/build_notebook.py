@@ -26,6 +26,7 @@ from pathlib import Path
 SETUP_CODE = '''import warnings
 warnings.filterwarnings("ignore")
 
+import os
 import sqlite3
 import numpy as np
 import pandas as pd
@@ -37,6 +38,10 @@ from IPython.display import display, HTML, Markdown
 
 # ── Database connection ──
 DB_PATH = "{db_path}"
+# sqlite3.connect() silently CREATES an empty file on a bad path, so every
+# query would then return nothing. Fail loudly on a missing DB instead.
+if DB_PATH != ":memory:" and not os.path.exists(DB_PATH):
+    raise FileNotFoundError(f"Database not found: {{DB_PATH}}")
 conn = sqlite3.connect(DB_PATH)
 
 # ── Sentiment mapping ──
