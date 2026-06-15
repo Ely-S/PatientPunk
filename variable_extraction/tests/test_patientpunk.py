@@ -2163,6 +2163,31 @@ class TestOpenAIProvider:
         assert sent[0]["content"] == "PLAIN"
 
 
+class TestActiveExtractorTextCollection:
+    """Active extraction scripts must not attribute commenter text to post authors."""
+
+    def _post_with_other_author_comment(self):
+        return {
+            "author_hash": "post_author",
+            "title": "Post title",
+            "body": "Post body",
+            "comments": [
+                {"author_hash": "comment_author", "body": "Commenter's condition should not attach"},
+                {"author_hash": "post_author", "body": "Post author's reply is still comment text"},
+            ],
+        }
+
+    def test_biomedical_post_collection_uses_title_and_body_only(self):
+        from scripts.extract_biomedical import collect_texts_from_post
+        texts = collect_texts_from_post(self._post_with_other_author_comment())
+        assert texts == ["Post title", "Post body"]
+
+    def test_llm_post_collection_uses_title_and_body_only(self):
+        from scripts.llm_extract import collect_texts_from_post
+        texts = collect_texts_from_post(self._post_with_other_author_comment())
+        assert texts == ["Post title", "Post body"]
+
+
 class TestAggregateByAuthor:
     """Per-patient corpus aggregation (patientpunk/aggregate.py)."""
 
@@ -2326,6 +2351,15 @@ class TestNormalize:
         assert d["treatment_outcome_label"] == "helped | worsened | no_effect"
         assert "helped" not in d["treatment_outcome_drug"]   # no drug names present
         assert "worsened" not in d["treatment_outcome_drug"]
+
+    def test_treatment_outcome_decompose_mixed_structured_and_legacy(self):
+        from patientpunk.normalize import decompose_treatment_outcome
+        d = decompose_treatment_outcome(
+            "LDN: helped: brain fog | helped | metoprolol: made it worse"
+        )
+        assert d["treatment_outcome_label"] == "helped | worsened"
+        assert d["treatment_outcome_drug"] == "LDN |  | metoprolol"
+        assert d["treatment_outcome_symptom"] == "brain fog |  | "
 
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META

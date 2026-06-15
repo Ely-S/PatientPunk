@@ -850,6 +850,27 @@ class TestRunTimeTrend:
         assert any("gaps" in w.message.lower() for w in result.warnings)
         assert any("no variation" in w.message.lower() for w in result.warnings)
 
+    def test_text_label_sentiments_are_scored_before_monthly_mean(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (10, 'text_trend_drug')")
+        points = [
+            ("user_00", "post_user_00_m0", "2026-01-01T00:00:00Z", "negative"),
+            ("user_01", "post_user_01_m1", "2026-02-01T00:00:00Z", "mixed"),
+            ("user_02", "post_user_02_m2", "2026-03-01T00:00:00Z", "positive"),
+        ]
+        for user_id, post_id, post_date, sentiment in points:
+            conn.execute("UPDATE posts SET post_date = ? WHERE post_id = ?", (post_date, post_id))
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 10, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+
+        result = run_time_trend(conn, "text_trend_drug")
+
+        assert result is not None
+        assert [point["avg_sentiment"] for point in result.monthly_data] == [-1.0, 0.5, 1.0]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # run_survival
@@ -947,6 +968,27 @@ class TestRunSurvival:
         result = run_survival(conn, "warning_survival_drug", ["has_pots"])
         assert result is not None
         assert any("censored" in w.message.lower() for w in result.warnings)
+
+    def test_text_label_survival_counts_only_positive_as_event(self, conn):
+        conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (11, 'text_survival_drug')")
+        points = [
+            ("user_00", "post_user_00_m0", "positive"),
+            ("user_01", "post_user_01_m0", "mixed"),
+            ("user_02", "post_user_02_m0", "negative"),
+        ]
+        for user_id, post_id, sentiment in points:
+            conn.execute(
+                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+                " VALUES (1, ?, ?, 11, ?, 1.0)",
+                (post_id, user_id, sentiment),
+            )
+        conn.commit()
+
+        survival_df = _build_survival_data(conn, "text_survival_drug", [])
+
+        assert survival_df is not None
+        events = dict(zip(survival_df["user_id"], survival_df["event"]))
+        assert events == {"user_00": 1, "user_01": 0, "user_02": 0}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1168,9 +1210,14 @@ class TestTextLabelSentiment:
         assert scores["u1"] == SENTIMENT_SCORES["positive"]   # 1.0
         assert scores["u2"] == SENTIMENT_SCORES["negative"]   # -1.0
         assert scores["u3"] == SENTIMENT_SCORES["neutral"]    # 0.0
-        assert scores["u4"] == SENTIMENT_SCORES["mixed"]      # 0.4
+        assert scores["u4"] == SENTIMENT_SCORES["mixed"]      # 0.5
         # The bug: AVG on raw text coerced every label to 0.0.
         assert not all(v == 0.0 for v in scores.values())
+
+    def test_stats_scores_match_patientpunk_db_scores(self):
+        from app.analysis.stats import SENTIMENT_SCORES
+        from patientpunk.db import _SENTIMENT_SCORE
+        assert SENTIMENT_SCORES == _SENTIMENT_SCORE
 
     def test_label_scores_roundtrip_to_category(self):
         from app.analysis.stats import get_user_sentiment, categorize_sentiment
