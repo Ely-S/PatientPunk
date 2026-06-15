@@ -35,6 +35,10 @@ pip install anthropic python-dotenv
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
 # 3. Full pipeline run (regex + LLM gap-fill + CSV + codebook)
+#    NOTE: raw post extraction uses each post's title + body ONLY (a post record
+#    belongs to the post author). For comment-heavy / subreddit corpora, run
+#    `python main.py aggregate ...` first so commenters are captured as their own
+#    patients -- otherwise comment-only evidence is intentionally skipped.
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
 # 4. LLM-only demographics (age / sex / location, deductive + inductive)
