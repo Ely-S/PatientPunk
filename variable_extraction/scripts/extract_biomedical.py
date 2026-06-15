@@ -904,14 +904,15 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    """Collect non-empty, non-removed text segments from a subreddit post."""
+    """Collect non-empty, non-removed text from a subreddit post.
+
+    Title + body ONLY: comments are written by OTHER users, so including them
+    here would attribute their conditions/treatments to the post author.
+    Commenters are captured as their own patients via the aggregate path.
+    """
     texts: list[str] = []
     for raw in (post.get("title"), post.get("body")):
         kept = _keep_text(raw)
-        if kept:
-            texts.append(kept)
-    for comment in post.get("comments", []):
-        kept = _keep_text(comment.get("body"))
         if kept:
             texts.append(kept)
     return texts

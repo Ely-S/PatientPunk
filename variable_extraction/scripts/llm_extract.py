@@ -395,14 +395,15 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
+    # Post-author record: title + body ONLY. Comments are written by OTHER
+    # users, so folding them in here would attribute their conditions and
+    # treatments to the post author. Commenters are captured as their own
+    # patients via the aggregate path (aggregate_corpus_by_author).
     texts = []
     if post.get("title"):
         texts.append(post["title"])
     if post.get("body"):
         texts.append(post["body"])
-    for comment in post.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
     return texts
 
 

@@ -35,6 +35,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -57,7 +58,11 @@ MODEL = MODEL_FAST
 # the first MAX_CHARS characters, which usually covers enough posts to
 # capture repeated self-mentions of age/sex.
 MAX_CHARS = 8000
-BATCH_SIZE = 10  # records per LLM call
+# Multi-record array prompts mis-split when a record's text holds several posts
+# (model emits one object per post -> count mismatch); default to 1 record/call
+# via the single-object path in _call_haiku_batch_raw. (>1 still works as a
+# best-effort batch with split_retry_batch falling back to single calls.)
+BATCH_SIZE = 1  # records per LLM call
 
 SYSTEM_PROMPT = f"""\
 You are a demographic data extractor for a medical research project about long COVID.
@@ -153,13 +158,48 @@ def _strip_markdown_fences(raw: str) -> str:
     return raw
 
 
-def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
-    """Send multiple records in one API call. Returns list of parsed dicts.
+def _parse_one_object(text: str) -> dict | None:
+    """Tolerant single-object JSON parse: strip fences, then isolate the {...}
+    span so leading/trailing prose doesn't break json.loads."""
+    text = _strip_markdown_fences(text.strip())
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end <= start:
+            return None
+        try:
+            obj = json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            return None
+    return obj if isinstance(obj, dict) else None
 
-    Each item in *items* must have keys: author_hash, source_type, text.
-    Raises ValueError if the response array length doesn't match.
+
+def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
+    """Send record(s) in one API call. Returns a list of parsed dicts.
+
+    Each item must have keys: author_hash, source_type, text.
+
+    A single record (the default, and the split_retry_batch fallback) asks for
+    ONE object via the system prompt's native format and re-asks at escalating
+    temperature on a parse failure -- no array/count ambiguity and no multi-post
+    mis-splitting. Multiple records use the JSON-array path below.
     """
-    # Build numbered prompt
+    if len(items) == 1:
+        for temp in (LLM_TEMPERATURE, 0.7, 1.0):
+            response = client.messages.create(
+                model=MODEL,
+                temperature=temp,
+                max_tokens=300,
+                system=[{"type": "text", "text": SYSTEM_PROMPT,
+                         "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": items[0]["text"]}],
+            )
+            parsed = _parse_one_object(response.content[0].text)
+            if parsed is not None:
+                return [parsed]
+        raise ValueError("could not parse single-record demographics response")
+
     msg = (
         "Extract demographic information from the following Reddit records. "
         "Each record is by a DIFFERENT author.\n\n"
@@ -168,7 +208,10 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         "location_state, confidence, evidence.\n\n"
     )
     for i, item in enumerate(items, 1):
-        msg += f"--- Record {i} ---\n{item['text']}\n\n"
+        # Collapse bare '---' rule lines so they don't read as the
+        # '--- Record N ---' delimiter and split one record into several objects.
+        text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", item["text"])
+        msg += f"--- Record {i} ---\n{text}\n\n"
 
     response = client.messages.create(
         model=MODEL,
@@ -183,7 +226,14 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         ],
         messages=[{"role": "user", "content": msg}],
     )
-    raw = _strip_markdown_fences(response.content[0].text.strip())
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw[raw.index("\n") + 1:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    start, end = raw.find("["), raw.rfind("]")
+    if start != -1 and end > start:
+        raw = raw[start:end + 1]
     results = json.loads(raw)
     if not isinstance(results, list):
         raise ValueError(f"Expected JSON array, got {type(results).__name__}")
