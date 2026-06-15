@@ -1,4 +1,4 @@
-﻿"""
+"""
 Notebook builder and executor for PatientPunk research notebooks.
 
 Usage:
@@ -22,6 +22,19 @@ from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
 from pathlib import Path
 
 
+# ── Default DB-resolution blocks ────────────────────────────────────────────
+# Callers can override this by passing `db_path_block=` to build_notebook().
+DEFAULT_DB_PATH_BLOCK = '''DB_PATH = {db_path_literal}
+# sqlite3.connect() silently CREATES an empty file on a bad path, so every
+# query would then return nothing. Fail loudly on a missing DB instead.
+if DB_PATH != ":memory:" and not os.path.exists(DB_PATH):
+    raise FileNotFoundError(f"Database not found: {{DB_PATH}}")
+conn = sqlite3.connect(DB_PATH)'''
+
+URI_DB_PATH_BLOCK = '''DB_PATH = {db_path_literal}
+conn = sqlite3.connect(DB_PATH, uri=True)'''
+
+
 # ── Standard setup code injected into every notebook ────────────────────────
 SETUP_CODE = '''import warnings
 warnings.filterwarnings("ignore")
@@ -37,12 +50,7 @@ from scipy.stats import binomtest, mannwhitneyu, fisher_exact, kruskal
 from IPython.display import display, HTML, Markdown
 
 # ── Database connection ──
-DB_PATH = "{db_path}"
-# sqlite3.connect() silently CREATES an empty file on a bad path, so every
-# query would then return nothing. Fail loudly on a missing DB instead.
-if DB_PATH != ":memory:" and not os.path.exists(DB_PATH):
-    raise FileNotFoundError(f"Database not found: {{DB_PATH}}")
-conn = sqlite3.connect(DB_PATH)
+{db_path_block}
 
 # ── Sentiment mapping ──
 SENTIMENT_SCORE = {{"positive": 1.0, "mixed": 0.5, "neutral": 0.0, "negative": -1.0}}
@@ -107,12 +115,17 @@ COLORS = {{
 '''
 
 
-def build_notebook(cells, db_path="patientpunk.db", title=None):
+def build_notebook(cells, db_path="patientpunk.db", db_path_block=None, title=None):
     """Build a valid Jupyter notebook from a list of (type, source) tuples.
 
     Args:
         cells: list of ("md", source_string) or ("code", source_string) tuples
-        db_path: path to SQLite database (injected into setup cell)
+        db_path: path to SQLite database (injected into setup cell as a string
+                 literal). Ignored if db_path_block is provided.
+        db_path_block: raw Python source that defines `DB_PATH` and `conn`.
+                       Use this when callers need richer resolution than a
+                       hard-coded literal, for example a custom resolver that
+                       anchors the database path to the notebook location.
         title: optional — not used in the notebook, just for reference
 
     Returns:
@@ -125,10 +138,24 @@ def build_notebook(cells, db_path="patientpunk.db", title=None):
         "name": "python3",
     }
 
-    # Resolve DB path to absolute with forward slashes (avoids Windows unicode escape issues)
-    db_path_resolved = Path(db_path).resolve().as_posix()
+    if db_path_block is None:
+        db_path_text = str(db_path)
+        if db_path_text == ":memory:":
+            db_path_block = DEFAULT_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_text)
+            )
+        elif db_path_text.startswith("file:"):
+            db_path_block = URI_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_text)
+            )
+        else:
+            db_path_resolved = Path(db_path).resolve().as_posix()
+            db_path_block = DEFAULT_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_resolved)
+            )
+
     # Inject setup cell (produces zero output)
-    setup = SETUP_CODE.format(db_path=db_path_resolved)
+    setup = SETUP_CODE.format(db_path_block=db_path_block)
     nb.cells.append(new_code_cell(source=setup))
 
     # Add user cells

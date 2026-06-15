@@ -1,4 +1,4 @@
-﻿# Statistics Reference for the Research-Assistant Skill
+# Statistics Reference for the Research-Assistant Skill
 
 Concise catalog of statistical tests the skill uses and the warnings each one must emit. This is prose guidance, not wrapper code — Claude writes the library calls inline in the notebook, then annotates with the relevant warnings as markdown callouts.
 

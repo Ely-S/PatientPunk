@@ -1,4 +1,4 @@
-﻿---
+---
 name: research-assistant
 description: Use this skill whenever the user says "run the research assistant skill", asks to generate a research notebook, analyze a patient community database, run a research question against PatientPunk data, or requests analysis involving .db files. Also triggers on drug comparisons, treatment outcome questions, or community sentiment analysis. Generates reproducible Jupyter notebooks with statistical tests, charts, patient quotes, and HTML export.
 ---
@@ -39,12 +39,12 @@ Build the analysis as a story with five beats:
    - Treatments that are conspicuously absent despite being commonly prescribed
    - Results that contradict what the community believes about itself
    **Do not invent causal mechanisms to explain correlations.** If two text-mining signals co-occur (e.g., users who mention kind staff also mention fear more), report the correlation honestly: "Users who describe positive staff interactions mention fear at higher rates (25.9% vs 18.4%)." Do NOT then invent a mechanism: "kind staff convert fear into relief." You have no evidence for that — the correlation could reflect verbosity bias (detailed posters write about both), selection (frightened patients notice staff quality more), or confounding. State the observation. Let the reader interpret.
-   
+
    **Counterintuitive findings must be surprising to a human reader, not just to a text-mining algorithm.** "People who write 'regret' often mean they don't feel it" is a data-processing observation, not a research finding — any human reading those posts would understand the negation immediately. Similarly, "sentiment scores don't capture mixed emotions" is a known limitation, not a discovery. The bar is: would a clinician, patient, or researcher say "huh, I wouldn't have expected that" upon reading this finding? If not, it's not counterintuitive — it's methodology commentary. Put methodology observations in the limitations section, not the findings.
    **It is better to have no counterintuitive findings than bad ones.** A weak or forced "counterintuitive" finding (circular comparisons, methodology artifacts, things any human would expect) actively damages the notebook's credibility. If you genuinely cannot find anything counterintuitive, say so explicitly and keep the section to one sentence: "All findings aligned with community consensus and clinical expectations." Do not pad with pipeline observations dressed up as insights. A short honest section earns more trust than a long section full of reaches.
 5. **Land the conclusion** — what should the reader take away? Tiered recommendations, plain-language verdict, and limitations.
 
-Each section's opening markdown cell must connect to the previous section with a brief factual transition — not a rhetorical flourish. Good: "Subgroup X reports worse outcomes overall (mean 0.18 vs 0.39). Which treatments buck that trend?" Bad: "Having painted the broad strokes, we now zoom in to examine..." 
+Each section's opening markdown cell must connect to the previous section with a brief factual transition — not a rhetorical flourish. Good: "Subgroup X reports worse outcomes overall (mean 0.18 vs 0.39). Which treatments buck that trend?" Bad: "Having painted the broad strokes, we now zoom in to examine..."
 
 **No circular comparisons.** Never compare a subgroup to a superset that contains it ("monotherapy users do worse than the broader community" — the broader community IS those users plus multi-treatment users). If you split a population into groups A and B, you can compare A to B, but not A to "the overall population" since the overall population is just A+B. This sounds insightful but is mathematically trivial.
 
