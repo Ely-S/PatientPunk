@@ -2318,6 +2318,15 @@ class TestNormalize:
         d = decompose_treatment_outcome("ldn: worked | b12: helped | x: positive")
         assert d["treatment_outcome_label"] == "helped | unknown"
 
+    def test_treatment_outcome_decompose_legacy_bare_outcomes(self):
+        from patientpunk.normalize import decompose_treatment_outcome
+        # Legacy format (pre drug:outcome:symptom): bare outcome words with no
+        # drug must still bucket into the label column, not land in drug.
+        d = decompose_treatment_outcome("helped | worked | made it worse | didn't work")
+        assert d["treatment_outcome_label"] == "helped | worsened | no_effect"
+        assert "helped" not in d["treatment_outcome_drug"]   # no drug names present
+        assert "worsened" not in d["treatment_outcome_drug"]
+
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META
         header = ["author_hash", "treatment_outcome", "treatment_outcome_label",

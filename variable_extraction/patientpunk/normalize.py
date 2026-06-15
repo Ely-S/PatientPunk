@@ -204,9 +204,15 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         if not entry:
             continue
         parts = [p.strip() for p in entry.split(":")]
-        drugs.append(parts[0])
-        symptoms.append(parts[2] if len(parts) > 2 else "")
-        raw_outcome = parts[1] if len(parts) > 1 else ""
+        if len(parts) >= 2:
+            drug, raw_outcome = parts[0], parts[1]
+            symptom = parts[2] if len(parts) > 2 else ""
+        else:
+            # Legacy / bare format: a bare outcome word with no drug
+            # (e.g. "helped", "80% better"). Keep the outcome; no drug/symptom.
+            drug, raw_outcome, symptom = "", parts[0], ""
+        drugs.append(drug)
+        symptoms.append(symptom)
         if not raw_outcome:
             continue
         lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
