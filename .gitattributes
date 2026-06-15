@@ -1,0 +1,3 @@
+# Files that run on Linux nodes must stay LF regardless of checkout platform.
+*.sh text eol=lf
+*.Dockerfile text eol=lf
