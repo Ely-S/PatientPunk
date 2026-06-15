@@ -90,8 +90,15 @@ GENERIC_TERMS = {{
     "vitamin", "prescription", "pill", "pills", "dosage", "dose",
 }}
 
-# Colors
-COLORS = {{"positive": "#2ecc71", "mixed/neutral": "#95a5a6", "negative": "#e74c3c"}}
+# Colors — include both aggregated ("mixed/neutral") and raw DB labels
+# ("mixed", "neutral") so charts can key off either without a KeyError.
+COLORS = {{
+    "positive": "#2ecc71",
+    "mixed/neutral": "#95a5a6",
+    "mixed": "#95a5a6",
+    "neutral": "#95a5a6",
+    "negative": "#e74c3c",
+}}
 '''
 
 
