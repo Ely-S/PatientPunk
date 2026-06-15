@@ -225,7 +225,7 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     if len(items) == 1:
         for temp in (LLM_TEMPERATURE, 0.7, 1.0):
             response = _create_with_retry(
-        client,
+                client,
                 model=MODEL,
                 temperature=temp,
                 max_tokens=300,

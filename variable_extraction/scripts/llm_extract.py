@@ -1112,7 +1112,11 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                 continue
             parts = [p.strip() for p in v.split(":")]
             if len(parts) < 2 or not parts[0]:
-                continue  # not a drug:outcome pair -- drop malformed
+                # Drop bare outcomes (no drug) here intentionally: with no drug
+                # attribution they carry no drug-efficacy signal. Legacy bare
+                # outcomes in older records.csv are handled separately by
+                # normalize.decompose_treatment_outcome (-> treatment_outcome_label).
+                continue
             drug, outcome = parts[0], parts[1]
             # Rejoin parts[2:] so a symptom containing ':' isn't truncated.
             symptom = ":".join(parts[2:]) if len(parts) > 2 else ""

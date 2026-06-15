@@ -52,7 +52,7 @@ def categorize_sentiment(score: float) -> str:
     unrecognised labels, so AVG returned NULL) maps to "neutral" rather than
     crashing (None) or being misclassified as "negative" (NaN compares False).
     """
-    if score is None or score != score:   # None or NaN
+    if score is None or math.isnan(score):   # no scoreable sentiment
         return "neutral"
     if score > 0.7:
         return "positive"
