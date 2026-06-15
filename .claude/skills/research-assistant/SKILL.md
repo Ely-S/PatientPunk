@@ -149,6 +149,8 @@ If the answer to any of these is "no," use a table or inline text instead.
 # Manual fallback when adjustText isn't available — detect in display (pixel)
 # coords via get_window_extent, then convert the nudge back to data coords
 # because set_position uses data units:
+fig.canvas.draw()  # force a draw first: text bounding boxes are only valid
+                   # after layout, and get_renderer() can fail before drawing
 renderer = fig.canvas.get_renderer()
 inv_transform = ax.transData.inverted()
 texts = list(ax.texts)

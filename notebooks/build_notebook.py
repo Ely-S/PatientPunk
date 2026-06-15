@@ -48,6 +48,8 @@ def to_numeric(s):
 
 def classify_outcome(avg_score):
     """Classify user-level average into outcome category."""
+    if avg_score is None or pd.isna(avg_score):
+        return None
     if avg_score > 0.7:
         return "positive"
     elif avg_score < -0.3:
@@ -56,16 +58,18 @@ def classify_outcome(avg_score):
 
 def wilson_ci(k, n, z=1.96):
     """Wilson score confidence interval for a proportion."""
-    if n == 0:
+    if pd.isna(k) or pd.isna(n) or n <= 0 or k < 0 or k > n:
         return 0.0, 0.0
     p = k / n
     denom = 1 + z**2 / n
     center = (p + z**2 / (2 * n)) / denom
     margin = z * np.sqrt((p * (1 - p) + z**2 / (4 * n)) / n) / denom
-    return max(0, center - margin), min(1, center + margin)
+    return max(0.0, center - margin), min(1.0, center + margin)
 
 def nnt(treatment_rate, baseline_rate):
-    """Number needed to treat. Returns None if rates are equal or inverted."""
+    """Number needed to treat. Returns None if rates are equal, inverted, or invalid."""
+    if pd.isna(treatment_rate) or pd.isna(baseline_rate):
+        return None
     diff = treatment_rate - baseline_rate
     if diff <= 0:
         return None
@@ -123,7 +127,7 @@ def build_notebook(cells, db_path="patientpunk.db", title=None):
     return nb
 
 
-def execute_and_export(nb, output_stem, timeout=600):
+def execute_and_export(nb, output_stem, timeout=600, kernel_name="python3"):
     """Execute a notebook and export to HTML.
 
     Args:
@@ -131,6 +135,8 @@ def execute_and_export(nb, output_stem, timeout=600):
         output_stem: path without extension, e.g., "notebooks/v2/1_overview"
                      Produces: {stem}.ipynb, {stem}_executed.ipynb, {stem}.html
         timeout: max seconds per cell
+        kernel_name: Jupyter kernel to execute in (default "python3"; pass a
+                     project-specific kernel like "patientpunk-main" if registered)
 
     Returns:
         Path to HTML file
@@ -141,17 +147,20 @@ def execute_and_export(nb, output_stem, timeout=600):
     stem = Path(output_stem)
     stem.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save source notebook
+    # Save source notebook. Write UTF-8 explicitly: the setup cell contains
+    # box-drawing chars, which crash on Windows' default cp1252 encoding.
     source_path = stem.with_suffix(".ipynb")
-    nbformat.write(nb, str(source_path))
+    with open(source_path, "w", encoding="utf-8") as f:
+        nbformat.write(nb, f)
 
     # Execute
-    ep = ExecutePreprocessor(timeout=timeout, kernel_name="patientpunk-main")
+    ep = ExecutePreprocessor(timeout=timeout, kernel_name=kernel_name)
     ep.preprocess(nb, {"metadata": {"path": str(stem.parent)}})
 
     # Save executed notebook
     executed_path = stem.parent / f"{stem.stem}_executed.ipynb"
-    nbformat.write(nb, str(executed_path))
+    with open(executed_path, "w", encoding="utf-8") as f:
+        nbformat.write(nb, f)
 
     # Export to HTML (no code cells)
     exporter = HTMLExporter()
