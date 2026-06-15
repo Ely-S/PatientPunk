@@ -251,7 +251,8 @@ Use the profile to skip the exploration step and go straight to the analysis pla
 
 Sentiment is stored as TEXT strings ('positive', 'negative', 'mixed', 'neutral'). Convert to numeric with:
 ```sql
-CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE 0.0 END
+CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 WHEN 'negative' THEN -1.0 ELSE NULL END
 ```
+`ELSE NULL` (not `0.0`) so missing/unrecognized sentiment is excluded from `AVG()` rather than silently biasing the average toward neutral.
 
 All tables join on `user_id`. Always aggregate to user level (one data point per user per drug) for statistical independence.

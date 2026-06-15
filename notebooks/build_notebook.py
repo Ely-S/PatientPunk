@@ -43,8 +43,12 @@ conn = sqlite3.connect(DB_PATH)
 SENTIMENT_SCORE = {{"positive": 1.0, "mixed": 0.5, "neutral": 0.0, "negative": -1.0}}
 
 def to_numeric(s):
-    """Convert sentiment string to numeric score."""
-    return SENTIMENT_SCORE.get(s, 0.0)
+    """Convert sentiment string to numeric score.
+
+    Unrecognized/missing labels return NaN (excluded from means) rather than
+    0.0, to avoid silently biasing averages toward neutral.
+    """
+    return SENTIMENT_SCORE.get(s, np.nan)
 
 def classify_outcome(avg_score):
     """Classify user-level average into outcome category."""
@@ -153,9 +157,19 @@ def execute_and_export(nb, output_stem, timeout=600, kernel_name="python3"):
     with open(source_path, "w", encoding="utf-8") as f:
         nbformat.write(nb, f)
 
-    # Execute
+    # Execute. On cell failure, persist the partially-executed notebook (it
+    # carries the error traceback in the failing cell's output) for debugging,
+    # then re-raise.
     ep = ExecutePreprocessor(timeout=timeout, kernel_name=kernel_name)
-    ep.preprocess(nb, {"metadata": {"path": str(stem.parent)}})
+    try:
+        ep.preprocess(nb, {"metadata": {"path": str(stem.parent)}})
+    except Exception as e:
+        failed_path = stem.parent / f"{stem.stem}_failed.ipynb"
+        with open(failed_path, "w", encoding="utf-8") as f:
+            nbformat.write(nb, f)
+        raise RuntimeError(
+            f"Notebook execution failed; partial output saved to {failed_path}"
+        ) from e
 
     # Save executed notebook
     executed_path = stem.parent / f"{stem.stem}_executed.ipynb"
