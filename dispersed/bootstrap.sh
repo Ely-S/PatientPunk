@@ -14,12 +14,12 @@
 #   MODEL      model id/tag         (ollama: qwen2.5:32b ; vllm: Qwen/Qwen2.5-32B-Instruct)
 #   PORT       server port          (default: 11434 ollama / 8000 vllm)
 #   REPO_URL   git URL to clone     (default: https://github.com/Ely-S/PatientPunk)
-#   BRANCH     branch               (default: shaun/analysis)
+#   BRANCH     branch               (default: shaun/variable_extraction)
 #   REPO_DIR   existing repo path   (skip clone if set)
 set -euo pipefail
 
 SERVER="${SERVER:-ollama}"
-BRANCH="${BRANCH:-shaun/analysis}"
+BRANCH="${BRANCH:-shaun/variable_extraction}"
 REPO_URL="${REPO_URL:-https://github.com/Ely-S/PatientPunk}"
 if [ "$SERVER" = "vllm" ]; then
   MODEL="${MODEL:-Qwen/Qwen2.5-32B-Instruct}"; PORT="${PORT:-8000}"

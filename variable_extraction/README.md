@@ -418,7 +418,9 @@ can tell whether the data is appropriate for clustering before you try.
 
 ## Library Reference
 
-The `patientpunk` package can be imported directly for use in notebooks or scripts.
+Install the package first (from the repo root: `pip install -e .` or `uv pip
+install -e .`); `patientpunk` then imports from anywhere for use in notebooks or
+scripts.
 
 ```python
 from patientpunk import CorpusLoader, Pipeline, PipelineConfig, DemographicCoder
