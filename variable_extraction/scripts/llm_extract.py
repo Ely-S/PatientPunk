@@ -41,6 +41,7 @@ Output:
 import argparse
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -79,10 +80,20 @@ MODEL = MODEL_FAST
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
 # most prolific posters. Haiku's hard output ceiling is 8192; use it.
 MAX_TOKENS = 8192
-MAX_TEXT_CHARS = 30_000
+# A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
+# single record's reply (full fields + verbose suggested_fields) overran 8192
+# output tokens and got truncated mid-JSON. The discovery script learned the
+# same lesson and uses 10_000; 8_000 keeps a comfortable margin.
+MAX_TEXT_CHARS = 8_000
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
-BATCH_SIZE = 5      # records per LLM call (larger text per record → smaller batch)
+# The multi-record array path is unreliable: a record's text holds several
+# posts and the model emits one object PER POST ("Expected 1, got N"),
+# independent of delimiters -- plus a batch shares one MAX_TOKENS budget. So
+# default to 1 record/call: the single-object path in _call_batch_raw is
+# count-mismatch-proof and proven on the full corpus. (>1 still works as a
+# best-effort batch; split_retry_batch falls back to single calls on failure.)
+BATCH_SIZE = 1      # records per LLM call
 
 # Subreddits known to contain health/chronic illness content.
 # Text from these is prioritised when building the per-record prompt so the
@@ -148,20 +159,25 @@ def get_client() -> anthropic.Anthropic:
     return get_llm_client()
 
 
-def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str) -> str:
+def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
+               temperature: float | None = None) -> str:
     """Call Haiku with retry/backoff and prompt caching.
 
     Thread-safe - Anthropic client is thread-safe.
     The system prompt is marked for caching: after the first request Anthropic
     serves it from cache at 1/10th the token cost with lower latency.
+
+    ``temperature`` overrides the default (used to re-ask at a higher temp when a
+    temp-0 reply was deterministically malformed JSON).
     """
+    temp = LLM_TEMPERATURE if temperature is None else temperature
     for attempt, delay in enumerate([0] + RETRY_DELAYS):
         if delay:
             time.sleep(delay)
         try:
             response = client.messages.create(
                 model=MODEL,
-                temperature=LLM_TEMPERATURE,
+                temperature=temp,
                 max_tokens=MAX_TOKENS,
                 system=[
                     {
@@ -527,10 +543,26 @@ def _process_one(
 
 
 def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]:
-    """Send multiple records in one API call. Returns list of parsed dicts.
+    """Send record(s) in one API call. Returns a list of parsed dicts.
 
     Each item must have key 'user_message' with the per-record text.
+
+    A single record (the default, and the split_retry_batch fallback) asks for
+    ONE object and uses the tolerant parser -- no array/count ambiguity, no
+    multi-post mis-splitting, and trailing prose is handled. Multiple records
+    use the JSON-array path below.
     """
+    if len(items) == 1:
+        # Re-ask at escalating temperature: at temp 0 a malformed reply (e.g. a
+        # stray doubled bracket) is deterministic, so a plain retry repeats it;
+        # nudging temperature breaks the determinism and yields valid JSON.
+        for temp in (None, 0.7, 1.0):
+            parsed = parse_json_response(
+                call_haiku(client, system_prompt, items[0]["user_message"], temperature=temp))
+            if parsed is not None:
+                return [parsed]
+        raise ValueError("could not parse single-record response after retries")
+
     msg = (
         "Extract biomedical information from the following patient-authored records. "
         "Each record is by a DIFFERENT author.\n\n"
@@ -542,17 +574,26 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         text = item["user_message"]
         if text.startswith("Extract biomedical"):
             text = text.split("\n\n", 1)[-1]
+        # build_user_message joins a user's posts with '---', and Reddit markdown
+        # uses '---' horizontal rules -- both collide with the '--- Record N ---'
+        # delimiter and make the model split one multi-post record into several
+        # objects (-> "Expected 1 results, got N"). Collapse bare rule lines.
+        text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", text)
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    raw = call_haiku(client, system_prompt, msg)
+    raw = call_haiku(client, system_prompt, msg).strip()
 
-    # Try to parse as JSON array
-    raw = raw.strip()
+    # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
+    # leading prose line or trailing content after the array ("Extra data")
+    # doesn't break json.loads. A genuinely truncated reply still raises
+    # JSONDecodeError, which split_retry_batch handles by splitting smaller.
     if raw.startswith("```"):
-        first_nl = raw.index("\n")
-        raw = raw[first_nl + 1:]
+        raw = raw[raw.index("\n") + 1:]
         if raw.endswith("```"):
-            raw = raw[:-3].strip()
+            raw = raw[:-3]
+    start, end = raw.find("["), raw.rfind("]")
+    if start != -1 and end > start:
+        raw = raw[start:end + 1]
 
     results = json.loads(raw)
     if not isinstance(results, list):
