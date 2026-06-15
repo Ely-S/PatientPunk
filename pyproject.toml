@@ -44,5 +44,5 @@ where = ["variable_extraction"]
 include = ["patientpunk*"]
 
 [tool.pytest.ini_options]
-testpaths = ["variable_extraction/tests"]
+testpaths = ["variable_extraction/tests", "tests"]
 pythonpath = ["src"]
