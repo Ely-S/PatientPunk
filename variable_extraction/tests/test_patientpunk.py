@@ -2328,3 +2328,32 @@ class TestNormalize:
         assert "treatment_outcome_drug" not in fields
         assert "treatment_outcome_symptom" not in fields
         assert "conditions" in fields
+
+
+class TestBatchExtraction:
+    """Regression coverage for the batched-extraction parse path (was silently
+    dropping ~half of records). Mocks the LLM call -- no API needed."""
+
+    def test_single_record_uses_object_path_no_retry(self, monkeypatch):
+        import scripts.llm_extract as m
+        temps = []
+        def fake(client, sysp, um, temperature=None):
+            temps.append(temperature)
+            return '```json\n{"fields": {"age": [33]}, "suggested_fields": []}\n```'
+        monkeypatch.setattr(m, "call_haiku", fake)
+        out = m._call_batch_raw(None, "sys", [{"user_message": "x"}])
+        assert out == [{"fields": {"age": [33]}, "suggested_fields": []}]
+        assert temps == [None]   # parsed first try; no temperature escalation
+
+    def test_single_record_retries_at_higher_temp_on_bad_json(self, monkeypatch):
+        import scripts.llm_extract as m
+        seq = iter(['{"fields": ] ]malformed',                       # deterministic bad JSON
+                    '{"fields": {"age": null}, "suggested_fields": []}'])
+        temps = []
+        def fake(client, sysp, um, temperature=None):
+            temps.append(temperature)
+            return next(seq)
+        monkeypatch.setattr(m, "call_haiku", fake)
+        out = m._call_batch_raw(None, "sys", [{"user_message": "x"}])
+        assert out[0]["fields"] == {"age": None}
+        assert temps[:2] == [None, 0.7]   # escalated temperature after parse failure
