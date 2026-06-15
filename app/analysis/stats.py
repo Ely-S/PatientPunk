@@ -59,6 +59,17 @@ def categorize_sentiment(score: float) -> str:
 
 SENTIMENT_CATEGORIES = ["positive", "mixed", "neutral", "negative"]
 
+# treatment_reports.sentiment is stored as a TEXT *label* (positive/mixed/
+# neutral/negative -- see schema.sql + the classify step), NOT a number. Every
+# numeric query below must therefore map the label to a score; AVG() on the raw
+# text silently coerces labels to 0, collapsing every user to "neutral" and
+# invalidating all downstream stats. Scores are the inverse of
+# categorize_sentiment(), so they round-trip back to their label.
+SENTIMENT_SCORES = {"positive": 1.0, "mixed": 0.4, "neutral": 0.0, "negative": -1.0}
+# The SQL form of SENTIMENT_SCORES is inlined into the queries below (as
+# AVG(_SENTIMENT_SCORE_SQL)); kept in sync with the dict above. A non-label
+# value passes through via CAST, so it is safe on label OR numeric columns.
+
 
 # ── Structured warnings ──────────────────────────────────────────────────────
 
@@ -254,7 +265,7 @@ def get_user_sentiment(
     sql = f"""
         SELECT
             tr.user_id,
-            AVG(tr.sentiment)   AS avg_sentiment,
+            AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END))   AS avg_sentiment,
             COUNT(*)            AS n_posts
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
@@ -670,7 +681,7 @@ def _build_logit_features(
     """
     # Start with user-level sentiment for this drug
     sql = """
-        SELECT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1153,7 +1164,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
     Returns None if fewer than 3 months of data.
     """
     sql = """
-        SELECT p.post_date, tr.sentiment
+        SELECT p.post_date, (CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END) AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         JOIN posts p ON p.post_id = tr.post_id
@@ -1300,7 +1311,7 @@ def _build_survival_data(
 
     # Get treatment reports with dates for this drug
     report_sql = """
-        SELECT tr.user_id, tr.post_id, tr.sentiment
+        SELECT tr.user_id, tr.post_id, (CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END) AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1520,14 +1531,14 @@ def get_paired_sentiment(
             a.avg_a,
             b.avg_b
         FROM (
-            SELECT tr.user_id, AVG(tr.sentiment) AS avg_a
+            SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_a
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
             GROUP BY tr.user_id
         ) a
         JOIN (
-            SELECT tr.user_id, AVG(tr.sentiment) AS avg_b
+            SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_b
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1704,7 +1715,7 @@ def run_propensity_match(
 
     # Get users who tried THIS drug
     drug_users_sql = """
-        SELECT DISTINCT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT DISTINCT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
@@ -1725,7 +1736,7 @@ def run_propensity_match(
 
     # Get average sentiment for control users (across all their drugs)
     control_sql = """
-        SELECT tr.user_id, AVG(tr.sentiment) AS avg_sentiment
+        SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.4 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
         FROM treatment_reports tr
         WHERE tr.user_id IN ({})
         GROUP BY tr.user_id

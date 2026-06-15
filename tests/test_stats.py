@@ -1125,3 +1125,58 @@ class TestWarnings:
         from app.analysis.stats import REPORTING_BIAS_DISCLAIMER
         assert "self-selected" in REPORTING_BIAS_DISCLAIMER
         assert "Reddit" in REPORTING_BIAS_DISCLAIMER
+
+
+class TestTextLabelSentiment:
+    """Regression: production stores treatment_reports.sentiment as a TEXT label
+    (positive/mixed/neutral/negative) -- see schema.sql + the classify step.
+    AVG() must map labels to scores; the bug was it coerced labels to 0, so every
+    user collapsed to neutral. These tests use the REAL TEXT schema, unlike the
+    REAL-numeric fixtures above."""
+
+    def _text_conn(self):
+        import sqlite3
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(
+            """
+            CREATE TABLE treatment (id INTEGER PRIMARY KEY, canonical_name TEXT);
+            CREATE TABLE treatment_reports (
+                report_id INTEGER PRIMARY KEY, run_id INTEGER, post_id TEXT,
+                user_id TEXT, drug_id INTEGER, sentiment TEXT NOT NULL,
+                signal_strength TEXT
+            );
+            INSERT INTO treatment VALUES (1, 'low dose naltrexone');
+            """
+        )
+        for pid, uid, sent in [
+            ("p1", "u1", "positive"), ("p2", "u2", "negative"),
+            ("p3", "u3", "neutral"), ("p4", "u4", "mixed"),
+        ]:
+            conn.execute(
+                "INSERT INTO treatment_reports "
+                "(run_id, post_id, user_id, drug_id, sentiment, signal_strength) "
+                "VALUES (1, ?, ?, 1, ?, 'strong')",
+                (pid, uid, sent),
+            )
+        conn.commit()
+        return conn
+
+    def test_labels_map_to_scores_not_zero(self):
+        from app.analysis.stats import get_user_sentiment, SENTIMENT_SCORES
+        df = get_user_sentiment(self._text_conn(), "low dose naltrexone")
+        scores = dict(zip(df["user_id"], df["avg_sentiment"]))
+        assert scores["u1"] == SENTIMENT_SCORES["positive"]   # 1.0
+        assert scores["u2"] == SENTIMENT_SCORES["negative"]   # -1.0
+        assert scores["u3"] == SENTIMENT_SCORES["neutral"]    # 0.0
+        assert scores["u4"] == SENTIMENT_SCORES["mixed"]      # 0.4
+        # The bug: AVG on raw text coerced every label to 0.0.
+        assert not all(v == 0.0 for v in scores.values())
+
+    def test_label_scores_roundtrip_to_category(self):
+        from app.analysis.stats import get_user_sentiment, categorize_sentiment
+        df = get_user_sentiment(self._text_conn(), "low dose naltrexone")
+        cats = dict(zip(df["user_id"], df["avg_sentiment"].map(categorize_sentiment)))
+        assert cats["u1"] == "positive"
+        assert cats["u2"] == "negative"
+        assert cats["u3"] == "neutral"
+        assert cats["u4"] == "mixed"
