@@ -43,8 +43,11 @@ Scrapers/output/
 # Database files
 *.db
 
-# AI session continuity / handoff notes (local-only project state, not code)
+# Local-only agent config + session notes (not code, not versioned in this repo)
+.cursorrules
 CONTINUITY.md
+AGENTS.md
+CLAUDE.md
 
 # Run/scratch output dirs (data + intermediates — keep in PatientPunk_data/ + S3, never commit)
 output_*/
