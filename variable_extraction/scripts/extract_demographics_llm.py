@@ -265,13 +265,9 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         ],
         messages=[{"role": "user", "content": msg}],
     )
-    raw = response.content[0].text.strip()
-    if raw.startswith("```"):
-        nl = raw.find("\n")                 # find() not index(): a single-line
-        if nl != -1:                        # fence (```json[...]```) has no newline
-            raw = raw[nl + 1:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
+    # Reuse the canonical (single-line-fence-safe) stripper, then isolate the
+    # JSON array span so leading/trailing prose doesn't break json.loads.
+    raw = _strip_markdown_fences(response.content[0].text)
     start, end = raw.find("["), raw.rfind("]")
     if start != -1 and end > start:
         raw = raw[start:end + 1]
