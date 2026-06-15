@@ -59,7 +59,7 @@ def classify_outcome(avg_score):
 def wilson_ci(k, n, z=1.96):
     """Wilson score confidence interval for a proportion."""
     if pd.isna(k) or pd.isna(n) or n <= 0 or k < 0 or k > n:
-        return 0.0, 0.0
+        return np.nan, np.nan
     p = k / n
     denom = 1 + z**2 / n
     center = (p + z**2 / (2 * n)) / denom

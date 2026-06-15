@@ -241,7 +241,8 @@ Pre-generated database profiles are at `notebooks/profiles/{db_name}.json`. Read
 
 ```python
 import json
-profile = json.loads(open("notebooks/profiles/polina_onemonth.json").read())
+with open("notebooks/profiles/polina_onemonth.json") as f:
+    profile = json.load(f)
 ```
 
 Use the profile to skip the exploration step and go straight to the analysis plan.

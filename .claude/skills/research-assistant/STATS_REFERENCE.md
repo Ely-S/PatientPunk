@@ -72,7 +72,7 @@ Every analysis result should list warnings with one of three severities. Surface
 ### 5. Kruskal-Wallis — 3+ group comparison
 - **Use when:** comparing sentiment across 3 or more groups (e.g., treatment classes).
 - **Library:** `scipy.stats.kruskal(*arrays)` for the omnibus; pairwise Mann-Whitney + BH FDR via `statsmodels.stats.multitest.multipletests(method='fdr_bh')`.
-- **Effect size:** eta-squared `η² = (H - k + 1) / (N - k)` where `H` is Kruskal's statistic, `k` is number of groups, `N` is total n.
+- **Effect size:** epsilon-squared `ε² = (H - k + 1) / (N - k)` where `H` is Kruskal's statistic, `k` is number of groups, `N` is total n.
 - **Warnings:**
   - `small_group` (caveat) — any group `n < 10`.
   - `no_within_variation` (caution) — any group has zero within-group variation.
