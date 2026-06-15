@@ -206,7 +206,8 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         parts = [p.strip() for p in entry.split(":")]
         if len(parts) >= 2:
             drug, raw_outcome = parts[0], parts[1]
-            symptom = parts[2] if len(parts) > 2 else ""
+            # Rejoin parts[2:] so a symptom that itself contains ':' isn't truncated.
+            symptom = ":".join(parts[2:]) if len(parts) > 2 else ""
         else:
             # Legacy / bare format: a bare outcome word with no drug
             # (e.g. "helped", "80% better"). Keep the outcome; no drug/symptom.
@@ -215,6 +216,9 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         symptoms.append(symptom)
         if not raw_outcome:
             continue
+        # NB: TREATMENT_OUTCOME_RAW ("treatment_outcome") is the correct FIELD_VOCAB
+        # key for outcome synonyms (worked->helped, etc.); there is no
+        # "treatment_outcome_label" vocab. Do not "fix" this to TREATMENT_OUTCOME_LABEL.
         lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
         if lbl not in _OUTCOME_LABELS:
             lbl = "unknown"

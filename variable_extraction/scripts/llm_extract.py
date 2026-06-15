@@ -213,8 +213,9 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
 def parse_json_response(text: str) -> dict | None:
     text = text.strip()
     if text.startswith("```"):
-        first_newline = text.index("\n")
-        text = text[first_newline + 1:]
+        nl = text.find("\n")               # find() not index(): single-line fence
+        if nl != -1:                       # (```json{...}```) has no newline
+            text = text[nl + 1:]
         if text.endswith("```"):
             text = text[:-3].strip()
     try:
@@ -589,7 +590,9 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
     # doesn't break json.loads. A genuinely truncated reply still raises
     # JSONDecodeError, which split_retry_batch handles by splitting smaller.
     if raw.startswith("```"):
-        raw = raw[raw.index("\n") + 1:]
+        nl = raw.find("\n")                 # find() not index(): a single-line
+        if nl != -1:                        # fence (```json[...]```) has no newline
+            raw = raw[nl + 1:]
         if raw.endswith("```"):
             raw = raw[:-3]
     start, end = raw.find("["), raw.rfind("]")
@@ -1111,7 +1114,8 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
             if len(parts) < 2 or not parts[0]:
                 continue  # not a drug:outcome pair -- drop malformed
             drug, outcome = parts[0], parts[1]
-            symptom = parts[2] if len(parts) > 2 else ""
+            # Rejoin parts[2:] so a symptom containing ':' isn't truncated.
+            symptom = ":".join(parts[2:]) if len(parts) > 2 else ""
             outcome = _OUTCOME_SYNONYMS.get(outcome, outcome)
             if outcome not in _OUTCOME_LABELS:
                 outcome = "unknown"

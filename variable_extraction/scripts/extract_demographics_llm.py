@@ -37,6 +37,7 @@ import json
 import os
 import re
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -175,6 +176,33 @@ def _parse_one_object(text: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+_RETRY_DELAYS = [2, 5, 15, 30]
+
+
+def _create_with_retry(client, **kwargs):
+    """client.messages.create with provider-agnostic retry/backoff on transient
+    errors (429 / 5xx / connection / timeout) -- parity with
+    llm_extract.call_haiku, so a long demographics job survives a temporary blip
+    instead of failing the batch. Non-transient errors re-raise immediately."""
+    for attempt, delay in enumerate([0] + _RETRY_DELAYS):
+        if delay:
+            time.sleep(delay)
+        try:
+            return client.messages.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - provider-agnostic transient check
+            status = getattr(exc, "status_code", None)
+            if status is None:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+            name = type(exc).__name__
+            transient = (
+                status == 429
+                or (status is not None and 500 <= status < 600)
+                or "Connection" in name or "Timeout" in name
+            )
+            if not transient or attempt == len(_RETRY_DELAYS):
+                raise
+
+
 def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     """Send record(s) in one API call. Returns a list of parsed dicts.
 
@@ -187,7 +215,8 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     """
     if len(items) == 1:
         for temp in (LLM_TEMPERATURE, 0.7, 1.0):
-            response = client.messages.create(
+            response = _create_with_retry(
+        client,
                 model=MODEL,
                 temperature=temp,
                 max_tokens=300,
@@ -213,7 +242,8 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", item["text"])
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    response = client.messages.create(
+    response = _create_with_retry(
+        client,
         model=MODEL,
         temperature=LLM_TEMPERATURE,
         max_tokens=len(items) * 300,
@@ -228,7 +258,9 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     )
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
-        raw = raw[raw.index("\n") + 1:]
+        nl = raw.find("\n")                 # find() not index(): a single-line
+        if nl != -1:                        # fence (```json[...]```) has no newline
+            raw = raw[nl + 1:]
         if raw.endswith("```"):
             raw = raw[:-3]
     start, end = raw.find("["), raw.rfind("]")

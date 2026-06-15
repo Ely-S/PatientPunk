@@ -68,9 +68,25 @@ SENTIMENT_CATEGORIES = ["positive", "mixed", "neutral", "negative"]
 SENTIMENT_SCORES = {"positive": 1.0, "mixed": 0.5, "neutral": 0.0, "negative": -1.0}
 # Values match patientpunk.db._SENTIMENT_SCORE (the variable_extraction package's
 # encoding) so both analysis paths score a label identically.
-# The SQL form of SENTIMENT_SCORES is inlined into the queries below (as
-# AVG(_SENTIMENT_SCORE_SQL)); kept in sync with the dict above. A non-label
-# value passes through via CAST, so it is safe on label OR numeric columns.
+
+# SQL form of the label->score map, DERIVED from SENTIMENT_SCORES so the two
+# cannot drift. A known label maps to its score; an UNRECOGNISED text label maps
+# to NULL (AVG ignores it, so malformed/unexpected data can't skew results toward
+# neutral); numeric data passes through unchanged (keeps the REAL-valued test
+# fixtures valid). Inject with _sent() (replaces the __SENT__ sentinel) -- avoids
+# f-string/.format brace conflicts in queries that also use positional placeholders.
+_SENTIMENT_SCORE_SQL = (
+    "(CASE tr.sentiment "
+    + " ".join(f"WHEN '{label}' THEN {score}"
+               for label, score in SENTIMENT_SCORES.items())
+    + " ELSE (CASE WHEN typeof(tr.sentiment) IN ('real','integer') "
+      "THEN tr.sentiment ELSE NULL END) END)"
+)
+
+
+def _sent(sql: str) -> str:
+    """Inline the label->score CASE into a query (replaces the __SENT__ token)."""
+    return sql.replace("__SENT__", _SENTIMENT_SCORE_SQL)
 
 
 # ── Structured warnings ──────────────────────────────────────────────────────
@@ -267,7 +283,7 @@ def get_user_sentiment(
     sql = f"""
         SELECT
             tr.user_id,
-            AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END))   AS avg_sentiment,
+            AVG(__SENT__)   AS avg_sentiment,
             COUNT(*)            AS n_posts
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
@@ -286,7 +302,7 @@ def get_user_sentiment(
     if age_bucket:
         ordered_params.append(age_bucket)
 
-    rows = conn.execute(sql, ordered_params).fetchall()
+    rows = conn.execute(_sent(sql), ordered_params).fetchall()
     df = pd.DataFrame(rows, columns=["user_id", "avg_sentiment", "n_posts"])
     if not df.empty:
         df["category"] = df["avg_sentiment"].map(categorize_sentiment)
@@ -683,14 +699,14 @@ def _build_logit_features(
     """
     # Start with user-level sentiment for this drug
     sql = """
-        SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
+        SELECT tr.user_id, AVG(__SENT__) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
         GROUP BY tr.user_id
     """
     df = pd.DataFrame(
-        conn.execute(sql, [drug]).fetchall(),
+        conn.execute(_sent(sql), [drug]).fetchall(),
         columns=["user_id", "avg_sentiment"],
     )
     if df.empty:
@@ -1166,7 +1182,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
     Returns None if fewer than 3 months of data.
     """
     sql = """
-        SELECT p.post_date, (CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END) AS sentiment
+        SELECT p.post_date, __SENT__ AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         JOIN posts p ON p.post_id = tr.post_id
@@ -1174,7 +1190,7 @@ def run_time_trend(conn: sqlite3.Connection, drug: str) -> TimeTrendResult | Non
         AND p.post_date IS NOT NULL
         ORDER BY p.post_date
     """
-    rows = conn.execute(sql, [drug]).fetchall()
+    rows = conn.execute(_sent(sql), [drug]).fetchall()
     if not rows:
         return None
 
@@ -1313,13 +1329,13 @@ def _build_survival_data(
 
     # Get treatment reports with dates for this drug
     report_sql = """
-        SELECT tr.user_id, tr.post_id, (CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END) AS sentiment
+        SELECT tr.user_id, tr.post_id, __SENT__ AS sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
     """
     reports = pd.DataFrame(
-        conn.execute(report_sql, [drug]).fetchall(),
+        conn.execute(_sent(report_sql), [drug]).fetchall(),
         columns=["user_id", "post_id", "sentiment"],
     )
     if reports.empty:
@@ -1533,21 +1549,21 @@ def get_paired_sentiment(
             a.avg_a,
             b.avg_b
         FROM (
-            SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_a
+            SELECT tr.user_id, AVG(__SENT__) AS avg_a
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
             GROUP BY tr.user_id
         ) a
         JOIN (
-            SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_b
+            SELECT tr.user_id, AVG(__SENT__) AS avg_b
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             WHERE t.canonical_name = ? COLLATE NOCASE
             GROUP BY tr.user_id
         ) b ON a.user_id = b.user_id
     """
-    rows = conn.execute(sql, [drug_a, drug_b]).fetchall()
+    rows = conn.execute(_sent(sql), [drug_a, drug_b]).fetchall()
     if not rows:
         return None
     df = pd.DataFrame(rows, columns=["user_id", "sentiment_a", "sentiment_b"])
@@ -1717,14 +1733,14 @@ def run_propensity_match(
 
     # Get users who tried THIS drug
     drug_users_sql = """
-        SELECT DISTINCT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
+        SELECT DISTINCT tr.user_id, AVG(__SENT__) AS avg_sentiment
         FROM treatment_reports tr
         JOIN treatment t ON t.id = tr.drug_id
         WHERE t.canonical_name = ? COLLATE NOCASE
         GROUP BY tr.user_id
     """
     drug_df = pd.DataFrame(
-        conn.execute(drug_users_sql, [drug]).fetchall(),
+        conn.execute(_sent(drug_users_sql), [drug]).fetchall(),
         columns=["user_id", "sentiment"],
     )
     if drug_df.empty or len(drug_df) < 10:
@@ -1738,13 +1754,13 @@ def run_propensity_match(
 
     # Get average sentiment for control users (across all their drugs)
     control_sql = """
-        SELECT tr.user_id, AVG((CASE WHEN tr.sentiment IN ('positive','mixed','neutral','negative') THEN (CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' THEN 0.0 ELSE -1.0 END) ELSE CAST(tr.sentiment AS REAL) END)) AS avg_sentiment
+        SELECT tr.user_id, AVG(__SENT__) AS avg_sentiment
         FROM treatment_reports tr
         WHERE tr.user_id IN ({})
         GROUP BY tr.user_id
     """.format(",".join("?" for _ in control_ids))
     control_df = pd.DataFrame(
-        conn.execute(control_sql, list(control_ids)).fetchall(),
+        conn.execute(_sent(control_sql), list(control_ids)).fetchall(),
         columns=["user_id", "sentiment"],
     )
 
