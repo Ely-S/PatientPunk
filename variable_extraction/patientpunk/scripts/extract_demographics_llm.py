@@ -335,6 +335,11 @@ def process_batch(client, batch: list[tuple], max_chars=MAX_CHARS) -> list[dict]
     return output
 
 
+def _default_output_path(input_dir: Path) -> Path:
+    """Default the demographics CSV next to the selected input directory."""
+    return input_dir / "demographics.csv"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="LLM-only demographic extraction (age, sex/gender, location).",
@@ -355,8 +360,8 @@ Examples:
     )
     parser.add_argument(
         "--output", type=Path,
-        default=Path(__file__).parent.parent.parent / "output" / "demographics.csv",
-        help="Output CSV file path (default: output/demographics.csv)",
+        default=None,
+        help="Output CSV file path (default: <input-dir>/demographics.csv)",
     )
     parser.add_argument(
         "--workers", type=int, default=10,
@@ -375,6 +380,8 @@ Examples:
         help=f"Max characters of text to send per record (default: {MAX_CHARS})",
     )
     args = parser.parse_args()
+    if args.output is None:
+        args.output = _default_output_path(args.input_dir)
 
     max_chars = args.max_chars
 
