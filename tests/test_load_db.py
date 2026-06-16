@@ -11,12 +11,13 @@ REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import load_db  # noqa: E402
+from patientpunk.db import _bucketize_age  # noqa: E402
 
 SCHEMA_SQL = REPO_ROOT / "schema.sql"
 
 
 def _make_posts_db(path: Path) -> None:
-    """Tiny posts.db: 2 users, 3 posts, 2 drugs, 1 run, 2 TEXT-sentiment reports."""
+    """Tiny posts.db: 2 users, 3 posts, 2 drugs, 1 run, 3 TEXT-sentiment reports."""
     conn = sqlite3.connect(path)
     conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
     conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at) VALUES ('u1','x',0)")
@@ -39,6 +40,10 @@ def _make_posts_db(path: Path) -> None:
     conn.execute(
         "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
         " VALUES (1,'p2','u2',2,'negative','weak')"
+    )
+    conn.execute(
+        "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength)"
+        " VALUES (1,'p3','u1',1,'positive','strong')"
     )
     conn.commit()
     conn.close()
@@ -92,7 +97,7 @@ def test_corpus_copied(built):
     conn = sqlite3.connect(built)
     assert _count(conn, "users") == 2
     assert _count(conn, "posts") == 3
-    assert _count(conn, "treatment_reports") == 2
+    assert _count(conn, "treatment_reports") == 3
     conn.close()
 
 
@@ -132,4 +137,14 @@ def test_unified_table(built):
     assert "demo_age" in cols                    # demographics joined
     assert "drugs_mentioned" in cols and "n_drug_reports" in cols
     assert _count(conn, "unified") == 2          # one row per record
+    u1 = conn.execute(
+        "SELECT drugs_mentioned, n_drug_reports FROM unified WHERE author_hash='u1'"
+    ).fetchone()
+    assert u1 == ("ldn", 2)
     conn.close()
+
+
+def test_bucketize_age_handles_missing_and_qualitative_decades():
+    assert _bucketize_age(None) is None
+    assert _bucketize_age("mid-30s") == "30s"
+    assert _bucketize_age("early 40s") == "40s"

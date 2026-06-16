@@ -57,13 +57,17 @@ def _backup_db(src_db: Path, dst_db: Path) -> None:
     """Copy *src_db* -> *dst_db* via the sqlite backup API (full overwrite)."""
     if dst_db.exists():
         dst_db.unlink()
-    src = sqlite3.connect(src_db)
-    dst = sqlite3.connect(dst_db)
+    src = None
+    dst = None
     try:
+        src = sqlite3.connect(src_db)
+        dst = sqlite3.connect(dst_db)
         src.backup(dst)
     finally:
-        src.close()
-        dst.close()
+        if src is not None:
+            src.close()
+        if dst is not None:
+            dst.close()
 
 
 def build_unified(conn: sqlite3.Connection, records_csv: Path,
@@ -85,13 +89,24 @@ def build_unified(conn: sqlite3.Connection, records_csv: Path,
     # Per-author drug-sentiment rollup from treatment_reports (already in the DB).
     drug_rows = conn.execute(
         """
+        WITH distinct_user_drugs AS (
+            SELECT DISTINCT user_id, drug_id
+            FROM treatment_reports
+        ),
+        drug_rollup AS (
+            SELECT dud.user_id,
+                   GROUP_CONCAT(t.canonical_name) AS drugs_mentioned
+            FROM distinct_user_drugs dud
+            JOIN treatment t ON t.id = dud.drug_id
+            GROUP BY dud.user_id
+        )
         SELECT tr.user_id                              AS author_hash,
-               GROUP_CONCAT(DISTINCT t.canonical_name) AS drugs_mentioned,
+               dr.drugs_mentioned                      AS drugs_mentioned,
                COUNT(*)                                AS n_drug_reports,
                SUM(CASE WHEN tr.sentiment='positive' THEN 1 ELSE 0 END) AS drugs_positive,
                SUM(CASE WHEN tr.sentiment='negative' THEN 1 ELSE 0 END) AS drugs_negative
         FROM treatment_reports tr
-        JOIN treatment t ON t.id = tr.drug_id
+        LEFT JOIN drug_rollup dr ON dr.user_id = tr.user_id
         GROUP BY tr.user_id
         """
     ).fetchall()
