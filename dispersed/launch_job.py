@@ -77,7 +77,7 @@ def _signed_request(method: str, path: str, body: dict | None = None,
         detail = e.read().decode(errors="ignore")
         sys.exit(f"HTTP {e.code} on {method} {path}: {detail}\n"
                  f"  (if 401: verify the signing canonical string against Dispersed's SDK/docs)")
-    except (URLError, TimeoutError) as e:
+    except (URLError, TimeoutError, OSError) as e:
         reason = getattr(e, "reason", e)
         sys.exit(f"Could not reach the Dispersed API at {url}: {reason}\n"
                  f"  (check network / DNS / the API host, or that the job's port is open)")
@@ -187,7 +187,10 @@ def main(argv=None) -> int:
     if not node:
         sys.exit(f"Timed out waiting for node_urls. Check job {uuid} in the console.")
 
-    host, port = node["hostname"], node["port"]
+    host = node.get("hostname")
+    port = node.get("port")
+    if not host or port is None:
+        sys.exit(f"Dispersed returned an incomplete node_urls entry: {node}")
     scheme = "https" if node.get("tls") else "http"
     base = f"{scheme}://{host}:{port}"
     print(f"\n  Reachable at: {base}")

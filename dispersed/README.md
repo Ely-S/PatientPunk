@@ -45,7 +45,7 @@ slow for the full 100k. Use Path B for the full run.
 ## Path B — custom vLLM image, max throughput (for the full corpus)
 
 vLLM's continuous batching is the right tool for 100k items. Since there's no
-command override, bake the model into the image (`dispersed/vllm.Dockerfile`):
+command override, pin the served model in the image (`dispersed/vllm.Dockerfile`):
 
 ```bash
 docker build -f dispersed/vllm.Dockerfile -t <registry>/pp-vllm-qwen:latest .
@@ -53,9 +53,11 @@ docker push <registry>/pp-vllm-qwen:latest
 python dispersed/launch_job.py --image <registry>/pp-vllm-qwen --port 8000 \
     --model Qwen/Qwen2.5-32B-Instruct-AWQ --gpu-name "<gpu>" --min-vram-gb 24
 ```
-(`launch_job.py` skips the Ollama pull when the model is baked in — omit `--pull`.)
-The image (`dispersed/vllm.Dockerfile`) serves the **AWQ** (4-bit) build, which fits a
-single 24-32 GB GPU. Then set `MODEL_FAST/STRONG=Qwen/Qwen2.5-32B-Instruct-AWQ`,
+(`launch_job.py` skips the Ollama pull for this path — omit `--pull`. vLLM will
+download the model weights on first container start.)
+The image (`dispersed/vllm.Dockerfile`) serves the **AWQ** (4-bit) build, which
+fits a single 24-32 GB GPU. Then set
+`MODEL_FAST/STRONG=Qwen/Qwen2.5-32B-Instruct-AWQ`,
 `LLM_BASE_URL=http://<node>:8000/v1`.
 
 ## Path C — SSH box, serve + extract on-box (fastest end-to-end)

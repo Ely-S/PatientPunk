@@ -1,4 +1,5 @@
-# Throughput path: vLLM serving a QUANTIZED 32B with the model baked into CMD.
+# Throughput path: vLLM serving a QUANTIZED 32B with the served model pinned in
+# the image command.
 #
 # Dispersed has NO command override (only image/env/ports/...), and the GPU
 # catalog tops out at a single 32GB card (RTX 5090) / 24GB (RTX 4090) -- there
@@ -12,7 +13,8 @@
 #   docker push <registry>/pp-vllm-qwen32-awq:latest
 #   python dispersed/launch_job.py --image <registry>/pp-vllm-qwen32-awq --port 8000 \
 #       --model Qwen/Qwen2.5-32B-Instruct-AWQ --gpu-name "NVIDIA RTX 5090" --min-vram-gb 32
-#   (NO --pull: the model is baked into the image. Then point extraction at it:
+#   (NO --pull for Path B: vLLM downloads weights on first container start, not
+#    via the Ollama pull API. Then point extraction at it:
 #    MODEL_FAST/STRONG=Qwen/Qwen2.5-32B-Instruct-AWQ, LLM_BASE_URL=http://<node>:8000/v1)
 #
 # GPU notes:
