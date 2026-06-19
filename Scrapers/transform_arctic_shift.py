@@ -30,6 +30,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+DELETED_AUTHOR = "[deleted]"  # Reddit placeholder author; never hashed as a username
+
 
 def hash_username(username: str) -> str:
     """SHA-256 hash of username for privacy."""
@@ -77,7 +79,7 @@ def open_ndjson(path: Path):
 def build_comment(c: dict) -> dict:
     """Transform an Arctic Shift comment into our format."""
     author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
@@ -91,7 +93,7 @@ def build_comment(c: dict) -> dict:
 def build_post(p: dict, comments: list[dict]) -> dict:
     """Transform an Arctic Shift post into our format."""
     author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     return {
         "post_id": f"t3_{p.get('id', '')}",
         "title": p.get("title", ""),

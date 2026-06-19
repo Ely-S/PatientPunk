@@ -62,7 +62,7 @@ from patientpunk.qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, REDDIT_REMOVED, split_retry_batch
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
 BATCH_SIZE = 10
@@ -184,13 +184,13 @@ def build_text(record: dict, source_type: str, max_chars: int = MAX_CHARS) -> st
         body = record.get("body", "") or ""
         if title:
             parts.append(f"Post title: {title}")
-        if body and body not in ("[removed]", "[deleted]"):
+        if body and body not in REDDIT_REMOVED:
             parts.append(f"Post body:\n{body}")
         author_hash = record.get("author_hash")
         for comment in record.get("comments", []):
             if comment.get("author_hash") == author_hash:
                 cb = comment.get("body", "") or ""
-                if cb and cb not in ("[removed]", "[deleted]"):
+                if cb and cb not in REDDIT_REMOVED:
                     parts.append(f"Author comment:\n{cb}")
         text = "\n\n".join(parts)
     else:  # user_history

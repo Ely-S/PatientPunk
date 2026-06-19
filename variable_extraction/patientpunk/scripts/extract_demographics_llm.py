@@ -50,7 +50,7 @@ load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variab
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
 
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, RETRY_DELAYS as _RETRY_DELAYS, split_retry_batch
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
@@ -181,9 +181,6 @@ def _parse_one_object(text: str) -> dict | None:
         except json.JSONDecodeError:
             return None
     return obj if isinstance(obj, dict) else None
-
-
-_RETRY_DELAYS = [2, 5, 15, 30]
 
 
 def _create_with_retry(client, **kwargs):

@@ -28,6 +28,10 @@ from utilities.db import open_db
 from utilities import get_client, get_git_commit, llm_call, log, parse_json_object, MODEL_FAST
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 
+# Fallback condition type when the model omits it or returns an out-of-vocab
+# value. Must be one of the allowed ("illness", "symptom") DB enum values.
+DEFAULT_CONDITION_TYPE = "illness"
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # LLM extraction
@@ -114,14 +118,14 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
             for cond in result.get("conditions", []):
                 if isinstance(cond, dict):
                     name = (cond.get("condition_name") or "").strip().lower()
-                    ctype = (cond.get("condition_type") or "illness").strip().lower()
+                    ctype = (cond.get("condition_type") or DEFAULT_CONDITION_TYPE).strip().lower()
                 elif isinstance(cond, str):
                     name = cond.strip().lower()
-                    ctype = "illness"
+                    ctype = DEFAULT_CONDITION_TYPE
                 else:
                     continue
                 if ctype not in ("illness", "symptom"):
-                    ctype = "illness"
+                    ctype = DEFAULT_CONDITION_TYPE
                 if name:
                     conn.execute(
                         "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "

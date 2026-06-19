@@ -23,8 +23,10 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from ._utils import REDDIT_REMOVED
+
 # Mirror scripts' _keep_text: drop empty / moderator-removed / user-deleted text.
-_DROP = {"", "[removed]", "[deleted]"}
+_DROP = REDDIT_REMOVED | {""}
 
 
 def _keep(text: object) -> str:

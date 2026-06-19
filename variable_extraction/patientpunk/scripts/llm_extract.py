@@ -74,7 +74,10 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
+from patientpunk._utils import (
+    LLM_TEMPERATURE, MODEL_FAST, OUTCOME_LABELS, PATIENTPUNK_RECORD_VERSION,
+    RETRY_DELAYS, get_llm_client, split_retry_batch,
+)
 MODEL = MODEL_FAST
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
@@ -85,7 +88,6 @@ MAX_TOKENS = 8192
 # output tokens and got truncated mid-JSON. The discovery script learned the
 # same lesson and uses 10_000; 8_000 keeps a comfortable margin.
 MAX_TEXT_CHARS = 8_000
-RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
 # posts and the model emits one object PER POST ("Expected 1, got N"),
@@ -433,7 +435,7 @@ def build_llm_record(
             fields[key] = [v for v in val if v] or None
 
     return {
-        "_patientpunk_version": "2.0",
+        "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
         "_extraction_method": "llm",
         "_model": MODEL,
         "_schema_id": schema_id,
@@ -862,7 +864,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         llm_rec = llm_index.pop(key, None)
 
         merged_record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "merged",
             "_schema_id": regex_rec.get("_schema_id", "base"),
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
@@ -934,7 +936,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
     for llm_rec in llm_index.values():
         llm_fields = llm_rec.get("fields", {})
         merged_record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "llm_only",
             "_schema_id": llm_rec.get("_schema_id", "base"),
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
@@ -1098,8 +1100,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         "made worse": "worsened", "side effects": "worsened",
         "adverse": "worsened",
     }
-    _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
-
     for rec in merged:
         field_data = rec.get("fields", {}).get("treatment_outcome", {})
         values = field_data.get("values")
@@ -1121,7 +1121,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
             # Rejoin parts[2:] so a symptom containing ':' isn't truncated.
             symptom = ":".join(parts[2:]) if len(parts) > 2 else ""
             outcome = _OUTCOME_SYNONYMS.get(outcome, outcome)
-            if outcome not in _OUTCOME_LABELS:
+            if outcome not in OUTCOME_LABELS:
                 outcome = "unknown"
             rejoined = f"{drug}: {outcome}" + (f": {symptom}" if symptom else "")
             if rejoined not in seen:

@@ -115,7 +115,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # =============================================================================
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG, PATIENTPUNK_RECORD_VERSION, RETRY_DELAYS
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -136,7 +136,6 @@ MAX_TEXT_CHARS_PHASE3 = 30_000
 # not read every word. Capping each item keeps batches dense (fewer API calls).
 MAX_TEXT_CHARS_PER_ITEM_PHASE1 = 0
 REQUEST_DELAY_S = 0.5
-RETRY_DELAYS = [2, 5, 15, 30]
 
 # How many example snippets Haiku should find per candidate field
 EXAMPLES_PER_FIELD = 8
@@ -1156,7 +1155,7 @@ def run_phase3_regex_extract(
                 record_hits += 1
 
         record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "discovered_regex",
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
             "record_meta": {

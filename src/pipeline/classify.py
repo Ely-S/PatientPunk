@@ -31,7 +31,7 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    PipelineConfig, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, DEFAULT_SUBREDDIT, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
 )
 from utilities.db import load_synonyms, open_db, post_text
 
@@ -155,10 +155,10 @@ def run_classification(
         synonyms_for = load_synonyms(config.db_path)
         with open_db(config.db_path) as conn:
             row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
-        subreddit = row[0] if row else "Long COVID"
+        subreddit = row[0] if row else DEFAULT_SUBREDDIT
     else:
         synonyms_for = {}
-        subreddit = "Long COVID"
+        subreddit = DEFAULT_SUBREDDIT
 
     target_aliases: set[str] | None = None
     if config.drug:

@@ -23,6 +23,10 @@ import anthropic
 TAGGED_MENTIONS = "tagged_mentions.json"
 CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 
+# Community name injected into the classifier prompt when the DB has no
+# source_subreddit (e.g. a writer-less / no-DB run).
+DEFAULT_SUBREDDIT = "Long COVID"
+
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
 @dataclass
@@ -190,6 +194,11 @@ class _OpenAIAdapter:
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
+# Request timeout (seconds) and retry budget, shared by both provider branches below.
+CLIENT_TIMEOUT_SECONDS = 60.0
+CLIENT_MAX_RETRIES = 4
+
+
 def get_client() -> anthropic.Anthropic:
     """Return a configured LLM client.
 
@@ -207,7 +216,7 @@ def get_client() -> anthropic.Anthropic:
             sys.exit("LLM_PROVIDER=openai needs the openai package: pip install openai")
         log.info(f"LLM provider: openai | base: {_API_BASE} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
         return _OpenAIAdapter(
-            OpenAI(api_key=api_key, base_url=_API_BASE, max_retries=4, timeout=60.0),
+            OpenAI(api_key=api_key, base_url=_API_BASE, max_retries=CLIENT_MAX_RETRIES, timeout=CLIENT_TIMEOUT_SECONDS),
             temperature=float(os.environ.get("LLM_TEMPERATURE", "0") or 0),
         )
 
@@ -229,8 +238,8 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
-        "timeout": 60.0,
+        "max_retries": CLIENT_MAX_RETRIES,
+        "timeout": CLIENT_TIMEOUT_SECONDS,
     }
     if _API_BASE:
         kwargs["base_url"] = _API_BASE

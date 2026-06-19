@@ -52,6 +52,9 @@ _TEMP_PATTERNS: list[str] = [
     "discovered_field_report_*.json",
 ]
 
+# Primary per-record output artifact; written by Phase 4 and read back by Phase 5.
+RECORDS_CSV_NAME = "records.csv"
+
 
 # ---------------------------------------------------------------------------
 # Configuration dataclass
@@ -479,7 +482,7 @@ class Pipeline:
             print("  [Skipping phase 4 -- no input files available]")
             return PhaseResult(phase=phase, label=label, skipped=True)
 
-        output_csv = self.config.input_dir / "records.csv"
+        output_csv = self.config.input_dir / RECORDS_CSV_NAME
         exporter = CSVExporter(
             input_files=input_files,
             output_path=output_csv,
@@ -515,7 +518,7 @@ class Pipeline:
             return PhaseResult(phase=phase, label=label, skipped=True)
 
         self._print_phase_banner(phase, label)
-        records_csv = self.config.input_dir / "records.csv"
+        records_csv = self.config.input_dir / RECORDS_CSV_NAME
         # Discovered fields live in a separate timestamped schema in temp/ that
         # Phase 5 would otherwise never see (the original curated schema knows
         # nothing about them).  Surface it so the codebook documents discovered

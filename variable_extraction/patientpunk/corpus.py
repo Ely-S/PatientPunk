@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from ._utils import REDDIT_REMOVED
 from typing import Any, Iterator
 
 from pydantic import BaseModel, Field
@@ -209,11 +211,11 @@ class CorpusLoader:
         body = (post.get("body") or "").strip()
         if title:
             texts.append(title)
-        if body and body not in ("[removed]", "[deleted]"):
+        if body and body not in REDDIT_REMOVED:
             texts.append(body)
         for comment in post.get("comments", []):
             comment_body = (comment.get("body") or "").strip()
-            if comment_body and comment_body not in ("[removed]", "[deleted]"):
+            if comment_body and comment_body not in REDDIT_REMOVED:
                 texts.append(comment_body)
         return texts
 
@@ -226,10 +228,10 @@ class CorpusLoader:
             body = (post.get("body") or "").strip()
             if title:
                 texts.append(title)
-            if body and body not in ("[removed]", "[deleted]"):
+            if body and body not in REDDIT_REMOVED:
                 texts.append(body)
         for comment in user.get("comments", []):
             comment_body = (comment.get("body") or "").strip()
-            if comment_body and comment_body not in ("[removed]", "[deleted]"):
+            if comment_body and comment_body not in REDDIT_REMOVED:
                 texts.append(comment_body)
         return texts

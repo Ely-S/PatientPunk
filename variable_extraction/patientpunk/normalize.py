@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import re
 
+from ._utils import OUTCOME_LABELS
+
 # --- cleaning ---------------------------------------------------------------
 
 _PUNCT = re.compile(r"[^\w%/+\- ]+")
@@ -185,7 +187,6 @@ TREATMENT_OUTCOME_SYMPTOM = "treatment_outcome_symptom"
 TREATMENT_OUTCOME_DERIVED = [
     TREATMENT_OUTCOME_LABEL, TREATMENT_OUTCOME_DRUG, TREATMENT_OUTCOME_SYMPTOM,
 ]
-_OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
 
 def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
@@ -220,7 +221,7 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         # key for outcome synonyms (worked->helped, etc.); there is no
         # "treatment_outcome_label" vocab. Do not "fix" this to TREATMENT_OUTCOME_LABEL.
         lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
-        if lbl not in _OUTCOME_LABELS:
+        if lbl not in OUTCOME_LABELS:
             lbl = "unknown"
         if lbl not in seen:
             seen.add(lbl)

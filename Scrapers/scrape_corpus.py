@@ -35,6 +35,8 @@ REQUEST_DELAY = 1.0       # seconds between Arctic Shift calls
 REDDIT_REQUEST_DELAY = 7  # seconds between Reddit calls (~10/min unauthenticated)
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 USERS_DIR = OUTPUT_DIR / "users"
+PAGE_SIZE = 100               # Arctic Shift max items per page; also the last-page sentinel
+DELETED_AUTHOR = "[deleted]"  # Reddit placeholder author; never hashed as a username
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +104,7 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
     Stops when a page returns fewer than 100 items (last page) or the
     returned created_utc exceeds the 'before' bound if one is set.
     """
-    params = {**base_params, "limit": 100, "sort": "asc"}
+    params = {**base_params, "limit": PAGE_SIZE, "sort": "asc"}
     all_items: list[dict] = []
     page = 0
 
@@ -125,7 +127,7 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
         params["after"] = last_ts
 
         # If we got a partial page we've hit the end
-        if len(items) < 100:
+        if len(items) < PAGE_SIZE:
             break
 
         polite_sleep()
@@ -177,7 +179,7 @@ def fetch_comments_for_post(post_id: str) -> list[dict]:
 
 def build_comment(c: dict) -> dict:
     author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
@@ -192,7 +194,7 @@ def build_comment(c: dict) -> dict:
 
 def build_post(p: dict, comments: list[dict] | None = None) -> dict:
     author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     comments = comments or []
     return {
         "post_id": f"t3_{p.get('id', '')}",
@@ -495,7 +497,7 @@ def main():
         post_data = build_post(full_post, comments)
         posts.append(post_data)
 
-        if author and author != "[deleted]":
+        if author and author != DELETED_AUTHOR:
             unique_authors[author] = post_data["author_hash"]
         else:
             deleted_post_authors += 1
