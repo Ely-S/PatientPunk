@@ -160,15 +160,29 @@ cluster_prep.DEFAULT_META + evaluate._META; named to avoid the `records_to_csv.M
   also introduces a `confounded` signal label not in the canonical set.
 - `src/extract_demographics_conditions.py` *docstring* (not `--help`) references a nonexistent
   `run_demographics.py` (the function `run_demographics` exists; no standalone file).
+- **(found Step 4)** `variable_extraction/main.py` + `patientpunk/pipeline.py` reference an `apps/discover.py`
+  Marimo picker that does not exist on disk (no `apps/` dir anywhere) — a broken/aspirational feature
+  reference. Distinct from the now-deleted `app/` package. Investigate in Step 12 (delete the dead path
+  or build the picker).
 
 ### D6. Behavior bugs found — LOG, do not fix during cleanup (invariant #8)
 - **Windows encoding (found Step 1):** `tests/populate_db_test.py` does `SCHEMA.read_text()` with no
   `encoding=`, so it dies (`UnicodeDecodeError`) on `schema.sql`'s UTF-8 box-drawing chars under cp1252.
   Invisible in CI (testpaths excludes it). Fix = `encoding="utf-8"`. Gate currently uses `PYTHONUTF8=1`.
-- **F841 unused locals (found Step 1) — likely dropped-value bugs, not just dead code:**
-  `extract.py:batches_since_save` (a save-throttle counter that's never read → periodic save may be
-  broken), `pipeline.py:ext_result`, `discover_fields.py:regex_fields`, `extract_biomedical.py:ext_count`,
-  `llm_extract.py:reason`. Left in place so cleanup doesn't mask the underlying bug.
+- **F841 dropped-value bugs (found Step 1; dead assignments REMOVED in Step 4 per user decision — the
+  latent-bug record now lives ONLY here, no longer flagged in code):** each computed a value whose
+  intended print/use was dropped:
+  - `extract.py` save-throttle: the removed `batches_since_save`/`SAVE_EVERY=50` flagged that the
+    checkpoint actually fires every `BATCH_SIZE*100` = **1000 records**, NOT "every 50 batches" as the
+    old comment claimed (comment corrected in Step 4; the *throttle value* itself was NOT changed).
+  - `pipeline.py:ext_result` — the extractor's richer structured return was discarded; stats are
+    re-read from temp JSON via `_collect_stats` instead.
+  - `discover_fields.py:regex_fields` — the regex-extractable field-count summary was never printed
+    (only the sibling `llm_only_fields` summary is).
+  - `extract_biomedical.py:ext_count` — total extension-field count dropped from the `Done!` summary.
+  - `llm_extract.py:reason` — producers tag skips with `no_text`/`regex_covered` but the per-reason
+    breakdown was never tallied (only an aggregate `{skipped} skipped`).
+  Fix in a separate behavioral pass (wire the dropped diagnostic, or accept the simplification).
 - `scrape_corpus.fetch_reddit_profile` reads `data['output']` but reddit `about.json` → `{kind,data}`.
 - `transform_arctic_shift._sort_key` sorts stringified int timestamps (not numeric).
 - `paginate_all` documented "before bound" never implemented.

@@ -22,8 +22,11 @@ Read these in order:
   (4 src/, 2 Scrapers, 6 variable_extraction); 4 candidates deliberately left inline. 63 green, ruff 161→159.
 - Step 3 (DRY) **done** (`618be3a`): 4 within-system consolidations applied; 36 cross-boundary clusters
   surfaced as intentional duplication (registry in hazards §D3). 63 green, ruff 159.
-- Steps 4–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 4 (second dead-code pass) — re-scan
-  after 2–3, and revisit the deferred judgment-call items (`app/`+ui group, the broken `main()`s).
+- Step 4 (dead code, pass 2) **done** (`e96a6cb`): fresh sweep found 0 new dead code; resolved the deferred
+  judgment calls per user — deleted app/+ui group, the broken canonicalize/classify `main()`s, and the 5
+  F841 locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0.
+- Steps 5–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 5 (identify private/inner variables
+  + usage) — start of the rename cadence (5→6→7); renames are boundary-sensitive (hazard map §D2).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

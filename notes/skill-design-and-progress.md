@@ -89,7 +89,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 1 | Delete dead/deprecated/thin shims (pass 1) | done | `63c93d8` | Workflow `wf_92192192-1a5`. Deleted 3 dead internal symbols + 10 unused imports + stray `test` file. 171→161 ruff, 63 tests green. Deferred items below. |
 | 2 | Magic strings/numbers → constants/enums | done | `0066153` | Workflow `wf_ddcd00cd-fa2` (39 candidates → 16 extract). Applied ~12 constants (4 src/, 2 Scrapers, 6 variable_extraction); dropped 4 as over-extraction/enum-modeling. 63 green, ruff 161→159. |
 | 3 | DRY similar logic | done | `618be3a` | Workflow `wf_313cd4bc-9a5` (60 clusters → **4 dry, 36 surfaced, 20 leave**). Applied 4 within-system DRYs; surfaced the intentional-duplication registry (§D3). 63 green, ruff 159. |
-| 4 | Delete dead code (pass 2) | pending | — | Re-scan after 2–3. |
+| 4 | Delete dead code (pass 2) | done | `e96a6cb` | Workflow `wf_defc3f44-e36` (fresh sweep found 0 new dead code — Steps 1-3 were clean). Resolved deferred items per user: deleted app/+ui group (uv.lock regenerated), the broken canonicalize/classify `main()`s, and the 5 F841 dead locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0. |
 | 5 | Identify private/inner variables + usage | pending | — | |
 | 6 | Propose best variable names (no change) | pending | — | Human review gate. |
 | 7 | Apply variable renames (no misdirection) | pending | — | grep old names after. |
@@ -104,17 +104,12 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 **Operating protocol:** do ONE step per go-ahead, run gates, commit, update this table, then stop and
 report. Do not chain steps without the user's signal (mirrors the "one prompt at a time" design).
 
-### Deferred dead-code items (revisit at Step 4, the second dead-code pass)
-The Step-1 adversarial gate deliberately kept these; they're judgment calls, not mechanical dead code:
-- **`app/__init__.py` (0 bytes) + `[dependency-groups] ui` (streamlit/plotly) in pyproject** — roadmap
-  scaffolding for the unbuilt web UI documented in `docs/MVP_PLAN.md`. Deleting is a *product* decision.
-  → ask the user.
-- **`src/pipeline/canonicalize.py:main()` and `classify.py:main()`** — real but vestigial `__main__` CLI
-  entry points that can't actually persist (`db_path='.'`, `writer=None`). Delete-vs-fix decision.
-- **F841 unused locals** (`extract.py:batches_since_save`, `pipeline.py:ext_result`,
-  `discover_fields.py:regex_fields`, `extract_biomedical.py:ext_count`, `llm_extract.py:reason`) —
-  likely **bug symptoms** (computed-but-dropped values). Removing them would mask the bug → handle in a
-  separate behavioral pass, not here.
+### Deferred dead-code items — RESOLVED in Step 4 (`e96a6cb`) per user decisions
+- **`app/` + `[dependency-groups] ui`** — DELETED (web UI not being scaffolded). uv.lock regenerated.
+- **`canonicalize.main()` / `classify.main()`** — DELETED (one crashed, one discarded output); live
+  `run_*` functions kept; orphaned imports + stale docstring cleaned.
+- **F841 unused locals** — dead assignments REMOVED (user chose strict removal over leave); the
+  underlying dropped-diagnostic bugs are now recorded in hazards §D6 (no longer flagged in code).
 
 ### Step 2 deferred / left-inline (judgment calls, with reasons)
 - **`source` field enum** (`"llm_discovered"`/`"base"`/`"base_optional"`/`"extension"`, ~13 sites) —
@@ -126,6 +121,19 @@ The Step-1 adversarial gate deliberately kept these; they're judgment calls, not
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 4 skill learnings (toward the repo-agnostic skill)
+- **The second dead-code pass is mostly about the judgment calls, not new finds.** If Steps 1-3 cleaned
+  orphans inline (re-run the linter's F401/F811 after each), the fresh sweep finds ~nothing (here: 0).
+  The value of Step 4 is *resolving* what Step 1 deferred — so carry a deferred-items list forward.
+- **Surface roadmap/product decisions to the human** (AskUserQuestion), don't infer them: deleting
+  `app/`+the `ui` group is a roadmap statement; the user owned it.
+- **"Broken" beats "runnable" for deadness**: a `main()` that *crashes* or *discards all output* is
+  deprecated/dead even though Step 1's gate kept it as a "runnable entry point." Verify functional-vs-broken.
+- **Removing a bug-flag relocates the bug record** — when you delete a dropped-value local that flagged a
+  latent bug, move that knowledge to the notes so it isn't lost (§D6).
+- **Editing pyproject deps means regenerating the lockfile** (`uv lock`) or CI's `--locked` install breaks.
+  Deleting a function orphans imports → autofix F401 after.
 
 ### Step 3 skill learnings (toward the repo-agnostic skill)
 - **On an intentional-duplication repo, DRY is mostly inapplicable — and a short apply-list is the
