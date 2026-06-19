@@ -79,12 +79,14 @@ re-detection.
 ## 6. Progress tracker (the resumable state — UPDATE AFTER EVERY STEP)
 
 Status legend: `pending` · `in-progress` · `done` · `skipped` · `blocked`.
-Working branch: `repo-meta-and-docs-cj` (clean as of 2026-06-19). Commit per step when we execute.
+Working branch: `cleanup/legibility-pass` (off `repo-meta-and-docs-cj`). Commit per step.
+Gate: `PYTHONUTF8=1 uv run pytest tests/ variable_extraction/tests/ -q` → must hold at **63 passed**.
+Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161).
 
 | Step | Description | Status | Commit | Notes |
 |---|---|---|---|---|
-| 0 | Recon: read PDF, deep-read repo, build hazard map, scaffold notes | done | (uncommitted) | This session. Workflow `wf_0f707536-71a`. |
-| 1 | Delete dead/deprecated/thin shims (pass 1) | pending | — | Candidates in hazard map §D4; verify each vs public API. |
+| 0 | Recon: read PDF, deep-read repo, build hazard map, scaffold notes | done | `6cc6820` | Workflow `wf_0f707536-71a`. |
+| 1 | Delete dead/deprecated/thin shims (pass 1) | done | `63c93d8` | Workflow `wf_92192192-1a5`. Deleted 3 dead internal symbols + 10 unused imports + stray `test` file. 171→161 ruff, 63 tests green. Deferred items below. |
 | 2 | Magic strings/numbers → constants/enums | pending | — | Watch boundary *values* (§D2) — don't "constant-ize" a frozen string into a renamed symbol carelessly. |
 | 3 | DRY similar logic | pending | — | **Do NOT merge cross-boundary dup (§D3).** |
 | 4 | Delete dead code (pass 2) | pending | — | Re-scan after 2–3. |
@@ -101,3 +103,27 @@ Working branch: `repo-meta-and-docs-cj` (clean as of 2026-06-19). Commit per ste
 
 **Operating protocol:** do ONE step per go-ahead, run gates, commit, update this table, then stop and
 report. Do not chain steps without the user's signal (mirrors the "one prompt at a time" design).
+
+### Deferred dead-code items (revisit at Step 4, the second dead-code pass)
+The Step-1 adversarial gate deliberately kept these; they're judgment calls, not mechanical dead code:
+- **`app/__init__.py` (0 bytes) + `[dependency-groups] ui` (streamlit/plotly) in pyproject** — roadmap
+  scaffolding for the unbuilt web UI documented in `docs/MVP_PLAN.md`. Deleting is a *product* decision.
+  → ask the user.
+- **`src/pipeline/canonicalize.py:main()` and `classify.py:main()`** — real but vestigial `__main__` CLI
+  entry points that can't actually persist (`db_path='.'`, `writer=None`). Delete-vs-fix decision.
+- **F841 unused locals** (`extract.py:batches_since_save`, `pipeline.py:ext_result`,
+  `discover_fields.py:regex_fields`, `extract_biomedical.py:ext_count`, `llm_extract.py:reason`) —
+  likely **bug symptoms** (computed-but-dropped values). Removing them would mask the bug → handle in a
+  separate behavioral pass, not here.
+
+### Skill learnings harvested this step (toward the repo-agnostic skill)
+- **Green-baseline gotcha:** on Windows, `tests/populate_db_test.py` dies reading `schema.sql` (UTF-8
+  box-drawing) under cp1252. Neutralized with `PYTHONUTF8=1` (no code change). The skill's Phase-0 must
+  detect encoding/locale gate failures and pin an env that yields a *truly* green baseline before edits.
+- **Cross-reference the linter with the agent hunt:** ruff's `F401/F811/F841` are deterministic dead-code
+  oracles that catch things the LLM finders/verifiers miss (e.g. an unused import the verifier kept by
+  conflating "used in another module"). Run the linter's dead-code rules as a second, authoritative finder.
+- **"Verify live twins survive":** when deleting a symbol that has same-named copies elsewhere
+  (`call_haiku`, `META_COLUMNS`), assert post-deletion that the dead one is gone AND the live ones remain.
+- **Prefer the linter's safe autofix** (`ruff --select F401 --fix`) for mechanical removals over hand-edits;
+  it also cleans imports newly orphaned by function deletions (cascade).

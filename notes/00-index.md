@@ -15,8 +15,10 @@ Read these in order:
    (the resumable state — update after every step). Other target repos listed there.
 
 ## Current status (2026-06-19)
-- Step 0 (recon/setup) **done**: PDF read, repo deep-read, hazard map built, notes scaffolded.
-- Steps 1–14 **pending**. Awaiting the user's go-ahead to begin Step 1.
+- Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
+- Step 1 (dead code, pass 1) **done** (`63c93d8`): 3 dead internal symbols + 10 unused imports + stray
+  `test` file removed; 63 tests green, ruff 171→161. See tracker for deferred judgment-call items.
+- Steps 2–14 **pending**. Branch: `cleanup/legibility-pass`. Awaiting go-ahead for Step 2 (constants).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

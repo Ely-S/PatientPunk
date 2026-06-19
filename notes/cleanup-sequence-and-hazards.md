@@ -143,6 +143,13 @@ presumptively intentional. Surface it; let the human decide. Within a single sub
   `run_demographics.py` (the function `run_demographics` exists; no standalone file).
 
 ### D6. Behavior bugs found — LOG, do not fix during cleanup (invariant #8)
+- **Windows encoding (found Step 1):** `tests/populate_db_test.py` does `SCHEMA.read_text()` with no
+  `encoding=`, so it dies (`UnicodeDecodeError`) on `schema.sql`'s UTF-8 box-drawing chars under cp1252.
+  Invisible in CI (testpaths excludes it). Fix = `encoding="utf-8"`. Gate currently uses `PYTHONUTF8=1`.
+- **F841 unused locals (found Step 1) — likely dropped-value bugs, not just dead code:**
+  `extract.py:batches_since_save` (a save-throttle counter that's never read → periodic save may be
+  broken), `pipeline.py:ext_result`, `discover_fields.py:regex_fields`, `extract_biomedical.py:ext_count`,
+  `llm_extract.py:reason`. Left in place so cleanup doesn't mask the underlying bug.
 - `scrape_corpus.fetch_reddit_profile` reads `data['output']` but reddit `about.json` → `{kind,data}`.
 - `transform_arctic_shift._sort_key` sorts stringified int timestamps (not numeric).
 - `paginate_all` documented "before bound" never implemented.
