@@ -20,8 +20,10 @@ Read these in order:
   `test` file removed; 63 tests green, ruff 171→161. See tracker for deferred judgment-call items.
 - Step 2 (magic literals → constants) **done** (`0066153`): ~12 constants across all 3 systems
   (4 src/, 2 Scrapers, 6 variable_extraction); 4 candidates deliberately left inline. 63 green, ruff 161→159.
-- Steps 3–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 3 (DRY) — **mind the do-NOT-DRY
-  cross-boundary duplication in hazard map §D3**.
+- Step 3 (DRY) **done** (`618be3a`): 4 within-system consolidations applied; 36 cross-boundary clusters
+  surfaced as intentional duplication (registry in hazards §D3). 63 green, ruff 159.
+- Steps 4–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 4 (second dead-code pass) — re-scan
+  after 2–3, and revisit the deferred judgment-call items (`app/`+ui group, the broken `main()`s).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

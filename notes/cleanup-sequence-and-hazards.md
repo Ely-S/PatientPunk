@@ -124,6 +124,25 @@ change what the code *does*.
 → Rule: when duplication straddles the `src/` ↔ `variable_extraction/` ↔ `docs/RCT...` boundary, it is
 presumptively intentional. Surface it; let the human decide. Within a single subsystem, DRY freely.
 
+**Intentional-duplication registry (confirmed in Step 3 — 36 surfaced clusters; do NOT merge):**
+- **LLM-provider abstraction** — `src/utilities/__init__.py` vs `patientpunk/_utils.py`. Subtly
+  DIVERGENT (placeholder-key handling, default openai base URL openrouter-vs-localhost, adapter surface
+  `.stream()+.create()` vs `.create()` only, empty-choices handling, client kwargs, unsupported-provider
+  `sys.exit` vs fallthrough). Merging changes behavior for ≥1 caller AND breaks package-independence.
+- **Demographics extraction** in both systems — incompatible output schemas (bucketed→SQLite vs
+  raw-int+country/state→CSV), prompts, and LLM machinery. No shared impl preserves both.
+- **Two `PipelineConfig` classes** (src `@dataclass` vs patientpunk pydantic) — unrelated, same name.
+- **RCT sync-group** — `SIG_RANK` / `DRUG_CUTOFFS` / `EXPECTED_OUTPUTS` / dedup rule / `find_parent_cycles`
+  across `docs/RCT_historical_validation/{verify,_build_paper_figures}.py` + `scripts/dump_per_drug_csvs.py`.
+  Deliberate self-containment for reproducibility; "must stay in sync" comments are intentional.
+- **Scrapers** `scrape_corpus.py` ↔ `transform_arctic_shift.py` standalone helpers (don't import each other).
+- **Cross-script helpers in `scripts/`** (fence-stripping, retry, `collect_texts_*`) — the scripts are
+  deliberately subprocess-independent; `extract_biomedical.py` is intentionally stdlib-only. Leave.
+
+**Applied in Step 3 (within-system, byte-identical, behavior-preserving):** `_build_tagged` (extract.py),
+`create_extraction_run` (db.py), `_parse_json` (utilities), `META_SKIP_COLUMNS` (consolidated
+cluster_prep.DEFAULT_META + evaluate._META; named to avoid the `records_to_csv.META_COLUMNS` collision).
+
 ### D4. Genuine dead-code candidates (Steps 1/4 — still verify each isn't dynamically/publicly used)
 - `app/__init__.py` (0 bytes; no web app despite the name).
 - stray 2-byte `test` file at repo root.

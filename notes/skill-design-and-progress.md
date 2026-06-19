@@ -88,7 +88,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 0 | Recon: read PDF, deep-read repo, build hazard map, scaffold notes | done | `6cc6820` | Workflow `wf_0f707536-71a`. |
 | 1 | Delete dead/deprecated/thin shims (pass 1) | done | `63c93d8` | Workflow `wf_92192192-1a5`. Deleted 3 dead internal symbols + 10 unused imports + stray `test` file. 171→161 ruff, 63 tests green. Deferred items below. |
 | 2 | Magic strings/numbers → constants/enums | done | `0066153` | Workflow `wf_ddcd00cd-fa2` (39 candidates → 16 extract). Applied ~12 constants (4 src/, 2 Scrapers, 6 variable_extraction); dropped 4 as over-extraction/enum-modeling. 63 green, ruff 161→159. |
-| 3 | DRY similar logic | pending | — | **Do NOT merge cross-boundary dup (§D3).** |
+| 3 | DRY similar logic | done | `618be3a` | Workflow `wf_313cd4bc-9a5` (60 clusters → **4 dry, 36 surfaced, 20 leave**). Applied 4 within-system DRYs; surfaced the intentional-duplication registry (§D3). 63 green, ruff 159. |
 | 4 | Delete dead code (pass 2) | pending | — | Re-scan after 2–3. |
 | 5 | Identify private/inner variables + usage | pending | — | |
 | 6 | Propose best variable names (no change) | pending | — | Human review gate. |
@@ -126,6 +126,20 @@ The Step-1 adversarial gate deliberately kept these; they're judgment calls, not
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 3 skill learnings (toward the repo-agnostic skill)
+- **On an intentional-duplication repo, DRY is mostly inapplicable — and a short apply-list is the
+  CORRECT outcome.** Here: 60 clusters → 4 applied, 36 surfaced as do-not-merge. The deliverable is as
+  much the *map of intentional duplication* as the consolidations. Don't force DRY to hit a quota.
+- **Near-identical ≠ mergeable.** Always diff near-duplicates before merging; subtle divergences (the two
+  LLM abstractions differ in ≥5 behaviors) mean a merge would silently change behavior. Only `dry` when
+  the consolidation is byte-for-byte preserving for EVERY call site.
+- **Respect architectural boundaries over textual similarity**: decoupled systems, self-contained
+  reproducibility packages, and subprocess-independent / stdlib-only modules are duplication-by-design.
+- **Naming-collision check when consolidating**: don't reuse a name that already means something else in
+  the package (`META_COLUMNS` was taken with a different value → used `META_SKIP_COLUMNS`).
+- **Extracting a code block can orphan imports** (here `json`/`time`): re-run the linter's unused-import
+  pass after each DRY. And remember keyword-only defaults live in `__kwdefaults__`, not `__defaults__`.
 
 ### Step 2 skill learnings (toward the repo-agnostic skill)
 - **Over-extraction is the #1 failure mode**, not breakage. Bias to LEAVE; extract only on repetition
