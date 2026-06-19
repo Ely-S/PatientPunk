@@ -13,6 +13,8 @@ Read these in order:
    log-not-fix, and this repo's gate commands). **Read before executing any step.**
 3. **`skill-design-and-progress.md`** — the repo-agnostic skill design + the **progress tracker**
    (the resumable state — update after every step). Other target repos listed there.
+4. **`step5-variable-inventory.md`** — the inner/private-variable catalog (rename candidates + frozen
+   boundary keys) produced by Step 5; the actionable input for Steps 6 (propose names) & 7 (apply).
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -25,8 +27,10 @@ Read these in order:
 - Step 4 (dead code, pass 2) **done** (`e96a6cb`): fresh sweep found 0 new dead code; resolved the deferred
   judgment calls per user — deleted app/+ui group, the broken canonicalize/classify `main()`s, and the 5
   F841 locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0.
-- Steps 5–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 5 (identify private/inner variables
-  + usage) — start of the rename cadence (5→6→7); renames are boundary-sensitive (hazard map §D2).
+- Step 5 (identify private/inner variables) **done** (notes only, no code change): inventory in
+  `step5-variable-inventory.md` — ~3 cryptic attrs + ~27 candidate locals out of ~700 (codebase is well-named).
+- Steps 6–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 6 (propose the clearest names for the
+  Step-5 candidates — the review gate; do NOT change code yet), then Step 7 applies them (boundary-sensitive, §D2).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

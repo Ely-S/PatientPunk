@@ -90,7 +90,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 2 | Magic strings/numbers → constants/enums | done | `0066153` | Workflow `wf_ddcd00cd-fa2` (39 candidates → 16 extract). Applied ~12 constants (4 src/, 2 Scrapers, 6 variable_extraction); dropped 4 as over-extraction/enum-modeling. 63 green, ruff 161→159. |
 | 3 | DRY similar logic | done | `618be3a` | Workflow `wf_313cd4bc-9a5` (60 clusters → **4 dry, 36 surfaced, 20 leave**). Applied 4 within-system DRYs; surfaced the intentional-duplication registry (§D3). 63 green, ruff 159. |
 | 4 | Delete dead code (pass 2) | done | `e96a6cb` | Workflow `wf_defc3f44-e36` (fresh sweep found 0 new dead code — Steps 1-3 were clean). Resolved deferred items per user: deleted app/+ui group (uv.lock regenerated), the broken canonicalize/classify `main()`s, and the 5 F841 dead locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0. |
-| 5 | Identify private/inner variables + usage | pending | — | |
+| 5 | Identify private/inner variables + usage | done | (notes only) | Workflow `wf_9a72256e-bca`. Read-only inventory → `notes/step5-variable-inventory.md`. Codebase is well-named: ~3 cryptic attrs + ~27 candidate locals out of ~700. No code change, no gate. Feeds Step 6. |
 | 6 | Propose best variable names (no change) | pending | — | Human review gate. |
 | 7 | Apply variable renames (no misdirection) | pending | — | grep old names after. |
 | 8 | Identify functions/params + usage | pending | — | |
@@ -121,6 +121,20 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 5 skill learnings (toward the repo-agnostic skill)
+- **The rename cadence (5→6→7) separates identify / name / apply — Step 5 is READ-ONLY** (inventory). No
+  mutation → no test gate; the deliverable is a committed catalog, not a diff. Keep the beats separate.
+- **Inventory the rename CANDIDATES, not every variable.** The value is the bounded unclear-name list; skip
+  idiomatic short vars (`i`/`e`/`f`/`c`/`d`) and clearly-named locals (count them, don't list them). A
+  well-factored repo has a tiny rename surface (here ~30 of ~700 locals).
+- **The killer trap: underscore-prefixed NAMES vs underscore-prefixed serialized KEYS.** `_temp` (a private
+  attr, rename-eligible) vs `_patientpunk_version`/`_skipped`/`__provenance` (frozen JSON/CSV keys). Also
+  string-template pseudo-globals in generated notebooks (`_DB_FILENAME` inside r-strings) are not source vars.
+  Misclassifying a frozen key as a rename target would break a contract in Step 7.
+- **Run a boundary-accuracy critic on the inventory itself** — it caught a phantom attribute (`_client` vs
+  the real `_c`) and a "file doesn't exist" error before Step 7 could act on bad info.
+- Note cross-module/shared-local names and self-contained-copy mirrors so Step 7 renames *all* usages.
 
 ### Step 4 skill learnings (toward the repo-agnostic skill)
 - **The second dead-code pass is mostly about the judgment calls, not new finds.** If Steps 1-3 cleaned
