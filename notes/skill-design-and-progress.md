@@ -91,7 +91,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 3 | DRY similar logic | done | `618be3a` | Workflow `wf_313cd4bc-9a5` (60 clusters → **4 dry, 36 surfaced, 20 leave**). Applied 4 within-system DRYs; surfaced the intentional-duplication registry (§D3). 63 green, ruff 159. |
 | 4 | Delete dead code (pass 2) | done | `e96a6cb` | Workflow `wf_defc3f44-e36` (fresh sweep found 0 new dead code — Steps 1-3 were clean). Resolved deferred items per user: deleted app/+ui group (uv.lock regenerated), the broken canonicalize/classify `main()`s, and the 5 F841 dead locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0. |
 | 5 | Identify private/inner variables + usage | done | (notes only) | Workflow `wf_9a72256e-bca`. Read-only inventory → `notes/step5-variable-inventory.md`. Codebase is well-named: ~3 cryptic attrs + ~27 candidate locals out of ~700. No code change, no gate. Feeds Step 6. |
-| 6 | Propose best variable names (no change) | pending | — | Human review gate. |
+| 6 | Propose best variable names (no change) | done | (notes only) | Workflow `wf_dc08ce88-bcd`. Proposal in `notes/step6-rename-proposal.md` — 30 renames, critic-APPROVED (0 collisions/boundary/param/missed-site issues). `td` deferred to Step 8; `D`/`Xa`/`sims` left. No code change. Review gate. |
 | 7 | Apply variable renames (no misdirection) | pending | — | grep old names after. |
 | 8 | Identify functions/params + usage | pending | — | |
 | 9 | Propose best function/param names (no change) | pending | — | Human review gate. |
@@ -121,6 +121,19 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 6 skill learnings (toward the repo-agnostic skill)
+- **Step 6 (propose names) is ALSO read-only — it's the review gate.** Separating "decide the name" from
+  "apply the rename" lets a human (or a critic) veto bad names before they're sprayed across the codebase.
+  The deliverable is a `current → proposed` doc, not a diff.
+- **A good namer LEAVES well enough alone**: conventional notation (`D`/`Xa`/`sims`), and names that are
+  already fine, should be recommended "leave". Over-renaming is the Step-2-style failure mode here too.
+- **Collision-check every proposed name against its scope BEFORE proposing** — the namer caught `av`
+  colliding with an existing `allowed_values` and proposed `member_allowed_values` instead.
+- **Reconcile cross-module/mirror names to ONE choice** and list *all* sites (the `mn`/`mx`/`rel`
+  verify↔notebook mirror, `ne_items`↔`non_empty_items`, `tagged` across two files) so Step 7 changes them together.
+- **Catch scope leaks**: a function PARAMETER (`td`) is Step-8 work, not a Step-6 variable — defer it.
+  And rename the loop var alongside its collection (`cat` with `cats`).
 
 ### Step 5 skill learnings (toward the repo-agnostic skill)
 - **The rename cadence (5→6→7) separates identify / name / apply — Step 5 is READ-ONLY** (inventory). No

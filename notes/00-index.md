@@ -15,6 +15,8 @@ Read these in order:
    (the resumable state — update after every step). Other target repos listed there.
 4. **`step5-variable-inventory.md`** — the inner/private-variable catalog (rename candidates + frozen
    boundary keys) produced by Step 5; the actionable input for Steps 6 (propose names) & 7 (apply).
+5. **`step6-rename-proposal.md`** — the `current → proposed` name map (critic-approved); the exact
+   instructions for Step 7 to apply. Includes cross-module/mirror sites and §6 flagged choices.
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -29,8 +31,10 @@ Read these in order:
   F841 locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0.
 - Step 5 (identify private/inner variables) **done** (notes only, no code change): inventory in
   `step5-variable-inventory.md` — ~3 cryptic attrs + ~27 candidate locals out of ~700 (codebase is well-named).
-- Steps 6–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 6 (propose the clearest names for the
-  Step-5 candidates — the review gate; do NOT change code yet), then Step 7 applies them (boundary-sensitive, §D2).
+- Step 6 (propose names) **done** (notes only, no code change): `step6-rename-proposal.md` — 30 critic-approved
+  renames; `td` deferred to Step 8; `D`/`Xa`/`sims` left. The review gate.
+- Steps 7–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 7 — apply the renames** from
+  `step6-rename-proposal.md` (with §6 recommended options); grep for old names after (no misdirection); gate at 63.
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →
