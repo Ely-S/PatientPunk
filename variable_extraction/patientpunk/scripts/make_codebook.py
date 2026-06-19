@@ -46,10 +46,6 @@ DEFAULT_BASE_SCHEMA = Path(__file__).parent.parent / "schemas" / "base_schema.js
 DEFAULT_OUTPUT_CSV  = Path(__file__).parent.parent.parent / "output" / "codebook.csv"
 DEFAULT_OUTPUT_MD   = Path(__file__).parent.parent.parent / "output" / "codebook.md"
 
-# Meta columns written by records_to_csv.py -- skip them in the codebook
-META_COLUMNS = {"author_hash", "source", "post_id", "text_count",
-                "schema_id", "extraction_method", "extracted_at"}
-
 
 # ---------------------------------------------------------------------------
 # Schema loading helpers

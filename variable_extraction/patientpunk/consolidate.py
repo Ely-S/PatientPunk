@@ -26,7 +26,6 @@ Pure functions; the deterministic path makes no API calls.
 from __future__ import annotations
 
 import re
-from collections import Counter
 
 from pydantic import BaseModel, ConfigDict
 

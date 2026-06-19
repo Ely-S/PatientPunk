@@ -44,7 +44,6 @@ Output:
 import argparse
 import builtins
 import json
-import os
 import random
 import re
 import sys
@@ -1462,59 +1461,6 @@ def merge_into_schema(
         added += 1
 
     return existing_schema, added, skipped
-
-
-# =============================================================================
-# SCHEMA HEALTH UPDATE (Improvement 6)
-# =============================================================================
-
-def run_schema_health_update(schema_path: Path, records_file: Path) -> None:
-    """Compute per-field bleed rates from extracted records and write back to schema."""
-    print("\n" + "=" * 60)
-    print("  Schema Health Update")
-    print("=" * 60 + "\n")
-
-    with open(records_file, encoding="utf-8") as f:
-        records = json.load(f)
-
-    # Count extractions and bleed instances per field
-    field_total: dict[str, int] = defaultdict(int)
-    field_bleed: dict[str, int] = defaultdict(int)
-
-    for record in records:
-        for fname, fdata in record.get("discovered_fields", {}).items():
-            values = fdata.get("values") or []
-            for val in values:
-                if not isinstance(val, str):
-                    continue
-                field_total[fname] += 1
-                if len(val.split()) >= 10:
-                    field_bleed[fname] += 1
-
-    # Load and update schema
-    with open(schema_path, encoding="utf-8") as f:
-        schema = json.load(f)
-
-    now = datetime.now(timezone.utc).isoformat()
-    updated = 0
-    print(f"  {'Field':<40} {'Extractions':>12} {'Bleed':>8} {'Rate':>8}")
-    print(f"  {'-'*40} {'-'*12} {'-'*8} {'-'*8}")
-
-    for fname, fdata in schema.get("extension_fields", {}).items():
-        total = field_total.get(fname, 0)
-        bleed = field_bleed.get(fname, 0)
-        rate = bleed / total if total > 0 else None
-        fdata["_bleed_rate_last_run"] = rate
-        fdata["_last_health_check"] = now
-        updated += 1
-        flag = " *** HIGH BLEED" if rate is not None and rate >= 0.10 else ""
-        rate_str = f"{rate:.0%}" if rate is not None else "no data"
-        print(f"  {fname:<40} {total:>12} {bleed:>8} {rate_str:>8}{flag}")
-
-    with open(schema_path, "w", encoding="utf-8") as f:
-        json.dump(schema, f, ensure_ascii=False, indent=2)
-
-    print(f"\n  Updated {updated} fields in {schema_path.name}")
 
 
 # =============================================================================

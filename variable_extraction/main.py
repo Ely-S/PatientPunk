@@ -65,7 +65,7 @@ from pathlib import Path
 # Make sure the package is importable when run from this directory.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from patientpunk import Pipeline, PipelineConfig, DemographicCoder, DemographicsExtractor
+from patientpunk import Pipeline, PipelineConfig, DemographicCoder
 from patientpunk.corpus import CorpusLoader
 from patientpunk.schema import Schema
 from patientpunk._utils import get_schema_id, load_json
