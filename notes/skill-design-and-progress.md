@@ -87,7 +87,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 |---|---|---|---|---|
 | 0 | Recon: read PDF, deep-read repo, build hazard map, scaffold notes | done | `6cc6820` | Workflow `wf_0f707536-71a`. |
 | 1 | Delete dead/deprecated/thin shims (pass 1) | done | `63c93d8` | Workflow `wf_92192192-1a5`. Deleted 3 dead internal symbols + 10 unused imports + stray `test` file. 171→161 ruff, 63 tests green. Deferred items below. |
-| 2 | Magic strings/numbers → constants/enums | pending | — | Watch boundary *values* (§D2) — don't "constant-ize" a frozen string into a renamed symbol carelessly. |
+| 2 | Magic strings/numbers → constants/enums | done | `0066153` | Workflow `wf_ddcd00cd-fa2` (39 candidates → 16 extract). Applied ~12 constants (4 src/, 2 Scrapers, 6 variable_extraction); dropped 4 as over-extraction/enum-modeling. 63 green, ruff 161→159. |
 | 3 | DRY similar logic | pending | — | **Do NOT merge cross-boundary dup (§D3).** |
 | 4 | Delete dead code (pass 2) | pending | — | Re-scan after 2–3. |
 | 5 | Identify private/inner variables + usage | pending | — | |
@@ -116,7 +116,33 @@ The Step-1 adversarial gate deliberately kept these; they're judgment calls, not
   likely **bug symptoms** (computed-but-dropped values). Removing them would mask the bug → handle in a
   separate behavioral pass, not here.
 
-### Skill learnings harvested this step (toward the repo-agnostic skill)
+### Step 2 deferred / left-inline (judgment calls, with reasons)
+- **`source` field enum** (`"llm_discovered"`/`"base"`/`"base_optional"`/`"extension"`, ~13 sites) —
+  left inline; this is enum-modeling (and `"base"` is overloaded 3 ways), better as a dedicated typed
+  constant group than a single magic-literal extraction. Candidate for a focused follow-up.
+- **Function-signature defaults** (`max_chars=500`, `max_posts=10`, `sep=" | "` ×9) — kept inline:
+  a parameter default is self-documenting at the signature; relocating forces an import-chase.
+- **JSON record keys** (`drugs_direct`/`drugs_context`) — kept inline; the maintainers extracted
+  filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
+- **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
+  consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 2 skill learnings (toward the repo-agnostic skill)
+- **Over-extraction is the #1 failure mode**, not breakage. Bias to LEAVE; extract only on repetition
+  (drift risk) OR non-obvious domain meaning. A linter-clean codebase already names most constants, so
+  the real surface is small (here: 39 candidates → 16 → ~12 applied). Budget ~15–40, not hundreds.
+- **Resolve verdict conflicts with taste**: independent adjudicators disagreed (extract `500` vs leave
+  its twin `10`; extract `" | "` vs leave it). The tie-breaker is "is the value self-documenting where
+  it sits?" — parameter defaults and SQL-context values usually are.
+- **Runtime-import test after cross-module constant moves**: `py_compile` does NOT execute imports, so
+  it misses cycles/missing-names introduced by new `from ._utils import X` lines. Add an explicit
+  `importlib.import_module` + value-assertion probe (catches what the unit tests don't import).
+- **Home shared constants at the import-graph bottom** (`_utils.py` here) to make cross-module sharing
+  cycle-proof; use `import X as _X` to consolidate a private-named local without touching its usages.
+- **Preserve "stdlib-only by design" modules**: don't add a package import just to share a constant
+  (left `extract_biomedical.py`'s `"2.0"` inline rather than wire it to `_utils`).
+
+### Skill learnings harvested in Step 1 (toward the repo-agnostic skill)
 - **Green-baseline gotcha:** on Windows, `tests/populate_db_test.py` dies reading `schema.sql` (UTF-8
   box-drawing) under cp1252. Neutralized with `PYTHONUTF8=1` (no code change). The skill's Phase-0 must
   detect encoding/locale gate failures and pin an env that yields a *truly* green baseline before edits.

@@ -18,7 +18,10 @@ Read these in order:
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
 - Step 1 (dead code, pass 1) **done** (`63c93d8`): 3 dead internal symbols + 10 unused imports + stray
   `test` file removed; 63 tests green, ruff 171→161. See tracker for deferred judgment-call items.
-- Steps 2–14 **pending**. Branch: `cleanup/legibility-pass`. Awaiting go-ahead for Step 2 (constants).
+- Step 2 (magic literals → constants) **done** (`0066153`): ~12 constants across all 3 systems
+  (4 src/, 2 Scrapers, 6 variable_extraction); 4 candidates deliberately left inline. 63 green, ruff 161→159.
+- Steps 3–14 **pending**. Branch: `cleanup/legibility-pass`. Next: Step 3 (DRY) — **mind the do-NOT-DRY
+  cross-boundary duplication in hazard map §D3**.
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →
