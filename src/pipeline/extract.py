@@ -153,6 +153,23 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
     return items, id_to_parent
 
 
+def _build_tagged(all_items: list, id_to_parent: dict, id_to_drugs: dict, max_depth) -> list:
+    """Compute upstream drug context and assemble the filtered tagged-entry list.
+
+    Spreads each item and attaches drugs_direct (direct matches) and
+    drugs_context (inherited from upstream comments), keeping only entries
+    that have at least one direct or context drug and are not question-only.
+    """
+    upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, max_depth)
+    return [
+        {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
+         "drugs_context": upstream_drugs.get(item["id"], [])}
+        for item in all_items
+        if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+        and not is_only_questions(item["text"])
+    ]
+
+
 def run_extraction(config: "PipelineConfig"):
     """Main extraction logic — called by pipeline or standalone."""
     client = config.client
@@ -175,14 +192,7 @@ def run_extraction(config: "PipelineConfig"):
         }
         log.info(f"Substring-matched {sum(1 for v in id_to_drugs.values() if v)} posts against aliases for {target!r}.")
 
-        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
-        tagged = [
-            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
-             "drugs_context": upstream_drugs.get(item["id"], [])}
-            for item in all_items
-            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
-            and not is_only_questions(item["text"])
-        ]
+        tagged = _build_tagged(all_items, id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged_path.write_text(json.dumps(tagged, indent=2))
         log.info(f"Wrote {len(tagged)} entries to {tagged_path.name}.")
         return
@@ -200,14 +210,7 @@ def run_extraction(config: "PipelineConfig"):
 
     def save_tagged_atomic() -> list:
         """Recompute upstream context and write atomically via a temp file."""
-        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
-        tagged = [
-            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
-             "drugs_context": upstream_drugs.get(item["id"], [])}
-            for item in all_items
-            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
-            and not is_only_questions(item["text"])
-        ]
+        tagged = _build_tagged(all_items, id_to_parent, id_to_drugs, config.max_upstream_depth)
         tmp = tagged_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(tagged, indent=2))
         tmp.replace(tagged_path)

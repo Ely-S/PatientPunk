@@ -32,13 +32,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-DEFAULT_KEY = ("author_hash", "post_id")
+from ._utils import META_SKIP_COLUMNS
 
-# Columns that are metadata, not extracted variables (mirrors records_to_csv).
-_META = {
-    "author_hash", "source", "source_type", "post_id", "text_count",
-    "schema_id", "extraction_method", "extracted_at",
-}
+DEFAULT_KEY = ("author_hash", "post_id")
 
 
 def _value_set(cell, sep: str) -> set[str]:
@@ -65,7 +61,7 @@ def load_records(path: Path, key=DEFAULT_KEY) -> tuple[dict, list[str]]:
 def _data_fields(sample_row: dict) -> list[str]:
     return [
         c for c in sample_row
-        if c not in _META
+        if c not in META_SKIP_COLUMNS
         and not c.endswith("__provenance")
         and not c.endswith("__confidence")
     ]

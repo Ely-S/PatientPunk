@@ -33,6 +33,17 @@ def open_db(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def create_extraction_run(conn: sqlite3.Connection, extraction_type: str, run_config: dict, commit_hash: str) -> int:
+    """Insert an extraction_runs provenance row, commit, and return its id."""
+    cursor = conn.execute(
+        "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
+        "VALUES (?, ?, ?, ?)",
+        (int(time.time()), commit_hash, extraction_type, json.dumps(run_config)),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
 def load_synonyms(db_path: Path) -> dict[str, list[str]]:
     """Load canonical_name -> [aliases] from the treatment table."""
     conn = open_db(db_path)
@@ -69,14 +80,7 @@ class ReportWriter:
         self._conn = open_db(db_path)
         self._pending = 0
 
-        cursor = self._conn.execute(
-            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
-            "VALUES (?, ?, ?, ?)",
-            (int(time.time()), commit_hash, "treatment_sentiment",
-             json.dumps(run_config)),
-        )
-        self.run_id = cursor.lastrowid
-        self._conn.commit()
+        self.run_id = create_extraction_run(self._conn, "treatment_sentiment", run_config, commit_hash)
 
         self._drug_ids = {
             row[0].lower(): row[1]

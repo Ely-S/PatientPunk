@@ -25,10 +25,7 @@ import csv
 from collections import Counter, defaultdict
 from pathlib import Path
 
-DEFAULT_META = {
-    "author_hash", "source", "source_type", "post_id", "text_count",
-    "schema_id", "extraction_method", "extracted_at",
-}
+from ._utils import META_SKIP_COLUMNS
 
 
 def read_records(path: Path) -> list[dict]:
@@ -51,7 +48,7 @@ def _data_fields(header: list[str], meta: set[str]) -> list[str]:
 
 
 def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",
-                       sep: str = " | ", meta: set[str] = DEFAULT_META):
+                       sep: str = " | ", meta: frozenset[str] = META_SKIP_COLUMNS):
     """``rows`` -> ({patient_id: {field: set(values)}}, data_fields).
 
     One entry per distinct *key_col*; multi-values are unioned across the

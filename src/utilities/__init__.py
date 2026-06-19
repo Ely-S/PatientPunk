@@ -263,28 +263,24 @@ import re
 
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
 
-def parse_json_array(raw: str) -> list:
+def _parse_json(raw: str, open_ch: str, close_ch: str, label: str):
     raw = _strip_markdown(raw)
-    start, end = raw.find("["), raw.rfind("]") + 1
+    start, end = raw.find(open_ch), raw.rfind(close_ch) + 1
     if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
+        raise LLMParseError(f"No JSON {label} in response: {raw[:200]}")
     text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+
+
+def parse_json_array(raw: str) -> list:
+    return _parse_json(raw, "[", "]", "array")
 
 
 def parse_json_object(raw: str) -> dict:
-    raw = _strip_markdown(raw)
-    start, end = raw.find("{"), raw.rfind("}") + 1
-    if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
-    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+    return _parse_json(raw, "{", "}", "object")
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────

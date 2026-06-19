@@ -15,16 +15,14 @@ Usage:
     python src/run_demographics.py --db data/posts.db --limit 50
 """
 import argparse
-import json
 import sys
-import time
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities.db import open_db
+from utilities.db import create_extraction_run, open_db
 from utilities import get_client, get_git_commit, llm_call, log, parse_json_object, MODEL_FAST
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 
@@ -67,12 +65,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
     with closing(open_db(db_path)) as conn:
         # Create extraction run
         run_config = {"limit": limit, "model": MODEL_FAST, "max_posts": max_posts, "max_chars": max_chars}
-        cursor = conn.execute(
-            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) VALUES (?, ?, ?, ?)",
-            (int(time.time()), get_git_commit(), "demographics", json.dumps(run_config)),
-        )
-        run_id = cursor.lastrowid
-        conn.commit()
+        run_id = create_extraction_run(conn, "demographics", run_config, get_git_commit())
         log.info(f"Extraction run {run_id}")
 
         # Load posts grouped by user (limit applies to number of distinct users)
