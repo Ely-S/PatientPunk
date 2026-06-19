@@ -1102,7 +1102,6 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
         json.dump(metadata, f, ensure_ascii=False, indent=2)
 
     schema_label = schema["schema_id"] if schema else "base only"
-    ext_count = len(extension_field_names)
     reactivated = len(schema.get("include_base_fields", [])) if schema else 0
     new_ext = len(schema.get("extension_fields", {})) if schema else 0
 

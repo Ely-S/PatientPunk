@@ -358,7 +358,7 @@ class Pipeline:
             # return a fully populated PhaseResult object.  This keeps Pipeline.run()
             # clean: it only needs to inspect result.phases[-1].ok instead of
             # wrapping every phase call in its own try/except.
-            ext_result = extractor.run(raise_on_error=True)
+            extractor.run(raise_on_error=True)
             elapsed = time.time() - t0
             stats = self._collect_stats(phase)
             pr = PhaseResult(

@@ -1697,7 +1697,6 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
         return
 
-    regex_fields = [f for f in validated_fields if not f.get("llm_only")]
     llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
     if llm_only_fields:
         print(f"\n  {len(llm_only_fields)} llm_only field(s) (no regex, Phase 4 gap-fill only):")

@@ -26,7 +26,6 @@ from utilities.db import open_db, post_text
 from utilities.graph import find_parent_cycles
 
 BATCH_SIZE = 10
-SAVE_EVERY = 50  # batches between checkpoint writes
 
 
 def is_only_questions(text: str) -> bool:
@@ -218,11 +217,10 @@ def run_extraction(config: "PipelineConfig"):
 
     # Bounded parallel extraction: at most workers * 4 futures in flight at once.
     # As each future completes the next batch is submitted (backpressure).
-    # Checkpoint written every SAVE_EVERY completed batches.
+    # Checkpoint written every BATCH_SIZE * 100 completed records.
     all_batches = [to_do[i:i + BATCH_SIZE] for i in range(0, len(to_do), BATCH_SIZE)]
     batch_iter = iter(all_batches)
     done_ext = 0
-    batches_since_save = 0
     max_inflight = max(config.workers * 4, 1)
 
     with ThreadPoolExecutor(max_workers=config.workers) as pool:

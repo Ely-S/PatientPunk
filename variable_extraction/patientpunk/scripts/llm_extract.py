@@ -818,7 +818,6 @@ def process_corpus(
                     continue
 
                 if result.get("_skipped"):
-                    reason = result.get("reason", "?")
                     skipped += 1
                     continue
 

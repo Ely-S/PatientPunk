@@ -12,17 +12,13 @@ are skipped unless --reclassify is set.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs
-    # Or standalone (run from src/):
-    python -m scripts.classify_sentiment --output-dir ../outputs
 """
 from __future__ import annotations
 
-import argparse
 import itertools
 import json
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -31,7 +27,7 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    PipelineConfig, DEFAULT_SUBREDDIT, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, DEFAULT_SUBREDDIT, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
 )
 from utilities.db import load_synonyms, open_db, post_text
 
@@ -336,25 +332,3 @@ def run_classification(
     log.info("Top drugs:")
     for drug, count in drug_counter.most_common(10):
         log.info(f"  {drug:<30} {count}")
-
-
-def main():
-    """Standalone entry point (no database)."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
-    parser.add_argument("--limit", type=int)
-    parser.add_argument("--reclassify", action="store_true")
-    args = parser.parse_args()
-
-    config = PipelineConfig(
-        client=get_client(),
-        output_dir=Path(args.output_dir),
-        db_path=Path("."),  # Not used by classify
-        limit=args.limit or 0,
-        reclassify=args.reclassify,
-    )
-    run_classification(config)
-
-
-if __name__ == "__main__":
-    main()
