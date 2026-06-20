@@ -19,6 +19,8 @@ Read these in order:
    instructions for Step 7 to apply. Includes cross-module/mirror sites and §6 flagged choices.
 6. **`step8-function-param-inventory.md`** — the function/parameter rename candidates + the frozen
    public-API/CLI/subprocess/serialized boundary; the input for Steps 9 (names) & 10 (apply).
+7. **`step9-function-rename-proposal.md`** — the `current → proposed` function/param map (critic-SAFE);
+   the exact instructions for Step 10, incl. distinct names for same-name copies + the r-string watch-item.
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -39,9 +41,10 @@ Read these in order:
   ruff 154, 0 misdirection, 0 over-reach. **Variable rename cadence (5→6→7) COMPLETE.**
 - Step 8 (identify functions/params) **done** (notes only, no code change): `step8-function-param-inventory.md` —
   ~13 fn + ~3 param candidates of ~284 (all private internals); frozen boundary mapped.
-- Steps 9–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 9** — propose the clearest names for the
-  Step-8 candidates (review gate, no code change), then **Step 10** applies (function blast radius: call sites,
-  the `patientpunk` public API frozen, same-name copies kept distinct not merged).
+- Step 9 (propose function/param names) **done** (notes only, no code change): `step9-function-rename-proposal.md` —
+  ~15 critic-SAFE renames; `call_haiku`→`call_model`; same-name copies distinct; `nnt`/`k` cosmetic/leave.
+- Steps 10–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 10** — apply the function/param renames
+  (update all call sites + comment mentions; keep the §4 frozen boundary; r-string edits need manual eyeballing); gate at 63.
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

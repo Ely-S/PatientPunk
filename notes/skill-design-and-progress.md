@@ -94,7 +94,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 6 | Propose best variable names (no change) | done | (notes only) | Workflow `wf_dc08ce88-bcd`. Proposal in `notes/step6-rename-proposal.md` — 30 renames, critic-APPROVED (0 collisions/boundary/param/missed-site issues). `td` deferred to Step 8; `D`/`Xa`/`sims` left. No code change. Review gate. |
 | 7 | Apply variable renames (no misdirection) | done | `d10d3a8` | Workflow `wf_ae74cb2e-9ac` (1 agent/file). 30 renames across 16 files; +149/-149 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach. Variable cadence (5→6→7) COMPLETE. |
 | 8 | Identify functions/params + usage | done | (notes only) | Workflow `wf_c4c4418e-4ce`. Inventory → `notes/step8-function-param-inventory.md`. Naming is good: ~13 fn + ~3 param candidates of ~284, all private internals. Critic-verified frozen boundary (public API/CLI/subprocess/serialized). No code change. Feeds Step 9. |
-| 9 | Propose best function/param names (no change) | pending | — | Human review gate. |
+| 9 | Propose best function/param names (no change) | done | (notes only) | Workflow `wf_7d5033a1-cdc`. Proposal in `notes/step9-function-rename-proposal.md` — ~15 renames, critic-SAFE (0 collisions/frozen/test/weaker). call_haiku→call_model aligned; same-name copies distinct; nnt/k cosmetic. No code change. Review gate. |
 | 10 | Apply function/param renames | pending | — | grep old names; watch CLI flag boundary. |
 | 11 | Rename/reorganize unclear classes & files | pending | — | Widest blast radius; `patientpunk` public API is a boundary. |
 | 12 | Clean up comments/docstrings | pending | — | Stale-doc targets in §D5. |
@@ -121,6 +121,19 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 9 skill learnings (toward the repo-agnostic skill)
+- **Make misleading names honest, not just shorter→longer**: a function returning a rate-float (`_hit`) or a
+  cleaned-string (`_keep`) must NOT read like an `is_x` predicate. The best function name encodes the RETURN.
+- **Name to expose a shape difference, not hide it**: the `_eq`/`_other`/`_presence` trio (2 factories + 1 bare
+  predicate) → `_value_match`/`_has_other` (builders) vs `_has_any` (direct test).
+- **Cross-module alignment is a naming win**: `call_haiku`→`call_model` matches a sibling that does the same
+  role — but alignment is name+role only, NOT a directive to unify signatures or merge the functions.
+- **Same-name/different-body copies get DISTINGUISHING names** (`_code_demographics_batch_raw` vs
+  `_extract_demographics_batch_raw`; `merge_records`→`fill_empty_fields`), and the canonical/frozen copy is left.
+- **A param's call-site cost depends on how it's called**: renaming a param only touches the def + body + any
+  KEYWORD call sites — POSITIONAL callers (`_trial_tag(r[...])`) need no edit. And watch r-string/notebook code:
+  the test gate doesn't cover string content, so those edits need manual eyeballing.
 
 ### Step 8 skill learnings (toward the repo-agnostic skill)
 - **Function/param renaming has a WIDER frozen boundary than variables.** The killer surface here is the
