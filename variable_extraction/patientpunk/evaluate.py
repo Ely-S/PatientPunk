@@ -72,18 +72,18 @@ def score_field(pairs: list[tuple], sep: str) -> dict:
     tp = ref_total = cand_total = 0
     n_present = exact_present = ref_fill = cand_fill = 0
     for ref_cell, cand_cell in pairs:
-        rs, cs = _value_set(ref_cell, sep), _value_set(cand_cell, sep)
-        if rs:
+        ref_set, cand_set = _value_set(ref_cell, sep), _value_set(cand_cell, sep)
+        if ref_set:
             ref_fill += 1
-        if cs:
+        if cand_set:
             cand_fill += 1
-        if not rs and not cs:
+        if not ref_set and not cand_set:
             continue
         n_present += 1
-        tp += len(rs & cs)
-        ref_total += len(rs)
-        cand_total += len(cs)
-        if rs == cs:
+        tp += len(ref_set & cand_set)
+        ref_total += len(ref_set)
+        cand_total += len(cand_set)
+        if ref_set == cand_set:
             exact_present += 1
     precision = tp / cand_total if cand_total else 0.0
     recall = tp / ref_total if ref_total else 0.0

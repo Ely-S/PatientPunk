@@ -113,8 +113,8 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
         if label:
             print(f"    {label} — page {page} ({len(all_items)} items so far)...")
 
-        data = arctic_get(endpoint, params)
-        items = data.get("output", [])
+        response = arctic_get(endpoint, params)
+        items = response.get("output", [])
         if not items:
             break
 
@@ -140,13 +140,13 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
 # ---------------------------------------------------------------------------
 
 def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
-    """Paginate through all post stubs (id + created_utc only) to get a count.
+    """Paginate through all partial posts (id + created_utc only) to get a count.
 
-    Returns (count, list_of_stubs). The stubs are reused in Phase 1 so we
-    don't make a second full-metadata pass.
+    Returns (count, list_of_partial_posts). The partial posts are reused in
+    Phase 1 so we don't make a second full-metadata pass.
     """
     print(f"  Counting posts since {after[:10]}...")
-    stubs = paginate_all(
+    partial_posts = paginate_all(
         "/api/posts/search",
         {
             "subreddit": subreddit,
@@ -154,7 +154,7 @@ def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
         },
         label="counting",
     )
-    return len(stubs), stubs
+    return len(partial_posts), partial_posts
 
 
 # ---------------------------------------------------------------------------
@@ -163,18 +163,18 @@ def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
 
 def fetch_full_post(post_id: str) -> dict | None:
     """Fetch full metadata for a single post by ID."""
-    data = arctic_get("/api/posts/ids", {"ids": post_id})
-    items = data.get("output", [])
+    response = arctic_get("/api/posts/ids", {"ids": post_id})
+    items = response.get("output", [])
     return items[0] if items else None
 
 
 def fetch_comments_for_post(post_id: str) -> list[dict]:
     """Fetch the full comment tree for a single post via Arctic Shift."""
-    raw = paginate_all(
+    raw_comments = paginate_all(
         "/api/comments/search",
         {"link_id": f"t3_{post_id}"},
     )
-    return [build_comment(c) for c in raw]
+    return [build_comment(c) for c in raw_comments]
 
 
 def build_comment(c: dict) -> dict:
@@ -299,12 +299,12 @@ def fetch_reddit_profile(username: str) -> dict | None:
     url = f"https://www.reddit.com/user/{username}/about.json"
     headers = {"User-Agent": REDDIT_USER_AGENT}
     try:
-        data = api_get(url, headers=headers)
+        response = api_get(url, headers=headers)
     except Exception as e:
         print(f"    Could not fetch Reddit profile: {e}")
         return None
 
-    user_data = data.get("output", {})
+    user_data = response.get("output", {})
     if not user_data:
         return None
 
@@ -450,11 +450,11 @@ def main():
     # Phase 0: Count posts in window
     # -----------------------------------------------------------------------
     print(f"\n[Phase 0] Measuring posts in window...")
-    post_count, post_stubs = count_posts_in_window(SUBREDDIT, after_ts)
+    post_count, partial_posts = count_posts_in_window(SUBREDDIT, after_ts)
     print(f"  Found {post_count} posts to download.")
     if args.limit_posts and args.limit_posts < post_count:
-        post_stubs = post_stubs[:args.limit_posts]
-        post_count = len(post_stubs)
+        partial_posts = partial_posts[:args.limit_posts]
+        post_count = len(partial_posts)
         print(f"  Limiting to first {post_count} posts (--limit-posts).")
     print()
 
@@ -471,8 +471,8 @@ def main():
     # Dedup key: (author, normalised_title) — catches same author posting same question twice
     seen_post_keys: set[tuple] = set()
 
-    for i, stub in enumerate(post_stubs, 1):
-        post_id = stub.get("id", "")
+    for i, partial_post in enumerate(partial_posts, 1):
+        post_id = partial_post.get("id", "")
         fetch_label = "fetching post + comments" if args.comments else "fetching post"
         print(f"  Post {i}/{post_count}: t3_{post_id} — {fetch_label}...")
 
@@ -484,7 +484,7 @@ def main():
         polite_sleep()
 
         # Deduplicate: skip if same author has already posted the same title
-        author = stub.get("author") or ""
+        author = partial_post.get("author") or ""
         dedup_key = (author.lower(), (full_post.get("title") or "").strip().lower())
         if dedup_key in seen_post_keys and author:
             print(f"    Duplicate post detected (same author + title), skipping.")

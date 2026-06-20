@@ -142,15 +142,15 @@ def normalize_value(field: str, raw: str) -> str | None:
     cleaned = _clean(raw)
     if not cleaned:
         return None
-    lut = _LOOKUP.get(field)
-    if lut and cleaned in lut:
-        return lut[cleaned]
+    lookup = _LOOKUP.get(field)
+    if lookup and cleaned in lookup:
+        return lookup[cleaned]
     rule = _regex_rules(field, cleaned)
     if rule:
         return rule
     # substring fallback for known canonicals embedded in noisy text
-    if lut:
-        for surface, canon in lut.items():
+    if lookup:
+        for surface, canon in lookup.items():
             if len(surface) >= 4 and re.search(rf"\b{re.escape(surface)}\b", cleaned):
                 return canon
     return cleaned  # passthrough: tidied but unmapped (never silently dropped)
@@ -220,12 +220,12 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         # NB: TREATMENT_OUTCOME_RAW ("treatment_outcome") is the correct FIELD_VOCAB
         # key for outcome synonyms (worked->helped, etc.); there is no
         # "treatment_outcome_label" vocab. Do not "fix" this to TREATMENT_OUTCOME_LABEL.
-        lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
-        if lbl not in OUTCOME_LABELS:
-            lbl = "unknown"
-        if lbl not in seen:
-            seen.add(lbl)
-            labels.append(lbl)
+        label = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
+        if label not in OUTCOME_LABELS:
+            label = "unknown"
+        if label not in seen:
+            seen.add(label)
+            labels.append(label)
     return {
         TREATMENT_OUTCOME_LABEL: sep.join(labels),
         TREATMENT_OUTCOME_DRUG: sep.join(drugs),

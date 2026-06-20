@@ -203,9 +203,9 @@ def run_extraction(config: "PipelineConfig"):
     else:
         id_to_drugs = {}
 
-    to_do = [(item["id"], item["text"]) for item in all_items
+    pending_extractions = [(item["id"], item["text"]) for item in all_items
              if item["id"] not in id_to_drugs and item["text"].strip()]
-    log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
+    log.info(f"{len(id_to_drugs)} cached, {len(pending_extractions)} to extract...")
 
     def save_tagged_atomic() -> list:
         """Recompute upstream context and write atomically via a temp file."""
@@ -218,7 +218,7 @@ def run_extraction(config: "PipelineConfig"):
     # Bounded parallel extraction: at most workers * 4 futures in flight at once.
     # As each future completes the next batch is submitted (backpressure).
     # Checkpoint written every BATCH_SIZE * 100 completed records.
-    all_batches = [to_do[i:i + BATCH_SIZE] for i in range(0, len(to_do), BATCH_SIZE)]
+    all_batches = [pending_extractions[i:i + BATCH_SIZE] for i in range(0, len(pending_extractions), BATCH_SIZE)]
     batch_iter = iter(all_batches)
     done_ext = 0
     max_inflight = max(config.workers * 4, 1)
@@ -236,13 +236,13 @@ def run_extraction(config: "PipelineConfig"):
             batch = pending.pop(future)
 
             for (item_id, _), drugs in zip(batch, future.result()):
-                flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
-                id_to_drugs[item_id] = flat
+                drug_names = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                id_to_drugs[item_id] = drug_names
 
             done_ext += len(batch)
             if done_ext % (BATCH_SIZE * 100) == 0:
                 save_tagged_atomic()
-            log.info(f"Extracted {done_ext}/{len(to_do)}...")
+            log.info(f"Extracted {done_ext}/{len(pending_extractions)}...")
 
             # Submit next batch to keep pool saturated
             next_batch = next(batch_iter, None)

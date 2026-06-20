@@ -282,13 +282,13 @@ def process_batch(client, system_prompt: str, batch: list[tuple], mode: str,
             output.append(base)
         return output
 
-    ne_items = [items[i] for i in non_empty]
+    non_empty_items = [items[i] for i in non_empty]
 
     def call_fn(sub_items):
         return _call_haiku_batch_raw(client, system_prompt, sub_items, mode)
 
     try:
-        raw_results = split_retry_batch(call_fn, ne_items)
+        raw_results = split_retry_batch(call_fn, non_empty_items)
     except Exception as e:
         # Total failure
         output = []

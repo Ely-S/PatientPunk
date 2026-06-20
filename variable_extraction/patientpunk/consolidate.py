@@ -138,9 +138,9 @@ def _merge_group(members: list[tuple[str, int, dict]], n_runs: int) -> tuple[str
         for p in defn.get("patterns") or []:
             if p not in patterns:
                 patterns.append(p)
-        av = defn.get("allowed_values")
-        if isinstance(av, list):
-            for v in av:
+        allowed_values = defn.get("allowed_values")
+        if isinstance(allowed_values, list):
+            for v in allowed_values:
                 if v not in allowed:
                     allowed.append(v)
         max_hit = max(max_hit, _hit(defn))

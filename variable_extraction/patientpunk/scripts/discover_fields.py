@@ -307,16 +307,16 @@ def build_discovery_prompt(known_fields: list, schema_data: dict | None = None) 
 
     health_block = ""
     if schema_data:
-        high_bleed = [
+        high_bleed_fields = [
             (fname, fdata.get("_bleed_rate_last_run", 0))
             for fname, fdata in schema_data.get("extension_fields", {}).items()
             if fdata.get("_bleed_rate_last_run") is not None
             and fdata.get("_bleed_rate_last_run") >= 0.10
         ]
-        if high_bleed:
+        if high_bleed_fields:
             lines = "\n".join(
                 f"  - {name} ({rate:.0%} bleed) - patterns are capturing too much context"
-                for name, rate in sorted(high_bleed, key=lambda x: -x[1])
+                for name, rate in sorted(high_bleed_fields, key=lambda x: -x[1])
             )
             health_block = f"""
 HIGH BLEED WARNING - these existing fields had excessive bleed in the last run.
@@ -574,9 +574,9 @@ def run_phase1_discovery(
                     if not entry["extractability_note"] and field.get("extractability_note"):
                         entry["extractability_note"] = field["extractability_note"]
                     # Improvement 3: accumulate allowed_values sets
-                    av = field.get("allowed_values")
-                    if av and isinstance(av, list):
-                        entry["allowed_values_sets"].append({v.lower() for v in av})
+                    member_allowed_values = field.get("allowed_values")
+                    if member_allowed_values and isinstance(member_allowed_values, list):
+                        entry["allowed_values_sets"].append({v.lower() for v in member_allowed_values})
 
     # Filter to candidates with enough examples
     qualified = []
@@ -1090,9 +1090,9 @@ def run_phase3_regex_extract(
         if compiled:
             field_patterns[field["field_name"]] = compiled
         # Improvement 3: build allowed values map for normalization
-        av = field.get("allowed_values")
-        if av:
-            field_allowed_values[field["field_name"]] = {v.lower(): v for v in av}
+        allowed_values = field.get("allowed_values")
+        if allowed_values:
+            field_allowed_values[field["field_name"]] = {v.lower(): v for v in allowed_values}
         else:
             field_allowed_values[field["field_name"]] = None
 
@@ -1142,11 +1142,11 @@ def run_phase3_regex_extract(
                         if value and value.lower() not in [v.lower() for v in matches]:
                             matches.append(value)
             # Improvement 3 / 7: normalize matches to canonical allowed values
-            av_map = field_allowed_values.get(field_name)
-            if av_map is not None:
+            canonical_by_lower = field_allowed_values.get(field_name)
+            if canonical_by_lower is not None:
                 normalized = []
                 for val in matches:
-                    canonical = av_map.get(val.lower())
+                    canonical = canonical_by_lower.get(val.lower())
                     if canonical is not None:
                         normalized.append(canonical)
                 matches = normalized
@@ -1274,8 +1274,8 @@ def run_phase4_fill_gaps(
     # Improvement 3 / 7: build allowed_values maps for normalization in Phase 4
     field_av_maps: dict[str, dict[str, str] | None] = {}
     for f in validated_fields:
-        av = f.get("allowed_values")
-        field_av_maps[f["field_name"]] = {v.lower(): v for v in av} if av else None
+        allowed_values = f.get("allowed_values")
+        field_av_maps[f["field_name"]] = {v.lower(): v for v in allowed_values} if allowed_values else None
 
     # Build field descriptions for the prompt (Improvement 3: include allowed values)
     field_lines = []
@@ -1333,11 +1333,11 @@ Include ALL listed fields. Use null when no evidence exists."""
                             values = [values]
                         values = [v for v in values if v]
                         # Improvement 3 / 7: normalize to allowed values if applicable
-                        av_map = field_av_maps.get(field_name)
-                        if av_map is not None and isinstance(values, list):
-                            values = [av_map[v.lower()] for v in values if isinstance(v, str) and v.lower() in av_map]
-                        elif av_map is not None and isinstance(values, str):
-                            values = [av_map[values.lower()]] if values.lower() in av_map else []
+                        canonical_by_lower = field_av_maps.get(field_name)
+                        if canonical_by_lower is not None and isinstance(values, list):
+                            values = [canonical_by_lower[v.lower()] for v in values if isinstance(v, str) and v.lower() in canonical_by_lower]
+                        elif canonical_by_lower is not None and isinstance(values, str):
+                            values = [canonical_by_lower[values.lower()]] if values.lower() in canonical_by_lower else []
                         if not values:
                             continue  # skip if normalization eliminated all values
                         if values:

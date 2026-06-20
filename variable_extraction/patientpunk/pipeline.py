@@ -231,16 +231,16 @@ class Pipeline:
 
         # Record the LLM configuration (model / provider / base_url / temperature)
         # so every output is traceable to the model + settings that produced it.
-        prov = {**llm_config(), "schema_id": self._schema_id,
+        provenance = {**llm_config(), "schema_id": self._schema_id,
                 "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode}
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
-                json.dumps(prov, indent=2), encoding="utf-8")
+                json.dumps(provenance, indent=2), encoding="utf-8")
         except OSError:
             pass
-        print(f"  LLM config: provider={prov['provider']}  fast={prov['model_fast']}  "
-              f"strong={prov['model_strong']}  temp={prov['temperature']}"
-              + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
+        print(f"  LLM config: provider={provenance['provider']}  fast={provenance['model_fast']}  "
+              f"strong={provenance['model_strong']}  temp={provenance['temperature']}"
+              + (f"  base_url={provenance['base_url']}" if provenance['base_url'] else ""))
 
         # Phase 1 -- regex extraction
         result.phases.append(
@@ -465,10 +465,10 @@ class Pipeline:
         # both schemas and stitches them into the correct columns itself; if we
         # merged them here we would lose the structural distinction and the
         # exporter would silently drop the discovered columns.
-        disc = self._find_discovered_records()
-        if disc:
-            input_files.append(disc)
-            print(f"  Including discovered records: {disc.name}")
+        discovered_records = self._find_discovered_records()
+        if discovered_records:
+            input_files.append(discovered_records)
+            print(f"  Including discovered records: {discovered_records.name}")
         else:
             print(f"  No discovered records found -- exporting base records only")
 

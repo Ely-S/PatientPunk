@@ -131,8 +131,8 @@ Examples:
     post_count = 0
     for p in open_ndjson(args.posts):
         # Filter to subreddit if specified
-        sub = (p.get("subreddit") or "").lower()
-        if args.subreddit and sub != args.subreddit.lower():
+        subreddit = (p.get("subreddit") or "").lower()
+        if args.subreddit and subreddit != args.subreddit.lower():
             continue
         post_id = p.get("id", "")
         posts_by_id[post_id] = p

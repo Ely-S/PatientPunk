@@ -162,22 +162,22 @@ class _Block:
 class _Msg:
     def __init__(self, text: str): self.content = [_Block(text)]
 class _Stream:
-    def __init__(self, text: str): self._t = text
+    def __init__(self, text: str): self._text = text
     def __enter__(self): return self
     def __exit__(self, *exc): return False
-    def get_final_message(self): return _Msg(self._t)
+    def get_final_message(self): return _Msg(self._text)
 class _OpenAIMessages:
     def __init__(self, client, temperature: float = 0.0):
-        self._c = client
-        self._temp = temperature
+        self._client = client
+        self._temperature = temperature
     def _call(self, model, messages, max_tokens, system) -> str:
         msgs = []
         if system:
             msgs.append({"role": "system", "content": system if isinstance(system, str)
                          else "\n".join(b.get("text", "") for b in system)})
         msgs.extend(messages)
-        r = self._c.chat.completions.create(
-            model=model, messages=msgs, max_tokens=max_tokens, temperature=self._temp)
+        r = self._client.chat.completions.create(
+            model=model, messages=msgs, max_tokens=max_tokens, temperature=self._temperature)
         if not r.choices:
             raise RuntimeError(
                 f"OpenAI-compatible endpoint returned no choices for model {model!r} "
