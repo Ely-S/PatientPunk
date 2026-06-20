@@ -1,5 +1,10 @@
 # Contributing to PatientPunk
 
+> ⚠️ **Some paths/commands below are stale.** This doc predates the `Scrapers/demographic_extraction/` →
+> `variable_extraction/patientpunk/` move and still says `pip install -r requirements.txt` (the project uses
+> **`uv`** — run `uv sync`; there is no `Scrapers/requirements.txt`). For the current architecture, layout, and
+> commands, trust [`/CLAUDE.md`](../CLAUDE.md) and [`notes/codebase-understanding.md`](../notes/codebase-understanding.md).
+
 PatientPunk treats Reddit patient self-reports as first-class scientific evidence — aggregating and normalising them into structured, queryable datasets for medical researchers. This document covers the project architecture, data model, and how to extend the system.
 
 ---

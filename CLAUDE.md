@@ -53,6 +53,7 @@ not unify those either. Full architecture map: `notes/codebase-understanding.md`
 
 ## Gotchas — do NOT "fix" these (they are intentional or out of scope)
 - **Silent drops:** `treatment_reports` rows are written only when `signal != 'n/a'` — absence of a row ≠ "never classified".
+- **Frozen value-enums:** the `sentiment` set (`positive/negative/mixed/neutral`) and `signal_strength` (`strong/moderate/weak/n/a`) are a frozen boundary **duplicated** across `schema.sql`, the `Literal` in `src/models.py`, the prompt strings in `src/pipeline/classify.py`, the tests, and `docs/RCT_historical_validation/`. Changing the set means touching all of those in sync and is gated by hazards §D2 — don't do it casually.
 - **Load-bearing ordering:** `import_posts.strip_reddit_prefix()` must run BEFORE the SQL `UPDATE` that nulls dangling `parent_id`s.
 - **LLM config is resolved once at IMPORT time** (auto-detect: `OPENROUTER_API_KEY`→openrouter else `ANTHROPIC_API_KEY`→anthropic;
   `LLM_PROVIDER` overrides; `LLM_PROVIDER=openai` requires explicit `MODEL_FAST`/`MODEL_STRONG` or `src/` `sys.exit()`s at import). Changing env after import has no effect.

@@ -10,8 +10,8 @@ Reddit API key required**.
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
-python scrape_corpus.py --weeks 2 --comments
+uv sync   # from the repo root (this project uses uv, not pip)
+uv run python Scrapers/scrape_corpus.py --weeks 2 --comments
 ```
 
 Output goes to `output/` at the project root. Then run the extraction pipeline:

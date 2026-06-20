@@ -166,7 +166,7 @@ cluster_prep.DEFAULT_META + evaluate._META; named to avoid the `records_to_csv.M
   `run_demographics.py` (the function `run_demographics` exists; no standalone file).
 - **(found Step 11) Consolidated stale-filename worklist** for Step 12 — docstrings naming old files
   (`extract_mentions.py` / `classify_sentiment.py` / `run_demographics.py`, the gone `database_creation/` +
-  `Scrapers/demographic_extraction/` dirs) — is enumerated precisely in `notes/step11-class-file-plan.md` §4.
+  `Scrapers/demographic_extraction/` dirs) — is enumerated precisely in `notes/archive/step11-class-file-plan.md` §4.
 - **(found Step 4)** `variable_extraction/main.py` + `patientpunk/pipeline.py` reference an `apps/discover.py`
   Marimo picker that does not exist on disk (no `apps/` dir anywhere) — a broken/aspirational feature
   reference. Distinct from the now-deleted `app/` package. Investigate in Step 12 (delete the dead path

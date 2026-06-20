@@ -127,6 +127,8 @@ unless `--reclassify`. In the validated DB, `conditions`/`user_profiles` are emp
 
 ## 8. "Where do I look for X"
 
+> Shorthand: `patientpunk/` = `variable_extraction/patientpunk/`; RCT files (`verify.py`, `_build_paper_figures.py`) live under `docs/RCT_historical_validation/`.
+
 - Drug-sentiment row → `src/run_sentiment_pipeline.py` → `src/pipeline/{extract,canonicalize,classify}.py`; writer `src/utilities/db.py`.
 - DB shape / traceability → `schema.sql`; `extraction_runs` + `run_id`.
 - Prompts/rubrics → `src/prompts/intervention_config.py`, `src/prompts/demographic_prompt.py`; `docs/ldn_notes.md`; `patientpunk/qualitative_standards.py`.
