@@ -21,6 +21,8 @@ Read these in order:
    public-API/CLI/subprocess/serialized boundary; the input for Steps 9 (names) & 10 (apply).
 7. **`step9-function-rename-proposal.md`** — the `current → proposed` function/param map (critic-SAFE);
    the exact instructions for Step 10, incl. distinct names for same-name copies + the r-string watch-item.
+8. **`step11-class-file-plan.md`** — class/file rename plan (**empty surface — leave as-is**) + the canonical
+   frozen class/file map + the consolidated **Step-12 doc-rot worklist** (stale filenames in docstrings).
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -45,8 +47,10 @@ Read these in order:
   ~15 critic-SAFE renames; `call_haiku`→`call_model`; same-name copies distinct; `nnt`/`k` cosmetic/leave.
 - Step 10 (apply function/param renames) **done** (`e25103e`): ~15 renames across 14 files (+67/−67, pure). 63 green,
   ruff 154, 0 misdirection, 0 over-reach, r-string edits hand-checked. **Function rename cadence (8→9→10) COMPLETE.**
-- Steps 11–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 11** — identify unclear CLASS & FILE names
-  and rename/reorganize (widest blast radius: imports/paths; the `patientpunk` public API + `_SCRIPT` filenames are frozen).
+- Step 11 (classes/files) **done** (notes only, no code change): `step11-class-file-plan.md` — **empty surface**
+  (0 class + 0 file renames, critic-confirmed); naming + structure are sound → leave as-is. Frozen map + Step-12 doc-rot list captured.
+- Steps 12–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 12** — clean up comments/docstrings no longer
+  useful (start from the §4 doc-rot worklist + the §D5/§D6 logged items: stale filenames, the inaccurate "Call Haiku" prose).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

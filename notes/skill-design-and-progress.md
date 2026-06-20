@@ -96,7 +96,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 8 | Identify functions/params + usage | done | (notes only) | Workflow `wf_c4c4418e-4ce`. Inventory → `notes/step8-function-param-inventory.md`. Naming is good: ~13 fn + ~3 param candidates of ~284, all private internals. Critic-verified frozen boundary (public API/CLI/subprocess/serialized). No code change. Feeds Step 9. |
 | 9 | Propose best function/param names (no change) | done | (notes only) | Workflow `wf_7d5033a1-cdc`. Proposal in `notes/step9-function-rename-proposal.md` — ~15 renames, critic-SAFE (0 collisions/frozen/test/weaker). call_haiku→call_model aligned; same-name copies distinct; nnt/k cosmetic. No code change. Review gate. |
 | 10 | Apply function/param renames | done | `e25103e` | Workflow `wf_d05adbd5-607` (1 agent/file). ~15 renames across 14 files; +67/-67 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach; r-string edits hand-checked. Function cadence (8→9→10) COMPLETE. |
-| 11 | Rename/reorganize unclear classes & files | pending | — | Widest blast radius; `patientpunk` public API is a boundary. |
+| 11 | Rename/reorganize unclear classes & files | done | (notes only) | Workflow `wf_6e314a03-2d7`. **Empty surface (0 class + 0 file renames) — critic-confirmed.** Plan in `notes/step11-class-file-plan.md`: leave naming + structure as-is; frozen map + Step-12 doc-rot worklist captured. No code change. |
 | 12 | Clean up comments/docstrings | pending | — | Stale-doc targets in §D5. |
 | 13 | Deep-research latest CC-comprehension techniques | pending | — | Use `deep-research`. |
 | 14 | Make repo self-legible; clean CLAUDE.md; fresh-agent eval | pending | — | Use `init` + `deep-guide` + Explore. |
@@ -121,6 +121,18 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 11 skill learnings (toward the repo-agnostic skill)
+- **An empty rename surface is a VALID, well-supported outcome — not a skipped step.** On a well-organized
+  repo, "leave class names, file names, and structure as-is" is the right answer; the value is the *verified*
+  decision + the frozen map, not a forced change. Make the critic confirm the emptiness (no false negatives).
+- **Class/file naming has the LARGEST frozen surface**: public-API class names (incl. via sub-package `__all__`),
+  subprocess **filenames** (a `_SCRIPT` attribute), documented entry files, package-root marker files, bare-path
+  import-boundary modules, and test files governed by `testpaths`. File renames also break **git history + docs**.
+- **"Reorganize" is presumed unnecessary** unless the structure is clearly broken — moving files is the
+  highest-blast-radius action in the whole sequence (import paths + documented commands + history) for usually zero gain.
+- **This step surfaces doc-rot for free**: cataloging files reveals docstrings naming *old* filenames
+  (`extract_mentions.py`, `classify_sentiment.py`, …) — hand that worklist to the docs pass (Step 12), don't auto-edit.
 
 ### Step 10 skill learnings (toward the repo-agnostic skill)
 - **Same verification trifecta as Step 7, but the over-reach check must also protect SIBLINGS/same-name copies**
