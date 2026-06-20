@@ -45,11 +45,11 @@ def to_epoch(ts: str | int | None) -> int | None:
 def strip_reddit_prefix(reddit_id: str | None) -> str | None:
     """Strip Reddit's `t1_` (comment) or `t3_` (submission) kind prefix.
 
-    Reddit's API serializes comment.parent_id as `t1_<id>` (parent is a comment)
-    or `t3_<id>` (parent is a submission), but post_id / comment_id themselves
-    are stored bare. Without stripping, the `parent_id NOT IN (SELECT post_id)`
-    cleanup below treats every prefixed parent_id as dangling and nulls it,
-    silently destroying thread structure on import.
+    The scraper emits post_id, comment_id, AND parent_id all carrying Reddit's
+    kind prefix (`t3_<id>` for submissions, `t1_<id>` for comments). We strip the
+    prefix off ALL of them on import so they are consistently bare. Otherwise the
+    `parent_id NOT IN (SELECT post_id)` cleanup below treats every parent_id as
+    dangling and nulls it, silently destroying thread structure on import.
     """
     if reddit_id is None:
         return None
@@ -84,7 +84,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
 
         add_user(author, sub)
         posts.append(PostRow(
-            post_id=post["post_id"], title=post.get("title"), parent_id=None,
+            post_id=strip_reddit_prefix(post["post_id"]), title=post.get("title"), parent_id=None,
             user_id=author, body_text=post.get("body") or "",
             flair=post.get("flair"), post_date=to_epoch(post.get("created_utc")),
             scraped_at=now,
@@ -93,7 +93,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             c_author = comment["author_hash"]
             add_user(c_author, sub)
             posts.append(PostRow(
-                post_id=comment["comment_id"], title=None,
+                post_id=strip_reddit_prefix(comment["comment_id"]), title=None,
                 parent_id=strip_reddit_prefix(comment.get("parent_id")),
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
