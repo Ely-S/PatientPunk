@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Trial &mdash; a drug&rsquo;s patient evidence on the stand</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root{
+    --parchment:#f6efe1;
+    --parchment-2:#efe6d3;
+    --ink:#163b3f;          /* deep teal ink */
+    --ink-soft:#3a5e62;
+    --indigo:#26324f;
+    --gold:#b8893b;
+    --line:#e0d4ba;
+    --hooper:#7a571c;       /* warm advocate */
+    --hooper-bg:#fbf1dd;
+    --vex:#26324f;          /* cool skeptic */
+    --vex-bg:#eef0f6;
+    --pos:#2f7d4f;
+    --neg:#a23b2e;
+    --mixed:#b8893b;
+    --neutral:#9b9486;
+    --shadow:0 10px 30px rgba(40,30,10,.10);
+    --sans:'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif;
+    --serif: Georgia, 'Times New Roman', serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:var(--sans);
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(184,137,59,.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(38,50,79,.06), transparent 60%),
+      var(--parchment);
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  header.app{
+    padding:26px 28px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,.35), transparent);
+  }
+  header.app h1{
+    margin:0;
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:26px;
+    letter-spacing:.2px;
+    color:var(--indigo);
+  }
+  header.app .sub{
+    margin-top:4px;
+    font-size:13px;
+    color:var(--ink-soft);
+    letter-spacing:.3px;
+  }
+  header.app .rule{
+    margin-top:14px;
+    height:2px;
+    width:64px;
+    background:linear-gradient(90deg, var(--gold), transparent);
+    border-radius:2px;
+  }
+
+  main{
+    flex:1;
+    display:flex;
+    justify-content:center;
+    padding:22px 16px 0;
+  }
+  .frame{
+    width:100%;
+    max-width:880px;
+    display:flex;
+    flex-direction:column;
+    flex:1;
+  }
+
+  #transcript{
+    flex:1;
+    overflow-y:auto;
+    padding:8px 4px 24px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  #transcript::-webkit-scrollbar{width:10px;}
+  #transcript::-webkit-scrollbar-thumb{background:#ddceb0;border-radius:8px;border:3px solid var(--parchment);}
+
+  .intro{
+    align-self:center;
+    max-width:660px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:14px;
+    line-height:1.6;
+    padding:12px 16px;
+    border:1px dashed var(--line);
+    border-radius:12px;
+    background:rgba(255,255,255,.35);
+  }
+  .intro .q{
+    font-family:var(--serif);
+    font-style:italic;
+    color:var(--ink);
+  }
+
+  /* ── The user's case ──────────────────────────────────────────────── */
+  .row{display:flex;width:100%;}
+  .row.user{justify-content:flex-end;}
+  .row.left{justify-content:flex-start;}
+  .row.right{justify-content:flex-end;}
+
+  .bubble{
+    max-width:80%;
+    padding:14px 18px;
+    border-radius:18px;
+    line-height:1.55;
+    box-shadow:var(--shadow);
+    word-wrap:break-word;
+    overflow-wrap:anywhere;
+  }
+  .row.user .bubble{
+    background:#1f4b50;
+    color:#f4efe2;
+    border-bottom-right-radius:6px;
+    font-size:15px;
+  }
+  .speaker{
+    font-family:var(--sans);
+    font-size:11px;
+    letter-spacing:1.4px;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin-bottom:6px;
+    font-weight:600;
+  }
+  .row.user .speaker{color:#cdbf9a;text-align:right;}
+
+  /* ── The Case File (frozen evidence) ──────────────────────────────── */
+  .casefile{
+    align-self:stretch;
+    background:#fbf7ee;
+    border:1px solid var(--line);
+    border-left:4px solid var(--gold);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    padding:18px 20px 16px;
+  }
+  .casefile .cf-eyebrow{
+    font-size:11px;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--gold);font-weight:700;
+  }
+  .casefile .cf-head{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    margin-top:4px;
+  }
+  .casefile .cf-drug{
+    font-family:var(--serif);font-size:24px;font-weight:600;color:var(--indigo);
+    text-transform:uppercase;letter-spacing:.4px;
+  }
+  .badge{
+    display:inline-block;font-size:11px;font-weight:700;letter-spacing:.6px;
+    text-transform:uppercase;padding:3px 10px;border-radius:999px;
+    border:1px solid var(--line);background:#efe6d3;color:var(--ink-soft);
+  }
+  .badge.tier-suggestive{background:#e7f1e8;color:var(--pos);border-color:#bcd9c2;}
+  .badge.tier-moderate{background:#f6edd6;color:#8a6a1f;border-color:#e3cf9a;}
+  .badge.tier-thin{background:#f3e7df;color:#9a5a3e;border-color:#e0c3b0;}
+  .badge.tier-none{background:#ececec;color:#6e6e6e;border-color:#d4d4d4;}
+  .casefile .cf-meta{
+    margin-top:6px;font-size:13px;color:var(--ink-soft);
+  }
+  .casefile .cf-meta b{color:var(--ink);}
+
+  /* sentiment bar */
+  .sentbar{
+    display:flex;height:18px;border-radius:8px;overflow:hidden;
+    margin:14px 0 6px;border:1px solid var(--line);background:#eee;
+  }
+  .sentbar > span{display:block;height:100%;}
+  .seg-pos{background:var(--pos);}
+  .seg-neg{background:var(--neg);}
+  .seg-mixed{background:var(--mixed);}
+  .seg-neutral{background:var(--neutral);}
+  .sentlegend{
+    display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .sentlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .sentlegend .l-pos i{background:var(--pos);}
+  .sentlegend .l-neg i{background:var(--neg);}
+  .sentlegend .l-mixed i{background:var(--mixed);}
+  .sentlegend .l-neutral i{background:var(--neutral);}
+
+  .cf-section{margin-top:14px;}
+  .cf-section > .cf-label{
+    font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--gold);font-weight:700;margin-bottom:7px;
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{
+    font-size:12.5px;padding:4px 11px;border-radius:999px;
+    background:#efe6d3;border:1px solid var(--line);color:var(--ink);
+  }
+  .chip .n{color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+
+  .quote{
+    border-radius:10px;padding:10px 14px;margin:8px 0;font-family:var(--serif);
+    font-style:italic;font-size:15px;line-height:1.5;
+  }
+  .quote.q-pos{background:#f3efe0;border-left:3px solid var(--pos);color:#2c4a36;}
+  .quote.q-neg{background:#eef0f6;border-left:3px solid var(--vex);color:#2c3550;}
+  .quote .q-tag{
+    display:block;font-family:var(--sans);font-style:normal;font-size:10.5px;
+    letter-spacing:.8px;text-transform:uppercase;margin-top:6px;opacity:.7;
+  }
+
+  .caveats{margin:0;padding:0;list-style:none;}
+  .caveats li{
+    font-size:13px;line-height:1.5;color:var(--ink-soft);
+    padding:5px 0 5px 18px;position:relative;
+  }
+  .caveats li::before{
+    content:"\00a7";position:absolute;left:0;color:var(--gold);font-weight:700;
+  }
+
+  /* ── Debate bubbles ───────────────────────────────────────────────── */
+  .row.left .bubble{
+    background:var(--hooper-bg);
+    color:var(--ink);
+    border:1px solid #e6d6b3;
+    border-left:4px solid var(--gold);
+    border-bottom-left-radius:6px;
+    font-family:var(--serif);
+    font-size:16px;
+  }
+  .row.right .bubble{
+    background:var(--vex-bg);
+    color:var(--ink);
+    border:1px solid #d4d9e6;
+    border-right:4px solid var(--vex);
+    border-bottom-right-radius:6px;
+    font-family:var(--serif);
+    font-size:16px;
+  }
+  .row.left .speaker{color:var(--hooper);}
+  .row.right .speaker{color:var(--vex);text-align:right;}
+
+  .turn-badge{
+    display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.5px;
+    padding:2px 9px;border-radius:999px;margin-top:9px;
+  }
+  .turn-badge.ok{background:#e7f1e8;color:var(--pos);border:1px solid #bcd9c2;}
+  .turn-badge.flag{background:#f3e3df;color:#9a4a3a;border:1px solid #e0c3b6;}
+
+  /* ── The Verdict ──────────────────────────────────────────────────── */
+  .verdict{
+    align-self:stretch;
+    background:#fbf7ee;
+    border:1px solid var(--gold);
+    border-radius:16px;
+    box-shadow:0 14px 38px rgba(120,90,30,.16);
+    padding:22px 24px 18px;
+  }
+  .verdict .v-eyebrow{
+    font-size:11px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--gold);font-weight:700;text-align:center;
+  }
+  .verdict .v-rule{
+    height:2px;width:80px;margin:10px auto 16px;border-radius:2px;
+    background:linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  /* markdown styling (agent prose + verdict) */
+  .md h1,.md h2,.md h3{font-family:var(--serif);color:var(--indigo);line-height:1.25;margin:.6em 0 .35em;}
+  .md h1{font-size:1.35em;}
+  .md h2{font-size:1.2em;}
+  .md h3{font-size:1.05em;}
+  .md p{margin:.5em 0;}
+  .md ul,.md ol{margin:.4em 0 .4em 1.2em;padding:0;}
+  .md li{margin:.2em 0;}
+  .md strong{color:var(--indigo);}
+  .md a{color:var(--gold);}
+  .md code{
+    font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+    font-size:.85em;
+    background:#efe7d4;
+    padding:.12em .4em;
+    border-radius:5px;
+  }
+  .md pre{
+    background:#1d2b3a;
+    color:#e9eef5;
+    padding:14px 16px;
+    border-radius:12px;
+    overflow:auto;
+    font-size:13px;
+    line-height:1.5;
+  }
+  .md pre code{background:transparent;color:inherit;padding:0;font-size:13px;}
+  .md blockquote{
+    margin:.6em 0;padding:.3em 1em;
+    border-left:3px solid var(--gold);
+    color:var(--ink-soft);font-style:italic;
+  }
+
+  /* deliberating placeholder */
+  .thinking{align-self:center;}
+  .thinking .head{
+    display:flex;align-items:center;gap:10px;
+    font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:15px;
+  }
+  .dots{display:inline-flex;gap:4px;}
+  .dots i{
+    width:6px;height:6px;border-radius:50%;background:var(--gold);
+    animation:pulse 1.2s infinite ease-in-out;
+  }
+  .dots i:nth-child(2){animation-delay:.2s;}
+  .dots i:nth-child(3){animation-delay:.4s;}
+  @keyframes pulse{0%,80%,100%{opacity:.25;transform:scale(.8);}40%{opacity:1;transform:scale(1);}}
+  .elapsed{font-family:var(--sans);font-size:12px;color:var(--gold);letter-spacing:.5px;}
+
+  .err{
+    color:#8a3b2e;align-self:center;text-align:center;font-family:var(--serif);
+    font-style:italic;font-size:15px;padding:8px 14px;
+  }
+
+  /* composer */
+  .composer{
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg, rgba(255,255,255,.5), transparent);
+    padding:14px 16px 20px;
+    display:flex;
+    justify-content:center;
+  }
+  .composer-inner{
+    width:100%;max-width:880px;
+    display:flex;gap:10px;align-items:flex-end;
+  }
+  textarea#input{
+    flex:1;
+    resize:none;
+    min-height:52px;
+    max-height:180px;
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background:#fffdf8;
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.45;
+    outline:none;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.03);
+  }
+  textarea#input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,137,59,.15);}
+  button#send{
+    border:none;
+    cursor:pointer;
+    padding:0 22px;
+    height:52px;
+    border-radius:14px;
+    background:var(--ink);
+    color:#f4efe2;
+    font-family:var(--sans);
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:.3px;
+    box-shadow:var(--shadow);
+    transition:background .15s, transform .05s;
+    white-space:nowrap;
+  }
+  button#send:hover:not(:disabled){background:#1d4a4f;}
+  button#send:active:not(:disabled){transform:translateY(1px);}
+  button#send:disabled{background:#9bada6;cursor:not-allowed;opacity:.8;}
+  .hint{
+    text-align:center;font-size:11px;color:var(--ink-soft);
+    margin:8px 0 0;opacity:.8;
+  }
+</style>
+</head>
+<body>
+  <header class="app">
+    <h1>The Trial &mdash; a drug&rsquo;s patient evidence on the stand</h1>
+    <div class="sub">Two advocates argue a frozen case file of real patient reports. The numbers are the court&rsquo;s; the verdict is the data&rsquo;s.</div>
+    <div class="rule"></div>
+  </header>
+
+  <main>
+    <div class="frame">
+      <div id="transcript">
+        <div class="intro">
+          Put a drug on the stand. Hooper argues for the patient; Dr.&nbsp;Vex argues for the evidence.
+          Every claim is traced back to the case file &mdash; no number is invented.<br/>
+          <span class="q">Try: Should I try LDN for my long COVID fatigue?</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="composer">
+    <div class="composer-inner">
+      <textarea id="input" placeholder="Put a drug on the stand&hellip;  e.g. Should I try LDN for my long COVID fatigue?"></textarea>
+      <button id="send">Convene</button>
+    </div>
+  </div>
+  <div class="hint">Enter convenes &middot; Shift+Enter adds a line</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var POLL_MS = 1100;
+  var transcript = document.getElementById("transcript");
+  var input = document.getElementById("input");
+  var sendBtn = document.getElementById("send");
+  var running = false;
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
+  function renderMarkdown(text){
+    var safe = String(text == null ? "" : text);
+    if (window.marked && typeof window.marked.parse === "function"){
+      try{
+        return window.marked.parse(safe, { breaks:true, gfm:true });
+      }catch(e){ /* fall through */ }
+    }
+    return "<pre>" + escapeHtml(safe) + "</pre>";
+  }
+
+  function scrollToBottom(){
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  function pctText(n){ return (n == null ? 0 : n) + "%"; }
+
+  // ── The user's question, as a bubble ──────────────────────────────────
+  function addUserBubble(text){
+    var row = document.createElement("div");
+    row.className = "row user";
+    var b = document.createElement("div");
+    b.className = "bubble";
+    var sp = document.createElement("div");
+    sp.className = "speaker";
+    sp.textContent = "The petitioner";
+    var body = document.createElement("div");
+    body.textContent = text;            // plain text, escaped by textContent
+    b.appendChild(sp);
+    b.appendChild(body);
+    row.appendChild(b);
+    transcript.appendChild(row);
+    scrollToBottom();
+  }
+
+  // ── A live "deliberating" placeholder (returns a remove() controller) ──
+  function addDeliberating(label){
+    var wrap = document.createElement("div");
+    wrap.className = "thinking";
+    var head = document.createElement("div");
+    head.className = "head";
+    head.innerHTML = "<span>" + escapeHtml(label || "The court is deliberating") + "</span>" +
+                     '<span class="dots"><i></i><i></i><i></i></span>' +
+                     '<span class="elapsed">0s</span>';
+    var elapsed = head.querySelector(".elapsed");
+    wrap.appendChild(head);
+    transcript.appendChild(wrap);
+    scrollToBottom();
+
+    var start = Date.now();
+    var timer = setInterval(function(){
+      elapsed.textContent = Math.floor((Date.now()-start)/1000) + "s";
+    }, 250);
+
+    return {
+      node: wrap,
+      setLabel: function(t){ head.firstChild.textContent = t; },
+      remove: function(){
+        clearInterval(timer);
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      }
+    };
+  }
+
+  function addError(msg){
+    var e = document.createElement("div");
+    e.className = "err";
+    e.textContent = "The trial faltered: " + (msg || "something went wrong.");
+    transcript.appendChild(e);
+    scrollToBottom();
+  }
+
+  // ── The Case File: the frozen evidence both sides argue over ──────────
+  function renderCaseFile(packet){
+    var card = document.createElement("div");
+    card.className = "casefile";
+
+    var pct = packet.pct || {};
+    var counts = packet.counts || {};
+    var tier = packet.confidence_tier || "none";
+
+    // header: eyebrow + drug title + tier badge
+    var html = '<div class="cf-eyebrow">Case File &mdash; the frozen evidence</div>';
+    html += '<div class="cf-head">';
+    html += '<span class="cf-drug">' + escapeHtml(packet.drug || packet.drug_query || "unknown") + '</span>';
+    html += '<span class="badge tier-' + escapeHtml(tier) + '">' + escapeHtml(tier) + ' evidence</span>';
+    html += '</div>';
+
+    // meta line: patients / reports
+    html += '<div class="cf-meta"><b>' + (packet.n_users || 0) + '</b> distinct patients &middot; ' +
+            '<b>' + (packet.n_reports || 0) + '</b> raw reports';
+    var sm = packet.signal_mix || {};
+    html += ' &middot; signal: ' + (sm.strong || 0) + ' strong / ' + (sm.moderate || 0) +
+            ' moderate / ' + (sm.weak || 0) + ' weak</div>';
+
+    // sentiment bar from pct
+    var p = {
+      positive: pct.positive || 0,
+      negative: pct.negative || 0,
+      mixed: pct.mixed || 0,
+      neutral: pct.neutral || 0
+    };
+    html += '<div class="sentbar">';
+    if (p.positive) html += '<span class="seg-pos" style="width:' + p.positive + '%"></span>';
+    if (p.negative) html += '<span class="seg-neg" style="width:' + p.negative + '%"></span>';
+    if (p.mixed)    html += '<span class="seg-mixed" style="width:' + p.mixed + '%"></span>';
+    if (p.neutral)  html += '<span class="seg-neutral" style="width:' + p.neutral + '%"></span>';
+    html += '</div>';
+    html += '<div class="sentlegend">' +
+            '<span class="l-pos"><i></i>positive ' + pctText(p.positive) + ' (' + (counts.positive || 0) + ')</span>' +
+            '<span class="l-neg"><i></i>negative ' + pctText(p.negative) + ' (' + (counts.negative || 0) + ')</span>' +
+            '<span class="l-mixed"><i></i>mixed ' + pctText(p.mixed) + ' (' + (counts.mixed || 0) + ')</span>' +
+            '<span class="l-neutral"><i></i>neutral ' + pctText(p.neutral) + ' (' + (counts.neutral || 0) + ')</span>' +
+            '</div>';
+
+    // side effects
+    var se = packet.side_effects || [];
+    if (se.length){
+      html += '<div class="cf-section"><div class="cf-label">Side effects reported</div><div class="chips">';
+      for (var i=0;i<se.length;i++){
+        var eff = se[i] || {};
+        html += '<span class="chip">' + escapeHtml(eff.effect || "") +
+                ' <span class="n">&times;' + (eff.count == null ? "?" : eff.count) + '</span></span>';
+      }
+      html += '</div></div>';
+    }
+
+    // verbatim quotes, pos in warm tint / neg in cool tint
+    var quotes = packet.quotes || [];
+    if (quotes.length){
+      html += '<div class="cf-section"><div class="cf-label">In patients’ own words</div>';
+      for (var j=0;j<quotes.length;j++){
+        var q = quotes[j] || {};
+        var cls = q.pole === "neg" ? "q-neg" : "q-pos";
+        var poleLabel = q.pole === "neg" ? "negative" : "positive";
+        html += '<div class="quote ' + cls + '">“' + escapeHtml(q.text || "") + '”' +
+                '<span class="q-tag">' + poleLabel + ' &middot; signal: ' + escapeHtml(q.signal || "n/a") +
+                ' &middot; ' + escapeHtml(q.claim_id || "") + '</span></div>';
+      }
+      html += '</div>';
+    }
+
+    // caveats — the fine print
+    var caveats = packet.caveats || [];
+    if (caveats.length){
+      html += '<div class="cf-section"><div class="cf-label">The fine print</div><ul class="caveats">';
+      for (var k=0;k<caveats.length;k++){
+        var c = caveats[k] || {};
+        html += '<li>' + escapeHtml(c.text || "") + '</li>';
+      }
+      html += '</ul></div>';
+    }
+
+    card.innerHTML = html;
+    transcript.appendChild(card);
+    scrollToBottom();
+  }
+
+  // ── One debate turn (Hooper left / Dr. Vex right) ─────────────────────
+  function renderTurn(turn){
+    var isHooper = turn.agent === "hooper";
+    var row = document.createElement("div");
+    row.className = "row " + (isHooper ? "left" : "right");
+
+    var b = document.createElement("div");
+    b.className = "bubble";
+
+    var sp = document.createElement("div");
+    sp.className = "speaker";
+    sp.textContent = isHooper ? "Hooper — for the patient" : "Dr. Vex — for the evidence";
+    b.appendChild(sp);
+
+    var md = document.createElement("div");
+    md.className = "md";
+    md.innerHTML = renderMarkdown(turn.text);   // text is already render_citations-expanded
+    b.appendChild(md);
+
+    var violations = turn.violations || [];
+    var badge = document.createElement("span");
+    if (violations.length === 0){
+      badge.className = "turn-badge ok";
+      badge.textContent = "✓ grounded";
+    } else {
+      badge.className = "turn-badge flag";
+      badge.textContent = "⚠ flagged: " + violations.join(", ");
+    }
+    b.appendChild(badge);
+
+    row.appendChild(b);
+    transcript.appendChild(row);
+    scrollToBottom();
+  }
+
+  // ── The Verdict ───────────────────────────────────────────────────────
+  function renderVerdict(briefing){
+    var card = document.createElement("div");
+    card.className = "verdict";
+    var html = '<div class="v-eyebrow">The Verdict</div><div class="v-rule"></div>';
+    html += '<div class="md">' + renderMarkdown((briefing && briefing.text) || "") + '</div>';
+    card.innerHTML = html;
+    transcript.appendChild(card);
+    scrollToBottom();
+  }
+
+  function setRunning(on){
+    running = on;
+    sendBtn.disabled = on;
+    input.disabled = on;
+    if (!on){ input.focus(); }
+  }
+
+  var STAGE_LABEL = {
+    resolving: "Resolving the drug from your question",
+    packet: "Assembling the case file",
+    debating: "The advocates are deliberating",
+    synthesizing: "Weighing the verdict"
+  };
+
+  // ── Poll loop ─────────────────────────────────────────────────────────
+  // Tracks how much of the streamed state we've already drawn so re-polling
+  // never duplicates the case file or a debate turn.
+  function poll(jobId){
+    var state = { packetDrawn:false, turnsDrawn:0, verdictDrawn:false };
+    var deliberating = null;
+
+    function clearDeliberating(){
+      if (deliberating){ deliberating.remove(); deliberating = null; }
+    }
+
+    function tick(){
+      fetch("/poll?job_id=" + encodeURIComponent(jobId))
+        .then(function(res){
+          if (res.status === 404){ throw new Error("The court lost the case (unknown job)."); }
+          if (!res.ok){ throw new Error("Server responded " + res.status + "."); }
+          return res.json();
+        })
+        .then(function(data){
+          data = data || {};
+
+          // 1) Case file — drawn once, the instant the packet arrives.
+          if (data.packet && !state.packetDrawn){
+            clearDeliberating();
+            renderCaseFile(data.packet);
+            state.packetDrawn = true;
+          }
+
+          // 2) Debate turns — append any we haven't drawn yet (de-dupe by index).
+          var turns = data.turns || [];
+          if (turns.length > state.turnsDrawn){
+            clearDeliberating();
+            for (var i = state.turnsDrawn; i < turns.length; i++){
+              renderTurn(turns[i]);
+            }
+            state.turnsDrawn = turns.length;
+          }
+
+          // 3) Verdict — drawn once when the briefing is set.
+          if (data.briefing && !state.verdictDrawn){
+            clearDeliberating();
+            renderVerdict(data.briefing);
+            state.verdictDrawn = true;
+          }
+
+          if (data.done){
+            clearDeliberating();
+            if (data.error){ addError(data.error); }
+            setRunning(false);
+            return;
+          }
+
+          // Not done — show a stage-appropriate deliberating placeholder.
+          if (!deliberating){
+            deliberating = addDeliberating(STAGE_LABEL[data.stage] || "The court is deliberating");
+          } else {
+            deliberating.setLabel(STAGE_LABEL[data.stage] || "The court is deliberating");
+          }
+          setTimeout(tick, POLL_MS);
+        })
+        .catch(function(err){
+          clearDeliberating();
+          addError(err && err.message ? err.message : "connection lost.");
+          setRunning(false);
+        });
+    }
+
+    tick();
+  }
+
+  function send(){
+    if (running) return;
+    var text = input.value.replace(/\s+$/,"");
+    if (!text.trim()) return;
+
+    addUserBubble(text);
+    input.value = "";
+    input.style.height = "";
+    setRunning(true);
+
+    fetch("/trial", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ prompt: text })
+    })
+      .then(function(res){
+        if (!res.ok){ throw new Error("Could not convene the court (" + res.status + ")."); }
+        return res.json();
+      })
+      .then(function(data){
+        if (!data || !data.job_id){ throw new Error("No job id returned."); }
+        poll(data.job_id);
+      })
+      .catch(function(err){
+        addError(err && err.message ? err.message : "could not reach the server.");
+        setRunning(false);
+      });
+  }
+
+  // Enter convenes, Shift+Enter newline.
+  input.addEventListener("keydown", function(e){
+    if (e.key === "Enter" && !e.shiftKey){
+      e.preventDefault();
+      send();
+    }
+  });
+
+  // auto-grow textarea
+  input.addEventListener("input", function(){
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  });
+
+  sendBtn.addEventListener("click", send);
+  input.focus();
+})();
+</script>
+</body>
+</html>

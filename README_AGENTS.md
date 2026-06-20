@@ -98,6 +98,31 @@ just an honest "no patient reports for X" briefing. This is correct, not a failu
 | `PYTHONUTF8=1` | Windows | Avoids a cp1252 decode error (same as the test gate). |
 | `RUMI_DATA_DIR` | no | Rumi persists agent history here. If unset, each run uses a fresh temp dir so debates never bleed across runs — leave it unset unless you want persistence. |
 
+### The web UI (watch the trial unfold)
+
+`src/agents/server.py` serves a single-page courtroom UI (`src/agents/trial.html`, styled after
+Rumi's `poet_chat.html`) where you watch Hooper and Dr. Vex argue **live, turn by turn**, over the
+frozen evidence — then read the verdict.
+
+```bash
+RUMI_MODEL=anthropic/claude-sonnet-4.6 PYTHONUTF8=1 PYTHONPATH=src \
+  uv run python -m agents.server --db data/posts.db --port 8770
+# → open http://127.0.0.1:8770 and put a drug on the stand
+```
+
+| Flag / env | Default | Meaning |
+|---|---|---|
+| `--port` / `TRIAL_PORT` | `8770` | HTTP port (8765 is Rumi's Poet — kept distinct). |
+| `--host` | `127.0.0.1` | Bind address (localhost-only by default). |
+| `--db` | `data/posts.db` | The read-only posts DB. |
+
+It's a **stdlib-only** server (no Flask/FastAPI) mirroring Rumi's `poet_server.py`: `POST /trial`
+`{prompt}` starts a job; the browser polls `GET /poll?job_id=…`, which streams the **Case File**
+(the frozen evidence packet) immediately, then each debate turn as it lands — each with a
+`✓ grounded` / `⚠ flagged: G#` badge from the same G1–G6 gate — then the **Verdict**. One
+`RUN_LOCK` serializes debates (the rumi driver isn't concurrency-safe), so it's a single-user
+local tool, not a public server.
+
 ---
 
 ## How it works

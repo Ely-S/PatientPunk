@@ -40,13 +40,18 @@ def _fresh_suffix(agent_suffix: str = "") -> str:
     return f"{agent_suffix}-{base}" if agent_suffix else base
 
 
-def run_debate(packet, *, rounds: int = 2, agent_suffix: str = "") -> list[dict]:
+def run_debate(packet, *, rounds: int = 2, agent_suffix: str = "", on_turn=None) -> list[dict]:
     """Run the Hooper vs. Dr. Vex debate over ``packet``.
 
     Builds one ``World()`` (zero-config from env). If ``RUMI_DATA_DIR`` is
     unset we point it at a fresh temp dir so Rumi's on-disk history never bleeds
     across runs. Seeds Hooper with the packet's prompt block and an opening
     cue, then loops ``rounds * 2`` turns, alternating Hooper -> Dr. Vex.
+
+    ``on_turn`` is an OPTIONAL callback. When provided, it is invoked with each
+    turn dict (``{"agent": str, "text": str}``) right after that turn is appended
+    to the transcript — letting a live consumer (e.g. the trial server) stream
+    the debate as it unfolds. Default ``None`` is fully backward-compatible.
 
     Returns the transcript as a list of ``{"agent": str, "text": str}`` dicts in
     speaking order.
@@ -75,7 +80,11 @@ def run_debate(packet, *, rounds: int = 2, agent_suffix: str = "") -> list[dict]
 
     for _ in range(rounds * 2):
         reply = speaker.whirl(message).content
-        transcript.append({"agent": name, "text": reply})
+        turn = {"agent": name, "text": reply}
+        transcript.append(turn)
+        # Stream the freshly-appended turn to a live consumer, if any.
+        if on_turn is not None:
+            on_turn(turn)
         # Hand the plain string to the other agent as its next user message.
         message = reply
         speaker, other = other, speaker
