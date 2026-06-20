@@ -1,0 +1,241 @@
+[
+  {
+    "id": "p1",
+    "text": "Full-Time School with ME/CFS This week I went back to school for a full-time online course. My initial infection was in February 2024. In 2025, I was able to return to part-time work, although not on a regular basis. My main symptoms are PEM and vertigo, and I would consider my Long COVID/ME/CFS to be mild.\n\nThe course runs until September, and I'm honestly not sure whether I can sustain it for that long. It's only Saturday, and I'm already feeling extremely exhausted.\n\nI also started taking fluvoxamine this week, and my sleep has been worse since then. My current medications are LDN, LDA, amifampridine, and fluvoxamine. In addition, I regularly use a red light mat, nicotine patches, and do HBOT twice a week. This week I was only able to do HBOT once, so maybe that's contributing to the increased fatigue.\n\nI'm struggling to decide whether I should continue with school. For those of you with Long COVID or ME/CFS who have returned to full-time work or school, how long did it take for your body to adjust, if it did at all?\n\nTo be honest, I spent most of today crying. I was doing relatively well until Thursday, but then the PEM started to hit, and the exhaustion has been overwhelming.",
+    "is_comment": false,
+    "upstream": "",
+    "expected_drugs": ["ldn", "lda", "amifampridine", "fluvoxamine", "red light mat", "nicotine patches", "hbot"],
+    "labels": {
+      "fluvoxamine": {"sentiment": "negative", "side_effects": ["worse sleep"]},
+      "red light mat": {"sentiment": "neutral", "side_effects": []},
+      "nicotine patches": {"sentiment": "neutral", "side_effects": []},
+      "hbot": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL post t3_1tyd1cr. OBSERVED FAILURE #2 (side-effect over-attribution). Author attributes worse sleep ONLY to fluvoxamine ('I also started taking fluvoxamine this week, and my sleep has been worse since then'). This is NOT a LIST FANOUT (the symptom is tied to one drug the author started, not predicated of a drug list), so 'worse sleep' must attach to fluvoxamine alone. The prior pipeline run wrongly put 'worse sleep' on red light mat + nicotine patches + hbot (see data/posts.db) -- this row pins that bug: those three are a stable pre-existing stack with no symptom attributed and no benefit claimed => neutral, side_effects=[]. fluvoxamine => negative + side_effects=['worse sleep']. LDN/LDA/amifampridine left UNLABELED: named in the stack with no individual outcome and the week went badly (PEM/crying), so sentiment is genuinely ambiguous. expected_drugs: extract must find all 7; LDA (low-dose abilify) must not be confused with / dropped for LDN."
+  },
+  {
+    "id": "p2",
+    "text": "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all on pause. I have a lot of feelings to work through still. I'm playing catch up, it comes in waves.\"",
+    "is_comment": true,
+    "upstream": "Releasing trauma and long COVID. I've been dealing with long COVID for a long time ... Recently I've started feeling a little better physically, but now it's like all the grief, fear, stress, and trauma I buried is coming to the surface at once. Has anyone else experienced intense emotions coming up as their long COVID symptoms improved?",
+    "expected_drugs": ["ldn"],
+    "labels": {
+      "ldn": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq2v9l6. First-person credit: 'Once I started to have more energy due to ldn' => positive (named-symptom improvement, energy). The emotional surfacing is framed as a downstream consequence of regaining energy ('a relief'), not a side effect blamed on LDN => side_effects=[] (CAUSE-vs-EFFECT: energy gain is the benefit). Matches prior DB run (ldn positive/strong). Confident."
+  },
+  {
+    "id": "p3",
+    "text": "Yup. Also, beta blockers always made me cry more.\n\nI'm six years in and it's still incredibly difficult. I was forced to go from 40 to 80 years old overnight and I, like many of us, lost everything.",
+    "is_comment": true,
+    "upstream": "Releasing trauma and long COVID. ... Has anyone else experienced intense emotions coming up as their long COVID symptoms improved?",
+    "expected_drugs": ["beta blockers"],
+    "labels": {
+      "beta blockers": {"sentiment": "negative", "side_effects": ["crying more"]}
+    },
+    "notes": "REAL comment t1_oq558rj. First-person adverse effect: 'beta blockers always made me cry more' => negative, side_effects=['crying more'] (author's wording trimmed to the symptom). 'always' = emphatic => strong signal defensible. Confident."
+  },
+  {
+    "id": "p4",
+    "text": "Antihistamines didn't do anything for me. As far as I've understood, it depends on if you have MCAS or not",
+    "is_comment": true,
+    "upstream": "When does Antihistamine start to work? ... My doc prescribed me antihistamine for my stomach and for my allergy symptoms.",
+    "expected_drugs": ["antihistamines"],
+    "labels": {
+      "antihistamines": {"sentiment": "negative", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq3v0d6. 'Antihistamines didn't do anything for me' = personal use, no benefit => negative. Emphatic 'didn't do anything' => strong defensible. The MCAS clause is general info, not an outcome. side_effects=[]. Matches prior DB run (antihistamines negative/strong). Confident."
+  },
+  {
+    "id": "p5",
+    "text": "all they did was help me with sleep and helped me feel a bit better. thats about it",
+    "is_comment": true,
+    "upstream": "When does Antihistamine start to work? Like does it work immediately? ... My doc prescribed me antihistamine for my stomach and for my allergy symptoms.",
+    "expected_drugs": ["antihistamines"],
+    "labels": {
+      "antihistamines": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq57g5e. Reply-chain pronoun: 'they' = antihistamines (post topic). 'all they did was help me with sleep and helped me feel a bit better' = first-person partial benefit. Per the prompt, partial improvement is POSITIVE (not mixed); 'that's about it' downplays scope but is not a worsening axis => positive, side_effects=[]."
+  },
+  {
+    "id": "p6",
+    "text": "It won't do much without the appropriate diet. But in general the mast cells need quite some time to stabilise again. Ketotifen it's the first line treatment here with antihistamines and needs weeks to be effective. Antihistamines only block some receptors, for only sums hours, histamine can still cause a lot of symptoms, mast cells are still releasing histamine. Ketotifen actually stabilises the mast cells and treats the actual cause. Desloratadine can also be mast cell stabilising. Also it depends on which ones you're taking Zyrtec would make you tired on it's own, ehybitd barely used here",
+    "is_comment": true,
+    "upstream": "When does Antihistamine start to work? ... My doc prescribed me antihistamine for my stomach and for my allergy symptoms.",
+    "expected_drugs": ["ketotifen", "antihistamines", "desloratadine", "zyrtec"],
+    "labels": {
+      "ketotifen": {"sentiment": "neutral", "side_effects": []},
+      "antihistamines": {"sentiment": "neutral", "side_effects": []},
+      "desloratadine": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq39o0j. Educational / mechanism explainer ('first line treatment here', 'actually stabilises the mast cells', 'can also be mast cell stabilising') with NO first-person 'I tried X and it did Y' => neutral per the prompt (discussing the evidence base / how the drug works without reporting personal use). side_effects=[]. Zyrtec ('would make you tired on its own') is a general third-person statement => also neutral but left UNLABELED to keep labels to the cleanest cases; extract should still capture it. This is a key NEUTRAL stress case (drugs named heavily, zero personal outcome)."
+  },
+  {
+    "id": "p7",
+    "text": "Yep totally fine with adhd meds, take betaine HCL before meals if ur worried about famotidine to offset and it also lowers homocysteine which is a systemic stress biomarker and increases stress on the body so it's a win win. I take 2mg ketotifen 2x daily, 5mg desloratadine and 20mg Famotidine 2x daily for MCAS. This was fine with 70mg lisdex and amfexa top ups, guanfacine 2mg etc there's no interaction",
+    "is_comment": true,
+    "upstream": "H2 blockers and ADHD meds. ... am on Elvanse (Vyvanse) 50 mg + amfexa boosters ... She's prescribed famotidine and ketotifen ... Has anyone taken these drugs in conjunction with Elvanse/Vyvanse? Have you seen any side effects?",
+    "expected_drugs": ["betaine hcl", "famotidine", "ketotifen", "desloratadine", "lisdexamfetamine", "amfexa", "guanfacine"],
+    "labels": {
+      "famotidine": {"sentiment": "neutral", "side_effects": []},
+      "ketotifen": {"sentiment": "neutral", "side_effects": []},
+      "desloratadine": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq4cgsb. Author personally takes a ketotifen/desloratadine/famotidine stack for MCAS but the comment reports TOLERABILITY, not efficacy ('totally fine with adhd meds', 'there's no interaction') -- no first-person symptom-relief outcome => neutral. INTERACTIONS rule: a tolerated combo yields side_effects=[] for all => the load-bearing assertion here is side_effects=[]. lisdex/amfexa/guanfacine/betaine hcl mentioned without outcome (not labeled). Precise neutral case for drugs the author actually uses."
+  },
+  {
+    "id": "p8",
+    "text": "I just started trying Lumbrokinase recently (similar to Nattokinase) and I read that it can help get rid of the \"floaters\" around our eyeballs. It's a proteolytic enzyme that helps break up blood clots by dissolving fibrin, but it seems to have a few other benefits too.",
+    "is_comment": true,
+    "upstream": "How are y'all's vision been since covid? Mine very bad, very blurry, double vision ... | parent reply: I have all this too. Floaters. Blurry vision. Pressure around eyes and forehead",
+    "expected_drugs": ["lumbrokinase", "nattokinase"],
+    "labels": {
+      "lumbrokinase": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq7mwah. 'I just started trying Lumbrokinase recently' + benefit is what they 'read that it can help' ('seems to have a few other benefits' is hedged hearsay) => no personal outcome yet => neutral, side_effects=[] (used but post does not state whether it helped; benefit read-about not experienced). nattokinase named only as a comparison ('similar to Nattokinase'), no use => extract finds it, not labeled. Good 'just started, no outcome' neutral."
+  },
+  {
+    "id": "p9",
+    "text": "Tollovid is (apparently) back. Has anyone tried it?\n\nI was reading one of those big spreadsheets of what patients tried for long COVID and what worked and one of the things that got a good response was Tollovid.\n\nI was sad to find out that the FDA shut them down but apparently it's back? Not sure how long this has been up. Anyone here take it? It's expensive as hell lol. $200 a bottle is insane.",
+    "is_comment": false,
+    "upstream": "",
+    "expected_drugs": ["tollovid"],
+    "labels": {
+      "tollovid": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL post t3_1ty9loi. Author names Tollovid but has NOT used it: 'Has anyone tried it?', 'Anyone here take it?'. The 'good response' is from a spreadsheet of what OTHERS reported = third-party evidence, not personal use => neutral, side_effects=[]. Question-only post (is_only_questions may drop at extract), but the objectively-correct classify outcome is neutral."
+  },
+  {
+    "id": "p10",
+    "text": "I used to take Ferrous Sulfate (cuz I'm on a vegetarian diet) from Costco, never noticed any difference. I'm not deficient. Just wanted a bit more since there isn't as much iron in vegetarian cuisine. No difference. Currently one of my doctors is asking me to try iron glycinate instead (which I haven't started yet)",
+    "is_comment": true,
+    "upstream": "Iron supplementation. Has anyone here experienced improvements from iron supplementation, even without a proven deficiency?",
+    "expected_drugs": ["ferrous sulfate", "iron glycinate", "iron"],
+    "labels": {
+      "ferrous sulfate": {"sentiment": "negative", "side_effects": []},
+      "iron glycinate": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq5omz7. ferrous sulfate: first-person 'never noticed any difference ... No difference' => negative (didn't help), side_effects=[]. iron glycinate: 'asking me to try ... which I haven't started yet' => explicitly NOT used => neutral, side_effects=[]. Sharp contrast within one comment (tried/no-effect vs not-yet-tried). 'iron' kept in expected_drugs as the umbrella term extract may emit."
+  },
+  {
+    "id": "p11",
+    "text": "I think it was my tremors and part of one type headache I had that went down and gave me a generally good feeling when I took iron supplements/ate beef. My ferritin levels were normal as far as I remember, but also they were done at LifeLabs in Ontario until I moved",
+    "is_comment": true,
+    "upstream": "Iron supplementation. Has anyone here experienced improvements from iron supplementation, even without a proven deficiency?",
+    "expected_drugs": ["iron"],
+    "labels": {
+      "iron": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq6w33h. First-person benefit: 'my tremors and ... headache ... went down and gave me a generally good feeling when I took iron supplements' => positive (named-symptom improvement => strong defensible). side_effects=[] -- the tremors/headache are the conditions that improved, not side effects (CAUSE-vs-EFFECT). 'ate beef' is diet, not a drug; only 'iron supplements' counts."
+  },
+  {
+    "id": "p12",
+    "text": "Surprisingly, my naturopath just put me on a mitochondrial support supplement which has resolved my OH for the last 3 days. ... An hour or two after I take the supp, that doesn't happen anymore, and there's minimal change in my HR/BP standing vs recline. I also have much more physical and cognitive energy. ... the supp is SFI Mitothera.",
+    "is_comment": true,
+    "upstream": "Does anyone else feel like the blood is literally draining out of their head when they stand up? ... Likely my POTS but it's horrendous.",
+    "expected_drugs": ["mitochondrial support supplement", "guanfacine"],
+    "labels": {
+      "mitochondrial support supplement": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq78xys. mitochondrial support supplement (SFI Mitothera): 'resolved my OH for the last 3 days ... much more physical and cognitive energy' => positive (named-symptom + clear temporal => strong defensible). side_effects=[] (OH = treated condition). CAUSE-vs-EFFECT trap also present: earlier the author says 'taking guanfacine for brain fog leading to orthostatic hypotension' -- guanfacine is described as CAUSING the OH that the supplement fixed. guanfacine left UNLABELED (complex framing; the comment's focus is the supplement) but kept in expected_drugs so extract is scored."
+  },
+  {
+    "id": "p13",
+    "text": "... brain fog comes and goes and I can mostly control it with creatine and magnesium ... Currently I go for B12 injections every other week(they helped initially) do double daily dose of creatine, omega 3, magnesium, B1,B6, D3 and a probiotic.",
+    "is_comment": false,
+    "upstream": "",
+    "expected_drugs": ["creatine", "magnesium", "b12", "omega 3", "b1", "b6", "d3", "probiotics"],
+    "labels": {
+      "creatine": {"sentiment": "positive", "side_effects": []},
+      "magnesium": {"sentiment": "positive", "side_effects": []},
+      "b12": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL post t3_1tymnad (excerpt). 'brain fog comes and goes and I can mostly control it with creatine and magnesium' => positive for creatine + magnesium (named-symptom control). 'B12 injections ... (they helped initially)' => positive for b12. side_effects=[] for all (brain fog = treated condition). omega 3 / B1 / B6 / D3 / probiotic named in the regimen list with NO individual outcome => UNLABELED (mentioned-in-stack without crediting; ambiguous). Stresses crediting only the named-as-helping drugs vs the undifferentiated stack."
+  },
+  {
+    "id": "p14",
+    "text": "I had all these symptoms with b12 deficiency. Every other week b12 injections is typically not enough. For neurological symptoms the recommendation is every other day injections. Healing can take awhile, but almost all my symptoms are gone after months of every other day injections. Check out the b12 deficiency group.",
+    "is_comment": true,
+    "upstream": "... Currently I go for B12 injections every other week (they helped initially) do double daily dose of creatine, omega 3, magnesium, B1,B6, D3 and a probiotic.",
+    "expected_drugs": ["b12"],
+    "labels": {
+      "b12": {"sentiment": "positive", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq7ltc5. First-person: 'almost all my symptoms are gone after months of every other day [b12] injections' => positive (temporal attribution + dramatic outcome => strong defensible). side_effects=[] (deficiency symptoms = treated condition; resolution is the benefit, CAUSE-vs-EFFECT)."
+  },
+  {
+    "id": "p15",
+    "text": "I needed H1 blockers for this. Ended up getting a prescription for 3 EpiPens. I also have refills on hydroxyzine. I need a lot once a week or so of the H1 blocker.",
+    "is_comment": true,
+    "upstream": "Anybody get tight throat at times? Shits ridiculous and a headache too",
+    "expected_drugs": ["h1 blockers", "epipen", "hydroxyzine"],
+    "labels": {},
+    "notes": "REAL comment t1_oq6uyh4. Author personally uses H1 blockers / EpiPens / hydroxyzine ('I needed H1 blockers for this', 'I need a lot once a week') -- clearly personal use, so this is NOT a true negative for the prefilter. But the comment reports USE/need without stating an efficacy outcome ('I need a lot ... of the H1 blocker' describes dosing frequency, not whether it relieved the throat tightness) => sentiment is genuinely ambiguous (used, but does-it-help not stated) => all drugs left UNLABELED. Kept for its extract value (3 real treatments incl. EpiPen + hydroxyzine) and as a prefilter case (personal experience = yes, but classify outcome unclear)."
+  },
+  {
+    "id": "p16",
+    "text": "Silent acid reflux.  Gerd/Lpr\nBasically acid reflux without heartburn,  so it can take years to get properly diagnosed.\n\nTry pepsid/famitodine and gaviscon advance and see if it helps.\n\nBut acid reflux is a whole lifestyle change to manage.",
+    "is_comment": true,
+    "upstream": "Anybody get tight throat at times? Shits ridiculous and a headache too",
+    "expected_drugs": ["pepcid", "famotidine", "gaviscon"],
+    "labels": {
+      "famotidine": {"sentiment": "neutral", "side_effects": []},
+      "gaviscon": {"sentiment": "neutral", "side_effects": []}
+    },
+    "notes": "REAL comment t1_oq5nxl1. Pure ADVICE-TO-OTHERS: 'Try pepsid/famitodine and gaviscon advance and see if it helps' -- recommending to the OP, no first-person outcome => neutral for famotidine + gaviscon, side_effects=[]. ('pepsid'/'famitodine' are misspellings of pepcid/famotidine -- same drug; canonicalize should merge pepcid->famotidine, so expected_drugs lists both the brand and generic forms.) Clean neutral/advice case."
+  },
+  {
+    "id": "p17",
+    "text": "Covid triggered celiac for me. If I eat gluten now I am bedridden in the worst body and flu-like pain of my life for 6-8 weeks. It's PEM on steroids. Crawling out of my skin. Prior to covid, I could eat as much gluten as I wanted with no issues my entire life.",
+    "is_comment": true,
+    "upstream": "Celiac and Long Covid. I have had tremors since I contacted Covid and they seem worse if I even got glutened a small amount anyone else?",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL comment t1_oq4371d. TRUE NEGATIVE for drug extraction. Gluten/celiac is diet, not a drug/supplement/intervention -- EXTRACT_PROMPT explicitly excludes diet and lifestyle changes. 'PEM on steroids' is an idiom, NOT the drug steroids (a distractor extract must not bite on). expected_drugs=[]."
+  },
+  {
+    "id": "p18",
+    "text": "Does anyone else feel like the blood is literally draining out of their head when they stand up? I get this strange sensation where I can feel the blood leave my head and pool lower down in my body, followed by light-headedness and feeling strange mentally. Likely my POTS but it's horrendous. It really affects my mood. I get intense depressions, intrusive thoughts and anxiety with it.",
+    "is_comment": false,
+    "upstream": "",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL post t3_1tym05b. TRUE NEGATIVE. Pure symptom description (POTS / orthostatic intolerance, mood) -- no drug/supplement/intervention named. expected_drugs=[]. Tests that extract does not hallucinate a treatment from a symptom-only post."
+  },
+  {
+    "id": "p19",
+    "text": "You are the strongest people I know. From my own experiences, I know just how incredibly strong you are. The relentless cell sapping fatigue, the loss of identity, crippling cognitive dysfunction like every synapse is firing through treacle, the constant pain ... Despite all of this, you wake up in the morning (if you even slept) and fight once more. You are not alone.",
+    "is_comment": false,
+    "upstream": "",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL post t3_1tyq9ky. TRUE NEGATIVE. Pure emotional support, no treatments. expected_drugs=[]. Exercises prefilter/extract on encouragement-only text (PREFILTER_PROMPT lists 'just encouragement' as a 'no')."
+  },
+  {
+    "id": "p20",
+    "text": "it highly correlates with pem for me",
+    "is_comment": true,
+    "upstream": "Anybody get tight throat at times? Shits ridiculous and a headache too",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL comment t1_oq578ew. TRUE NEGATIVE + short-reply trap. A terse reply with NO drug and an upstream that also names no drug -- nothing to attribute => expected_drugs=[], no labels. Tests that the short-reply / upstream-context machinery does not fabricate a drug when neither reply nor parent mentions one."
+  },
+  {
+    "id": "p21",
+    "text": "i felt better at the beginning but now i get only worse with something else added",
+    "is_comment": true,
+    "upstream": "I thing I got the most potent solution for long Covid. The answer is to reinfect one with the common cold as much and as lengthy as possible. ... | Recovery was aligned with every reinfection. Each infection left me with less symptoms.",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL comment t1_oq32msx. TRUE NEGATIVE for drugs. The 'intervention' is deliberate reinfection with the common cold -- not a drug/supplement and a lifestyle action, so expected_drugs=[]. Even though the author voices a mixed personal experience ('felt better at the beginning but now ... only worse'), there is no DRUG to attach it to => no labels. Guards against the classifier inventing a drug to hang a sentiment on."
+  },
+  {
+    "id": "p22",
+    "text": "I tried this. definitely didnt work for me.",
+    "is_comment": true,
+    "upstream": "Maybe the 'cure' for Long COVID includes learning to ignore the pain. ... After many months, the body accepts the pain and learns to move forward. Any thoughts.",
+    "expected_drugs": [],
+    "labels": {},
+    "notes": "REAL comment t1_oq5aj5w. TRUE NEGATIVE for drugs. 'I tried this. definitely didnt work for me' -- 'this' = the brain-retraining / ignore-the-pain idea in the parent, a lifestyle/psychological approach, NOT a drug. expected_drugs=[]. A short negative-sentiment reply whose referent is a non-drug intervention; ensures upstream-context propagation does not manufacture a drug to classify."
+  }
+]

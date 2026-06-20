@@ -86,22 +86,33 @@ def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None =
     return msg
 
 
+def build_classify_batch_msg(
+    items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None,
+) -> str:
+    """Compose a classify-batch user message. Importable so evals measure the real prompt."""
+    msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
+    for i, (entry, _) in enumerate(items):
+        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
+    msg += (
+        f'Output a JSON array and nothing else — no prose, no explanation, no markdown '
+        f'before or after the array. Return exactly {len(items)} objects, each with '
+        f'"sentiment" (positive/negative/mixed/neutral), '
+        f'"signal" (strong/moderate/weak/n/a), '
+        f'and "side_effects" (array of short lowercase symptom strings, or []). '
+        f'Example for 2 entries: '
+        f'[{{"sentiment":"positive","signal":"strong","side_effects":[]}},'
+        f'{{"sentiment":"neutral","signal":"n/a","side_effects":[]}}]'
+    )
+    return msg
+
+
 def classify_batch(
     client, items: list[tuple[dict, str]], id_to_text: dict, prompts: dict,
     max_upstream_chars: int | None = None,
 ) -> list[dict]:
     """Classify a batch of (entry, drug) pairs. All must share the same drug."""
     drug = items[0][1]
-    msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
-    for i, (entry, _) in enumerate(items):
-        msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
-    msg += (
-        f'Return ONLY a JSON array of {len(items)} objects, each with '
-        f'"sentiment" (positive/negative/mixed/neutral), '
-        f'"signal" (strong/moderate/weak/n/a), '
-        f'and "side_effects" (array of short lowercase symptom strings, or []).'
-    )
-
+    msg = build_classify_batch_msg(items, id_to_text, max_upstream_chars)
     raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
