@@ -17,6 +17,8 @@ Read these in order:
    boundary keys) produced by Step 5; the actionable input for Steps 6 (propose names) & 7 (apply).
 5. **`step6-rename-proposal.md`** — the `current → proposed` name map (critic-approved); the exact
    instructions for Step 7 to apply. Includes cross-module/mirror sites and §6 flagged choices.
+6. **`step8-function-param-inventory.md`** — the function/parameter rename candidates + the frozen
+   public-API/CLI/subprocess/serialized boundary; the input for Steps 9 (names) & 10 (apply).
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -35,8 +37,11 @@ Read these in order:
   renames; `td` deferred to Step 8; `D`/`Xa`/`sims` left. The review gate.
 - Step 7 (apply variable renames) **done** (`d10d3a8`): 30 renames across 16 files (+149/−149, pure). 63 green,
   ruff 154, 0 misdirection, 0 over-reach. **Variable rename cadence (5→6→7) COMPLETE.**
-- Steps 8–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 8** — identify functions + parameters
-  and their usage (start of the function-rename cadence 8→9→10; includes the deferred `td` param → `trial_dir`).
+- Step 8 (identify functions/params) **done** (notes only, no code change): `step8-function-param-inventory.md` —
+  ~13 fn + ~3 param candidates of ~284 (all private internals); frozen boundary mapped.
+- Steps 9–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 9** — propose the clearest names for the
+  Step-8 candidates (review gate, no code change), then **Step 10** applies (function blast radius: call sites,
+  the `patientpunk` public API frozen, same-name copies kept distinct not merged).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

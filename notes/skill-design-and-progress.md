@@ -93,7 +93,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 5 | Identify private/inner variables + usage | done | (notes only) | Workflow `wf_9a72256e-bca`. Read-only inventory → `notes/step5-variable-inventory.md`. Codebase is well-named: ~3 cryptic attrs + ~27 candidate locals out of ~700. No code change, no gate. Feeds Step 6. |
 | 6 | Propose best variable names (no change) | done | (notes only) | Workflow `wf_dc08ce88-bcd`. Proposal in `notes/step6-rename-proposal.md` — 30 renames, critic-APPROVED (0 collisions/boundary/param/missed-site issues). `td` deferred to Step 8; `D`/`Xa`/`sims` left. No code change. Review gate. |
 | 7 | Apply variable renames (no misdirection) | done | `d10d3a8` | Workflow `wf_ae74cb2e-9ac` (1 agent/file). 30 renames across 16 files; +149/-149 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach. Variable cadence (5→6→7) COMPLETE. |
-| 8 | Identify functions/params + usage | pending | — | |
+| 8 | Identify functions/params + usage | done | (notes only) | Workflow `wf_c4c4418e-4ce`. Inventory → `notes/step8-function-param-inventory.md`. Naming is good: ~13 fn + ~3 param candidates of ~284, all private internals. Critic-verified frozen boundary (public API/CLI/subprocess/serialized). No code change. Feeds Step 9. |
 | 9 | Propose best function/param names (no change) | pending | — | Human review gate. |
 | 10 | Apply function/param renames | pending | — | grep old names; watch CLI flag boundary. |
 | 11 | Rename/reorganize unclear classes & files | pending | — | Widest blast radius; `patientpunk` public API is a boundary. |
@@ -121,6 +121,21 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 8 skill learnings (toward the repo-agnostic skill)
+- **Function/param renaming has a WIDER frozen boundary than variables.** The killer surface here is the
+  installable package's public API — exported functions/classes AND the **public methods of exported classes**,
+  plus keyword-arg names of public/multi-caller functions (a keyword call is a contract), CLI flag/subcommand
+  strings, subprocess **script filenames**, serialized pydantic fields, and **test-imported** functions. Read
+  `__init__.py` (+ sub-package `__all__`) first; a boundary-accuracy critic must verify nothing frozen slipped in.
+- **A param's freedom follows its function's boundary** — `fmt` looked renameable but its function is a public
+  exporter class, so it's a frozen keyword+CLI contract. Conversely `eid`/`fdata` are free because they're a
+  *closure* param / a private helper's param (not the public function's kwarg) — precision matters.
+- **Naming smells cluster into patterns**, not noise: predicate-shaped-non-predicates, generic verbs, and
+  misleading provider labels (`call_haiku` for a provider-agnostic `MODEL_FAST` call). Reporting the *patterns* is
+  more useful to Step 9 than a flat list.
+- **Same-name/different-body functions are an inconsistency to flag, NOT a duplication to merge** — the test
+  imports pin which copy is canonical; the others are independent. Distinguish "give them distinct names" from "DRY".
 
 ### Step 7 skill learnings (toward the repo-agnostic skill)
 - **A safe rename needs a verification TRIFECTA, not one check:** (1) no-misdirection grep — old whole-word
