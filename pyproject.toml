@@ -13,6 +13,7 @@ dependencies = [
     "scipy>=1.12",
     "pandas>=2.1",
     "pydantic>=2.5",
+    "rumi",
 ]
 
 # Runtime extras -- installable with pip: `pip install '.[cluster,openai]'`
@@ -42,3 +43,6 @@ include = ["patientpunk*"]
 [tool.pytest.ini_options]
 testpaths = ["variable_extraction/tests"]
 pythonpath = ["src"]
+
+[tool.uv.sources]
+rumi = { git = "https://github.com/cjleemesotes/Rumi.git", rev = "v0.1.0" }
