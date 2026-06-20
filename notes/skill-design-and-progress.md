@@ -97,7 +97,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 9 | Propose best function/param names (no change) | done | (notes only) | Workflow `wf_7d5033a1-cdc`. Proposal in `notes/step9-function-rename-proposal.md` — ~15 renames, critic-SAFE (0 collisions/frozen/test/weaker). call_haiku→call_model aligned; same-name copies distinct; nnt/k cosmetic. No code change. Review gate. |
 | 10 | Apply function/param renames | done | `e25103e` | Workflow `wf_d05adbd5-607` (1 agent/file). ~15 renames across 14 files; +67/-67 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach; r-string edits hand-checked. Function cadence (8→9→10) COMPLETE. |
 | 11 | Rename/reorganize unclear classes & files | done | (notes only) | Workflow `wf_6e314a03-2d7`. **Empty surface (0 class + 0 file renames) — critic-confirmed.** Plan in `notes/step11-class-file-plan.md`: leave naming + structure as-is; frozen map + Step-12 doc-rot worklist captured. No code change. |
-| 12 | Clean up comments/docstrings | pending | — | Stale-doc targets in §D5. |
+| 12 | Clean up comments/docstrings | done | `423e55a` | Workflows `wf_9bfb93a6` + sequential rerun `wf_36b64049` (3 slices rate-limited → re-run sequentially). 13 conservative stale-ref fixes across 14 files, +31/-33; 0 good comments removed. 63 green, ruff 154. Resolved the §D5/§D6 doc-rot. |
 | 13 | Deep-research latest CC-comprehension techniques | pending | — | Use `deep-research`. |
 | 14 | Make repo self-legible; clean CLAUDE.md; fresh-agent eval | pending | — | Use `init` + `deep-guide` + Explore. |
 
@@ -121,6 +121,19 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 12 skill learnings (toward the repo-agnostic skill)
+- **Inverse failure mode: OVER-DELETION of good comments.** Unlike the dead-code/extraction steps, the danger
+  here is removing valuable "why" comments. Default KEEP; act only on a narrow bar (stale ref / misleading /
+  egregious noise / commented-out dead code). The result should be small (+31/−33) and mostly *fixes*, not deletions.
+- **The gate can't judge comment quality — the DIFF REVIEW is the verification.** Keep the change set small and
+  readable so reviewing every hunk is feasible; that's the only thing that catches an over-deletion.
+- **Distinguish a stale SYMBOL from an accurate DOMAIN FACT**: "Call Haiku" on the renamed `call_model` was stale;
+  "Claude Haiku is the default fast model" / "Haiku's 8192 ceiling" are accurate facts → keep. Agents nailed this.
+- **A prior step's doc-rot inventory is a high-value head-start** — Step 11's worklist seeded most of Step 12.
+- **Rate-limit recovery: re-run failed slices SEQUENTIALLY**, not parallel (avoids the burst). Direct-apply agents'
+  successful edits persist on disk, so re-run only the failures — don't redo the whole pass.
+- **ERA001 "commented-out code" is false-positive-prone** — let judgment agents decide per-block; never mass-delete.
 
 ### Step 11 skill learnings (toward the repo-agnostic skill)
 - **An empty rename surface is a VALID, well-supported outcome — not a skipped step.** On a well-organized

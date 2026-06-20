@@ -49,8 +49,11 @@ Read these in order:
   ruff 154, 0 misdirection, 0 over-reach, r-string edits hand-checked. **Function rename cadence (8→9→10) COMPLETE.**
 - Step 11 (classes/files) **done** (notes only, no code change): `step11-class-file-plan.md` — **empty surface**
   (0 class + 0 file renames, critic-confirmed); naming + structure are sound → leave as-is. Frozen map + Step-12 doc-rot list captured.
-- Steps 12–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 12** — clean up comments/docstrings no longer
-  useful (start from the §4 doc-rot worklist + the §D5/§D6 logged items: stale filenames, the inaccurate "Call Haiku" prose).
+- Step 12 (clean up comments/docstrings) **done** (`423e55a`): 13 conservative stale-ref fixes across 14 files
+  (+31/−33); 0 good comments removed; resolved the §D5/§D6 doc-rot. 63 green, ruff 154.
+- Steps 13–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 13** — deep-research the latest techniques
+  for helping Claude Code understand a codebase (→ `deep-research` skill); then **Step 14** — make the repo self-legible
+  (CLAUDE.md, fresh-context sub-agent comprehension eval).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

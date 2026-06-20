@@ -152,7 +152,11 @@ cluster_prep.DEFAULT_META + evaluate._META; named to avoid the `records_to_csv.M
 - `code_demographics_llm.call_haiku()` (unused).
 - `run_schema_health_update` skipped in `discover_fields.main()`.
 
-### D5. Stale-doc targets (Step 12 + doc hygiene)
+### D5. Stale-doc targets (Step 12 + doc hygiene) — ✅ RESOLVED in Step 12 (`423e55a`)
+> The stale-filename docstrings/comments (`extract_mentions.py`, `classify_sentiment.py`, `run_demographics.py`,
+> `run_pipeline.py`, `apps/discover.py`, `merge_and_analyze_historical.py`, the `Scrapers/demographic_extraction/`
+> command in the Scrapers docs) + the "Call Haiku" prose (§D6) were fixed. Items below are kept for the record;
+> `docs/MVP_PLAN.md` + `docs/ldn_notes.md` were left as historical notes (out of Step-12 scope).
 - `Scrapers/{README,SCRAPER_HELP,CONTRIBUTING}.md` reference nonexistent
   `Scrapers/demographic_extraction/`, `requirements.txt`, `.env.example`.
 - `docs/MVP_PLAN.md` (self-flagged 90% generated) references nonexistent modules / old author split.
