@@ -32,7 +32,7 @@ _PUNCT = re.compile(r"[^\w%/+\- ]+")
 _WS = re.compile(r"\s+")
 
 
-def _clean(s: str) -> str:
+def _clean_surface(s: str) -> str:
     s = (s or "").strip().lower()
     s = s.replace("’", "'").replace("‘", "'")  # smart quotes
     s = _PUNCT.sub(" ", s)
@@ -125,21 +125,21 @@ def _regex_rules(field: str, cleaned: str) -> str | None:
     return None
 
 
-def _invert(vocab: dict[str, list[str]]) -> dict[str, str]:
+def _build_surface_lookup(vocab: dict[str, list[str]]) -> dict[str, str]:
     inv: dict[str, str] = {}
     for canon, syns in vocab.items():
-        inv[_clean(canon)] = canon
+        inv[_clean_surface(canon)] = canon
         for s in syns:
-            inv[_clean(s)] = canon
+            inv[_clean_surface(s)] = canon
     return inv
 
 
-_LOOKUP = {f: _invert(v) for f, v in FIELD_VOCAB.items()}
+_LOOKUP = {f: _build_surface_lookup(v) for f, v in FIELD_VOCAB.items()}
 
 
 def normalize_value(field: str, raw: str) -> str | None:
     """Map one raw value to its canonical form (or cleaned passthrough)."""
-    cleaned = _clean(raw)
+    cleaned = _clean_surface(raw)
     if not cleaned:
         return None
     lookup = _LOOKUP.get(field)

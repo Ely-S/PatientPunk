@@ -82,15 +82,15 @@ def select_fields(patients: dict, fields: list[str], min_coverage: float):
 
 
 # Column predicates (defined at module scope to avoid late-binding closures).
-def _eq(value):
+def _value_match(value):
     return lambda have: 1 if value in have else 0
 
 
-def _other(topset):
+def _has_other(topset):
     return lambda have: 1 if (have - topset) else 0
 
 
-def _presence(have):
+def _has_any(have):
     return 1 if have else 0
 
 
@@ -110,17 +110,17 @@ def build_matrix(patients: dict, fields: list[str], *,
     columns: list[tuple[str, str, callable]] = []  # (name, field, predicate)
     for f in fields:
         if encode == "presence":
-            columns.append((f, f, _presence))
+            columns.append((f, f, _has_any))
             continue
         counter = Counter(v for p in patients.values() for v in p.get(f, ()))
         if encode == "multihot":
             for v in sorted(counter):
-                columns.append((f"{f}={v}", f, _eq(v)))
+                columns.append((f"{f}={v}", f, _value_match(v)))
         else:  # topk
             top = [v for v, _ in counter.most_common(top_k)]
             for v in top:
-                columns.append((f"{f}={v}", f, _eq(v)))
-            columns.append((f"{f}:other", f, _other(set(top))))
+                columns.append((f"{f}={v}", f, _value_match(v)))
+            columns.append((f"{f}:other", f, _has_other(set(top))))
 
     names = [c[0] for c in columns]
     X = [[pred(patients[pid].get(field, set())) for _, field, pred in columns]

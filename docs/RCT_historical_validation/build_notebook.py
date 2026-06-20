@@ -71,7 +71,7 @@ def wilson_ci(k, n, alpha=0.05):
         return 0.0, 0.0
     return proportion_confint(k, n, alpha=alpha, method="wilson")
 
-def nnt(treatment_rate, baseline_rate):
+def number_needed_to_treat(treatment_rate, baseline_rate):
     """Number needed to treat. Returns None if rates are equal or inverted."""
     diff = treatment_rate - baseline_rate
     if diff <= 0:

@@ -653,8 +653,8 @@ for i, r in resp_df.iterrows():
             color=RED, va='center', ha='left', fontsize=11)
 
 # Y-tick labels: drug + trial outcome tag (line 1), paper + n (line 2)
-def _trial_tag(td):
-    return '+ trial' if td == '+' else ('null trial' if td == '0' else f'{td} trial')
+def _trial_tag(trial_dir):
+    return '+ trial' if trial_dir == '+' else ('null trial' if trial_dir == '0' else f'{trial_dir} trial')
 
 ax.set_yticks(y_center)
 ax.set_yticklabels(

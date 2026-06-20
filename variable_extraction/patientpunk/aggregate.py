@@ -29,7 +29,7 @@ from ._utils import REDDIT_REMOVED
 _DROP = REDDIT_REMOVED | {""}
 
 
-def _keep(text: object) -> str:
+def _clean_text(text: object) -> str:
     t = (text or "").strip() if isinstance(text, str) else ""
     return "" if t in _DROP else t
 
@@ -55,15 +55,15 @@ def aggregate_corpus_by_author(
     for post in posts:
         n_posts += 1
         post_author = (post.get("author_hash") or "").strip()
-        title = _keep(post.get("title"))
-        body = _keep(post.get("body"))
+        title = _clean_text(post.get("title"))
+        body = _clean_text(post.get("body"))
         block = "\n\n".join(t for t in (title, body) if t)
         if post_author and block:
             segments[post_author].append(block)
         for comment in post.get("comments") or []:
             n_comments += 1
             comment_author = (comment.get("author_hash") or "").strip()
-            comment_body = _keep(comment.get("body"))
+            comment_body = _clean_text(comment.get("body"))
             if comment_author and comment_body:
                 segments[comment_author].append(comment_body)
 

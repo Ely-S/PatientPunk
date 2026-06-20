@@ -227,7 +227,7 @@ def _strip_markdown_fences(raw: str) -> str:
     return raw
 
 
-def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: str) -> list[dict]:
+def _code_demographics_batch_raw(client, system_prompt: str, items: list[dict], mode: str) -> list[dict]:
     """Send multiple records in one API call. Returns list of parsed dicts."""
     msg = (
         "Code demographic information from the following Reddit records. "
@@ -285,7 +285,7 @@ def process_batch(client, system_prompt: str, batch: list[tuple], mode: str,
     non_empty_items = [items[i] for i in non_empty]
 
     def call_fn(sub_items):
-        return _call_haiku_batch_raw(client, system_prompt, sub_items, mode)
+        return _code_demographics_batch_raw(client, system_prompt, sub_items, mode)
 
     try:
         raw_results = split_retry_batch(call_fn, non_empty_items)

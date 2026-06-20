@@ -161,7 +161,7 @@ def get_client() -> anthropic.Anthropic:
     return get_llm_client()
 
 
-def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
+def call_model(client: anthropic.Anthropic, system_prompt: str, user_message: str,
                temperature: float | None = None) -> str:
     """Call Haiku with retry/backoff and prompt caching.
 
@@ -562,7 +562,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         # nudging temperature breaks the determinism and yields valid JSON.
         for temp in (None, 0.7, 1.0):
             parsed = parse_json_response(
-                call_haiku(client, system_prompt, items[0]["user_message"], temperature=temp))
+                call_model(client, system_prompt, items[0]["user_message"], temperature=temp))
             if parsed is not None:
                 return [parsed]
         raise ValueError("could not parse single-record response after retries")
@@ -585,7 +585,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", text)
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    raw = call_haiku(client, system_prompt, msg).strip()
+    raw = call_model(client, system_prompt, msg).strip()
 
     # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
     # leading prose line or trailing content after the array ("Extra data")
@@ -1252,7 +1252,7 @@ Examples:
         system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
         user_message = build_user_message([args.text])
         print(f"Sending to {MODEL}...\n")
-        raw = call_haiku(client, system_prompt, user_message)
+        raw = call_model(client, system_prompt, user_message)
         parsed = parse_json_response(raw)
         if parsed:
             print("=== Extracted fields ===")

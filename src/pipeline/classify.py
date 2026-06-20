@@ -38,7 +38,7 @@ BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
 
 
-def _pf_key(entry: dict, drug: str) -> str:
+def _prefilter_key(entry: dict, drug: str) -> str:
     """Cache/filter key for a single (entry, drug) pair."""
     return f"{entry['id']}:{drug}"
 
@@ -235,7 +235,7 @@ def run_classification(
         # Single-pass split: cached → apply to filtered set; uncached → queue for LLM
         uncached: list[tuple[dict, str]] = []
         for e, d in pairs_to_classify:
-            key = _pf_key(e, d)
+            key = _prefilter_key(e, d)
             cached = cached_prefilter_results.get(key)
             if cached is None:
                 uncached.append((e, d))
@@ -259,7 +259,7 @@ def run_classification(
                     batch = futures[future]
                     results = future.result()
                     for (entry, drug), passed in zip(batch, results):
-                        key = _pf_key(entry, drug)
+                        key = _prefilter_key(entry, drug)
                         cached_prefilter_results[key] = passed
                         if not passed:
                             filtered.add(key)
@@ -270,7 +270,7 @@ def run_classification(
             prefilter_path.write_text(json.dumps(cached_prefilter_results))
 
     # Only classify entries that passed prefilter
-    to_classify = [(e, d) for e, d in pairs_to_classify if _pf_key(e, d) not in filtered]
+    to_classify = [(e, d) for e, d in pairs_to_classify if _prefilter_key(e, d) not in filtered]
     log.info(f"{len(filtered)} filtered out, {len(to_classify)} to classify...")
 
     # Group by drug for batching (shared system prompt per drug)

@@ -68,7 +68,7 @@ def _detect_parent_cycles(id_to_parent: dict) -> None:
     The upstream-mentioned-drugs recursion below assumes id_to_parent is a
     forest (each node has at most one parent and chains terminate). A cycle
     in malformed imported data would cause the recursion to memoize on
-    (eid, remaining) and still never terminate (cache stores final values,
+    (post_id, remaining) and still never terminate (cache stores final values,
     not in-progress visits). Detect once up front and fail loudly.
 
     Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
@@ -92,17 +92,17 @@ def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_
     _detect_parent_cycles(id_to_parent)
 
     @lru_cache(maxsize=None)
-    def upstream(eid: str, remaining: int | None) -> tuple[str, ...]:
+    def upstream(post_id: str, remaining: int | None) -> tuple[str, ...]:
         if remaining == 0:
             return ()
-        parent_id = id_to_parent.get(eid)
+        parent_id = id_to_parent.get(post_id)
         if not parent_id:
             return ()
         parent_drugs = tuple(id_to_drugs.get(parent_id, []))
         next_remaining = None if remaining is None else remaining - 1
         return tuple(dict.fromkeys(parent_drugs + upstream(parent_id, next_remaining)))
 
-    return {eid: list(upstream(eid, max_depth)) for eid in id_to_parent}
+    return {post_id: list(upstream(post_id, max_depth)) for post_id in id_to_parent}
 
 
 def load_posts_from_db(db_path: Path, limit: int | None = None):

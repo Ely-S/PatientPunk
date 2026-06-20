@@ -747,16 +747,16 @@ def _cmd_validate(args: argparse.Namespace) -> None:
             corpus_text = {}
             data = load_json(args.corpus) or []
 
-            def _walk(node):
+            def _collect_post_text(node):
                 pid = node.get("post_id") or node.get("id")
                 txt = "\n".join(filter(None, [node.get("title", ""), node.get("body", ""), node.get("text", "")]))
                 if pid:
                     corpus_text[pid] = txt
                 for c in node.get("comments") or []:
-                    _walk(c)
+                    _collect_post_text(c)
 
             for post in (data if isinstance(data, list) else []):
-                _walk(post)
+                _collect_post_text(post)
         out = args.out or (_HERE.parent / "gold_template.csv")
         n_written = export_gold_template(rows, fields, out, key=key, corpus_text=corpus_text, n=args.n)
         print(f"  Wrote gold-labeling template: {out}  ({n_written} rows x {len(fields)} fields to label)")

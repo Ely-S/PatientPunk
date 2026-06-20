@@ -56,19 +56,19 @@ def load_json(path: Path) -> dict:
         return json.load(f)
 
 
-def _ext_row(fname: str, fdata: dict) -> dict:
+def _ext_row(fname: str, field_def: dict) -> dict:
     """Build one codebook registry row for an extension / discovered field."""
-    is_discovered = fdata.get("source") == "llm_discovered"
+    is_discovered = field_def.get("source") == "llm_discovered"
     return {
         "field":          fname,
         "source":         "llm_discovered" if is_discovered else "extension",
-        "description":    fdata.get("description", ""),
-        "confidence":     fdata.get("confidence", ""),
-        "icd10":          fdata.get("icd10", ""),
-        "frequency_hint": fdata.get("frequency_hint", ""),
-        "research_value": fdata.get("research_value", ""),
-        "n_patterns":     len(fdata.get("patterns", [])),
-        "discovered_at":  fdata.get("_discovered_at", ""),
+        "description":    field_def.get("description", ""),
+        "confidence":     field_def.get("confidence", ""),
+        "icd10":          field_def.get("icd10", ""),
+        "frequency_hint": field_def.get("frequency_hint", ""),
+        "research_value": field_def.get("research_value", ""),
+        "n_patterns":     len(field_def.get("patterns", [])),
+        "discovered_at":  field_def.get("_discovered_at", ""),
     }
 
 
@@ -86,13 +86,13 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
     registry: list[dict] = []
 
     # --- Base fields ---
-    for fname, fdata in base_schema.get("base_fields", {}).items():
+    for fname, field_def in base_schema.get("base_fields", {}).items():
         registry.append({
             "field":          fname,
             "source":         "base",
-            "description":    fdata.get("description", ""),
-            "confidence":     fdata.get("confidence", ""),
-            "icd10":          fdata.get("icd10", ""),
+            "description":    field_def.get("description", ""),
+            "confidence":     field_def.get("confidence", ""),
+            "icd10":          field_def.get("icd10", ""),
             "frequency_hint": "",
             "research_value": "",
             "n_patterns":     "",   # base patterns live in extract_biomedical.py, not the schema JSON
@@ -100,16 +100,16 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
         })
 
     # --- Base-optional fields activated for this schema ---
-    for fname, fdata in base_schema.get("base_optional_fields", {}).items():
+    for fname, field_def in base_schema.get("base_optional_fields", {}).items():
         if fname == "_description":
             continue
         if fname in active_base_optional:
             registry.append({
                 "field":          fname,
                 "source":         "base_optional",
-                "description":    fdata.get("description", ""),
-                "confidence":     fdata.get("confidence", ""),
-                "icd10":          fdata.get("icd10", ""),
+                "description":    field_def.get("description", ""),
+                "confidence":     field_def.get("confidence", ""),
+                "icd10":          field_def.get("icd10", ""),
                 "frequency_hint": "",
                 "research_value": "",
                 "n_patterns":     "",
@@ -118,8 +118,8 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
 
     # --- Extension fields (hand-written + promoted) ---
     seen_ext = set()
-    for fname, fdata in ext_schema.get("extension_fields", {}).items():
-        registry.append(_ext_row(fname, fdata))
+    for fname, field_def in ext_schema.get("extension_fields", {}).items():
+        registry.append(_ext_row(fname, field_def))
         seen_ext.add(fname)
 
     # --- Discovered extension fields not already in the curated schema ---
@@ -127,10 +127,10 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
     # curated schema unless promoted, so without this Phase 5 would document zero
     # discovered fields even though records.csv already contains their columns.
     if discovered_schema:
-        for fname, fdata in discovered_schema.get("extension_fields", {}).items():
+        for fname, field_def in discovered_schema.get("extension_fields", {}).items():
             if fname in seen_ext:
                 continue
-            registry.append(_ext_row(fname, fdata))
+            registry.append(_ext_row(fname, field_def))
 
     return registry
 
