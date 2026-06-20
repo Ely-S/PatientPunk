@@ -99,7 +99,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 11 | Rename/reorganize unclear classes & files | done | (notes only) | Workflow `wf_6e314a03-2d7`. **Empty surface (0 class + 0 file renames) — critic-confirmed.** Plan in `notes/step11-class-file-plan.md`: leave naming + structure as-is; frozen map + Step-12 doc-rot worklist captured. No code change. |
 | 12 | Clean up comments/docstrings | done | `423e55a` | Workflows `wf_9bfb93a6` + sequential rerun `wf_36b64049` (3 slices rate-limited → re-run sequentially). 13 conservative stale-ref fixes across 14 files, +31/-33; 0 good comments removed. 63 green, ruff 154. Resolved the §D5/§D6 doc-rot. |
 | 13 | Deep-research latest CC-comprehension techniques | done | (notes only) | Workflow `wf_e5e6877a-7c4` (web research + claude-code-guide agents + fact-check: 0 hallucinations). Cited report → `notes/step13-ai-legibility-research.md`; §6 = the Step-14 plan. CRITICAL catch: CLAUDE.md is gitignored (`git add -f`). No code change. |
-| 14 | Make repo self-legible; clean CLAUDE.md; fresh-agent eval | pending | — | Use `init` + `deep-guide` + Explore. |
+| 14 | Make repo self-legible; clean CLAUDE.md; fresh-agent eval | done | `55e5594` | **CAPSTONE.** 61-line root CLAUDE.md (`git add -f`), 2 path-scoped `.claude/rules/`, banners on stale docs. Fresh-context eval (`wf_05d8971a-22f`): 3 zero-context agents answered 5 onboarding Qs correctly + orientedWell; critic ran live `pytest --co`=63, found 0 inaccuracies/0 bloat. Eval caught a real README doc/code bug (COMMIT_EVERY 5→50). **14/14 — SEQUENCE COMPLETE.** |
 
 **Operating protocol:** do ONE step per go-ahead, run gates, commit, update this table, then stop and
 report. Do not chain steps without the user's signal (mirrors the "one prompt at a time" design).
@@ -121,6 +121,22 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 14 skill learnings (toward the repo-agnostic skill) — the CAPSTONE
+- **The deliverable is a LEAN CLAUDE.md** (~60–120 lines): open with the load-bearing fact, put exact gate
+  commands + the surprising gotchas, and push depth into linked notes/README rather than inlining. Authored by
+  the main agent (who knows the repo after 13 steps), not a sub-agent re-deriving it.
+- **The fresh-context eval IS the acceptance test, and it's only valid because workflow agents are genuinely
+  zero-context** — an unbiased onboarding probe. Measure BOTH answer-correctness AND orientation efficiency
+  (report files-read-in-order + an `orientedWell` verdict): a correct answer reached by crawling 20 files still
+  means CLAUDE.md failed to orient. Pass = correct + few targeted reads.
+- **The eval doubles as a doc-accuracy audit**: fresh agents reading the code to *verify* CLAUDE.md surface real
+  doc/code mismatches the whole cleanup missed — here, `COMMIT_EVERY 5 vs 50` in the README, caught by 2 of 3 agents.
+- **Add a CLAUDE.md critic that runs the live gate** (`pytest --co` → 63) to fact-check the doc's claims against
+  the running system, not just its prose. It returned 0 inaccuracies / 0 bloat → objective sign-off.
+- **`git add -f` when the repo gitignores CLAUDE.md** (the Step-13 repo cross-check caught this; verify it's tracked after).
+- **Path-scoped `.claude/rules/` are a cheap, robust reinforcement** of the architectural boundary — but keep
+  CLAUDE.md self-sufficient (state the rule there too), since rules-loading is version-sensitive.
 
 ### Step 13 skill learnings (toward the repo-agnostic skill)
 - **Research must be ACTIONABLE, not a literature review.** Frame every sub-topic around "what will I DO next

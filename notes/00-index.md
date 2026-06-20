@@ -55,9 +55,18 @@ Read these in order:
   (+31/−33); 0 good comments removed; resolved the §D5/§D6 doc-rot. 63 green, ruff 154.
 - Step 13 (deep-research CC-comprehension techniques) **done** (notes only): `step13-ai-legibility-research.md` —
   cited, fact-checked (0 hallucinations); **§6 = the Step-14 action plan**.
-- Step 14 **pending** (the capstone). Branch: `cleanup/legibility-pass`. Next: **Step 14** — execute step13 §6:
-  write a lean root `CLAUDE.md` (**`git add -f` — it's gitignored!**), `.claude/rules/` for the two systems, 1–2 skills,
-  then the fresh-context comprehension eval (acceptance test). This is the final step (14/14).
+- Step 14 (self-legibility capstone) **done** (`55e5594`): 61-line root `CLAUDE.md` (`git add -f`), 2 path-scoped
+  `.claude/rules/`, banners on stale docs. Fresh-context eval (`wf_05d8971a-22f`): 3 zero-context agents answered
+  5 onboarding Qs correctly + orientedWell; critic (live `pytest --co`=63) found 0 inaccuracies/0 bloat; eval caught
+  a real README doc/code bug (COMMIT_EVERY 5→50, fixed).
+
+## ✅ 14/14 — SEQUENCE COMPLETE (branch `cleanup/legibility-pass`)
+All 14 steps done; 63 tests green + behavior-preserving throughout. Code commits: `63c93d8` (1, dead code),
+`0066153` (2, constants), `618be3a` (3, DRY), `e96a6cb` (4, dead code #2), `d10d3a8` (7, variable renames),
+`e25103e` (10, function renames), `423e55a` (12, comments), `55e5594` (14, CLAUDE.md). Steps 5/6/8/9/11/13 were
+notes-only (identify/propose/research); Step 11 = empty rename surface (leave as-is). Net: a well-named,
+dead-code-free, accurately-documented repo with a CLAUDE.md proven legible by a fresh-context eval. The reusable
+machinery is distilled in `skill-design-and-progress.md` → ready to run on the other target repos.
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →
