@@ -98,7 +98,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 10 | Apply function/param renames | done | `e25103e` | Workflow `wf_d05adbd5-607` (1 agent/file). ~15 renames across 14 files; +67/-67 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach; r-string edits hand-checked. Function cadence (8→9→10) COMPLETE. |
 | 11 | Rename/reorganize unclear classes & files | done | (notes only) | Workflow `wf_6e314a03-2d7`. **Empty surface (0 class + 0 file renames) — critic-confirmed.** Plan in `notes/step11-class-file-plan.md`: leave naming + structure as-is; frozen map + Step-12 doc-rot worklist captured. No code change. |
 | 12 | Clean up comments/docstrings | done | `423e55a` | Workflows `wf_9bfb93a6` + sequential rerun `wf_36b64049` (3 slices rate-limited → re-run sequentially). 13 conservative stale-ref fixes across 14 files, +31/-33; 0 good comments removed. 63 green, ruff 154. Resolved the §D5/§D6 doc-rot. |
-| 13 | Deep-research latest CC-comprehension techniques | pending | — | Use `deep-research`. |
+| 13 | Deep-research latest CC-comprehension techniques | done | (notes only) | Workflow `wf_e5e6877a-7c4` (web research + claude-code-guide agents + fact-check: 0 hallucinations). Cited report → `notes/step13-ai-legibility-research.md`; §6 = the Step-14 plan. CRITICAL catch: CLAUDE.md is gitignored (`git add -f`). No code change. |
 | 14 | Make repo self-legible; clean CLAUDE.md; fresh-agent eval | pending | — | Use `init` + `deep-guide` + Explore. |
 
 **Operating protocol:** do ONE step per go-ahead, run gates, commit, update this table, then stop and
@@ -121,6 +121,18 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 13 skill learnings (toward the repo-agnostic skill)
+- **Research must be ACTIONABLE, not a literature review.** Frame every sub-topic around "what will I DO next
+  (Step 14)"; the deliverable's center of gravity is the ordered action plan (§6), not the survey.
+- **Use the domain-right agent type** — `claude-code-guide` (web tools + Claude Code expertise) for the
+  CC-specific facts; general web-research agents for the broader practice.
+- **Adversarially fact-check "latest techniques" research** — hallucinated tool features are the real risk. A
+  `claude-code-guide` verifier confirmed 0 hallucinations and that all cited URLs were real. Always run this gate.
+- **Tag every claim [WEB]/[KB]/[REPO]** — separate primary-source facts from directional community claims so the
+  apply step doesn't ship a [KB] number as fact.
+- **Cross-check the LIVE repo, not just the web** — that's what surfaced the repo-specific CRITICAL (CLAUDE.md is
+  gitignored here → must `git add -f`), which a web-only research pass would have missed.
 
 ### Step 12 skill learnings (toward the repo-agnostic skill)
 - **Inverse failure mode: OVER-DELETION of good comments.** Unlike the dead-code/extraction steps, the danger

@@ -23,6 +23,8 @@ Read these in order:
    the exact instructions for Step 10, incl. distinct names for same-name copies + the r-string watch-item.
 8. **`step11-class-file-plan.md`** — class/file rename plan (**empty surface — leave as-is**) + the canonical
    frozen class/file map + the consolidated **Step-12 doc-rot worklist** (stale filenames in docstrings).
+9. **`step13-ai-legibility-research.md`** — cited research on making the repo legible to Claude Code; **§6 is the
+   Step-14 action plan** (write CLAUDE.md, `.claude/rules/`, skills, the comprehension eval; `git add -f` CLAUDE.md).
 
 ## Current status (2026-06-19)
 - Step 0 (recon/setup) **done** (`6cc6820`): PDF read, repo deep-read, hazard map built, notes scaffolded.
@@ -51,9 +53,11 @@ Read these in order:
   (0 class + 0 file renames, critic-confirmed); naming + structure are sound → leave as-is. Frozen map + Step-12 doc-rot list captured.
 - Step 12 (clean up comments/docstrings) **done** (`423e55a`): 13 conservative stale-ref fixes across 14 files
   (+31/−33); 0 good comments removed; resolved the §D5/§D6 doc-rot. 63 green, ruff 154.
-- Steps 13–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 13** — deep-research the latest techniques
-  for helping Claude Code understand a codebase (→ `deep-research` skill); then **Step 14** — make the repo self-legible
-  (CLAUDE.md, fresh-context sub-agent comprehension eval).
+- Step 13 (deep-research CC-comprehension techniques) **done** (notes only): `step13-ai-legibility-research.md` —
+  cited, fact-checked (0 hallucinations); **§6 = the Step-14 action plan**.
+- Step 14 **pending** (the capstone). Branch: `cleanup/legibility-pass`. Next: **Step 14** — execute step13 §6:
+  write a lean root `CLAUDE.md` (**`git add -f` — it's gitignored!**), `.claude/rules/` for the two systems, 1–2 skills,
+  then the fresh-context comprehension eval (acceptance test). This is the final step (14/14).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →
