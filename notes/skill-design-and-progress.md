@@ -92,7 +92,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 4 | Delete dead code (pass 2) | done | `e96a6cb` | Workflow `wf_defc3f44-e36` (fresh sweep found 0 new dead code — Steps 1-3 were clean). Resolved deferred items per user: deleted app/+ui group (uv.lock regenerated), the broken canonicalize/classify `main()`s, and the 5 F841 dead locals + SAVE_EVERY. 63 green, ruff 159→154, F841 0. |
 | 5 | Identify private/inner variables + usage | done | (notes only) | Workflow `wf_9a72256e-bca`. Read-only inventory → `notes/step5-variable-inventory.md`. Codebase is well-named: ~3 cryptic attrs + ~27 candidate locals out of ~700. No code change, no gate. Feeds Step 6. |
 | 6 | Propose best variable names (no change) | done | (notes only) | Workflow `wf_dc08ce88-bcd`. Proposal in `notes/step6-rename-proposal.md` — 30 renames, critic-APPROVED (0 collisions/boundary/param/missed-site issues). `td` deferred to Step 8; `D`/`Xa`/`sims` left. No code change. Review gate. |
-| 7 | Apply variable renames (no misdirection) | pending | — | grep old names after. |
+| 7 | Apply variable renames (no misdirection) | done | `d10d3a8` | Workflow `wf_ae74cb2e-9ac` (1 agent/file). 30 renames across 16 files; +149/-149 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach. Variable cadence (5→6→7) COMPLETE. |
 | 8 | Identify functions/params + usage | pending | — | |
 | 9 | Propose best function/param names (no change) | pending | — | Human review gate. |
 | 10 | Apply function/param renames | pending | — | grep old names; watch CLI flag boundary. |
@@ -121,6 +121,19 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 7 skill learnings (toward the repo-agnostic skill)
+- **A safe rename needs a verification TRIFECTA, not one check:** (1) no-misdirection grep — old whole-word
+  tokens are GONE; (2) over-reach grep — frozen substrings are still INTACT (grep-for-absence alone misses a
+  `data`→`response` that mangled `metadata`); (3) the gate (pytest + ruff-unchanged + py_compile). Renames are
+  pure → **ruff total must be UNCHANGED** (154→154) and the diff symmetric (+149/−149); any drift = a mistake.
+- **Whole-word + per-scope discipline is everything** for local-variable renames. Short/substring-prone names
+  (`data`, `sub`, `av`, `pa`, `prov`, `rel`, `tagged`) demand context-bounded edits, never bare replace_all.
+- **One agent per file parallelizes safely** (disjoint files = no conflicts, no worktree needed) — and agents
+  enforce the no-misdirection rule better than a static plan (one caught a 4th `to_do` in a log f-string the
+  proposal's site list missed, and renamed comment references too).
+- **Legit survivors are expected** — distinguish a renamed variable's old token appearing as English prose
+  (help text), a *different* out-of-scope variable of the same name, or display-label text, from real misdirection.
 
 ### Step 6 skill learnings (toward the repo-agnostic skill)
 - **Step 6 (propose names) is ALSO read-only — it's the review gate.** Separating "decide the name" from

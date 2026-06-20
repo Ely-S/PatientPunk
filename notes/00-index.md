@@ -33,8 +33,10 @@ Read these in order:
   `step5-variable-inventory.md` — ~3 cryptic attrs + ~27 candidate locals out of ~700 (codebase is well-named).
 - Step 6 (propose names) **done** (notes only, no code change): `step6-rename-proposal.md` — 30 critic-approved
   renames; `td` deferred to Step 8; `D`/`Xa`/`sims` left. The review gate.
-- Steps 7–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 7 — apply the renames** from
-  `step6-rename-proposal.md` (with §6 recommended options); grep for old names after (no misdirection); gate at 63.
+- Step 7 (apply variable renames) **done** (`d10d3a8`): 30 renames across 16 files (+149/−149, pure). 63 green,
+  ruff 154, 0 misdirection, 0 over-reach. **Variable rename cadence (5→6→7) COMPLETE.**
+- Steps 8–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 8** — identify functions + parameters
+  and their usage (start of the function-rename cadence 8→9→10; includes the deferred `td` param → `trial_dir`).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →
