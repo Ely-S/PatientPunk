@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-classify_sentiment.py — Classify sentiment toward drugs.
+classify.py — Classify sentiment toward drugs.
 
 Step 3 of the pipeline. For each entry×drug pair, classifies sentiment
 (positive/negative/mixed/neutral) and signal strength. Note that this will take into

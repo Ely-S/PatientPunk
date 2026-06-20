@@ -142,8 +142,8 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
     run_parser.add_argument("--discover", choices=["auto", "review"], default=None,
                    help="Run Phase 3 field discovery. 'auto' runs all stages and "
                         "merges candidates. 'review' stops after candidate generation "
-                        "so you can select fields in the Marimo variable picker "
-                        "(apps/discover.py). Default: skip discovery entirely.")
+                        "so you can select fields in the Marimo variable picker. "
+                        "Default: skip discovery entirely.")
     run_parser.add_argument("--no-clean", action="store_true",
                    help="Do not wipe temp/ before starting.  Useful when resuming.")
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-extract_mentions.py — Extract drug mentions from Reddit posts.
+extract.py — Extract drug mentions from Reddit posts.
 
 Step 1 of the pipeline. Reads posts from SQLite and outputs tagged_mentions.json
 with drugs found in each post/comment (direct mentions + inherited from upstream comments).

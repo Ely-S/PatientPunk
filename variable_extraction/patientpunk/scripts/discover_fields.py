@@ -1560,8 +1560,8 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         help=(
             "Load Phase 1 candidates from a saved JSON file and skip Phase 1 entirely. "
             "Phase 1 results are always saved to output/phase1_candidates.json after each run. "
-            "Note: run_pipeline.py auto-detects output/phase1_candidates.json and passes it "
-            "automatically - use --candidates here to override or specify a different file."
+            "Note: the pipeline (main.py run --discover) auto-detects output/phase1_candidates.json "
+            "and passes it automatically - use --candidates here to override or specify a different file."
         ),
     )
     parser.add_argument(

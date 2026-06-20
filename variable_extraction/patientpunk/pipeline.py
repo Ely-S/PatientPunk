@@ -292,7 +292,7 @@ class Pipeline:
         # "auto" runs all 4 stages and merges candidates into the schema.
         # "review" runs stages 1-2 (candidate scan + regex gen), saves
         # candidates JSON, then stops so the user can select fields in
-        # the Marimo variable picker (apps/discover.py).
+        # the Marimo variable picker.
         skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
         result.phases.append(
             self._run_phase(
@@ -318,7 +318,7 @@ class Pipeline:
         # candidates before they flow into Phases 4-5.
         if cfg.discovery_mode == "review" and not result.phases[-1].skipped:
             print("\n  Discovery candidates saved to temp/.")
-            print("  Review in: marimo run apps/discover.py")
+            print("  Review them in the Marimo variable picker.")
             print("  Then re-run with: --start-at 4 --no-clean")
             result.total_elapsed = time.time() - pipeline_start
             return result

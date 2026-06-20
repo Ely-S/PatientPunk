@@ -1,7 +1,7 @@
 """Database helpers for the pipeline.
 
 Thin layer over treatment_reports — handles run logging, lookups,
-existence checks, and incremental inserts. Keeps classify_sentiment
+existence checks, and incremental inserts. Keeps classify
 free of schema details.
 """
 import json

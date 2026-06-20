@@ -163,7 +163,7 @@ def get_client() -> anthropic.Anthropic:
 
 def call_model(client: anthropic.Anthropic, system_prompt: str, user_message: str,
                temperature: float | None = None) -> str:
-    """Call Haiku with retry/backoff and prompt caching.
+    """Call the fast model with retry/backoff and prompt caching.
 
     Thread-safe - Anthropic client is thread-safe.
     The system prompt is marked for caching: after the first request Anthropic

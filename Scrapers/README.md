@@ -17,9 +17,8 @@ python scrape_corpus.py --weeks 2 --comments
 Output goes to `output/` at the project root. Then run the extraction pipeline:
 
 ```bash
-cd ..
-python Scrapers/demographic_extraction/run_pipeline.py \
-    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
+cd ../variable_extraction
+python main.py run --schema schemas/covidlonghaulers_schema.json
 ```
 
 ---

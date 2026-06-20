@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_demographics.py — Extract demographics and conditions from user posts.
+extract_demographics_conditions.py — Extract demographics and conditions from user posts.
 
 Reads from the posts table, groups by user, sends to a fast model for extraction,
 and writes to user_profiles and conditions tables.
@@ -11,8 +11,8 @@ along with the type of condition (illness or symptom), the severity of the condi
 and the date of diagnosis and resolution.
 Both of these may have empty values if the model fails to extract any information.
 Usage:
-    python src/run_demographics.py --db data/posts.db
-    python src/run_demographics.py --db data/posts.db --limit 50
+    python src/extract_demographics_conditions.py --db data/posts.db
+    python src/extract_demographics_conditions.py --db data/posts.db --limit 50
 """
 import argparse
 import sys

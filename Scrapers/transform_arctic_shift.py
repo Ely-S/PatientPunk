@@ -17,8 +17,8 @@ Usage:
     python transform_arctic_shift.py --posts posts.zst --comments comments.zst
     python transform_arctic_shift.py --posts posts.ndjson --comments comments.ndjson --output output/subreddit_posts.json
 
-The output is compatible with both pipelines (Scrapers/demographic_extraction/
-and src/run_pipeline.py).
+The output is compatible with both pipelines (variable_extraction/main.py
+and src/run_sentiment_pipeline.py).
 """
 
 import argparse
