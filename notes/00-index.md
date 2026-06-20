@@ -43,8 +43,10 @@ Read these in order:
   ~13 fn + ~3 param candidates of ~284 (all private internals); frozen boundary mapped.
 - Step 9 (propose function/param names) **done** (notes only, no code change): `step9-function-rename-proposal.md` —
   ~15 critic-SAFE renames; `call_haiku`→`call_model`; same-name copies distinct; `nnt`/`k` cosmetic/leave.
-- Steps 10–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 10** — apply the function/param renames
-  (update all call sites + comment mentions; keep the §4 frozen boundary; r-string edits need manual eyeballing); gate at 63.
+- Step 10 (apply function/param renames) **done** (`e25103e`): ~15 renames across 14 files (+67/−67, pure). 63 green,
+  ruff 154, 0 misdirection, 0 over-reach, r-string edits hand-checked. **Function rename cadence (8→9→10) COMPLETE.**
+- Steps 11–14 **pending**. Branch: `cleanup/legibility-pass`. Next: **Step 11** — identify unclear CLASS & FILE names
+  and rename/reorganize (widest blast radius: imports/paths; the `patientpunk` public API + `_SCRIPT` filenames are frozen).
 
 ## Operating protocol
 ONE step per go-ahead → run gates (`uv run pytest tests/ variable_extraction/tests/ -v`, `ruff`) →

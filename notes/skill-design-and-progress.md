@@ -95,7 +95,7 @@ Lint watch: `uv run ruff check .` total must not rise (baseline 171 → now 161)
 | 7 | Apply variable renames (no misdirection) | done | `d10d3a8` | Workflow `wf_ae74cb2e-9ac` (1 agent/file). 30 renames across 16 files; +149/-149 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach. Variable cadence (5→6→7) COMPLETE. |
 | 8 | Identify functions/params + usage | done | (notes only) | Workflow `wf_c4c4418e-4ce`. Inventory → `notes/step8-function-param-inventory.md`. Naming is good: ~13 fn + ~3 param candidates of ~284, all private internals. Critic-verified frozen boundary (public API/CLI/subprocess/serialized). No code change. Feeds Step 9. |
 | 9 | Propose best function/param names (no change) | done | (notes only) | Workflow `wf_7d5033a1-cdc`. Proposal in `notes/step9-function-rename-proposal.md` — ~15 renames, critic-SAFE (0 collisions/frozen/test/weaker). call_haiku→call_model aligned; same-name copies distinct; nnt/k cosmetic. No code change. Review gate. |
-| 10 | Apply function/param renames | pending | — | grep old names; watch CLI flag boundary. |
+| 10 | Apply function/param renames | done | `e25103e` | Workflow `wf_d05adbd5-607` (1 agent/file). ~15 renames across 14 files; +67/-67 (pure). 63 green, ruff 154, 0 misdirection, 0 over-reach; r-string edits hand-checked. Function cadence (8→9→10) COMPLETE. |
 | 11 | Rename/reorganize unclear classes & files | pending | — | Widest blast radius; `patientpunk` public API is a boundary. |
 | 12 | Clean up comments/docstrings | pending | — | Stale-doc targets in §D5. |
 | 13 | Deep-research latest CC-comprehension techniques | pending | — | Use `deep-research`. |
@@ -121,6 +121,18 @@ report. Do not chain steps without the user's signal (mirrors the "one prompt at
   filenames but not keys, and naming them makes the schema-defining dict literals less JSON-shaped.
 - **RCT `SIG_RANK`/`DRUG_CUTOFFS`/`END_2022_EXCLUSIVE`** — already constants; cross-`src/`↔`RCT`
   consolidation is forbidden (intentional self-containment). SQL `'deleted'` sentinels stay in-query.
+
+### Step 10 skill learnings (toward the repo-agnostic skill)
+- **Same verification trifecta as Step 7, but the over-reach check must also protect SIBLINGS/same-name copies**
+  that intentionally stay (`merge_records` in llm_extract, the `discover_fields.call_model` sibling) — not just frozen names.
+- **Coincidental tokens in strings look like survivors**: `\btd\b` matched `<td>` HTML tags in f-strings — a legit
+  survivor, not misdirection. Distinguish the renamed symbol from same-spelled tokens in string/HTML content.
+- **r-string / notebook-cell edits dodge the gate** (pytest/py_compile don't execute string content) — eyeball the
+  def AND any in-string reference by hand; a partial rename inside a string breaks only at notebook-execution time.
+- **Renaming a function across files** means updating its docstring/comment cross-references too
+  (`extract_demographics_llm`'s `llm_extract.call_haiku` → `call_model`).
+- **A symbol rename does NOT fix PROSE describing it**: docstring prose "Call Haiku" is now inaccurate after
+  `call_haiku`→`call_model`. That's a Step-12 comment-cleanup item (logged in §D5), not a Step-10 symbol misdirection.
 
 ### Step 9 skill learnings (toward the repo-agnostic skill)
 - **Make misleading names honest, not just shorter→longer**: a function returning a rate-float (`_hit`) or a

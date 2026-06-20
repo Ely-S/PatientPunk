@@ -164,6 +164,10 @@ cluster_prep.DEFAULT_META + evaluate._META; named to avoid the `records_to_csv.M
   Marimo picker that does not exist on disk (no `apps/` dir anywhere) — a broken/aspirational feature
   reference. Distinct from the now-deleted `app/` package. Investigate in Step 12 (delete the dead path
   or build the picker).
+- **(found Step 10)** Docstring/comment PROSE saying "Call Haiku" / "Claude Haiku" / "Haiku reads the text" in
+  `scripts/{llm_extract,code_demographics_llm,extract_demographics_llm}.py` is now provider-inaccurate after the
+  `call_haiku`→`call_model` rename (the model is the provider-agnostic `MODEL_FAST`). Make the prose
+  provider-agnostic in Step 12 (comment/docstring cleanup) — it's prose, not a symbol, so Step 10 left it.
 
 ### D6. Behavior bugs found — LOG, do not fix during cleanup (invariant #8)
 - **Windows encoding (found Step 1):** `tests/populate_db_test.py` does `SCHEMA.read_text()` with no
