@@ -1,5 +1,9 @@
 # PatientPunk MVP Plan
 ## Static Drug Intervention Database — r/covidlonghaulers
+
+> ⚠️ **HISTORICAL / likely stale.** Early planning doc (self-flagged ~90% generated below) that references
+> modules and a layout that no longer exist. For the current architecture and how to run, see
+> [`/CLAUDE.md`](../CLAUDE.md) and [`notes/codebase-understanding.md`](../notes/codebase-understanding.md).
 ################################################################################ 
 ##This is 90% Claude generated and I need to think about this a bit more for myself:  please both humans and LLMs, do not take it as gospel -SG
 ################################################################################ 
