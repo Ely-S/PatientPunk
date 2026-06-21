@@ -37,21 +37,21 @@ from agents.tools import (
 _MAX_QUOTES_PER_POLE = 3
 # Small-n threshold (distinct users) — fewer than this and we hedge hard.
 _SMALL_N = 30
+# Cap side-effect claims to the top N by report count. The long tail is almost
+# all x1 singletons (near-zero evidentiary value) that bloat the block and dilute
+# the claim_ids a small model has to track. Top-N keeps the effects worth citing.
+_MAX_SIDE_EFFECT_CLAIMS = 12
 
-# IRON RULES the agents must obey — embedded verbatim in the prompt block so the
-# constraint travels with the evidence the model sees.
+# IRON RULES embedded in the prompt block so the constraint travels with the
+# evidence the model sees. Critical rule first; one crisp copy (the system prompt
+# states the citation HOW-TO — not repeated here).
 _IRON_RULES = (
-    "IRON RULES (non-negotiable):\n"
-    "  1. Cite ONLY the claim_ids below. Never invent a number, percentage, or quote.\n"
-    "     Refer to evidence as cite(\"S2\") or quote(\"Q-pos-1\"); the system fills in\n"
-    "     the literal text. If a fact is not a claim_id here, you do not have it.\n"
-    "  2. NEVER tell anyone to start, stop, switch, or dose a drug. You weigh evidence;\n"
-    "     a doctor decides. Keep it about what the reports do and do not show.\n"
-    "  3. A low negative count is NOT proof of safety: see C3 — reports exist only when\n"
-    "     an author expressed personal experience, so non-experiential mentions are\n"
-    "     silently dropped. Absence of negatives != safe.\n"
-    "  4. This is anecdotal self-report from one community (C2, C4), not a trial.\n"
-    "  5. Keep any humor PG and OFF the evidence path.\n"
+    "IRON RULES:\n"
+    '  1. Cite ONLY the claim_ids above, as cite("S2") / quote("Q-pos-1"). Write the\n'
+    "     cite() with NO number before it — the system prints the exact text. Any\n"
+    "     number, percent, or quote not from a claim_id loses the round.\n"
+    "  2. Never tell anyone to start, stop, switch, or dose a drug — the doctor decides.\n"
+    "  3. Low negatives is NOT safety: cite C3 (non-experiential mentions are dropped).\n"
 )
 
 
@@ -94,23 +94,20 @@ class EvidencePacket:
         Deterministic string — no LLM, no fabrication.
         """
         lines: list[str] = []
-        lines.append("=" * 60)
-        lines.append(f"EVIDENCE PACKET — drug: {self.drug!r} (query: {self.drug_query!r})")
-        lines.append(f"confidence tier: {self.confidence_tier}")
-        lines.append("=" * 60)
+        lines.append(
+            f"EVIDENCE PACKET — {self.drug!r} (query {self.drug_query!r}), "
+            f"confidence: {self.confidence_tier}"
+        )
         if not self.found:
-            lines.append("")
             lines.append(
-                "NO REPORTS. The corpus has zero personal-experience reports for "
-                "this query. There is nothing to debate — say so plainly and stop."
+                "NO REPORTS for this query — nothing to debate. Say so plainly and stop."
             )
             lines.append("")
             lines.append(_IRON_RULES)
             return "\n".join(lines)
 
-        lines.append("")
-        lines.append("CLAIMS (cite these ids — this is the whole of your evidence):")
-        # Emit in a stable, readable order: stats, side effects, quotes, caveats, prov.
+        lines.append("CLAIMS — your ONLY evidence; cite these ids:")
+        # Stable order: stats, side effects, quotes, caveats, prov.
         for cid in self._ordered_claim_ids():
             c = self.claims[cid]
             lines.append(f"  [{cid}] {c['render']}")
@@ -373,7 +370,10 @@ def build_packet(drug_query: str, db_path: str | Path) -> EvidencePacket:
                   "neutral": counts.get("neutral", 0)},
     }
 
-    for i, se in enumerate(side_effects, start=1):
+    # Cap the SE claim_ids agents may cite to the top N by count. The long x1
+    # tail (mostly singletons) bloats the block and dilutes the ids a small model
+    # tracks. `self.side_effects` stays full for the code-templated briefing.
+    for i, se in enumerate(side_effects[:_MAX_SIDE_EFFECT_CLAIMS], start=1):
         cid = f"SE{i}"
         claims[cid] = {
             "kind": "side_effect",
@@ -452,34 +452,32 @@ def _build_caveats(n_users: int, cav: dict) -> list[dict]:
             "text": (
                 f"SMALL N: only {n_users} distinct patients"
                 + (
-                    " — below the n>=30 bar; treat every percentage as noisy and provisional."
+                    " — below the n>=30 bar; every percentage is noisy."
                     if n_users < _SMALL_N
-                    else " — still a community sample, not a trial."
+                    else " — a community sample, not a trial."
                 )
             ),
         },
         {
             "claim_id": "C2",
             "text": (
-                f"SINGLE SOURCE: all reports come from {sub_label}; self-selected "
-                "forum users are not the general patient population."
+                f"SINGLE SOURCE: all from {sub_label}; self-selected forum users, "
+                "not the general patient population."
             ),
         },
         {
             "claim_id": "C3",
             "text": (
-                "SILENT DROP / SELF-SELECTION: a report row exists ONLY when an "
-                "author voiced personal experience (signal != 'n/a'). Non-experiential "
-                "mentions are dropped before counting, so a low NEGATIVE count is NOT "
-                "evidence of safety — absence of negatives != safe."
+                "SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced "
+                "personal experience; non-experiential mentions are dropped, so a low "
+                "negative count is NOT safety — absence of negatives != safe."
             ),
         },
         {
             "claim_id": "C4",
             "text": (
-                "SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured "
-                "outcomes — no dosing, no controls, no follow-up, recall and placebo "
-                "uncontrolled."
+                "SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — "
+                "no controls, no follow-up, recall and placebo uncontrolled."
             ),
         },
     ]

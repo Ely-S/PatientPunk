@@ -57,15 +57,15 @@ def _stub_response(messages, system):
             "conditions": [],
         })
 
-    # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
-    if "identify true synonyms" in prompt:
+    # Canonicalize: "Merge only TRUE synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
+    if "Merge only TRUE synonyms" in prompt:
         end = prompt.rindex("]") + 1
         start = prompt.rindex("[", 0, end)
         names = json.loads(prompt[start:end])
         return json.dumps({n: n for n in names})
 
-    # Prefilter: "Does the AUTHOR express personal experience" is in PREFILTER_PROMPT.
-    if "Does the AUTHOR express personal experience" in prompt:
+    # Prefilter: "report personal experience" is in PREFILTER_PROMPT.
+    if "report personal experience" in prompt:
         blocks = re.split(r"--- \d+ ---", prompt)[1:]
         return json.dumps(["yes" if "I love it" in b else "no" for b in blocks])
 
@@ -81,7 +81,7 @@ def _stub_response(messages, system):
         return json.dumps({"sentiment": "positive", "signal": "strong"})
 
     # Extract: EXTRACT_PROMPT text fingerprint.
-    if "list all drugs, medications, supplements" in prompt:
+    if "list every drug, supplement" in prompt:
         blocks = re.split(r"--- \d+ ---", prompt)[1:]
         return json.dumps([["ldn"] if "ldn" in b.lower() else [] for b in blocks])
 

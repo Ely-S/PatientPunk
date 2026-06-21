@@ -28,13 +28,8 @@ SENTIMENTS = ("positive", "negative", "mixed", "neutral")
 
 
 def _resolve_drug(name: str, db_path: str | Path) -> str:
-    """Resolve a free-text drug query to a canonical treatment name.
-
-    Matches the query case-insensitively against every canonical_name AND
-    every alias in the `treatment` table. On no match, falls back to the
-    lowercased input (so downstream queries simply return empty rather than
-    raising). Deterministic: no LLM call.
-    """
+    """Resolve a free-text drug query to a canonical name (case-insensitive over
+    canonical_name + aliases); unmatched -> lowercased passthrough. No LLM."""
     q = (name or "").strip().lower()
     if not q:
         return q
@@ -57,12 +52,7 @@ def _resolve_drug(name: str, db_path: str | Path) -> str:
 
 
 def get_sentiment_breakdown(drug: str, db_path: str | Path) -> dict:
-    """Sentiment counts for one drug, GROUP BY sentiment.
-
-    Returns {found, drug, n_reports, counts:{positive,negative,mixed,neutral}}.
-    All four sentiments are pre-seeded to 0. Counts are RAW report rows — the
-    packet builder re-derives user-deduped counts on top of the example rows.
-    """
+    """Raw sentiment counts for one drug -> {found, drug, n_reports, counts{4 buckets}}."""
     canonical = _resolve_drug(drug, db_path)
     counts: dict[str, int] = {s: 0 for s in SENTIMENTS}
     conn = open_db(Path(db_path))
@@ -93,12 +83,7 @@ def get_sentiment_breakdown(drug: str, db_path: str | Path) -> dict:
 
 
 def get_example_reports(drug: str, sentiment: str, k: int, db_path: str | Path) -> dict:
-    """Up to k verbatim example reports of one sentiment, strongest signal first.
-
-    Snippet text is reconstructed via `post_text(title, body_text, parent_id)`
-    and truncated — verbatim only, never paraphrased. Ordered strong > moderate
-    > weak > other.
-    """
+    """Up to k verbatim example reports of one sentiment, strongest signal first."""
     canonical = _resolve_drug(drug, db_path)
     k = max(0, int(k))
     conn = open_db(Path(db_path))
@@ -141,11 +126,7 @@ def get_example_reports(drug: str, sentiment: str, k: int, db_path: str | Path) 
 
 
 def get_side_effects(drug: str, db_path: str | Path) -> dict:
-    """Tally reported side effects for one drug.
-
-    Pulls the `side_effects` JSON column where it isn't NULL/empty, json.loads,
-    Counter-tallies the lowercased effect strings. Returns most-common first.
-    """
+    """Tally reported side effects for one drug, most-common first."""
     canonical = _resolve_drug(drug, db_path)
     conn = open_db(Path(db_path))
     try:
@@ -184,11 +165,7 @@ def get_side_effects(drug: str, db_path: str | Path) -> dict:
 
 
 def list_drugs(min_reports: int, db_path: str | Path) -> dict:
-    """List drugs with >= min_reports reports, with deduped-user counts.
-
-    GROUP BY treatment; reports = COUNT(*), users = COUNT(DISTINCT user_id).
-    HAVING reports >= min_reports. Ordered by report count descending.
-    """
+    """List drugs with >= min_reports reports + deduped-user counts, report-count desc."""
     min_reports = max(0, int(min_reports))
     conn = open_db(Path(db_path))
     try:
@@ -212,12 +189,7 @@ def list_drugs(min_reports: int, db_path: str | Path) -> dict:
 
 
 def get_caveats(drug: str, db_path: str | Path) -> dict:
-    """Methodological caveats for one drug: small-n, single-subreddit, self-report.
-
-    Counts reports + distinct users + distinct source subreddits. `small_n_warning`
-    fires when fewer than 30 distinct users. Patient self-reports are always
-    anecdotal, so `self_report`/`is_anecdotal` are unconditionally True.
-    """
+    """Methodology caveats for one drug: report/user/subreddit counts; small_n_warning < 30 users."""
     canonical = _resolve_drug(drug, db_path)
     conn = open_db(Path(db_path))
     try:
