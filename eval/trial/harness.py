@@ -67,14 +67,17 @@ def _install_selftest_stubs() -> None:
     """Monkeypatch all LLM paths so the harness runs fully offline.
 
     Stubs (a) Hooper/Vex whirl -> canned cite()-only TextIdea-likes, (b) the
-    drug-query parser -> a deterministic keyword resolver, and (c) the
-    synthesize bottom-line LLM call -> a fixed safe sentence. After this, run_trial
-    makes ZERO network calls.
+    ResolverAgent drug-query parse -> a deterministic keyword resolver, (c) the
+    SynthesizerAgent bottom-line -> a fixed safe sentence, and (d) the JudgeAgent
+    grade -> a canned all-pass scores dict. After this, run_trial (and any
+    grading) makes ZERO network calls.
     """
     import agents.HooperAgent.main as hooper_mod
     import agents.DrVexAgent.main as drvex_mod
+    import agents.ResolverAgent.main as resolver_mod
     import agents.TheTrialAgent.main as world
-    import agents.TheTrialAgent.synthesize as synthesize
+    import agents.SynthesizerAgent.main as synth_agent
+    import agents.JudgeAgent.main as judge_mod
 
     class _StubIdea:
         def __init__(self, content: str):
@@ -93,24 +96,37 @@ def _install_selftest_stubs() -> None:
     # the resolver (build_packet's Resolver does the real alias work). For the
     # bank's free-text prompts we pull out a best-effort drug token so the
     # Resolver can hit. Simplicity over cleverness — the Resolver is the truth.
-    def _stub_parse(user_prompt: str) -> str:
-        return _keyword_drug_query(user_prompt)
+    # Stub the ResolverAgent entrypoint AND the name TheTrialAgent.main bound at
+    # import time, so _parse_drug_query never reaches Rumi.
+    def _stub_resolve_query(user_prompt: str, *, world=None) -> dict:
+        return {"drug_query": _keyword_drug_query(user_prompt)}
 
-    world._parse_drug_query = _stub_parse  # type: ignore[assignment]
+    resolver_mod.resolve_query = _stub_resolve_query  # type: ignore[assignment]
+    world.resolve_query = _stub_resolve_query         # type: ignore[assignment]
 
-    # synthesize's lone generative call -> a fixed, safe, directive-free line.
-    def _stub_llm_call(client, prompt, model=None, system=None, max_tokens=100, **kw):
+    # SynthesizerAgent's lone generative call -> a fixed, safe, directive-free line.
+    def _stub_write_bottom_line(tier, facts, *, world=None):
         return (
             "Patients reported a mix of experiences and the evidence is limited, "
             "so treat this as one data point; discuss with your doctor."
         )
 
-    synthesize.llm_call = _stub_llm_call  # type: ignore[assignment]
+    synth_agent.write_bottom_line = _stub_write_bottom_line  # type: ignore[assignment]
+    # synthesize.py binds write_bottom_line at import time — patch that name too.
+    import agents.TheTrialAgent.synthesize as synthesize
+    synthesize.write_bottom_line = _stub_write_bottom_line   # type: ignore[assignment]
 
-    def _stub_get_client():
-        return object()
+    # JudgeAgent grade -> a canned all-pass scores dict (selftest never grades,
+    # but keep the path offline if a caller flips grading on).
+    def _stub_judge_grade(packet_block, transcript_text, briefing_text, *, world=None):
+        return {
+            "U": {"score": 3, "reason": "selftest stub"},
+            "D": {"score": 3, "reason": "selftest stub"},
+            "F": {"score": 3, "reason": "selftest stub"},
+            "CAL": {"score": 3, "reason": "selftest stub"},
+        }
 
-    synthesize.get_client = _stub_get_client  # type: ignore[assignment]
+    judge_mod.grade = _stub_judge_grade  # type: ignore[assignment]
 
 
 # Keyword map: bank prompts -> the drug token to feed the Resolver offline.

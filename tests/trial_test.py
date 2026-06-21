@@ -215,12 +215,13 @@ def test_render_citations_expands_and_marks_missing(trial_db: Path):
 
 # ── synthesize numbers == packet numbers ─────────────────────────────────────
 def _stub_synth_bottom_line(monkeypatch):
+    # synthesize() delegates the bottom line to SynthesizerAgent.write_bottom_line;
+    # patch the name bound in synthesize.py so no Rumi/LLM call happens.
     import agents.TheTrialAgent.synthesize as syn
     monkeypatch.setattr(
-        syn, "llm_call",
-        lambda *a, **k: "Patients reported a mix of experiences; discuss with your doctor.",
+        syn, "write_bottom_line",
+        lambda tier, facts, **k: "Patients reported a mix of experiences; discuss with your doctor.",
     )
-    monkeypatch.setattr(syn, "get_client", lambda: object())
 
 
 def test_synthesize_numbers_match_packet(trial_db: Path, monkeypatch):

@@ -12,32 +12,30 @@ Design constraints (see the shared contract):
 * No ``@tool`` — Dr. Vex only talks, it never fetches data. All headline numbers
   and verbatim quotes are code-templated downstream by ``synthesize()``; the
   agent only ever cites/quotes packet claim ids.
-* ``MODEL`` must be an OpenRouter model id for live runs.
+* The model + sampling config live in ``brain/brain.json`` (OpenRouter model id,
+  temperature 0.4). ``RUMI_MODEL`` is an optional global override.
 """
 
 from __future__ import annotations
 
-from rumi import Dervish, HeartConfig, Voice
+from pathlib import Path
 
-from agents._common.model import MODEL
+from rumi import Dervish, HeartConfig
+
+from agents._common.brain import build_voice
 from agents.DrVexAgent.brain.prompts import INSTRUCTIONS
+
+_BRAIN_DIR = Path(__file__).parent / "brain"
 
 
 class DrVex(Dervish):
     """The skeptic. Cooler-headed, surfaces caveats and the silent-drop trap.
 
-    Lower temperature (0.4) — Dr. Vex is precise and must always raise C3
-    (non-experiential mentions are dropped, so a low negative count is NOT
-    proof of safety). Like Hooper, bound to packet claim ids only.
+    Lower temperature (0.4, from brain.json) — Dr. Vex is precise and must
+    always raise C3 (non-experiential mentions are dropped, so a low negative
+    count is NOT proof of safety). Like Hooper, bound to packet claim ids only.
     """
 
     heart_config = HeartConfig(
-        voices=[
-            Voice(
-                model_name=MODEL,
-                instructions=INSTRUCTIONS,
-                context_window=16,
-                temperature=0.4,
-            )
-        ]
+        voices=[build_voice(_BRAIN_DIR, INSTRUCTIONS)]
     )

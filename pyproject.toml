@@ -45,4 +45,7 @@ testpaths = ["variable_extraction/tests"]
 pythonpath = ["src"]
 
 [tool.uv.sources]
-rumi = { git = "https://github.com/cjleemesotes/Rumi.git", rev = "v0.1.0" }
+# Local editable checkout of Rumi (carries the agent_id auto-generation edit).
+# Revert to the published pin with:
+#   rumi = { git = "https://github.com/cjleemesotes/Rumi.git", rev = "v0.1.0" }
+rumi = { path = "../Rumi", editable = true }

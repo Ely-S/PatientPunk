@@ -12,31 +12,30 @@ Design constraints (see the shared contract):
 * No ``@tool`` — Hooper only talks, it never fetches data. All headline numbers
   and verbatim quotes are code-templated downstream by ``synthesize()``; the
   agent only ever cites/quotes packet claim ids.
-* ``MODEL`` must be an OpenRouter model id for live runs.
+* The model + sampling config live in ``brain/brain.json`` (OpenRouter model id,
+  temperature 0.7). ``RUMI_MODEL`` is an optional global override.
 """
 
 from __future__ import annotations
 
-from rumi import Dervish, HeartConfig, Voice
+from pathlib import Path
 
-from agents._common.model import MODEL
+from rumi import Dervish, HeartConfig
+
+from agents._common.brain import build_voice
 from agents.HooperAgent.brain.prompts import INSTRUCTIONS
+
+_BRAIN_DIR = Path(__file__).parent / "brain"
 
 
 class Hooper(Dervish):
     """The believer. Warm, hopeful, leans on the positive evidence.
 
-    Higher temperature (0.7) — Hooper is the enthusiastic one, but is still
-    bound to the packet: every number or quote must be a packet claim id.
+    Higher temperature (0.7, from brain.json) — Hooper is the enthusiastic one,
+    but is still bound to the packet: every number or quote must be a packet
+    claim id.
     """
 
     heart_config = HeartConfig(
-        voices=[
-            Voice(
-                model_name=MODEL,
-                instructions=INSTRUCTIONS,
-                context_window=16,
-                temperature=0.7,
-            )
-        ]
+        voices=[build_voice(_BRAIN_DIR, INSTRUCTIONS)]
     )

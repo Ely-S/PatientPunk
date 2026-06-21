@@ -19,10 +19,10 @@ Each axis is scored 0-3 by an LLM judge. The judge is given the packet's
 and is asked to grade conservatively at ``temperature=0``. A score >= the axis
 threshold is a "pass" for that axis.
 
-The judge call is routed through the same provider plumbing as the rest of
-``src/`` (``utilities.llm_call`` with ``MODEL_STRONG``). In offline / no-key
-runs the harness does not invoke the rubric (it grades only gate-passing live
-runs), so a missing key never blocks ``--selftest``.
+The judge call is delegated to the :class:`~agents.JudgeAgent.main.JudgeAgent`
+Dervish (its model + temp live in ``brain/brain.json``; OpenRouter via Rumi). In
+offline / no-key runs the harness does not invoke the rubric (it grades only
+gate-passing live runs), so a missing key never blocks ``--selftest``.
 """
 from __future__ import annotations
 
@@ -129,8 +129,9 @@ def grade(packet, briefing: dict, *, client=None, model=None) -> dict:
     returns a structured error result with all axes failed — the harness records
     it rather than crashing.
 
-    ``client``/``model`` are injectable for tests; default to the src/ strong
-    model via ``utilities``.
+    ``client``/``model`` are accepted for backward-compatible signature stability
+    but are no longer used: the judge model now lives in the JudgeAgent's
+    ``brain/brain.json`` (overridable via ``RUMI_MODEL``).
     """
     from agents._common.validate import render_citations  # local import: keep module light
 
@@ -149,21 +150,14 @@ def grade(packet, briefing: dict, *, client=None, model=None) -> dict:
     transcript_text = _transcript_to_text(rendered_turns)
     briefing_text = briefing.get("text", "")
 
-    prompt = judge_prompt(packet_block, transcript_text, briefing_text)
+    # Delegate the actual judging to the JudgeAgent Dervish (its model lives in
+    # brain/brain.json). It returns the raw scores dict {"U": {...}, ...} or, on
+    # any failure, {"error": "<msg>"} — which we turn into a structured error.
+    from agents.JudgeAgent.main import grade as judge_grade
 
-    try:
-        if client is None or model is None:
-            from utilities import get_client, llm_call, MODEL_STRONG
-            from utilities import parse_json_object
-            _client = client or get_client()
-            _model = model or MODEL_STRONG
-        else:
-            from utilities import llm_call, parse_json_object
-            _client, _model = client, model
-        raw = llm_call(_client, prompt, model=_model, max_tokens=400)
-        parsed = parse_json_object(raw)
-    except Exception as exc:
-        return _error_result(f"judge failed: {type(exc).__name__}: {exc}")
+    parsed = judge_grade(packet_block, transcript_text, briefing_text)
+    if isinstance(parsed, dict) and parsed.get("error"):
+        return _error_result(str(parsed["error"]))
 
     axes: dict[str, AxisResult] = {}
     for aid, spec in AXES.items():

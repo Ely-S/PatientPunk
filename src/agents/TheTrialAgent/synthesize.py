@@ -3,18 +3,17 @@
 The agents' banter is NEVER trusted for numbers or quotes. ``synthesize`` builds
 the briefing's spine — headline sentiment split, confidence tier, side effects
 to watch, real verbatim quotes, and the four caveats — entirely from the packet.
-The ONLY generative call is a single tool-less ``bottom_line`` from the strong
-model, and even that is fed packet-derived facts and constrained by
-``bottom_line_prompt`` (no dose/start/stop directives).
+The ONLY generative call is a single tool-less bottom line from the
+:class:`~agents.SynthesizerAgent.main.SynthesizerAgent` (its model lives in
+``brain/brain.json``), and even that is fed packet-derived facts and constrained
+by its prompt (no dose/start/stop directives).
 
 A fixed safety coda and a provenance footer are always appended.
 """
 
 from __future__ import annotations
 
-from utilities import get_client, llm_call, MODEL_STRONG
-
-from agents.TheTrialAgent.brain.prompts import bottom_line_prompt
+from agents.SynthesizerAgent.main import write_bottom_line
 
 # Never a medical directive — always the doctor's call.
 SAFETY_CODA = (
@@ -68,8 +67,8 @@ def synthesize(packet, transcript) -> dict:
 
     Code-fills the headline (S2/S3 over n_users), confidence tier, side effects
     (SE*), up to two real quotes per pole, and the four caveats — all from the
-    packet. Then makes ONE tool-less strong-model call for a <=2-sentence bottom
-    line, and appends the safety coda + provenance footer.
+    packet. Then asks the SynthesizerAgent for a <=2-sentence bottom line, and
+    appends the safety coda + provenance footer.
     """
     drug = packet.drug
     n_users = packet.n_users
@@ -146,23 +145,9 @@ def synthesize(packet, transcript) -> dict:
         "confidence_tier": tier,
     }
 
-    bottom_line = ""
-    try:
-        client = get_client()
-        bottom_line = llm_call(
-            client,
-            bottom_line_prompt(tier, facts),
-            model=MODEL_STRONG,
-            max_tokens=160,
-        ).strip()
-    except Exception:
-        # If the model is unavailable, fall back to a deterministic line so the
-        # briefing is still complete and safe (never a directive).
-        bottom_line = (
-            f"Bottom line: with {tier} evidence from {n_users} "
-            f"patient{'s' if n_users != 1 else ''}, treat this as one data "
-            "point among many."
-        )
+    # The single generative bottom line — delegated to the SynthesizerAgent
+    # Dervish, which carries its own deterministic fallback sentence on failure.
+    bottom_line = write_bottom_line(tier, facts)
 
     if bottom_line:
         if bottom_line.lower().startswith("bottom line"):

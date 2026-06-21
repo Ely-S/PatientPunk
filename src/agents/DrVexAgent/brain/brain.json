@@ -1,0 +1,5 @@
+{
+  "model": "anthropic/claude-sonnet-4.6",
+  "temperature": 0.4,
+  "context_window": 16
+}

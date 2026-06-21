@@ -21,13 +21,11 @@ import uuid
 
 from rumi import World
 
-from utilities import get_client, llm_call, parse_json_object, MODEL_FAST
-
 from agents._common.packet import build_packet
 from agents.HooperAgent.main import Hooper
 from agents.DrVexAgent.main import DrVex
+from agents.ResolverAgent.main import resolve_query
 from agents.TheTrialAgent.synthesize import synthesize
-from agents.TheTrialAgent.brain.prompts import kickoff_parse_prompt
 
 
 def _fresh_suffix(agent_suffix: str = "") -> str:
@@ -97,27 +95,12 @@ def run_debate(packet, *, rounds: int = 2, agent_suffix: str = "", on_turn=None)
 def _parse_drug_query(user_prompt: str) -> str:
     """Best-effort extraction of the target drug from the user's free text.
 
-    Uses the fast model with ``kickoff_parse_prompt``. Tolerates any parse
-    failure by falling back to the raw user prompt as the drug query — the
+    Delegates to the :class:`~agents.ResolverAgent.main.ResolverAgent` (a one-shot
+    Rumi Dervish whose model lives in its ``brain/brain.json``). Tolerates any
+    parse failure by falling back to the raw user prompt as the drug query — the
     deterministic Resolver in ``build_packet`` does the real resolution.
     """
-    raw_query = user_prompt.strip()
-    try:
-        client = get_client()
-        raw = llm_call(
-            client,
-            kickoff_parse_prompt(user_prompt),
-            model=MODEL_FAST,
-            max_tokens=120,
-        )
-        parsed = parse_json_object(raw)
-        candidate = (parsed.get("drug_query") or parsed.get("drug") or "").strip()
-        if candidate:
-            return candidate
-    except Exception:
-        # Any failure (no key, bad JSON, network) -> fall back to raw text.
-        pass
-    return raw_query
+    return resolve_query(user_prompt)["drug_query"]
 
 
 def run_trial(user_prompt: str, db_path: str, *, rounds: int = 2) -> dict:
