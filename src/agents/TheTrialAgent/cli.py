@@ -6,8 +6,8 @@ briefing for machine consumption.
 
 Usage::
 
-    uv run python -m agents.cli --prompt "what do people say about LDN?"
-    uv run python -m agents.cli --prompt "ivermectin?" --rounds 3 --json
+    uv run python -m agents.TheTrialAgent.cli --prompt "what do people say about LDN?"
+    uv run python -m agents.TheTrialAgent.cli --prompt "ivermectin?" --rounds 3 --json
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import dataclasses
 import json
 import sys
 
-from agents.world import run_trial
+from agents.TheTrialAgent.main import run_trial
 
 
 def _jsonable(obj):
@@ -35,7 +35,7 @@ def _jsonable(obj):
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="agents.cli",
+        prog="agents.TheTrialAgent.cli",
         description="The Trial — put a drug's patient evidence on the stand.",
     )
     p.add_argument(

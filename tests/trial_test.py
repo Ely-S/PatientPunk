@@ -24,10 +24,10 @@ from pathlib import Path
 
 import pytest
 
-from agents.packet import build_packet, _dedup_by_user, EvidencePacket
-from agents.tools import _resolve_drug
-from agents.validate import check_turn, render_citations
-from agents.synthesize import synthesize
+from agents._common.packet import build_packet, _dedup_by_user, EvidencePacket
+from agents._common.tools import _resolve_drug
+from agents._common.validate import check_turn, render_citations
+from agents.TheTrialAgent.synthesize import synthesize
 
 SCHEMA = Path(__file__).parent.parent / "schema.sql"
 LIVE_DB = Path(__file__).parent.parent / "data" / "posts.db"
@@ -215,7 +215,7 @@ def test_render_citations_expands_and_marks_missing(trial_db: Path):
 
 # ── synthesize numbers == packet numbers ─────────────────────────────────────
 def _stub_synth_bottom_line(monkeypatch):
-    import agents.synthesize as syn
+    import agents.TheTrialAgent.synthesize as syn
     monkeypatch.setattr(
         syn, "llm_call",
         lambda *a, **k: "Patients reported a mix of experiences; discuss with your doctor.",
@@ -261,20 +261,21 @@ def test_run_debate_with_stubbed_heart(trial_db: Path, tmp_path: Path, monkeypat
     monkeypatch.setenv("RUMI_DATA_DIR", str(tmp_path / "rumi"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-offline")
 
-    import agents.dervishes as dervishes
-    from agents.world import run_debate
+    import agents.HooperAgent.main as hooper_mod
+    import agents.DrVexAgent.main as drvex_mod
+    from agents.TheTrialAgent.main import run_debate
 
     class _Idea:
         def __init__(self, content):
             self.content = content
 
     monkeypatch.setattr(
-        dervishes.Hooper, "whirl",
+        hooper_mod.Hooper, "whirl",
         lambda self, message, **kw: _Idea('Hopeful: cite("S2"). Ask your doctor.'),
         raising=False,
     )
     monkeypatch.setattr(
-        dervishes.DrVex, "whirl",
+        drvex_mod.DrVex, "whirl",
         lambda self, message, **kw: _Idea('Skeptical: cite("S3") and cite("C3").'),
         raising=False,
     )

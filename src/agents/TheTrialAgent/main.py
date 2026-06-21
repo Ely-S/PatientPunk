@@ -23,10 +23,11 @@ from rumi import World
 
 from utilities import get_client, llm_call, parse_json_object, MODEL_FAST
 
-from agents.packet import build_packet
-from agents.dervishes import Hooper, DrVex
-from agents.synthesize import synthesize
-from prompts.trial_prompts import kickoff_parse_prompt
+from agents._common.packet import build_packet
+from agents.HooperAgent.main import Hooper
+from agents.DrVexAgent.main import DrVex
+from agents.TheTrialAgent.synthesize import synthesize
+from agents.TheTrialAgent.brain.prompts import kickoff_parse_prompt
 
 
 def _fresh_suffix(agent_suffix: str = "") -> str:

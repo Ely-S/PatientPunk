@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from utilities import get_client, llm_call, MODEL_STRONG
 
-from prompts.trial_prompts import bottom_line_prompt
+from agents.TheTrialAgent.brain.prompts import bottom_line_prompt
 
 # Never a medical directive — always the doctor's call.
 SAFETY_CODA = (

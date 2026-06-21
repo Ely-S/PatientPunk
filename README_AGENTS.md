@@ -20,7 +20,7 @@ entirely on the **`src/` (SQLite) side** of the repo. It never imports `patientp
 ```bash
 # Windows PowerShell uses `$env:NAME = "..."`; the values below are bash-style.
 RUMI_MODEL=anthropic/claude-sonnet-4.6 PYTHONUTF8=1 PYTHONPATH=src \
-  uv run python -m agents.cli --db data/posts.db --prompt "Should I try LDN for my long COVID fatigue?"
+  uv run python -m agents.TheTrialAgent.cli --db data/posts.db --prompt "Should I try LDN for my long COVID fatigue?"
 ```
 
 You get a briefing like:
@@ -75,7 +75,7 @@ for a longer argument.
 
 ```bash
 RUMI_MODEL=anthropic/claude-sonnet-4.6 PYTHONPATH=src \
-  uv run python -m agents.cli --prompt "what do people say about LDN?" [--db PATH] [--rounds N] [--json]
+  uv run python -m agents.TheTrialAgent.cli --prompt "what do people say about LDN?" [--db PATH] [--rounds N] [--json]
 ```
 
 | Flag | Default | Meaning |
@@ -94,19 +94,19 @@ just an honest "no patient reports for X" briefing. This is correct, not a failu
 |---|---|---|
 | `OPENROUTER_API_KEY` | **yes** | Auto-loaded from `.env`. The agents + judge run on OpenRouter. |
 | `RUMI_MODEL` | **for live runs** | A valid **OpenRouter** model id, e.g. `anthropic/claude-sonnet-4.6`. Rumi is OpenRouter-only; without this the agents fall back to a default that may not route. |
-| `PYTHONPATH=src` | **yes** | `pyproject` `pythonpath=["src"]` only applies under pytest; `python -m agents.cli` needs it explicitly. |
+| `PYTHONPATH=src` | **yes** | `pyproject` `pythonpath=["src"]` only applies under pytest; `python -m agents.TheTrialAgent.cli` needs it explicitly. |
 | `PYTHONUTF8=1` | Windows | Avoids a cp1252 decode error (same as the test gate). |
 | `RUMI_DATA_DIR` | no | Rumi persists agent history here. If unset, each run uses a fresh temp dir so debates never bleed across runs — leave it unset unless you want persistence. |
 
 ### The web UI (watch the trial unfold)
 
-`src/agents/server.py` serves a single-page courtroom UI (`src/agents/trial.html`, styled after
+`src/agents/TheTrialAgent/api.py` serves a single-page courtroom UI (`src/agents/TheTrialAgent/trial.html`, styled after
 Rumi's `poet_chat.html`) where you watch Hooper and Dr. Vex argue **live, turn by turn**, over the
 frozen evidence — then read the verdict.
 
 ```bash
 RUMI_MODEL=anthropic/claude-sonnet-4.6 PYTHONUTF8=1 PYTHONPATH=src \
-  uv run python -m agents.server --db data/posts.db --port 8770
+  uv run python -m agents.TheTrialAgent.api --db data/posts.db --port 8770
 # → open http://127.0.0.1:8770 and put a drug on the stand
 ```
 
@@ -158,7 +158,7 @@ prompted-hope**, and a runtime gate (below) enforces it.
 
 ### The two agents
 
-- **Hooper** (`src/agents/dervishes.py`, temp 0.7) — a loud, warm, exclamation-forward
+- **Hooper** (`src/agents/HooperAgent/main.py`, temp 0.7) — a loud, warm, exclamation-forward
   patient-advocate hype-man. Argues the optimistic case from the packet's positive claims, but
   must concede real negatives and caps its strongest line at *"might be worth asking your
   doctor about."*
@@ -166,7 +166,9 @@ prompted-hope**, and a runtime gate (below) enforces it.
   negatives, and **must** cite `C3` every trial (a low negative count is a *silent-drop sampling
   artifact*, not proof of safety). Roasts only flaws the data actually has.
 
-Their system prompts are in `src/prompts/trial_prompts.py`.
+Their system prompts are in `src/agents/HooperAgent/brain/prompts.py` and
+`src/agents/DrVexAgent/brain/prompts.py` (the shared IRON RULES live in
+`src/agents/_common/iron_rules.py`).
 
 ---
 
@@ -187,7 +189,7 @@ SCORECARD_API_KEY=ak_... SCORECARD_PROJECT=patientpunk-trial RUMI_MODEL=anthropi
 PYTHONUTF8=1 uv run pytest tests/trial_test.py -v
 ```
 
-### The no-fabrication gate (`src/agents/validate.py`) — the hard, run-failing bar
+### The no-fabrication gate (`src/agents/_common/validate.py`) — the hard, run-failing bar
 
 `check_turn(text, packet)` runs on every debate turn **and** the briefing. Any violation fails
 the run, regardless of how good it reads:
@@ -233,14 +235,19 @@ key, or network is missing, so local eval always runs.
 
 | Path | What |
 |---|---|
-| `src/agents/cli.py` | CLI entrypoint (`python -m agents.cli`). |
-| `src/agents/world.py` | `run_trial` (end-to-end) + `run_debate` (the rumi back-and-forth driver loop). |
-| `src/agents/packet.py` | `EvidencePacket` + `build_packet` — the deterministic Resolver + claim_id scheme + `as_prompt_block()`. |
-| `src/agents/tools.py` | 5 read-only DB tools (sentiment breakdown, example reports, side effects, list drugs, caveats) + `_resolve_drug`. |
-| `src/agents/dervishes.py` | The `Hooper` and `DrVex` rumi `Dervish` subclasses. |
-| `src/agents/synthesize.py` | The deterministic briefing builder (+ the one bottom-line LLM call). |
-| `src/agents/validate.py` | The G1–G6 no-fabrication gate (`check_turn`, `render_citations`). |
-| `src/prompts/trial_prompts.py` | Hooper/Dr. Vex system prompts + the kickoff-parse + bottom-line prompts. |
+| `src/agents/__init__.py` | Lazy PEP-562 re-export (`run_trial`, `build_packet`, `EvidencePacket`). |
+| `src/agents/_common/packet.py` | `EvidencePacket` + `build_packet` — the deterministic Resolver + claim_id scheme + `as_prompt_block()`. |
+| `src/agents/_common/validate.py` | The G1–G6 no-fabrication gate (`check_turn`, `render_citations`). |
+| `src/agents/_common/tools/` | 5 read-only DB tools (sentiment breakdown, example reports, side effects, list drugs, caveats) + `_resolve_drug`/`SIG_RANK` in `deps.py`. |
+| `src/agents/_common/iron_rules.py` | The shared IRON RULES + citation HOW-TO embedded in both system prompts. |
+| `src/agents/_common/model.py` | The debate `MODEL` id resolution (RUMI_MODEL → MODEL_STRONG → default). |
+| `src/agents/HooperAgent/` | The `Hooper` rumi `Dervish` (`main.py`) + its system prompt (`brain/prompts.py`) + `manifest.py`. |
+| `src/agents/DrVexAgent/` | The `DrVex` rumi `Dervish` (`main.py`) + its system prompt (`brain/prompts.py`) + `manifest.py`. |
+| `src/agents/TheTrialAgent/main.py` | `run_trial` (end-to-end) + `run_debate` (the rumi back-and-forth driver loop). |
+| `src/agents/TheTrialAgent/synthesize.py` | The deterministic briefing builder (+ the one bottom-line LLM call). |
+| `src/agents/TheTrialAgent/cli.py` | CLI entrypoint (`python -m agents.TheTrialAgent.cli`). |
+| `src/agents/TheTrialAgent/api.py` | The stdlib web server (`python -m agents.TheTrialAgent.api`), serves sibling `trial.html`. |
+| `src/agents/TheTrialAgent/brain/prompts.py` | The kickoff-parse + bottom-line user prompts. |
 | `tests/trial_test.py` | Unit tests (run explicitly; not in CI's default collection). |
 | `eval/trial/` | `harness.py` (gate + axes), `bank.py` (8 prompts), `rubric.py` (graded axes), `scorecard_logger.py`. |
 
@@ -265,10 +272,12 @@ key, or network is missing, so local eval always runs.
 
 ## Extending it
 
-- **A new evidence dimension?** Add a tool in `tools.py`, surface it in `build_packet` with a new
-  `claim_id` family, list it in `as_prompt_block()`, and (if it's a number/quote) make sure the
-  gate's G1/G2/G6 can trace it. The agents pick it up for free — they only cite claim_ids.
-- **Tune a persona?** Edit `src/prompts/trial_prompts.py`, then re-prove the gate: run the bank
+- **A new evidence dimension?** Add a tool under `src/agents/_common/tools/`, surface it in
+  `build_packet` with a new `claim_id` family, list it in `as_prompt_block()`, and (if it's a
+  number/quote) make sure the gate's G1/G2/G6 can trace it. The agents pick it up for free — they
+  only cite claim_ids.
+- **Tune a persona?** Edit `src/agents/HooperAgent/brain/prompts.py` or
+  `src/agents/DrVexAgent/brain/prompts.py`, then re-prove the gate: run the bank
   through `harness.py --selftest` (logic) and a couple of `--live` debates, and confirm the G1–G6
   gate stays clean. Ground every prompt change in a real failing turn (read `--json` transcripts).
 - **The whole thing is read-only on `data/posts.db`** — it never writes the DB and never imports

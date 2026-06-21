@@ -15,7 +15,7 @@ stored, so the UI shows real numbers/quotes and the gate verdict.
 
 Run (PYTHONPATH=src so the bare ``agents.*`` imports resolve)::
 
-    PYTHONPATH=src uv run python -m agents.server --db data/posts.db --port 8770
+    PYTHONPATH=src uv run python -m agents.TheTrialAgent.api --db data/posts.db --port 8770
 
 Read-only on the posts DB. NEVER imports ``patientpunk`` / ``variable_extraction``.
 """
@@ -38,10 +38,10 @@ try:
 except Exception:
     pass
 
-from agents.packet import build_packet
-from agents.synthesize import synthesize
-from agents.validate import check_turn, render_citations
-from agents.world import run_debate, _parse_drug_query
+from agents._common.packet import build_packet
+from agents.TheTrialAgent.synthesize import synthesize
+from agents._common.validate import check_turn, render_citations
+from agents.TheTrialAgent.main import run_debate, _parse_drug_query
 
 # ---------------------------------------------------------------------------
 # Job state. One trial at a time (the Rumi debate driver is not concurrency-safe).
@@ -219,7 +219,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send_html(
                         404,
                         b"<h1>trial.html not found</h1>"
-                        b"<p>Expected a sibling file next to server.py.</p>",
+                        b"<p>Expected a sibling file next to api.py.</p>",
                     )
                     return
                 self._send_html(200, html.encode("utf-8"))
@@ -288,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
 def main(argv: list[str] | None = None) -> int:
     global DB_PATH, HOST, PORT
     parser = argparse.ArgumentParser(
-        prog="agents.server",
+        prog="agents.TheTrialAgent.api",
         description="Serve 'The Trial' web UI (stdlib http.server).",
     )
     parser.add_argument(

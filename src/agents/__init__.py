@@ -13,7 +13,7 @@ pull in rumi / the DB layer, which not every consumer needs — the validate gat
 is pure-Python and standalone, and ``build_packet`` needs no rumi at all. So
 ``import agents`` stays cheap; the heavy import happens only when you touch one
 of the re-exported names (or import a submodule directly, e.g.
-``from agents.validate import check_turn``).
+``from agents._common.validate import check_turn``).
 
 Part of the ``src/`` sentiment system. Never import ``patientpunk`` /
 ``variable_extraction`` here — that decoupling boundary is frozen.
@@ -26,13 +26,13 @@ __all__ = ["run_trial", "build_packet", "EvidencePacket"]
 def __getattr__(name: str):
     # Lazy: defer the (rumi/DB-touching) submodule import until first access.
     if name in ("build_packet", "EvidencePacket"):
-        from agents import packet
+        from agents._common import packet
 
         return getattr(packet, name)
     if name == "run_trial":
-        from agents import world
+        from agents.TheTrialAgent import main
 
-        return world.run_trial
+        return main.run_trial
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

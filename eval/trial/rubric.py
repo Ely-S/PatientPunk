@@ -1,6 +1,6 @@
 """The graded rubric for "The Trial" — four axes, LLM-judged at temperature 0.
 
-The HARD gate (G1-G5 in ``agents.validate``) is binary and run-failing: a turn
+The HARD gate (G1-G5 in ``agents._common.validate``) is binary and run-failing: a turn
 that fabricates a number, invents a flaw, or slips a prescription FAILS the run
 outright, and the graded axes below are never even reached. These four axes are
 the *quality* layer, applied ONLY to runs that already cleared the gate:
@@ -132,7 +132,7 @@ def grade(packet, briefing: dict, *, client=None, model=None) -> dict:
     ``client``/``model`` are injectable for tests; default to the src/ strong
     model via ``utilities``.
     """
-    from agents.validate import render_citations  # local import: keep module light
+    from agents._common.validate import render_citations  # local import: keep module light
 
     packet_block = packet.as_prompt_block()
     # Render citations in the transcript so the judge sees expanded evidence text,

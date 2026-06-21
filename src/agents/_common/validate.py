@@ -372,7 +372,7 @@ def render_citations(text: str, packet) -> str:
 
 # ── Self-test ────────────────────────────────────────────────────────────────
 # A hand-written fabricated turn must trip G1/G3; a clean cite-only turn must
-# trip nothing. Run: `uv run python src/agents/validate.py`
+# trip nothing. Run: `uv run python src/agents/_common/validate.py`
 if __name__ == "__main__":
     @dataclass
     class _FakePacket:

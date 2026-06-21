@@ -3,7 +3,7 @@
 For each bank prompt:
   1. run_trial(prompt, db) -> a briefing (parse -> build_packet ->
      short-circuit | debate -> synthesize).
-  2. HARD GATE (binary, run-failing): run agents.validate.check_turn over EVERY
+  2. HARD GATE (binary, run-failing): run agents._common.validate.check_turn over EVERY
      debate turn AND the briefing text. Any G1-G5 violation fails the run.
   3. ONLY on gate-pass: the graded axes (U/D/F/CAL) via the LLM judge.
   4. Aggregate per-case + overall pass/fail and (in live mode) log to ScoreCard.
@@ -71,9 +71,10 @@ def _install_selftest_stubs() -> None:
     synthesize bottom-line LLM call -> a fixed safe sentence. After this, run_trial
     makes ZERO network calls.
     """
-    import agents.dervishes as dervishes
-    import agents.world as world
-    import agents.synthesize as synthesize
+    import agents.HooperAgent.main as hooper_mod
+    import agents.DrVexAgent.main as drvex_mod
+    import agents.TheTrialAgent.main as world
+    import agents.TheTrialAgent.synthesize as synthesize
 
     class _StubIdea:
         def __init__(self, content: str):
@@ -85,8 +86,8 @@ def _install_selftest_stubs() -> None:
     def _vex_whirl(self, message, **kw):
         return _StubIdea(_VEX_CANNED)
 
-    dervishes.Hooper.whirl = _hooper_whirl  # type: ignore[assignment]
-    dervishes.DrVex.whirl = _vex_whirl      # type: ignore[assignment]
+    hooper_mod.Hooper.whirl = _hooper_whirl  # type: ignore[assignment]
+    drvex_mod.DrVex.whirl = _vex_whirl       # type: ignore[assignment]
 
     # Deterministic, network-free drug-query parse: just hand the raw prompt to
     # the resolver (build_packet's Resolver does the real alias work). For the
@@ -152,7 +153,7 @@ _BRIEFING_SAFETY_GATES = {"G4", "G5"}
 
 def gate_turn(text: str, packet) -> list:
     """Full G1-G5 no-fabrication gate for one DEBATE turn (agent prose)."""
-    from agents.validate import check_turn
+    from agents._common.validate import check_turn
 
     return check_turn(text, packet)
 
@@ -164,7 +165,7 @@ def gate_briefing(text: str, packet) -> list:
     trustworthy by construction and exempt from the citation-trace gates. We
     still enforce the patient-safety gates: no Rx directive, no unsafe framing.
     """
-    from agents.validate import check_turn
+    from agents._common.validate import check_turn
 
     return [v for v in check_turn(text, packet) if v.rule in _BRIEFING_SAFETY_GATES]
 
@@ -195,7 +196,7 @@ def run_gate(packet, briefing: dict) -> dict:
 # ── Per-case run ─────────────────────────────────────────────────────────────
 def run_case(case: BankCase, db_path: str, *, rounds: int, do_grade: bool) -> dict:
     """Run one bank case end-to-end: trial -> gate -> (graded axes on pass)."""
-    from agents.world import run_trial
+    from agents.TheTrialAgent.main import run_trial
 
     result: dict = {
         "case_id": case.case_id,
