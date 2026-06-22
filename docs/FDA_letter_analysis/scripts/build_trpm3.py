@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Rectangle, Circle, RegularPolygon
 import os
 
-OUT = r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\figures"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
 os.makedirs(OUT, exist_ok=True)
 GREEN, RED, GREY, ORANGE, BLUE, CA = "#27ae60", "#c0392b", "#95a5a6", "#e67e22", "#2e86c1", "#2980b9"
 

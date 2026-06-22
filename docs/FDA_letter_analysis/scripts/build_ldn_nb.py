@@ -4,12 +4,14 @@ research-assistant skill format. Reads ldn_2yr.db (build_ldn_data.py)."""
 from __future__ import annotations
 import sys
 from pathlib import Path
-REPO = Path(r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk")
-sys.path.insert(0, str(REPO / "notebooks"))
+REPO = Path(__file__).resolve().parents[3]
+PKG = Path(__file__).resolve().parents[1]
+DATA = Path(os.environ.get("PP_DATA_DIR", PKG / "data"))  # source DBs are not committed; see ../README.md and MANIFEST.csv
+sys.path.insert(0, str(REPO / "docs" / "RCT_historical_validation"))  # build_notebook lives here
 from build_notebook import build_notebook, execute_and_export  # noqa: E402
 
-DB = REPO / "FDA_analysis" / "notebooks" / "ldn_2yr.db"
-OUT = REPO / "FDA_analysis" / "notebooks" / "ldn_2yr_deepdive"
+DB = DATA / "ldn_2yr.db"
+OUT = PKG / "notebooks" / "ldn_2yr_deepdive"
 
 cells = []
 def md(s): cells.append(("md", s))

@@ -6,7 +6,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np, os
 
-OUTDIR = r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\figures"
+OUTDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
 os.makedirs(OUTDIR, exist_ok=True)
 
 # Long COVID LDN cohorts (clinical) + our real-world cohort

@@ -8,7 +8,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np, os
 
-OUT = r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\figures"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
 os.makedirs(OUT, exist_ok=True)
 
 fig, (axA, axB) = plt.subplots(1, 2, figsize=(14.2, 5.3), gridspec_kw={"width_ratios": [1.0, 1.08]})

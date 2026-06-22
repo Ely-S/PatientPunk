@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np, os
 
-OUT = r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\figures"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
 os.makedirs(OUT, exist_ok=True)
 def save(fig, stem):
     fig.savefig(os.path.join(OUT, stem + ".png"), dpi=200, bbox_inches="tight")

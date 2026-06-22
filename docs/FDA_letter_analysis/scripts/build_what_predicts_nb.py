@@ -6,15 +6,18 @@ All feature mining is pre-baked into mestinon_predict.db (build_predict_data.py)
 so the notebook cells contain NO regex — only stats, charts, and narrative.
 """
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 
-REPO = Path(r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk")
-sys.path.insert(0, str(REPO / "notebooks"))
+REPO = Path(__file__).resolve().parents[3]
+PKG = Path(__file__).resolve().parents[1]
+DATA = Path(os.environ.get("PP_DATA_DIR", PKG / "data"))  # source DBs are not committed; see ../README.md and MANIFEST.csv
+sys.path.insert(0, str(REPO / "docs" / "RCT_historical_validation"))  # build_notebook lives here
 from build_notebook import build_notebook, execute_and_export  # noqa: E402
 
-DB = REPO / "FDA_analysis" / "notebooks" / "mestinon_predict.db"
-OUT = REPO / "FDA_analysis" / "notebooks" / "mestinon_what_predicts_response"
+DB = DATA / "mestinon_predict.db"
+OUT = PKG / "notebooks" / "mestinon_what_predicts_response"
 
 cells = []
 def md(s): cells.append(("md", s))

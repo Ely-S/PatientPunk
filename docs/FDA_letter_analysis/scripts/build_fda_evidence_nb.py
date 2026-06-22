@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 """Build the FDA supporting-evidence notebook (research-assistant skill format).
 
 Consolidates this session's analyses into one evidence document mapped to the
@@ -11,12 +12,14 @@ FDA submission (Docket FDA-2026-N-4492). Draws live from:
 from __future__ import annotations
 import sys
 from pathlib import Path
-REPO = Path(r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk")
-sys.path.insert(0, str(REPO / "notebooks"))
+REPO = Path(__file__).resolve().parents[3]
+PKG = Path(__file__).resolve().parents[1]
+DATA = Path(os.environ.get("PP_DATA_DIR", PKG / "data"))  # source DBs are not committed; see ../README.md and MANIFEST.csv
+sys.path.insert(0, str(REPO / "docs" / "RCT_historical_validation"))  # build_notebook lives here
 from build_notebook import build_notebook, execute_and_export  # noqa: E402
 
-NB_DIR = REPO / "FDA_analysis" / "notebooks"
-DB = NB_DIR / "mestinon_predict.db"            # setup connects `conn` here
+NB_DIR = PKG / "notebooks"
+DB = DATA / "mestinon_predict.db"            # setup connects `conn` here
 OUT = NB_DIR / "fda_supporting_evidence"
 
 cells = []
@@ -40,7 +43,7 @@ reps = pd.read_sql("select * from reports", conn)
 CORDER = ["covidlonghaulers","dysautonomia","r/cfs","Phoenix Rising"]
 POP = {"covidlonghaulers":"long COVID","dysautonomia":"POTS/dysautonomia","r/cfs":"ME/CFS (Reddit)","Phoenix Rising":"ME/CFS (forum)"}
 PAL = {"covidlonghaulers":"#2e86c1","dysautonomia":"#17a589","r/cfs":"#ca6f1e","Phoenix Rising":"#884ea0"}
-''' % (str(NB_DIR / "fda_evidence.db"), str(REPO / "FDA_analysis" / ".." / ".." / "..").replace("\\\\","/") if False else r"C:\Users\scgee\Downloads\pp_clh_full_run\covidlonghaulers_full.db"))
+''' % (str(DATA / "fda_evidence.db"), str(DATA / "covidlonghaulers_full.db")))
 
 # ── research question + abstract ────────────────────────────────────────────────
 md('**Research Question:** *"What real-world evidence from patient communities supports the repurposing case for Mestinon and low-dose naltrexone in the FDA Drug Repurposing RFI (Docket FDA-2026-N-4492)?"*')

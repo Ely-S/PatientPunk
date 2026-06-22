@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 import sys
-sys.path.insert(0, r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\notebooks")
+import os
+from pathlib import Path
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE.parents[1] / "RCT_historical_validation"))  # build_notebook lives here
+_DATA = Path(os.environ.get("PP_DATA_DIR", _HERE.parent / "data"))  # source DBs not committed
 from build_notebook import build_notebook, execute_and_export
 
-CLH = r"C:\Users\scgee\Downloads\pp_clh_full_run\covidlonghaulers_full.db"
-DYS = r"C:\Users\scgee\Downloads\pp_dysautonomia_run\dysautonomia.db"
-SLICE = r"C:\Users\scgee\Downloads\pp_mestinon_run\mestinon_run.db"
+CLH = str(_DATA / "covidlonghaulers_full.db")
+DYS = str(_DATA / "dysautonomia.db")
+SLICE = str(_DATA / "mestinon_run.db")
 
 cells = []
 
@@ -279,5 +283,5 @@ cells.append(("code",
 '''display(HTML("<div style='font-size:1.2em;font-weight:bold;font-style:italic;border-top:2px solid #ccc;padding-top:14px;margin-top:20px;'>These findings reflect reporting patterns in online communities, not population-level treatment effects. This is not medical advice.</div>"))'''))
 
 nb = build_notebook(cells=cells, db_path=CLH, title="What predicts Mestinon response")
-html = execute_and_export(nb, r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\notebooks\mestinon_predictors_analysis")
+html = execute_and_export(nb, str(_HERE.parent / "notebooks" / "mestinon_predictors_analysis"))
 print("BUILT_OK ->", html)

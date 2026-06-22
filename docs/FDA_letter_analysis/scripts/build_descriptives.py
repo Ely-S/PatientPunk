@@ -4,16 +4,18 @@ Total posts/users, date span, per-drug user/report/mention counts + Mestinon
 sentiment breakdown. Used by the FDA evidence notebook's data-inventory section.
 """
 from __future__ import annotations
+import os
 import sqlite3, sys, datetime
 if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 CORPORA = [
-    ("covidlonghaulers", "long COVID",      r"C:\Users\scgee\Downloads\pp_clh_full_run\covidlonghaulers_full.db"),
-    ("dysautonomia",     "POTS/dysautonomia", r"C:\Users\scgee\Downloads\pp_dysautonomia_run\dysautonomia.db"),
-    ("r/cfs",            "ME/CFS (Reddit)",  r"C:\Users\scgee\Downloads\pp_rcfs_run\rcfs_run.db"),
-    ("Phoenix Rising",   "ME/CFS (forum)",   r"C:\Users\scgee\Downloads\pp_phoenix_eli\phoenix_eli_ourpipeline.db"),
+    ("covidlonghaulers", "long COVID",      os.path.join(_DATA, "covidlonghaulers_full.db")),
+    ("dysautonomia",     "POTS/dysautonomia", os.path.join(_DATA, "dysautonomia.db")),
+    ("r/cfs",            "ME/CFS (Reddit)",  os.path.join(_DATA, "rcfs_run.db")),
+    ("Phoenix Rising",   "ME/CFS (forum)",   os.path.join(_DATA, "phoenix_eli_ourpipeline.db")),
 ]
-EV = r"C:\Users\scgee\OneDrive\Documents\Projects\PatientPunk\FDA_analysis\notebooks\fda_evidence.db"
+_DATA = os.environ.get("PP_DATA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"))
+EV = os.path.join(_DATA, "fda_evidence.db")
 
 
 def ymd(ts):
