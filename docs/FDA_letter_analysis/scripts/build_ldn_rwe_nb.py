@@ -5,6 +5,7 @@ Reads ldn_2yr.db (build_ldn_data.py). Six-trial validation panel uses the
 published numbers from our methodology paper (Binder, Geer & Sakov), cited inline.
 """
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]

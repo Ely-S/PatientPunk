@@ -2,6 +2,7 @@
 """Verbose LDN (naltrexone) deep-dive notebook on the vetted 2-year dataset.
 research-assistant skill format. Reads ldn_2yr.db (build_ldn_data.py)."""
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
