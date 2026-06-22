@@ -1,0 +1,5 @@
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+.fuse_hidden*
