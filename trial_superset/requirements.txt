@@ -1,0 +1,2 @@
+naturalv2 @ git+https://github.com/nikitadhawan/naturalv2.git@16ca17819e7b6310f9d9799238f4ff8b11b4c6f5
+httpx>=0.27
