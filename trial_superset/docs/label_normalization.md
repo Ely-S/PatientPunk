@@ -49,8 +49,13 @@ row so the two scales are never silently mixed.
 The root cause is her `notbinary` `Experiment` normalization (`value/denom` for continuous).
 Options: (a) consume our `labels_sidecar.csv` (`endpoint_type` + `clean_outcome` [+ `scale_proportion`])
 and model binary/continuous as separate scales/heads; or (b) fix the normalization in her
-`Experiment` (use the mean directly / standardize for continuous). The binary-only preset avoids
-the issue entirely but drops ~80% of these trials.
+`Experiment` (use the mean directly / standardize for continuous).
+
+**Why not just use the `binary` preset (clean rates, no sidecar)?** Measured (`binary_compare.py`):
+the binary preset drops the training set from **234 → 20 train+val (−91%)**, and zeroes out ME/CFS
+and chronic Lyme entirely — because these symptom conditions are dominated by **continuous** primary
+endpoints (FSS, 6MWD, FIQ, VAS), not binary "X% responded" ones. So binary is non-viable here, and
+the sidecar (keep notbinary, fix continuous labels) is the right approach, not over-engineering.
 
 ## Artifacts
 - [`build_labels_sidecar.py`](../build_labels_sidecar.py) · `data/labels_sidecar.csv`
