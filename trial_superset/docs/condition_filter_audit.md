@@ -9,6 +9,12 @@ condition, the wins from widening it, the noise it admits, and which changes dev
 her shared output. Goal: the cleanest training set we can build, with every deviation
 labeled for discussion with Nikita.
 
+**Provenance** (see README): the matcher `find_condition_ncts` and the `"Long Covid"` string are
+**Nikita's [N]**; the four other condition strings (POTS / Myalgic Encephalomyelitis / Fibromyalgia
+/ Post-Treatment Lyme) are **TrialScout's [TS]** (`build_candidates.py`); the clean keyword
+classifier that replaces the matcher is **ours [NEW]**. So the mis-classification below is a
+property of *her* matcher + the condition strings, run faithfully — we measured it; we didn't cause it.
+
 > **DECISION (2026-06-25): improved/clean classification adopted as the canonical training
 > set — including the long-COVID change.** We deliberately deviate from her shared study
 > (we no longer reproduce her 21/21 long-COVID retro, because we drop her acute-COVID
