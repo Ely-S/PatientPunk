@@ -22,8 +22,18 @@ import csv
 import json
 import logging
 import os
+import re
 
 logging.disable(logging.INFO)
+
+# #5: continuous labels mix absolute scores and change-from-baseline (different quantities).
+# Flag it from the outcome title (data we already have). Heuristic but consistent across sources.
+_CHANGE_RE = re.compile(r"\bchange\b|from baseline|\bΔ\b|reduction in|improvement (in|from)|"
+                        r"\b(decrease|increase) (in|from)\b|difference from baseline", re.I)
+
+
+def is_change(title: str) -> bool:
+    return bool(_CHANGE_RE.search(title or ""))
 
 MANIFEST = "trial_superset/data/training_set_manifest_augmented.csv"
 JSONL = "trial_superset/data/m3_extractions.jsonl"
@@ -141,12 +151,13 @@ def main() -> None:
             et_counter[etype] = et_counter.get(etype, 0) + 1
             out_rows.append({"nct": nct, "condition": slug, "split": r["split"], "label_source": src,
                              "outcome": otitle[:120], "arm": arm[:80], "endpoint_type": etype,
+                             "is_change_from_baseline": is_change(otitle) if etype == "continuous" else "",
                              "raw_value": val, "n": n,
                              "clean_outcome": round(clean, 4) if clean is not None else "",
                              "scale_proportion": sp if sp is not None else ""})
 
     cols = ["nct", "condition", "split", "label_source", "outcome", "arm", "endpoint_type",
-            "raw_value", "n", "clean_outcome", "scale_proportion"]
+            "is_change_from_baseline", "raw_value", "n", "clean_outcome", "scale_proportion"]
     with open(OUT, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
@@ -154,8 +165,10 @@ def main() -> None:
 
     cont = [r for r in out_rows if r["endpoint_type"] == "continuous"]
     with_prop = [r for r in cont if r["scale_proportion"] != ""]
+    chg = [r for r in cont if r["is_change_from_baseline"] is True]
     print(f"label rows: {len(out_rows)}  by endpoint_type: {et_counter}")
-    print(f"continuous arms: {len(cont)}; with scale_proportion: {len(with_prop)} ({100*len(with_prop)//max(len(cont),1)}%)")
+    print(f"continuous arms: {len(cont)}; change-from-baseline: {len(chg)}; absolute: {len(cont)-len(chg)}; "
+          f"with scale_proportion: {len(with_prop)}")
     print(f"-> {OUT}")
 
 
