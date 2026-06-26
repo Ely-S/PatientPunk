@@ -83,6 +83,7 @@ Both are kept so we can hand Nikita the exact delta.
 | `build_augmented.py` | inject extracted labels → `data/m3_labeled/`, the augmented set |
 | `build_labels_sidecar.py` | model-ready label sidecar (endpoint_type / clean_outcome / scale_proportion / is_change) |
 | `endpoint_classify.py` | LLM-classify endpoints → domain / modality / self_reportable / instrument |
+| `drug_classify.py` | LLM-classify interventions → drug_class / drug_accessibility (self-experimentable) |
 | `extract_validate.py` | extraction accuracy vs CT.gov ground truth |
 | `binary_compare.py` | binary-vs-notbinary trial-count comparison (justifies notbinary+sidecar) |
 | `sanity_check.py` | data QA (disjointness, baseline, label ranges) |
