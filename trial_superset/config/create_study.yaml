@@ -1,0 +1,10 @@
+defaults:
+  - common
+  - _self_
+
+trial_filters:
+  randomized: True
+  parallel: True
+  num_noncontrol: null
+  nonhealthy: True
+  binary_endpoint: True

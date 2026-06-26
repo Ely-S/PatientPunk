@@ -1,0 +1,15 @@
+defaults:
+  - source@sources.reddit: reddit_20k
+  - source@sources.pubmed: pubmed
+  - _self_
+
+ate: False
+seed: 42
+experiment_name: ???
+conditions:
+  - Nervous System Diseases
+train_ratio: 0.6
+save_path: ${oc.env:SAVE_PATH,./outputs}
+
+# Metadata
+date_time: ${now:%Y-%m-%d}_${now:%H-%M-%S}
