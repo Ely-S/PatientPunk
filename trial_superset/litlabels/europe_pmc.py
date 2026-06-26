@@ -72,7 +72,8 @@ def fulltext_xml(source: str, ext_id: str) -> str | None:
     cached = cache.get("europe_pmc/fulltext", payload, _FULLTEXT_TTL)
     if cached is not None:
         return cached
-    url = f"{_BASE_URL}/{source}/{ext_id}/fullTextXML"
+    # EPMC full-text endpoint: /{pmcid}/fullTextXML (bare PMCID, NO /{source}/ segment).
+    url = f"{_BASE_URL}/{ext_id}/fullTextXML"
     xml = _get_text_with_retry(url)
     if xml is not None:
         cache.put("europe_pmc/fulltext", payload, xml)
