@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .cache/
 .venv/
+
+# master CSV export (ad-hoc) + its generator — kept out of git
+build_master_csv.py
+master_pulled_data.csv
