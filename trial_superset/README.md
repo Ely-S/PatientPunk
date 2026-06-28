@@ -122,10 +122,15 @@ credits.)
 **All data lives in S3, not git.** `data/` is gitignored; mirror with
 `aws s3 sync trial_superset/data s3://patientpunk/trial_superset/ --exclude ".cache/*" --exclude "*.log"`.
 Key artifacts in `s3://patientpunk/trial_superset/`:
-- `training_set_manifest_augmented.csv` — 249 train+val + test, `label_source` tagged
+- `training_set_manifest_augmented.csv` — 255 train+val + test, `label_source` tagged
 - `labels_sidecar.csv` — per (trial, outcome, arm) model-ready labels
 - `endpoint_classification.csv` — endpoint domain/modality/self_reportable/instrument
-- `master_pulled_data.csv` — everything joined (also gitignored; generator `build_master_csv.py` gitignored too)
+- `master_pulled_data.csv` — everything joined (also gitignored; generator `build_master_csv.py` gitignored too).
+  Provenance columns: **`data_source`** = `trial_listing` (CT.gov results) / `paper` (extracted from
+  publication) / `registry_adapted` (non-CT.gov ISRCTN); **`is_prediction_target`** = the 3 trials we
+  predict (LIFT, Tirzepatide, IVIG — LIFT is recruiting so pulled from the relaxed test universe);
+  **`in_nikita_seed`** = trial was in Nikita's original shared study (her M1-reproduced pull).
+- `long_covid_eval_set.csv` — the recruiting-inclusive Long-COVID prediction targets (incl. LIFT's factorial arms + corpus signal)
 
 ## Status
 
