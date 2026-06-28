@@ -17,7 +17,7 @@ learns to predict; we feed the trial side.
 
 Everything here is one of three sources. Be precise about which:
 
-- **[N]** — Nikita / `naturalv2`: her code and design.
+- **[N]** — Nikita / [`naturalv2`](https://github.com/nikitadhawan/naturalv2): her code and design (pinned `16ca178`).
 - **[TS]** — TrialScout: the team's prior work, *before* this effort (`../TrialScout/`).
 - **[NEW]** — built in this effort (`trial_superset/`).
 
@@ -163,3 +163,32 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - Open decisions that are hers: which conditions belong in the cluster; the long-COVID/POTS definitions;
   the canonical target for continuous endpoints (absolute vs change); recruiting-inclusive test universe;
   whether to ingest non-CT.gov registries (needs a schema adapter).
+
+## References & external resources
+
+**Core dependency**
+- [`naturalv2`](https://github.com/nikitadhawan/naturalv2) — Nikita Dhawan's NATURAL-v2 pipeline, the
+  consumer of this trial set. Installed from `requirements.txt`, pinned at commit
+  [`16ca178`](https://github.com/nikitadhawan/naturalv2/commit/16ca17819e7b6310f9d9799238f4ff8b11b4c6f5)
+  — **do not bump without re-validating** (her schema/criteria can change).
+- Her seed study (the format we match, Long COVID only): `long_covid_noparallel_notbinary_apo_study.yaml`.
+
+**Data sources**
+- [ClinicalTrials.gov API v2](https://clinicaltrials.gov/data-api/api) — trial protocols + structured results (the frame).
+- [Europe PMC REST API](https://europepmc.org/RestfulWebService) — paper linking + OA full text (papers-as-labels, both miners).
+- [ISRCTN registry API](https://www.isrctn.com/page/api) — non-CT.gov (UK) trial records (`mine_registries.py`, `adapt_registries.py`).
+- Reddit patient-community corpus + precomputed signal — sibling project `../TrialScout/` (`signal_distinct.json`, `count_distinct_authors.py`).
+
+**Data storage**
+- All `data/` is gitignored and mirrored to **`s3://patientpunk/trial_superset/`**
+  (`aws s3 sync trial_superset/data s3://patientpunk/trial_superset/ --exclude ".cache/*" --exclude "*.log"`).
+- Master export: `data/master_pulled_data.csv` (also gitignored; generator `build_master_csv.py` gitignored too).
+
+**Documentation index (`docs/`)**
+- [bugs.md](docs/bugs.md) — **consolidated bug registry (start here for Nikita).**
+- [condition_filter_audit.md](docs/condition_filter_audit.md) — her condition matcher's over/under-matching.
+- [test_universe_status.md](docs/test_universe_status.md) — `status:act` vs recruiting-inclusive test set.
+- [label_normalization.md](docs/label_normalization.md) — the `value/N` continuous-label problem + sidecar fix.
+- [validation.md](docs/validation.md) — extraction accuracy + downstream compatibility + limits.
+- [long_covid_focus.md](docs/long_covid_focus.md) — Long-COVID targets, scope fix, factorial-arm bug.
+- [additional_sources.md](docs/additional_sources.md) — ISRCTN/EudraCT + systematic-review mining + the adapter.
