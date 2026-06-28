@@ -41,7 +41,10 @@ LABELED = "trial_superset/data/m3_labeled"
 OUT = "trial_superset/data/labels_sidecar.csv"
 
 _MEAN_PARAMS = {"MEAN", "MEDIAN", "LEAST_SQUARES_MEAN", "GEOMETRIC_MEAN", "GEOMETRIC_LEAST_SQUARES_MEAN"}
-_COUNT_PARAMS = {"COUNT_OF_PARTICIPANTS", "COUNT_OF_UNITS", "NUMBER"}
+# Only COUNT_OF_PARTICIPANTS is reliably a responders-out-of-N count (-> binary rate value/N).
+# NUMBER and COUNT_OF_UNITS are ambiguous (means, scores, event counts) and produced impossible
+# rates >1 when divided by N -> treat as continuous (raw value), never as a rate.
+_COUNT_PARAMS = {"COUNT_OF_PARTICIPANTS"}
 
 
 def _num(x):
@@ -68,7 +71,9 @@ def rows_from_paper(schema, check_nonplacebo):
     hib = schema.get("higher_is_better")
     out = []
     for a in schema.get("arms", []):
-        if a.get("is_placebo") or not check_nonplacebo([a.get("title", "")]):
+        # align with NATURAL: it selects treatment arms by check_nonplacebo(title) ONLY (title-based).
+        # Adding the schema's is_placebo flag dropped sham/control arms NATURAL keeps -> missing rows.
+        if not check_nonplacebo([a.get("title", "")]):
             continue
         val, n = _num(a.get("value")), _num(a.get("n"))
         if val is None:
@@ -98,11 +103,16 @@ def rows_from_structured(trial_path, check_nonplacebo):
         groups = {g["id"]: g.get("title", g["id"]) for g in om.get("groups", []) or []}
         denoms = (om.get("denoms") or [{}])[0].get("counts", []) or []
         denom = {c["groupId"]: _num(c.get("value")) for c in denoms}
+        # match NATURAL's get_group_stats: first class, FIRST category (categories[0]), first
+        # occurrence per groupId. (Was iterating all classes/categories last-write-wins, which took
+        # the last timepoint or overwrote a valid value with a later NA -> dropped/mismatched rows.)
         meas = {}
         for cls in om.get("classes", []) or []:
-            for cat in (cls.get("categories") or []):
-                for m in (cat.get("measurements") or []):
-                    meas[m["groupId"]] = _num(m.get("value"))
+            cats = cls.get("categories") or []
+            for m in ((cats[0].get("measurements") or []) if cats else []):
+                gid = m.get("groupId")
+                if gid is not None and gid not in meas:
+                    meas[gid] = _num(m.get("value"))
         if "percent" in unit:
             etype = "percentage"
         elif ptype in _MEAN_PARAMS:
@@ -151,7 +161,7 @@ def main() -> None:
             et_counter[etype] = et_counter.get(etype, 0) + 1
             out_rows.append({"nct": nct, "condition": slug, "split": r["split"], "label_source": src,
                              "outcome": otitle[:120], "arm": arm[:80], "endpoint_type": etype,
-                             "is_change_from_baseline": is_change(otitle) if etype == "continuous" else "",
+                             "is_change_from_baseline": is_change(otitle),  # all types: % can be a (signed) change too
                              "raw_value": val, "n": n,
                              "clean_outcome": round(clean, 4) if clean is not None else "",
                              "scale_proportion": sp if sp is not None else ""})
