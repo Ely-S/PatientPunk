@@ -10,12 +10,19 @@
 the candidate targets *and* the Reddit corpus signal are; the other cluster conditions are mostly
 off-premise or population-mismatched — see master CSV flags).
 
-## The three trials we're actually predicting (`candidates_final_cut.csv`)
-| trial | drug(s) | corpus signal (LC) | verdict |
-|---|---|---|---|
-| **Tirzepatide** NCT07128082 | tirzepatide | 446 | **cleanly predictable** — single-agent, blinded, fatigue PRO |
-| **LIFT** NCT06366724 | LDN + pyridostigmine (2×2 factorial) | **LDN 5183, pyrido 683** | richest signal; needs the arm-relabel below + recruiting-inclusive test |
-| **IVIG** NCT06305793 | IVIG | 0 | off-premise — clinic-administered, no corpus signal, combination |
+## The three trials we're predicting
+
+These are the prospective targets. In the data they are flagged **`is_prediction_target=True`** in
+`master_pulled_data.csv`, and detailed per-arm (with corpus signal) in `data/long_covid_eval_set.csv`.
+
+| trial | NCT | drug(s) | corpus signal (LC) | fits NATURAL's premise? |
+|---|---|---|---|---|
+| **Tirzepatide** | NCT07128082 | tirzepatide | 446 | ✅ **yes** — single-agent, blinded, fatigue PRO |
+| **LIFT** | NCT06366724 | LDN + pyridostigmine (2×2 factorial) | LDN 5183, pyrido 683 | ⚠️ **partial** — richest signal, but factorial; only its **LDN-alone arm** is learnable (after the relabel below) + it's recruiting |
+| **IVIG** | NCT06305793 | IVIG | 0 | ❌ **no** — clinic-administered, no corpus signal, combination |
+
+**Bottom line: of the 3, only Tirzepatide cleanly fits** (see [method_and_scope.md](method_and_scope.md)) —
+the honest framing for the report is "1 clean + 1 partial (LIFT, via its LDN arm) + 1 off-premise (IVIG)."
 
 ## Growing the Long-COVID *training* set — what works (corrected 2026-06-27)
 
