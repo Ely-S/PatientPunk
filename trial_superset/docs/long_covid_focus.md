@@ -1,4 +1,10 @@
-# Long-COVID focus: the three targets, the training lever, and the factorial-arm bug
+# Long-COVID focus: the three targets, the benchmark, and the factorial-arm bug
+
+> **Framing note (read [method_and_scope.md](method_and_scope.md) first):** NATURAL estimates each trial
+> *independently* from its own community text — it does **not** train a pooled model on the trials. So
+> this set is a **benchmark + target list**, not "training data," and "lever / training" language below
+> should be read as *growing the benchmark pool*. The canonical set is now **Long COVID only** (the
+> non-LC cluster conditions were removed — they add nothing under per-trial estimation).
 
 **Date:** 2026-06-25 · scope decision: keep the prediction universe at **Long COVID** (that's where
 the candidate targets *and* the Reddit corpus signal are; the other cluster conditions are mostly

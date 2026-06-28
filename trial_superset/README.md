@@ -1,17 +1,24 @@
 # trial_superset
 
-Builds the **training-trial set** for Nikita's NATURAL-v2 model — larger and cleaner than her
-single Long-COVID study — in her exact format. We **depend on `naturalv2` (pinned); we do not
-reproduce or edit it**: her `check_trial` / `Experiment` / `Study` are called unchanged. Only the
-data we feed them, and a few additive layers on top, are ours.
+Builds the **Long-COVID benchmark + target set** for Nikita's NATURAL-v2 model, in her exact format.
+We **depend on `naturalv2` (pinned); we do not reproduce or edit it**: her `check_trial` /
+`Experiment` / `Study` are called unchanged. Only the data we feed them, and a few additive layers, are ours.
+
+> **Read [docs/method_and_scope.md](docs/method_and_scope.md) first.** NATURAL estimates each trial
+> *independently* from its own patient-community text — it does **not** train a pooled model on the
+> trials. So this is a **benchmark + target list, not training data**, and the **canonical set is now
+> Long COVID only** (the non-LC cluster conditions add nothing under per-trial estimation and were
+> removed; they remain recoverable). Headline: **50 LC trials with ground truth, of which 9 fit
+> NATURAL's premise** (the real benchmark; ~2× NATURAL v1's ~4-per-condition).
 
 ## What this is for
 
-NATURAL-v2 predicts a clinical trial's **outcome** from **pre-publication patient-community signal**
-(what Reddit patients said about a drug *before* the trial read out). Training/validating that needs
-many **completed trials whose real per-arm outcome is known** — the ground truth. This package
-produces that labeled trial set. Her pipeline separately attaches the Reddit/PubMed evidence and
-learns to predict; we feed the trial side.
+NATURAL-v2 estimates a clinical trial's **outcome** from **pre-publication patient-community signal**
+(what Reddit patients said about a drug *before* the trial read out), **per trial, zero-shot** — no
+cross-trial training. Validating that needs **completed trials whose real per-arm outcome is known** —
+ground truth to benchmark the estimates against. This package produces that **Long-COVID benchmark**
+plus the **prospective targets** we want to predict. Her pipeline attaches the Reddit/PubMed evidence
+and runs the estimator per trial; we provide the trial side.
 
 ## Provenance & attribution (read this first)
 
@@ -122,7 +129,7 @@ credits.)
 **All data lives in S3, not git.** `data/` is gitignored; mirror with
 `aws s3 sync trial_superset/data s3://patientpunk/trial_superset/ --exclude ".cache/*" --exclude "*.log"`.
 Key artifacts in `s3://patientpunk/trial_superset/`:
-- `training_set_manifest_augmented.csv` — 255 train+val + test, `label_source` tagged
+- `training_set_manifest_augmented.csv` — 50 LC train+val + test, `label_source` tagged (LC-only canonical)
 - `labels_sidecar.csv` — per (trial, outcome, arm) model-ready labels
 - `endpoint_classification.csv` — endpoint domain/modality/self_reportable/instrument
 - `master_pulled_data.csv` — everything joined (also gitignored; generator `build_master_csv.py` gitignored too).
@@ -135,9 +142,11 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 ## Status
 
 - **M0–M3 + validation + endpoint-match done & committed** (`shaun/trial-superset`, unpushed, no PR).
-- **Training set:** 255 train+val (161 structured [N] + 88 paper-rescued [NEW] + 6 ISRCTN-adapted [NEW]) + test.
-  Long COVID specifically: 50 train+val = 21 CT.gov + 23 paper-rescued + 6 non-CT.gov ISRCTN (adapted to
-  CT.gov shape). See docs/long_covid_focus.md and docs/additional_sources.md.
+- **Canonical set (Long COVID only):** 50 train+val benchmark trials = 21 CT.gov + 23 paper-rescued +
+  6 non-CT.gov ISRCTN (adapted). **Of these, 9 fit NATURAL's premise** (the real benchmark). 3 prospective
+  targets (LIFT, Tirzepatide, IVIG); only Tirzepatide cleanly fits. See docs/method_and_scope.md,
+  docs/long_covid_focus.md, docs/additional_sources.md. (Non-LC cluster removed but recoverable — set
+  `CANONICAL_CONDITIONS = list(CLUSTER)` in `build_augmented.py`.)
 - **Validated:** loads/runs in her `Study`; extraction ~75–88% accurate vs CT.gov ground truth (conservative,
   no fabrication); structured baseline (157) preserved; disjointness checks pass.
 - **Not done:** full Step-3 estimator run (needs GPU/vLLM + the Reddit/PubMed corpus) — ingestion validated, not end-to-end training.
@@ -190,6 +199,7 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - Master export: `data/master_pulled_data.csv` (also gitignored; generator `build_master_csv.py` gitignored too).
 
 **Documentation index (`docs/`)**
+- [method_and_scope.md](docs/method_and_scope.md) — **READ FIRST: how NATURAL actually works (per-trial, zero-shot), why this is a benchmark not training data, why Long-COVID-only.**
 - [bugs.md](docs/bugs.md) — **consolidated bug registry (start here for Nikita).**
 - [condition_filter_audit.md](docs/condition_filter_audit.md) — her condition matcher's over/under-matching.
 - [test_universe_status.md](docs/test_universe_status.md) — `status:act` vs recruiting-inclusive test set.

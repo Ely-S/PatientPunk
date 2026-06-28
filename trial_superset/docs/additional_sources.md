@@ -1,6 +1,11 @@
 # Additional Long-COVID sources beyond CT.gov structured results
 
-Two **independent** explorers (separate files, separate outputs) for growing the Long-COVID training
+> **Framing ([method_and_scope.md](method_and_scope.md)):** these sources grow the Long-COVID
+> **benchmark pool** (more LC trials with ground-truth outcomes to evaluate NATURAL against) — *not*
+> "training data," since NATURAL trains no pooled model. Value = benchmark breadth + surfacing the
+> occasional accessible-drug LC trial, not training volume.
+
+Two **independent** explorers (separate files, separate outputs) for growing the Long-COVID benchmark
 pool past CT.gov. Both emit **candidate CSVs for human review** — neither auto-injects into the
 training set, because each crosses a boundary that needs a deliberate decision (non-CT.gov schema;
 trusting a review's extraction).
