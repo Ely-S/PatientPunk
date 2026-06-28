@@ -155,6 +155,36 @@ def link_paper(nct: str, trial_json_path: str) -> dict | None:
     return None
 
 
+def candidate_papers(nct: str, trial_json_path: str, k: int = 5) -> list[tuple[str, str]]:
+    """Ordered list of (pmcid, via) candidate OA papers — CT.gov RESULT refs first, then
+    NCT-search hits excluding reviews. Lets us retry extraction across papers when the first
+    linked paper is the wrong one (a review / protocol / secondary analysis)."""
+    trial = json.load(open(trial_json_path, encoding="utf-8"))
+    refs = trial["protocolSection"].get("referencesModule", {}).get("references", []) or []
+    out: list[tuple[str, str]] = []
+    seen = set()
+    for pmid in [r["pmid"] for r in refs if r.get("type") == "RESULT" and r.get("pmid")]:
+        res = europe_pmc.search(f"EXT_ID:{pmid} AND SRC:MED", page_size=1).get("resultList", {}).get("result", [])
+        if res and _oa_pmcid(res[0]) and res[0]["pmcid"] not in seen:
+            out.append((res[0]["pmcid"], "ct_result_ref")); seen.add(res[0]["pmcid"])
+    for x in europe_pmc.search(nct, page_size=25).get("resultList", {}).get("result", []):
+        pm = _oa_pmcid(x)
+        if pm and not _is_review(x) and pm not in seen:
+            out.append((pm, "nct_search")); seen.add(pm)
+        if len(out) >= k:
+            break
+    return out
+
+
+def extract_best(nct: str, trial_json_path: str) -> tuple[dict, str, str] | None:
+    """Try each candidate paper until one yields an extractable result. Returns (schema, pmcid, via)."""
+    for pmcid, via in candidate_papers(nct, trial_json_path):
+        r = extract(nct, trial_json_path, pmcid)
+        if r and r.get("extractable"):
+            return r, pmcid, via
+    return None
+
+
 def extract(nct: str, trial_json_path: str, pmcid: str) -> dict | None:
     payload = {"nct": nct, "pmcid": pmcid, "model": MODEL, "v": 3}
     cached = cache.get("m3/extract", payload, _EXTRACT_TTL)

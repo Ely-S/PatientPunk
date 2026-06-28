@@ -84,6 +84,8 @@ Both are kept so we can hand Nikita the exact delta.
 | `build_labels_sidecar.py` | model-ready label sidecar (endpoint_type / clean_outcome / scale_proportion / is_change) |
 | `endpoint_classify.py` | LLM-classify endpoints → domain / modality / self_reportable / instrument |
 | `drug_classify.py` | LLM-classify interventions → drug_class / drug_accessibility (self-experimentable) |
+| `relink_long_covid.py` | grow Long-COVID training: multi-paper retry on declined no-results trials |
+| `long_covid_eval.py` | persist the recruiting-inclusive Long-COVID eval set (LIFT factorial relabeled) |
 | `extract_validate.py` | extraction accuracy vs CT.gov ground truth |
 | `binary_compare.py` | binary-vs-notbinary trial-count comparison (justifies notbinary+sidecar) |
 | `sanity_check.py` | data QA (disjointness, baseline, label ranges) |
@@ -141,5 +143,8 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
   but `mean/N` (garbage) for continuous (~80% of endpoints). Sidecar fixes it [NEW]; binary preset is non-viable (234→20).
 - [docs/validation.md](docs/validation.md) — extraction accuracy + downstream-compatibility + limits
   (covariate sparsity on rescued trials, ~12% extraction error).
+- [docs/long_covid_focus.md](docs/long_covid_focus.md) — Long-COVID focus + **a real factorial-arm bug**:
+  her `check_nonplacebo` drops factorial arms named `"X/Placebo"` (e.g. LIFT's LDN-alone and
+  pyridostigmine-alone main-effect arms), keeping only the stack. Affects any 2×2 factorial. Fix = relabel.
 - Open decisions that are hers: which conditions belong in the cluster; the long-COVID/POTS definitions;
-  the canonical target for continuous endpoints (absolute vs change).
+  the canonical target for continuous endpoints (absolute vs change); recruiting-inclusive test universe.
