@@ -6,10 +6,10 @@ We **depend on `naturalv2` (pinned); we do not reproduce or edit it**: her `chec
 
 > **Read [docs/method_and_scope.md](docs/method_and_scope.md) first.** NATURAL estimates each trial
 > *independently* from its own patient-community text — it does **not** train a pooled model on the
-> trials. So this is a **benchmark + target list, not training data**, and the **canonical set is now
-> Long COVID only** (the non-LC cluster conditions add nothing under per-trial estimation and were
-> removed; they remain recoverable). Headline: **50 LC trials with ground truth, of which 9 fit
-> NATURAL's premise** (the real benchmark; ~2× NATURAL v1's ~4-per-condition).
+> trials. So this is a **benchmark + target list, not training data.** Two separate datasets:
+> **`master_pulled_data.csv` = Long COVID (primary)** and **`cluster_benchmark.csv` = adjacent
+> conditions (separate)** — kept apart because each is its own benchmark (no pooling). Headline:
+> **50 LC trials with ground truth, of which 9 fit NATURAL's premise** (~2× NATURAL v1's ~4-per-condition).
 
 ## What this is for
 
@@ -132,21 +132,24 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - `training_set_manifest_augmented.csv` — 50 LC train+val + test, `label_source` tagged (LC-only canonical)
 - `labels_sidecar.csv` — per (trial, outcome, arm) model-ready labels
 - `endpoint_classification.csv` — endpoint domain/modality/self_reportable/instrument
-- `master_pulled_data.csv` — everything joined (also gitignored; generator `build_master_csv.py` gitignored too).
+- `master_pulled_data.csv` — **Long COVID benchmark** (primary; gitignored, generator `build_master_csv.py` gitignored too).
   Provenance columns: **`data_source`** = `trial_listing` (CT.gov results) / `paper` (extracted from
   publication) / `registry_adapted` (non-CT.gov ISRCTN); **`is_prediction_target`** = the 3 trials we
   predict (LIFT, Tirzepatide, IVIG — LIFT is recruiting so pulled from the relaxed test universe);
   **`in_nikita_seed`** = trial was in Nikita's original shared study (her M1-reproduced pull).
+- `cluster_benchmark.csv` — **adjacent-conditions benchmark** (separate dataset: ME/CFS, fibromyalgia,
+  dysautonomia, chronic Lyme), identical schema. Kept apart from LC because NATURAL estimates per-trial (no pooling).
 - `long_covid_eval_set.csv` — the recruiting-inclusive Long-COVID prediction targets (incl. LIFT's factorial arms + corpus signal)
 
 ## Status
 
 - **M0–M3 + validation + endpoint-match done & committed** (`shaun/trial-superset`, unpushed, no PR).
-- **Canonical set (Long COVID only):** 50 train+val benchmark trials = 21 CT.gov + 23 paper-rescued +
-  6 non-CT.gov ISRCTN (adapted). **Of these, 9 fit NATURAL's premise** (the real benchmark). 3 prospective
-  targets (LIFT, Tirzepatide, IVIG); only Tirzepatide cleanly fits. See docs/method_and_scope.md,
-  docs/long_covid_focus.md, docs/additional_sources.md. (Non-LC cluster removed but recoverable — set
-  `CANONICAL_CONDITIONS = list(CLUSTER)` in `build_augmented.py`.)
+- **Primary dataset — Long COVID** (`master_pulled_data.csv`): 50 train+val benchmark trials = 21 CT.gov
+  + 23 paper-rescued + 6 non-CT.gov ISRCTN (adapted). **Of these, 9 fit NATURAL's premise** (the real
+  benchmark). 3 prospective targets (LIFT, Tirzepatide, IVIG); only Tirzepatide cleanly fits.
+- **Separate dataset — adjacent conditions** (`cluster_benchmark.csv`): ME/CFS, fibromyalgia,
+  dysautonomia, chronic Lyme — same schema, for cross-cluster evaluation; kept apart, not mixed into LC.
+- See docs/method_and_scope.md, docs/long_covid_focus.md, docs/additional_sources.md.
 - **Validated:** loads/runs in her `Study`; extraction ~75–88% accurate vs CT.gov ground truth (conservative,
   no fabrication); structured baseline (157) preserved; disjointness checks pass.
 - **Not done:** full Step-3 estimator run (needs GPU/vLLM + the Reddit/PubMed corpus) — ingestion validated, not end-to-end training.

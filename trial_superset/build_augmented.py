@@ -95,11 +95,11 @@ def inject_one(slug: str, nct: str, schema: dict, dest_reports: str) -> str | No
     return date
 
 
-# CANONICAL set = Long COVID only. NATURAL estimates each trial independently from its own
-# patient-community text (it does NOT train a pooled cross-trial model — see docs/method_and_scope.md),
-# so the other cluster conditions add nothing to LC prediction; they are off-topic for an LC report.
-# The per-condition source data remains on disk/S3 — restore the cluster by setting this to `list(CLUSTER)`.
-CANONICAL_CONDITIONS = ["long_covid"]
+# Build all cluster conditions. NATURAL estimates each trial independently (no pooled cross-trial
+# model — see docs/method_and_scope.md), so Long COVID is the PRIMARY benchmark and the other 4
+# conditions are a SEPARATE adjacent-conditions benchmark. The split into two datasets
+# (master_pulled_data.csv vs cluster_benchmark.csv) happens in build_master_csv.py.
+CANONICAL_CONDITIONS = list(CLUSTER)
 ADAPTED = "trial_superset/data/adapted_registries/nct_reports"
 
 

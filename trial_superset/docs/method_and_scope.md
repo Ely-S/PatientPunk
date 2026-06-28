@@ -29,15 +29,20 @@ across adjacent conditions (transfer)." **That is wrong.** Reading the paper
   (does the drug have enough Reddit discussion *for this condition*) — exactly what
   `is_corpus_learnable` measures. Set *size* is not the lever; per-trial *signal* is.
 
-## Why the other conditions were removed (canonical = Long COVID only)
+## Two separate datasets (Long COVID primary, cluster secondary)
 Because there is **no pooled model**, the non-LC trials (ME/CFS, fibromyalgia, dysautonomia, chronic
-Lyme) **neither help nor hurt** LC prediction — they are simply off-topic benchmark entries. With the
-report scoped to Long COVID, they are removed from the canonical set. (Earlier we worried that
-fibromyalgia dominating 56% of the set would *bias* predictions — that worry was itself a product of the
-wrong framing; nothing is trained on it, so it biases nothing.)
+Lyme) **neither help nor hurt** LC prediction — they are a *different* benchmark, not part of the LC one.
+So they are kept but **split into their own dataset**, not mixed into the headline LC set:
 
-The non-LC data is **not destroyed** — the per-condition source pulls remain on disk/S3, and the cluster
-is restored by setting `CANONICAL_CONDITIONS = list(CLUSTER)` in `build_augmented.py` and rebuilding.
+- **`master_pulled_data.csv`** — **Long COVID** benchmark (primary): 50 trials, 9 corpus-learnable.
+- **`cluster_benchmark.csv`** — **adjacent conditions** benchmark (separate): ME/CFS, fibromyalgia,
+  dysautonomia, chronic Lyme. Same schema; for anyone who wants to evaluate NATURAL across the
+  post-viral/chronic-fatigue cluster rather than LC alone.
+
+(Earlier we worried that fibromyalgia dominating 56% of a *combined* set would *bias* predictions — that
+worry was a product of the wrong framing; nothing is trained, so nothing is biased. The fix is simply to
+not mix the two benchmarks, which the split achieves.) Both are produced by the same pipeline
+(`build_augmented.py` builds all conditions; `build_master_csv.py` writes the two files).
 
 ## The honest numbers (Long COVID)
 | | count | what it is |
