@@ -86,6 +86,8 @@ Both are kept so we can hand Nikita the exact delta.
 | `drug_classify.py` | LLM-classify interventions → drug_class / drug_accessibility (self-experimentable) |
 | `relink_long_covid.py` | grow Long-COVID training: multi-paper retry on declined no-results trials |
 | `long_covid_eval.py` | persist the recruiting-inclusive Long-COVID eval set (LIFT factorial relabeled) |
+| `mine_registries.py` | **additional-source explorer #1** — mine ISRCTN/EudraCT (non-CT.gov) LC RCTs → `data/mined_registries.csv` |
+| `mine_reviews.py` | **additional-source explorer #2** — mine LC systematic-review evidence tables → `data/mined_reviews.csv` |
 | `extract_validate.py` | extraction accuracy vs CT.gov ground truth |
 | `binary_compare.py` | binary-vs-notbinary trial-count comparison (justifies notbinary+sidecar) |
 | `sanity_check.py` | data QA (disjointness, baseline, label ranges) |
@@ -153,5 +155,10 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - [docs/long_covid_focus.md](docs/long_covid_focus.md) — Long-COVID focus + **a real factorial-arm bug**:
   her `check_nonplacebo` drops factorial arms named `"X/Placebo"` (e.g. LIFT's LDN-alone and
   pyridostigmine-alone main-effect arms), keeping only the stack. Affects any 2×2 factorial. Fix = relabel.
+- [docs/additional_sources.md](docs/additional_sources.md) — exploring growth beyond CT.gov: non-CT.gov
+  registries (ISRCTN/EudraCT, `mine_registries.py`) and systematic-review evidence tables
+  (`mine_reviews.py`). Both are candidate-CSV explorers, kept separate; injection would cross the
+  CT.gov-only boundary, so it's flagged not done.
 - Open decisions that are hers: which conditions belong in the cluster; the long-COVID/POTS definitions;
-  the canonical target for continuous endpoints (absolute vs change); recruiting-inclusive test universe.
+  the canonical target for continuous endpoints (absolute vs change); recruiting-inclusive test universe;
+  whether to ingest non-CT.gov registries (needs a schema adapter).
