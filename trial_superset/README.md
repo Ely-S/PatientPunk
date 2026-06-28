@@ -136,6 +136,11 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 
 ## For Nikita (differences & decisions)
 
+> **⚠️ [docs/bugs.md](docs/bugs.md) — start here.** A single registry of every bug found. Four are in
+> `naturalv2` itself and change *your own* published study (condition matcher, `value/N` continuous
+> labels, factorial-arm dropping, `status:act` vs your shared test set). The per-topic docs below have
+> the full detail for each.
+
 - [docs/condition_filter_audit.md](docs/condition_filter_audit.md) — **her** substring matcher [N] mis-classifies
   (long-COVID admits ~12/22 acute-COVID trials and drops post-COVID; dysautonomia under-matches). Effectively a
   bug in her pipeline that affects her own shared study. We adopted a clean classifier [NEW].

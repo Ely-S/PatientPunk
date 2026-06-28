@@ -49,6 +49,7 @@ the broadened scope grows the Long-COVID test set to **88 trials** and **include
 persisted to `data/long_covid_eval_set.csv` (one row per prediction-target arm, annotated with corpus signal).
 
 ## The factorial-arm bug (a real bug in her pipeline — flag to Nikita)
+*(Registry entry: [bugs.md](bugs.md) A3.)*
 LIFT is a 2×2 factorial. Her `check_nonplacebo` filters arms by **title**, so factorial arms named
 `"X/Placebo"` are silently treated as placebo and **dropped**:
 
