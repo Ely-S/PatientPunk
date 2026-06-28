@@ -74,10 +74,11 @@ def synth_outcome_measure(schema: dict) -> dict | None:
 
 
 def inject_one(slug: str, nct: str, schema: dict, dest_reports: str) -> str | None:
-    """Write an augmented trial JSON (synthetic results + date) into dest_reports. Returns date."""
+    """Write an augmented trial JSON (synthetic results + date) into dest_reports.
+    Returns the date string (or None if written but no date), or False if nothing was written."""
     om = synth_outcome_measure(schema)
     if om is None:
-        return None
+        return False  # no usable numeric arm -> nothing written (distinct from "written, no date")
     src = os.path.join(POOL, slug, "nct_reports_noresults", f"{nct}.json")
     trial = json.load(open(src, encoding="utf-8"))
     # her ResultsSection requires all three modules; flow + baseline are stubbed (empty),
@@ -115,7 +116,7 @@ def main() -> None:
         paper_retro = []
         for nct, schema in extractions.get(slug, {}).items():
             date = inject_one(slug, nct, schema, dest_reports)
-            if date is not None or schema.get("arms"):
+            if date is not False:  # only trials whose synthetic results file was actually written
                 paper_retro.append((nct, date))
 
         cfg = build_cfg(dest, {"conditions": [LABEL[slug]]})
@@ -149,7 +150,7 @@ def main() -> None:
         print(f"{slug:<14}{av:>15}{pin:>13}")
     print("-" * 42)
     print(f"{'TOTAL':<14}{tot:>15}{tp:>13}")
-    print(f"\nImproved baseline train+val = 157  ->  augmented = {tot}  (+{tp} paper-labeled)")
+    print(f"\nImproved baseline train+val = {tot - tp}  ->  augmented = {tot}  (+{tp} paper-labeled)")
     print("Augmented manifest: data/training_set_manifest_augmented.csv")
 
 

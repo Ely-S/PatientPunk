@@ -11,23 +11,42 @@ off-premise or population-mismatched — see master CSV flags).
 | **LIFT** NCT06366724 | LDN + pyridostigmine (2×2 factorial) | **LDN 5183, pyrido 683** | richest signal; needs the arm-relabel below + recruiting-inclusive test |
 | **IVIG** NCT06305793 | IVIG | 0 | off-premise — clinic-administered, no corpus signal, combination |
 
-## Growing the Long-COVID *training* set — what works
-- **Strings are NOT the lever.** Of 205 valid COVID structured-results trials, 17 are Long COVID;
-  the 188 excluded are genuine *acute* COVID (pneumonia/ARDS/coagulopathy). Broadening strings just
-  re-admits acute contamination. `query.cond="Long COVID"` = 28 total → ~17 after criteria.
-- **Cross-bucket reclaim is ~0 net** — the Long-COVID download already uses `query.cond=COVID`, which
-  captures every COVID trial regardless of which other condition bucket it also appears in.
-- **The real lever = the no-results pool.** Long COVID is recent, so most completed trials never
-  posted CT.gov structured results. ~85 completed-no-results Long-COVID trials exist; 41 link to an OA
-  paper, of which the first pass extracted 12 and **declined 29** (mostly the *wrong* paper — review /
-  protocol / secondary analysis). `relink_long_covid.py` retries those across **multiple** candidate
-  papers (`extract_best`) to recover the wrong-paper declines.
+## Growing the Long-COVID *training* set — what works (corrected 2026-06-27)
+
+Two string layers; only one was the lever, and it wasn't the one assumed first.
+
+- **The CLASSIFIER is not the lever.** Of the valid COVID structured-results trials, the ~188 the
+  classifier excludes are genuine *acute* COVID (pneumonia/ARDS/coagulopathy). Loosening the post-COVID
+  keyword tokens just re-admits acute contamination.
+- **The DOWNLOAD SCOPE query *was* the lever.** `query.cond="COVID"` does **not** match a trial tagged
+  `"Post-Acute Sequelae of SARS-CoV-2"` / `"PASC"` / `"Post-COVID-19 Condition"` — no "COVID" substring,
+  and CT.gov does **not** auto-expand. Broadening the scope to the synonym set
+  (`COVID OR SARS-CoV-2 OR PASC OR Post-Acute Sequelae of SARS-CoV-2 OR Post-COVID-19 Condition OR
+  Chronic COVID OR Long-haul COVID`) recovers genuine Long-COVID trials the bare scope missed:
+  **structured training 17 → 21 (+4); paper-rescue pool 85 → 118 (+33).** Wired into `seed_terms.py`.
+- **Paper repositories (Europe PMC) confirm the ceiling is structural.** ~4,800 Long-COVID RCT papers
+  exist; harvesting NCTs from them yields **371 distinct trials**, but after requiring *genuine
+  Long-COVID* + *her RCT criteria*, only ~7 are new and usable and **0 have structured results**. Most
+  Long-COVID literature is reviews/observational/non-RCT, and the trials are dominated by
+  behavioral/device/rehab interventions.
+- **Caveat on what the +4/+33 actually are:** mostly behavioral/device (tDCS, cognitive rehab, exercise,
+  inspiratory-muscle training, yoga). A *few* accessible drugs appear (Montelukast, Vitamin D/K2,
+  Sulodexide) that are corpus-relevant. So the scope fix grows the **raw** count meaningfully but the
+  **corpus-learnable** subset only slightly — the structural scarcity of self-experimentable-drug
+  Long-COVID RCTs stands.
+- **No-results extraction lever:** `relink_long_covid.py` retries each candidate across **multiple**
+  candidate papers (`extract_best`) to recover wrong-paper declines (review/protocol/secondary).
+
+## Net outcome of the scope fix + extraction (2026-06-27)
+**Long-COVID train+val: 31 → 44** (21 CT.gov-structured + 23 paper-rescued); whole-superset augmented
+**236 → 249**. Corpus-learnable Long-COVID training trials: **9** (small — the new trials skew
+behavioral/device, a handful of accessible drugs). Eval set **75 → 88 trials** (LIFT included).
 
 ## Recruiting-inclusive test universe (so LIFT is predictable)
 Her `status:act` excludes recruiting trials, so LIFT (RECRUITING) was absent from the test set.
-Switching to recruiting-inclusive (ACTIVE_NOT_RECRUITING + RECRUITING + ENROLLING_BY_INVITATION)
-grows the Long-COVID test set **24 → 75 trials** and **includes LIFT**. Eval set persisted to
-`data/long_covid_eval_set.csv` (one row per prediction-target arm, annotated with corpus signal).
+Switching to recruiting-inclusive (ACTIVE_NOT_RECRUITING + RECRUITING + ENROLLING_BY_INVITATION) +
+the broadened scope grows the Long-COVID test set to **88 trials** and **includes LIFT**. Eval set
+persisted to `data/long_covid_eval_set.csv` (one row per prediction-target arm, annotated with corpus signal).
 
 ## The factorial-arm bug (a real bug in her pipeline — flag to Nikita)
 LIFT is a 2×2 factorial. Her `check_nonplacebo` filters arms by **title**, so factorial arms named

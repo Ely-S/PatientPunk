@@ -55,7 +55,7 @@ ClinicalTrials.gov ─▶ check_trial [N] ─▶ condition match ─▶ trials W
 3. **Papers-as-labels [NEW].** Many completed trials **never post structured results** to CT.gov, so
    her pipeline drops them. We rescue them: link the results paper (Europe PMC), pull OA full text,
    LLM-extract the per-arm primary outcome, synthesize the CT.gov-results shape her `Experiment`
-   expects, and inject it. **+77 trials → 234 train+val** (157 structured + 77 paper-rescued).
+   expects, and inject it. **+88 trials → 249 train+val** (161 structured + 88 paper-rescued).
 
 ## Two modes (both call her code unchanged)
 
@@ -119,7 +119,7 @@ credits.)
 **All data lives in S3, not git.** `data/` is gitignored; mirror with
 `aws s3 sync trial_superset/data s3://patientpunk/trial_superset/ --exclude ".cache/*" --exclude "*.log"`.
 Key artifacts in `s3://patientpunk/trial_superset/`:
-- `training_set_manifest_augmented.csv` — 234 train+val + 56 test, `label_source` tagged
+- `training_set_manifest_augmented.csv` — 249 train+val + test, `label_source` tagged
 - `labels_sidecar.csv` — per (trial, outcome, arm) model-ready labels
 - `endpoint_classification.csv` — endpoint domain/modality/self_reportable/instrument
 - `master_pulled_data.csv` — everything joined (also gitignored; generator `build_master_csv.py` gitignored too)
@@ -127,7 +127,9 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 ## Status
 
 - **M0–M3 + validation + endpoint-match done & committed** (`shaun/trial-superset`, unpushed, no PR).
-- **Training set:** 234 train+val (157 structured [N] + 77 paper-rescued [NEW]) + 56 test, across 5 conditions.
+- **Training set:** 249 train+val (161 structured [N] + 88 paper-rescued [NEW]) + test, across 5 conditions.
+  Long COVID specifically: 44 train+val (broadened `query.cond` scope catches `SARS-CoV-2`/`PASC`-tagged trials
+  that bare `COVID` missed — see docs/long_covid_focus.md).
 - **Validated:** loads/runs in her `Study`; extraction ~75–88% accurate vs CT.gov ground truth (conservative,
   no fabrication); structured baseline (157) preserved; disjointness checks pass.
 - **Not done:** full Step-3 estimator run (needs GPU/vLLM + the Reddit/PubMed corpus) — ingestion validated, not end-to-end training.

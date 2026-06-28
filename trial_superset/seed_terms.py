@@ -21,7 +21,12 @@ from __future__ import annotations
 CLUSTER: dict[str, dict] = {
     "long_covid": {
         "filter": ["Long Covid"],
-        "scope": "COVID",
+        # "COVID" alone MISSES trials tagged "Post-Acute Sequelae of SARS-CoV-2" / "PASC" /
+        # "Post-COVID-19 Condition" (no "COVID" substring, and CT.gov doesn't auto-expand).
+        # Broadened scope recovers +4 results:with and +33 results:without genuine LC trials
+        # (verified 2026-06-27). The CLASSIFY classifier still narrows to genuine long-COVID.
+        "scope": ("COVID OR SARS-CoV-2 OR PASC OR Post-Acute Sequelae of SARS-CoV-2 OR "
+                  "Post-COVID-19 Condition OR Chronic COVID OR Long-haul COVID"),
     },
     "me_cfs": {
         # "Myalgic Encephalomyelitis" alone misses CFS-tagged trials -> broaden the filter.
