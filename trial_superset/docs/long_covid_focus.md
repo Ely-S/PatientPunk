@@ -3,8 +3,9 @@
 > **Framing note (read [method_and_scope.md](method_and_scope.md) first):** NATURAL estimates each trial
 > *independently* from its own community text — it does **not** train a pooled model on the trials. So
 > this set is a **benchmark + target list**, not "training data," and "lever / training" language below
-> should be read as *growing the benchmark pool*. The canonical set is now **Long COVID only** (the
-> non-LC cluster conditions were removed — they add nothing under per-trial estimation).
+> should be read as *growing the benchmark pool*. The primary set is **Long COVID** (`master_pulled_data.csv`);
+> the non-LC cluster conditions were **split into a separate `cluster_benchmark.csv`** (kept, not deleted —
+> they add nothing to LC under per-trial estimation, so they're their own benchmark).
 
 **Date:** 2026-06-25 · scope decision: keep the prediction universe at **Long COVID** (that's where
 the candidate targets *and* the Reddit corpus signal are; the other cluster conditions are mostly
@@ -13,7 +14,10 @@ off-premise or population-mismatched — see master CSV flags).
 ## The three trials we're predicting
 
 These are the prospective targets. In the data they are flagged **`is_prediction_target=True`** in
-`master_pulled_data.csv`, and detailed per-arm (with corpus signal) in `data/long_covid_eval_set.csv`.
+`master_pulled_data.csv`. Note `master`'s test rows are **trial/outcome-level** (one per registered
+primary outcome), so the **arm-level** targets — e.g. LIFT's LDN-alone vs pyridostigmine-alone arms,
+with the factorial relabel — live in **`data/long_covid_eval_set.csv`**, which is the canonical
+**arm-level prediction-target artifact** (annotated with per-arm corpus signal).
 
 | trial | NCT | drug(s) | corpus signal (LC) | fits NATURAL's premise? |
 |---|---|---|---|---|
@@ -50,10 +54,11 @@ Two string layers; only one was the lever, and it wasn't the one assumed first.
 - **No-results extraction lever:** `relink_long_covid.py` retries each candidate across **multiple**
   candidate papers (`extract_best`) to recover wrong-paper declines (review/protocol/secondary).
 
-## Net outcome of the scope fix + extraction (2026-06-27)
-**Long-COVID train+val: 31 → 44** (21 CT.gov-structured + 23 paper-rescued); whole-superset augmented
-**236 → 249**. Corpus-learnable Long-COVID training trials: **9** (small — the new trials skew
-behavioral/device, a handful of accessible drugs). Eval set **75 → 88 trials** (LIFT included).
+## Current net outcome (2026-06-28)
+**Long-COVID train+val: 31 -> 50** (21 CT.gov-structured + 23 paper-rescued +
+6 registry-adapted); whole-superset augmented **236 -> 255**. Corpus-learnable Long-COVID
+training trials: **9** (small - the new trials skew behavioral/device, a handful of accessible
+drugs). Eval set: **88 trials / 153 prediction-target arms** (LIFT included).
 
 ## Recruiting-inclusive test universe (so LIFT is predictable)
 Her `status:act` excludes recruiting trials, so LIFT (RECRUITING) was absent from the test set.
@@ -78,14 +83,16 @@ This affects **any** 2×2 factorial in her pipeline, not just LIFT.
 
 **Fix:** relabel factorial arms to their non-placebo component before her filter —
 `"Placebo/LDN" → "Low-Dose Naltrexone"`, `"Pyridostigmine/Placebo" → "Pyridostigmine"`,
-`"Pyridostigmine/LDN" → "Pyridostigmine + Low-Dose Naltrexone"`. Then NATURAL predicts all three
-main-effect / interaction targets. Implemented in `long_covid_eval.py::relabel`.
+`"Pyridostigmine/LDN" -> "Pyridostigmine + Low-Dose Naltrexone"`. Then NATURAL can target all
+three main-effect / interaction arms. Implemented in `long_covid_eval.py::relabel` for the
+arm-level eval CSV; a relabeled JSON/Experiment is still needed if pinned `naturalv2` will run
+directly on the LIFT main-effect arms.
 
 This operationalizes the candidates-CSV guidance ("predict the **main effects**, the community can't
 isolate the stack"): the *trial* isolates them via the factorial; her *arm filter* was discarding them;
 and the *corpus* signal is for the stack — so LDN-alone is the hard, high-value prediction.
 
 ## Artifacts
-- `data/long_covid_eval_set.csv` — 88 trials / 153 prediction-target arms (LIFT relabeled).
+- `data/long_covid_eval_set.csv` - 88 trials / 153 prediction-target arms (LIFT relabeled).
 - `relink_long_covid.py` + `litlabels/extract_labels.py::candidate_papers/extract_best` — the multi-paper push.
 - `long_covid_eval.py` — the eval-set generator (+ the factorial relabel).

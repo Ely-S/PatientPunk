@@ -58,11 +58,12 @@ ClinicalTrials.gov ─▶ check_trial [N] ─▶ condition match ─▶ trials W
 1. **Frame [N].** Completed interventional trials, design-filtered by `check_trial`, assigned to one
    of the 5 conditions. Condition assignment runs in two modes (below).
 2. **Label [N].** For a trial with posted structured results, her `Experiment` reads the per-arm
-   primary-endpoint value — the number NATURAL learns to predict.
+   primary-endpoint value - the ground-truth number NATURAL evaluates predictions against.
 3. **Papers-as-labels [NEW].** Many completed trials **never post structured results** to CT.gov, so
    her pipeline drops them. We rescue them: link the results paper (Europe PMC), pull OA full text,
    LLM-extract the per-arm primary outcome, synthesize the CT.gov-results shape her `Experiment`
-   expects, and inject it. **+88 trials → 249 train+val** (161 structured + 88 paper-rescued).
+   expects, and inject it. Current augmented train+val: **255 trials** = 161 CT.gov-structured +
+   88 paper-rescued + 6 registry-adapted.
 
 ## Two modes (both call her code unchanged)
 
@@ -129,8 +130,10 @@ credits.)
 **All data lives in S3, not git.** `data/` is gitignored; mirror with
 `aws s3 sync trial_superset/data s3://patientpunk/trial_superset/ --exclude ".cache/*" --exclude "*.log"`.
 Key artifacts in `s3://patientpunk/trial_superset/`:
-- `training_set_manifest_augmented.csv` — 50 LC train+val + test, `label_source` tagged (LC-only canonical)
-- `labels_sidecar.csv` — per (trial, outcome, arm) model-ready labels
+- `training_set_manifest_augmented.csv` - all-condition manifest (315 rows): 255 train+val +
+  60 test across Long COVID and the adjacent-condition benchmark; `label_source` tagged.
+- `labels_sidecar.csv` - per (trial, outcome, arm) model-ready labels. This is an export/workaround:
+  pinned `naturalv2` does not consume it unless the evaluation path is changed to do so.
 - `endpoint_classification.csv` — endpoint domain/modality/self_reportable/instrument
 - `master_pulled_data.csv` — **Long COVID benchmark** (primary; gitignored, generator `build_master_csv.py` gitignored too).
   Provenance columns: **`data_source`** = `trial_listing` (CT.gov results) / `paper` (extracted from
@@ -151,7 +154,7 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
   dysautonomia, chronic Lyme — same schema, for cross-cluster evaluation; kept apart, not mixed into LC.
 - See docs/method_and_scope.md, docs/long_covid_focus.md, docs/additional_sources.md.
 - **Validated:** loads/runs in her `Study`; extraction ~75–88% accurate vs CT.gov ground truth (conservative,
-  no fabrication); structured baseline (157) preserved; disjointness checks pass.
+  no fabrication); structured baseline (161) preserved; disjointness checks pass.
 - **Not done:** full Step-3 estimator run (needs GPU/vLLM + the Reddit/PubMed corpus) — ingestion validated, not end-to-end training.
 
 ## For Nikita (differences & decisions)
@@ -167,7 +170,9 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - [docs/test_universe_status.md](docs/test_universe_status.md) — her `status:act` [N] excludes recruiting trials
   (so LIFT can't be a test trial), yet her shared test set is effectively recruiting-inclusive → repo vs output disagree.
 - [docs/label_normalization.md](docs/label_normalization.md) — her notbinary `value/N` [N] is a rate for binary
-  but `mean/N` (garbage) for continuous (~80% of endpoints). Sidecar fixes it [NEW]; binary preset is non-viable (234→20).
+  but `mean/N` (garbage) for continuous (~84% of sidecar rows). The sidecar gives a model-ready
+  corrected export, but native `naturalv2` still uses `Experiment.avg_potential_outcomes` unless changed.
+  Binary preset is non-viable (255 -> 21 train+val).
 - [docs/validation.md](docs/validation.md) — extraction accuracy + downstream-compatibility + limits
   (covariate sparsity on rescued trials, ~12% extraction error).
 - [docs/long_covid_focus.md](docs/long_covid_focus.md) — Long-COVID focus + **a real factorial-arm bug**:

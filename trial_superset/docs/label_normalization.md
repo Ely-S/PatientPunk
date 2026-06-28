@@ -14,7 +14,7 @@ arm's sample size mixes the effect with N:
 | NCT04158427 | VAS fatigue 0–100 | 72.8 (n=5) | **14.6** ⚠️ |
 | NCT05559021 | FIQ score | 44.07 (n=8) | **5.5** ⚠️ |
 
-In the augmented set, **~80% of label rows are continuous endpoints** (the `notbinary` preset
+In the current sidecar, **~84% of label rows are continuous endpoints** (the `notbinary` preset
 admits them), so most labels were affected — only ~52% landed in [0,1], with extremes to ~387.
 The extraction is correct; the **normalization** is the issue, and it's inherent to her
 `notbinary` `Experiment` (her own notbinary study has it). We reproduced it faithfully, then
@@ -36,9 +36,14 @@ mean/N); and where the instrument is a bounded absolute score we *also* give an 
 [0,1] proportion so it shares an axis with the rates. The `endpoint_type` flag travels with every
 row so the two scales are never silently mixed.
 
+Important NATURAL context: pinned `naturalv2` does **not** read `labels_sidecar.csv`. Native
+`estimate_ate.py` still compares predictions against `Experiment.avg_potential_outcomes`. The
+sidecar is the corrected, model-ready export for a downstream consumer or for a patched evaluation
+path; it does not change `naturalv2` behavior by itself.
+
 ## Coverage / honest limits
-- `endpoint_type` distribution (569 rows): **continuous 454, binary 77, percentage 38**.
-- `scale_proportion` is populated for only **55 / 454 continuous (12%)**. Most continuous
+- `endpoint_type` distribution (689 rows): **continuous 582, binary 66, percentage 41**.
+- `scale_proportion` is populated for only **62 / 582 continuous (11%)**. Most continuous
   endpoints here are **change-from-baseline** or **unbounded** (steps, meters, days, labs) — those
   *cannot* be expressed as a proportion of scale, by definition. The flag + raw mean still cover
   all of them; the proportion is a bonus where it's valid.
@@ -52,11 +57,11 @@ and model binary/continuous as separate scales/heads; or (b) fix the normalizati
 `Experiment` (use the mean directly / standardize for continuous).
 
 **Why not just use the `binary` preset (clean rates, no sidecar)?** Measured (`binary_compare.py`):
-the binary preset drops the training set from **234 → 20 train+val (−91%)**, and zeroes out ME/CFS
+the binary preset drops the training set from **255 -> 21 train+val (-92%)**, and zeroes out ME/CFS
 and chronic Lyme entirely — because these symptom conditions are dominated by **continuous** primary
 endpoints (FSS, 6MWD, FIQ, VAS), not binary "X% responded" ones. So binary is non-viable here, and
 the sidecar (keep notbinary, fix continuous labels) is the right approach, not over-engineering.
 
 ## Artifacts
 - [`build_labels_sidecar.py`](../build_labels_sidecar.py) · `data/labels_sidecar.csv`
-- Augmented set: `data/training_set_manifest_augmented.csv` (234 train+val incl. +77 paper-labeled)
+- Augmented set: `data/training_set_manifest_augmented.csv` (255 train+val incl. +88 paper-labeled)

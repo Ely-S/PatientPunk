@@ -28,13 +28,13 @@ Method: trials with BOTH structured CT.gov results AND an OA paper. Extract from
   = truth 1626.6 exactly. The one miss (`NCT00633880`: truth 1.3 vs extracted −1.8) is a
   change-vs-absolute / timepoint ambiguity — the #5 issue.
 - **Implication:** the extractor is conservative (declines when unsure) and ~75–88% accurate when it
-  commits. The 77 paper-only labels carry roughly that accuracy + occasional incompleteness — a
+  commits. The 88 paper-extracted train/val trials carry roughly that accuracy + occasional incompleteness - a
   measured error bar, not ground truth. Use the per-label `confidence` field; treat as good-but-noisy.
 
 ## #5 — Absolute-vs-change flag (`labels_sidecar.csv`)
 Continuous labels mixed absolute scores (FIQ 44) and change-from-baseline (RAND-36 +9) — different
-quantities. Sidecar now has **`is_change_from_baseline`** (from the outcome title): of 454 continuous
-arms, **195 change-from-baseline, 259 absolute**. Prevents a model from mixing levels and deltas.
+quantities. Sidecar now has **`is_change_from_baseline`** (from the outcome title): of 582 continuous
+arms, **227 change-from-baseline, 355 absolute**. Prevents a model from mixing levels and deltas.
 
 ## Net
 The pipeline and assembly are sound; the paper labels are **ingestible and ~75–88% accurate**, with

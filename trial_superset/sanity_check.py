@@ -4,7 +4,7 @@ Checks:
   1. manifest: counts, label_source split, duplicate NCTs, date population
   2. disjointness: paper-labeled (results:without) vs structured (results:with) NCT sets;
      train/val/test non-overlap
-  3. structured baseline unchanged (= improved 157 train+val)
+  3. structured baseline unchanged (= improved 161 train+val)
   4. labels: rebuild every train+val Experiment, flag empty/degenerate, compare the
      avg_potential_outcome distributions of structured vs paper (surfaces the mean/N scale)
 
@@ -71,7 +71,7 @@ def main() -> None:
 
     # === 3. structured baseline ===
     struct_tv = sum(1 for r in rows if r["label_source"] == "ctgov_structured" and r["split"] in ("train", "val"))
-    print(f"\n=== 3. BASELINE ===\n[{'PASS' if struct_tv == 157 else 'CHECK'}] structured train+val = {struct_tv} (expected 157 from improved baseline)")
+    print(f"\n=== 3. BASELINE ===\n[{'PASS' if struct_tv == 161 else 'CHECK'}] structured train+val = {struct_tv} (expected 161 from improved baseline)")
 
     # === 4. labels: rebuild Experiments ===
     print("\n=== 4. LABELS (rebuild every train+val Experiment) ===")

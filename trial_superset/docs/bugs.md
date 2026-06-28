@@ -53,13 +53,14 @@ endpoint (`value/100` if the unit says percent). Correct as a response *rate* fo
 | NCT04158427 | VAS fatigue 0–100 | 72.8 (n=5) | **14.6** ⚠️ |
 | NCT05559021 | FIQ score | 44.07 (n=8) | **5.5** ⚠️ |
 
-**Impact on her:** **~80% of label rows are continuous**, so most of the labels her model trains on
-are corrupted (only ~52% land in [0,1], extremes to ~387). This is the prediction *target* — arguably
+**Impact on her:** **~84% of current sidecar rows are continuous**, so most evaluation labels in the
+notbinary path are affected (only ~52% land in [0,1], extremes to ~387). This is the prediction *target* - arguably
 the highest-severity item. Present in her own notbinary study. The `binary` preset is not an escape:
-it collapses the set 234 → 20 (−91%) because these symptom conditions use continuous primaries.
+it collapses the set 255 -> 21 train+val (-92%) because these symptom conditions use continuous primaries.
 **Fix/status:** we keep every trial and add a model-ready **label sidecar** (`endpoint_type` +
-`clean_outcome` [raw mean for continuous] + `scale_proportion`); recommend she consume it or fix the
-normalization (use the mean / standardize). Full detail: [label_normalization.md](label_normalization.md).
+`clean_outcome` [raw mean for continuous] + `scale_proportion`). Pinned `naturalv2` does not read
+that sidecar by itself, so she would need to consume it explicitly or fix the normalization
+(use the mean / standardize). Full detail: [label_normalization.md](label_normalization.md).
 
 ### A3 — Factorial arms named `"X/Placebo"` are silently dropped
 **Where:** `check_nonplacebo` decides "is this a real treatment arm?" by the arm **title**. Factorial

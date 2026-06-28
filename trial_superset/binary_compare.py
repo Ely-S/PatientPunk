@@ -10,10 +10,11 @@ Run: trial_superset/.venv/Scripts/python.exe trial_superset/binary_compare.py
 
 from __future__ import annotations
 
-import glob
+import csv
 import json
 import logging
 import os
+from collections import Counter
 
 logging.disable(logging.INFO)
 
@@ -23,8 +24,17 @@ from build_improved import terms_of, classify, LABEL
 
 LABELED = "trial_superset/data/m3_labeled"
 JSONL = "trial_superset/data/m3_extractions.jsonl"
+MANIFEST = "trial_superset/data/training_set_manifest_augmented.csv"
 BINARY_FILTERS = {"randomized": True, "parallel": False, "num_noncontrol": None,
                   "nonhealthy": True, "binary_endpoint": True}
+
+
+def notbinary_counts() -> Counter:
+    """Current notbinary train+val counts from the augmented manifest."""
+    if not os.path.exists(MANIFEST):
+        return Counter()
+    rows = csv.DictReader(open(MANIFEST, encoding="utf-8-sig"))
+    return Counter(r["condition"] for r in rows if r["split"] in ("train", "val"))
 
 
 def main() -> None:
@@ -45,7 +55,8 @@ def main() -> None:
 
     print(f"{'condition':<14}{'binary t+v':>11}{'(struct':>9}{'paper)':>8}   {'notbin t+v':>11}")
     print("-" * 56)
-    tot_bin = tot_bin_paper = 0
+    tot_bin = tot_bin_paper = tot_notbin = 0
+    notbin_by_slug = notbinary_counts()
     for slug in CLUSTER:
         dest = os.path.join(LABELED, slug)
         tp = os.path.join(dest, "nct_reports")
@@ -70,12 +81,13 @@ def main() -> None:
         surv = {list(d.keys())[0] for d in (study.train_trials + study.val_trials)}
         p = len(surv & paper)
         tot_bin += tv; tot_bin_paper += p
-        notbin = {"long_covid": 28, "me_cfs": 17, "fibromyalgia": 140, "dysautonomia": 41, "chronic_lyme": 4}.get(slug, 0)
+        notbin = notbin_by_slug.get(slug, 0)
+        tot_notbin += notbin
         print(f"{slug:<14}{tv:>11}{tv-p:>9}{p:>8}   {notbin:>11}")
     print("-" * 56)
-    print(f"{'TOTAL':<14}{tot_bin:>11}{tot_bin-tot_bin_paper:>9}{tot_bin_paper:>8}   {'234':>11}")
-    print(f"\nbinary preset: {tot_bin} train+val ({tot_bin_paper} paper) — ALL clean rates, NO sidecar")
-    print(f"notbinary:     234 train+val (77 paper) — needs the label sidecar for continuous")
+    print(f"{'TOTAL':<14}{tot_bin:>11}{tot_bin-tot_bin_paper:>9}{tot_bin_paper:>8}   {tot_notbin:>11}")
+    print(f"\nbinary preset: {tot_bin} train+val ({tot_bin_paper} paper) - ALL clean rates, NO sidecar")
+    print(f"notbinary:     {tot_notbin} train+val - needs the label sidecar for continuous")
 
 
 if __name__ == "__main__":
