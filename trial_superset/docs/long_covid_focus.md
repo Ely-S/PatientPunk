@@ -86,6 +86,6 @@ isolate the stack"): the *trial* isolates them via the factorial; her *arm filte
 and the *corpus* signal is for the stack — so LDN-alone is the hard, high-value prediction.
 
 ## Artifacts
-- `data/long_covid_eval_set.csv` — 75 trials / 129 prediction-target arms (LIFT relabeled).
+- `data/long_covid_eval_set.csv` — 88 trials / 153 prediction-target arms (LIFT relabeled).
 - `relink_long_covid.py` + `litlabels/extract_labels.py::candidate_papers/extract_best` — the multi-paper push.
 - `long_covid_eval.py` — the eval-set generator (+ the factorial relabel).
