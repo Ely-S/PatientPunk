@@ -31,9 +31,16 @@ is behavioral/rehab (as expected for UK LC trials); **2 drug**, of which **ISRCT
 (loratadine + **famotidine** — famotidine has real corpus signal, ~3110 distinct authors). That trial
 alone justifies the lever — it's a notable accessible-drug LC RCT invisible to a CT.gov-only pull.
 
-**Cost to actually use these:** their records aren't CT.gov JSON, so wiring them into her `Study` needs
-a small **schema adapter** (ISRCTN/EUCTR → her `ClinicalTrial` shape), or extracting design *and*
-outcome from the linked paper. That's the CT.gov-only boundary — a separate decision before injection.
+**Adapter — BUILT (`adapt_registries.py`).** ISRCTN record (design) + linked results paper (per-arm
+outcome) → LLM schema → clone a real CT.gov trial as a structural template and overwrite the semantic
+fields → a CT.gov-shaped trial that loads in `ClinicalTrial`, passes `check_trial`, and whose
+`Experiment` reads the label. **6 of 13 adapted + validated end-to-end** (the rest: no clean per-arm
+numeric primary in the OA paper — incl. STIMULATE-ICP famotidine, a platform trial). The 6 are folded
+into the `long_covid` Study via `build_augmented.py` (tagged `label_source=registry_adapted`):
+**Long-COVID train+val 44 → 50; augmented total 249 → 255.** Covariates are neutralized (template
+leakage) — same sparsity caveat as papers-as-labels. The 6 are behavioral/device/supplement, so the
+**corpus-learnable** subset is unchanged (68 trials); raw base grew. Output: `data/adapted_registries/`
++ `data/adapted_registries_manifest.csv`. EudraCT still needs its own fetch (no API).
 
 ## Lever #2 — systematic-review evidence tables (`mine_reviews.py`)
 **Why:** a Long-COVID-interventions review already lists every included RCT *and* extracts its primary

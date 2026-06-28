@@ -88,6 +88,7 @@ Both are kept so we can hand Nikita the exact delta.
 | `long_covid_eval.py` | persist the recruiting-inclusive Long-COVID eval set (LIFT factorial relabeled) |
 | `mine_registries.py` | **additional-source explorer #1** — mine ISRCTN/EudraCT (non-CT.gov) LC RCTs → `data/mined_registries.csv` |
 | `mine_reviews.py` | **additional-source explorer #2** — mine LC systematic-review evidence tables → `data/mined_reviews.csv` |
+| `adapt_registries.py` | adapt ISRCTN LC RCTs → CT.gov-shaped JSON (template-clone + paper outcome); 6 ingested into long_covid |
 | `extract_validate.py` | extraction accuracy vs CT.gov ground truth |
 | `binary_compare.py` | binary-vs-notbinary trial-count comparison (justifies notbinary+sidecar) |
 | `sanity_check.py` | data QA (disjointness, baseline, label ranges) |
@@ -129,9 +130,9 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 ## Status
 
 - **M0–M3 + validation + endpoint-match done & committed** (`shaun/trial-superset`, unpushed, no PR).
-- **Training set:** 249 train+val (161 structured [N] + 88 paper-rescued [NEW]) + test, across 5 conditions.
-  Long COVID specifically: 44 train+val (broadened `query.cond` scope catches `SARS-CoV-2`/`PASC`-tagged trials
-  that bare `COVID` missed — see docs/long_covid_focus.md).
+- **Training set:** 255 train+val (161 structured [N] + 88 paper-rescued [NEW] + 6 ISRCTN-adapted [NEW]) + test.
+  Long COVID specifically: 50 train+val = 21 CT.gov + 23 paper-rescued + 6 non-CT.gov ISRCTN (adapted to
+  CT.gov shape). See docs/long_covid_focus.md and docs/additional_sources.md.
 - **Validated:** loads/runs in her `Study`; extraction ~75–88% accurate vs CT.gov ground truth (conservative,
   no fabrication); structured baseline (157) preserved; disjointness checks pass.
 - **Not done:** full Step-3 estimator run (needs GPU/vLLM + the Reddit/PubMed corpus) — ingestion validated, not end-to-end training.

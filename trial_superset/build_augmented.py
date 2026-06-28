@@ -95,6 +95,28 @@ def inject_one(slug: str, nct: str, schema: dict, dest_reports: str) -> str | No
     return date
 
 
+ADAPTED = "trial_superset/data/adapted_registries/nct_reports"
+
+
+def adapted_registry_retro(slug: str, dest_reports: str) -> list[tuple[str, str | None]]:
+    """Fold in non-CT.gov (ISRCTN) trials adapted to CT.gov shape (adapt_registries.py).
+    Long COVID only; only trials carrying a synthetic outcome. Returns [(id, date)]."""
+    if slug != "long_covid" or not os.path.isdir(ADAPTED):
+        return []
+    out = []
+    for fn in sorted(os.listdir(ADAPTED)):
+        if not fn.endswith(".json"):
+            continue
+        src = os.path.join(ADAPTED, fn)
+        j = json.load(open(src, encoding="utf-8"))
+        if not j.get("resultsSection", {}).get("outcomeMeasuresModule", {}).get("outcomeMeasures"):
+            continue
+        shutil.copy(src, os.path.join(dest_reports, fn))
+        date = j["protocolSection"]["statusModule"].get("resultsFirstPostDateStruct", {}).get("date")
+        out.append((fn[:-5], date or None))
+    return out
+
+
 def main() -> None:
     from naturalv2.cli.create_study import resolve_trial_filters
     from naturalv2.study import Study, get_study_filepaths
@@ -119,9 +141,10 @@ def main() -> None:
             if date is not False:  # only trials whose synthetic results file was actually written
                 paper_retro.append((nct, date))
 
+        registry_retro = adapted_registry_retro(slug, dest_reports)  # non-CT.gov (ISRCTN), LC only
         cfg = build_cfg(dest, {"conditions": [LABEL[slug]]})
         cfg.save_path = dest
-        study = Study(improved_retro + paper_retro, test, cfg)
+        study = Study(improved_retro + paper_retro + registry_retro, test, cfg)
         os.makedirs(os.path.join(dest, "studies"), exist_ok=True)
         out_fp = get_study_filepaths(dest, LABEL[slug], "noparallel_notbinary", ate=False)["study"]
         study.to_yaml(out_fp)
@@ -134,8 +157,11 @@ def main() -> None:
         for split in ("train_trials", "val_trials", "test_trials"):
             for d in (aug.get(split) or []):
                 n, meta = next(iter(d.items()))
+                source = ("registry_adapted" if n.startswith("ISRCTN")
+                          else "paper_extracted" if n in extractions.get(slug, {})
+                          else "ctgov_structured")
                 manifest.append({"condition": slug, "split": split.replace("_trials", ""), "nct": n,
-                                 "label_source": "paper_extracted" if n in extractions.get(slug, {}) else "ctgov_structured",
+                                 "label_source": source,
                                  "date": meta[1] if len(meta) > 1 else "", "title": meta[0] if meta else ""})
 
     with open("trial_superset/data/training_set_manifest_augmented.csv", "w", newline="", encoding="utf-8-sig") as f:
