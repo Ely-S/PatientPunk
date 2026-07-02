@@ -29,10 +29,12 @@ OUT = "trial_superset/data/coverage_validation.csv"
 SAMPLES = "trial_superset/data/coverage_validation_samples.jsonl"
 COVERAGE = "trial_superset/data/drug_coverage.csv"
 
-# over-count-risk drugs to validate + clean-alias controls (should score high -> validates the method)
-VALIDATE = ["paxlovid_nirmatrelvir", "vagus_nerve_stim", "vitamin_d", "ivig", "prednisolone",
-            "hyperbaric_oxygen", "mesenchymal_stem_cell", "lithium",
-            "fluvoxamine", "oxaloacetate", "naltrexone_ldn"]  # last 3 = clean controls
+# validate EVERY runnable drug (>=50 raw authors) so each trial gets a real on-target report count.
+VALIDATE = ["naltrexone_ldn", "vitamin_d", "vagus_nerve_stim", "prednisolone", "plasma_exchange_apheresis",
+            "hyperbaric_oxygen", "stellate_ganglion_block", "pyridostigmine", "ivig", "paxlovid_nirmatrelvir",
+            "tirzepatide", "fluvoxamine", "l_citrulline", "tens", "lithium", "nicotinamide_riboside",
+            "vortioxetine", "rintatolimod", "oxaloacetate", "cyclobenzaprine", "sulodexide", "efgartigimod",
+            "mesenchymal_stem_cell", "homeopathy"]
 
 PROMPT = """These are Reddit snippets from Long COVID communities that mention "{drug}". For NATURAL we
 need reports where an individual personally used (or is seriously trying) {drug} as a treatment for
