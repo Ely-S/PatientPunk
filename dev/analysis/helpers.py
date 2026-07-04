@@ -15,6 +15,7 @@ from dev.analysis.a0_extraction.comment_context import (
     CommentContext,
     CommentStore,
 )
+from dev.analysis.cluster.analysis import build_comment_clusters, load_comment_cluster_assignments
 
 
 def comments(
@@ -143,4 +144,46 @@ def _iter_comments(
             )
 
 
-__all__ = ["comments"]
+def cluster_comments(
+    *,
+    a4_report: str | Path,
+    output_dir: str | Path | None = None,
+    comment_db: str | Path = DEFAULT_DB,
+    include_comment_body: bool = True,
+    include_claim_text: bool = True,
+    include_evidence_quotes: bool = True,
+    min_meaningful_comments: int = 10,
+    max_features: int = 5000,
+    min_df: int = 1,
+    ngram_range: tuple[int, int] = (1, 2),
+    distance_threshold: float = 0.65,
+    n_clusters: int | None = None,
+    write_feature_matrix: bool = False,
+) -> dict[str, Any]:
+    """Build exploratory comment clusters from an A4 report package.
+
+    ```python
+    from dev.analysis.helpers import cluster_comments
+
+    result = cluster_comments(a4_report="dataset/.../reports/<report_id>")
+    print(result["output_dir"])
+    ```
+    """
+    return build_comment_clusters(
+        a4_report=a4_report,
+        output_dir=output_dir,
+        comment_db=comment_db,
+        include_comment_body=include_comment_body,
+        include_claim_text=include_claim_text,
+        include_evidence_quotes=include_evidence_quotes,
+        min_meaningful_comments=min_meaningful_comments,
+        max_features=max_features,
+        min_df=min_df,
+        ngram_range=ngram_range,
+        distance_threshold=distance_threshold,
+        n_clusters=n_clusters,
+        write_feature_matrix=write_feature_matrix,
+    )
+
+
+__all__ = ["comments", "cluster_comments", "load_comment_cluster_assignments"]

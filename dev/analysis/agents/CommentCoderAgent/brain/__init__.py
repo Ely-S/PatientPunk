@@ -1,0 +1,2 @@
+"""Prompt resources for CommentCoderAgent."""
+
