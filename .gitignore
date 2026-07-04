@@ -18,6 +18,8 @@ dist/
 # (PatientPunk_data/ + S3) and provide download instructions in the README.
 data/*
 !data/.gitkeep
+dataset/*
+!dataset/.gitkeep
 output/
 *.zip
 

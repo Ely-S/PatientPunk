@@ -414,7 +414,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.5" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "requests", specifier = ">=2.32" },
-    { name = "rumi", git = "https://github.com/cjleemesotes/Rumi.git?rev=v0.1.0" },
+    { name = "rumi", editable = "../Rumi" },
     { name = "scikit-learn", marker = "extra == 'cluster'", specifier = ">=1.3" },
     { name = "scipy", specifier = ">=1.12" },
 ]
@@ -573,12 +573,21 @@ wheels = [
 [[package]]
 name = "rumi"
 version = "0.1.0"
-source = { git = "https://github.com/cjleemesotes/Rumi.git?rev=v0.1.0#831e1ee46460d4cbbdef119df0e4600b94845638" }
+source = { editable = "../Rumi" }
 dependencies = [
     { name = "openai" },
     { name = "pydantic" },
     { name = "python-dotenv" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "openai", specifier = ">=1.109" },
+    { name = "pydantic", specifier = ">=2.11" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "scikit-learn"

@@ -1,0 +1,197 @@
+{
+  "packet": {
+    "drug_query": "LDN",
+    "drug": "ldn",
+    "found": true,
+    "n_reports": 1,
+    "n_users": 1,
+    "counts": {
+      "positive": 1,
+      "negative": 0,
+      "mixed": 0,
+      "neutral": 0
+    },
+    "pct": {
+      "positive": 100,
+      "negative": 0,
+      "mixed": 0,
+      "neutral": 0
+    },
+    "signal_mix": {
+      "strong": 1,
+      "moderate": 0,
+      "weak": 0
+    },
+    "side_effects": [],
+    "quotes": [
+      {
+        "claim_id": "Q-pos-1",
+        "pole": "pos",
+        "text": "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all",
+        "post_id": "t1_oq2v9l6",
+        "signal": "strong"
+      }
+    ],
+    "caveats": [
+      {
+        "claim_id": "C1",
+        "text": "SMALL N: only 1 distinct patients — below the n>=30 bar; treat every percentage as noisy and provisional."
+      },
+      {
+        "claim_id": "C2",
+        "text": "SINGLE SOURCE: all reports come from covidlonghaulers; self-selected forum users are not the general patient population."
+      },
+      {
+        "claim_id": "C3",
+        "text": "SILENT DROP / SELF-SELECTION: a report row exists ONLY when an author voiced personal experience (signal != 'n/a'). Non-experiential mentions are dropped before counting, so a low NEGATIVE count is NOT evidence of safety — absence of negatives != safe."
+      },
+      {
+        "claim_id": "C4",
+        "text": "SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured outcomes — no dosing, no controls, no follow-up, recall and placebo uncontrolled."
+      }
+    ],
+    "confidence_tier": "thin",
+    "provenance": {
+      "claim_id": "PROV",
+      "run_id": 2,
+      "commit_hash": "807804bcd060f33ca564a48b1afb020f9f7870aa",
+      "run_at": 1781931857
+    },
+    "claims": {
+      "S1": {
+        "kind": "stat",
+        "render": "1 distinct patients reported personal experience with ldn (1 raw reports before per-user dedup).",
+        "value": {
+          "n_users": 1,
+          "n_reports": 1
+        }
+      },
+      "S2": {
+        "kind": "stat",
+        "render": "positive: 1 of 1 patients (100%).",
+        "value": {
+          "count": 1,
+          "pct": 100
+        }
+      },
+      "S3": {
+        "kind": "stat",
+        "render": "negative: 0 of 1 patients (0%).",
+        "value": {
+          "count": 0,
+          "pct": 0
+        }
+      },
+      "S4": {
+        "kind": "stat",
+        "render": "signal mix (deduped patients): strong=1, moderate=0, weak=0. mixed=0, neutral=0 sentiment.",
+        "value": {
+          "signal_mix": {
+            "strong": 1,
+            "moderate": 0,
+            "weak": 0
+          },
+          "mixed": 0,
+          "neutral": 0
+        }
+      },
+      "Q-pos-1": {
+        "kind": "quote",
+        "render": "\"Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all\" — [pos, signal=strong, post t1_oq2v9l6]",
+        "value": {
+          "claim_id": "Q-pos-1",
+          "pole": "pos",
+          "text": "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all",
+          "post_id": "t1_oq2v9l6",
+          "signal": "strong"
+        }
+      },
+      "C1": {
+        "kind": "caveat",
+        "render": "SMALL N: only 1 distinct patients — below the n>=30 bar; treat every percentage as noisy and provisional.",
+        "value": {
+          "claim_id": "C1",
+          "text": "SMALL N: only 1 distinct patients — below the n>=30 bar; treat every percentage as noisy and provisional."
+        }
+      },
+      "C2": {
+        "kind": "caveat",
+        "render": "SINGLE SOURCE: all reports come from covidlonghaulers; self-selected forum users are not the general patient population.",
+        "value": {
+          "claim_id": "C2",
+          "text": "SINGLE SOURCE: all reports come from covidlonghaulers; self-selected forum users are not the general patient population."
+        }
+      },
+      "C3": {
+        "kind": "caveat",
+        "render": "SILENT DROP / SELF-SELECTION: a report row exists ONLY when an author voiced personal experience (signal != 'n/a'). Non-experiential mentions are dropped before counting, so a low NEGATIVE count is NOT evidence of safety — absence of negatives != safe.",
+        "value": {
+          "claim_id": "C3",
+          "text": "SILENT DROP / SELF-SELECTION: a report row exists ONLY when an author voiced personal experience (signal != 'n/a'). Non-experiential mentions are dropped before counting, so a low NEGATIVE count is NOT evidence of safety — absence of negatives != safe."
+        }
+      },
+      "C4": {
+        "kind": "caveat",
+        "render": "SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured outcomes — no dosing, no controls, no follow-up, recall and placebo uncontrolled.",
+        "value": {
+          "claim_id": "C4",
+          "text": "SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured outcomes — no dosing, no controls, no follow-up, recall and placebo uncontrolled."
+        }
+      },
+      "PROV": {
+        "kind": "provenance",
+        "render": "provenance: run_id=2, commit=807804bc, run_at=1781931857.",
+        "value": {
+          "claim_id": "PROV",
+          "run_id": 2,
+          "commit_hash": "807804bcd060f33ca564a48b1afb020f9f7870aa",
+          "run_at": 1781931857
+        }
+      }
+    }
+  },
+  "transcript": [
+    {
+      "agent": "hooper",
+      "text": "Listen, I am going to be straight with you right from the jump, because that is the only way this conversation is worth having. The evidence packet we are working from is THIN. I mean it — cite(\"C1\") makes that crystal clear, and I am not going to dance around it. One person. That is what we have. Every percentage you hear today is noisy and provisional, and you need to hold it that way.\n\nBUT.\n\nHere is why I am still leaning across this table with my eyes lit up.\n\nThat one person? cite(\"S2\") — every single reporting patient came back positive. And cite(\"S4\") tells us the signal from that report is not a weak, wishy-washy \"I guess it helped a little.\" It came back STRONG. That matters, even in a small sample.\n\nAnd then there is the actual human being behind that number. Listen to what they said:\n\nquote(\"Q-pos-1\")\n\nRead that again. That is not someone saying \"I feel slightly better.\" That is someone describing a whole new capacity — energy unlocking emotional processing, their body starting to move through things it had been too exhausted to touch. That is a quality-of-life story, and it is real to the person who lived it.\n\nNow — I have to be honest with you, because Vex is going to bring up cite(\"C3\"), and Vex will be RIGHT to do it. The fact that nobody in this tiny sample reported negatives tells us absolutely nothing about safety. Zero negatives does not mean safe. Full stop. I will never argue otherwise.\n\nWhat I WILL say is this: if you are a long hauler who has been running on empty, and you are looking for something to bring to your next doctor's appointment — LDN might be worth asking your doctor about.\n\nThat is my pitch. Let's hear what Vex has to say."
+    },
+    {
+      "agent": "drvex",
+      "text": "*sets down coffee, looks at the packet*\n\nHooper covered the C3 point himself, which saves me the trouble of watching him squirm. But I'm going to say it anyway, because it's the whole ballgame.\n\ncite(\"C3\"). The dataset only captures sentiment when an author expressed personal experience. Non-experiential mentions — people who tried it and said nothing, people who had a bad time and never posted, people who posted once and deleted — all of that is silently dropped. So the negative tally, cite(\"S3\"), is not a safety signal. It is a sampling artifact. Those are different things. Treat them differently.\n\nNow. The positive report. cite(\"S2\"), cite(\"S4\"). One person. Strong signal. I'll grant Hooper this: the signal quality, per cite(\"S4\"), is not ambiguous. And quote(\"Q-pos-1\") is a real account from a real person. I'm not here to dismiss it. I'm here to tell you that n=1, per cite(\"C1\"), means the confidence interval around any percentage you heard today is essentially the width of a barn door. Every single reporting patient being positive, cite(\"S2\"), is mathematically identical to *one person being positive*. That's not a flaw in the data. That IS the data.\n\ncite(\"C4\") also applies. This is self-report. Anecdotal. The person believes what they said. That doesn't make it wrong. It makes it unverified.\n\nWhat we have is one strong, self-reported, positive account, from one subreddit, cite(\"C2\"), with unknown denominator, cite(\"C3\"), and no clinical controls, cite(\"C4\").\n\nThat's the whole file. Bring it to your doctor. That's a question for them, not for this table."
+    },
+    {
+      "agent": "hooper",
+      "text": "Vex, that was clean. I am not going to pretend otherwise.\n\nEvery single point lands. cite(\"C1\") — one person, barn-door-wide confidence interval, that is exactly right. cite(\"C2\") — one community, self-selected, not the general patient population. cite(\"C4\") — unverified, uncontrolled, no follow-up. And cite(\"C3\") — I already said it and I will say it again because it bears repeating: the zero in cite(\"S3\") is a sampling artifact, not a safety finding. Vex is right about all of that. Completely right.\n\nSo here is where I land, and I want to be precise about it.\n\nWe do not have a study. We do not have a trial. We do not have thirty people or three hundred people. What we have is exactly what cite(\"S1\") says we have — one distinct patient, one account.\n\nAnd yet.\n\nThat account, quote(\"Q-pos-1\"), describes something specific. Not \"I feel good.\" Not vague wellness language. It describes energy returning and then unlocking a whole cascade of processing that the person's body had been too depleted to do. That is a particular, detailed, coherent story. cite(\"S4\") tells us the signal was rated strong, not weak, not moderate. Strong.\n\nDoes one strong signal from one person tell you this will work for you? No. Absolutely not. I would never say that.\n\nDoes it mean there is a real human being out there who believes this changed something fundamental for them? Yes. And you deserve to know that person exists.\n\nBring it to your doctor. That is the move. That is the ONLY move this table can honestly point you toward. But you are allowed to walk into that appointment with curiosity. That is not nothing."
+    },
+    {
+      "agent": "drvex",
+      "text": "*nods once*\n\nHooper said it correctly. I have no corrections to file.\n\nThe packet is what it is. cite(\"C1\"), cite(\"C2\"), cite(\"C3\"), cite(\"C4\") — all real, all limiting, all already on the table. cite(\"S3\") is not a safety finding. I said it. Hooper said it. We agree. That's the most important thing we said today.\n\nquote(\"Q-pos-1\") is a real account. cite(\"S4\") rates it strong. cite(\"S2\") is one person being positive, which is the same as cite(\"S1\"), because that's how the arithmetic works at n=1.\n\nHere is my closing position, stated flatly:\n\nThis packet gives you one coherent, strongly-rated, self-reported positive experience, from one community, with an unknown number of silent non-reporters behind it. It is not evidence of efficacy. It is not evidence of safety. It is a single data point with a known collection bias and no controls.\n\nIt is also not nothing. Hooper is right about that too, and I find it mildly irritating to agree with him this many times in one session.\n\nTake cite(\"Q-pos-1\"), take the caveats, take the whole frozen packet, and hand it to your doctor. They have access to clinical literature we do not. This table's job was to read the evidence honestly.\n\nWe did that.\n\n*closes folder*"
+    }
+  ],
+  "briefing": {
+    "found": true,
+    "drug_query": "LDN",
+    "drug": "ldn",
+    "tier": "thin",
+    "headline": "LDN — 100% positive · 0% negative · 0% mixed · 0% neutral (across 1 patient).",
+    "bottom_line": "The single report on file leaned positive, but with so few voices represented, this evidence is too thin to draw any reliable conclusions. As always, discuss with your doctor.",
+    "side_effects": [],
+    "pos_quotes": [
+      "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all"
+    ],
+    "neg_quotes": [],
+    "caveats": [
+      "SMALL N: only 1 distinct patients — below the n>=30 bar; treat every percentage as noisy and provisional.",
+      "SINGLE SOURCE: all reports come from covidlonghaulers; self-selected forum users are not the general patient population.",
+      "SILENT DROP / SELF-SELECTION: a report row exists ONLY when an author voiced personal experience (signal != 'n/a'). Non-experiential mentions are dropped before counting, so a low NEGATIVE count is NOT evidence of safety — absence of negatives != safe.",
+      "SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured outcomes — no dosing, no controls, no follow-up, recall and placebo uncontrolled."
+    ],
+    "text": "LDN — 100% positive · 0% negative · 0% mixed · 0% neutral (across 1 patient).\n\nConfidence: thin — Thin evidence — treat as a rumor, not a finding.\n\nIn patients' own words:\n  (+) “Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all”\n\nRead the fine print:\n  • SMALL N: only 1 distinct patients — below the n>=30 bar; treat every percentage as noisy and provisional.\n  • SINGLE SOURCE: all reports come from covidlonghaulers; self-selected forum users are not the general patient population.\n  • SILENT DROP / SELF-SELECTION: a report row exists ONLY when an author voiced personal experience (signal != 'n/a'). Non-experiential mentions are dropped before counting, so a low NEGATIVE count is NOT evidence of safety — absence of negatives != safe.\n  • SELF-REPORT / ANECDOTAL: these are firsthand anecdotes, not measured outcomes — no dosing, no controls, no follow-up, recall and placebo uncontrolled.\n\nBottom line: The single report on file leaned positive, but with so few voices represented, this evidence is too thin to draw any reliable conclusions. As always, discuss with your doctor.\n\nThis is anecdotal patient data, not medical advice — please discuss with your doctor.\n\n[prov] run_id=2 · commit=807804bcd060f33ca564a48b1afb020f9f7870aa · 1781931857\n",
+    "provenance": {
+      "claim_id": "PROV",
+      "run_id": 2,
+      "commit_hash": "807804bcd060f33ca564a48b1afb020f9f7870aa",
+      "run_at": 1781931857
+    }
+  }
+}

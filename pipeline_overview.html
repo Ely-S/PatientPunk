@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PatientPunk — pipeline overview</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; background: #f5f6f8; color: #1a1a1a; }
+  header { padding: 26px 30px 6px; }
+  h1 { margin: 0 0 6px; font-size: 23px; }
+  p.sub { margin: 0; color: #555; max-width: 960px; line-height: 1.5; }
+  .wrap { padding: 14px 30px 44px; overflow-x: auto; }
+  .mermaid { background: #fff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 24px; }
+  footer { padding: 0 30px 30px; color: #999; font-size: 13px; }
+  b { color: #111; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PatientPunk — what it does</h1>
+  <p class="sub">Scrapes firsthand patient reports from Reddit (r/covidlonghaulers) and mines them into
+  structured, queryable evidence: drug <b>sentiment</b> (<b>Track A</b> → SQLite) and patient
+  <b>demographics + clinical variables</b> (<b>Track B</b> → files). The two tracks share no database and
+  no code — they're intentionally decoupled, joinable only via the SHA-256 author hash.</p>
+</header>
+<div class="wrap">
+<pre class="mermaid">
+flowchart TD
+    REDDIT["r/covidlonghaulers (Reddit)"]
+
+    subgraph ACQ["Scrapers/ — acquire the corpus"]
+        REDDIT -->|"Arctic Shift API · usernames SHA-256 hashed"| JSON["output/subreddit_posts.json<br/>posts + comment trees + author histories"]
+    end
+
+    JSON --> IMPORT
+    JSON --> MAIN
+
+    subgraph TA["Track A · src/ — drug SENTIMENT (writes SQLite)"]
+        IMPORT["import_posts.py"] --> DB[("data/posts.db<br/>posts table")]
+        DB --> EX["1 · extract<br/>fast model tags drugs;<br/>inherits upstream reply context"]
+        EX -->|"tagged_mentions.json"| CN["2 · canonicalize<br/>strong model merges synonyms<br/>(low dose naltrexone → ldn)"]
+        CN -->|"canonicalized_mentions.json"| CL["3 · classify<br/>prefilter → strong-model sentiment"]
+        CL --> TR[("treatment_reports<br/>sentiment + signal_strength")]
+        DB --> DM["extract_demographics_conditions.py<br/>per-user LLM"]
+        DM --> PR[("user_profiles + conditions")]
+    end
+
+    subgraph TB["Track B · variable_extraction/patientpunk — wide VARIABLES (writes files)"]
+        MAIN["main.py — 5 phases<br/>biomedical regex → LLM extract →<br/>field discovery → records→CSV → codebook"] --> CSV["records.csv + codebook.csv"]
+    end
+
+    TR --> Q["Researcher query<br/>'ME/CFS + brain fog → outcomes on LDN?'<br/>64% positive · 20% negative · 16% no effect (312 reports)"]
+    PR --> Q
+    TR -.->|"read-only"| VF["docs/RCT_historical_validation/verify.py<br/>validate signal vs historical RCTs"]
+
+    classDef a fill:#e8f1ff,stroke:#3178c6,color:#111;
+    classDef b fill:#fff1e6,stroke:#cc6a1f,color:#111;
+    classDef store fill:#eef7ee,stroke:#2e7d32,color:#111;
+    class IMPORT,EX,CN,CL,DM a;
+    class MAIN b;
+    class DB,TR,PR,CSV store;
+</pre>
+</div>
+<footer>Quick-look artifact — not committed to the repo; delete it whenever.</footer>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+</script>
+</body>
+</html>

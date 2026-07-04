@@ -1,0 +1,1066 @@
+{
+  "packet": {
+    "drug_query": "ldn",
+    "drug": "ldn",
+    "found": true,
+    "n_reports": 533,
+    "n_users": 331,
+    "counts": {
+      "positive": 175,
+      "negative": 119,
+      "mixed": 31,
+      "neutral": 6
+    },
+    "pct": {
+      "positive": 53,
+      "negative": 36,
+      "mixed": 9,
+      "neutral": 2
+    },
+    "signal_mix": {
+      "strong": 178,
+      "moderate": 56,
+      "weak": 97
+    },
+    "side_effects": [
+      {
+        "effect": "insomnia",
+        "count": 18
+      },
+      {
+        "effect": "fatigue",
+        "count": 17
+      },
+      {
+        "effect": "nausea",
+        "count": 9
+      },
+      {
+        "effect": "anxiety",
+        "count": 8
+      },
+      {
+        "effect": "brain fog",
+        "count": 6
+      },
+      {
+        "effect": "depression",
+        "count": 6
+      },
+      {
+        "effect": "crash",
+        "count": 5
+      },
+      {
+        "effect": "sleepiness",
+        "count": 5
+      },
+      {
+        "effect": "headaches",
+        "count": 5
+      },
+      {
+        "effect": "pain",
+        "count": 4
+      },
+      {
+        "effect": "dizziness",
+        "count": 4
+      },
+      {
+        "effect": "vivid dreams",
+        "count": 3
+      },
+      {
+        "effect": "derealization",
+        "count": 3
+      },
+      {
+        "effect": "head pressure",
+        "count": 3
+      },
+      {
+        "effect": "tinnitus",
+        "count": 3
+      },
+      {
+        "effect": "headache",
+        "count": 2
+      },
+      {
+        "effect": "exhaustion",
+        "count": 2
+      },
+      {
+        "effect": "sedation",
+        "count": 2
+      },
+      {
+        "effect": "side effects",
+        "count": 2
+      },
+      {
+        "effect": "acid reflux",
+        "count": 2
+      },
+      {
+        "effect": "irritability",
+        "count": 2
+      },
+      {
+        "effect": "vivid nightmares",
+        "count": 2
+      },
+      {
+        "effect": "impending doom feeling",
+        "count": 2
+      },
+      {
+        "effect": "dry hands",
+        "count": 2
+      },
+      {
+        "effect": "pimples",
+        "count": 2
+      },
+      {
+        "effect": "trouble sleeping",
+        "count": 1
+      },
+      {
+        "effect": "muscle weakness",
+        "count": 1
+      },
+      {
+        "effect": "diarrhea",
+        "count": 1
+      },
+      {
+        "effect": "major deterioration",
+        "count": 1
+      },
+      {
+        "effect": "loss of appetite",
+        "count": 1
+      },
+      {
+        "effect": "worsened other symptoms",
+        "count": 1
+      },
+      {
+        "effect": "vertigo",
+        "count": 1
+      },
+      {
+        "effect": "did not feel good",
+        "count": 1
+      },
+      {
+        "effect": "adrenaline rush",
+        "count": 1
+      },
+      {
+        "effect": "memory impairment",
+        "count": 1
+      },
+      {
+        "effect": "chest pain",
+        "count": 1
+      },
+      {
+        "effect": "pounding heart beat",
+        "count": 1
+      },
+      {
+        "effect": "tight chest",
+        "count": 1
+      },
+      {
+        "effect": "throat tightness",
+        "count": 1
+      },
+      {
+        "effect": "bruising",
+        "count": 1
+      },
+      {
+        "effect": "side effects worse than lc",
+        "count": 1
+      },
+      {
+        "effect": "depersonalization",
+        "count": 1
+      },
+      {
+        "effect": "weird dreams",
+        "count": 1
+      },
+      {
+        "effect": "short term memory issues",
+        "count": 1
+      },
+      {
+        "effect": "extreme fatigue",
+        "count": 1
+      },
+      {
+        "effect": "joint pain",
+        "count": 1
+      },
+      {
+        "effect": "stomach reaction",
+        "count": 1
+      },
+      {
+        "effect": "nervous tremors",
+        "count": 1
+      },
+      {
+        "effect": "panic attacks",
+        "count": 1
+      },
+      {
+        "effect": "urge to defecate",
+        "count": 1
+      },
+      {
+        "effect": "nervous energy",
+        "count": 1
+      },
+      {
+        "effect": "pem crash",
+        "count": 1
+      },
+      {
+        "effect": "disassociation",
+        "count": 1
+      },
+      {
+        "effect": "paranoia",
+        "count": 1
+      },
+      {
+        "effect": "flare up",
+        "count": 1
+      },
+      {
+        "effect": "feeling ill",
+        "count": 1
+      },
+      {
+        "effect": "spacey",
+        "count": 1
+      },
+      {
+        "effect": "body odour",
+        "count": 1
+      },
+      {
+        "effect": "symptoms worse",
+        "count": 1
+      },
+      {
+        "effect": "feeling high",
+        "count": 1
+      },
+      {
+        "effect": "memory loss",
+        "count": 1
+      },
+      {
+        "effect": "sensitivity to sounds",
+        "count": 1
+      },
+      {
+        "effect": "amphetamine-like high",
+        "count": 1
+      },
+      {
+        "effect": "sympathetic overdrive",
+        "count": 1
+      },
+      {
+        "effect": "muscle spasms",
+        "count": 1
+      },
+      {
+        "effect": "racing thoughts",
+        "count": 1
+      },
+      {
+        "effect": "sensitivity to noise and light",
+        "count": 1
+      },
+      {
+        "effect": "inability to handle input",
+        "count": 1
+      },
+      {
+        "effect": "sleep disturbance",
+        "count": 1
+      },
+      {
+        "effect": "stomach problems",
+        "count": 1
+      },
+      {
+        "effect": "extreme tiredness",
+        "count": 1
+      },
+      {
+        "effect": "numbness",
+        "count": 1
+      },
+      {
+        "effect": "spaced out",
+        "count": 1
+      },
+      {
+        "effect": "pem",
+        "count": 1
+      },
+      {
+        "effect": "worsened symptoms",
+        "count": 1
+      },
+      {
+        "effect": "sleep disturbances",
+        "count": 1
+      },
+      {
+        "effect": "frequent urination",
+        "count": 1
+      },
+      {
+        "effect": "mcas flare",
+        "count": 1
+      },
+      {
+        "effect": "increased reactivity",
+        "count": 1
+      },
+      {
+        "effect": "prolonged fatigue",
+        "count": 1
+      },
+      {
+        "effect": "facial swelling",
+        "count": 1
+      },
+      {
+        "effect": "woozyness",
+        "count": 1
+      },
+      {
+        "effect": "burning eyes",
+        "count": 1
+      },
+      {
+        "effect": "sleepy eyes",
+        "count": 1
+      },
+      {
+        "effect": "aching muscles",
+        "count": 1
+      },
+      {
+        "effect": "severe arm pain",
+        "count": 1
+      },
+      {
+        "effect": "decreased baseline",
+        "count": 1
+      },
+      {
+        "effect": "burning aching pain",
+        "count": 1
+      },
+      {
+        "effect": "heart racing",
+        "count": 1
+      },
+      {
+        "effect": "muscle loss",
+        "count": 1
+      },
+      {
+        "effect": "achiness in legs and feet",
+        "count": 1
+      },
+      {
+        "effect": "could not get out of bed",
+        "count": 1
+      },
+      {
+        "effect": "body pains",
+        "count": 1
+      },
+      {
+        "effect": "reaction under the tongue",
+        "count": 1
+      },
+      {
+        "effect": "crying",
+        "count": 1
+      },
+      {
+        "effect": "tiredness",
+        "count": 1
+      },
+      {
+        "effect": "brain zaps",
+        "count": 1
+      },
+      {
+        "effect": "withdrawal",
+        "count": 1
+      },
+      {
+        "effect": "migraine",
+        "count": 1
+      },
+      {
+        "effect": "muscle fatigue",
+        "count": 1
+      },
+      {
+        "effect": "weakness",
+        "count": 1
+      },
+      {
+        "effect": "heavy feeling",
+        "count": 1
+      },
+      {
+        "effect": "adrenaline feelings",
+        "count": 1
+      },
+      {
+        "effect": "pots worsened",
+        "count": 1
+      },
+      {
+        "effect": "zombie feeling",
+        "count": 1
+      },
+      {
+        "effect": "severe right abdominal pain",
+        "count": 1
+      },
+      {
+        "effect": "neuralgia",
+        "count": 1
+      },
+      {
+        "effect": "lowered baseline",
+        "count": 1
+      },
+      {
+        "effect": "tmj flare",
+        "count": 1
+      },
+      {
+        "effect": "pots flare",
+        "count": 1
+      },
+      {
+        "effect": "tremors",
+        "count": 1
+      },
+      {
+        "effect": "racing heart",
+        "count": 1
+      },
+      {
+        "effect": "head felt funny",
+        "count": 1
+      },
+      {
+        "effect": "migraines",
+        "count": 1
+      },
+      {
+        "effect": "feeling worse at higher doses",
+        "count": 1
+      },
+      {
+        "effect": "symptoms worsened",
+        "count": 1
+      },
+      {
+        "effect": "nightmares",
+        "count": 1
+      },
+      {
+        "effect": "stomach pain",
+        "count": 1
+      },
+      {
+        "effect": "nervousness",
+        "count": 1
+      },
+      {
+        "effect": "thoughts all night while sleeping",
+        "count": 1
+      },
+      {
+        "effect": "sleep issues",
+        "count": 1
+      },
+      {
+        "effect": "lethargy",
+        "count": 1
+      },
+      {
+        "effect": "apathy",
+        "count": 1
+      },
+      {
+        "effect": "weakness in legs",
+        "count": 1
+      },
+      {
+        "effect": "vision problems",
+        "count": 1
+      },
+      {
+        "effect": "sensitivity to light",
+        "count": 1
+      },
+      {
+        "effect": "joint aches",
+        "count": 1
+      },
+      {
+        "effect": "lightheadedness",
+        "count": 1
+      },
+      {
+        "effect": "decline in baseline",
+        "count": 1
+      },
+      {
+        "effect": "crashing",
+        "count": 1
+      },
+      {
+        "effect": "leg pain",
+        "count": 1
+      },
+      {
+        "effect": "gastro symptoms",
+        "count": 1
+      },
+      {
+        "effect": "felt stuffed after first bite",
+        "count": 1
+      },
+      {
+        "effect": "snappy and irritable",
+        "count": 1
+      },
+      {
+        "effect": "adverse reaction",
+        "count": 1
+      },
+      {
+        "effect": "worse",
+        "count": 1
+      },
+      {
+        "effect": "couldn't move",
+        "count": 1
+      }
+    ],
+    "quotes": [
+      {
+        "claim_id": "Q-pos-1",
+        "pole": "pos",
+        "text": "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all",
+        "post_id": "t1_oq2v9l6",
+        "signal": "strong"
+      },
+      {
+        "claim_id": "Q-pos-2",
+        "pole": "pos",
+        "text": "treatments I believe have helped me (almost 2 years in) I'll start off by saying I have CFS type long covid, no so much dysautonomia (although I did experience pots when I had a very serious relapse)\n\nI have been doing better over the past 3 months, I believe thanks to the meds and lifestyle choices I have been making. One of the best meds you can get for CFS type LC is LDN it made a MASSIVE diffe",
+        "post_id": "ysfb9j",
+        "signal": "strong"
+      },
+      {
+        "claim_id": "Q-pos-3",
+        "pole": "pos",
+        "text": "LDN Update I am not advocating use of LDN. If you want to know the science and efficacy of it you should look up reputable sources posted throughout this sub. This is just my personal experience with it. \n\n\n\nSymptoms remaining include: \nmild POTS (palpitations, dizziness, heart rate issues, BP issues) PEM, fatigue, brain fog, DPDR, soreness in my upper back and neck, joint pain, anxiety, depressio",
+        "post_id": "xopgpv",
+        "signal": "strong"
+      },
+      {
+        "claim_id": "Q-neg-1",
+        "pole": "neg",
+        "text": "Brain fog and LDN Did anyones brain fog get worse with LDN? I’ve been on it a little over a week, the first couple of days I had trouble sleeping but that doesn’t seem to be much of a problem now but my brain fog has been like 10x worse the past four days. I don’t want to stop taking it if it will end up helping me but it’s making it so hard to do my job and I’ve had enough trouble with staying on",
+        "post_id": "ypqrbm",
+        "signal": "strong"
+      },
+      {
+        "claim_id": "Q-neg-2",
+        "pole": "neg",
+        "text": "My experience with LDN for fatigue Took 1mg LDN for 5 days. First 4 days were great, fatigue almost gone and was excited to titrate up in another 10 days or so. However, on 5th day got massive fatigue and then all the muscles in my body started became weak to the point where I could not move.\n\nMy suspicion is that perhaps the 2 years of inflammation preceding the LDN drained my adrenals and someho",
+        "post_id": "xwrzzp",
+        "signal": "strong"
+      },
+      {
+        "claim_id": "Q-neg-3",
+        "pole": "neg",
+        "text": "Paxlovid and Abilify I am sure that people on here know more than me, so please chime in.  I had an appointment with Stanford that has me hopeful.  They said that Paxlovid could get FDA approval early next year (they said mid-Feb but could be sooner).  If that happens, it sounds like they would be willing to try it on me, and I don’t have a documented case of Covid since I was infected in March of",
+        "post_id": "zawpg2",
+        "signal": "strong"
+      }
+    ],
+    "caveats": [
+      {
+        "claim_id": "C1",
+        "text": "SMALL N: only 331 distinct patients — a community sample, not a trial."
+      },
+      {
+        "claim_id": "C2",
+        "text": "SINGLE SOURCE: all from covidlonghaulers; self-selected forum users, not the general patient population."
+      },
+      {
+        "claim_id": "C3",
+        "text": "SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced personal experience; non-experiential mentions are dropped, so a low negative count is NOT safety — absence of negatives != safe."
+      },
+      {
+        "claim_id": "C4",
+        "text": "SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — no controls, no follow-up, recall and placebo uncontrolled."
+      }
+    ],
+    "confidence_tier": "suggestive",
+    "provenance": {
+      "claim_id": "PROV",
+      "run_id": 3,
+      "commit_hash": "f1023d60012bd32986a512ae41b134c5ed5d8ab8",
+      "run_at": 1782000514
+    },
+    "claims": {
+      "S1": {
+        "kind": "stat",
+        "render": "331 distinct patients reported personal experience with ldn (533 raw reports before per-user dedup).",
+        "value": {
+          "n_users": 331,
+          "n_reports": 533
+        }
+      },
+      "S2": {
+        "kind": "stat",
+        "render": "positive: 175 of 331 patients (53%).",
+        "value": {
+          "count": 175,
+          "pct": 53
+        }
+      },
+      "S3": {
+        "kind": "stat",
+        "render": "negative: 119 of 331 patients (36%).",
+        "value": {
+          "count": 119,
+          "pct": 36
+        }
+      },
+      "S4": {
+        "kind": "stat",
+        "render": "signal mix (deduped patients): strong=178, moderate=56, weak=97. mixed=31, neutral=6 sentiment.",
+        "value": {
+          "signal_mix": {
+            "strong": 178,
+            "moderate": 56,
+            "weak": 97
+          },
+          "mixed": 31,
+          "neutral": 6
+        }
+      },
+      "SE1": {
+        "kind": "side_effect",
+        "render": "reported side effect: insomnia (x18).",
+        "value": {
+          "effect": "insomnia",
+          "count": 18
+        }
+      },
+      "SE2": {
+        "kind": "side_effect",
+        "render": "reported side effect: fatigue (x17).",
+        "value": {
+          "effect": "fatigue",
+          "count": 17
+        }
+      },
+      "SE3": {
+        "kind": "side_effect",
+        "render": "reported side effect: nausea (x9).",
+        "value": {
+          "effect": "nausea",
+          "count": 9
+        }
+      },
+      "SE4": {
+        "kind": "side_effect",
+        "render": "reported side effect: anxiety (x8).",
+        "value": {
+          "effect": "anxiety",
+          "count": 8
+        }
+      },
+      "SE5": {
+        "kind": "side_effect",
+        "render": "reported side effect: brain fog (x6).",
+        "value": {
+          "effect": "brain fog",
+          "count": 6
+        }
+      },
+      "SE6": {
+        "kind": "side_effect",
+        "render": "reported side effect: depression (x6).",
+        "value": {
+          "effect": "depression",
+          "count": 6
+        }
+      },
+      "SE7": {
+        "kind": "side_effect",
+        "render": "reported side effect: crash (x5).",
+        "value": {
+          "effect": "crash",
+          "count": 5
+        }
+      },
+      "SE8": {
+        "kind": "side_effect",
+        "render": "reported side effect: sleepiness (x5).",
+        "value": {
+          "effect": "sleepiness",
+          "count": 5
+        }
+      },
+      "SE9": {
+        "kind": "side_effect",
+        "render": "reported side effect: headaches (x5).",
+        "value": {
+          "effect": "headaches",
+          "count": 5
+        }
+      },
+      "SE10": {
+        "kind": "side_effect",
+        "render": "reported side effect: pain (x4).",
+        "value": {
+          "effect": "pain",
+          "count": 4
+        }
+      },
+      "SE11": {
+        "kind": "side_effect",
+        "render": "reported side effect: dizziness (x4).",
+        "value": {
+          "effect": "dizziness",
+          "count": 4
+        }
+      },
+      "SE12": {
+        "kind": "side_effect",
+        "render": "reported side effect: vivid dreams (x3).",
+        "value": {
+          "effect": "vivid dreams",
+          "count": 3
+        }
+      },
+      "Q-pos-1": {
+        "kind": "quote",
+        "render": "\"Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all\" — [pos, signal=strong, post t1_oq2v9l6]",
+        "value": {
+          "claim_id": "Q-pos-1",
+          "pole": "pos",
+          "text": "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all",
+          "post_id": "t1_oq2v9l6",
+          "signal": "strong"
+        }
+      },
+      "Q-pos-2": {
+        "kind": "quote",
+        "render": "\"treatments I believe have helped me (almost 2 years in) I'll start off by saying I have CFS type long covid, no so much dysautonomia (although I did experience pots when I had a very serious relapse)\n\nI have been doing better over the past 3 months, I believe thanks to the meds and lifestyle choices I have been making. One of the best meds you can get for CFS type LC is LDN it made a MASSIVE diffe\" — [pos, signal=strong, post ysfb9j]",
+        "value": {
+          "claim_id": "Q-pos-2",
+          "pole": "pos",
+          "text": "treatments I believe have helped me (almost 2 years in) I'll start off by saying I have CFS type long covid, no so much dysautonomia (although I did experience pots when I had a very serious relapse)\n\nI have been doing better over the past 3 months, I believe thanks to the meds and lifestyle choices I have been making. One of the best meds you can get for CFS type LC is LDN it made a MASSIVE diffe",
+          "post_id": "ysfb9j",
+          "signal": "strong"
+        }
+      },
+      "Q-pos-3": {
+        "kind": "quote",
+        "render": "\"LDN Update I am not advocating use of LDN. If you want to know the science and efficacy of it you should look up reputable sources posted throughout this sub. This is just my personal experience with it. \n\n\n\nSymptoms remaining include: \nmild POTS (palpitations, dizziness, heart rate issues, BP issues) PEM, fatigue, brain fog, DPDR, soreness in my upper back and neck, joint pain, anxiety, depressio\" — [pos, signal=strong, post xopgpv]",
+        "value": {
+          "claim_id": "Q-pos-3",
+          "pole": "pos",
+          "text": "LDN Update I am not advocating use of LDN. If you want to know the science and efficacy of it you should look up reputable sources posted throughout this sub. This is just my personal experience with it. \n\n\n\nSymptoms remaining include: \nmild POTS (palpitations, dizziness, heart rate issues, BP issues) PEM, fatigue, brain fog, DPDR, soreness in my upper back and neck, joint pain, anxiety, depressio",
+          "post_id": "xopgpv",
+          "signal": "strong"
+        }
+      },
+      "Q-neg-1": {
+        "kind": "quote",
+        "render": "\"Brain fog and LDN Did anyones brain fog get worse with LDN? I’ve been on it a little over a week, the first couple of days I had trouble sleeping but that doesn’t seem to be much of a problem now but my brain fog has been like 10x worse the past four days. I don’t want to stop taking it if it will end up helping me but it’s making it so hard to do my job and I’ve had enough trouble with staying on\" — [neg, signal=strong, post ypqrbm]",
+        "value": {
+          "claim_id": "Q-neg-1",
+          "pole": "neg",
+          "text": "Brain fog and LDN Did anyones brain fog get worse with LDN? I’ve been on it a little over a week, the first couple of days I had trouble sleeping but that doesn’t seem to be much of a problem now but my brain fog has been like 10x worse the past four days. I don’t want to stop taking it if it will end up helping me but it’s making it so hard to do my job and I’ve had enough trouble with staying on",
+          "post_id": "ypqrbm",
+          "signal": "strong"
+        }
+      },
+      "Q-neg-2": {
+        "kind": "quote",
+        "render": "\"My experience with LDN for fatigue Took 1mg LDN for 5 days. First 4 days were great, fatigue almost gone and was excited to titrate up in another 10 days or so. However, on 5th day got massive fatigue and then all the muscles in my body started became weak to the point where I could not move.\n\nMy suspicion is that perhaps the 2 years of inflammation preceding the LDN drained my adrenals and someho\" — [neg, signal=strong, post xwrzzp]",
+        "value": {
+          "claim_id": "Q-neg-2",
+          "pole": "neg",
+          "text": "My experience with LDN for fatigue Took 1mg LDN for 5 days. First 4 days were great, fatigue almost gone and was excited to titrate up in another 10 days or so. However, on 5th day got massive fatigue and then all the muscles in my body started became weak to the point where I could not move.\n\nMy suspicion is that perhaps the 2 years of inflammation preceding the LDN drained my adrenals and someho",
+          "post_id": "xwrzzp",
+          "signal": "strong"
+        }
+      },
+      "Q-neg-3": {
+        "kind": "quote",
+        "render": "\"Paxlovid and Abilify I am sure that people on here know more than me, so please chime in.  I had an appointment with Stanford that has me hopeful.  They said that Paxlovid could get FDA approval early next year (they said mid-Feb but could be sooner).  If that happens, it sounds like they would be willing to try it on me, and I don’t have a documented case of Covid since I was infected in March of\" — [neg, signal=strong, post zawpg2]",
+        "value": {
+          "claim_id": "Q-neg-3",
+          "pole": "neg",
+          "text": "Paxlovid and Abilify I am sure that people on here know more than me, so please chime in.  I had an appointment with Stanford that has me hopeful.  They said that Paxlovid could get FDA approval early next year (they said mid-Feb but could be sooner).  If that happens, it sounds like they would be willing to try it on me, and I don’t have a documented case of Covid since I was infected in March of",
+          "post_id": "zawpg2",
+          "signal": "strong"
+        }
+      },
+      "C1": {
+        "kind": "caveat",
+        "render": "SMALL N: only 331 distinct patients — a community sample, not a trial.",
+        "value": {
+          "claim_id": "C1",
+          "text": "SMALL N: only 331 distinct patients — a community sample, not a trial."
+        }
+      },
+      "C2": {
+        "kind": "caveat",
+        "render": "SINGLE SOURCE: all from covidlonghaulers; self-selected forum users, not the general patient population.",
+        "value": {
+          "claim_id": "C2",
+          "text": "SINGLE SOURCE: all from covidlonghaulers; self-selected forum users, not the general patient population."
+        }
+      },
+      "C3": {
+        "kind": "caveat",
+        "render": "SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced personal experience; non-experiential mentions are dropped, so a low negative count is NOT safety — absence of negatives != safe.",
+        "value": {
+          "claim_id": "C3",
+          "text": "SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced personal experience; non-experiential mentions are dropped, so a low negative count is NOT safety — absence of negatives != safe."
+        }
+      },
+      "C4": {
+        "kind": "caveat",
+        "render": "SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — no controls, no follow-up, recall and placebo uncontrolled.",
+        "value": {
+          "claim_id": "C4",
+          "text": "SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — no controls, no follow-up, recall and placebo uncontrolled."
+        }
+      },
+      "PROV": {
+        "kind": "provenance",
+        "render": "provenance: run_id=3, commit=f1023d60, run_at=1782000514.",
+        "value": {
+          "claim_id": "PROV",
+          "run_id": 3,
+          "commit_hash": "f1023d60012bd32986a512ae41b134c5ed5d8ab8",
+          "run_at": 1782000514
+        }
+      }
+    }
+  },
+  "transcript": [
+    {
+      "agent": "hooper",
+      "text": "Listen, friend — I have been through this data and I want to tell you what I found, because the signal here is genuinely worth paying attention to.\n\nLet's start with the headline number. cite(\"S2\") More than half the patients in this dataset reported a positive experience. That is not nothing. That is real people, in a real community, saying this thing moved the needle for them.\n\nAnd when you look at the *strength* of those signals? cite(\"S4\") The biggest single bucket in that whole dataset is \"strong\" positive signal. Not lukewarm. Not \"I guess it helped a little.\" Strong.\n\nNow listen to what one of those people actually said, because this is the part that got me:\n\nquote(\"Q-pos-1\")\n\nThat is someone describing a *qualitative shift* — more energy, more capacity to process what they have been through. That is not placebo language. That is a person noticing something real happening in their body and their life.\n\nAnd here is another one, someone with CFS-type long COVID:\n\nquote(\"Q-pos-2\")\n\n\"MASSIVE difference\" — their caps, not mine.\n\nNow — and I want to be straight with you here, because that is what a real advocate does — Vex is going to bring up cite(\"S3\"), and Vex is right to do it. cite(\"S3\") That is a real chunk of people who did not have a good experience. We cannot wave that away.\n\nAnd I will say it myself before Vex does: cite(\"C3\") A low negative count does not mean safe. The people who quietly stopped and never posted? We do not have their stories. That silence is not a green light.\n\nBut here is where I land: the positive signal is strong enough, and the patient voices are real enough, that this might be worth asking your doctor about. That is my honest, hopeful read of this evidence."
+    },
+    {
+      "agent": "drvex",
+      "text": "Thank you, Hooper. A reasonable summary. A few corrections and additions.\n\n---\n\n**The numbers, stated precisely.**\n\ncite(\"S2\") is accurate. cite(\"S4\") is accurate. Hooper stated both correctly. I have no quarrel with those figures.\n\n**The negative count.**\n\ncite(\"S3\") — and I will not wave that away either, but I will also not inflate it. That is the reported figure. Now the mandatory caveat:\n\ncite(\"C3\")\n\nThis is not a footnote. It is a structural feature of the dataset. The negative tally is a floor, not a ceiling. How low the floor sits relative to the actual basement is unknown.\n\n---\n\n**The quotes.**\n\nquote(\"Q-pos-1\") and quote(\"Q-pos-2\") are in the packet. They are real reports. They are also cite(\"C4\") — anecdotal, uncontrolled, unverified. \"Not placebo language\" is Hooper's interpretation, not a finding. A person noticing something real in their body is not the same as a study confirming what caused it.\n\n---\n\n**One correction.**\n\nHooper said this may be \"worth asking your doctor about.\" That is outside my lane and his. cite(\"C1\") and cite(\"C2\") both constrain how far this evidence travels. Small sample, single community. I will not tell you what to do with that. Neither should he.\n\n---\n\n**Bottom line.**\n\nThe positive signal exists. It is not fabricated. It is also anecdotal, community-sourced, and subject to silent-drop bias. Those four facts coexist without contradiction. That is where the evidence sits."
+    }
+  ],
+  "briefing": {
+    "found": true,
+    "drug_query": "ldn",
+    "drug": "ldn",
+    "tier": "suggestive",
+    "headline": "LDN — 53% positive · 36% negative · 9% mixed · 2% neutral (across 331 patients).",
+    "bottom_line": "Patients who tried low-dose naltrexone leaned more toward benefit than harm overall, though a meaningful share reported no improvement or worsening, and side effects — particularly sleep disruption and fatigue — were fairly common; discuss with your doctor.",
+    "side_effects": [
+      "insomnia (18)",
+      "fatigue (17)",
+      "nausea (9)",
+      "anxiety (8)",
+      "brain fog (6)",
+      "depression (6)",
+      "crash (5)",
+      "sleepiness (5)",
+      "headaches (5)",
+      "pain (4)",
+      "dizziness (4)",
+      "vivid dreams (3)",
+      "derealization (3)",
+      "head pressure (3)",
+      "tinnitus (3)",
+      "headache (2)",
+      "exhaustion (2)",
+      "sedation (2)",
+      "side effects (2)",
+      "acid reflux (2)",
+      "irritability (2)",
+      "vivid nightmares (2)",
+      "impending doom feeling (2)",
+      "dry hands (2)",
+      "pimples (2)",
+      "trouble sleeping (1)",
+      "muscle weakness (1)",
+      "diarrhea (1)",
+      "major deterioration (1)",
+      "loss of appetite (1)",
+      "worsened other symptoms (1)",
+      "vertigo (1)",
+      "did not feel good (1)",
+      "adrenaline rush (1)",
+      "memory impairment (1)",
+      "chest pain (1)",
+      "pounding heart beat (1)",
+      "tight chest (1)",
+      "throat tightness (1)",
+      "bruising (1)",
+      "side effects worse than lc (1)",
+      "depersonalization (1)",
+      "weird dreams (1)",
+      "short term memory issues (1)",
+      "extreme fatigue (1)",
+      "joint pain (1)",
+      "stomach reaction (1)",
+      "nervous tremors (1)",
+      "panic attacks (1)",
+      "urge to defecate (1)",
+      "nervous energy (1)",
+      "pem crash (1)",
+      "disassociation (1)",
+      "paranoia (1)",
+      "flare up (1)",
+      "feeling ill (1)",
+      "spacey (1)",
+      "body odour (1)",
+      "symptoms worse (1)",
+      "feeling high (1)",
+      "memory loss (1)",
+      "sensitivity to sounds (1)",
+      "amphetamine-like high (1)",
+      "sympathetic overdrive (1)",
+      "muscle spasms (1)",
+      "racing thoughts (1)",
+      "sensitivity to noise and light (1)",
+      "inability to handle input (1)",
+      "sleep disturbance (1)",
+      "stomach problems (1)",
+      "extreme tiredness (1)",
+      "numbness (1)",
+      "spaced out (1)",
+      "pem (1)",
+      "worsened symptoms (1)",
+      "sleep disturbances (1)",
+      "frequent urination (1)",
+      "mcas flare (1)",
+      "increased reactivity (1)",
+      "prolonged fatigue (1)",
+      "facial swelling (1)",
+      "woozyness (1)",
+      "burning eyes (1)",
+      "sleepy eyes (1)",
+      "aching muscles (1)",
+      "severe arm pain (1)",
+      "decreased baseline (1)",
+      "burning aching pain (1)",
+      "heart racing (1)",
+      "muscle loss (1)",
+      "achiness in legs and feet (1)",
+      "could not get out of bed (1)",
+      "body pains (1)",
+      "reaction under the tongue (1)",
+      "crying (1)",
+      "tiredness (1)",
+      "brain zaps (1)",
+      "withdrawal (1)",
+      "migraine (1)",
+      "muscle fatigue (1)",
+      "weakness (1)",
+      "heavy feeling (1)",
+      "adrenaline feelings (1)",
+      "pots worsened (1)",
+      "zombie feeling (1)",
+      "severe right abdominal pain (1)",
+      "neuralgia (1)",
+      "lowered baseline (1)",
+      "tmj flare (1)",
+      "pots flare (1)",
+      "tremors (1)",
+      "racing heart (1)",
+      "head felt funny (1)",
+      "migraines (1)",
+      "feeling worse at higher doses (1)",
+      "symptoms worsened (1)",
+      "nightmares (1)",
+      "stomach pain (1)",
+      "nervousness (1)",
+      "thoughts all night while sleeping (1)",
+      "sleep issues (1)",
+      "lethargy (1)",
+      "apathy (1)",
+      "weakness in legs (1)",
+      "vision problems (1)",
+      "sensitivity to light (1)",
+      "joint aches (1)",
+      "lightheadedness (1)",
+      "decline in baseline (1)",
+      "crashing (1)",
+      "leg pain (1)",
+      "gastro symptoms (1)",
+      "felt stuffed after first bite (1)",
+      "snappy and irritable (1)",
+      "adverse reaction (1)",
+      "worse (1)",
+      "couldn't move (1)"
+    ],
+    "pos_quotes": [
+      "Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all",
+      "treatments I believe have helped me (almost 2 years in) I'll start off by saying I have CFS type long covid, no so much dysautonomia (although I did experience pots when I had a very serious relapse)\n\nI have been doing better over the past 3 months, I believe thanks to the meds and lifestyle choices I have been making. One of the best meds you can get for CFS type LC is LDN it made a MASSIVE diffe"
+    ],
+    "neg_quotes": [
+      "Brain fog and LDN Did anyones brain fog get worse with LDN? I’ve been on it a little over a week, the first couple of days I had trouble sleeping but that doesn’t seem to be much of a problem now but my brain fog has been like 10x worse the past four days. I don’t want to stop taking it if it will end up helping me but it’s making it so hard to do my job and I’ve had enough trouble with staying on",
+      "My experience with LDN for fatigue Took 1mg LDN for 5 days. First 4 days were great, fatigue almost gone and was excited to titrate up in another 10 days or so. However, on 5th day got massive fatigue and then all the muscles in my body started became weak to the point where I could not move.\n\nMy suspicion is that perhaps the 2 years of inflammation preceding the LDN drained my adrenals and someho"
+    ],
+    "caveats": [
+      "SMALL N: only 331 distinct patients — a community sample, not a trial.",
+      "SINGLE SOURCE: all from covidlonghaulers; self-selected forum users, not the general patient population.",
+      "SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced personal experience; non-experiential mentions are dropped, so a low negative count is NOT safety — absence of negatives != safe.",
+      "SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — no controls, no follow-up, recall and placebo uncontrolled."
+    ],
+    "text": "LDN — 53% positive · 36% negative · 9% mixed · 2% neutral (across 331 patients).\n\nConfidence: suggestive — Suggestive evidence — a real pattern, still anecdotal.\n\nIn patients' own words:\n  (+) “Yes, I attribute this to the neuro/energy issues. Once I started to have more energy due to ldn, it was like all of the delayed emotional and psychological processing started. In some ways, it's a relief to feel it all moving through my body. I share this with the people around me, too. \"I think I only now have enough energy to reflect on everything that's happened...it's like I had to put it all”\n  (+) “treatments I believe have helped me (almost 2 years in) I'll start off by saying I have CFS type long covid, no so much dysautonomia (although I did experience pots when I had a very serious relapse)\n\nI have been doing better over the past 3 months, I believe thanks to the meds and lifestyle choices I have been making. One of the best meds you can get for CFS type LC is LDN it made a MASSIVE diffe”\n  (-) “Brain fog and LDN Did anyones brain fog get worse with LDN? I’ve been on it a little over a week, the first couple of days I had trouble sleeping but that doesn’t seem to be much of a problem now but my brain fog has been like 10x worse the past four days. I don’t want to stop taking it if it will end up helping me but it’s making it so hard to do my job and I’ve had enough trouble with staying on”\n  (-) “My experience with LDN for fatigue Took 1mg LDN for 5 days. First 4 days were great, fatigue almost gone and was excited to titrate up in another 10 days or so. However, on 5th day got massive fatigue and then all the muscles in my body started became weak to the point where I could not move.\n\nMy suspicion is that perhaps the 2 years of inflammation preceding the LDN drained my adrenals and someho”\n\nSide effects to watch: insomnia (18); fatigue (17); nausea (9); anxiety (8); brain fog (6); depression (6); crash (5); sleepiness (5); headaches (5); pain (4); dizziness (4); vivid dreams (3); derealization (3); head pressure (3); tinnitus (3); headache (2); exhaustion (2); sedation (2); side effects (2); acid reflux (2); irritability (2); vivid nightmares (2); impending doom feeling (2); dry hands (2); pimples (2); trouble sleeping (1); muscle weakness (1); diarrhea (1); major deterioration (1); loss of appetite (1); worsened other symptoms (1); vertigo (1); did not feel good (1); adrenaline rush (1); memory impairment (1); chest pain (1); pounding heart beat (1); tight chest (1); throat tightness (1); bruising (1); side effects worse than lc (1); depersonalization (1); weird dreams (1); short term memory issues (1); extreme fatigue (1); joint pain (1); stomach reaction (1); nervous tremors (1); panic attacks (1); urge to defecate (1); nervous energy (1); pem crash (1); disassociation (1); paranoia (1); flare up (1); feeling ill (1); spacey (1); body odour (1); symptoms worse (1); feeling high (1); memory loss (1); sensitivity to sounds (1); amphetamine-like high (1); sympathetic overdrive (1); muscle spasms (1); racing thoughts (1); sensitivity to noise and light (1); inability to handle input (1); sleep disturbance (1); stomach problems (1); extreme tiredness (1); numbness (1); spaced out (1); pem (1); worsened symptoms (1); sleep disturbances (1); frequent urination (1); mcas flare (1); increased reactivity (1); prolonged fatigue (1); facial swelling (1); woozyness (1); burning eyes (1); sleepy eyes (1); aching muscles (1); severe arm pain (1); decreased baseline (1); burning aching pain (1); heart racing (1); muscle loss (1); achiness in legs and feet (1); could not get out of bed (1); body pains (1); reaction under the tongue (1); crying (1); tiredness (1); brain zaps (1); withdrawal (1); migraine (1); muscle fatigue (1); weakness (1); heavy feeling (1); adrenaline feelings (1); pots worsened (1); zombie feeling (1); severe right abdominal pain (1); neuralgia (1); lowered baseline (1); tmj flare (1); pots flare (1); tremors (1); racing heart (1); head felt funny (1); migraines (1); feeling worse at higher doses (1); symptoms worsened (1); nightmares (1); stomach pain (1); nervousness (1); thoughts all night while sleeping (1); sleep issues (1); lethargy (1); apathy (1); weakness in legs (1); vision problems (1); sensitivity to light (1); joint aches (1); lightheadedness (1); decline in baseline (1); crashing (1); leg pain (1); gastro symptoms (1); felt stuffed after first bite (1); snappy and irritable (1); adverse reaction (1); worse (1); couldn't move (1).\n\nRead the fine print:\n  • SMALL N: only 331 distinct patients — a community sample, not a trial.\n  • SINGLE SOURCE: all from covidlonghaulers; self-selected forum users, not the general patient population.\n  • SILENT DROP / SELF-SELECTION: a row exists ONLY when an author voiced personal experience; non-experiential mentions are dropped, so a low negative count is NOT safety — absence of negatives != safe.\n  • SELF-REPORT / ANECDOTAL: firsthand anecdotes, not measured outcomes — no controls, no follow-up, recall and placebo uncontrolled.\n\nBottom line: Patients who tried low-dose naltrexone leaned more toward benefit than harm overall, though a meaningful share reported no improvement or worsening, and side effects — particularly sleep disruption and fatigue — were fairly common; discuss with your doctor.\n\nThis is anecdotal patient data, not medical advice — please discuss with your doctor.\n\n[prov] run_id=3 · commit=f1023d60012bd32986a512ae41b134c5ed5d8ab8 · 1782000514\n",
+    "provenance": {
+      "claim_id": "PROV",
+      "run_id": 3,
+      "commit_hash": "f1023d60012bd32986a512ae41b134c5ed5d8ab8",
+      "run_at": 1782000514
+    }
+  }
+}
