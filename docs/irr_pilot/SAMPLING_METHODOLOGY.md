@@ -23,12 +23,6 @@ blank template are tracked in this folder.
   [`CODING_INSTRUCTIONS.pdf`](./CODING_INSTRUCTIONS.pdf) — codebook
   distributed alongside the coding sheet
 
-This is the *original* IRR pilot. A larger 500-unit pilot was drawn later
-under the same procedure with `seed=43`; see
-[`docs/irr_pilot_500/SAMPLING_METHODOLOGY.md`](../irr_pilot_500/SAMPLING_METHODOLOGY.md).
-The two pilots cover non-overlapping windows of r/covidlonghaulers and use
-different seeds, so no codable unit can appear in both.
-
 Reproducibility script: `scripts/sample_for_coding.py` (in the project
 repository).
 
@@ -90,9 +84,8 @@ Each stratum tests a different aspect of pipeline behavior:
   drug here"?
 
 Within each stratum, units were drawn uniformly at random using
-`random.sample()` with `seed=42`. The seed is fixed for reproducibility; the
-later 500-sample pilot used `seed=43` so the two samples could share a source
-corpus without overlapping. The three strata were concatenated and shuffled
+`random.sample()` with `seed=42`. The seed is fixed for reproducibility. The
+three strata were concatenated and shuffled
 together before assignment of sample IDs, so coders cannot infer a unit's
 stratum from its position in the coding sheet.
 

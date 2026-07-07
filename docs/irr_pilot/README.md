@@ -39,7 +39,3 @@ in `data/irr_pilot/`, which is gitignored at the repo level.
 **Per-coder outputs are intentionally not redistributed** in this
 repo — coder identity is paired with coding decisions in those files,
 and we treat that pairing as private to the team.
-
-For the more recent 500-sample IRR pilot — drawn from the Nov–Dec 2021
-window matching the historical-validation paper's analysis window —
-see [`../irr_pilot_500/`](../irr_pilot_500/).

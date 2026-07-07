@@ -219,7 +219,7 @@ v1.4 brings the codebook back into sync with the data:
 - **Removed**: `side_effects_reported` and `side_effects_description` columns and the corresponding step. They were not actually coded; describing them in the codebook was misleading.
 - **Restored**: `personal_use` (yes/no), with explicit semantics. Was previously implicit (encoded as `sentiment = neutral` in v1.3 prose), but the actual coded data has the explicit column.
 - **Tightened**: `sentiment` and `signal_strength` are now described as conditional on `personal_use = yes`, matching how coders actually treated them.
-- **Single-schema templates.** Both the 300-pilot and 500-pilot `coder_output_template.csv` files share this schema, matching what was actually coded in the 300-pilot.
+- **Template schema.** The `coder_output_template.csv` schema matches what was actually coded in the 300-pilot.
 - Updated worked examples and decision tree.
 
-*v1.4 · matches `coder_output_template.csv` schema in both `docs/irr_pilot/` and `docs/irr_pilot_500/`, and matches the schema of the existing `human_coder_*.csv` and `ai_coder_*.csv` outputs the α report was computed from.*
+*v1.4 · matches the `coder_output_template.csv` schema in `docs/irr_pilot/`, and the schema of the existing `human_coder_*.csv` and `ai_coder_*.csv` outputs the α report was computed from.*
