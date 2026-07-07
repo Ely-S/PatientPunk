@@ -23,7 +23,7 @@ referenced, not committed.
 | Analysis | Folder | Summary |
 |---|---|---|
 | **Pilot paper** — predictive validity of community sentiment | [`docs/RCT_historical_validation/`](docs/RCT_historical_validation/) | Pre-publication Reddit treatment sentiment vs. the outcomes of 6 published Long COVID RCTs; community sentiment correctly classified all 6 directional outcomes (Wilson-CI forest plot, full reproducibility package). |
-| **FDA letter analysis** — LDN & Mestinon real-world evidence | [`docs/FDA_letter_analysis/`](docs/FDA_letter_analysis/) | RWE behind the FDA repurposing comment: use, dosing (~95% ≤ 4.5 mg), sentiment, and side-effect profiles for LDN (naltrexone) and Mestinon (pyridostigmine) across Reddit and the Phoenix Rising forum. |
+| **FDA letter analysis** — LDN & Mestinon real-world evidence | [`studies/fda_letter/`](studies/fda_letter/) | RWE behind the FDA repurposing comment: use, dosing (~95% ≤ 4.5 mg), sentiment, and side-effect profiles for LDN (naltrexone) and Mestinon (pyridostigmine) across Reddit and the Phoenix Rising forum. |
 
 ---
 
