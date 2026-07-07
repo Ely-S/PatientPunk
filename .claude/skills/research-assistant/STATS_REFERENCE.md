@@ -19,6 +19,14 @@ user_drug['outcome'] = user_drug['avg_score'].apply(classify_outcome)
 
 All tests below operate on this user-level DataFrame.
 
+## Known pipeline biases that change test setup
+
+See SKILL.md "Known data biases" for the full list. Three change how tests are configured:
+
+- **Positive labels are over-called ~10–20%** — prefer between-treatment comparisons over absolute positive rates; negatives are more reliable than positives.
+- **Binomial baselines must be corpus-derived** — use the positive rate across all treatments in the same database, never 0.5.
+- **Multi-treatment posts inflate positive attribution** — include the monotherapy sensitivity check for treatment findings.
+
 ## Warning severities
 
 Every analysis result should list warnings with one of three severities. Surface `caution` and `unreliable` warnings to the reader as markdown callouts (`> ⚠️ ...`). `caveat` can stay inline in the stats table.
@@ -38,7 +46,7 @@ Every analysis result should list warnings with one of three severities. Surface
 - **Warnings:** (none specific — size warnings apply at the comparison stage)
 
 ### 2. Binomial test — observed rate vs. baseline
-- **Use when:** asking "does this drug's positive rate differ from chance (50%) or some known baseline?"
+- **Use when:** asking "does this drug's positive rate differ from the corpus baseline?" The baseline MUST be the positive rate across all treatments in the same database — never 0.5. Reporting bias plus the positive over-call mean essentially every treatment "beats" 50%, so a 0.5 baseline manufactures significance.
 - **Library:** `scipy.stats.binomtest(n_pos, n, p=baseline, alternative='two-sided')`.
 - **Effect size:** Cohen's h = `2*arcsin(sqrt(p_obs)) - 2*arcsin(sqrt(p_baseline))`.
 - **CI:** Wilson score via `proportion_confint`.
@@ -46,6 +54,7 @@ Every analysis result should list warnings with one of three severities. Surface
   - `small_sample` (caveat) — `n < 20`.
   - `no_variation` (caution) — all users positive or all negative.
   - `extreme_baseline` (caution) — `baseline` is 0 or 1.
+  - `naive_baseline` (caution) — baseline set to 0.5 instead of a corpus-derived rate.
 
 ### 3. Two-group comparison — Mann-Whitney U + Fisher's exact / chi-square
 - **Use when:** comparing two drugs (or two user subgroups) on sentiment.
@@ -104,7 +113,7 @@ Every analysis result should list warnings with one of three severities. Surface
 - **Library:** `scipy.stats.kendalltau(months, avg_sentiment)` for the non-parametric trend test; `scipy.stats.linregress` for the slope estimate.
 - **Report:** Kendall's τ, p-value, slope, direction (`improving` / `declining` / `stable`), n_months, per-month data points.
 - **Warnings:**
-  - `misc` (caveat) — fewer than 3 months of data; trend not meaningful (return early).
+  - `too_few_months` (caveat) — fewer than 3 months of data; trend not meaningful (return early).
   - `short_series` (caution) — fewer than 6 months.
   - `gappy_series` (caution) — non-contiguous months.
   - `no_variation` (caution) — monthly sentiment is constant.
@@ -138,6 +147,7 @@ Every analysis result should list warnings with one of three severities. Surface
 After the primary analysis, re-run on a robustness subset:
 - Drop the 3 most extreme users (by `avg_score`).
 - OR restrict to `signal_strength == 'strong'` reports only.
+- OR restrict to single-treatment (monotherapy) reports — the strongest check for treatment findings, since it removes group-attribution inflation.
 
 Then write one sentence: either "Conclusion holds" or "Conclusion shifts — flagged as fragile."
 
@@ -160,8 +170,8 @@ When emitting results, Claude should produce:
    *Example:* "LDN users report a 94% positive rate, significantly higher than the 50% baseline (p < 0.001)."
 2. **Formal line** — test name, test statistic, p-value, effect size with name.
    *Example:* "Binomial test: 16/17, p < 0.001, Cohen's h = 0.96."
-3. **NNT (if applicable)** — `1 / (treatment_rate - baseline_rate)`, rounded to one decimal.
-   *Example:* "NNT = 2.3 — roughly 1 in 2.3 users reports benefit beyond chance."
+3. **NNT analog (if applicable)** — `1 / (treatment_rate - baseline_rate)`, rounded to one decimal. Label it a reporting-based NNT analog: there is no control arm, so it is not a true NNT.
+   *Example:* "NNT analog = 2.3 — for every ~2.3 users who try it, one additional user reports benefit relative to the corpus baseline."
 4. **Warnings** — any `caution`/`unreliable` warnings as markdown callouts:
    ```
    > ⚠️ Small sample (n=17) — interpret with caution.

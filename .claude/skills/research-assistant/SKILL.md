@@ -64,10 +64,11 @@ Each section's opening markdown cell must connect to the previous section with a
 - **Plain-language verdict** after every research question — never leave the reader to interpret p-values alone.
 - **Plain-language explanation** after every chart — call out key takeaway, outliers, surprises.
 - **Counterintuitive findings** — actively look for and highlight results that contradict clinical guidelines, community assumptions, or common sense. Frame as "worth investigating further," not as conclusions. If nothing is counterintuitive, say so — that itself is a finding.
-- **Qualitative evidence — high bar** — after the quantitative analysis, add a "What patients are saying" section. Approach this as an expert qualitative researcher would: every quote is evidence, not decoration. Query `posts.body_text` joined with `posts.post_date` for users who reported on the top treatments. Pull 3-5 quotes (1-2 sentences each, up to 40 words). Include the date. At least one quote must contradict or complicate the main narrative. Every quote must be self-contained (no ambiguous pronouns — add [bracketed clarifications] if needed), must contain a specific treatment outcome (not meta-commentary or social validation), and must match the claim in its category header. If you cannot find quotes that directly demonstrate a claim, omit quotes for that claim entirely. A qualitative researcher would never include a quote that doesn't advance the argument — neither should you.
+- **Qualitative evidence — high bar** — after the quantitative analysis, add a "What patients are saying" section. Approach this as an expert qualitative researcher would: every quote is evidence, not decoration. Query `posts.body_text` joined with `posts.post_date` for users who reported on the top treatments. Pull 3-5 quotes (1-2 sentences each, up to 40 words). Include the date. At least one quote must contradict or complicate the main narrative. Every quote must be self-contained (no ambiguous pronouns — add [bracketed clarifications] if needed), must contain a specific treatment outcome (not meta-commentary or social validation), and must match the claim in its category header. If you cannot find quotes that directly demonstrate a claim, omit quotes for that claim entirely. A qualitative researcher would never include a quote that doesn't advance the argument — neither should you. **Quote privacy:** notebooks are private-review documents by default — verbatim Reddit quotes are searchable and can deanonymize the author. Any notebook intended for public release must paraphrase quotes or pass an explicit redaction review first; note in the conclusion which applies.
 - **Tiered recommendations** after the analysis sections: Strong (n>=30, p<0.05) / Moderate (n>=15 or p<0.10) / Preliminary (n<15). Include a visual summary chart.
 - **Conclusion** — a 2-4 paragraph narrative synthesis that answers the original research question directly. This is not a bullet list of findings — it's the "so what?" that ties everything together. What did we learn? What surprised us? What should a patient or researcher take away? What questions remain unanswered? Write it as if you're explaining the results to a colleague over coffee. **Take a position.** "Based on this data, a patient asking about [symptom] should consider [top treatments]. [Poorly performing treatment class] should be approached with caution." Do not end with "further research is needed" — that's a non-answer.
-- **Research limitations** section after the conclusion covering all 8 biases: selection, reporting, survivorship, recall, confounding, no control group, sentiment vs efficacy, temporal snapshot. Do not abbreviate.
+- **Research limitations** section after the conclusion covering all 8 biases: selection, reporting, survivorship, recall, confounding, no control group, sentiment vs efficacy, temporal snapshot. Do not abbreviate. Also state the pipeline-specific biases that apply (positive over-call, group attribution — see Known data biases).
+- **Provenance block** — inside the limitations section, a short table recording: database filename and SHA-256, row counts of the main tables used, data date range, skill version (v2), and the date the notebook was executed. Every HTML export must be traceable to the exact data snapshot that produced it.
 - End with the following disclaimer, formatted as bold, italic, and larger text (use `display(HTML(...))`  with `font-size: 1.2em; font-weight: bold; font-style: italic`): ***"These findings reflect reporting patterns in online communities, not population-level treatment effects. This is not medical advice."***
 
 ### Output quality
@@ -86,9 +87,9 @@ Choose whatever tests, models, or approaches best fit the data. You are not limi
 Good defaults: Wilson score CI for rankings with small n. Bayesian shrinkage when comparing treatments with very different sample sizes. Fisher's exact or chi-squared for categorical comparisons. Mann-Whitney for two-group sentiment. Kruskal-Wallis for 3+ groups. Logistic regression for multivariate predictors. Shannon entropy for measuring user agreement.
 
 **Required for every comparison:**
-- **Effect size**, not just p-values. The reader needs to know if a difference is large or trivially small. Use Cohen's h for proportion comparisons, rank-biserial correlation for Mann-Whitney, eta-squared for Kruskal-Wallis.
-- **NNT (number needed to treat)** for patient-facing recommendations where applicable. "You'd need 3 people to try this for 1 additional person to report benefit" is more actionable than "p=0.002." Calculate as 1 / (treatment positive rate - baseline positive rate).
-- **Sensitivity check** — does the main conclusion survive if you drop the 3 most extreme users, or restrict to strong-signal reports only? One sentence confirming robustness or flagging fragility.
+- **Effect size**, not just p-values. The reader needs to know if a difference is large or trivially small. Use Cohen's h for proportion comparisons, rank-biserial correlation for Mann-Whitney, epsilon-squared for Kruskal-Wallis.
+- **NNT analog** for patient-facing recommendations where applicable. "You'd need 3 people to try this for 1 additional person to report benefit" is more actionable than "p=0.002." Calculate as 1 / (treatment positive rate - baseline positive rate). Label it a reporting-based NNT analog — there is no control arm, so it is not a true NNT.
+- **Sensitivity check** — does the main conclusion survive if you drop the 3 most extreme users, restrict to strong-signal reports only, or restrict to single-treatment (monotherapy) reports? The monotherapy check is the most informative one for treatment findings — it removes group-attribution inflation (see Known data biases). One sentence confirming robustness or flagging fragility.
 
 **Sample size discipline:**
 - When comparing groups, prefer binary comparisons (e.g., monotherapy vs polypharmacy) over splitting into 3+ tiers if any tier has n<20.
@@ -97,6 +98,16 @@ Good defaults: Wilson score CI for rankings with small n. Bayesian shrinkage whe
 - In **verbose mode**, multi-group comparisons are acceptable even with smaller groups, but must always include CIs and explicit power caveats.
 
 **Every visual comparison requires a statistical comparison.** If a chart shows two or more groups side by side (treatments, cohorts, tiers), there MUST be a corresponding statistical test (Fisher's exact, Mann-Whitney, chi-squared) with a p-value reported in the accompanying text. Placing bars or dots next to each other without testing the difference invites the reader to draw conclusions that may not be supported. If the comparison is not significant, say so: "While Drug A appears to outperform Drug B in this chart (6/6 vs 4/10 positive), the sample sizes are too small for a reliable comparison (Fisher's exact p=0.07)." Never show a visual comparison and let the reader assume significance.
+
+### Known data biases (apply to every notebook)
+
+These are measured properties of the PatientPunk extraction pipeline, not hypotheticals. Every notebook must respect them:
+
+1. **Positive sentiment is over-called.** Validation found roughly 10–20% of stored 'positive' labels are false positives (an artifact of the extraction schema, consistent across providers); negative labels are reliable. Consequences: never headline an absolute positive rate without noting the inflation; prefer between-treatment comparisons (the bias largely cancels) over absolute rates; treat negative findings as more trustworthy than positive ones.
+2. **Never use 50% as the "chance" baseline.** Self-reported treatment sentiment skews positive (reporting bias plus the over-call), so every treatment "beats" a 50% baseline. Compute the corpus-wide positive rate across all treatments in the same database and use that as the baseline for binomial tests and any "better than baseline" claim.
+3. **Group-attribution inflation.** Posts listing several treatments with one outcome ("I tried X, Y, and Z and finally improved") can assign the collective outcome to every treatment mentioned, inflating positive rates. For any headline treatment finding, run the monotherapy sensitivity check.
+4. **No cross-database sentiment comparisons.** Sentiment rates are NOT comparable across databases built by different extraction runs, prompts, or pipelines (e.g., two communities scraped and extracted separately). Compare sentiment only within one database. Cross-database claims are limited to distribution shapes (dose distributions, side-effect profiles) — never rates.
+5. **Multiplicity in the counterintuitive-findings scan.** Scanning 30+ treatments for surprises is a multiple-comparisons exercise. Any finding surfaced by scanning many candidates must either survive Benjamini-Hochberg FDR across the number of candidates scanned, or be explicitly labeled "hypothesis-generating — surfaced by exploratory scan."
 
 ### Tools available
 
@@ -256,3 +267,13 @@ CASE tr.sentiment WHEN 'positive' THEN 1.0 WHEN 'mixed' THEN 0.5 WHEN 'neutral' 
 `ELSE NULL` (not `0.0`) so missing/unrecognized sentiment is excluded from `AVG()` rather than silently biasing the average toward neutral.
 
 All tables join on `user_id`. Always aggregate to user level (one data point per user per drug) for statistical independence.
+
+### Schema detection
+
+Not every .db uses this schema. Before planning, check which schema the database uses (`SELECT name FROM sqlite_master WHERE type='table'`). Known variants:
+
+- **polina-era schema** (`users`, `posts`, `treatment_reports`) — user-keyed; everything above applies directly.
+- **unified `patientpunk.db`** (DB-bridge schema) — user-keyed; confirm table/column names from the schema before writing queries.
+- **A4 evidence marts** (`claims` table) — comment-keyed with NO user/author column. The golden rule of user-level aggregation is unsatisfiable here: refuse to present per-person claims, report comment/claim-denominated counts only, and state prominently that one prolific commenter can dominate every count.
+
+If the database has no user key, say so in the limitations and do not silently proceed with per-user language.
