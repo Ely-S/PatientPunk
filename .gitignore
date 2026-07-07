@@ -21,5 +21,5 @@ data/
 
 # IRR pilot sample packs — verbatim patient text + analyst-only answer keys.
 # Kept in gitignored data/ + S3 and distributed to coders privately; never tracked.
-docs/irr_pilot/coding_input.csv
-docs/irr_pilot/ai_labels.csv
+studies/rct_validation/irr_pilot/coding_input.csv
+studies/rct_validation/irr_pilot/ai_labels.csv

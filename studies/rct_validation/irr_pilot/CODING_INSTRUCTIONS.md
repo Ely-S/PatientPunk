@@ -222,4 +222,4 @@ v1.4 brings the codebook back into sync with the data:
 - **Template schema.** The `coder_output_template.csv` schema matches what was actually coded in the 300-pilot.
 - Updated worked examples and decision tree.
 
-*v1.4 · matches the `coder_output_template.csv` schema in `docs/irr_pilot/`, and the schema of the existing `human_coder_*.csv` and `ai_coder_*.csv` outputs the α report was computed from.*
+*v1.4 · matches the `coder_output_template.csv` schema in `studies/rct_validation/irr_pilot/`, and the schema of the existing `human_coder_*.csv` and `ai_coder_*.csv` outputs the α report was computed from.*
