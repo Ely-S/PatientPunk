@@ -1,7 +1,7 @@
 """
 Dump the `treatment.aliases` column from the analysis DB to a markdown file.
 
-This produces `docs/RCT_historical_validation/DRUG_ALIASES.md` — a static,
+This produces `studies/rct_validation/DRUG_ALIASES.md` — a static,
 reviewable export of the alias list every pipeline run substring-matched
 against. Source of truth is the SQLite DB; this script just renders it.
 
@@ -12,8 +12,8 @@ alias coverage need to see this list directly.
 
 Usage:
     python scripts/dump_drug_aliases.py \\
-        --db docs/RCT_historical_validation/data/historical_validation_2020-07_to_2022-12.db \\
-        --out docs/RCT_historical_validation/DRUG_ALIASES.md
+        --db studies/rct_validation/data/historical_validation_2020-07_to_2022-12.db \\
+        --out studies/rct_validation/DRUG_ALIASES.md
 
 Re-running with the same DB reproduces the same alias content
 (deterministic ordering); only the `Generated` timestamp at the top

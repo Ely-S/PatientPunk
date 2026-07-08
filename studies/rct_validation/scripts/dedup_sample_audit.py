@@ -18,8 +18,8 @@ non-deleted-user filter the analysis uses.
 
 Usage:
     python scripts/dedup_sample_audit.py \\
-        --db docs/RCT_historical_validation/data/historical_validation_2020-07_to_2022-12.db \\
-        --out docs/RCT_historical_validation/DEDUP_AUDIT.md
+        --db studies/rct_validation/data/historical_validation_2020-07_to_2022-12.db \\
+        --out studies/rct_validation/DEDUP_AUDIT.md
 """
 from __future__ import annotations
 import argparse

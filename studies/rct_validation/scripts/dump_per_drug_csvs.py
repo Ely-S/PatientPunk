@@ -12,7 +12,7 @@ Plus a one-row-per-drug summary:
   - summary.csv                - n, %positive, Wilson 95% CI, p-value vs 50%
 
 By default, reads the DB via the canonical resolver in
-`docs/RCT_historical_validation/paths.py` (env var `RCT_DB_PATH` →
+`studies/rct_validation/paths.py` (env var `RCT_DB_PATH` →
 package-anchor walk-up) and writes outputs into a `merged/` subdirectory of
 the package's `data/` folder. Both can be overridden via --db and --out.
 
@@ -35,12 +35,13 @@ from statsmodels.stats.proportion import proportion_confint
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# This script lives at <repo>/scripts/dump_per_drug_csvs.py. The RCT
-# validation package — including paths.py, the canonical DB resolver — lives
-# at <repo>/docs/RCT_historical_validation/. We bootstrap sys.path to import
-# it so this script and the in-package entry points share one resolver.
-_REPO_ROOT      = Path(__file__).resolve().parents[1]
-_RCT_PKG        = _REPO_ROOT / "docs" / "RCT_historical_validation"
+# This script lives at <repo>/studies/rct_validation/scripts/dump_per_drug_csvs.py.
+# The RCT validation package — including paths.py, the canonical DB resolver —
+# is its parent directory (<repo>/studies/rct_validation/). We bootstrap
+# sys.path to import it so this script and the in-package entry points share
+# one resolver.
+_RCT_PKG        = Path(__file__).resolve().parents[1]
+_REPO_ROOT      = Path(__file__).resolve().parents[3]
 if str(_RCT_PKG) not in sys.path:
     sys.path.insert(0, str(_RCT_PKG))
 from paths import (  # noqa: E402
@@ -172,7 +173,7 @@ def main(argv: list[str] | None = None) -> None:
         if not db.exists():
             sys.exit(
                 f"ERROR: analysis DB not found at {db}\n"
-                f"See docs/RCT_historical_validation/README.md for download instructions."
+                f"See studies/rct_validation/README.md for download instructions."
             )
     else:
         try:
