@@ -23,8 +23,8 @@ blank template are tracked in this folder.
   [`CODING_INSTRUCTIONS.pdf`](./CODING_INSTRUCTIONS.pdf) — codebook
   distributed alongside the coding sheet
 
-Reproducibility script: `scripts/sample_for_coding.py` (in the project
-repository).
+Reproducibility script: [`scripts/sample_for_coding.py`](./scripts/sample_for_coding.py)
+(tracked alongside this methodology).
 
 ## Source corpus
 
@@ -168,7 +168,7 @@ apples.
 Re-running
 
 ```
-python scripts/sample_for_coding.py \
+python studies/rct_validation/irr_pilot/scripts/sample_for_coding.py \
     --n               300 \
     --seed            42 \
     --out-dir         data/irr_pilot/ \
