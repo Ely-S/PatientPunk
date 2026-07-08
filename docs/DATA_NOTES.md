@@ -12,7 +12,7 @@ Source: Arctic Shift API. Scraped 2026-04-05. Subreddit: `r/covidlonghaulers`.
 - `num_comments` is unreliable — often says 0 when comments actually exist in the array
 - `depth` is always 0 — doesn't reflect actual nesting; trace `parent_id` chains to reconstruct reply threads
 - `score` is mostly 1 — data likely captured very soon after posting
-- Duplicate posts exist — same author posted the same question twice (e.g. `t3_1scp1om` and `t3_1scoxzu`)
+- Duplicate posts exist — the same author sometimes posted the same question twice
 
 ### Community patterns
 - Authors are anonymized via SHA-256 hash, no usernames stored
