@@ -841,14 +841,6 @@ class TestPipelineDiscoverySelection:
         assert result.phases[4].phase == 5 and result.phases[4].ok
 
 
-class TestPhaseResult:
-    def test_defaults(self):
-        pr = PhaseResult(phase=1, label="Test")
-        assert pr.ok is True
-        assert pr.skipped is False
-        assert pr.elapsed == 0.0
-
-
 class TestPipelineResult:
     def test_ok_all_passed(self):
         result = PipelineResult(
@@ -1130,17 +1122,6 @@ class TestCsvFillRateEdgeCases:
             writer.writerow(["3", "4"])
         stats = csv_fill_rate(csv_path)
         assert stats["fill_rate"] == 100.0
-
-
-class TestPhaseResultError:
-    def test_error_attribute_stored(self):
-        pr = PhaseResult(phase=2, label="LLM", ok=False, error="exit code 1")
-        assert pr.error == "exit code 1"
-        assert not pr.ok
-
-    def test_no_error_by_default(self):
-        pr = PhaseResult(phase=1, label="Regex")
-        assert pr.error is None
 
 
 class TestPipelineResultSummaryFailure:

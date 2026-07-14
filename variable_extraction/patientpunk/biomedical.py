@@ -913,8 +913,8 @@ def collect_texts_from_post(post: dict) -> list[str]:
     here would attribute their conditions/treatments to the post author.
     Commenters are captured as their own patients via the aggregate path.
     """
-    texts = [_keep_text(t) for t in _collect_texts_from_post(post)]
-    return [t for t in texts if t]
+    kept = (_keep_text(t) for t in _collect_texts_from_post(post))
+    return [t for t in kept if t]
 
 
 def process_corpus(
