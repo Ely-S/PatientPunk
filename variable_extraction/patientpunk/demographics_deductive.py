@@ -15,19 +15,19 @@ Output: output/demographics.csv
 
 Usage:
     # Both posts and user histories (default)
-    python extract_demographics_llm.py
+    python -m patientpunk.demographics_deductive
 
     # Explicit input directory
-    python extract_demographics_llm.py --input-dir ../../reddit_sample_data
+    python -m patientpunk.demographics_deductive --input-dir ../../reddit_sample_data
 
     # Posts only
-    python extract_demographics_llm.py --posts-only
+    python -m patientpunk.demographics_deductive --posts-only
 
     # User histories only
-    python extract_demographics_llm.py --users-only
+    python -m patientpunk.demographics_deductive --users-only
 
     # Custom output path
-    python extract_demographics_llm.py --output ../../reddit_posts_only/demographics.csv
+    python -m patientpunk.demographics_deductive --output ../../reddit_posts_only/demographics.csv
 """
 
 

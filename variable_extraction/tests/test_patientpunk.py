@@ -1725,7 +1725,7 @@ class TestOpenAIProvider:
 
 
 class TestActiveExtractorTextCollection:
-    """Active extraction scripts must not attribute commenter text to post authors."""
+    """Active extraction modules must not attribute commenter text to post authors."""
 
     def _post_with_other_author_comment(self):
         return {

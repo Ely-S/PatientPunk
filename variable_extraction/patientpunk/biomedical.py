@@ -6,10 +6,10 @@ Processes the corpus output from scrape_corpus.py and extracts structured
 biomedical signals from post and comment text using regex pattern matching.
 
 Usage:
-    python extract_biomedical.py                            # base fields, default input path
-    python extract_biomedical.py --input-dir ../output/     # explicit input path
-    python extract_biomedical.py --text "I'm a 34F with POTS"  # test single string
-    python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
+    python -m patientpunk.biomedical                         # base fields, default input path
+    python -m patientpunk.biomedical --input-dir ../output/  # explicit input path
+    python -m patientpunk.biomedical --text "I'm a 34F with POTS"
+    python -m patientpunk.biomedical --schema schemas/covidlonghaulers_schema.json
 
 Output:
     output/patientpunk_records_base.json          # v2.0 records (base fields only)
@@ -780,7 +780,7 @@ def compile_extension_patterns(schema: dict) -> tuple[dict, set]:
             active_patterns[field] = compiled
 
     # Add entirely new extension fields.  Raw llm_discovered fields are skipped
-    # (handled by discover_fields.py Phase 3, which has timeout protection and
+    # (handled by patientpunk.discover Phase 3, which has timeout protection and
     # per-text processing) -- UNLESS they have been promoted (_promoted_at), which
     # makes them first-class regex fields like any other extension field.
     for field, defn in schema.get("extension_fields", {}).items():

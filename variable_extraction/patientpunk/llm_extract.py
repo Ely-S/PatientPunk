@@ -3,7 +3,7 @@
 
 
 Second-pass extraction using Claude Haiku. Reads the same corpus as
-extract_biomedical.py and produces structured records for the same schema
+``patientpunk.biomedical`` and produces structured records for the same schema
 fields, PLUS suggests new fields the schema doesn't cover yet.
 
 Designed to run AFTER regex extraction. The merge step combines both passes:
@@ -656,14 +656,11 @@ def _process_batch(
         def call_fn(sub_items, _prompt=prompt):
             return _call_batch_raw(client, _prompt, sub_items)
 
-        try:
-            raw_results = split_retry_batch(call_fn, items)
-        except Exception:
-            # Total failure — mark all as failed
-            for idx, item in zip(indices, items):
-                output[idx] = {"_failed": True, "author_hash": item["author_hash"],
-                               "post_id": item["post_id"]}
-            continue
+        # split_retry_batch already absorbs parse failures (bad/short JSON) into
+        # per-item None results, so anything that escapes it (auth errors, other
+        # non-transient API errors) is fatal and must propagate, not be logged
+        # per-record as a generic "PARSE FAILED" that hides the real cause.
+        raw_results = split_retry_batch(call_fn, items)
 
         for idx, item, parsed in zip(indices, items, raw_results):
             if parsed is None or not isinstance(parsed, dict):
@@ -797,11 +794,16 @@ def process_corpus(
             try:
                 batch_results = future.result()
             except Exception as exc:
-                with print_lock:
-                    print(f"  [batch {batch_idx+1}/{n_batches}] ERROR: {exc}")
-                failed += BATCH_SIZE
-                completed += BATCH_SIZE
-                continue
+                # A batch only raises for fatal, non-per-record errors (auth
+                # failures, non-transient API errors) -- cancel remaining work
+                # and fail the whole run loudly instead of limping on with
+                # partial/garbage results.
+                for f in future_to_batch_idx:
+                    f.cancel()
+                save_incremental()
+                raise RuntimeError(
+                    f"LLM extraction aborted at batch {batch_idx+1}/{n_batches}: {exc}"
+                ) from exc
 
             for result in batch_results:
                 completed += 1

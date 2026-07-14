@@ -23,7 +23,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-# Mirror scripts' _keep_text: drop empty / moderator-removed / user-deleted text.
+# Mirror extraction modules' _keep_text: drop empty / moderator-removed / user-deleted text.
 _DROP = {"", "[removed]", "[deleted]"}
 
 

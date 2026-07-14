@@ -19,17 +19,17 @@ the author states about themselves are extracted.
 
 Usage:
     # Both modes (default)
-    python code_demographics_llm.py --input-dir ../../reddit_sample_data
+    python -m patientpunk.demographics --input-dir ../../reddit_sample_data
 
-    # Deductive only (same as extract_demographics_llm.py)
-    python code_demographics_llm.py --input-dir ../../reddit_sample_data --mode deductive
+    # Deductive only
+    python -m patientpunk.demographics --input-dir ../../reddit_sample_data --mode deductive
 
     # Inductive only (discovery)
-    python code_demographics_llm.py --input-dir ../../reddit_sample_data --mode inductive
+    python -m patientpunk.demographics --input-dir ../../reddit_sample_data --mode inductive
 
     # Posts only / users only
-    python code_demographics_llm.py --input-dir ../../reddit_sample_data --posts-only
-    python code_demographics_llm.py --input-dir ../../reddit_sample_data --users-only
+    python -m patientpunk.demographics --input-dir ../../reddit_sample_data --posts-only
+    python -m patientpunk.demographics --input-dir ../../reddit_sample_data --users-only
 
 Output:
     {output-dir}/demographics_deductive.csv   - predefined fields (deductive mode)

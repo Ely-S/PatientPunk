@@ -8,21 +8,21 @@ output CSV to add real coverage stats and example values.
 
 Usage:
     # Minimal (schema only):
-    python make_codebook.py --schema schemas/covidlonghaulers_schema.json
+    python -m patientpunk.codebook --schema schemas/covidlonghaulers_schema.json
 
     # Full (schema + CSV for coverage/examples):
-    python make_codebook.py \\
+    python -m patientpunk.codebook \\
         --schema schemas/covidlonghaulers_schema.json \\
         --csv    ../output/records.csv
 
     # Markdown output instead of CSV:
-    python make_codebook.py \\
+    python -m patientpunk.codebook \\
         --schema schemas/covidlonghaulers_schema.json \\
         --csv    ../output/records.csv \\
         --format markdown
 
     # Custom output path:
-    python make_codebook.py \\
+    python -m patientpunk.codebook \\
         --schema schemas/covidlonghaulers_schema.json \\
         --csv    ../output/records.csv \\
         --output ../output/codebook.csv
@@ -50,7 +50,7 @@ DEFAULT_BASE_SCHEMA = _VE_ROOT / "schemas" / "base_schema.json"
 DEFAULT_OUTPUT_CSV  = _VE_ROOT / "output" / "codebook.csv"
 DEFAULT_OUTPUT_MD   = _VE_ROOT / "output" / "codebook.md"
 
-# Meta columns written by records_to_csv.py -- skip them in the codebook
+# Meta columns written by patientpunk.export_csv -- skip them in the codebook
 META_COLUMNS = {"author_hash", "source", "post_id", "text_count",
                 "schema_id", "extraction_method", "extracted_at"}
 
@@ -103,7 +103,7 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
             "icd10":          fdata.get("icd10", ""),
             "frequency_hint": "",
             "research_value": "",
-            "n_patterns":     "",   # base patterns live in extract_biomedical.py, not the schema JSON
+            "n_patterns":     "",   # base patterns live in patientpunk.biomedical, not the schema JSON
             "discovered_at":  "",
         })
 

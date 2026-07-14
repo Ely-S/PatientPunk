@@ -9,21 +9,21 @@ ones, so you can combine base + discovered schema outputs without duplicating ro
 
 Usage:
     # Single file
-    python records_to_csv.py
+    python -m patientpunk.export_csv
 
     # Specific input / output
-    python records_to_csv.py --input output/merged_records_base.json --output output/records.csv
+    python -m patientpunk.export_csv --input output/merged_records_base.json --output output/records.csv
 
     # Combine base + discovered fields into one CSV
-    python records_to_csv.py \\
+    python -m patientpunk.export_csv \\
         --input output/merged_records_base.json \\
                 output/discovered_records_covidlonghaulers_v1.json
 
     # Include provenance columns (age__provenance, conditions__provenance, …)
-    python records_to_csv.py --provenance
+    python -m patientpunk.export_csv --provenance
 
     # Change multi-value separator (default: " | ")
-    python records_to_csv.py --sep "; "
+    python -m patientpunk.export_csv --sep "; "
 
 Output:
     One row per unique (author_hash, post_id). Multi-value fields are joined

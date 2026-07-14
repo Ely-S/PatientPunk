@@ -497,7 +497,11 @@ def _cmd_promote(args: argparse.Namespace) -> None:
         report_path, report = latest
         disc_path = resolve_discovered_schema(report, temp_dir)
         if not disc_path:
-            sys.exit(f"Discovery report {report_path.name} has no resolvable schema_file.")
+            found = report.get("discovery_results", {}).get("candidates_found", "?")
+            sys.exit(
+                f"Discovery report {report_path.name} has no promotable schema "
+                f"({found} candidate(s) found, none validated) -- nothing to promote."
+            )
         field_stats = report.get("field_stats")
 
     discovered_schema = load_json(disc_path)

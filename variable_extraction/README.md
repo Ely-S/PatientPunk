@@ -178,14 +178,14 @@ flowchart TD
     posts & ufiles --> p1
     schema --> p1
 
-    p1["Phase 1 · extract_biomedical.py<br/>37 hand-crafted regex patterns · free · seconds"]:::phase
+    p1["Phase 1 · patientpunk.biomedical<br/>37 hand-crafted regex patterns · free · seconds"]:::phase
     p1 --> t1[("temp/ patientpunk_records<br/>extraction_metadata")]:::temp
-    t1 --> p2["Phase 2 · llm_extract.py<br/>Claude Haiku fills regex gaps · ~$0.10–0.50"]:::phase
+    t1 --> p2["Phase 2 · patientpunk.llm_extract<br/>Claude Haiku fills regex gaps · ~$0.10–0.50"]:::phase
     p2 --> t2[("temp/ merged_records")]:::temp
-    t2 --> p3["Phase 3 · discover_fields.py<br/>Haiku scans → Sonnet writes regex → Haiku fills gaps · ~$1–3"]:::phase
+    t2 --> p3["Phase 3 · patientpunk.discover<br/>Haiku scans → Sonnet writes regex → Haiku fills gaps · ~$1–3"]:::phase
     p3 --> t3[("temp/ discovered_records")]:::temp
-    t3 --> p4["Phase 4 · records_to_csv.py<br/>Flatten nested JSON to wide CSV"]:::phase
-    p4 --> p5["Phase 5 · make_codebook.py<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
+    t3 --> p4["Phase 4 · patientpunk.export_csv<br/>Flatten nested JSON to wide CSV"]:::phase
+    p4 --> p5["Phase 5 · patientpunk.codebook<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
     p5 --> out1["output/records.csv"]:::out
     p5 --> out2["output/codebook.csv"]:::out
 

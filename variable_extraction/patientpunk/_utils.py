@@ -142,7 +142,7 @@ def llm_config() -> dict:
 # vLLM / Ollama / TGI and most self-hosted open-model servers speak the OpenAI
 # API. This thin adapter exposes the same ``.messages.create(...)`` surface as
 # the Anthropic SDK (translating the system prompt and reshaping the response),
-# so the extraction scripts work unchanged regardless of backend.
+# so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
     def __init__(self, text: str) -> None:
@@ -251,13 +251,16 @@ def split_retry_batch(
         return results
     except (ValueError, json.JSONDecodeError):
         if _depth >= max_depth or len(items) <= 1:
-            # Fall back to individual calls
+            # Fall back to individual calls. Only absorb parse failures here --
+            # anything else (auth errors, other non-transient API errors) is
+            # fatal and must propagate so the caller fails loudly instead of
+            # silently recording a "PARSE FAILED" that hides the real cause.
             individual = []
             for item in items:
                 try:
                     r = call_fn([item])
                     individual.append(r[0])
-                except Exception:
+                except (ValueError, json.JSONDecodeError):
                     individual.append(None)
             return individual
         mid = len(items) // 2
