@@ -1441,6 +1441,82 @@ class TestDiscoveryReviewMode:
         assert out.stats["candidates"] == 1
         assert json.loads(out.artifacts["candidates"].read_text(encoding="utf-8")) == candidates
 
+    def test_run_discovery_stop_after_candidates_overwrites_stale_file(self, tmp_path):
+        from patientpunk.discover import run_discovery
+
+        input_dir = tmp_path / "output"
+        input_dir.mkdir()
+        (input_dir / "subreddit_posts.json").write_text("[]", encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")
+
+        stale_path = temp_dir / "phase1_candidates.json"
+        stale_path.write_text(
+            json.dumps([{"field_name": "stale_field", "examples": ["x"] * 8}]),
+            encoding="utf-8",
+        )
+
+        loaded_candidates_file = tmp_path / "curated_candidates.json"
+        new_candidates = [{"field_name": "new_field", "examples": ["y"] * 8}]
+        loaded_candidates_file.write_text(json.dumps(new_candidates), encoding="utf-8")
+
+        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+             patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]):
+            out = run_discovery(
+                input_dir=input_dir,
+                schema_path=schema,
+                temp_dir=temp_dir,
+                candidates_file=loaded_candidates_file,
+                stop_after="candidates",
+            )
+
+        assert out.artifacts["candidates"] == stale_path
+        assert json.loads(stale_path.read_text(encoding="utf-8")) == new_candidates
+        assert out.stats["candidates"] == 1
+
+    def test_run_discovery_known_fields_derived_from_patterns(self, tmp_path):
+        from patientpunk.discover import run_discovery
+        from patientpunk.biomedical import PATTERNS
+
+        input_dir = tmp_path / "output"
+        input_dir.mkdir()
+        (input_dir / "subreddit_posts.json").write_text("[]", encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        schema = tmp_path / "s.json"
+        schema.write_text(
+            json.dumps({
+                "schema_id": "s",
+                "extension_fields": {"functional_status_tier": {"description": "d"}},
+            }),
+            encoding="utf-8",
+        )
+
+        captured = {}
+
+        def _fake_phase1(_client, _items, known_fields, **_k):
+            captured["known_fields"] = known_fields
+            return []
+
+        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+             patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]), \
+             patch("patientpunk.discover.run_phase1_discovery", _fake_phase1):
+            run_discovery(
+                input_dir=input_dir,
+                schema_path=schema,
+                temp_dir=temp_dir,
+                stop_after="candidates",
+            )
+
+        known_fields = captured["known_fields"]
+        plain_names = {f for f in known_fields if isinstance(f, str)}
+        assert "activity_level" not in plain_names
+        assert plain_names == set(PATTERNS.keys())
+        extension_names = {f["name"] for f in known_fields if isinstance(f, dict)}
+        assert "functional_status_tier" in extension_names
+
     def test_pipeline_review_mode_passes_stop_after_and_exits(self, tmp_path):
         schema = tmp_path / "s.json"
         schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")

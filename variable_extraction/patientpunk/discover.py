@@ -82,6 +82,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)     
 
 from .qualitative_standards import FIELD_DESIGN_STANDARDS
 from .phase import PhaseResult
+from .biomedical import PATTERNS
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
@@ -1556,19 +1557,10 @@ def run_discovery(
     out_temp.mkdir(parents=True, exist_ok=True)
 
     existing_schema = None
-    _base_field_names = [
-        "age", "sex_gender", "location_country", "healthcare_system",
-        "conditions", "onset_trigger", "diagnosis_source", "time_to_diagnosis",
-        "misdiagnosis", "symptom_duration", "symptom_trajectory", "age_at_onset",
-        "medications", "treatment_outcome", "procedures",
-        "activity_level", "work_disability_status", "mental_health",
-        "doctor_dismissal", "diagnostic_odyssey",
-        "prior_infections", "hormonal_events", "family_history",
-        "location_us_state", "ethnicity", "occupation", "bmi_weight",
-        "dosage", "dietary_interventions", "alternative_treatments",
-        "genetic_testing", "social_impact", "trauma_history",
-        "toxic_exposures", "healthcare_costs",
-    ]
+    # Known-to-discovery fields = every biomedical field with an established
+    # regex pattern, so removed/renamed fields (e.g. activity_level) can't
+    # silently reappear here after being dropped from PATTERNS.
+    _base_field_names = sorted(PATTERNS.keys())
     known_fields_seen: set[str] = set()
     known_fields: list = []
     for name in _base_field_names:
@@ -1638,10 +1630,9 @@ def run_discovery(
             print(f"\n  Phase 1 saved: {phase1_candidates_path}")
 
     if stop_after == "candidates":
-        if not phase1_candidates_path.exists():
-            with open(phase1_candidates_path, "w", encoding="utf-8") as f:
-                json.dump(candidates, f, ensure_ascii=False, indent=2)
-            print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+        with open(phase1_candidates_path, "w", encoding="utf-8") as f:
+            json.dump(candidates, f, ensure_ascii=False, indent=2)
+        print(f"\n  Phase 1 saved: {phase1_candidates_path}")
         print(f"\n  Stopped after candidates ({len(candidates)}) for review.")
         return PhaseResult(
             artifacts={"candidates": phase1_candidates_path},
