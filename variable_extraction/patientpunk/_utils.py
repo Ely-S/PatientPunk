@@ -43,7 +43,6 @@ from __future__ import annotations
 import csv
 import json
 import os
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -51,6 +50,25 @@ from types import SimpleNamespace
 # All path resolution should reference this constant instead of
 # repeating Path(__file__).parent.parent... chains.
 PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
+
+
+def load_env() -> None:
+    """Load .env from the repo root and variable_extraction/, if present.
+
+    The variable_extraction/.env values win (loaded second, override=True).
+    Runs once at import time here so every module that reads os.environ for
+    LLM config (including this module's own _CFG below) sees .env values,
+    regardless of which module a caller imports first.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        raise ImportError("python-dotenv is required: pip install python-dotenv") from None
+    load_dotenv(PACKAGE_ROOT.parent / ".env", override=True)  # repo root
+    load_dotenv(PACKAGE_ROOT / ".env", override=True)         # variable_extraction/
+
+
+load_env()
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +221,9 @@ def get_llm_client():
         try:
             from openai import OpenAI
         except ImportError:
-            sys.exit("openai package required for LLM_PROVIDER=openai: pip install openai")
+            raise ImportError(
+                "openai package required for LLM_PROVIDER=openai: pip install openai"
+            ) from None
         # Self-hosted servers (vLLM/Ollama) often need no real key -> send a dummy.
         client = OpenAI(api_key=cfg["api_key"] or "EMPTY",
                         base_url=cfg["base_url"] or "http://localhost:8000/v1")
@@ -212,9 +232,11 @@ def get_llm_client():
     try:
         import anthropic
     except ImportError:
-        sys.exit("anthropic package required: pip install anthropic")
+        raise ImportError("anthropic package required: pip install anthropic") from None
     if not cfg["api_key"]:
-        sys.exit("API key not set. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY.")
+        raise RuntimeError(
+            "API key not set. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY."
+        )
     kwargs: dict = {"api_key": cfg["api_key"]}
     if cfg["base_url"]:
         kwargs["base_url"] = cfg["base_url"]

@@ -51,17 +51,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from dotenv import load_dotenv
-except ImportError:
-    sys.exit("python-dotenv is required: pip install python-dotenv")
-
-try:
     import anthropic
 except ImportError:
-    sys.exit("anthropic is required: pip install anthropic")
-
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)  # repo root
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
+    raise ImportError("anthropic is required: pip install anthropic") from None
 
 from .qualitative_standards import EXTRACTION_STANDARDS
 from .phase import PhaseResult
@@ -154,13 +146,6 @@ BASE_OPTIONAL_DESCRIPTIONS = {
     "healthcare_costs": "Out-of-pocket costs, insurance denials, financial burden",
 }
 
-
-# =============================================================================
-# API HELPERS
-# =============================================================================
-
-def get_client() -> anthropic.Anthropic:
-    return get_llm_client()
 
 
 def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
@@ -1208,7 +1193,7 @@ def run_llm_extract(
                 f"({regex_file.name}). Run biomedical extraction first for best results."
             )
 
-    client = get_client()
+    client = get_llm_client()
 
     print("=" * 60)
     print(f"  PatientPunk LLM Extraction")
@@ -1356,7 +1341,7 @@ def main(argv: list[str] | None = None) -> None:
         ).strip().lower() in ("1", "true", "yes")
 
         if args.text:
-            client = get_client()
+            client = get_llm_client()
             system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
             user_message = build_user_message([args.text])
             print(f"Sending to {MODEL}...\n")
@@ -1390,7 +1375,7 @@ def main(argv: list[str] | None = None) -> None:
             limit=args.limit,
             group_guard=group_guard,
         )
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 

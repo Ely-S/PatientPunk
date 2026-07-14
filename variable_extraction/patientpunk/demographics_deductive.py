@@ -41,11 +41,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
-
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
 from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
 from .phase import PhaseResult
@@ -497,7 +492,7 @@ def main(argv: list[str] | None = None) -> None:
             include_users=not args.posts_only,
             max_chars=args.max_chars,
         )
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 

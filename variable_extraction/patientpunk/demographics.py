@@ -51,11 +51,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import anthropic
-from dotenv import load_dotenv
-
-# Load API key: project root first, then local fallback.
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 from .qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
@@ -681,7 +676,7 @@ def main(argv: list[str] | None = None) -> None:
             include_users=not args.posts_only,
             max_chars=args.max_chars,
         )
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 

@@ -1422,7 +1422,7 @@ class TestDiscoveryReviewMode:
             called["phase4"] = True
             return []
 
-        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+        with patch("patientpunk.discover.get_llm_client", return_value=MagicMock()), \
              patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]), \
              patch("patientpunk.discover.run_phase1_discovery", _fake_phase1), \
              patch("patientpunk.discover.run_phase2_build_regex", _fake_phase2), \
@@ -1462,7 +1462,7 @@ class TestDiscoveryReviewMode:
         new_candidates = [{"field_name": "new_field", "examples": ["y"] * 8}]
         loaded_candidates_file.write_text(json.dumps(new_candidates), encoding="utf-8")
 
-        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+        with patch("patientpunk.discover.get_llm_client", return_value=MagicMock()), \
              patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]):
             out = run_discovery(
                 input_dir=input_dir,
@@ -1500,7 +1500,7 @@ class TestDiscoveryReviewMode:
             captured["known_fields"] = known_fields
             return []
 
-        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+        with patch("patientpunk.discover.get_llm_client", return_value=MagicMock()), \
              patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]), \
              patch("patientpunk.discover.run_phase1_discovery", _fake_phase1):
             run_discovery(

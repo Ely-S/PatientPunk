@@ -68,17 +68,9 @@ from pathlib import Path
 from typing import Literal
 
 try:
-    from dotenv import load_dotenv
-except ImportError:
-    sys.exit("python-dotenv is required: pip install python-dotenv")
-
-try:
     import anthropic
 except ImportError:
-    sys.exit("anthropic is required: pip install anthropic")
-
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)  # repo root
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
+    raise ImportError("anthropic is required: pip install anthropic") from None
 
 from .qualitative_standards import FIELD_DESIGN_STANDARDS
 from .phase import PhaseResult
@@ -152,13 +144,6 @@ MAX_REGEX_ITERATIONS = 3
 # Minimum examples a field must have to proceed to regex generation
 MIN_EXAMPLES = 3
 
-
-# =============================================================================
-# API HELPERS
-# =============================================================================
-
-def get_client() -> anthropic.Anthropic:
-    return get_llm_client()
 
 
 def call_model(
@@ -1580,7 +1565,7 @@ def run_discovery(
                 known_fields.append({"name": fname, "description": fdata.get("description", "")})
 
     base_schema_id = existing_schema["schema_id"] if existing_schema else None
-    client = get_client()
+    client = get_llm_client()
 
     print("=" * 60)
     print("  PatientPunk Field Discovery Pipeline")
@@ -1824,7 +1809,7 @@ def main(argv: list[str] | None = None) -> None:
             sample=args.sample,
             per_item_chars=args.per_item_chars,
         )
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
