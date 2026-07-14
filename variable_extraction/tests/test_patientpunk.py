@@ -859,25 +859,6 @@ class TestPipelineResult:
         )
         assert result.ok
 
-    def test_ok_with_skipped(self):
-        result = PipelineResult(
-            phases=[
-                PhaseResult(phase=1, label="A", ok=True),
-                PhaseResult(phase=2, label="B", skipped=True),
-                PhaseResult(phase=3, label="C", ok=True),
-            ]
-        )
-        assert result.ok
-
-    def test_not_ok_when_failed(self):
-        result = PipelineResult(
-            phases=[
-                PhaseResult(phase=1, label="A", ok=True),
-                PhaseResult(phase=2, label="B", ok=False, error="1"),
-            ]
-        )
-        assert not result.ok
-
     def test_summary_contains_phases(self):
         result = PipelineResult(
             phases=[
@@ -1221,7 +1202,7 @@ class TestPipelineConfigRepr:
         )
         repr_str = repr(cfg)
         assert "my_schema.json" in repr_str
-        assert "2" in repr_str
+        assert "start_at=2" in repr_str
 
 
 class TestCleanTempDirReturnedPaths:

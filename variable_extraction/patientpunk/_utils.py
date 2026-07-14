@@ -29,6 +29,12 @@ clean_temp_dir      Delete intermediate files by glob pattern.  Called at the
 
 csv_fill_rate       Compute basic fill-rate statistics for a CSV file.  Used
                     by Pipeline._run_phase_4() to report coverage after export.
+
+collect_texts_from_post  Collect title/body (optionally + comments) text from
+                    a single subreddit post. Shared by biomedical.py,
+                    llm_extract.py, and discover.py so the comments-inclusion
+                    difference between them is an explicit flag, not three
+                    silently-diverging copies.
 """
 
 from __future__ import annotations
@@ -381,3 +387,19 @@ def csv_fill_rate(csv_path: Path) -> dict:
         "total_cells": total_cells,
         "filled_cells": filled_cells,
     }
+
+
+def collect_texts_from_post(post: dict, include_comments: bool = False) -> list[str]:
+    """Collect non-empty text segments from a subreddit post.
+
+    Title + body only by default: comments are written by OTHER users, so
+    including them would attribute their conditions/treatments to the post
+    author. Commenters are captured as their own patients via the aggregate
+    path (aggregate_corpus_by_author). Pass include_comments=True only for
+    callers that intentionally want the discussion as extra context (e.g.
+    field discovery), not per-author attribution.
+    """
+    texts = [t for t in (post.get("title"), post.get("body")) if t]
+    if include_comments:
+        texts.extend(c["body"] for c in post.get("comments", []) if c.get("body"))
+    return texts

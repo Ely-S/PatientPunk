@@ -72,7 +72,13 @@ from .phase import PhaseOutput
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from ._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
+from ._utils import (
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    collect_texts_from_post,
+    get_llm_client,
+    split_retry_batch,
+)
 MODEL = MODEL_FAST
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
@@ -391,19 +397,6 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
             bucket.append(comment["body"])
 
     return health_texts + other_texts
-
-
-def collect_texts_from_post(post: dict) -> list[str]:
-    # Post-author record: title + body ONLY. Comments are written by OTHER
-    # users, so folding them in here would attribute their conditions and
-    # treatments to the post author. Commenters are captured as their own
-    # patients via the aggregate path (aggregate_corpus_by_author).
-    texts = []
-    if post.get("title"):
-        texts.append(post["title"])
-    if post.get("body"):
-        texts.append(post["body"])
-    return texts
 
 
 # =============================================================================

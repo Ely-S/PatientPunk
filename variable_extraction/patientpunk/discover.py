@@ -114,7 +114,13 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # =============================================================================
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
-from ._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG, get_llm_client
+from ._utils import (
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    MODEL_STRONG,
+    collect_texts_from_post as _collect_texts_from_post,
+    get_llm_client,
+)
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -233,15 +239,11 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    texts = []
-    if post.get("title"):
-        texts.append(post["title"])
-    if post.get("body"):
-        texts.append(post["body"])
-    for comment in post.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
-    return texts
+    # Discovery wants the surrounding discussion as extra context (more
+    # candidate phrasing to scan), unlike biomedical.py/llm_extract.py which
+    # exclude comments to avoid attributing commenters' conditions to the
+    # post author.
+    return _collect_texts_from_post(post, include_comments=True)
 
 
 def load_corpus_texts(

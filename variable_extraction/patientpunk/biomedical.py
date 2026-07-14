@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ._utils import collect_texts_from_post as _collect_texts_from_post
 from .phase import PhaseOutput
 
 
@@ -912,12 +913,8 @@ def collect_texts_from_post(post: dict) -> list[str]:
     here would attribute their conditions/treatments to the post author.
     Commenters are captured as their own patients via the aggregate path.
     """
-    texts: list[str] = []
-    for raw in (post.get("title"), post.get("body")):
-        kept = _keep_text(raw)
-        if kept:
-            texts.append(kept)
-    return texts
+    texts = [_keep_text(t) for t in _collect_texts_from_post(post)]
+    return [t for t in texts if t]
 
 
 def process_corpus(

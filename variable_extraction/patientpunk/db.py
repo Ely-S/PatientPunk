@@ -114,59 +114,6 @@ def register_run(
     return cur.lastrowid
 
 
-# ── ETL: corpus ────────────────────────────────────────────────────────────────
-
-def load_corpus(conn: sqlite3.Connection, corpus_dir: Path) -> int:
-    """
-    Load subreddit_posts.json -> users + posts tables.
-
-    Returns the number of posts inserted.
-    """
-    posts_file = corpus_dir / "subreddit_posts.json"
-    if not posts_file.exists():
-        raise FileNotFoundError(f"Not found: {posts_file}")
-
-    posts = json.loads(posts_file.read_text(encoding="utf-8"))
-    inserted = 0
-
-    for post in posts:
-        author_hash = post.get("author_hash") or ""
-        post_id = post.get("post_id") or post.get("id") or ""
-        if not author_hash or not post_id:
-            continue
-
-        conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-            " VALUES (?, ?, ?)",
-            (author_hash, post.get("subreddit", "covidlonghaulers"), int(time.time())),
-        )
-
-        body = "\n".join(filter(None, [post.get("title", ""), post.get("body", "")]))
-        metadata = json.dumps({
-            k: post[k] for k in ("score", "num_comments", "url", "flair")
-            if k in post
-        })
-        post_date = post.get("created_utc")
-        if isinstance(post_date, str):
-            # ISO string -> unix int best-effort
-            try:
-                from datetime import datetime
-                post_date = int(datetime.fromisoformat(post_date).timestamp())
-            except ValueError:
-                post_date = None
-
-        conn.execute(
-            "INSERT OR IGNORE INTO posts"
-            " (post_id, user_id, body_text, metadata, post_date, scraped_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (post_id, author_hash, body, metadata, post_date, int(time.time())),
-        )
-        inserted += 1
-
-    conn.commit()
-    return inserted
-
-
 # ── ETL: Shaun's pipeline ──────────────────────────────────────────────────────
 
 def load_extractions(
@@ -366,56 +313,6 @@ def _bucketize_age(raw: str | None) -> str | None:
     return f"{(age // 10) * 10}s"
 
 
-def load_conditions(
-    conn: sqlite3.Connection,
-    merged_records_json: Path,
-    run_id: int | None = None,
-) -> int:
-    """
-    Load conditions from merged_records_*.json -> conditions table.
-
-    Returns the run_id used.
-    """
-    if run_id is None:
-        run_id = register_run(conn, "biomedical_regex+llm", {"source": str(merged_records_json)})
-
-    records = json.loads(merged_records_json.read_text(encoding="utf-8"))
-    inserted = 0
-
-    for rec in records:
-        meta = rec.get("record_meta", {})
-        author_hash = meta.get("author_hash", "")
-        post_id = meta.get("post_id")
-        fields = rec.get("fields", rec.get("base", {}))
-
-        # Ensure user row exists
-        if author_hash:
-            conn.execute(
-                "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-                " VALUES (?, ?, ?)",
-                (author_hash, "covidlonghaulers", int(time.time())),
-            )
-
-        conditions_field = fields.get("conditions", {})
-        values = conditions_field.get("values") if isinstance(conditions_field, dict) else None
-        if not values:
-            continue
-
-        for condition_name in values:
-            if not condition_name:
-                continue
-            conn.execute(
-                "INSERT INTO conditions"
-                " (run_id, user_id, post_id, condition_type, condition_name)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (run_id, author_hash or None, post_id, "illness", condition_name.lower()),
-            )
-            inserted += 1
-
-    conn.commit()
-    return run_id
-
-
 # ── Query ──────────────────────────────────────────────────────────────────────
 
 def query_treatment_outcomes(
@@ -514,21 +411,3 @@ def query_treatment_outcomes(
             "pct_mixed", "pct_neutral", "avg_sentiment", "avg_signal"]
     rows = conn.execute(sql, params).fetchall()
     return [dict(zip(cols, row)) for row in rows]
-
-
-def list_drugs(conn: sqlite3.Connection) -> list[str]:
-    """Return all canonical drug names that have at least one sentiment report."""
-    rows = conn.execute(
-        "SELECT DISTINCT t.canonical_name FROM treatment t"
-        " JOIN treatment_reports tr ON tr.drug_id = t.id"
-        " ORDER BY t.canonical_name"
-    ).fetchall()
-    return [r[0] for r in rows]
-
-
-def list_conditions(conn: sqlite3.Connection) -> list[str]:
-    """Return all distinct condition names in the database."""
-    rows = conn.execute(
-        "SELECT DISTINCT condition_name FROM conditions ORDER BY condition_name"
-    ).fetchall()
-    return [r[0] for r in rows]
