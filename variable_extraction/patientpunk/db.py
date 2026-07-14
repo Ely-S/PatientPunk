@@ -6,6 +6,16 @@ SQLite ETL and query layer.
 Loads output from both pipelines into a shared database keyed on author_hash,
 then exposes a single query function for treatment outcome analysis.
 
+Schema design
+-------------
+* ``variables`` is the **canonical EAV** store for extracted fields (one row per
+  author_hash × field × run).  Prefer querying / loading into this table when
+  you need flexible, sparse, multi-run variable data.
+* ``unified`` is a **derived wide table** built by ``load_db.build_unified`` for
+  clustering / notebook convenience (one row per record with pivoted columns).
+  It is not the source of truth — regenerate it from ``variables`` + related
+  tables after new loads.
+
 Usage:
     from patientpunk.db import init_db, load_extractions, load_variables
     from patientpunk.db import query_treatment_outcomes
@@ -47,7 +57,7 @@ _SIGNAL_SCORE: dict[str, float] = {
 }
 
 # Columns in records.csv that are metadata, not extracted variables.
-# Mirrors scripts/records_to_csv.py META_COLUMNS (+ source_type for the
+# Mirrors export_csv.META_COLUMNS (+ source_type for the
 # demographics CSV).  Used by load_variables to decide which columns are data.
 VARIABLE_META_COLUMNS: set[str] = {
     "author_hash", "source", "source_type", "post_id", "text_count",
@@ -522,61 +532,3 @@ def list_conditions(conn: sqlite3.Connection) -> list[str]:
         "SELECT DISTINCT condition_name FROM conditions ORDER BY condition_name"
     ).fetchall()
     return [r[0] for r in rows]
-
-
-# ── Discovery merge ────────────────────────────────────────────────────────────
-
-def merge_selected(
-    validated_fields: list[dict],
-    selected_names: set[str],
-    schema_path: Path,
-) -> dict:
-    """
-    Merge selected validated fields into a schema JSON file.
-
-    Only fields whose ``field_name`` is in ``selected_names`` are written.
-    Each selected field is inserted (or overwritten) in the schema's
-    ``extension_fields`` dict.
-
-    Parameters
-    ----------
-    validated_fields:
-        List of validated candidate dicts (Phase 2 pipeline output).
-    selected_names:
-        Set of field_name strings to keep.
-    schema_path:
-        Path to the schema JSON file to update in-place.
-
-    Returns
-    -------
-    The updated schema dict (also written to disk).
-    """
-    import datetime
-
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    extension_fields: dict = schema.setdefault("extension_fields", {})
-
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-    for field in validated_fields:
-        name = field.get("field_name", "")
-        if name not in selected_names:
-            continue
-        extension_fields[name] = {
-            "description":            field.get("description", ""),
-            "confidence":             field.get("confidence", "medium"),
-            "source":                 field.get("source", "llm_discovered"),
-            "_discovered_at":         now,
-            "hit_rate_at_discovery":  field.get("hit_rate", 0.0),
-            "coverage":               field.get("coverage"),
-            "frequency_hint":         field.get("frequency_hint", "occasional"),
-            "research_value":         field.get("research_value", ""),
-            "patterns":               field.get("patterns", []),
-            "llm_only":               field.get("llm_only", False),
-            "extractability_note":    field.get("extractability_note", ""),
-            "allowed_values":         field.get("allowed_values"),
-            "trigger_vocabulary":     field.get("trigger_vocabulary", []),
-        }
-
-    schema_path.write_text(json.dumps(schema, indent=2), encoding="utf-8")
-    return schema

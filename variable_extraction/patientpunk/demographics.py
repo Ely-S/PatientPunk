@@ -54,17 +54,15 @@ import anthropic
 from dotenv import load_dotenv
 
 # Load API key: project root first, then local fallback.
-load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
-# Shared qualitative coding standards.
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from patientpunk.qualitative_standards import (
+from .qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
-
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
+from .phase import PhaseOutput
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
 BATCH_SIZE = 10
@@ -521,76 +519,47 @@ def write_codebook_json(codebook: dict, output_path: Path) -> None:
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Inductive + deductive demographic coder (LLM-only).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Coding modes:
-  deductive   Extract predefined fields: age, sex_gender, location_country, location_state
-  inductive   Discover new demographic categories from the data
-  both        Do both in a single LLM pass (default)
+def run_demographic_coding(
+    *,
+    input_dir: Path,
+    output_dir: Path | None = None,
+    mode: str = "both",
+    workers: int = 10,
+    include_posts: bool = True,
+    include_users: bool = True,
+    max_chars: int = MAX_CHARS,
+) -> PhaseOutput:
+    """Inductive + deductive demographic coding (primary demographics entrypoint)."""
+    from typing import Any
 
-Examples:
-  python code_demographics_llm.py --input-dir ../../reddit_sample_data
-  python code_demographics_llm.py --input-dir ../../reddit_sample_data --mode deductive
-  python code_demographics_llm.py --input-dir ../../reddit_sample_data --mode inductive
-  python code_demographics_llm.py --input-dir ../../reddit_sample_data --posts-only
-        """,
-    )
-    parser.add_argument(
-        "--input-dir", type=Path,
-        default=Path(__file__).parent.parent.parent / "reddit_sample_data",
-        help="Directory containing subreddit_posts.json and/or users/",
-    )
-    parser.add_argument(
-        "--output-dir", type=Path, default=None,
-        help="Output directory (default: {input-dir})",
-    )
-    parser.add_argument(
-        "--mode", choices=["deductive", "inductive", "both"], default="both",
-        help="Coding mode (default: both)",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Concurrent API workers (default: 10)",
-    )
-    parser.add_argument(
-        "--posts-only", action="store_true",
-        help="Only process subreddit_posts.json",
-    )
-    parser.add_argument(
-        "--users-only", action="store_true",
-        help="Only process users/*.json histories",
-    )
-    parser.add_argument(
-        "--max-chars", type=int, default=MAX_CHARS,
-        help=f"Max characters per record (default: {MAX_CHARS})",
-    )
-    args = parser.parse_args()
+    if not include_posts and not include_users:
+        raise ValueError(
+            "At least one source must be enabled: "
+            "include_posts and include_users cannot both be False."
+        )
+    if mode not in ("deductive", "inductive", "both"):
+        raise ValueError(f"mode must be deductive|inductive|both, got {mode!r}")
 
-    output_dir = args.output_dir or args.input_dir
-    max_chars = args.max_chars
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir) if output_dir else input_dir
 
-    from patientpunk._utils import get_llm_client
     client = get_llm_client()
-    system_prompt = build_system_prompt(args.mode)
+    system_prompt = build_system_prompt(mode)
     work_items: list[tuple[dict, str]] = []
 
-    # --- Load corpus ---
-    if not args.users_only:
-        posts_file = args.input_dir / "subreddit_posts.json"
+    if include_posts:
+        posts_file = input_dir / "subreddit_posts.json"
         if posts_file.exists():
             posts = json.loads(posts_file.read_text(encoding="utf-8"))
             print(f"  Posts loaded        : {len(posts)} from {posts_file.name}")
             for post in posts:
                 work_items.append((post, "subreddit_post"))
 
-    if not args.posts_only:
-        users_dir = args.input_dir / "users"
+    if include_users:
+        users_dir = input_dir / "users"
         if users_dir.is_dir():
             user_files = sorted(users_dir.glob("*.json"))
             print(f"  User files loaded   : {len(user_files)} from users/")
@@ -599,14 +568,13 @@ Examples:
                 work_items.append((user, "user_history"))
 
     if not work_items:
-        sys.exit("No data found in --input-dir. Check the path.")
+        raise FileNotFoundError("No data found in input_dir. Check the path.")
 
-    print(f"\n  Mode                : {args.mode}")
+    print(f"\n  Mode                : {mode}")
     print(f"  Total records       : {len(work_items)}")
-    print(f"  Workers             : {args.workers}")
+    print(f"  Workers             : {workers}")
     print(f"  Max chars/record    : {max_chars}")
 
-    # --- Process concurrently in batches ---
     results: list[dict] = []
     errors = 0
 
@@ -614,12 +582,12 @@ Examples:
     n_batches = len(batches)
     print(
         f"\n  Processing {len(work_items)} records in {n_batches} batches "
-        f"(batch size {BATCH_SIZE}) with {args.workers} workers...\n"
+        f"(batch size {BATCH_SIZE}) with {workers} workers...\n"
     )
 
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(process_batch, client, system_prompt, batch, args.mode, max_chars): i
+            pool.submit(process_batch, client, system_prompt, batch, mode, max_chars): i
             for i, batch in enumerate(batches)
         }
         for future in as_completed(futures):
@@ -639,16 +607,21 @@ Examples:
 
     print(f"\n\n  Completed: {len(results)} results, {errors} errors")
 
-    # --- Write outputs ---
-    if args.mode in ("deductive", "both"):
-        write_deductive_csv(results, output_dir / "demographics_deductive.csv")
+    artifacts: dict[str, Path] = {}
+    if mode in ("deductive", "both"):
+        out = output_dir / "demographics_deductive.csv"
+        write_deductive_csv(results, out)
+        artifacts["deductive_csv"] = out
 
-    if args.mode in ("inductive", "both"):
-        write_inductive_json(results, output_dir / "demographics_inductive.json")
+    if mode in ("inductive", "both"):
+        ind_path = output_dir / "demographics_inductive.json"
+        write_inductive_json(results, ind_path)
+        artifacts["inductive_json"] = ind_path
         codebook = build_codebook(results)
-        write_codebook_json(codebook, output_dir / "demographics_codebook.json")
+        cb_path = output_dir / "demographics_codebook.json"
+        write_codebook_json(codebook, cb_path)
+        artifacts["codebook"] = cb_path
 
-        # Print codebook summary
         if codebook:
             print(f"\n  Discovered demographic categories:")
             print(f"  {'Category':<35} {'Records':>8}  {'Values':>7}  Top value")
@@ -658,8 +631,7 @@ Examples:
                 print(f"  {fname:<35} {entry['record_count']:>8}  "
                       f"{entry['unique_values']:>7}  {top_val}")
 
-    # --- Coverage summary (deductive) ---
-    if args.mode in ("deductive", "both"):
+    if mode in ("deductive", "both"):
         for src in ("subreddit_post", "user_history"):
             subset = [r for r in results if r.get("source_type") == src]
             if not subset:
@@ -674,6 +646,44 @@ Examples:
             print(f"    location: {loc_n}/{n} ({loc_n/n*100:.0f}%)")
 
     print()
+    stats: dict[str, Any] = {
+        "results": len(results),
+        "errors": errors,
+        "mode": mode,
+    }
+    return PhaseOutput(artifacts=artifacts, stats=stats)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Inductive + deductive demographic coder (LLM-only).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--input-dir", type=Path,
+        default=Path(__file__).resolve().parent.parent / "reddit_sample_data",
+    )
+    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--mode", choices=["deductive", "inductive", "both"], default="both")
+    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--posts-only", action="store_true")
+    parser.add_argument("--users-only", action="store_true")
+    parser.add_argument("--max-chars", type=int, default=MAX_CHARS)
+    args = parser.parse_args(argv)
+
+    try:
+        run_demographic_coding(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            mode=args.mode,
+            workers=args.workers,
+            include_posts=not args.users_only,
+            include_users=not args.posts_only,
+            max_chars=args.max_chars,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

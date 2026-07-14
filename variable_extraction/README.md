@@ -108,13 +108,13 @@ python main.py demographics --input-dir ../output --users-only
 
 ## Pipeline Phases
 
-| Phase | Script | Class | Cost | Description |
-|-------|--------|-------|------|-------------|
-| 1 | `extract_biomedical.py` | `BiomedicalExtractor` | Free | Regex patterns across all schema fields |
-| 2 | `llm_extract.py` | `LLMExtractor` | ~$0.05-0.10 | Claude Haiku extracts fields regex missed |
-| 3 | `discover_fields.py` | `FieldDiscoveryExtractor` | ~$1-3 | Haiku discovers new fields; Sonnet writes regex (opt-in) |
-| 4 | `records_to_csv.py` | `CSVExporter` | Free | Flatten JSON records to `records.csv` |
-| 5 | `make_codebook.py` | `CodebookGenerator` | Free | Generate `codebook.csv` data dictionary |
+| Phase | Module | `run_*` | Cost | Description |
+|-------|--------|---------|------|-------------|
+| 1 | `biomedical` | `run_biomedical` | Free | Regex patterns across all schema fields |
+| 2 | `llm_extract` | `run_llm_extract` | ~$0.05-0.10 | Claude Haiku extracts fields regex missed |
+| 3 | `discover` | `run_discovery` | ~$1-3 | Haiku discovers new fields; Sonnet writes regex (opt-in) |
+| 4 | `export_csv` | `run_export_csv` | Free | Flatten JSON records to `records.csv` |
+| 5 | `codebook` | `run_codebook` | Free | Generate `codebook.csv` data dictionary |
 
 ```bash
 # Default run (Phases 1-2-4-5, discovery off)
@@ -427,7 +427,7 @@ install -e .`); `patientpunk` then imports from anywhere for use in notebooks or
 scripts.
 
 ```python
-from patientpunk import CorpusLoader, Pipeline, PipelineConfig, DemographicCoder
+from patientpunk import CorpusLoader, Pipeline, PipelineConfig, run_demographic_coding
 from pathlib import Path
 
 # Load corpus
@@ -446,12 +446,11 @@ result = Pipeline(config).run()
 print(result.ok, result.summary())
 
 # LLM-only demographics (deductive + inductive)
-coder = DemographicCoder(
+run_demographic_coding(
     input_dir=Path("../output"),
     mode="both",
     include_users=True,
 )
-coder.run()
 ```
 
 ---
@@ -526,7 +525,7 @@ Shaun's extraction pipeline (this module) and Polina's drug sentiment pipeline.
 variable_extraction/
 ├── main.py                        Entry point — CLI with 5 subcommands
 ├── README.md                      This file
-├── conftest.py                    Tells pytest to skip patientpunk/scripts/
+├── conftest.py                    Pytest package config
 ├── .env                           API keys (gitignored)
 │
 ├── schemas/
@@ -536,21 +535,19 @@ variable_extraction/
 ├── patientpunk/                   Importable Python library
 │   ├── __init__.py                Public API surface
 │   ├── py.typed                   PEP 561 marker
+│   ├── phase.py                   PhaseOutput dataclass (shared by run_*)
 │   ├── corpus.py                  CorpusLoader + CorpusRecord
 │   ├── schema.py                  Schema + FieldDefinition
-│   ├── pipeline.py                Pipeline + PipelineConfig
+│   ├── pipeline.py                Pipeline + PipelineConfig (calls run_* in-process)
 │   ├── qualitative_standards.py   LLM coding standards (injected into prompts)
 │   ├── _utils.py                  Internal helpers
-│   ├── extractors/                Phase 1–3 wrappers + demographics
-│   ├── exporters/                 Phase 4–5 wrappers
-│   └── scripts/                   Canonical executable scripts (run by the wrappers; shipped with the package)
-│       ├── extract_biomedical.py      Phase 1
-│       ├── llm_extract.py             Phase 2
-│       ├── discover_fields.py         Phase 3
-│       ├── records_to_csv.py          Phase 4
-│       ├── make_codebook.py           Phase 5
-│       ├── extract_demographics_llm.py  Standalone demographics (deductive)
-│       └── code_demographics_llm.py   Standalone demographics (deductive + inductive)
+│   ├── biomedical.py              Phase 1 — run_biomedical (+ CLI)
+│   ├── llm_extract.py             Phase 2 — run_llm_extract (+ CLI)
+│   ├── discover.py                Phase 3 — run_discovery (+ CLI)
+│   ├── export_csv.py              Phase 4 — run_export_csv (+ CLI)
+│   ├── codebook.py                Phase 5 — run_codebook (+ CLI)
+│   ├── demographics.py            run_demographic_coding (+ CLI)
+│   └── demographics_deductive.py  run_demographics_deductive (+ CLI)
 │
 └── tests/
     ├── test_patientpunk.py
@@ -632,14 +629,14 @@ Create a `.json` file in `schemas/`. It will be validated at startup.
 Test patterns before a full run:
 
 ```bash
-python patientpunk/scripts/extract_biomedical.py \
+python -m patientpunk.biomedical \
     --text "your test sentence" \
     --schema schemas/my_schema.json
 ```
 
 ### Adding or modifying regex patterns
 
-Base patterns live in the `PATTERNS` dict in `patientpunk/scripts/extract_biomedical.py`.
+Base patterns live in the `PATTERNS` dict in `patientpunk/biomedical.py`.
 
 ```python
 # Append a pattern to an existing field
@@ -650,11 +647,11 @@ Base patterns live in the `PATTERNS` dict in `patientpunk/scripts/extract_biomed
 ```
 
 All patterns use `re.IGNORECASE`. Double-escape backslashes in JSON (`\\b`).
-Use captured groups — the extractor uses `m.group(1)` when present.
+Use captured groups — the matcher uses `m.group(1)` when present.
 
 ### Running the test suite
 
 ```bash
 python -m pytest tests/ -v                          # full suite
-python patientpunk/scripts/extract_biomedical.py --text "34F with POTS and long COVID"  # spot-check
+python -m patientpunk.biomedical --text "34F with POTS and long COVID"  # spot-check
 ```

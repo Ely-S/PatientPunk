@@ -2,8 +2,7 @@
 Tests for PatientPunk extraction pipeline utilities.
 
 No API calls are made -- all tests cover pure functions only.
-All imports come from ``patientpunk/scripts/discover_fields.py`` because the
-library wrappers launch those executable modules directly.
+Imports come from the in-process ``patientpunk`` phase modules.
 
 Test sections
 -------------
@@ -39,16 +38,16 @@ from pathlib import Path
 
 import pytest
 
-from patientpunk.scripts.discover_fields import (
+from patientpunk.discover import (
     collect_texts_from_post,
     collect_texts_from_user,
     merge_into_schema,
     parse_json_response,
     evaluate_patterns,
 )
-from patientpunk.scripts.extract_demographics_llm import _default_output_path
-from patientpunk.scripts.extract_biomedical import compile_extension_patterns
-from patientpunk.scripts.make_codebook import build_field_registry
+from patientpunk.demographics_deductive import _default_output_path
+from patientpunk.biomedical import compile_extension_patterns, run_biomedical
+from patientpunk.codebook import build_field_registry
 
 
 # =============================================================================
@@ -534,34 +533,12 @@ class TestBuildFieldRegistryDiscovered:
         assert shared[0]["source"] == "extension"     # curated entry wins
 
 
-class TestExtractorMissingScript:
-    """A missing extractor script should fail fast with an actionable error
-    rather than a cryptic interpreter "can't open file" exit code.
-    """
+class TestRunBiomedicalMissingInput:
+    """run_biomedical raises FileNotFoundError when the corpus dir is missing."""
 
-    def _extractor(self, tmp_path):
-        from patientpunk.extractors import BiomedicalExtractor
-        ext = BiomedicalExtractor(input_dir=tmp_path, schema_path=SCHEMA_PATH)
-        # Point at a script that does not exist (simulates a broken install).
-        ext._script_path = tmp_path / "missing" / "extract_biomedical.py"
-        return ext
-
-    def test_raises_clear_error(self, tmp_path):
-        from patientpunk.extractors.base import ExtractorError
-        ext = self._extractor(tmp_path)
-        with pytest.raises(ExtractorError) as exc:
-            ext.run(raise_on_error=True)
-        assert exc.value.returncode == 127
-        msg = str(exc.value).lower()
-        assert "script not found" in msg
-        assert "patientpunk/scripts/" in msg
-
-    def test_no_raise_returns_127_with_message(self, tmp_path):
-        ext = self._extractor(tmp_path)
-        result = ext.run(raise_on_error=False)
-        assert result.returncode == 127
-        assert not result.ok
-        assert "script not found" in result.stderr.lower()
+    def test_missing_input_dir(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            run_biomedical(input_dir=tmp_path / "does_not_exist")
 
 
 class TestDemographicsScriptDefaults:

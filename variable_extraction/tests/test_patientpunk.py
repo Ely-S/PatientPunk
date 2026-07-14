@@ -1,18 +1,17 @@
 """
 Tests for the patientpunk library.
 
-Covers the modules introduced during the OOP refactor:
+Covers:
     patientpunk._utils
     patientpunk.corpus
     patientpunk.schema
-    patientpunk.extractors.base
-    patientpunk.extractors.biomedical / llm / discovery / demographics
-    patientpunk.exporters.base / csv_exporter / codebook
+    patientpunk.biomedical / llm_extract / discover / export_csv / codebook
+    patientpunk.demographics / demographics_deductive
     patientpunk.pipeline
     patientpunk.qualitative_standards
 
 No API calls are made -- all tests use pure functions, in-memory data, or
-mocked subprocesses.
+in-process run_* phase functions (no subprocess).
 
 Run with:
     cd variable_extraction
@@ -62,14 +61,9 @@ from patientpunk.cluster_prep import (
 )
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
-from patientpunk.extractors.base import BaseExtractor, ExtractorError, ExtractorResult
-from patientpunk.extractors.biomedical import BiomedicalExtractor
-from patientpunk.extractors.llm import LLMExtractor
-from patientpunk.extractors.discovery import FieldDiscoveryExtractor
-from patientpunk.extractors.demographics import DemographicsExtractor
-from patientpunk.extractors.demographic_coder import DemographicCoder
-from patientpunk.exporters.csv_exporter import CSVExporter
-from patientpunk.exporters.codebook import CodebookGenerator
+from patientpunk.biomedical import run_biomedical
+from patientpunk.export_csv import run_export_csv
+from patientpunk.phase import PhaseOutput
 from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult, PhaseResult
 from patientpunk.qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
@@ -567,302 +561,6 @@ class TestSchemaFromMinimalFile:
 
 
 # =============================================================================
-# extractors -- base class and argument building
-# =============================================================================
-
-class TestExtractorResult:
-    def test_ok_property(self):
-        assert ExtractorResult(returncode=0, elapsed=1.0).ok is True
-        assert ExtractorResult(returncode=1, elapsed=1.0).ok is False
-
-    def test_stdout_stderr_default_none(self):
-        extractor_result = ExtractorResult(returncode=0, elapsed=1.0)
-        assert extractor_result.stdout is None
-        assert extractor_result.stderr is None
-
-    def test_stdout_stderr_populated(self):
-        extractor_result = ExtractorResult(
-            returncode=0, elapsed=1.0,
-            stdout="output line\n", stderr="warning\n",
-        )
-        assert extractor_result.stdout == "output line\n"
-        assert extractor_result.stderr == "warning\n"
-
-
-class TestExtractorError:
-    def test_message_format(self):
-        exc = ExtractorError("BiomedicalExtractor", 1)
-        assert "BiomedicalExtractor" in str(exc)
-        assert "1" in str(exc)
-        assert exc.extractor == "BiomedicalExtractor"
-        assert exc.returncode == 1
-
-
-class TestBiomedicalExtractorArgs:
-    def test_basic_args(self, tmp_path):
-        ext = BiomedicalExtractor(
-            input_dir=tmp_path / "input",
-            schema_path=tmp_path / "schema.json",
-            temp_dir=tmp_path / "temp",
-        )
-        args = ext._build_args()
-        assert "--input-dir" in args
-        assert "--schema" in args
-        assert "--temp-dir" in args
-
-    def test_no_schema(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        args = ext._build_args()
-        assert "--schema" not in args
-
-    def test_default_temp_dir(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path / "input")
-        assert ext.temp_dir == tmp_path / "input" / "temp"
-
-
-class TestLLMExtractorArgs:
-    def test_all_options(self, tmp_path):
-        ext = LLMExtractor(
-            input_dir=tmp_path,
-            schema_path=tmp_path / "s.json",
-            workers=5,
-            skip_threshold=0.5,
-            focus_gaps=False,
-            merge=False,
-            resume=True,
-            limit=20,
-        )
-        args = ext._build_args()
-        assert "--workers" in args
-        assert "5" in args
-        assert "--skip-threshold" in args
-        assert "0.5" in args
-        assert "--no-focus-gaps" in args
-        assert "--no-merge" in args
-        assert "--resume" in args
-        assert "--limit" in args
-        assert "20" in args
-
-    def test_defaults(self, tmp_path):
-        ext = LLMExtractor(input_dir=tmp_path)
-        args = ext._build_args()
-        # Default focus_gaps=True → no --no-focus-gaps
-        assert "--no-focus-gaps" not in args
-        # Default merge=True → no --no-merge
-        assert "--no-merge" not in args
-        assert "--resume" not in args
-        assert "--limit" not in args
-
-
-class TestFieldDiscoveryArgs:
-    def test_all_options(self, tmp_path):
-        ext = FieldDiscoveryExtractor(
-            input_dir=tmp_path,
-            schema_path=tmp_path / "s.json",
-            workers=3,
-            limit=10,
-            fill_gaps=False,
-            resume=True,
-            sample=50,
-            per_item_chars=3000,
-        )
-        args = ext._build_args()
-        assert "--workers" in args
-        assert "3" in args
-        assert "--limit" in args
-        assert "10" in args
-        assert "--no-fill" in args
-        assert "--resume" in args
-        assert "--sample" in args
-        assert "50" in args
-        assert "--per-item-chars" in args
-        assert "3000" in args
-
-    def test_auto_candidates_detection(self, tmp_path):
-        """If phase1_candidates.json exists in temp_dir, auto-detect it."""
-        temp = tmp_path / "temp"
-        temp.mkdir()
-        cand = temp / "phase1_candidates.json"
-        cand.write_text("[]", encoding="utf-8")
-
-        ext = FieldDiscoveryExtractor(
-            input_dir=tmp_path,
-            temp_dir=temp,
-        )
-        args = ext._build_args()
-        assert "--candidates" in args
-        assert str(cand) in args
-
-
-class TestDemographicsExtractorArgs:
-    def test_all_options(self, tmp_path):
-        ext = DemographicsExtractor(
-            input_dir=tmp_path,
-            output_path=tmp_path / "out.csv",
-            workers=5,
-            include_posts=True,
-            include_users=False,
-            max_chars=4000,
-        )
-        args = ext._build_args()
-        assert "--output" in args
-        assert "--workers" in args
-        assert "5" in args
-        assert "--max-chars" in args
-        assert "4000" in args
-        assert "--posts-only" in args
-        assert "--users-only" not in args
-
-    def test_users_only(self, tmp_path):
-        ext = DemographicsExtractor(
-            input_dir=tmp_path,
-            include_posts=False,
-            include_users=True,
-        )
-        args = ext._build_args()
-        assert "--users-only" in args
-        assert "--posts-only" not in args
-
-    def test_both_sources_default(self, tmp_path):
-        ext = DemographicsExtractor(input_dir=tmp_path)
-        args = ext._build_args()
-        assert "--posts-only" not in args
-        assert "--users-only" not in args
-
-
-class TestBaseExtractorRepr:
-    def test_repr(self, tmp_path):
-        ext = BiomedicalExtractor(
-            input_dir=tmp_path / "input",
-            schema_path=tmp_path / "schema.json",
-        )
-        repr_str = repr(ext)
-        assert "BiomedicalExtractor" in repr_str
-        assert "input" in repr_str
-
-
-class TestBaseExtractorCaptureOutput:
-    """Test that capture_output=True routes stdout/stderr to ExtractorResult."""
-
-    def test_capture_output(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        # Mock subprocess.run to avoid running the actual script
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = "hello from stdout\n"
-        mock_proc.stderr = ""
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            result = ext.run(capture_output=True)
-
-        assert result.ok
-        assert result.stdout == "hello from stdout\n"
-        assert result.stderr == ""
-
-    def test_no_capture_default(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = None
-        mock_proc.stderr = None
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            result = ext.run(capture_output=False)
-
-        assert result.stdout is None
-        assert result.stderr is None
-
-    def test_raise_on_error(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        mock_proc = MagicMock()
-        mock_proc.returncode = 1
-        mock_proc.stdout = None
-        mock_proc.stderr = None
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            with pytest.raises(ExtractorError) as exc_info:
-                ext.run(raise_on_error=True)
-            assert exc_info.value.returncode == 1
-
-    def test_no_raise_on_error(self, tmp_path):
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        mock_proc = MagicMock()
-        mock_proc.returncode = 1
-        mock_proc.stdout = None
-        mock_proc.stderr = None
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            result = ext.run(raise_on_error=False)
-            assert not result.ok
-            assert result.returncode == 1
-
-
-# =============================================================================
-# exporters -- argument building
-# =============================================================================
-
-class TestCSVExporterArgs:
-    def test_basic_args(self, tmp_path):
-        f1 = tmp_path / "records1.json"
-        f2 = tmp_path / "records2.json"
-        exp = CSVExporter(
-            input_files=[f1, f2],
-            output_path=tmp_path / "out.csv",
-            sep=" | ",
-            include_provenance=True,
-        )
-        args = exp._build_args()
-        assert "--input" in args
-        assert str(f1) in args
-        assert str(f2) in args
-        assert "--output" in args
-        assert "--provenance" in args
-        assert "--sep" in args
-
-    def test_requires_input_files(self):
-        with pytest.raises(ValueError, match="at least one input"):
-            CSVExporter(input_files=[])
-
-
-class TestCodebookGeneratorArgs:
-    def test_all_options(self, tmp_path):
-        gen = CodebookGenerator(
-            schema_path=tmp_path / "schema.json",
-            records_csv=tmp_path / "records.csv",
-            fmt="markdown",
-            max_examples=10,
-            include_discovered=False,
-        )
-        args = gen._build_args()
-        assert "--schema" in args
-        assert "--csv" in args
-        assert "--format" in args
-        assert "markdown" in args
-        assert "--examples" in args
-        assert "10" in args
-        assert "--no-discovered" in args
-
-    def test_default_csv_format(self, tmp_path):
-        gen = CodebookGenerator(schema_path=tmp_path / "s.json")
-        args = gen._build_args()
-        assert "csv" in args
-        assert "--no-discovered" not in args
-
-    def test_discovered_schema_arg(self, tmp_path):
-        gen = CodebookGenerator(
-            schema_path=tmp_path / "s.json",
-            discovered_schema_path=tmp_path / "discovered_x.json",
-        )
-        args = gen._build_args()
-        assert "--discovered-schema" in args
-        assert str(tmp_path / "discovered_x.json") in args
-        # absent when not provided
-        assert "--discovered-schema" not in CodebookGenerator(
-            schema_path=tmp_path / "s.json"
-        )._build_args()
-
-
-# =============================================================================
 # pipeline -- config and result
 # =============================================================================
 
@@ -1081,22 +779,20 @@ class TestPipelineDiscoverySelection:
             encoding="utf-8",
         )
 
-        captured_input_files: list[Path] = []
+        captured: dict = {}
 
-        class _DummyCSVExporter:
-            def __init__(self, input_files, output_path, sep, include_provenance):
-                captured_input_files[:] = input_files
+        def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
+            captured["input_files"] = list(input_files)
+            Path(output_path).write_text("author_hash\n", encoding="utf-8")
+            return PhaseOutput(artifacts={"csv": Path(output_path)}, stats={})
 
-            def run(self, raise_on_error=True):
-                return None
-
-        with patch("patientpunk.pipeline.CSVExporter", _DummyCSVExporter):
+        with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
             result = pipeline._run_phase_4()
 
         assert result.ok
-        assert merged in captured_input_files
-        assert rec_a in captured_input_files
-        assert rec_b not in captured_input_files
+        assert merged in captured["input_files"]
+        assert rec_a in captured["input_files"]
+        assert rec_b not in captured["input_files"]
 
     def test_phase3_stats_with_empty_or_null_values_reports_zero_coverage(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
@@ -1245,20 +941,20 @@ class TestQualitativeStandards:
 
     def test_standards_injected_into_llm_extract(self):
         """Verify EXTRACTION_STANDARDS actually appears in the LLM system prompt."""
-        from patientpunk.scripts.llm_extract import build_system_prompt
+        from patientpunk.llm_extract import build_system_prompt
         prompt = build_system_prompt({"age": "Patient age"})
         assert "OPERATIONALIZATION" in prompt
         assert "CONSTRUCT VALIDITY" in prompt
 
     def test_standards_injected_into_demographics(self):
         """Verify DEMOGRAPHIC_STANDARDS actually appears in the demographics prompt."""
-        from patientpunk.scripts.extract_demographics_llm import SYSTEM_PROMPT
+        from patientpunk.demographics_deductive import SYSTEM_PROMPT
         assert "SELF-REFERENCE ONLY" in SYSTEM_PROMPT
         assert "CONFIDENCE CALIBRATION" in SYSTEM_PROMPT
 
     def test_standards_injected_into_discovery(self):
         """Verify FIELD_DESIGN_STANDARDS actually appears in the discovery prompt."""
-        from patientpunk.scripts.discover_fields import build_discovery_prompt
+        from patientpunk.discover import build_discovery_prompt
         prompt = build_discovery_prompt(["age", "sex_gender"])
         assert "PARSIMONY" in prompt
         assert "DOUBLE-BARRELED" in prompt
@@ -1280,7 +976,7 @@ class TestQualitativeStandards:
 
     def test_inductive_standards_injected_into_coder(self):
         """Verify standards actually appear in the demographic coder prompts."""
-        from patientpunk.scripts.code_demographics_llm import build_system_prompt
+        from patientpunk.demographics import build_system_prompt
         # Inductive mode should include inductive standards
         prompt_ind = build_system_prompt("inductive")
         assert "INDUCTIVE" in prompt_ind
@@ -1296,66 +992,14 @@ class TestQualitativeStandards:
 
 
 # =============================================================================
-# demographic_coder -- DemographicCoder class
+# demographics -- codebook aggregation
 # =============================================================================
 
-class TestDemographicCoderArgs:
-    def test_default_mode_is_both(self, tmp_path):
-        coder = DemographicCoder(input_dir=tmp_path)
-        args = coder._build_args()
-        assert "--mode" in args
-        assert "both" in args
-
-    def test_deductive_mode(self, tmp_path):
-        coder = DemographicCoder(input_dir=tmp_path, mode="deductive")
-        args = coder._build_args()
-        assert "deductive" in args
-
-    def test_inductive_mode(self, tmp_path):
-        coder = DemographicCoder(input_dir=tmp_path, mode="inductive")
-        args = coder._build_args()
-        assert "inductive" in args
-
-    def test_all_options(self, tmp_path):
-        coder = DemographicCoder(
-            input_dir=tmp_path,
-            output_dir=tmp_path / "out",
-            mode="both",
-            workers=5,
-            include_posts=True,
-            include_users=False,
-            max_chars=4000,
-        )
-        args = coder._build_args()
-        assert "--output-dir" in args
-        assert "--workers" in args
-        assert "5" in args
-        assert "--max-chars" in args
-        assert "4000" in args
-        assert "--posts-only" in args
-        assert "--users-only" not in args
-
-    def test_users_only(self, tmp_path):
-        coder = DemographicCoder(
-            input_dir=tmp_path,
-            include_posts=False,
-            include_users=True,
-        )
-        args = coder._build_args()
-        assert "--users-only" in args
-        assert "--posts-only" not in args
-
-    def test_repr(self, tmp_path):
-        coder = DemographicCoder(input_dir=tmp_path / "output")
-        repr_str = repr(coder)
-        assert "DemographicCoder" in repr_str
-
-
 class TestCodeDemographicsCodebook:
-    """Test the codebook aggregation logic from code_demographics_llm.py."""
+    """Test the codebook aggregation logic from demographics.run_demographic_coding."""
 
     def test_build_codebook_aggregation(self):
-        from patientpunk.scripts.code_demographics_llm import build_codebook
+        from patientpunk.demographics import build_codebook
         results = [
             {
                 "author_hash": "aaa111",
@@ -1408,12 +1052,12 @@ class TestCodeDemographicsCodebook:
         assert len(codebook["occupation_sector"]["examples"]) == 3
 
     def test_build_codebook_empty(self):
-        from patientpunk.scripts.code_demographics_llm import build_codebook
+        from patientpunk.demographics import build_codebook
         assert build_codebook([]) == {}
         assert build_codebook([{"discovered_demographics": []}]) == {}
 
     def test_build_codebook_sorted_by_frequency(self):
-        from patientpunk.scripts.code_demographics_llm import build_codebook
+        from patientpunk.demographics import build_codebook
         results = [
             {"discovered_demographics": [
                 {"field_name": "rare_field", "value": "x", "evidence": "e", "confidence": "low"},
@@ -1507,65 +1151,6 @@ class TestCsvFillRateEdgeCases:
         assert stats["fill_rate"] == 100.0
 
 
-class TestExtractorResultArgs:
-    def test_args_stored(self, tmp_path):
-        """ExtractorResult should store the exact args passed to the subprocess."""
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = None
-        mock_proc.stderr = None
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            result = ext.run(capture_output=False)
-
-        assert isinstance(result.args, list)
-        assert len(result.args) > 0
-        # The script name should appear in the command
-        assert any("extract_biomedical" in a for a in result.args)
-
-    def test_nonzero_returncode_stored(self, tmp_path):
-        """returncode of 2 should be stored (not just 0 and 1)."""
-        ext = BiomedicalExtractor(input_dir=tmp_path)
-        mock_proc = MagicMock()
-        mock_proc.returncode = 2
-        mock_proc.stdout = None
-        mock_proc.stderr = None
-
-        with patch("patientpunk.extractors.base.subprocess.run", return_value=mock_proc):
-            result = ext.run(raise_on_error=False)
-        assert result.returncode == 2
-        assert not result.ok
-
-
-class TestLLMExtractorNoSchema:
-    def test_no_schema_omits_flag(self, tmp_path):
-        ext = LLMExtractor(input_dir=tmp_path)
-        args = ext._build_args()
-        assert "--schema" not in args
-
-    def test_with_schema_includes_flag(self, tmp_path):
-        ext = LLMExtractor(input_dir=tmp_path, schema_path=tmp_path / "s.json")
-        args = ext._build_args()
-        assert "--schema" in args
-
-
-class TestCodebookGeneratorOutputPath:
-    def test_output_path_included(self, tmp_path):
-        gen = CodebookGenerator(
-            schema_path=tmp_path / "s.json",
-            output_path=tmp_path / "custom_codebook.csv",
-        )
-        args = gen._build_args()
-        assert "--output" in args
-        assert str(tmp_path / "custom_codebook.csv") in args
-
-    def test_no_output_path_omits_flag(self, tmp_path):
-        gen = CodebookGenerator(schema_path=tmp_path / "s.json")
-        args = gen._build_args()
-        assert "--output" not in args
-
-
 class TestPhaseResultError:
     def test_error_attribute_stored(self):
         pr = PhaseResult(phase=2, label="LLM", ok=False, error="exit code 1")
@@ -1637,28 +1222,6 @@ class TestPipelineConfigRepr:
         repr_str = repr(cfg)
         assert "my_schema.json" in repr_str
         assert "2" in repr_str
-
-
-class TestFieldDiscoveryExplicitCandidates:
-    def test_explicit_candidates_file_takes_precedence_over_auto(self, tmp_path):
-        """When candidates_file is explicitly set, auto-detect is skipped."""
-        temp = tmp_path / "temp"
-        temp.mkdir()
-        # Create the auto-detect file
-        auto = temp / "phase1_candidates.json"
-        auto.write_text("[]", encoding="utf-8")
-        # Create a separate explicit candidates file
-        explicit = tmp_path / "my_candidates.json"
-        explicit.write_text("[]", encoding="utf-8")
-
-        ext = FieldDiscoveryExtractor(
-            input_dir=tmp_path,
-            temp_dir=temp,
-            candidates_file=explicit,
-        )
-        args = ext._build_args()
-        candidates_idx = args.index("--candidates")
-        assert args[candidates_idx + 1] == str(explicit)
 
 
 class TestCleanTempDirReturnedPaths:
@@ -1865,20 +1428,20 @@ class TestPhase5DiscoveredSchemaWiring:
     def test_passes_discovered_schema(self, tmp_path):
         p = self._pipeline(tmp_path, include_discovered=True)
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
-        with patch("patientpunk.pipeline.CodebookGenerator") as MockGen:
-            MockGen.return_value.run.return_value = MagicMock()
+        with patch("patientpunk.pipeline.run_codebook") as mock_cb:
+            mock_cb.return_value = PhaseOutput(artifacts={}, stats={})
             p._run_phase_5()
-        kwargs = MockGen.call_args.kwargs
+        kwargs = mock_cb.call_args.kwargs
         assert kwargs["discovered_schema_path"] is not None
         assert kwargs["discovered_schema_path"].name == "discovered_a.json"
 
     def test_no_discovered_when_flag_off(self, tmp_path):
         p = self._pipeline(tmp_path, include_discovered=False)
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
-        with patch("patientpunk.pipeline.CodebookGenerator") as MockGen:
-            MockGen.return_value.run.return_value = MagicMock()
+        with patch("patientpunk.pipeline.run_codebook") as mock_cb:
+            mock_cb.return_value = PhaseOutput(artifacts={}, stats={})
             p._run_phase_5()
-        assert MockGen.call_args.kwargs["discovered_schema_path"] is None
+        assert mock_cb.call_args.kwargs["discovered_schema_path"] is None
 
 
 # =============================================================================
@@ -2176,12 +1739,12 @@ class TestActiveExtractorTextCollection:
         }
 
     def test_biomedical_post_collection_uses_title_and_body_only(self):
-        from patientpunk.scripts.extract_biomedical import collect_texts_from_post
+        from patientpunk.biomedical import collect_texts_from_post
         texts = collect_texts_from_post(self._post_with_other_author_comment())
         assert texts == ["Post title", "Post body"]
 
     def test_llm_post_collection_uses_title_and_body_only(self):
-        from patientpunk.scripts.llm_extract import collect_texts_from_post
+        from patientpunk.llm_extract import collect_texts_from_post
         texts = collect_texts_from_post(self._post_with_other_author_comment())
         assert texts == ["Post title", "Post body"]
 
@@ -2218,7 +1781,7 @@ class TestAggregateByAuthor:
 
     def test_synthetic_post_shape_is_pipeline_consumable(self):
         from patientpunk.aggregate import aggregate_corpus_by_author
-        from patientpunk.scripts.extract_biomedical import collect_texts_from_post
+        from patientpunk.biomedical import collect_texts_from_post
         out, _ = aggregate_corpus_by_author(self._corpus(), min_items=1)
         p = out[0]
         assert p["post_id"].startswith("agg_")
@@ -2376,7 +1939,7 @@ class TestBatchExtraction:
     dropping ~half of records). Mocks the LLM call -- no API needed."""
 
     def test_single_record_uses_object_path_no_retry(self, monkeypatch):
-        import scripts.llm_extract as m
+        import patientpunk.llm_extract as m
         temps = []
         def fake(client, sysp, um, temperature=None):
             temps.append(temperature)
@@ -2387,7 +1950,7 @@ class TestBatchExtraction:
         assert temps == [None]   # parsed first try; no temperature escalation
 
     def test_single_record_retries_at_higher_temp_on_bad_json(self, monkeypatch):
-        import scripts.llm_extract as m
+        import patientpunk.llm_extract as m
         seq = iter(['{"fields": ] ]malformed',                       # deterministic bad JSON
                     '{"fields": {"age": null}, "suggested_fields": []}'])
         temps = []
@@ -2402,7 +1965,101 @@ class TestBatchExtraction:
     def test_demographics_parse_single_line_fence(self):
         # Regression: a single-line ```json{...}``` fence (no newline) must parse
         # on the default single-record demographics path, not blank to None.
-        import scripts.extract_demographics_llm as d
+        import patientpunk.demographics_deductive as d
         assert d._parse_one_object('```json{"age": 34}```') == {"age": 34}
         assert d._parse_one_object('```{"age": 5}```') == {"age": 5}
         assert d._parse_one_object('```json\n{"age": 7}\n```') == {"age": 7}
+
+
+# =============================================================================
+# In-process run_* phases (no subprocess)
+# =============================================================================
+
+class TestRunBiomedical:
+    def test_writes_artifacts(self, tmp_path):
+        posts = tmp_path / "subreddit_posts.json"
+        posts.write_text(json.dumps([
+            {"author_hash": "a1", "post_id": "p1", "title": "34F with POTS", "body": "LDN helped"},
+        ]), encoding="utf-8")
+        out = run_biomedical(input_dir=tmp_path, temp_dir=tmp_path / "temp")
+        assert out.artifacts["records"].exists()
+        assert out.artifacts["metadata"].exists()
+        assert out.stats["records processed"] == 1
+
+    def test_missing_input_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            run_biomedical(input_dir=tmp_path / "missing")
+
+
+class TestRunExportCsv:
+    def test_writes_csv(self, tmp_path):
+        rec = {
+            "_schema_id": "base",
+            "_extracted_at": "2020-01-01",
+            "record_meta": {"author_hash": "a", "source": "subreddit_post",
+                            "post_id": "p1", "text_count": 1},
+            "base": {"age": {"values": ["34"], "provenance": "self_reported", "confidence": "medium"}},
+        }
+        src = tmp_path / "records.json"
+        src.write_text(json.dumps([rec]), encoding="utf-8")
+        dest = tmp_path / "out.csv"
+        out = run_export_csv(input_files=[src], output_path=dest)
+        assert dest.exists()
+        assert out.stats["rows"] == 1
+        body = dest.read_text(encoding="utf-8")
+        assert "age" in body and "34" in body
+
+    def test_empty_input_raises(self):
+        with pytest.raises(ValueError):
+            run_export_csv(input_files=[], output_path=Path("x.csv"))
+
+
+class TestPipelineNoSubprocess:
+    def test_phase1_does_not_call_subprocess(self, tmp_path, monkeypatch):
+        import subprocess
+        calls = []
+        real_run = subprocess.run
+
+        def guard(*args, **kwargs):
+            calls.append(args)
+            raise AssertionError(f"subprocess.run should not be used: {args}")
+
+        monkeypatch.setattr(subprocess, "run", guard)
+
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")
+        (tmp_path / "subreddit_posts.json").write_text(json.dumps([
+            {"author_hash": "a", "post_id": "p", "title": "I am 40", "body": "with POTS"},
+        ]), encoding="utf-8")
+        cfg = PipelineConfig(
+            schema_path=schema,
+            input_dir=tmp_path,
+            temp_dir=tmp_path / "temp",
+            run_llm=False,
+            discovery_mode=None,
+            start_at=1,
+            clean=True,
+        )
+        # Only run phase 1 then stop by failing phase 4 inputs intentionally via start_at tricks:
+        # run full but patch later phases.
+        with patch.object(Pipeline, "_run_phase_2", return_value=PhaseResult(phase=2, label="x", skipped=True)), \
+             patch.object(Pipeline, "_run_phase_3", return_value=PhaseResult(phase=3, label="x", skipped=True)), \
+             patch.object(Pipeline, "_run_phase_4", return_value=PhaseResult(phase=4, label="x", skipped=True)), \
+             patch.object(Pipeline, "_run_phase_5", return_value=PhaseResult(phase=5, label="x", skipped=True)):
+            result = Pipeline(cfg).run()
+        assert result.phases[0].ok
+        assert calls == []
+
+
+class TestBiomedicalCliSmoke:
+    def test_help(self):
+        from patientpunk.biomedical import main
+        with pytest.raises(SystemExit) as exc:
+            main(["--help"])
+        assert exc.value.code == 0
+
+    def test_text_mode(self, capsys):
+        from patientpunk.biomedical import main
+        main(["--text", "34F with POTS"])
+        out = capsys.readouterr().out
+        assert "Base fields" in out

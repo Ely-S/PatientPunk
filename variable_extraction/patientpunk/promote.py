@@ -5,7 +5,7 @@ Promote auto-discovered fields into a curated extension schema.
 
 Field discovery (Phase 3) deliberately writes its results to a throwaway
 ``discovered_{timestamp}.json`` in temp/ and never merges them into the curated
-schema (see scripts/discover_fields.py).  That keeps the curated schema clean,
+schema (see patientpunk.discover).  That keeps the curated schema clean,
 but it also makes discovered variables a dead end: the next run cannot
 deliberately re-extract them, Phase 2's LLM gap-fill never targets them, and
 they are not documented in the codebook.
@@ -15,7 +15,7 @@ fields into a schema's ``extension_fields`` so subsequent runs treat them as
 first-class fields (Phase 1 regex + Phase 2 LLM fill) on any data.  Each
 promoted field is stamped with ``_promoted_at`` -- which is also the marker that
 re-enables Phase 1 regex compilation for it (raw ``llm_discovered`` fields are
-skipped by Phase 1 for safety; see scripts/extract_biomedical.py).
+skipped by Phase 1 for safety; see patientpunk.biomedical).
 
 Pure functions, no API calls -- unit-testable.
 """

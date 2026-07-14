@@ -30,9 +30,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config, load_json
-from .extractors import BiomedicalExtractor, ExtractorError, FieldDiscoveryExtractor, LLMExtractor
-from .exporters import CSVExporter, CodebookGenerator
+from ._utils import clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
+from .biomedical import run_biomedical
+from .codebook import run_codebook
+from .discover import run_discovery
+from .export_csv import run_export_csv
+from .llm_extract import run_llm_extract
+from .phase import PhaseOutput
 
 # Intermediate file glob patterns that live in temp_dir.
 # These are wiped at the start of a full run unless clean=False.
@@ -168,7 +172,7 @@ class PipelineResult(BaseModel):
             if phase_result.skipped:
                 lines.append(f"\n  Phase {phase_result.phase} -- {phase_result.label}  [SKIPPED]")
                 continue
-            status = "OK" if phase_result.ok else f"FAILED (exit {phase_result.error})"
+            status = "OK" if phase_result.ok else f"FAILED ({phase_result.error})"
             lines.append(f"\n  Phase {phase_result.phase} -- {phase_result.label}  [{status}]  {phase_result.elapsed:.0f}s")
             for stat_name, stat_value in phase_result.stats.items():
                 lines.append(f"    {stat_name:<28} {stat_value}")
@@ -191,11 +195,11 @@ class Pipeline:
     """
 
     _PHASE_LABELS = {
-        1: "Regex extraction     (extract_biomedical)",
+        1: "Regex extraction     (biomedical)",
         2: "LLM gap-filling      (llm_extract)",
-        3: "Field discovery      (discover_fields)",
-        4: "CSV export           (records_to_csv)",
-        5: "Codebook             (make_codebook)",
+        3: "Field discovery      (discover)",
+        4: "CSV export           (export_csv)",
+        5: "Codebook             (codebook)",
     }
 
     def __init__(self, config: PipelineConfig) -> None:
@@ -240,79 +244,23 @@ class Pipeline:
               + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
 
         # Phase 1 -- regex extraction
-        result.phases.append(
-            self._run_phase(
-                phase=1,
-                skip=(cfg.start_at > 1),
-                extractor=BiomedicalExtractor(
-                    input_dir=cfg.input_dir,
-                    schema_path=cfg.schema_path,
-                    temp_dir=self._temp_dir,
-                ),
-            )
-        )
-        # Fail-fast pattern: if Phase 1 regex extraction failed there is nothing
-        # for Phase 2 to work on -- the merged_records file won't exist and every
-        # downstream phase would fail with confusing "file not found" errors.
-        # Returning early here gives the caller a clean, partial PipelineResult
-        # with ok=False on the failed phase rather than a cascade of failures.
+        result.phases.append(self._run_phase_1())
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
         # Phase 2 -- LLM gap-filling
-        result.phases.append(
-            self._run_phase(
-                phase=2,
-                skip=(cfg.start_at > 2 or not cfg.run_llm),
-                extractor=LLMExtractor(
-                    input_dir=cfg.input_dir,
-                    schema_path=cfg.schema_path,
-                    temp_dir=self._temp_dir,
-                    workers=cfg.workers,
-                    skip_threshold=cfg.llm_skip_threshold,
-                    focus_gaps=cfg.llm_focus_gaps,
-                    resume=cfg.resume,
-                    limit=cfg.limit,
-                ),
-            )
-        )
-        # Same fail-fast check: if the LLM phase failed (e.g. API auth error,
-        # malformed output), the merged_records file may be incomplete or absent,
-        # so there is no point attempting Phase 3 field discovery or CSV export.
+        result.phases.append(self._run_phase_2())
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
         # Phase 3 -- field discovery
-        # discovery_mode=None skips entirely (default).
-        # "auto" runs all 4 stages and merges candidates into the schema.
-        # "review" runs stages 1-2 (candidate scan + regex gen), saves
-        # candidates JSON, then stops so the user can select fields in
-        # the Marimo variable picker (apps/discover.py).
         skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
-        result.phases.append(
-            self._run_phase(
-                phase=3,
-                skip=skip_discovery,
-                extractor=FieldDiscoveryExtractor(
-                    input_dir=cfg.input_dir,
-                    schema_path=cfg.schema_path,
-                    temp_dir=self._temp_dir,
-                    workers=cfg.workers,
-                    limit=cfg.limit,
-                    fill_gaps=cfg.discovery_fill_gaps,
-                    resume=cfg.resume,
-                    candidates_file=cfg.candidates_file,
-                    sample=cfg.discovery_sample,
-                ),
-            )
-        )
+        result.phases.append(self._run_phase_3(skip=skip_discovery))
         if not result.phases[-1].ok and not result.phases[-1].skipped:
             result.total_elapsed = time.time() - pipeline_start
             return result
-        # In "review" mode, stop after Phase 3 so the user can review
-        # candidates before they flow into Phases 4-5.
         if cfg.discovery_mode == "review" and not result.phases[-1].skipped:
             print("\n  Discovery candidates saved to temp/.")
             print("  Review in: marimo run apps/discover.py")
@@ -322,7 +270,6 @@ class Pipeline:
 
         # Phase 4 -- CSV export
         result.phases.append(self._run_phase_4())
-        # No CSV means the codebook (Phase 5) has no fill-rate data to work from.
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
@@ -338,8 +285,14 @@ class Pipeline:
     # Internal phase runners
     # ------------------------------------------------------------------
 
-    def _run_phase(self, phase: int, skip: bool, extractor) -> PhaseResult:
-        """Generic phase runner that delegates to an extractor/exporter."""
+    def _call_phase(
+        self,
+        phase: int,
+        *,
+        skip: bool,
+        runner,
+    ) -> PhaseResult:
+        """Run a phase callable that returns PhaseOutput (or raises)."""
         label = self._PHASE_LABELS[phase]
         if skip:
             print(f"\n  [Skipping phase {phase}]")
@@ -348,16 +301,9 @@ class Pipeline:
         self._print_phase_banner(phase, label)
         t0 = time.time()
         try:
-            # raise_on_error=True tells the extractor to raise ExtractorError
-            # (rather than returning a falsy result) if the subprocess it spawns
-            # exits with a non-zero return code.  We catch it here -- rather than
-            # letting it propagate to the caller -- so that _run_phase can always
-            # return a fully populated PhaseResult object.  This keeps Pipeline.run()
-            # clean: it only needs to inspect result.phases[-1].ok instead of
-            # wrapping every phase call in its own try/except.
-            ext_result = extractor.run(raise_on_error=True)
+            out: PhaseOutput | None = runner()
             elapsed = time.time() - t0
-            stats = self._collect_stats(phase)
+            stats = (out.stats if out and out.stats else None) or self._collect_stats(phase)
             pr = PhaseResult(
                 phase=phase,
                 label=label,
@@ -367,7 +313,7 @@ class Pipeline:
             )
             self._print_phase_stats(pr)
             return pr
-        except ExtractorError as exc:
+        except Exception as exc:
             elapsed = time.time() - t0
             print(f"\n  [Pipeline stopped] Phase {phase} failed: {exc}")
             return PhaseResult(
@@ -375,8 +321,60 @@ class Pipeline:
                 label=label,
                 elapsed=elapsed,
                 ok=False,
-                error=str(exc.returncode),
+                error=str(exc),
             )
+
+    def _run_phase_1(self) -> PhaseResult:
+        cfg = self.config
+        return self._call_phase(
+            1,
+            skip=(cfg.start_at > 1),
+            runner=lambda: run_biomedical(
+                input_dir=cfg.input_dir,
+                schema_path=cfg.schema_path,
+                temp_dir=self._temp_dir,
+            ),
+        )
+
+    def _run_phase_2(self) -> PhaseResult:
+        cfg = self.config
+        return self._call_phase(
+            2,
+            skip=(cfg.start_at > 2 or not cfg.run_llm),
+            runner=lambda: run_llm_extract(
+                input_dir=cfg.input_dir,
+                schema_path=cfg.schema_path,
+                temp_dir=self._temp_dir,
+                workers=cfg.workers,
+                skip_threshold=cfg.llm_skip_threshold,
+                focus_gaps=cfg.llm_focus_gaps,
+                resume=cfg.resume,
+                limit=cfg.limit,
+            ),
+        )
+
+    def _run_phase_3(self, *, skip: bool) -> PhaseResult:
+        cfg = self.config
+
+        def _runner() -> PhaseOutput:
+            candidates = cfg.candidates_file
+            if candidates is None:
+                auto = self._temp_dir / "phase1_candidates.json"
+                if auto.exists():
+                    candidates = auto
+            return run_discovery(
+                input_dir=cfg.input_dir,
+                schema_path=cfg.schema_path,
+                temp_dir=self._temp_dir,
+                workers=cfg.workers,
+                limit=cfg.limit,
+                fill_gaps=cfg.discovery_fill_gaps,
+                resume=cfg.resume,
+                candidates_file=candidates,
+                sample=cfg.discovery_sample,
+            )
+
+        return self._call_phase(3, skip=skip, runner=_runner)
 
     def _find_discovered_records(self) -> Path | None:
         """
@@ -387,9 +385,6 @@ class Pipeline:
            ``pipeline_run.base_schema`` matches this pipeline's schema_id.
         2. Fallback to the newest discovered_records_*.json file in temp/.
         """
-        # Newer discovery runs write report files that explicitly record which
-        # base schema they were derived from. Use that when available to avoid
-        # accidentally mixing discoveries from a different schema.
         matched_records: list[Path] = []
         for _report_path, report in find_discovery_reports(self._temp_dir, self._schema_id):
             records_file = report.get("records_file")
@@ -398,8 +393,6 @@ class Pipeline:
 
             record_path = Path(records_file)
             if not record_path.is_absolute():
-                # Older report paths may be relative to an unknown CWD.
-                # Resolve by filename in this run's temp directory.
                 record_path = self._temp_dir / record_path.name
             if record_path.exists():
                 matched_records.append(record_path)
@@ -431,7 +424,7 @@ class Pipeline:
         return None
 
     def _run_phase_4(self) -> PhaseResult:
-        """Phase 4 -- assemble input files and call CSVExporter."""
+        """Phase 4 -- assemble input files and call run_export_csv."""
         phase = 4
         label = self._PHASE_LABELS[phase]
 
@@ -441,8 +434,6 @@ class Pipeline:
 
         self._print_phase_banner(phase, label)
 
-        # Prefer merged records (combined regex + LLM from Phases 1–2), but
-        # fall back to regex-only records when --no-llm skips Phase 2.
         merged_path = self._temp_dir / f"merged_records_{self._schema_id}.json"
         regex_path = self._temp_dir / f"patientpunk_records_{self._schema_id}.json"
         if merged_path.exists():
@@ -451,17 +442,8 @@ class Pipeline:
             print(f"  merged_records not found -- falling back to regex-only records")
             input_files = [regex_path]
         else:
-            input_files = [merged_path]  # will be caught by the missing-file check below
+            input_files = [merged_path]
 
-        # Auto-include the most recent discovered records if they exist.
-        # Discovered records are kept as a separate file rather than being
-        # pre-merged into merged_records because they use a different JSON
-        # schema: each record contains a "discovered_fields" dict with its own
-        # value/confidence/provenance structure, whereas merged_records uses a
-        # flat "fields" dict.  The CSVExporter (records_to_csv.py) understands
-        # both schemas and stitches them into the correct columns itself; if we
-        # merged them here we would lose the structural distinction and the
-        # exporter would silently drop the discovered columns.
         disc = self._find_discovered_records()
         if disc:
             input_files.append(disc)
@@ -469,7 +451,6 @@ class Pipeline:
         else:
             print(f"  No discovered records found -- exporting base records only")
 
-        # Prune missing files
         missing = [path for path in input_files if not path.exists()]
         if missing:
             print(f"  [Warning] Missing: {[path.name for path in missing]}")
@@ -480,29 +461,28 @@ class Pipeline:
             return PhaseResult(phase=phase, label=label, skipped=True)
 
         output_csv = self.config.input_dir / "records.csv"
-        exporter = CSVExporter(
-            input_files=input_files,
-            output_path=output_csv,
-            sep=self.config.csv_sep,
-            include_provenance=self.config.csv_provenance,
-        )
 
         t0 = time.time()
         try:
-            exporter.run(raise_on_error=True)
+            out = run_export_csv(
+                input_files=input_files,
+                output_path=output_csv,
+                sep=self.config.csv_sep,
+                include_provenance=self.config.csv_provenance,
+            )
             elapsed = time.time() - t0
-            stats = csv_fill_rate(output_csv)
+            stats = csv_fill_rate(output_csv) or out.stats
             pr = PhaseResult(
                 phase=phase, label=label, elapsed=elapsed, ok=True, stats=stats
             )
             self._print_phase_stats(pr)
             return pr
-        except ExtractorError as exc:
+        except Exception as exc:
             elapsed = time.time() - t0
             print(f"\n  [Pipeline stopped] Phase {phase} failed: {exc}")
             return PhaseResult(
                 phase=phase, label=label, elapsed=elapsed, ok=False,
-                error=str(exc.returncode),
+                error=str(exc),
             )
 
     def _run_phase_5(self) -> PhaseResult:
@@ -516,35 +496,36 @@ class Pipeline:
 
         self._print_phase_banner(phase, label)
         records_csv = self.config.input_dir / "records.csv"
-        # Discovered fields live in a separate timestamped schema in temp/ that
-        # Phase 5 would otherwise never see (the original curated schema knows
-        # nothing about them).  Surface it so the codebook documents discovered
-        # columns too.  Gated by the same --no-discovered flag as the CSV.
         disc_schema = (
             self._find_discovered_schema()
             if self.config.codebook_include_discovered else None
         )
         if disc_schema:
             print(f"  Including discovered schema: {disc_schema.name}")
-        gen = CodebookGenerator(
-            schema_path=self.config.schema_path,
-            records_csv=records_csv if records_csv.exists() else None,
-            fmt=self.config.codebook_format,
-            include_discovered=self.config.codebook_include_discovered,
-            discovered_schema_path=disc_schema,
-        )
+
+        # Default codebook next to records.csv (input_dir), matching prior CLI default
+        # when Pipeline drove make_codebook via the exporter (schema parent was schemas/).
+        ext = "md" if self.config.codebook_format == "markdown" else "csv"
+        output_path = self.config.input_dir / f"codebook.{ext}"
 
         t0 = time.time()
         try:
-            gen.run(raise_on_error=True)
+            run_codebook(
+                schema_path=self.config.schema_path,
+                records_csv=records_csv if records_csv.exists() else None,
+                output_path=output_path,
+                fmt=self.config.codebook_format,
+                include_discovered=self.config.codebook_include_discovered,
+                discovered_schema_path=disc_schema,
+            )
             elapsed = time.time() - t0
             return PhaseResult(phase=phase, label=label, elapsed=elapsed, ok=True)
-        except ExtractorError as exc:
+        except Exception as exc:
             elapsed = time.time() - t0
             print(f"\n  [Pipeline stopped] Phase {phase} failed: {exc}")
             return PhaseResult(
                 phase=phase, label=label, elapsed=elapsed, ok=False,
-                error=str(exc.returncode),
+                error=str(exc),
             )
 
     # ------------------------------------------------------------------
@@ -552,15 +533,8 @@ class Pipeline:
     # ------------------------------------------------------------------
 
     def _collect_stats(self, phase: int) -> dict:
-        """Collect lightweight post-phase statistics without reimporting scripts."""
-        # json is imported here (inside the method) rather than at the top of the
-        # module to avoid a circular import: several modules in this package import
-        # from pipeline.py at load time, and importing json at module level inside
-        # those modules triggers re-entrant imports before the package is fully
-        # initialised.  Deferring the import to call time is safe here because
-        # _collect_stats is only ever called after a phase has successfully
-        # completed, guaranteeing that the JSON files it reads already exist on disk.
-        import json
+        """Collect lightweight post-phase statistics from artifact files."""
+        import json as _json
 
         schema_id = self._schema_id
         temp_dir = self._temp_dir
@@ -568,8 +542,8 @@ class Pipeline:
         if phase == 1:
             meta_path = temp_dir / f"extraction_metadata_{schema_id}.json"
             try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+            except (_json.JSONDecodeError, OSError):
                 return {}
             total = meta.get("total_records_processed", 0)
             hits = meta.get("field_hit_counts", {})
@@ -584,16 +558,10 @@ class Pipeline:
             llm_path = temp_dir / f"llm_records_{schema_id}.json"
             merged_path = temp_dir / f"merged_records_{schema_id}.json"
             try:
-                llm = json.loads(llm_path.read_text(encoding="utf-8"))
-                merged = json.loads(merged_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                llm = _json.loads(llm_path.read_text(encoding="utf-8"))
+                merged = _json.loads(merged_path.read_text(encoding="utf-8"))
+            except (_json.JSONDecodeError, OSError):
                 return {}
-            # Count every non-null field value the LLM returned across all records.
-            # This "fills" metric is a proxy for how much work the LLM actually did:
-            # a high fill count relative to the number of LLM records means the LLM
-            # was finding a lot of fields that regex missed; a low fill count suggests
-            # that regex was already covering most of the schema and the LLM added
-            # relatively little incremental value.
             fills = sum(
                 1 for rec in llm
                 for field_value in rec.get("fields", {}).values()
@@ -611,8 +579,8 @@ class Pipeline:
             if not disc_path:
                 return {}
             try:
-                records = json.loads(disc_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
+                records = _json.loads(disc_path.read_text(encoding="utf-8"))
+            except (_json.JSONDecodeError, OSError):
                 return {}
             field_hits: dict[str, int] = {}
             for rec in records:

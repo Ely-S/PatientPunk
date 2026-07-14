@@ -44,15 +44,12 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variable_extraction/.env (fallback)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
-# Shared qualitative coding standards - injected into the system prompt so the
-# model applies research-grade rigour to demographic coding decisions.
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
-
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from .qualitative_standards import DEMOGRAPHIC_STANDARDS
+from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
+from .phase import PhaseOutput
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
@@ -340,58 +337,35 @@ def _default_output_path(input_dir: Path) -> Path:
     return input_dir / "demographics.csv"
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="LLM-only demographic extraction (age, sex/gender, location).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python extract_demographics_llm.py
-  python extract_demographics_llm.py --input-dir ../../reddit_sample_data
-  python extract_demographics_llm.py --posts-only
-  python extract_demographics_llm.py --users-only
-  python extract_demographics_llm.py --output ../../reddit_posts_only/demographics.csv
-        """,
-    )
-    parser.add_argument(
-        "--input-dir", type=Path,
-        default=Path(__file__).parent.parent.parent / "reddit_sample_data",
-        help="Directory containing subreddit_posts.json and/or users/ (default: reddit_sample_data/)",
-    )
-    parser.add_argument(
-        "--output", type=Path,
-        default=None,
-        help="Output CSV file path (default: <input-dir>/demographics.csv)",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Concurrent API workers (default: 10)",
-    )
-    parser.add_argument(
-        "--posts-only", action="store_true",
-        help="Only process subreddit_posts.json, skip users/",
-    )
-    parser.add_argument(
-        "--users-only", action="store_true",
-        help="Only process users/*.json, skip subreddit_posts.json",
-    )
-    parser.add_argument(
-        "--max-chars", type=int, default=MAX_CHARS,
-        help=f"Max characters of text to send per record (default: {MAX_CHARS})",
-    )
-    args = parser.parse_args()
-    if args.output is None:
-        args.output = _default_output_path(args.input_dir)
+def run_demographics_deductive(
+    *,
+    input_dir: Path,
+    output_path: Path | None = None,
+    workers: int = 10,
+    include_posts: bool = True,
+    include_users: bool = True,
+    max_chars: int = MAX_CHARS,
+) -> PhaseOutput:
+    """Legacy deductive-only demographic extraction."""
+    from typing import Any
 
-    max_chars = args.max_chars
+    if not include_posts and not include_users:
+        raise ValueError(
+            "At least one source must be enabled: "
+            "include_posts and include_users cannot both be False."
+        )
 
-    from patientpunk._utils import get_llm_client
+    input_dir = Path(input_dir)
+    if output_path is None:
+        output_path = _default_output_path(input_dir)
+    else:
+        output_path = Path(output_path)
+
     client = get_llm_client()
-    work_items = []  # list of (record_dict, source_type_str)
+    work_items = []
 
-    # --- Load subreddit posts ---
-    if not args.users_only:
-        posts_file = args.input_dir / "subreddit_posts.json"
+    if include_posts:
+        posts_file = input_dir / "subreddit_posts.json"
         if posts_file.exists():
             posts = json.loads(posts_file.read_text(encoding="utf-8"))
             print(f"  Posts loaded        : {len(posts)} from {posts_file.name}")
@@ -400,9 +374,8 @@ Examples:
         else:
             print(f"  Warning: {posts_file} not found - skipping posts")
 
-    # --- Load user history files ---
-    if not args.posts_only:
-        users_dir = args.input_dir / "users"
+    if include_users:
+        users_dir = input_dir / "users"
         if users_dir.exists():
             user_files = sorted(users_dir.glob("*.json"))
             print(f"  User histories loaded: {len(user_files)} files from {users_dir.name}/")
@@ -415,7 +388,6 @@ Examples:
         else:
             print(f"  Warning: {users_dir} not found - skipping user histories")
 
-    # Chunk work items into batches
     batches = [
         work_items[i:i + BATCH_SIZE]
         for i in range(0, len(work_items), BATCH_SIZE)
@@ -423,13 +395,13 @@ Examples:
     n_batches = len(batches)
     print(
         f"\nProcessing {len(work_items)} records in {n_batches} batches "
-        f"(batch size {BATCH_SIZE}) with {args.workers} workers...\n"
+        f"(batch size {BATCH_SIZE}) with {workers} workers...\n"
     )
 
     results = []
     completed = 0
 
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_batch = {
             executor.submit(process_batch, client, batch, max_chars): batch
             for batch in batches
@@ -450,23 +422,20 @@ Examples:
                     f"  age={age_str:<4} sex={sex_str:<12} loc={loc_str}"
                 )
 
-    # Sort: subreddit posts first, then user histories; within each by author_hash
     results.sort(key=lambda r: (0 if r["source_type"] == "subreddit_post" else 1,
                                  r["author_hash"] or ""))
 
-    # Write CSV
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "author_hash", "source_type",
         "age", "sex_gender", "location_country", "location_state",
         "confidence", "evidence",
     ]
-    with open(args.output, "w", newline="", encoding="utf-8") as f:
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results)
 
-    # --- Summary ---
     posts_results = [r for r in results if r["source_type"] == "subreddit_post"]
     user_results  = [r for r in results if r["source_type"] == "user_history"]
 
@@ -495,7 +464,43 @@ Examples:
             f"{coverage(results, field):>10}"
         )
     print(f"{'='*55}")
-    print(f"\n  Output: {args.output}\n")
+    print(f"\n  Output: {output_path}\n")
+
+    stats: dict[str, Any] = {
+        "results": len(results),
+        "errors": errors,
+    }
+    return PhaseOutput(artifacts={"csv": output_path}, stats=stats)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="LLM-only demographic extraction (age, sex/gender, location).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--input-dir", type=Path,
+        default=Path(__file__).resolve().parent.parent / "reddit_sample_data",
+    )
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--posts-only", action="store_true")
+    parser.add_argument("--users-only", action="store_true")
+    parser.add_argument("--max-chars", type=int, default=MAX_CHARS)
+    args = parser.parse_args(argv)
+
+    try:
+        run_demographics_deductive(
+            input_dir=args.input_dir,
+            output_path=args.output,
+            workers=args.workers,
+            include_posts=not args.users_only,
+            include_users=not args.posts_only,
+            max_chars=args.max_chars,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

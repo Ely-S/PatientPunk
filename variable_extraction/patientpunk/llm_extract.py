@@ -60,13 +60,11 @@ try:
 except ImportError:
     sys.exit("anthropic is required: pip install anthropic")
 
-load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variable_extraction/.env (fallback)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)  # repo root
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
 
-# Shared qualitative coding standards - injected into every system prompt so
-# the model extracts values at graduate research-methods rigour.
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
+from .qualitative_standards import EXTRACTION_STANDARDS
+from .phase import PhaseOutput
 
 
 # =============================================================================
@@ -74,7 +72,7 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
+from ._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
 MODEL = MODEL_FAST
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
@@ -1160,137 +1158,60 @@ def aggregate_suggestions(all_suggestions: list[dict]) -> list[dict]:
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="LLM-based biomedical extraction for PatientPunk (Claude Haiku).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Defaults: 10 workers, skip-threshold 0.7, focus-gaps on, merge on.
+def run_llm_extract(
+    *,
+    input_dir: Path,
+    schema_path: Path | None = None,
+    temp_dir: Path | None = None,
+    workers: int = 10,
+    skip_threshold: float = 0.7,
+    focus_gaps: bool = True,
+    merge: bool = True,
+    resume: bool = False,
+    limit: int | None = None,
+    group_guard: bool | None = None,
+) -> PhaseOutput:
+    """Run Phase 2 LLM gap-filling over a corpus directory."""
+    import os
+    from typing import Any
 
-Examples:
-  python llm_extract.py                              # run with all defaults
-  python llm_extract.py --schema schemas/covidlonghaulers_schema.json
-  python llm_extract.py --limit 5                    # test on 5 records first
-  python llm_extract.py --text "34F with POTS, LDN helped"
-  python llm_extract.py --no-merge                   # skip the merge step
-  python llm_extract.py --skip-threshold 0.0         # process every record
-  python llm_extract.py --no-focus-gaps              # send full prompt every time
-  python llm_extract.py --resume                     # continue a crashed/interrupted run
-        """,
-    )
-    parser.add_argument(
-        "--input-dir", type=Path,
-        default=Path(__file__).parent.parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py",
-    )
-    parser.add_argument(
-        "--text", type=str, default=None,
-        help="Test mode: extract from a single string and print results.",
-    )
-    parser.add_argument(
-        "--schema", type=Path, default=None,
-        help="Path to a JSON extension schema file.",
-    )
-    parser.add_argument(
-        "--limit", type=int, default=None,
-        help="Process at most N records (cost control / testing).",
-    )
-    parser.add_argument(
-        "--no-merge", action="store_true",
-        help="Disable merging with regex results (merge is on by default).",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Number of concurrent API requests (default: 10).",
-    )
-    parser.add_argument(
-        "--skip-threshold", type=float, default=0.7,
-        help="Skip records where regex already found this fraction of fields "
-             "(0.0-1.0, default: 0.7). Set to 0.0 to disable skipping.",
-    )
-    parser.add_argument(
-        "--no-focus-gaps", action="store_true",
-        help="Disable focused-gap mode and send the full prompt for every record.",
-    )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="Resume a previous run - skip records already in llm_records_{schema_id}.json.",
-    )
-    parser.add_argument(
-        "--temp-dir", type=Path, default=None,
-        help="Directory for intermediate output files (default: {input-dir}/temp/).",
-    )
-    parser.add_argument(
-        "--group-guard", action="store_true",
-        help="Opt-in: tell the model NOT to copy a collective outcome ('this stack "
-             "helped') onto each treatment; un-attributed stack members become "
-             "'unknown'. Default off. Also enabled via PP_GROUP_GUARD=1.",
-    )
-    args = parser.parse_args()
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(
+            f"{input_dir} does not exist. Run scrape_corpus.py first."
+        )
 
-    # Load schema
     schema = None
-    if args.schema:
-        if not args.schema.exists():
-            sys.exit(f"Schema file not found: {args.schema}")
-        with open(args.schema, encoding="utf-8") as f:
+    if schema_path:
+        schema_path = Path(schema_path)
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        with open(schema_path, encoding="utf-8") as f:
             schema = json.load(f)
         if "schema_id" not in schema:
-            sys.exit(f"Schema missing 'schema_id': {args.schema}")
+            raise ValueError(f"Schema missing 'schema_id': {schema_path}")
 
     field_descriptions = build_field_descriptions(schema)
     schema_id = schema["schema_id"] if schema else "base"
 
-    # Group-attribution guard: opt-in via flag or PP_GROUP_GUARD env var.
-    group_guard = args.group_guard or os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
+    if group_guard is None:
+        group_guard = os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
 
-    # Test mode
-    if args.text:
-        client = get_client()
-        system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
-        user_message = build_user_message([args.text])
-        print(f"Sending to {MODEL}...\n")
-        raw = call_haiku(client, system_prompt, user_message)
-        parsed = parse_json_response(raw)
-        if parsed:
-            print("=== Extracted fields ===")
-            for field in sorted(parsed.get("fields", {})):
-                val = parsed["fields"][field]
-                if val is not None:
-                    print(f"  {field}: {val}")
-            suggestions = parsed.get("suggested_fields", [])
-            if suggestions:
-                print(f"\n=== Suggested new fields ({len(suggestions)}) ===")
-                for s in suggestions:
-                    print(f"  {s.get('field_name')}: {s.get('values')} - {s.get('description')}")
-        else:
-            print("Failed to parse LLM response.\nRaw response:")
-            print(raw)
-        return
+    out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
+    out_temp.mkdir(parents=True, exist_ok=True)
 
-    # Full corpus mode
-    output_dir = args.input_dir
-    if not output_dir.exists():
-        sys.exit(f"Error: {output_dir} does not exist. Run scrape_corpus.py first.")
-
-    temp_dir = args.temp_dir if args.temp_dir else output_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Resolve flag inversions
-    do_merge = not args.no_merge
-    focus_gaps = not args.no_focus_gaps
-
-    # Build regex index for skip/focus-gaps (reads extract_biomedical output from temp/)
     regex_index = None
-    if args.skip_threshold > 0 or focus_gaps:
-        regex_file = temp_dir / f"patientpunk_records_{schema_id}.json"
+    if skip_threshold > 0 or focus_gaps:
+        regex_file = out_temp / f"patientpunk_records_{schema_id}.json"
         regex_index = build_regex_index(regex_file)
         if not regex_index:
-            print(f"Warning: skip-threshold/focus-gaps active but no regex file found "
-                  f"({regex_file.name}). Run extract_biomedical.py first for best results.")
+            print(
+                f"Warning: skip-threshold/focus-gaps active but no regex file found "
+                f"({regex_file.name}). Run biomedical extraction first for best results."
+            )
 
     client = get_client()
 
@@ -1299,12 +1220,12 @@ Examples:
     print(f"  Model           : {MODEL}")
     print(f"  Schema          : {schema_id}")
     print(f"  Fields          : {len(field_descriptions)}")
-    print(f"  Workers         : {args.workers}")
-    print(f"  Limit           : {args.limit or 'all'}")
-    print(f"  Skip threshold  : {args.skip_threshold or 'off'}")
+    print(f"  Workers         : {workers}")
+    print(f"  Limit           : {limit or 'all'}")
+    print(f"  Skip threshold  : {skip_threshold or 'off'}")
     print(f"  Focus gaps      : {'yes' if focus_gaps else 'no'}")
-    print(f"  Merge           : {'yes' if do_merge else 'no'}")
-    print(f"  Resume          : {'yes' if args.resume else 'no'}")
+    print(f"  Merge           : {'yes' if merge else 'no'}")
+    print(f"  Resume          : {'yes' if resume else 'no'}")
     print(f"  Group guard     : {'on' if group_guard else 'off'}")
     print("=" * 60 + "\n")
 
@@ -1312,49 +1233,51 @@ Examples:
 
     records, all_suggestions = process_corpus(
         client=client,
-        input_dir=output_dir,
-        temp_dir=temp_dir,
+        input_dir=input_dir,
+        temp_dir=out_temp,
         field_descriptions=field_descriptions,
         schema=schema,
-        limit=args.limit,
-        workers=args.workers,
-        skip_threshold=args.skip_threshold,
+        limit=limit,
+        workers=workers,
+        skip_threshold=skip_threshold,
         focus_gaps=focus_gaps,
         regex_index=regex_index,
-        resume=args.resume,
+        resume=resume,
         group_guard=group_guard,
     )
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-    # Write LLM records to temp/ (already saved incrementally, this is the final flush)
-    records_file = temp_dir / f"llm_records_{schema_id}.json"
+    records_file = out_temp / f"llm_records_{schema_id}.json"
     with open(records_file, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
-    # Aggregate suggestions
     ranked_suggestions = aggregate_suggestions(all_suggestions)
-    suggestions_file = temp_dir / f"llm_field_suggestions_{schema_id}.json"
+    suggestions_file = out_temp / f"llm_field_suggestions_{schema_id}.json"
     with open(suggestions_file, "w", encoding="utf-8") as f:
         json.dump(ranked_suggestions, f, ensure_ascii=False, indent=2)
 
-    # Merge
-    if do_merge:
-        regex_file = temp_dir / f"patientpunk_records_{schema_id}.json"
+    artifacts = {
+        "llm_records": records_file,
+        "suggestions": suggestions_file,
+    }
+
+    if merge:
+        regex_file = out_temp / f"patientpunk_records_{schema_id}.json"
         if regex_file.exists():
             print(f"\nMerging with {regex_file.name}...")
             with open(regex_file, encoding="utf-8") as f:
                 regex_records = json.load(f)
             merged = merge_records(regex_records, records)
-            merged_file = temp_dir / f"merged_records_{schema_id}.json"
+            merged_file = out_temp / f"merged_records_{schema_id}.json"
             with open(merged_file, "w", encoding="utf-8") as f:
                 json.dump(merged, f, ensure_ascii=False, indent=2)
             print(f"  Merged {len(merged)} records -> {merged_file}")
+            artifacts["merged_records"] = merged_file
         else:
             print(f"\nWarning: Cannot merge - {regex_file.name} not found.")
-            print(f"  Run extract_biomedical.py first.")
+            print(f"  Run biomedical extraction first.")
 
-    # Summary
     fields_found = defaultdict(int)
     for rec in records:
         for field, val in rec.get("fields", {}).items():
@@ -1374,6 +1297,107 @@ Examples:
             desc = s['descriptions'][0][:60] if s['descriptions'] else '?'
             print(f"    {s['field_name']:<30} ({s['times_suggested']}x) - {desc}")
     print(f"{'=' * 60}")
+
+    fills = sum(
+        1 for rec in records
+        for field_value in rec.get("fields", {}).values()
+        if field_value is not None
+    )
+    stats: dict[str, Any] = {
+        "LLM records": len(records),
+        "LLM field fills": fills,
+        "avg fills/record": round(fills / len(records), 2) if records else 0,
+    }
+    if "merged_records" in artifacts:
+        stats["merged records"] = len(json.loads(artifacts["merged_records"].read_text(encoding="utf-8")))
+    return PhaseOutput(artifacts=artifacts, stats=stats)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="LLM-based biomedical extraction for PatientPunk (Claude Haiku).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--input-dir", type=Path,
+        default=Path(__file__).resolve().parent.parent / "output",
+        help="Path to the output/ directory from scrape_corpus.py",
+    )
+    parser.add_argument("--text", type=str, default=None,
+                        help="Test mode: extract from a single string and print results.")
+    parser.add_argument("--schema", type=Path, default=None,
+                        help="Path to a JSON extension schema file.")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Process at most N records (cost control / testing).")
+    parser.add_argument("--no-merge", action="store_true",
+                        help="Disable merging with regex results (merge is on by default).")
+    parser.add_argument("--workers", type=int, default=10,
+                        help="Number of concurrent API requests (default: 10).")
+    parser.add_argument("--skip-threshold", type=float, default=0.7,
+                        help="Skip records where regex already found this fraction of fields.")
+    parser.add_argument("--no-focus-gaps", action="store_true",
+                        help="Disable focused-gap mode.")
+    parser.add_argument("--resume", action="store_true",
+                        help="Resume a previous run.")
+    parser.add_argument("--temp-dir", type=Path, default=None,
+                        help="Directory for intermediate output files.")
+    parser.add_argument("--group-guard", action="store_true",
+                        help="Opt-in group-attribution guard.")
+    args = parser.parse_args(argv)
+
+    try:
+        schema = None
+        if args.schema:
+            if not args.schema.exists():
+                raise FileNotFoundError(f"Schema file not found: {args.schema}")
+            with open(args.schema, encoding="utf-8") as f:
+                schema = json.load(f)
+            if "schema_id" not in schema:
+                raise ValueError(f"Schema missing 'schema_id': {args.schema}")
+
+        field_descriptions = build_field_descriptions(schema)
+        group_guard = args.group_guard or os.environ.get(
+            "PP_GROUP_GUARD", ""
+        ).strip().lower() in ("1", "true", "yes")
+
+        if args.text:
+            client = get_client()
+            system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
+            user_message = build_user_message([args.text])
+            print(f"Sending to {MODEL}...\n")
+            raw = call_haiku(client, system_prompt, user_message)
+            parsed = parse_json_response(raw)
+            if parsed:
+                print("=== Extracted fields ===")
+                for field in sorted(parsed.get("fields", {})):
+                    val = parsed["fields"][field]
+                    if val is not None:
+                        print(f"  {field}: {val}")
+                suggestions = parsed.get("suggested_fields", [])
+                if suggestions:
+                    print(f"\n=== Suggested new fields ({len(suggestions)}) ===")
+                    for s in suggestions:
+                        print(f"  {s.get('field_name')}: {s.get('values')} - {s.get('description')}")
+            else:
+                print("Failed to parse LLM response.\nRaw response:")
+                print(raw)
+            return
+
+        run_llm_extract(
+            input_dir=args.input_dir,
+            schema_path=args.schema,
+            temp_dir=args.temp_dir,
+            workers=args.workers,
+            skip_threshold=args.skip_threshold,
+            focus_gaps=not args.no_focus_gaps,
+            merge=not args.no_merge,
+            resume=args.resume,
+            limit=args.limit,
+            group_guard=group_guard,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

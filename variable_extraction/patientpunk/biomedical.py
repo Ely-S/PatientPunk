@@ -21,9 +21,13 @@ Output:
 import argparse
 import json
 import re
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from .phase import PhaseOutput
 
 
 
@@ -696,61 +700,59 @@ def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
 def load_extension_schema(schema_path: Path) -> dict:
     """Load and validate a JSON extension schema file.
 
-    Raises SystemExit with a clear human-readable message on any failure.
+    Raises FileNotFoundError or ValueError on failure.
     """
-    import sys
-
     if not schema_path.exists():
-        sys.exit(f"Schema file not found: {schema_path}")
+        raise FileNotFoundError(f"Schema file not found: {schema_path}")
 
     try:
         with open(schema_path, encoding="utf-8") as f:
             schema = json.load(f)
     except json.JSONDecodeError as exc:
-        sys.exit(f"Schema file is not valid JSON: {schema_path}\n  {exc}")
+        raise ValueError(f"Schema file is not valid JSON: {schema_path}\n  {exc}") from exc
 
     if "schema_id" not in schema or not isinstance(schema["schema_id"], str):
-        sys.exit(f"Schema missing required string field 'schema_id': {schema_path}")
+        raise ValueError(f"Schema missing required string field 'schema_id': {schema_path}")
 
     for field in schema.get("include_base_fields", []):
         if field not in PATTERNS:
-            sys.exit(
+            raise ValueError(
                 f"Schema 'include_base_fields' references unknown field '{field}'. "
                 f"Available base-optional fields: {sorted(set(PATTERNS.keys()) - BASE_FIELDS)}"
             )
 
     for field, override in schema.get("override_base_patterns", {}).items():
         if "mode" not in override or override["mode"] not in ("append", "replace"):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'override_base_patterns.{field}' must have 'mode' of "
                 f"'append' or 'replace'."
             )
         if "patterns" not in override or not isinstance(override["patterns"], list):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'override_base_patterns.{field}' must have a 'patterns' list."
             )
         for i, p in enumerate(override["patterns"]):
             try:
                 re.compile(p, re.I)
             except re.error as exc:
-                sys.exit(
+                raise ValueError(
                     f"Schema 'override_base_patterns.{field}.patterns[{i}]' "
                     f"failed to compile: {exc}"
-                )
+                ) from exc
 
     for field, defn in schema.get("extension_fields", {}).items():
         if "patterns" not in defn or not isinstance(defn["patterns"], list):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'extension_fields.{field}' must have a 'patterns' list."
             )
         for i, p in enumerate(defn["patterns"]):
             try:
                 re.compile(p, re.I)
             except re.error as exc:
-                sys.exit(
+                raise ValueError(
                     f"Schema 'extension_fields.{field}.patterns[{i}]' "
                     f"failed to compile: {exc}"
-                )
+                ) from exc
 
     return schema
 
@@ -989,111 +991,49 @@ def process_corpus(
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Extract biomedical signals from PatientPunk corpus.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Step 1 of the PatientPunk extraction pipeline. Fast, free, no API key needed.
-Regex patterns match across 24 base fields plus any hand-crafted extension schema
-fields. Extension fields with source="llm_discovered" are SKIPPED here UNLESS they
-have been promoted (_promoted_at is set); unpromoted discovered fields are handled
-exclusively by discover_fields.py Phase 3, which has timeout protection and
-per-text-segment processing to prevent cross-post bleed.
+def run_biomedical(
+    *,
+    input_dir: Path,
+    schema_path: Path | None = None,
+    temp_dir: Path | None = None,
+) -> PhaseOutput:
+    """Run Phase 1 regex extraction over a corpus directory.
 
-Examples:
-  python extract_biomedical.py
-  python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
-  python extract_biomedical.py --text "34F with POTS, diagnosed after 3 years"
-  python extract_biomedical.py --input-dir /path/to/output
+    Writes ``patientpunk_records_{schema_id}.json`` and
+    ``extraction_metadata_{schema_id}.json`` under *temp_dir*.
+    """
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(
+            f"{input_dir} does not exist. Run scrape_corpus.py first."
+        )
 
-Output:
-  output/patientpunk_records_base.json         one v2.0 record per user/post
-  output/patientpunk_records_{schema_id}.json  with extension schema fields
-  output/extraction_metadata_{schema_id}.json  field hit counts and summary
-
-Every base field is always present (null if not extracted). Conditions include
-ICD-10 candidates. All fields include provenance and confidence tiers.
-
-Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on by default)
-        """,
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=Path(__file__).parent.parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py "
-             "(default: ../output/ relative to this script)",
-    )
-    parser.add_argument(
-        "--text",
-        type=str,
-        default=None,
-        help="Test mode: extract from a single string and print results.",
-    )
-    parser.add_argument(
-        "--schema",
-        type=Path,
-        default=None,
-        help="Path to a JSON extension schema file. Adds bespoke fields on top of the "
-             "universal base. Example: schemas/covidlonghaulers_schema.json",
-    )
-    parser.add_argument(
-        "--temp-dir",
-        type=Path,
-        default=None,
-        help="Directory for intermediate output files (default: {input-dir}/temp/). "
-             "Keeps output/ clean - only records.csv and codebook.csv stay at the top level.",
-    )
-    args = parser.parse_args()
-
-    # Load schema and build active patterns
     schema = None
     active_patterns = {k: PATTERNS[k] for k in BASE_FIELDS if k in PATTERNS}
-    extension_field_names: set = set()
+    extension_field_names: set[str] = set()
 
-    if args.schema:
-        schema = load_extension_schema(args.schema)
+    if schema_path:
+        schema = load_extension_schema(Path(schema_path))
         active_patterns, extension_field_names = compile_extension_patterns(schema)
 
-    # Test mode
-    if args.text:
-        results = extract_from_text(args.text, patterns=active_patterns)
-        base_results = {k: v for k, v in results.items() if k in BASE_FIELDS}
-        ext_results = {k: v for k, v in results.items() if k in extension_field_names}
+    out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
+    out_temp.mkdir(parents=True, exist_ok=True)
 
-        print("=== Base fields ===")
-        print(json.dumps(base_results, indent=2))
-        if schema is not None:
-            print("\n=== Extension fields ===")
-            print(json.dumps(ext_results, indent=2))
-        return
-
-    # Full corpus mode
-    output_dir = args.input_dir
-    if not output_dir.exists():
-        print(f"Error: {output_dir} does not exist. Run scrape_corpus.py first.")
-        return
-
-    temp_dir = args.temp_dir if args.temp_dir else output_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"Extracting biomedical signals from {output_dir}...\n")
+    print(f"Extracting biomedical signals from {input_dir}...\n")
 
     extractions, metadata = process_corpus(
-        output_dir,
+        input_dir,
         active_patterns=active_patterns,
         extension_field_names=extension_field_names,
         schema=schema,
     )
 
-    # Write outputs to temp/
     schema_id = schema["schema_id"] if schema else "base"
-    extractions_file = temp_dir / f"patientpunk_records_{schema_id}.json"
-    metadata_file = temp_dir / f"extraction_metadata_{schema_id}.json"
+    extractions_file = out_temp / f"patientpunk_records_{schema_id}.json"
+    metadata_file = out_temp / f"extraction_metadata_{schema_id}.json"
 
     with open(extractions_file, "w", encoding="utf-8") as f:
         json.dump(extractions, f, ensure_ascii=False, indent=2)
@@ -1102,7 +1042,6 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
         json.dump(metadata, f, ensure_ascii=False, indent=2)
 
     schema_label = schema["schema_id"] if schema else "base only"
-    ext_count = len(extension_field_names)
     reactivated = len(schema.get("include_base_fields", [])) if schema else 0
     new_ext = len(schema.get("extension_fields", {})) if schema else 0
 
@@ -1116,6 +1055,92 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
     print(f"\n  Field hit counts:")
     for field, count in metadata["field_hit_counts"].items():
         print(f"    {field:<30} {count}")
+
+    hits = metadata.get("field_hit_counts", {})
+    n_hit = sum(1 for hit_count in hits.values() if hit_count > 0)
+    stats: dict[str, Any] = {
+        "records processed": metadata.get("total_records_processed", 0),
+        "fields with hits": f"{n_hit}/{len(hits)}",
+        "zero-coverage fields": len(hits) - n_hit,
+    }
+    return PhaseOutput(
+        artifacts={"records": extractions_file, "metadata": metadata_file},
+        stats=stats,
+    )
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract biomedical signals from PatientPunk corpus.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Step 1 of the PatientPunk extraction pipeline. Fast, free, no API key needed.
+
+Examples:
+  python -m patientpunk.biomedical
+  python -m patientpunk.biomedical --schema schemas/covidlonghaulers_schema.json
+  python -m patientpunk.biomedical --text "34F with POTS, diagnosed after 3 years"
+        """,
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "output",
+        help="Path to the output/ directory from scrape_corpus.py",
+    )
+    parser.add_argument(
+        "--text",
+        type=str,
+        default=None,
+        help="Test mode: extract from a single string and print results.",
+    )
+    parser.add_argument(
+        "--schema",
+        type=Path,
+        default=None,
+        help="Path to a JSON extension schema file.",
+    )
+    parser.add_argument(
+        "--temp-dir",
+        type=Path,
+        default=None,
+        help="Directory for intermediate output files (default: {input-dir}/temp/).",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        schema = None
+        active_patterns = {k: PATTERNS[k] for k in BASE_FIELDS if k in PATTERNS}
+        extension_field_names: set[str] = set()
+
+        if args.schema:
+            schema = load_extension_schema(args.schema)
+            active_patterns, extension_field_names = compile_extension_patterns(schema)
+
+        if args.text:
+            results = extract_from_text(args.text, patterns=active_patterns)
+            base_results = {k: v for k, v in results.items() if k in BASE_FIELDS}
+            ext_results = {k: v for k, v in results.items() if k in extension_field_names}
+
+            print("=== Base fields ===")
+            print(json.dumps(base_results, indent=2))
+            if schema is not None:
+                print("\n=== Extension fields ===")
+                print(json.dumps(ext_results, indent=2))
+            return
+
+        run_biomedical(
+            input_dir=args.input_dir,
+            schema_path=args.schema,
+            temp_dir=args.temp_dir,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

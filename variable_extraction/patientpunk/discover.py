@@ -76,13 +76,11 @@ try:
 except ImportError:
     sys.exit("anthropic is required: pip install anthropic")
 
-load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variable_extraction/.env (fallback)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=True)  # repo root
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
 
-# Shared qualitative coding standards - injected into the discovery prompt so
-# the model designs new fields to graduate research-methods standards.
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from patientpunk.qualitative_standards import FIELD_DESIGN_STANDARDS
+from .qualitative_standards import FIELD_DESIGN_STANDARDS
+from .phase import PhaseOutput
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
@@ -116,7 +114,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # =============================================================================
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG
+from ._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG, get_llm_client
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -152,7 +150,6 @@ MIN_EXAMPLES = 3
 # =============================================================================
 
 def get_client() -> anthropic.Anthropic:
-    from patientpunk._utils import get_llm_client
     return get_llm_client()
 
 
@@ -1518,137 +1515,34 @@ def run_schema_health_update(schema_path: Path, records_file: Path) -> None:
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Multi-model field discovery pipeline for PatientPunk.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Pipeline phases:
-  Phase 1 (Haiku)  : Scan corpus for new field candidates with examples
-  Phase 2 (Sonnet) : Write regex patterns, test against examples, self-iterate
-  Phase 3 (regex)  : Run validated patterns across full corpus (free).
-                     Each text segment is matched individually - regex never
-                     runs across a concatenated blob - to prevent cross-post
-                     bleed where capture groups would pull content from the
-                     wrong post or comment.
-  Phase 4 (Haiku)  : Fill gaps where regex missed. Posts are separated by
-                     ---NEW POST--- and Haiku is instructed not to span
-                     boundaries when extracting.
+def run_discovery(
+    *,
+    input_dir: Path,
+    schema_path: Path | None = None,
+    temp_dir: Path | None = None,
+    workers: int = 10,
+    limit: int | None = None,
+    fill_gaps: bool = True,
+    resume: bool = False,
+    candidates_file: Path | None = None,
+    sample: int | None = None,
+    per_item_chars: int = 0,
+) -> PhaseOutput:
+    """Run Phase 3 multi-model field discovery."""
+    from typing import Any
 
-Defaults (fast mode on by default):
-  --workers 10           Phase 1 and Phase 4 run 10 concurrent API calls
-  --per-item-chars 0     Full text per item (default). Use --per-item-chars 3000
-                         for ~4x cheaper Phase 1 once you're done testing.
-  Phase 4 enabled        Use --no-fill to skip gap filling
-  No resume              Use --resume to continue a previous Phase 4 run
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(
+            f"{input_dir} does not exist. Run scrape_corpus.py first."
+        )
 
-Schema library workflow (recommended):
-  Pass --schema to merge discoveries into your disease-specific schema file.
-  Each new field is tagged _discovered_at. Existing fields are never overwritten.
-  Run repeatedly - each run adds only what's new.
+    out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
+    out_temp.mkdir(parents=True, exist_ok=True)
 
-  python discover_fields.py --schema schemas/covidlonghaulers_schema.json
-  python discover_fields.py --schema schemas/covidlonghaulers_schema.json --limit 20 --no-fill
-
-  Then use the same schema everywhere:
-  python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
-  python llm_extract.py --schema schemas/covidlonghaulers_schema.json
-
-Standalone workflow (no --schema):
-  Creates schemas/discovered_{timestamp}.json with this run's fields only.
-
-  python discover_fields.py                              # full pipeline (fast, 10 workers)
-  python discover_fields.py --limit 20 --no-fill         # cheap test run
-  python discover_fields.py --workers 1                  # sequential (debug)
-  python discover_fields.py --resume                     # continue interrupted Phase 4
-  python discover_fields.py --candidates output/phase1_candidates.json  # skip Phase 1
-  python discover_fields.py --sample 50                  # random 50-item sample (diverse + cheap)
-  python discover_fields.py --per-item-chars 0           # send full text per item (thorough)
-
-Output:
-  --schema provided  : updates the schema file in place
-  no --schema        : schemas/discovered_{timestamp}.json  (new file each run)
-  output/discovered_records_{schema_id}.json             extraction results (saved incrementally)
-  output/discovered_field_report_{schema_id}.json        coverage stats and report
-
-All auto-discovered fields are tagged source: llm_discovered and _discovered_at (timestamp).
-
-Cost estimate (~220 posts corpus): Phase 1 ~$0.05-0.15, Phase 2 ~$0.50-2.00,
-Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first.
-        """,
-    )
-    parser.add_argument(
-        "--input-dir", type=Path,
-        default=Path(__file__).parent.parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py",
-    )
-    parser.add_argument(
-        "--schema", type=Path, default=None,
-        help=(
-            "Disease-specific schema file to update (e.g. schemas/covidlonghaulers_schema.json). "
-            "Discovered fields are merged INTO this file - existing fields are never overwritten, "
-            "new fields are tagged with _discovered_at. "
-            "Without --schema, a new discovered_{timestamp}.json file is created instead."
-        ),
-    )
-    parser.add_argument(
-        "--limit", type=int, default=None,
-        help="Limit Phase 1 corpus scan to N records (cost control)",
-    )
-    parser.add_argument(
-        "--no-fill", action="store_true",
-        help="Skip Phase 4 (gap filling). Only discover + generate regex.",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Concurrent API workers for Phase 1 and Phase 4 (default: 10). Use --workers 1 to disable.",
-    )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="Resume Phase 4 from an existing records file, skipping already-filled records.",
-    )
-    parser.add_argument(
-        "--candidates", type=Path, default=None,
-        help=(
-            "Load Phase 1 candidates from a saved JSON file and skip Phase 1 entirely. "
-            "Phase 1 results are always saved to output/phase1_candidates.json after each run. "
-            "Note: run_pipeline.py auto-detects output/phase1_candidates.json and passes it "
-            "automatically - use --candidates here to override or specify a different file."
-        ),
-    )
-    parser.add_argument(
-        "--sample", type=int, default=None,
-        help=(
-            "Randomly sample N corpus items for Phase 1 instead of using all (or --limit). "
-            "More representative than --limit (which takes the first N alphabetically). "
-            "Example: --sample 50"
-        ),
-    )
-    parser.add_argument(
-        "--per-item-chars", type=int, default=MAX_TEXT_CHARS_PER_ITEM_PHASE1,
-        help=(
-            "Max characters taken from each corpus item in Phase 1 (default: 0 = full text). "
-            "Smaller = denser batches = fewer API calls = lower cost. "
-            "Example: --per-item-chars 3000 for ~4x cheaper Phase 1."
-        ),
-    )
-    parser.add_argument(
-        "--temp-dir", type=Path, default=None,
-        help="Directory for intermediate output files (default: {input-dir}/temp/).",
-    )
-    args = parser.parse_args()
-
-    output_dir = args.input_dir
-    if not output_dir.exists():
-        sys.exit(f"Error: {output_dir} does not exist. Run scrape_corpus.py first.")
-
-    temp_dir = args.temp_dir if args.temp_dir else output_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load existing schema for context
     existing_schema = None
     _base_field_names = [
         "age", "sex_gender", "location_country", "healthcare_system",
@@ -1663,7 +1557,6 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         "genetic_testing", "social_impact", "trauma_history",
         "toxic_exposures", "healthcare_costs",
     ]
-    # Improvement 5: build known_fields as a list supporting both strings and dicts
     known_fields_seen: set[str] = set()
     known_fields: list = []
     for name in _base_field_names:
@@ -1671,126 +1564,107 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
             known_fields_seen.add(name)
             known_fields.append(name)
 
-    if args.schema:
-        if not args.schema.exists():
-            sys.exit(f"Schema file not found: {args.schema}")
-        with open(args.schema, encoding="utf-8") as f:
+    if schema_path:
+        schema_path = Path(schema_path)
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        with open(schema_path, encoding="utf-8") as f:
             existing_schema = json.load(f)
-        # Add extension fields WITH descriptions (Improvement 5: cross-field distinctiveness)
         for fname, fdata in existing_schema.get("extension_fields", {}).items():
             if fname not in known_fields_seen:
                 known_fields_seen.add(fname)
                 known_fields.append({"name": fname, "description": fdata.get("description", "")})
 
     base_schema_id = existing_schema["schema_id"] if existing_schema else None
-
     client = get_client()
 
     print("=" * 60)
     print("  PatientPunk Field Discovery Pipeline")
     print(f"  Models      : Haiku (scan/fill) + Sonnet (regex)")
-    print(f"  Target schema : {args.schema or 'new file (no --schema)'}")
+    print(f"  Target schema : {schema_path or 'new file (no --schema)'}")
     print(f"  Known fields  : {len(known_fields)}")
-    print(f"  Corpus limit  : {args.sample and f'sample {args.sample}' or args.limit or 'all'}")
-    print(f"  Per-item chars: {args.per_item_chars or 'unlimited'}")
-    print(f"  Gap fill      : {'yes' if not args.no_fill else 'no'}")
-    print(f"  Workers       : {args.workers}")
-    print(f"  Resume        : {'yes' if args.resume else 'no'}")
+    print(f"  Corpus limit  : {sample and f'sample {sample}' or limit or 'all'}")
+    print(f"  Per-item chars: {per_item_chars or 'unlimited'}")
+    print(f"  Gap fill      : {'yes' if fill_gaps else 'no'}")
+    print(f"  Workers       : {workers}")
+    print(f"  Resume        : {'yes' if resume else 'no'}")
     print("=" * 60)
 
     start_time = datetime.now(timezone.utc)
-    candidates_file = temp_dir / "phase1_candidates.json"
+    phase1_candidates_path = out_temp / "phase1_candidates.json"
 
-    # Always load corpus - needed for Phase 3 and 4 regardless of whether
-    # Phase 1 runs or is loaded from cache.
     print("\nLoading corpus...")
-    # Discovery uses posts only (not user histories) to avoid finding
-    # patterns from unrelated subreddits in users' full Reddit activity.
-    corpus_items = load_corpus_texts(output_dir, limit=None, posts_only=True)
+    corpus_items = load_corpus_texts(input_dir, limit=None, posts_only=True)
     print(f"  {len(corpus_items)} items loaded")
 
-    # Phase 1: Discover (or load from cache)
-    if args.candidates:
-        if not args.candidates.exists():
-            sys.exit(f"Candidates file not found: {args.candidates}")
-        with open(args.candidates, encoding="utf-8") as f:
+    if candidates_file:
+        candidates_file = Path(candidates_file)
+        if not candidates_file.exists():
+            raise FileNotFoundError(f"Candidates file not found: {candidates_file}")
+        with open(candidates_file, encoding="utf-8") as f:
             candidates = json.load(f)
-        print(f"\nLoaded {len(candidates)} Phase 1 candidates from {args.candidates} (skipping Phase 1)")
-        print(f"  NOTE: Old cache files lack new keys (trigger_vocabulary, allowed_values, etc.).")
-        print(f"  If you see missing-key errors, regenerate by removing --candidates.")
+        print(f"\nLoaded {len(candidates)} Phase 1 candidates from {candidates_file} (skipping Phase 1)")
     else:
-        # Apply limit/sample only for Phase 1 scan
         phase1_items = corpus_items
-        if args.sample and args.sample < len(phase1_items):
-            phase1_items = random.sample(phase1_items, args.sample)
-            print(f"  Using random sample of {args.sample} items for Phase 1")
-        elif args.limit and args.limit < len(phase1_items):
-            phase1_items = phase1_items[:args.limit]
-            print(f"  Using first {args.limit} items for Phase 1")
+        if sample and sample < len(phase1_items):
+            phase1_items = random.sample(phase1_items, sample)
+            print(f"  Using random sample of {sample} items for Phase 1")
+        elif limit and limit < len(phase1_items):
+            phase1_items = phase1_items[:limit]
+            print(f"  Using first {limit} items for Phase 1")
 
         candidates = run_phase1_discovery(
             client, phase1_items, known_fields,
-            workers=args.workers,
-            per_item_chars=args.per_item_chars,
+            workers=workers,
+            per_item_chars=per_item_chars,
             schema_data=existing_schema,
         )
 
         if candidates:
-            with open(candidates_file, "w", encoding="utf-8") as f:
+            with open(phase1_candidates_path, "w", encoding="utf-8") as f:
                 json.dump(candidates, f, ensure_ascii=False, indent=2)
-            print(f"\n  Phase 1 saved: {candidates_file}")
-            print(f"  (If Phase 2 fails, resume with: --candidates {candidates_file})")
+            print(f"\n  Phase 1 saved: {phase1_candidates_path}")
 
+    artifacts: dict[str, Path] = {}
     if not candidates:
         print("\nNo new fields discovered. The existing schema may already cover this corpus well.")
-        return
+        return PhaseOutput(artifacts=artifacts, stats={"fields discovered": 0})
 
-    # Phase 2: Build regex
-    validated_fields = run_phase2_build_regex(client, candidates, workers=args.workers)
+    validated_fields = run_phase2_build_regex(client, candidates, workers=workers)
 
     if not validated_fields:
         print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
-        return
+        return PhaseOutput(artifacts=artifacts, stats={"fields discovered": 0})
 
-    regex_fields = [f for f in validated_fields if not f.get("llm_only")]
     llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
     if llm_only_fields:
         print(f"\n  {len(llm_only_fields)} llm_only field(s) (no regex, Phase 4 gap-fill only):")
         for f in llm_only_fields:
             print(f"    {f['field_name']}: {f.get('extractability_note', 'not regex-extractable')}")
 
-    # Always generate a new discovery schema file in temp/.
-    # If --schema was provided it is used READ-ONLY for known-field context -
-    # discovered fields are never merged back into it, keeping the curated
-    # schema clean. Each run produces its own discovered_{timestamp}.json.
     schema = generate_schema(validated_fields, base_schema_id)
-    schema_file = temp_dir / f"{schema['schema_id']}.json"
+    schema_file = out_temp / f"{schema['schema_id']}.json"
     with open(schema_file, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
     print(f"\n  Discovery schema saved: {schema_file}")
+    artifacts["schema"] = schema_file
 
-    # Phase 3: Extract with new regex across the full corpus
-    records = run_phase3_regex_extract(validated_fields, corpus_items, workers=args.workers)
+    records = run_phase3_regex_extract(validated_fields, corpus_items, workers=workers)
 
-    # Phase 4: Fill gaps
     schema_id = schema["schema_id"]
-    records_file = temp_dir / f"discovered_records_{schema_id}.json"
-    if not args.no_fill:
+    records_file = out_temp / f"discovered_records_{schema_id}.json"
+    if fill_gaps:
         records = run_phase4_fill_gaps(
             client, validated_fields, corpus_items, records,
-            workers=args.workers,
-            resume=args.resume,
+            workers=workers,
+            resume=resume,
             records_file=records_file,
         )
 
-    # Save records (final write - Phase 4 also saves incrementally)
     with open(records_file, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
+    artifacts["records"] = records_file
 
-    # Schema health update skipped - discovered fields now live in temp/,
-    # not in the curated --schema file, so bleed rates are not written back.
-
-    # Build and save report
     end_time = datetime.now(timezone.utc)
     duration = (end_time - start_time).total_seconds()
 
@@ -1821,7 +1695,7 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
             "finished_at": end_time.isoformat(),
             "duration_seconds": duration,
             "corpus_items": len(corpus_items),
-            "discovery_limit": args.limit,
+            "discovery_limit": limit,
             "base_schema": base_schema_id,
         },
         "discovery_results": {
@@ -1834,11 +1708,11 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         "records_file": str(records_file),
     }
 
-    report_file = temp_dir / f"discovered_field_report_{schema_id}.json"
+    report_file = out_temp / f"discovered_field_report_{schema_id}.json"
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
+    artifacts["report"] = report_file
 
-    # Summary
     print(f"\n{'=' * 60}")
     print(f"  Pipeline Complete ({duration:.0f}s)")
     print(f"  Candidates discovered : {len(candidates)}")
@@ -1857,12 +1731,55 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         )
     print(f"{'=' * 60}")
 
-    print(f"\n  Next steps:")
-    print(f"  1. Review {schema_file.name} - edit/remove fields as needed")
-    print(f"  2. Run regex extractor with the new schema:")
-    print(f"       python extract_biomedical.py --schema schemas/{schema_file.name}")
-    print(f"  3. Or use it with llm_extract.py for merged results:")
-    print(f"       python llm_extract.py --schema schemas/{schema_file.name} --merge")
+    record_count = len(records)
+    covered = sum(
+        1 for rec in records
+        if any(fd.get("values") for fd in rec.get("discovered_fields", {}).values())
+    )
+    out_stats: dict[str, Any] = {
+        "fields discovered": len(field_stats),
+        "records with any hit": f"{covered}/{record_count}",
+        "coverage %": f"{round(covered / record_count * 100, 1) if record_count else 0}%",
+    }
+    return PhaseOutput(artifacts=artifacts, stats=out_stats)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Multi-model field discovery pipeline for PatientPunk.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--input-dir", type=Path,
+        default=Path(__file__).resolve().parent.parent / "output",
+    )
+    parser.add_argument("--schema", type=Path, default=None)
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--no-fill", action="store_true")
+    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--candidates", type=Path, default=None)
+    parser.add_argument("--sample", type=int, default=None)
+    parser.add_argument("--per-item-chars", type=int, default=MAX_TEXT_CHARS_PER_ITEM_PHASE1)
+    parser.add_argument("--temp-dir", type=Path, default=None)
+    args = parser.parse_args(argv)
+
+    try:
+        run_discovery(
+            input_dir=args.input_dir,
+            schema_path=args.schema,
+            temp_dir=args.temp_dir,
+            workers=args.workers,
+            limit=args.limit,
+            fill_gaps=not args.no_fill,
+            resume=args.resume,
+            candidates_file=args.candidates,
+            sample=args.sample,
+            per_item_chars=args.per_item_chars,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

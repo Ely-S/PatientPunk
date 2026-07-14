@@ -65,7 +65,7 @@ from pathlib import Path
 # Make sure the package is importable when run from this directory.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from patientpunk import Pipeline, PipelineConfig, DemographicCoder, DemographicsExtractor
+from patientpunk import Pipeline, PipelineConfig, run_demographic_coding
 from patientpunk.corpus import CorpusLoader
 from patientpunk.schema import Schema
 from patientpunk._utils import get_schema_id, load_json
@@ -279,17 +279,19 @@ Outputs (depending on mode):
 
 
 def _cmd_demographics(args: argparse.Namespace) -> None:
-    coder = DemographicCoder(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        mode=args.mode,
-        workers=args.workers,
-        include_posts=not args.users_only,
-        include_users=not args.posts_only,
-        max_chars=args.max_chars,
-    )
-    result = coder.run(raise_on_error=False)
-    sys.exit(result.returncode)
+    try:
+        run_demographic_coding(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            mode=args.mode,
+            workers=args.workers,
+            include_posts=not args.users_only,
+            include_users=not args.posts_only,
+            max_chars=args.max_chars,
+        )
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
