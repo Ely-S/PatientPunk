@@ -65,6 +65,7 @@ def print(*args, **kwargs):
     _original_print(*safe_args, **kwargs)
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 try:
     from dotenv import load_dotenv
@@ -1532,8 +1533,17 @@ def run_discovery(
     candidates_file: Path | None = None,
     sample: int | None = None,
     per_item_chars: int = 0,
+    stop_after: Literal["candidates"] | None = None,
 ) -> PhaseOutput:
-    """Run Phase 3 multi-model field discovery."""
+    """Run Phase 3 multi-model field discovery.
+
+    Parameters
+    ----------
+    stop_after:
+        If ``"candidates"``, run only candidate generation (or load
+        ``candidates_file``), write ``phase1_candidates.json``, and return.
+        Used by ``PipelineConfig.discovery_mode="review"`` for Marimo review.
+    """
     from typing import Any
 
     input_dir = Path(input_dir)
@@ -1626,6 +1636,17 @@ def run_discovery(
             with open(phase1_candidates_path, "w", encoding="utf-8") as f:
                 json.dump(candidates, f, ensure_ascii=False, indent=2)
             print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+
+    if stop_after == "candidates":
+        if not phase1_candidates_path.exists():
+            with open(phase1_candidates_path, "w", encoding="utf-8") as f:
+                json.dump(candidates, f, ensure_ascii=False, indent=2)
+            print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+        print(f"\n  Stopped after candidates ({len(candidates)}) for review.")
+        return PhaseOutput(
+            artifacts={"candidates": phase1_candidates_path},
+            stats={"candidates": len(candidates)},
+        )
 
     def _write_empty_report(candidates_found: int, candidates_validated: int) -> Path:
         # Written even when nothing was discovered so `promote` (which locates

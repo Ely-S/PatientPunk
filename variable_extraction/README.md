@@ -439,7 +439,7 @@ config = PipelineConfig(
     schema_path=Path("schemas/covidlonghaulers_schema.json"),
     input_dir=Path("../output"),
     run_llm=True,
-    discovery_mode=None,  # "auto" or "review" to enable
+    discovery_mode=None,  # None=off; "auto"=full; "review"=stop after candidates
     limit=50,
 )
 result = Pipeline(config).run()

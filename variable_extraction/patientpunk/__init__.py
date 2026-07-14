@@ -36,7 +36,7 @@ Quick-start example::
         schema_path=Path("schemas/covidlonghaulers_schema.json"),
         input_dir=Path("../output"),
         run_llm=True,
-        discovery_mode=None,   # discovery off by default; "auto" or "review" to enable
+        discovery_mode=None,   # None=off; "auto"=full discovery; "review"=candidates only
     )
     result = Pipeline(config).run()
     print(result.summary())

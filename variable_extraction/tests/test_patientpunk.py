@@ -651,64 +651,56 @@ class TestPipelineDiscoverySelection:
         selected = pipeline._find_discovered_records()
         assert selected == rec_a
 
-    def test_collect_stats_phase3_uses_schema_matched_records(self, tmp_path):
+    def test_phase4_prefers_in_memory_artifacts_over_filesystem(self, tmp_path):
+        """Consecutive runs should use PhaseOutput artifacts, not rediscovery."""
         pipeline = self._make_pipeline(tmp_path, "schema_a")
         temp_dir = pipeline._temp_dir
 
-        rec_a = temp_dir / "discovered_records_discovered_a.json"
-        rec_b = temp_dir / "discovered_records_discovered_b.json"
-        rec_a.write_text(
-            json.dumps([
-                {
-                    "discovered_fields": {
-                        "occupation_sector": {"values": ["healthcare"]},
-                    }
-                }
-            ]),
-            encoding="utf-8",
-        )
-        rec_b.write_text(
-            json.dumps([
-                {
-                    "discovered_fields": {
-                        "other_field": {"values": ["x"]},
-                    }
-                },
-                {
-                    "discovered_fields": {
-                        "another_field": {"values": ["y"]},
-                    }
-                },
-            ]),
+        mem_merged = temp_dir / "merged_records_from_memory.json"
+        mem_disc = temp_dir / "discovered_records_from_memory.json"
+        mem_merged.write_text("[]", encoding="utf-8")
+        mem_disc.write_text("[]", encoding="utf-8")
+
+        # Filesystem decoys that would win if rediscovery ran first.
+        fs_merged = temp_dir / "merged_records_schema_a.json"
+        fs_disc = temp_dir / "discovered_records_fs.json"
+        fs_merged.write_text("[]", encoding="utf-8")
+        fs_disc.write_text("[]", encoding="utf-8")
+        (temp_dir / "discovered_field_report_fs.json").write_text(
+            json.dumps({
+                "pipeline_run": {"base_schema": "schema_a"},
+                "records_file": str(fs_disc),
+            }),
             encoding="utf-8",
         )
 
-        # Make the wrong-schema file look newer to prove schema matching wins.
-        now = time.time()
-        os.utime(rec_a, (now - 10, now - 10))
-        os.utime(rec_b, (now - 1, now - 1))
-
-        report_a = {
-            "pipeline_run": {"base_schema": "schema_a"},
-            "records_file": str(rec_a),
-        }
-        report_b = {
-            "pipeline_run": {"base_schema": "schema_b"},
-            "records_file": str(rec_b),
-        }
-        (temp_dir / "discovered_field_report_discovered_a.json").write_text(
-            json.dumps(report_a),
-            encoding="utf-8",
+        pipeline._phase_outputs[2] = PhaseOutput(
+            artifacts={"merged_records": mem_merged}, stats={},
         )
-        (temp_dir / "discovered_field_report_discovered_b.json").write_text(
-            json.dumps(report_b),
-            encoding="utf-8",
+        pipeline._phase_outputs[3] = PhaseOutput(
+            artifacts={"records": mem_disc}, stats={},
         )
 
-        stats = pipeline._collect_stats(phase=3)
-        assert stats["fields discovered"] == 1
-        assert stats["records with any hit"] == "1/1"
-        assert stats["coverage %"] == "100.0%"
+        captured: dict = {}
+
+        def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
+            captured["input_files"] = list(input_files)
+            Path(output_path).write_text("author_hash\n", encoding="utf-8")
+            return PhaseOutput(
+                artifacts={"csv": Path(output_path)},
+                stats={"rows": 0, "columns": 1, "fields": 0},
+            )
+
+        with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
+            result = pipeline._run_phase_4()
+
+        assert result.ok
+        assert result.stats == {"rows": 0, "columns": 1, "fields": 0}
+        assert mem_merged in captured["input_files"]
+        assert mem_disc in captured["input_files"]
+        assert fs_merged not in captured["input_files"]
+        assert fs_disc not in captured["input_files"]
+        assert 4 in pipeline._phase_outputs
 
     def test_falls_back_to_newest_records_when_reports_invalid(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
@@ -784,7 +776,7 @@ class TestPipelineDiscoverySelection:
         def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
             captured["input_files"] = list(input_files)
             Path(output_path).write_text("author_hash\n", encoding="utf-8")
-            return PhaseOutput(artifacts={"csv": Path(output_path)}, stats={})
+            return PhaseOutput(artifacts={"csv": Path(output_path)}, stats={"rows": 0})
 
         with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
             result = pipeline._run_phase_4()
@@ -793,30 +785,6 @@ class TestPipelineDiscoverySelection:
         assert merged in captured["input_files"]
         assert rec_a in captured["input_files"]
         assert rec_b not in captured["input_files"]
-
-    def test_phase3_stats_with_empty_or_null_values_reports_zero_coverage(self, tmp_path):
-        pipeline = self._make_pipeline(tmp_path, "schema_a")
-        temp_dir = pipeline._temp_dir
-
-        rec = temp_dir / "discovered_records_discovered_a.json"
-        rec.write_text(
-            json.dumps(
-                [
-                    {"discovered_fields": {"field1": {"values": []}}},
-                    {"discovered_fields": {"field2": {"values": None}}},
-                ]
-            ),
-            encoding="utf-8",
-        )
-        (temp_dir / "discovered_field_report_discovered_a.json").write_text(
-            json.dumps({"pipeline_run": {"base_schema": "schema_a"}, "records_file": str(rec)}),
-            encoding="utf-8",
-        )
-
-        stats = pipeline._collect_stats(phase=3)
-        assert stats["fields discovered"] == 0
-        assert stats["records with any hit"] == "0/2"
-        assert stats["coverage %"] == "0.0%"
 
     def test_export_only_run_does_not_require_prior_phases(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
@@ -1404,6 +1372,110 @@ class TestPhase5DiscoveredSchemaWiring:
             mock_cb.return_value = PhaseOutput(artifacts={}, stats={})
             p._run_phase_5()
         assert mock_cb.call_args.kwargs["discovered_schema_path"] is None
+
+    def test_prefers_in_memory_schema_over_filesystem(self, tmp_path):
+        p = self._pipeline(tmp_path, include_discovered=True)
+        _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
+        mem_schema = p._temp_dir / "discovered_from_memory.json"
+        mem_schema.write_text(json.dumps({"schema_id": "mem", "extension_fields": {}}), encoding="utf-8")
+        p._phase_outputs[3] = PhaseOutput(artifacts={"schema": mem_schema}, stats={})
+        with patch("patientpunk.pipeline.run_codebook") as mock_cb:
+            mock_cb.return_value = PhaseOutput(artifacts={"codebook": tmp_path / "codebook.csv"}, stats={"fields": 1})
+            result = p._run_phase_5()
+        assert result.ok
+        assert result.stats == {"fields": 1}
+        assert mock_cb.call_args.kwargs["discovered_schema_path"] == mem_schema
+        assert 5 in p._phase_outputs
+
+
+# =============================================================================
+# Discovery review mode -- stop after candidates
+# =============================================================================
+
+class TestDiscoveryReviewMode:
+    def test_run_discovery_stop_after_candidates_skips_later_phases(self, tmp_path):
+        from patientpunk.discover import run_discovery
+
+        input_dir = tmp_path / "output"
+        input_dir.mkdir()
+        (input_dir / "subreddit_posts.json").write_text("[]", encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")
+
+        candidates = [{"field_name": "new_field", "examples": ["x"] * 8}]
+        called = {"phase2": False, "phase3": False, "phase4": False}
+
+        def _fake_phase1(*_a, **_k):
+            return candidates
+
+        def _fake_phase2(*_a, **_k):
+            called["phase2"] = True
+            return []
+
+        def _fake_phase3(*_a, **_k):
+            called["phase3"] = True
+            return []
+
+        def _fake_phase4(*_a, **_k):
+            called["phase4"] = True
+            return []
+
+        with patch("patientpunk.discover.get_client", return_value=MagicMock()), \
+             patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]), \
+             patch("patientpunk.discover.run_phase1_discovery", _fake_phase1), \
+             patch("patientpunk.discover.run_phase2_build_regex", _fake_phase2), \
+             patch("patientpunk.discover.run_phase3_regex_extract", _fake_phase3), \
+             patch("patientpunk.discover.run_phase4_fill_gaps", _fake_phase4):
+            out = run_discovery(
+                input_dir=input_dir,
+                schema_path=schema,
+                temp_dir=temp_dir,
+                stop_after="candidates",
+            )
+
+        assert called == {"phase2": False, "phase3": False, "phase4": False}
+        assert out.artifacts["candidates"].name == "phase1_candidates.json"
+        assert out.artifacts["candidates"].exists()
+        assert out.stats["candidates"] == 1
+        assert json.loads(out.artifacts["candidates"].read_text(encoding="utf-8")) == candidates
+
+    def test_pipeline_review_mode_passes_stop_after_and_exits(self, tmp_path):
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        cand = temp_dir / "phase1_candidates.json"
+        cand.write_text("[]", encoding="utf-8")
+
+        cfg = PipelineConfig(
+            schema_path=schema,
+            input_dir=tmp_path,
+            temp_dir=temp_dir,
+            start_at=3,
+            run_llm=False,
+            discovery_mode="review",
+            clean=False,
+        )
+        pipeline = Pipeline(cfg)
+
+        with patch("patientpunk.pipeline.run_discovery") as mock_disc, \
+             patch.object(Pipeline, "_run_phase_4") as mock_p4, \
+             patch.object(Pipeline, "_run_phase_5") as mock_p5:
+            mock_disc.return_value = PhaseOutput(
+                artifacts={"candidates": cand},
+                stats={"candidates": 0},
+            )
+            result = pipeline.run()
+
+        mock_disc.assert_called_once()
+        assert mock_disc.call_args.kwargs.get("stop_after") == "candidates"
+        mock_p4.assert_not_called()
+        mock_p5.assert_not_called()
+        assert len(result.phases) == 3
+        assert result.phases[2].ok
+        assert result.phases[2].stats["candidates"] == 0
 
 
 # =============================================================================

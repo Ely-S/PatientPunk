@@ -27,8 +27,9 @@ clean_temp_dir      Delete intermediate files by glob pattern.  Called at the
                     start of a full pipeline run to ensure stale results from
                     a prior run don't contaminate the new one.
 
-csv_fill_rate       Compute basic fill-rate statistics for a CSV file.  Used
-                    by Pipeline._run_phase_4() to report coverage after export.
+csv_fill_rate       Compute basic fill-rate statistics for a CSV file.
+                    Useful for ad-hoc coverage checks; Pipeline prefers
+                    ``PhaseOutput.stats`` from ``run_export_csv``.
 
 collect_texts_from_post  Collect title/body (optionally + comments) text from
                     a single subreddit post. Shared by biomedical.py,

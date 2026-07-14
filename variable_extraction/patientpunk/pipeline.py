@@ -30,7 +30,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
+from ._utils import clean_temp_dir, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
 from .biomedical import run_biomedical
 from .codebook import run_codebook
 from .discover import run_discovery
@@ -76,9 +76,15 @@ class PipelineConfig(BaseModel):
     # Phase control
     start_at: int = 1
     run_llm: bool = True
-    # Discovery is off by default. Use discovery_mode="auto" to run and
-    # auto-merge all candidates, or "review" to stop after candidate
-    # generation so the user can select fields in the Marimo variable picker.
+    # Discovery is off by default. Use discovery_mode="auto" for full
+    # discovery (candidates → regex → extract → gap-fill), or "review" to
+    # stop after candidate generation so the user can curate fields in
+    # temp/phase1_candidates.json (edit out unwanted entries), then re-run
+    # with discovery_mode="auto" and candidates_file pointed at that file
+    # to build regex, extract, and gap-fill for the curated set.
+    # NOTE: --start-at 4 does NOT work here -- it skips Phase 3 entirely,
+    # and "review" mode never runs regex-build/extract, so no discovered
+    # records exist yet at that point.
     discovery_mode: str | None = None
     clean: bool = True
 
@@ -206,6 +212,9 @@ class Pipeline:
         self.config = config
         self._schema_id = get_schema_id(config.schema_path)
         self._temp_dir: Path = config.temp_dir  # type: ignore[assignment]
+        # In-memory PhaseOutput from successful phases (artifact paths + stats).
+        # Preferred over filesystem rediscovery within a consecutive run.
+        self._phase_outputs: dict[int, PhaseOutput] = {}
 
     # ------------------------------------------------------------------
     # Public interface
@@ -220,6 +229,7 @@ class Pipeline:
             output_dir=cfg.input_dir,
         )
         pipeline_start = time.time()
+        self._phase_outputs.clear()
 
         self._print_header()
 
@@ -262,9 +272,12 @@ class Pipeline:
             result.total_elapsed = time.time() - pipeline_start
             return result
         if cfg.discovery_mode == "review" and not result.phases[-1].skipped:
-            print("\n  Discovery candidates saved to temp/.")
-            print("  Review in: marimo run apps/discover.py")
-            print("  Then re-run with: --start-at 4 --no-clean")
+            candidates_path = self._temp_dir / "phase1_candidates.json"
+            print(f"\n  Discovery candidates saved to: {candidates_path}")
+            print("  Edit that file to remove any fields you don't want, then re-run with:")
+            print(f"    --discover auto --candidates {candidates_path} --no-clean")
+            print("  (--start-at 4 will NOT pick these up -- Phase 3 regex-build/extract/")
+            print("   gap-fill still needs to run on the curated candidates first.)")
             result.total_elapsed = time.time() - pipeline_start
             return result
 
@@ -290,9 +303,12 @@ class Pipeline:
         phase: int,
         *,
         skip: bool,
-        runner,
+        runner=None,
     ) -> PhaseResult:
-        """Run a phase callable that returns PhaseOutput (or raises)."""
+        """Run a phase callable that returns PhaseOutput (or raises).
+
+        ``runner`` is unused (and may be omitted) when ``skip=True``.
+        """
         label = self._PHASE_LABELS[phase]
         if skip:
             print(f"\n  [Skipping phase {phase}]")
@@ -301,15 +317,15 @@ class Pipeline:
         self._print_phase_banner(phase, label)
         t0 = time.time()
         try:
-            out: PhaseOutput | None = runner()
+            out: PhaseOutput = runner()
             elapsed = time.time() - t0
-            stats = (out.stats if out and out.stats else None) or self._collect_stats(phase)
+            self._phase_outputs[phase] = out
             pr = PhaseResult(
                 phase=phase,
                 label=label,
                 elapsed=elapsed,
                 ok=True,
-                stats=stats,
+                stats=out.stats or {},
             )
             self._print_phase_stats(pr)
             return pr
@@ -323,6 +339,16 @@ class Pipeline:
                 ok=False,
                 error=str(exc),
             )
+
+    def _phase_artifact(self, phase: int, key: str) -> Path | None:
+        """Return an in-memory artifact path from a prior successful phase, if present."""
+        out = self._phase_outputs.get(phase)
+        if out is None:
+            return None
+        path = out.artifacts.get(key)
+        if path is not None and Path(path).exists():
+            return Path(path)
+        return None
 
     def _run_phase_1(self) -> PhaseResult:
         cfg = self.config
@@ -372,6 +398,7 @@ class Pipeline:
                 resume=cfg.resume,
                 candidates_file=candidates,
                 sample=cfg.discovery_sample,
+                stop_after="candidates" if cfg.discovery_mode == "review" else None,
             )
 
         return self._call_phase(3, skip=skip, runner=_runner)
@@ -384,6 +411,9 @@ class Pipeline:
         1. A records file referenced by a discovery report whose
            ``pipeline_run.base_schema`` matches this pipeline's schema_id.
         2. Fallback to the newest discovered_records_*.json file in temp/.
+
+        Used as resume / ``--start-at`` fallback when in-memory phase-3
+        artifacts are empty.
         """
         matched_records: list[Path] = []
         for _report_path, report in find_discovery_reports(self._temp_dir, self._schema_id):
@@ -409,6 +439,9 @@ class Pipeline:
         discovery report.  Unlike :meth:`_find_discovered_records` there is no
         blind-glob fallback -- a bare ``discovered_*.json`` glob would also match
         the report and records files and cannot be schema-verified.
+
+        Used as resume / ``--start-at`` fallback when in-memory phase-3
+        artifacts are empty.
         """
         reports = find_discovery_reports(self._temp_dir, self._schema_id)
         reports.sort(key=lambda rp: rp[0].stat().st_mtime, reverse=True)
@@ -423,83 +456,82 @@ class Pipeline:
                 return schema_path
         return None
 
-    def _run_phase_4(self) -> PhaseResult:
-        """Phase 4 -- assemble input files and call run_export_csv."""
-        phase = 4
-        label = self._PHASE_LABELS[phase]
+    def _resolve_phase4_input_files(self) -> list[Path]:
+        """Assemble CSV export inputs, preferring in-memory phase artifacts."""
+        merged = self._phase_artifact(2, "merged_records")
+        regex = self._phase_artifact(1, "records")
 
-        if self.config.start_at > 4:
-            print(f"\n  [Skipping phase {phase}]")
-            return PhaseResult(phase=phase, label=label, skipped=True)
+        if merged is None:
+            merged_path = self._temp_dir / f"merged_records_{self._schema_id}.json"
+            if merged_path.exists():
+                merged = merged_path
+        if regex is None:
+            regex_path = self._temp_dir / f"patientpunk_records_{self._schema_id}.json"
+            if regex_path.exists():
+                regex = regex_path
 
-        self._print_phase_banner(phase, label)
-
-        merged_path = self._temp_dir / f"merged_records_{self._schema_id}.json"
-        regex_path = self._temp_dir / f"patientpunk_records_{self._schema_id}.json"
-        if merged_path.exists():
-            input_files = [merged_path]
-        elif regex_path.exists():
-            print(f"  merged_records not found -- falling back to regex-only records")
-            input_files = [regex_path]
+        if merged is not None:
+            input_files = [merged]
+        elif regex is not None:
+            print("  merged_records not found -- falling back to regex-only records")
+            input_files = [regex]
         else:
-            input_files = [merged_path]
+            input_files = [self._temp_dir / f"merged_records_{self._schema_id}.json"]
 
-        disc = self._find_discovered_records()
+        disc = self._phase_artifact(3, "records")
+        if disc is None:
+            disc = self._find_discovered_records()
         if disc:
             input_files.append(disc)
             print(f"  Including discovered records: {disc.name}")
         else:
-            print(f"  No discovered records found -- exporting base records only")
+            print("  No discovered records found -- exporting base records only")
 
         missing = [path for path in input_files if not path.exists()]
         if missing:
             print(f"  [Warning] Missing: {[path.name for path in missing]}")
-        input_files = [path for path in input_files if path.exists()]
+        return [path for path in input_files if path.exists()]
 
+    def _run_phase_4(self) -> PhaseResult:
+        """Phase 4 -- assemble input files and call run_export_csv."""
+        if self.config.start_at > 4:
+            return self._call_phase(4, skip=True)
+
+        input_files = self._resolve_phase4_input_files()
         if not input_files:
             print("  [Skipping phase 4 -- no input files available]")
-            return PhaseResult(phase=phase, label=label, skipped=True)
+            return PhaseResult(
+                phase=4, label=self._PHASE_LABELS[4], skipped=True,
+            )
 
         output_csv = self.config.input_dir / "records.csv"
-
-        t0 = time.time()
-        try:
-            out = run_export_csv(
+        return self._call_phase(
+            4,
+            skip=False,
+            runner=lambda: run_export_csv(
                 input_files=input_files,
                 output_path=output_csv,
                 sep=self.config.csv_sep,
                 include_provenance=self.config.csv_provenance,
-            )
-            elapsed = time.time() - t0
-            stats = csv_fill_rate(output_csv) or out.stats
-            pr = PhaseResult(
-                phase=phase, label=label, elapsed=elapsed, ok=True, stats=stats
-            )
-            self._print_phase_stats(pr)
-            return pr
-        except Exception as exc:
-            elapsed = time.time() - t0
-            print(f"\n  [Pipeline stopped] Phase {phase} failed: {exc}")
-            return PhaseResult(
-                phase=phase, label=label, elapsed=elapsed, ok=False,
-                error=str(exc),
-            )
+            ),
+        )
+
+    def _resolve_discovered_schema(self) -> Path | None:
+        """Prefer in-memory phase-3 schema; fall back to report rediscovery."""
+        if not self.config.codebook_include_discovered:
+            return None
+        disc = self._phase_artifact(3, "schema")
+        if disc is not None:
+            return disc
+        return self._find_discovered_schema()
 
     def _run_phase_5(self) -> PhaseResult:
         """Phase 5 -- codebook generation."""
-        phase = 5
-        label = self._PHASE_LABELS[phase]
-
         if self.config.start_at > 5:
-            print(f"\n  [Skipping phase {phase}]")
-            return PhaseResult(phase=phase, label=label, skipped=True)
+            return self._call_phase(5, skip=True)
 
-        self._print_phase_banner(phase, label)
         records_csv = self.config.input_dir / "records.csv"
-        disc_schema = (
-            self._find_discovered_schema()
-            if self.config.codebook_include_discovered else None
-        )
+        disc_schema = self._resolve_discovered_schema()
         if disc_schema:
             print(f"  Including discovered schema: {disc_schema.name}")
 
@@ -508,100 +540,18 @@ class Pipeline:
         ext = "md" if self.config.codebook_format == "markdown" else "csv"
         output_path = self.config.input_dir / f"codebook.{ext}"
 
-        t0 = time.time()
-        try:
-            run_codebook(
+        return self._call_phase(
+            5,
+            skip=False,
+            runner=lambda: run_codebook(
                 schema_path=self.config.schema_path,
                 records_csv=records_csv if records_csv.exists() else None,
                 output_path=output_path,
                 fmt=self.config.codebook_format,
                 include_discovered=self.config.codebook_include_discovered,
                 discovered_schema_path=disc_schema,
-            )
-            elapsed = time.time() - t0
-            return PhaseResult(phase=phase, label=label, elapsed=elapsed, ok=True)
-        except Exception as exc:
-            elapsed = time.time() - t0
-            print(f"\n  [Pipeline stopped] Phase {phase} failed: {exc}")
-            return PhaseResult(
-                phase=phase, label=label, elapsed=elapsed, ok=False,
-                error=str(exc),
-            )
-
-    # ------------------------------------------------------------------
-    # Stats collection
-    # ------------------------------------------------------------------
-
-    def _collect_stats(self, phase: int) -> dict:
-        """Collect lightweight post-phase statistics from artifact files."""
-        import json as _json
-
-        schema_id = self._schema_id
-        temp_dir = self._temp_dir
-
-        if phase == 1:
-            meta_path = temp_dir / f"extraction_metadata_{schema_id}.json"
-            try:
-                meta = _json.loads(meta_path.read_text(encoding="utf-8"))
-            except (_json.JSONDecodeError, OSError):
-                return {}
-            total = meta.get("total_records_processed", 0)
-            hits = meta.get("field_hit_counts", {})
-            n_hit = sum(1 for hit_count in hits.values() if hit_count > 0)
-            return {
-                "records processed":  total,
-                "fields with hits":   f"{n_hit}/{len(hits)}",
-                "zero-coverage fields": len(hits) - n_hit,
-            }
-
-        if phase == 2:
-            llm_path = temp_dir / f"llm_records_{schema_id}.json"
-            merged_path = temp_dir / f"merged_records_{schema_id}.json"
-            try:
-                llm = _json.loads(llm_path.read_text(encoding="utf-8"))
-                merged = _json.loads(merged_path.read_text(encoding="utf-8"))
-            except (_json.JSONDecodeError, OSError):
-                return {}
-            fills = sum(
-                1 for rec in llm
-                for field_value in rec.get("fields", {}).values()
-                if field_value is not None
-            )
-            return {
-                "LLM records":     len(llm),
-                "merged records":  len(merged),
-                "LLM field fills": fills,
-                "avg fills/record": round(fills / len(llm), 2) if llm else 0,
-            }
-
-        if phase == 3:
-            disc_path = self._find_discovered_records()
-            if not disc_path:
-                return {}
-            try:
-                records = _json.loads(disc_path.read_text(encoding="utf-8"))
-            except (_json.JSONDecodeError, OSError):
-                return {}
-            field_hits: dict[str, int] = {}
-            for rec in records:
-                for fname, fdata in rec.get("discovered_fields", {}).items():
-                    if fdata.get("values"):
-                        field_hits[fname] = field_hits.get(fname, 0) + 1
-            record_count = len(records)
-            covered = sum(
-                1 for rec in records
-                if any(
-                    fd.get("values")
-                    for fd in rec.get("discovered_fields", {}).values()
-                )
-            )
-            return {
-                "fields discovered":     len(field_hits),
-                "records with any hit":  f"{covered}/{record_count}",
-                "coverage %":            f"{round(covered / record_count * 100, 1) if record_count else 0}%",
-            }
-
-        return {}
+            ),
+        )
 
     # ------------------------------------------------------------------
     # Console output helpers
