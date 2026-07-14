@@ -81,7 +81,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=Tru
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
 
 from .qualitative_standards import FIELD_DESIGN_STANDARDS
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
@@ -1534,7 +1534,7 @@ def run_discovery(
     sample: int | None = None,
     per_item_chars: int = 0,
     stop_after: Literal["candidates"] | None = None,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Run Phase 3 multi-model field discovery.
 
     Parameters
@@ -1643,7 +1643,7 @@ def run_discovery(
                 json.dump(candidates, f, ensure_ascii=False, indent=2)
             print(f"\n  Phase 1 saved: {phase1_candidates_path}")
         print(f"\n  Stopped after candidates ({len(candidates)}) for review.")
-        return PhaseOutput(
+        return PhaseResult(
             artifacts={"candidates": phase1_candidates_path},
             stats={"candidates": len(candidates)},
         )
@@ -1683,14 +1683,14 @@ def run_discovery(
     if not candidates:
         print("\nNo new fields discovered. The existing schema may already cover this corpus well.")
         artifacts["report"] = _write_empty_report(0, 0)
-        return PhaseOutput(artifacts=artifacts, stats={"fields discovered": 0})
+        return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
 
     validated_fields = run_phase2_build_regex(client, candidates, workers=workers)
 
     if not validated_fields:
         print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
         artifacts["report"] = _write_empty_report(len(candidates), 0)
-        return PhaseOutput(artifacts=artifacts, stats={"fields discovered": 0})
+        return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
 
     llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
     if llm_only_fields:
@@ -1797,7 +1797,7 @@ def run_discovery(
         "records with any hit": f"{covered}/{record_count}",
         "coverage %": f"{round(covered / record_count * 100, 1) if record_count else 0}%",
     }
-    return PhaseOutput(artifacts=artifacts, stats=out_stats)
+    return PhaseResult(artifacts=artifacts, stats=out_stats)
 
 
 def main(argv: list[str] | None = None) -> None:

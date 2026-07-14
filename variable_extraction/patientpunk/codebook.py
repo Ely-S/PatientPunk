@@ -41,7 +41,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 
 _VE_ROOT = Path(__file__).resolve().parent.parent
@@ -283,7 +283,7 @@ def run_codebook(
     sep: str = " | ",
     include_discovered: bool = True,
     discovered_schema_path: Path | None = None,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Generate a codebook / data dictionary for PatientPunk CSV output."""
     schema_path = Path(schema_path)
     base_schema_path = Path(base_schema_path) if base_schema_path else DEFAULT_BASE_SCHEMA
@@ -380,7 +380,7 @@ def run_codebook(
                 f"{row.get('coverage_pct',''):>7}  {row['confidence']:<8}"
             )
 
-    return PhaseOutput(
+    return PhaseResult(
         artifacts={"codebook": output_path},
         stats={"fields": len(output_rows)},
     )

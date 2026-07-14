@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 
 _VE_ROOT = Path(__file__).resolve().parent.parent
@@ -160,7 +160,7 @@ def run_export_csv(
     output_path: Path,
     sep: str = " | ",
     include_provenance: bool = False,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Flatten one or more JSON record files into a CSV.
 
     Raises FileNotFoundError / ValueError on bad inputs.
@@ -229,7 +229,7 @@ def run_export_csv(
         "columns": len(all_columns),
         "fields": len(field_names),
     }
-    return PhaseOutput(artifacts={"csv": output_path}, stats=stats)
+    return PhaseResult(artifacts={"csv": output_path}, stats=stats)
 
 
 def main(argv: list[str] | None = None) -> None:

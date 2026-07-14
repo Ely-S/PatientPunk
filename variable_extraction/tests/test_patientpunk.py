@@ -63,8 +63,8 @@ from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
 from patientpunk.biomedical import run_biomedical
 from patientpunk.export_csv import run_export_csv
-from patientpunk.phase import PhaseOutput
-from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult, PhaseResult
+from patientpunk.phase import PhaseResult
+from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult
 from patientpunk.qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
     EXTRACTION_STANDARDS,
@@ -652,7 +652,7 @@ class TestPipelineDiscoverySelection:
         assert selected == rec_a
 
     def test_phase4_prefers_in_memory_artifacts_over_filesystem(self, tmp_path):
-        """Consecutive runs should use PhaseOutput artifacts, not rediscovery."""
+        """Consecutive runs should use PhaseResult artifacts, not rediscovery."""
         pipeline = self._make_pipeline(tmp_path, "schema_a")
         temp_dir = pipeline._temp_dir
 
@@ -674,10 +674,10 @@ class TestPipelineDiscoverySelection:
             encoding="utf-8",
         )
 
-        pipeline._phase_outputs[2] = PhaseOutput(
+        pipeline._phase_outputs[2] = PhaseResult(
             artifacts={"merged_records": mem_merged}, stats={},
         )
-        pipeline._phase_outputs[3] = PhaseOutput(
+        pipeline._phase_outputs[3] = PhaseResult(
             artifacts={"records": mem_disc}, stats={},
         )
 
@@ -686,7 +686,7 @@ class TestPipelineDiscoverySelection:
         def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
             captured["input_files"] = list(input_files)
             Path(output_path).write_text("author_hash\n", encoding="utf-8")
-            return PhaseOutput(
+            return PhaseResult(
                 artifacts={"csv": Path(output_path)},
                 stats={"rows": 0, "columns": 1, "fields": 0},
             )
@@ -776,7 +776,7 @@ class TestPipelineDiscoverySelection:
         def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
             captured["input_files"] = list(input_files)
             Path(output_path).write_text("author_hash\n", encoding="utf-8")
-            return PhaseOutput(artifacts={"csv": Path(output_path)}, stats={"rows": 0})
+            return PhaseResult(artifacts={"csv": Path(output_path)}, stats={"rows": 0})
 
         with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
             result = pipeline._run_phase_4()
@@ -1359,7 +1359,7 @@ class TestPhase5DiscoveredSchemaWiring:
         p = self._pipeline(tmp_path, include_discovered=True)
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
-            mock_cb.return_value = PhaseOutput(artifacts={}, stats={})
+            mock_cb.return_value = PhaseResult(artifacts={}, stats={})
             p._run_phase_5()
         kwargs = mock_cb.call_args.kwargs
         assert kwargs["discovered_schema_path"] is not None
@@ -1369,7 +1369,7 @@ class TestPhase5DiscoveredSchemaWiring:
         p = self._pipeline(tmp_path, include_discovered=False)
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
-            mock_cb.return_value = PhaseOutput(artifacts={}, stats={})
+            mock_cb.return_value = PhaseResult(artifacts={}, stats={})
             p._run_phase_5()
         assert mock_cb.call_args.kwargs["discovered_schema_path"] is None
 
@@ -1378,9 +1378,9 @@ class TestPhase5DiscoveredSchemaWiring:
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         mem_schema = p._temp_dir / "discovered_from_memory.json"
         mem_schema.write_text(json.dumps({"schema_id": "mem", "extension_fields": {}}), encoding="utf-8")
-        p._phase_outputs[3] = PhaseOutput(artifacts={"schema": mem_schema}, stats={})
+        p._phase_outputs[3] = PhaseResult(artifacts={"schema": mem_schema}, stats={})
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
-            mock_cb.return_value = PhaseOutput(artifacts={"codebook": tmp_path / "codebook.csv"}, stats={"fields": 1})
+            mock_cb.return_value = PhaseResult(artifacts={"codebook": tmp_path / "codebook.csv"}, stats={"fields": 1})
             result = p._run_phase_5()
         assert result.ok
         assert result.stats == {"fields": 1}
@@ -1463,7 +1463,7 @@ class TestDiscoveryReviewMode:
         with patch("patientpunk.pipeline.run_discovery") as mock_disc, \
              patch.object(Pipeline, "_run_phase_4") as mock_p4, \
              patch.object(Pipeline, "_run_phase_5") as mock_p5:
-            mock_disc.return_value = PhaseOutput(
+            mock_disc.return_value = PhaseResult(
                 artifacts={"candidates": cand},
                 stats={"candidates": 0},
             )

@@ -64,7 +64,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=Tru
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)       # variable_extraction/
 
 from .qualitative_standards import EXTRACTION_STANDARDS
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 
 # =============================================================================
@@ -1168,7 +1168,7 @@ def run_llm_extract(
     resume: bool = False,
     limit: int | None = None,
     group_guard: bool | None = None,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Run Phase 2 LLM gap-filling over a corpus directory."""
     import os
     from typing import Any
@@ -1305,7 +1305,7 @@ def run_llm_extract(
     }
     if "merged_records" in artifacts:
         stats["merged records"] = len(json.loads(artifacts["merged_records"].read_text(encoding="utf-8")))
-    return PhaseOutput(artifacts=artifacts, stats=stats)
+    return PhaseResult(artifacts=artifacts, stats=stats)
 
 
 def main(argv: list[str] | None = None) -> None:

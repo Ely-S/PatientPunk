@@ -48,7 +48,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
 from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
-from .phase import PhaseOutput
+from .phase import PhaseResult
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
@@ -344,7 +344,7 @@ def run_demographics_deductive(
     include_posts: bool = True,
     include_users: bool = True,
     max_chars: int = MAX_CHARS,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Legacy deductive-only demographic extraction."""
     from typing import Any
 
@@ -469,7 +469,7 @@ def run_demographics_deductive(
         "results": len(results),
         "errors": errors,
     }
-    return PhaseOutput(artifacts={"csv": output_path}, stats=stats)
+    return PhaseResult(artifacts={"csv": output_path}, stats=stats)
 
 
 def main(argv: list[str] | None = None) -> None:

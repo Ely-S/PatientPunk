@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from ._utils import collect_texts_from_post as _collect_texts_from_post
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 
 
@@ -996,7 +996,7 @@ def run_biomedical(
     input_dir: Path,
     schema_path: Path | None = None,
     temp_dir: Path | None = None,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Run Phase 1 regex extraction over a corpus directory.
 
     Writes ``patientpunk_records_{schema_id}.json`` and
@@ -1060,7 +1060,7 @@ def run_biomedical(
         "fields with hits": f"{n_hit}/{len(hits)}",
         "zero-coverage fields": len(hits) - n_hit,
     }
-    return PhaseOutput(
+    return PhaseResult(
         artifacts={"records": extractions_file, "metadata": metadata_file},
         stats=stats,
     )

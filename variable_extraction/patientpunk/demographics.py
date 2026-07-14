@@ -62,7 +62,7 @@ from .qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
-from .phase import PhaseOutput
+from .phase import PhaseResult
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
 BATCH_SIZE = 10
@@ -531,7 +531,7 @@ def run_demographic_coding(
     include_posts: bool = True,
     include_users: bool = True,
     max_chars: int = MAX_CHARS,
-) -> PhaseOutput:
+) -> PhaseResult:
     """Inductive + deductive demographic coding (primary demographics entrypoint)."""
     from typing import Any
 
@@ -651,7 +651,7 @@ def run_demographic_coding(
         "errors": errors,
         "mode": mode,
     }
-    return PhaseOutput(artifacts=artifacts, stats=stats)
+    return PhaseResult(artifacts=artifacts, stats=stats)
 
 
 def main(argv: list[str] | None = None) -> None:

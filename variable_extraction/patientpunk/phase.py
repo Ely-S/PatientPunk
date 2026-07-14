@@ -1,15 +1,27 @@
-"""Shared return type for in-process pipeline phases."""
+"""Shared per-phase result type for in-process pipeline phases."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, Field
 
-@dataclass(frozen=True)
-class PhaseOutput:
-    """Paths written + lightweight stats for Pipeline summaries."""
 
-    artifacts: dict[str, Path]
-    stats: dict[str, Any] = field(default_factory=dict)
+class PhaseResult(BaseModel):
+    """Outcome, timing, and artifacts for a single pipeline phase.
+
+    Phase runner functions (``run_biomedical``, ``run_llm_extract``, etc.)
+    populate ``artifacts`` and ``stats`` only; ``Pipeline._call_phase`` fills
+    in ``phase``, ``label``, ``elapsed``, ``ok``, and ``error`` once the
+    runner returns.
+    """
+
+    phase: int = 0
+    label: str = ""
+    skipped: bool = False
+    elapsed: float = 0.0
+    ok: bool = True
+    error: str | None = None
+    artifacts: dict[str, Path] = Field(default_factory=dict)
+    stats: dict[str, Any] = Field(default_factory=dict)

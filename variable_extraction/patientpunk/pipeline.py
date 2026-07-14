@@ -26,7 +26,6 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -36,7 +35,7 @@ from .codebook import run_codebook
 from .discover import run_discovery
 from .export_csv import run_export_csv
 from .llm_extract import run_llm_extract
-from .phase import PhaseOutput
+from .phase import PhaseResult
 
 # Intermediate file glob patterns that live in temp_dir.
 # These are wiped at the start of a full run unless clean=False.
@@ -131,22 +130,6 @@ class PipelineConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Per-phase result
-# ---------------------------------------------------------------------------
-
-class PhaseResult(BaseModel):
-    """Outcome and timing for a single pipeline phase."""
-
-    phase: int
-    label: str
-    skipped: bool = False
-    elapsed: float = 0.0
-    ok: bool = True
-    error: str | None = None
-    stats: dict[str, Any] = Field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
 # Pipeline result
 # ---------------------------------------------------------------------------
 
@@ -212,9 +195,9 @@ class Pipeline:
         self.config = config
         self._schema_id = get_schema_id(config.schema_path)
         self._temp_dir: Path = config.temp_dir  # type: ignore[assignment]
-        # In-memory PhaseOutput from successful phases (artifact paths + stats).
+        # In-memory PhaseResult from successful phases (artifact paths + stats).
         # Preferred over filesystem rediscovery within a consecutive run.
-        self._phase_outputs: dict[int, PhaseOutput] = {}
+        self._phase_outputs: dict[int, PhaseResult] = {}
 
     # ------------------------------------------------------------------
     # Public interface
@@ -305,9 +288,11 @@ class Pipeline:
         skip: bool,
         runner=None,
     ) -> PhaseResult:
-        """Run a phase callable that returns PhaseOutput (or raises).
+        """Run a phase callable that returns PhaseResult (or raises).
 
-        ``runner`` is unused (and may be omitted) when ``skip=True``.
+        ``runner`` is expected to populate only ``artifacts``/``stats``;
+        timing and status are filled in here. It is unused (and may be
+        omitted) when ``skip=True``.
         """
         label = self._PHASE_LABELS[phase]
         if skip:
@@ -317,16 +302,10 @@ class Pipeline:
         self._print_phase_banner(phase, label)
         t0 = time.time()
         try:
-            out: PhaseOutput = runner()
+            out: PhaseResult = runner()
             elapsed = time.time() - t0
-            self._phase_outputs[phase] = out
-            pr = PhaseResult(
-                phase=phase,
-                label=label,
-                elapsed=elapsed,
-                ok=True,
-                stats=out.stats or {},
-            )
+            pr = out.model_copy(update={"phase": phase, "label": label, "elapsed": elapsed, "ok": True})
+            self._phase_outputs[phase] = pr
             self._print_phase_stats(pr)
             return pr
         except Exception as exc:
@@ -382,7 +361,7 @@ class Pipeline:
     def _run_phase_3(self, *, skip: bool) -> PhaseResult:
         cfg = self.config
 
-        def _runner() -> PhaseOutput:
+        def _runner() -> PhaseResult:
             candidates = cfg.candidates_file
             if candidates is None:
                 auto = self._temp_dir / "phase1_candidates.json"

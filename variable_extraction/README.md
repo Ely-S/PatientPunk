@@ -535,7 +535,7 @@ variable_extraction/
 ├── patientpunk/                   Importable Python library
 │   ├── __init__.py                Public API surface
 │   ├── py.typed                   PEP 561 marker
-│   ├── phase.py                   PhaseOutput dataclass (shared by run_*)
+│   ├── phase.py                   PhaseResult model (shared by run_* and Pipeline)
 │   ├── corpus.py                  CorpusLoader + CorpusRecord
 │   ├── schema.py                  Schema + FieldDefinition
 │   ├── pipeline.py                Pipeline + PipelineConfig (calls run_* in-process)
