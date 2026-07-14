@@ -135,7 +135,7 @@ SAMPLE = Path(__file__).parent / "sample_data.json"
 
 # Derive expectations from the fixture file so adding/removing posts in
 # sample_data.json surfaces as a clear failure rather than a magic-number mismatch.
-SAMPLE_POSTS = json.loads(SAMPLE.read_text())
+SAMPLE_POSTS = json.loads(SAMPLE.read_text(encoding="utf-8"))
 EXPECTED_POST_IDS = {p["post_id"] for p in SAMPLE_POSTS} | {
     c["comment_id"] for p in SAMPLE_POSTS for c in p["comments"]
 }
@@ -155,7 +155,7 @@ def db(tmp_path_factory: pytest.TempPathFactory) -> DB:
     path = tmp_path_factory.mktemp("db") / "test.db"
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA.read_text())
+    conn.executescript(SCHEMA.read_text(encoding="utf-8"))
     return DB(conn=conn, path=path)
 
 
