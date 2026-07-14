@@ -30,14 +30,8 @@ from pathlib import Path
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
-SOURCE_JSON = (
-    Path.home()
-    / "OneDrive"
-    / "Documents"
-    / "Projects"
-    / "PatientPunk_data"
-    / "subreddit_posts_month_1081posts.json"
-)
+# Default source corpus (not committed); override with --source-json (see README).
+SOURCE_JSON = Path("PatientPunk_data/subreddit_posts_month_1081posts.json")
 DB_PATH = Path("data/patientpunk.db")
 TAGGED_MENTIONS = Path("data/drug_pipeline/tagged_mentions.json")
 CANONICAL_MAP = Path("data/drug_pipeline/canonical_map.json")

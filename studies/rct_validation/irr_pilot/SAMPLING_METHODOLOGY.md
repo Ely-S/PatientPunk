@@ -31,8 +31,8 @@ Reproducibility script: [`scripts/sample_for_coding.py`](./scripts/sample_for_co
 We scraped one month of r/covidlonghaulers posting history into a single JSON
 file:
 
-- `~/OneDrive/Documents/Projects/PatientPunk_data/subreddit_posts_month_1081posts.json`
-  — 1,081 top-level posts and 16,342 comments
+- `PatientPunk_data/subreddit_posts_month_1081posts.json` (the local data
+  directory; not committed) — 1,081 top-level posts and 16,342 comments
 
 The window covered is **2026-03-11 20:02 UTC through 2026-04-10 21:06 UTC**
 (30 days). Comments are nested inside their parent post in the JSON;
@@ -172,7 +172,7 @@ python studies/rct_validation/irr_pilot/scripts/sample_for_coding.py \
     --n               300 \
     --seed            42 \
     --out-dir         data/irr_pilot/ \
-    --source-json     ~/OneDrive/Documents/Projects/PatientPunk_data/subreddit_posts_month_1081posts.json \
+    --source-json     PatientPunk_data/subreddit_posts_month_1081posts.json \
     --db-path         data/patientpunk.db \
     --tagged-mentions data/drug_pipeline/tagged_mentions.json \
     --canonical-map   data/drug_pipeline/canonical_map.json

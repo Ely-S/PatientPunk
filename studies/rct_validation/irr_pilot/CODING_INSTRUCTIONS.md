@@ -24,8 +24,8 @@ Rules below are adapted from the AI pipeline's prompts. Disagreement between cod
 | `confidence` | 1–5 | **About your coding:** how sure are you the labels you picked are right? Always filled, even when `personal_use = no`. |
 | `notes` | free text | Reasoning, ambiguity flags, anything worth recording (optional) |
 
-> **⚠️ STOP rule.** If `personal_use = no`, leave `sentiment` and
-> `signal_strength` blank (or set to `n/a`) and move on. The classifier and
+> **⚠️ STOP rule.** If `personal_use = no`, leave `sentiment` blank and set
+> `signal_strength` to `n/a`, then move on. The classifier and
 > the analysis only count personal-use reports, so non-personal-use rows
 > contribute to inter-coder reliability on the `personal_use` decision and
 > nothing further.
@@ -75,7 +75,7 @@ Decide first: did the author personally use this drug?
 - **`yes`** — author describes their own experience with this drug (taking it, having taken it, side effects from it, results from it).
 - **`no`** — questions to others, hearsay, advice, citing studies, hypothetical or planned use, mentions of someone else's experience, or a reply that doesn't itself express personal use even if the parent did.
 
-If `personal_use = no`, **stop here for this drug-row**: leave `sentiment` and `signal_strength` blank (or `n/a`), still record `confidence` (how sure are you the personal-use call is right?), and move on. Non-personal-use rows are useful for IRR on the personal-use decision but don't enter the per-drug sentiment analysis.
+If `personal_use = no`, **stop here for this drug-row**: leave `sentiment` blank and set `signal_strength` to `n/a`, still record `confidence` (how sure are you the personal-use call is right?), and move on. Non-personal-use rows are useful for IRR on the personal-use decision but don't enter the per-drug sentiment analysis.
 
 ## Step 3 — sentiment (per drug, only when personal_use = yes)
 
