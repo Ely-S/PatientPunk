@@ -31,8 +31,8 @@ hand-crafted regex patterns and Claude Haiku/Sonnet LLM calls.
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-pip install anthropic python-dotenv
+# 1. Install dependencies (from the repo root)
+uv sync
 
 # 2. Add your Anthropic API key to the project root .env
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
@@ -315,7 +315,23 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --provenance          Add {field}__provenance and {field}__confidence columns
   --codebook-format     csv (default) or markdown
   --no-discovered       Exclude llm_discovered fields from codebook
+  --group-guard         Route un-attributed stack members to `unknown` (see below)
 ```
+
+#### Group-attribution guard (optional)
+
+"Stack" posts (several treatments named together, one *collective* outcome — very
+common in long-COVID/PSSD) can inflate per-drug `helped` rates, because the model
+copies the collective outcome onto each named treatment. Enable the guard to route
+un-attributed stack members to `unknown` instead of a guessed `helped`:
+
+```bash
+PP_GROUP_GUARD=1        # env (dispersed / no-CLI path)
+... --group-guard       # CLI flag
+```
+
+Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
+analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix numbers.
 
 ### `demographics` — LLM-only demographics
 
@@ -421,6 +437,37 @@ the biggest clusterability lever. Prints n / p-over-n / density / pairwise
 similarity / silhouette-by-k (needs `pip install 'patientpunk[cluster]'`) so you
 can tell whether the data is appropriate for clustering before you try.
 
+### `aggregate` — collapse posts+comments into one synthetic post per author
+
+```
+python main.py aggregate --input-dir output [options]
+
+  --input-dir PATH      Corpus with subreddit_posts.json (default: ../output)
+  --out-dir PATH        Output corpus dir (default: <input-dir>_perpatient)
+  --min-items N          Drop authors with fewer than this many text segments (default: 1)
+  --sep STR             Separator joining an author's segments (default: blank-line rule)
+```
+
+Turns a posts+comments corpus into one per-*patient* corpus (every reply is
+attributed to its own author, so commenters become patients too), matching the
+clustering unit and cutting LLM cost several-fold before running `run` on the
+output dir.
+
+### `normalize` — collapse free-text fields to a controlled vocabulary
+
+```
+python main.py normalize --records output/records.csv [options]
+
+  --records PATH        records.csv to normalize (default: output/records.csv)
+  --out PATH            Output CSV (default: <records>_normalized.csv)
+  --sep STR             Multi-value separator (default: " | ")
+  --keep-dropped        Keep over-fragmented fields instead of blanking them
+```
+
+Maps dense free-text fields (`conditions`, `treatment_outcome`,
+`symptom_trajectory`, ...) onto a small curated vocabulary so `cluster-prep`
+encodes real signal instead of surface noise. Run before `cluster-prep`.
+
 ---
 
 ## Library Reference
@@ -489,7 +536,7 @@ Per-record discovered categories and aggregated frequency codebook.
 ## Environment Setup
 
 ```bash
-pip install anthropic python-dotenv
+uv sync   # from the repo root -- installs anthropic, pydantic, pandas, scipy, python-dotenv
 
 # API key lives at the project root — shared by both pipelines
 cp ../.env.example ../.env
@@ -498,16 +545,24 @@ cp ../.env.example ../.env
 
 Phase 1 (regex) and Phases 4–5 (export) require no API key.
 
+Optional extras (install with `pip install '.[extra]'` / `uv pip install '.[extra]'`
+from the repo root, or add to a `uv sync --extra` invocation):
+
+| Extra | Adds | Used by |
+|---|---|---|
+| `cluster` | scikit-learn, numpy | `cluster-prep`'s silhouette readiness report |
+| `openai` | openai | `LLM_PROVIDER=openai` (vLLM / Ollama / any OpenAI-compatible endpoint) |
+
 ---
 
 ## Running Tests
 
 ```bash
 cd variable_extraction
-python -m pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
-Comprehensive pytest suite (138 tests) with no live API calls. Covers corpus
+Comprehensive pytest suite (244 tests) with no live API calls. Covers corpus
 loading, schema parsing, extractor argument construction, pipeline config
 validation, qualitative standards injection, and codebook aggregation logic.
 
