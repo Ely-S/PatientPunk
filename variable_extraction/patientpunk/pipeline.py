@@ -30,7 +30,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import PACKAGE_ROOT, clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config, load_json
+from ._utils import clean_temp_dir, csv_fill_rate, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
 from .extractors import BiomedicalExtractor, ExtractorError, FieldDiscoveryExtractor, LLMExtractor
 from .exporters import CSVExporter, CodebookGenerator
 
@@ -51,6 +51,9 @@ _TEMP_PATTERNS: list[str] = [
     "discovered_records_*.json",
     "discovered_field_report_*.json",
 ]
+
+# Primary per-record output artifact; written by Phase 4 and read back by Phase 5.
+RECORDS_CSV_NAME = "records.csv"
 
 
 # ---------------------------------------------------------------------------
@@ -228,16 +231,16 @@ class Pipeline:
 
         # Record the LLM configuration (model / provider / base_url / temperature)
         # so every output is traceable to the model + settings that produced it.
-        prov = {**llm_config(), "schema_id": self._schema_id,
+        provenance = {**llm_config(), "schema_id": self._schema_id,
                 "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode}
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
-                json.dumps(prov, indent=2), encoding="utf-8")
+                json.dumps(provenance, indent=2), encoding="utf-8")
         except OSError:
             pass
-        print(f"  LLM config: provider={prov['provider']}  fast={prov['model_fast']}  "
-              f"strong={prov['model_strong']}  temp={prov['temperature']}"
-              + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
+        print(f"  LLM config: provider={provenance['provider']}  fast={provenance['model_fast']}  "
+              f"strong={provenance['model_strong']}  temp={provenance['temperature']}"
+              + (f"  base_url={provenance['base_url']}" if provenance['base_url'] else ""))
 
         # Phase 1 -- regex extraction
         result.phases.append(
@@ -289,7 +292,7 @@ class Pipeline:
         # "auto" runs all 4 stages and merges candidates into the schema.
         # "review" runs stages 1-2 (candidate scan + regex gen), saves
         # candidates JSON, then stops so the user can select fields in
-        # the Marimo variable picker (apps/discover.py).
+        # the Marimo variable picker.
         skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
         result.phases.append(
             self._run_phase(
@@ -315,7 +318,7 @@ class Pipeline:
         # candidates before they flow into Phases 4-5.
         if cfg.discovery_mode == "review" and not result.phases[-1].skipped:
             print("\n  Discovery candidates saved to temp/.")
-            print("  Review in: marimo run apps/discover.py")
+            print("  Review them in the Marimo variable picker.")
             print("  Then re-run with: --start-at 4 --no-clean")
             result.total_elapsed = time.time() - pipeline_start
             return result
@@ -355,7 +358,7 @@ class Pipeline:
             # return a fully populated PhaseResult object.  This keeps Pipeline.run()
             # clean: it only needs to inspect result.phases[-1].ok instead of
             # wrapping every phase call in its own try/except.
-            ext_result = extractor.run(raise_on_error=True)
+            extractor.run(raise_on_error=True)
             elapsed = time.time() - t0
             stats = self._collect_stats(phase)
             pr = PhaseResult(
@@ -462,10 +465,10 @@ class Pipeline:
         # both schemas and stitches them into the correct columns itself; if we
         # merged them here we would lose the structural distinction and the
         # exporter would silently drop the discovered columns.
-        disc = self._find_discovered_records()
-        if disc:
-            input_files.append(disc)
-            print(f"  Including discovered records: {disc.name}")
+        discovered_records = self._find_discovered_records()
+        if discovered_records:
+            input_files.append(discovered_records)
+            print(f"  Including discovered records: {discovered_records.name}")
         else:
             print(f"  No discovered records found -- exporting base records only")
 
@@ -479,7 +482,7 @@ class Pipeline:
             print("  [Skipping phase 4 -- no input files available]")
             return PhaseResult(phase=phase, label=label, skipped=True)
 
-        output_csv = self.config.input_dir / "records.csv"
+        output_csv = self.config.input_dir / RECORDS_CSV_NAME
         exporter = CSVExporter(
             input_files=input_files,
             output_path=output_csv,
@@ -515,7 +518,7 @@ class Pipeline:
             return PhaseResult(phase=phase, label=label, skipped=True)
 
         self._print_phase_banner(phase, label)
-        records_csv = self.config.input_dir / "records.csv"
+        records_csv = self.config.input_dir / RECORDS_CSV_NAME
         # Discovered fields live in a separate timestamped schema in temp/ that
         # Phase 5 would otherwise never see (the original curated schema knows
         # nothing about them).  Surface it so the codebook documents discovered

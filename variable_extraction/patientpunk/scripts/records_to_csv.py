@@ -102,7 +102,7 @@ def _all_fields_from_record(rec: dict) -> dict:
     }
 
 
-def merge_records(base: dict, incoming: dict, sep: str) -> dict:
+def fill_empty_fields(base: dict, incoming: dict, sep: str) -> dict:
     """Merge fields from `incoming` into `base`, filling empty values only."""
     base_fields = base.setdefault("_fields_merged", _all_fields_from_record(base))
     for field_name, field_data in _all_fields_from_record(incoming).items():
@@ -206,7 +206,7 @@ Output columns:
             if key not in merged:
                 merged[key] = rec
             else:
-                merge_records(merged[key], rec, args.sep)
+                fill_empty_fields(merged[key], rec, args.sep)
 
     if not merged:
         sys.exit("No records found.")

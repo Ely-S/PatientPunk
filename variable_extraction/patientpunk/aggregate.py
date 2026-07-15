@@ -23,11 +23,13 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from ._utils import REDDIT_REMOVED
+
 # Mirror scripts' _keep_text: drop empty / moderator-removed / user-deleted text.
-_DROP = {"", "[removed]", "[deleted]"}
+_DROP = REDDIT_REMOVED | {""}
 
 
-def _keep(text: object) -> str:
+def _clean_text(text: object) -> str:
     t = (text or "").strip() if isinstance(text, str) else ""
     return "" if t in _DROP else t
 
@@ -52,18 +54,18 @@ def aggregate_corpus_by_author(
     n_comments = 0
     for post in posts:
         n_posts += 1
-        pa = (post.get("author_hash") or "").strip()
-        title = _keep(post.get("title"))
-        body = _keep(post.get("body"))
+        post_author = (post.get("author_hash") or "").strip()
+        title = _clean_text(post.get("title"))
+        body = _clean_text(post.get("body"))
         block = "\n\n".join(t for t in (title, body) if t)
-        if pa and block:
-            segments[pa].append(block)
+        if post_author and block:
+            segments[post_author].append(block)
         for comment in post.get("comments") or []:
             n_comments += 1
-            ca = (comment.get("author_hash") or "").strip()
-            cb = _keep(comment.get("body"))
-            if ca and cb:
-                segments[ca].append(cb)
+            comment_author = (comment.get("author_hash") or "").strip()
+            comment_body = _clean_text(comment.get("body"))
+            if comment_author and comment_body:
+                segments[comment_author].append(comment_body)
 
     out: list[dict] = []
     dropped = 0

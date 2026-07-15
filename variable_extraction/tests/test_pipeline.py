@@ -46,7 +46,6 @@ from patientpunk.scripts.discover_fields import (
     parse_json_response,
     evaluate_patterns,
 )
-from patientpunk.scripts.extract_demographics_llm import _default_output_path
 from patientpunk.scripts.extract_biomedical import compile_extension_patterns
 from patientpunk.scripts.make_codebook import build_field_registry
 
@@ -562,8 +561,3 @@ class TestExtractorMissingScript:
         assert result.returncode == 127
         assert not result.ok
         assert "script not found" in result.stderr.lower()
-
-
-class TestDemographicsScriptDefaults:
-    def test_output_defaults_next_to_input_dir(self, tmp_path):
-        assert _default_output_path(tmp_path) == tmp_path / "demographics.csv"

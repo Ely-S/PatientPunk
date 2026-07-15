@@ -65,7 +65,7 @@ from pathlib import Path
 # Make sure the package is importable when run from this directory.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from patientpunk import Pipeline, PipelineConfig, DemographicCoder, DemographicsExtractor
+from patientpunk import Pipeline, PipelineConfig, DemographicCoder
 from patientpunk.corpus import CorpusLoader
 from patientpunk.schema import Schema
 from patientpunk._utils import get_schema_id, load_json
@@ -142,8 +142,8 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
     run_parser.add_argument("--discover", choices=["auto", "review"], default=None,
                    help="Run Phase 3 field discovery. 'auto' runs all stages and "
                         "merges candidates. 'review' stops after candidate generation "
-                        "so you can select fields in the Marimo variable picker "
-                        "(apps/discover.py). Default: skip discovery entirely.")
+                        "so you can select fields in the Marimo variable picker. "
+                        "Default: skip discovery entirely.")
     run_parser.add_argument("--no-clean", action="store_true",
                    help="Do not wipe temp/ before starting.  Useful when resuming.")
 
@@ -747,16 +747,16 @@ def _cmd_validate(args: argparse.Namespace) -> None:
             corpus_text = {}
             data = load_json(args.corpus) or []
 
-            def _walk(node):
+            def _collect_post_text(node):
                 pid = node.get("post_id") or node.get("id")
                 txt = "\n".join(filter(None, [node.get("title", ""), node.get("body", ""), node.get("text", "")]))
                 if pid:
                     corpus_text[pid] = txt
                 for c in node.get("comments") or []:
-                    _walk(c)
+                    _collect_post_text(c)
 
             for post in (data if isinstance(data, list) else []):
-                _walk(post)
+                _collect_post_text(post)
         out = args.out or (_HERE.parent / "gold_template.csv")
         n_written = export_gold_template(rows, fields, out, key=key, corpus_text=corpus_text, n=args.n)
         print(f"  Wrote gold-labeling template: {out}  ({n_written} rows x {len(fields)} fields to label)")

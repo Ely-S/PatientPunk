@@ -24,13 +24,15 @@ from __future__ import annotations
 
 import re
 
+from ._utils import OUTCOME_LABELS
+
 # --- cleaning ---------------------------------------------------------------
 
 _PUNCT = re.compile(r"[^\w%/+\- ]+")
 _WS = re.compile(r"\s+")
 
 
-def _clean(s: str) -> str:
+def _clean_surface(s: str) -> str:
     s = (s or "").strip().lower()
     s = s.replace("’", "'").replace("‘", "'")  # smart quotes
     s = _PUNCT.sub(" ", s)
@@ -123,32 +125,32 @@ def _regex_rules(field: str, cleaned: str) -> str | None:
     return None
 
 
-def _invert(vocab: dict[str, list[str]]) -> dict[str, str]:
+def _build_surface_lookup(vocab: dict[str, list[str]]) -> dict[str, str]:
     inv: dict[str, str] = {}
     for canon, syns in vocab.items():
-        inv[_clean(canon)] = canon
+        inv[_clean_surface(canon)] = canon
         for s in syns:
-            inv[_clean(s)] = canon
+            inv[_clean_surface(s)] = canon
     return inv
 
 
-_LOOKUP = {f: _invert(v) for f, v in FIELD_VOCAB.items()}
+_LOOKUP = {f: _build_surface_lookup(v) for f, v in FIELD_VOCAB.items()}
 
 
 def normalize_value(field: str, raw: str) -> str | None:
     """Map one raw value to its canonical form (or cleaned passthrough)."""
-    cleaned = _clean(raw)
+    cleaned = _clean_surface(raw)
     if not cleaned:
         return None
-    lut = _LOOKUP.get(field)
-    if lut and cleaned in lut:
-        return lut[cleaned]
+    lookup = _LOOKUP.get(field)
+    if lookup and cleaned in lookup:
+        return lookup[cleaned]
     rule = _regex_rules(field, cleaned)
     if rule:
         return rule
     # substring fallback for known canonicals embedded in noisy text
-    if lut:
-        for surface, canon in lut.items():
+    if lookup:
+        for surface, canon in lookup.items():
             if len(surface) >= 4 and re.search(rf"\b{re.escape(surface)}\b", cleaned):
                 return canon
     return cleaned  # passthrough: tidied but unmapped (never silently dropped)
@@ -185,7 +187,6 @@ TREATMENT_OUTCOME_SYMPTOM = "treatment_outcome_symptom"
 TREATMENT_OUTCOME_DERIVED = [
     TREATMENT_OUTCOME_LABEL, TREATMENT_OUTCOME_DRUG, TREATMENT_OUTCOME_SYMPTOM,
 ]
-_OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
 
 def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
@@ -219,12 +220,12 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
         # NB: TREATMENT_OUTCOME_RAW ("treatment_outcome") is the correct FIELD_VOCAB
         # key for outcome synonyms (worked->helped, etc.); there is no
         # "treatment_outcome_label" vocab. Do not "fix" this to TREATMENT_OUTCOME_LABEL.
-        lbl = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
-        if lbl not in _OUTCOME_LABELS:
-            lbl = "unknown"
-        if lbl not in seen:
-            seen.add(lbl)
-            labels.append(lbl)
+        label = normalize_value(TREATMENT_OUTCOME_RAW, raw_outcome)
+        if label not in OUTCOME_LABELS:
+            label = "unknown"
+        if label not in seen:
+            seen.add(label)
+            labels.append(label)
     return {
         TREATMENT_OUTCOME_LABEL: sep.join(labels),
         TREATMENT_OUTCOME_DRUG: sep.join(drugs),

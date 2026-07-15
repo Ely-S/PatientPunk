@@ -44,7 +44,6 @@ Output:
 import argparse
 import builtins
 import json
-import os
 import random
 import re
 import sys
@@ -116,7 +115,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # =============================================================================
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, MODEL_STRONG, PATIENTPUNK_RECORD_VERSION, RETRY_DELAYS
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -137,7 +136,6 @@ MAX_TEXT_CHARS_PHASE3 = 30_000
 # not read every word. Capping each item keeps batches dense (fewer API calls).
 MAX_TEXT_CHARS_PER_ITEM_PHASE1 = 0
 REQUEST_DELAY_S = 0.5
-RETRY_DELAYS = [2, 5, 15, 30]
 
 # How many example snippets Haiku should find per candidate field
 EXAMPLES_PER_FIELD = 8
@@ -309,16 +307,16 @@ def build_discovery_prompt(known_fields: list, schema_data: dict | None = None) 
 
     health_block = ""
     if schema_data:
-        high_bleed = [
+        high_bleed_fields = [
             (fname, fdata.get("_bleed_rate_last_run", 0))
             for fname, fdata in schema_data.get("extension_fields", {}).items()
             if fdata.get("_bleed_rate_last_run") is not None
             and fdata.get("_bleed_rate_last_run") >= 0.10
         ]
-        if high_bleed:
+        if high_bleed_fields:
             lines = "\n".join(
                 f"  - {name} ({rate:.0%} bleed) - patterns are capturing too much context"
-                for name, rate in sorted(high_bleed, key=lambda x: -x[1])
+                for name, rate in sorted(high_bleed_fields, key=lambda x: -x[1])
             )
             health_block = f"""
 HIGH BLEED WARNING - these existing fields had excessive bleed in the last run.
@@ -576,9 +574,9 @@ def run_phase1_discovery(
                     if not entry["extractability_note"] and field.get("extractability_note"):
                         entry["extractability_note"] = field["extractability_note"]
                     # Improvement 3: accumulate allowed_values sets
-                    av = field.get("allowed_values")
-                    if av and isinstance(av, list):
-                        entry["allowed_values_sets"].append({v.lower() for v in av})
+                    member_allowed_values = field.get("allowed_values")
+                    if member_allowed_values and isinstance(member_allowed_values, list):
+                        entry["allowed_values_sets"].append({v.lower() for v in member_allowed_values})
 
     # Filter to candidates with enough examples
     qualified = []
@@ -1092,9 +1090,9 @@ def run_phase3_regex_extract(
         if compiled:
             field_patterns[field["field_name"]] = compiled
         # Improvement 3: build allowed values map for normalization
-        av = field.get("allowed_values")
-        if av:
-            field_allowed_values[field["field_name"]] = {v.lower(): v for v in av}
+        allowed_values = field.get("allowed_values")
+        if allowed_values:
+            field_allowed_values[field["field_name"]] = {v.lower(): v for v in allowed_values}
         else:
             field_allowed_values[field["field_name"]] = None
 
@@ -1144,11 +1142,11 @@ def run_phase3_regex_extract(
                         if value and value.lower() not in [v.lower() for v in matches]:
                             matches.append(value)
             # Improvement 3 / 7: normalize matches to canonical allowed values
-            av_map = field_allowed_values.get(field_name)
-            if av_map is not None:
+            canonical_by_lower = field_allowed_values.get(field_name)
+            if canonical_by_lower is not None:
                 normalized = []
                 for val in matches:
-                    canonical = av_map.get(val.lower())
+                    canonical = canonical_by_lower.get(val.lower())
                     if canonical is not None:
                         normalized.append(canonical)
                 matches = normalized
@@ -1157,7 +1155,7 @@ def run_phase3_regex_extract(
                 record_hits += 1
 
         record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "discovered_regex",
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
             "record_meta": {
@@ -1276,8 +1274,8 @@ def run_phase4_fill_gaps(
     # Improvement 3 / 7: build allowed_values maps for normalization in Phase 4
     field_av_maps: dict[str, dict[str, str] | None] = {}
     for f in validated_fields:
-        av = f.get("allowed_values")
-        field_av_maps[f["field_name"]] = {v.lower(): v for v in av} if av else None
+        allowed_values = f.get("allowed_values")
+        field_av_maps[f["field_name"]] = {v.lower(): v for v in allowed_values} if allowed_values else None
 
     # Build field descriptions for the prompt (Improvement 3: include allowed values)
     field_lines = []
@@ -1335,11 +1333,11 @@ Include ALL listed fields. Use null when no evidence exists."""
                             values = [values]
                         values = [v for v in values if v]
                         # Improvement 3 / 7: normalize to allowed values if applicable
-                        av_map = field_av_maps.get(field_name)
-                        if av_map is not None and isinstance(values, list):
-                            values = [av_map[v.lower()] for v in values if isinstance(v, str) and v.lower() in av_map]
-                        elif av_map is not None and isinstance(values, str):
-                            values = [av_map[values.lower()]] if values.lower() in av_map else []
+                        canonical_by_lower = field_av_maps.get(field_name)
+                        if canonical_by_lower is not None and isinstance(values, list):
+                            values = [canonical_by_lower[v.lower()] for v in values if isinstance(v, str) and v.lower() in canonical_by_lower]
+                        elif canonical_by_lower is not None and isinstance(values, str):
+                            values = [canonical_by_lower[values.lower()]] if values.lower() in canonical_by_lower else []
                         if not values:
                             continue  # skip if normalization eliminated all values
                         if values:
@@ -1465,59 +1463,6 @@ def merge_into_schema(
 
 
 # =============================================================================
-# SCHEMA HEALTH UPDATE (Improvement 6)
-# =============================================================================
-
-def run_schema_health_update(schema_path: Path, records_file: Path) -> None:
-    """Compute per-field bleed rates from extracted records and write back to schema."""
-    print("\n" + "=" * 60)
-    print("  Schema Health Update")
-    print("=" * 60 + "\n")
-
-    with open(records_file, encoding="utf-8") as f:
-        records = json.load(f)
-
-    # Count extractions and bleed instances per field
-    field_total: dict[str, int] = defaultdict(int)
-    field_bleed: dict[str, int] = defaultdict(int)
-
-    for record in records:
-        for fname, fdata in record.get("discovered_fields", {}).items():
-            values = fdata.get("values") or []
-            for val in values:
-                if not isinstance(val, str):
-                    continue
-                field_total[fname] += 1
-                if len(val.split()) >= 10:
-                    field_bleed[fname] += 1
-
-    # Load and update schema
-    with open(schema_path, encoding="utf-8") as f:
-        schema = json.load(f)
-
-    now = datetime.now(timezone.utc).isoformat()
-    updated = 0
-    print(f"  {'Field':<40} {'Extractions':>12} {'Bleed':>8} {'Rate':>8}")
-    print(f"  {'-'*40} {'-'*12} {'-'*8} {'-'*8}")
-
-    for fname, fdata in schema.get("extension_fields", {}).items():
-        total = field_total.get(fname, 0)
-        bleed = field_bleed.get(fname, 0)
-        rate = bleed / total if total > 0 else None
-        fdata["_bleed_rate_last_run"] = rate
-        fdata["_last_health_check"] = now
-        updated += 1
-        flag = " *** HIGH BLEED" if rate is not None and rate >= 0.10 else ""
-        rate_str = f"{rate:.0%}" if rate is not None else "no data"
-        print(f"  {fname:<40} {total:>12} {bleed:>8} {rate_str:>8}{flag}")
-
-    with open(schema_path, "w", encoding="utf-8") as f:
-        json.dump(schema, f, ensure_ascii=False, indent=2)
-
-    print(f"\n  Updated {updated} fields in {schema_path.name}")
-
-
-# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1615,8 +1560,8 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         help=(
             "Load Phase 1 candidates from a saved JSON file and skip Phase 1 entirely. "
             "Phase 1 results are always saved to output/phase1_candidates.json after each run. "
-            "Note: run_pipeline.py auto-detects output/phase1_candidates.json and passes it "
-            "automatically - use --candidates here to override or specify a different file."
+            "Note: the pipeline (main.py run --discover) auto-detects output/phase1_candidates.json "
+            "and passes it automatically - use --candidates here to override or specify a different file."
         ),
     )
     parser.add_argument(
@@ -1752,7 +1697,6 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
         return
 
-    regex_fields = [f for f in validated_fields if not f.get("llm_only")]
     llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
     if llm_only_fields:
         print(f"\n  {len(llm_only_fields)} llm_only field(s) (no regex, Phase 4 gap-fill only):")

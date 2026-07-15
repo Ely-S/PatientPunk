@@ -74,7 +74,10 @@ from patientpunk.qualitative_standards import EXTRACTION_STANDARDS
 # =============================================================================
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, get_llm_client, split_retry_batch
+from patientpunk._utils import (
+    LLM_TEMPERATURE, MODEL_FAST, OUTCOME_LABELS, PATIENTPUNK_RECORD_VERSION,
+    RETRY_DELAYS, get_llm_client, split_retry_batch,
+)
 MODEL = MODEL_FAST
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
@@ -85,7 +88,6 @@ MAX_TOKENS = 8192
 # output tokens and got truncated mid-JSON. The discovery script learned the
 # same lesson and uses 10_000; 8_000 keeps a comfortable margin.
 MAX_TEXT_CHARS = 8_000
-RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
 # posts and the model emits one object PER POST ("Expected 1, got N"),
@@ -159,9 +161,9 @@ def get_client() -> anthropic.Anthropic:
     return get_llm_client()
 
 
-def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
+def call_model(client: anthropic.Anthropic, system_prompt: str, user_message: str,
                temperature: float | None = None) -> str:
-    """Call Haiku with retry/backoff and prompt caching.
+    """Call the fast model with retry/backoff and prompt caching.
 
     Thread-safe - Anthropic client is thread-safe.
     The system prompt is marked for caching: after the first request Anthropic
@@ -433,7 +435,7 @@ def build_llm_record(
             fields[key] = [v for v in val if v] or None
 
     return {
-        "_patientpunk_version": "2.0",
+        "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
         "_extraction_method": "llm",
         "_model": MODEL,
         "_schema_id": schema_id,
@@ -560,7 +562,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         # nudging temperature breaks the determinism and yields valid JSON.
         for temp in (None, 0.7, 1.0):
             parsed = parse_json_response(
-                call_haiku(client, system_prompt, items[0]["user_message"], temperature=temp))
+                call_model(client, system_prompt, items[0]["user_message"], temperature=temp))
             if parsed is not None:
                 return [parsed]
         raise ValueError("could not parse single-record response after retries")
@@ -583,7 +585,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", text)
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    raw = call_haiku(client, system_prompt, msg).strip()
+    raw = call_model(client, system_prompt, msg).strip()
 
     # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
     # leading prose line or trailing content after the array ("Extra data")
@@ -816,7 +818,6 @@ def process_corpus(
                     continue
 
                 if result.get("_skipped"):
-                    reason = result.get("reason", "?")
                     skipped += 1
                     continue
 
@@ -862,7 +863,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         llm_rec = llm_index.pop(key, None)
 
         merged_record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "merged",
             "_schema_id": regex_rec.get("_schema_id", "base"),
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
@@ -934,7 +935,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
     for llm_rec in llm_index.values():
         llm_fields = llm_rec.get("fields", {})
         merged_record = {
-            "_patientpunk_version": "2.0",
+            "_patientpunk_version": PATIENTPUNK_RECORD_VERSION,
             "_extraction_method": "llm_only",
             "_schema_id": llm_rec.get("_schema_id", "base"),
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
@@ -1098,8 +1099,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         "made worse": "worsened", "side effects": "worsened",
         "adverse": "worsened",
     }
-    _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
-
     for rec in merged:
         field_data = rec.get("fields", {}).get("treatment_outcome", {})
         values = field_data.get("values")
@@ -1121,7 +1120,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
             # Rejoin parts[2:] so a symptom containing ':' isn't truncated.
             symptom = ":".join(parts[2:]) if len(parts) > 2 else ""
             outcome = _OUTCOME_SYNONYMS.get(outcome, outcome)
-            if outcome not in _OUTCOME_LABELS:
+            if outcome not in OUTCOME_LABELS:
                 outcome = "unknown"
             rejoined = f"{drug}: {outcome}" + (f": {symptom}" if symptom else "")
             if rejoined not in seen:
@@ -1253,7 +1252,7 @@ Examples:
         system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
         user_message = build_user_message([args.text])
         print(f"Sending to {MODEL}...\n")
-        raw = call_haiku(client, system_prompt, user_message)
+        raw = call_model(client, system_prompt, user_message)
         parsed = parse_json_response(raw)
         if parsed:
             print("=== Extracted fields ===")
