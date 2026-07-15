@@ -286,7 +286,7 @@ The pipeline is designed to resume after interruptions:
 
 - **Extract:** Already-extracted entries are cached in `tagged_mentions.json` and skipped on re-run. Saves every 1000 items.
 - **Canonicalize:** Re-runs fully (single strong-model call on the unique drug name list; with `--drug` it's one LLM call the first time and zero on subsequent runs via the cached `aliases_<target>.json`). Treatment table uses `INSERT OR IGNORE`. Writes `canonicalized_mentions.json` separately, so rerunning canonicalize never invalidates `tagged_mentions.json`.
-- **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 5 writes, so at most 5 results are lost on crash.
+- **Classify:** `ReportWriter` loads all existing `(post_id, drug_id)` pairs at startup and skips them. Commits to SQLite every 50 writes (`COMMIT_EVERY`), so at most 50 results are lost on crash.
 
 ---
 
