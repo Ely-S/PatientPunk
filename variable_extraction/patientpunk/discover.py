@@ -50,6 +50,31 @@ import re
 import sys
 import threading
 import time
+
+try:
+    import regex as _regex  # real, interruptible match timeout (see _finditer_with_timeout)
+except ImportError:  # pragma: no cover - regex is a declared dependency
+    _regex = None
+
+
+def _re_flags_to_regex(flags: int) -> int:
+    """Translate the compile flags off a stdlib `re` pattern to `regex` flags.
+
+    Only the flags that can appear on our LLM-generated patterns are mapped; we
+    avoid copying raw flag ints because the two modules don't share all values.
+    """
+    out = 0
+    if _regex is not None:
+        for re_flag, name in (
+            (re.IGNORECASE, "IGNORECASE"),
+            (re.MULTILINE, "MULTILINE"),
+            (re.DOTALL, "DOTALL"),
+            (re.VERBOSE, "VERBOSE"),
+            (re.ASCII, "ASCII"),
+        ):
+            if flags & re_flag:
+                out |= getattr(_regex, name)
+    return out
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -78,12 +103,22 @@ from .biomedical import PATTERNS
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
-    """Run pattern.finditer(text) in a thread; raise TimeoutError if it takes too long.
+    """Run pattern.finditer(text), raising TimeoutError if it takes too long.
 
     Catastrophic backtracking in LLM-generated patterns can hang indefinitely.
-    This caps each pattern at `timeout` seconds and returns whatever matched so far,
-    raising TimeoutError so the caller can log and skip the offending pattern.
+    The `regex` module enforces a real timeout that *interrupts* the running match,
+    so a pathological pattern is genuinely abandoned. The stdlib-`re` fallback runs
+    the match in a daemon thread and can only *stop waiting* on it -- Python cannot
+    kill the thread, so a backtracking pattern keeps burning a core in the
+    background. We prefer `regex`; the thread path exists only if it's unavailable.
     """
+    if _regex is not None:
+        try:
+            compiled = _regex.compile(pattern.pattern, _re_flags_to_regex(pattern.flags))
+            return list(compiled.finditer(text, timeout=timeout))
+        except TimeoutError:
+            raise TimeoutError(f"Pattern timed out after {timeout}s") from None
+
     results: list = []
     exc: list = []
 
@@ -97,6 +132,8 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
     t.start()
     t.join(timeout)
     if t.is_alive():
+        # The thread is still running the match and cannot be killed; it will keep
+        # consuming a CPU core until the (LLM-generated) pattern finally returns.
         raise TimeoutError(f"Pattern timed out after {timeout}s")
     if exc:
         raise exc[0]

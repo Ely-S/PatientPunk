@@ -196,6 +196,8 @@ class _OpenAIMessages:
             model=model, messages=oai_messages,
             max_tokens=max_tokens, temperature=temperature,
         )
+        if not resp.choices:
+            return _AnthropicShapedResponse("")
         return _AnthropicShapedResponse(resp.choices[0].message.content or "")
 
 
@@ -269,7 +271,11 @@ def split_retry_batch(
 
     Returns
     -------
-    list of results, same length as *items*, in the same order.
+    list, same length as *items*, in the same order. Entries are whatever
+    *call_fn* returned for a successful item, or **None** for an item that still
+    failed to parse after the individual-call fallback. Callers MUST treat any
+    element as possibly-None (e.g. ``if result is None or not isinstance(...)``)
+    -- a None is the explicit "gave up on this item" signal, not a result.
     """
     try:
         results = call_fn(items)
