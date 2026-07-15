@@ -17,7 +17,7 @@ uv run python Scrapers/scrape_corpus.py --weeks 2 --comments
 Output goes to `output/` at the project root. Then run the extraction pipeline:
 
 ```bash
-cd ../variable_extraction
+cd variable_extraction
 python main.py run --schema schemas/covidlonghaulers_schema.json
 ```
 
