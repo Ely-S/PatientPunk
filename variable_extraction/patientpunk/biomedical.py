@@ -47,6 +47,16 @@ BASE_FIELDS = frozenset({
     "prior_infections", "hormonal_events", "family_history",
 })
 
+# Demographic fields are extracted by the LLM ONLY, never regex. Regex is the sole
+# extraction path with no self/other guard -- the LLM prompt, qualitative_standards'
+# "SELF-REFERENCE ONLY" block, and the demographics command all reject third-party
+# mentions, but a bare age/sex/location regex cannot tell the author from a commenter.
+# On measured data the guarded LLM strictly dominates these fields on coverage, so we
+# skip them in regex and let the Phase 2 gap-fill supply them.
+LLM_ONLY_FIELDS = frozenset({
+    "age", "sex_gender", "location_country", "location_us_state",
+})
+
 BASE_FIELD_CONFIDENCE: dict[str, str] = {
     "age": "medium",
     "sex_gender": "high",
@@ -656,6 +666,8 @@ def extract_from_text(text: str, patterns: dict = None) -> dict:
         patterns = PATTERNS
     results = {}
     for field, pattern_list in patterns.items():
+        if field in LLM_ONLY_FIELDS:
+            continue  # demographics are LLM-only (regex has no self/other guard)
         matches = []
         for pat in pattern_list:
             for m in pat.finditer(text):
