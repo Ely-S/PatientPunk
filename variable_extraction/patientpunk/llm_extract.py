@@ -69,6 +69,7 @@ from ._utils import (
     MODEL_FAST,
     collect_texts_from_post,
     get_llm_client,
+    parse_json_response,
     split_retry_batch,
 )
 MODEL = MODEL_FAST
@@ -199,25 +200,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     return ""
 
 
-def parse_json_response(text: str) -> dict | None:
-    text = text.strip()
-    if text.startswith("```"):
-        nl = text.find("\n")               # find() not index(): single-line fence
-        if nl != -1:                       # (```json{...}```) has no newline
-            text = text[nl + 1:]
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start >= 0 and end > start:
-            try:
-                return json.loads(text[start:end])
-            except json.JSONDecodeError:
-                return None
-    return None
+# parse_json_response lives in _utils (shared with demographics / discover)
 
 
 # =============================================================================

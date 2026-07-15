@@ -325,11 +325,12 @@ PATTERNS = {
     # Age at onset
     # NOTE: the optional anchor (?:at\s+|when\s+i\s+was\s+)? means the first
     # pattern would match "symptoms started 5 years ago" (duration, not age).
-    # Negative lookahead (?!\s*(?:years?|months?|weeks?|days?)) prevents that.
+    # Negative lookahead (?!\s*(?:years?|yrs?|y/?o|months?|mos?|weeks?|days?))
+    # prevents that (including common abbreviations).
     "age_at_onset": [
         re.compile(
             r"\b(?:onset|symptoms?\s+(?:started|began)|got sick|became ill)"
-            r"\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b(?!\s*(?:years?|months?|weeks?|days?))",
+            r"\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b(?!\s*(?:years?|yrs?|y/?o|months?|mos?|weeks?|days?))",
             re.I,
         ),
         re.compile(r"\b(?:started|began)\s+(?:at\s+age\s+|when\s+i\s+was\s+)(\d{1,2})\b", re.I),

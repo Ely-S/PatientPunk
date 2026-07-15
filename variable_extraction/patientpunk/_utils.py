@@ -36,8 +36,10 @@ collect_texts_from_post  Collect title/body (optionally + comments) text from
                     llm_extract.py, and discover.py so the comments-inclusion
                     difference between them is an explicit flag, not three
                     silently-diverging copies.
-"""
 
+strip_markdown_fences    Strip ``` / ```json fences (multi- and single-line).
+parse_json_response      Tolerant LLM JSON parse (fences + embedded {...}/[...]).
+"""
 from __future__ import annotations
 
 import csv
@@ -314,6 +316,45 @@ def load_json(path: Path) -> dict | list | None:
         return None
 
 
+def strip_markdown_fences(raw: str) -> str:
+    """Strip ``` / ```json fences from LLM output (multi- and single-line)."""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        nl = raw.find("\n")
+        if nl != -1:
+            raw = raw[nl + 1:]
+        else:
+            raw = raw[3:]
+            if raw[:4].lower() == "json":
+                raw = raw[4:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+    return raw.strip()
+
+
+def parse_json_response(text: str) -> dict | list | None:
+    """Extract a JSON object or array from an LLM response.
+
+    Handles markdown fences (including single-line `````json{...}``` ``) and
+    leading/trailing prose by isolating the outermost ``{...}`` or ``[...]``.
+    """
+    text = strip_markdown_fences(text.strip())
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        for opener, closer in (("{", "}"), ("[", "]")):
+            start = text.find(opener)
+            end = text.rfind(closer)
+            if start >= 0 and end > start:
+                try:
+                    return json.loads(text[start:end + 1])
+                except json.JSONDecodeError:
+                    continue
+    return None
+
+
 def get_schema_id(schema_path: Path) -> str:
     """Return the schema_id from a schema JSON file, falling back to the stem."""
     data = load_json(schema_path)
@@ -425,8 +466,7 @@ def collect_texts_from_post(post: dict, include_comments: bool = False) -> list[
     including them would attribute their conditions/treatments to the post
     author. Commenters are captured as their own patients via the aggregate
     path (aggregate_corpus_by_author). Pass include_comments=True only for
-    callers that intentionally want the discussion as extra context (e.g.
-    field discovery), not per-author attribution.
+    callers that intentionally want discussion text (not per-author attribution).
     """
     texts = [t for t in (post.get("title"), post.get("body")) if t]
     if include_comments:

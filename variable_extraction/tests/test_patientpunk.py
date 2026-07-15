@@ -385,10 +385,10 @@ class TestCorpusLoader:
         loader = CorpusLoader(tmp_corpus)
         records = list(loader.iter_records(include_users=False))
         first = records[0]
-        # Title + body + first comment ("Same here.") but NOT empty or [removed]
+        # Title + body only — comments are other users and must not attach
         assert "25M with long covid" in first.texts
         assert "I have POTS and brain fog." in first.texts
-        assert "Same here." in first.texts
+        assert "Same here." not in first.texts
         assert "" not in first.texts
         assert "[removed]" not in first.texts
 
@@ -1857,6 +1857,35 @@ class TestActiveExtractorTextCollection:
         from patientpunk.llm_extract import collect_texts_from_post
         texts = collect_texts_from_post(self._post_with_other_author_comment())
         assert texts == ["Post title", "Post body"]
+
+    def test_discover_post_collection_uses_title_and_body_only(self):
+        from patientpunk.discover import collect_texts_from_post
+        texts = collect_texts_from_post(self._post_with_other_author_comment())
+        assert texts == ["Post title", "Post body"]
+
+    def test_corpus_loader_post_collection_uses_title_and_body_only(self):
+        from patientpunk.corpus import CorpusLoader
+        texts = CorpusLoader._texts_from_post(self._post_with_other_author_comment())
+        assert texts == ["Post title", "Post body"]
+
+
+class TestAgeAtOnsetLookahead:
+    """Duration abbreviations must not be captured as age_at_onset."""
+
+    def test_years_ago_not_captured(self):
+        from patientpunk.biomedical import extract_from_text
+        result = extract_from_text("symptoms started 5 years ago")
+        assert "age_at_onset" not in result
+
+    def test_yrs_ago_not_captured(self):
+        from patientpunk.biomedical import extract_from_text
+        result = extract_from_text("symptoms started 5 yrs ago")
+        assert "age_at_onset" not in result
+
+    def test_explicit_age_still_captured(self):
+        from patientpunk.biomedical import extract_from_text
+        result = extract_from_text("symptoms started when I was 25")
+        assert result.get("age_at_onset") == ["25"]
 
 
 class TestAggregateByAuthor:

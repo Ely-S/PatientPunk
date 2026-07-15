@@ -151,6 +151,7 @@ from ._utils import (
     MODEL_STRONG,
     collect_texts_from_post as _collect_texts_from_post,
     get_llm_client,
+    parse_json_response,
 )
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
@@ -222,27 +223,7 @@ def call_model(
     return ""
 
 
-def parse_json_response(text: str) -> dict | list | None:
-    """Extract JSON from an LLM response, handling markdown code fences."""
-    text = text.strip()
-    if text.startswith("```"):
-        first_newline = text.index("\n")
-        text = text[first_newline + 1:]
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Find the outermost JSON structure
-        for opener, closer in [("{", "}"), ("[", "]")]:
-            start = text.find(opener)
-            end = text.rfind(closer) + 1
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(text[start:end])
-                except json.JSONDecodeError:
-                    continue
-    return None
+# parse_json_response lives in _utils (shared with llm_extract / demographics)
 
 
 # =============================================================================
@@ -263,11 +244,15 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    # Discovery wants the surrounding discussion as extra context (more
-    # candidate phrasing to scan), unlike biomedical.py/llm_extract.py which
-    # exclude comments to avoid attributing commenters' conditions to the
-    # post author.
-    return _collect_texts_from_post(post, include_comments=True)
+    """Title + body ONLY: comments are written by OTHER users, so including
+    them attributes their content to the post author (same as biomedical.py /
+    llm_extract.py; commenters are captured via the aggregate path)."""
+    texts: list[str] = []
+    for raw in _collect_texts_from_post(post, include_comments=False):
+        kept = (raw or "").strip()
+        if kept and kept not in ("[removed]", "[deleted]"):
+            texts.append(kept)
+    return texts
 
 
 def load_corpus_texts(
@@ -1169,11 +1154,18 @@ def run_phase3_regex_extract(
             # Improvement 3 / 7: normalize matches to canonical allowed values
             av_map = field_allowed_values.get(field_name)
             if av_map is not None:
-                normalized = []
+                normalized, dropped = [], []
                 for val in matches:
                     canonical = av_map.get(val.lower())
                     if canonical is not None:
                         normalized.append(canonical)
+                    else:
+                        dropped.append(val)
+                if dropped:
+                    print(
+                        f"    ! {field_name}: dropped {len(dropped)} value(s) "
+                        f"not in allowed_values: {dropped[:3]}"
+                    )
                 matches = normalized
             if matches:
                 extracted[field_name] = matches

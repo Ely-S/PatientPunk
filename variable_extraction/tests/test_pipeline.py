@@ -225,7 +225,8 @@ class TestCollectTexts:
     def test_user_empty(self):
         assert collect_texts_from_user({}) == []
 
-    def test_post_with_comments(self):
+    def test_post_excludes_comments(self):
+        """Title + body only — comments are other users and must not attach to the author."""
         post = {
             "title": "Long COVID 2 years in",
             "body": "Still struggling with fatigue",
@@ -235,42 +236,35 @@ class TestCollectTexts:
             ],
         }
         texts = collect_texts_from_post(post)
-        assert "Long COVID 2 years in" in texts
-        assert "Still struggling with fatigue" in texts
-        assert "Same here" in texts
-        assert "" not in texts
+        assert texts == ["Long COVID 2 years in", "Still struggling with fatigue"]
+        assert "Same here" not in texts
 
     def test_post_no_comments(self):
         post = {"title": "Title only", "body": "Body text"}
         texts = collect_texts_from_post(post)
         assert texts == ["Title only", "Body text"]
 
-    def test_post_with_removed_body_still_includes_comments(self):
-        """collect_texts_from_post collects all non-empty text including [removed];
-        filtering of sentinel strings is the CorpusLoader's responsibility."""
+    def test_post_filters_removed_and_deleted_body(self):
         post = {
             "title": "My post",
             "body": "[removed]",
             "comments": [{"body": "I have the same issue"}, {"body": ""}],
         }
         texts = collect_texts_from_post(post)
-        assert "My post" in texts
-        # [removed] is included at this level -- CorpusLoader filters it later
-        assert "[removed]" in texts
-        assert "I have the same issue" in texts
-        # Empty comment body should not appear
-        assert "" not in texts
+        assert texts == ["My post"]
+        assert "[removed]" not in texts
+        assert "I have the same issue" not in texts
 
-    def test_post_with_deleted_body_still_includes_comments(self):
+    def test_post_filters_deleted_body(self):
         post = {
             "title": "Question",
             "body": "[deleted]",
             "comments": [{"body": "Try LDN"}, {"body": ""}],
         }
         texts = collect_texts_from_post(post)
-        assert "Question" in texts
-        assert "[deleted]" in texts   # filtering is CorpusLoader's job
-        assert "Try LDN" in texts
+        assert texts == ["Question"]
+        assert "[deleted]" not in texts
+        assert "Try LDN" not in texts
 
     def test_user_no_posts_key(self):
         """Users without a 'posts' key should still return comment texts."""

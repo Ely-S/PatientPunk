@@ -208,22 +208,29 @@ def load_extractions(
                 ),
             )
 
-        # Conditions -> conditions table (if column exists)
+        # Conditions -> conditions table (if column exists).
+        # Self/other for conditions is enforced upstream (LLM prompts +
+        # title/body-only collectors). Unlike age/sex, pipe-separated multi
+        # values here are legitimate (one patient, several conditions), so we
+        # do not reject multi-value rows — only skip empty/duplicate tokens.
         conditions_raw = (row.get("conditions") or "").strip()
         post_id = (row.get("post_id") or "").strip() or None
         if post_id is not None and post_id not in valid_posts:
             post_id = None  # synthetic/aggregated id -> no FK target
         if conditions_raw:
+            seen_conditions: set[str] = set()
             for condition_name in conditions_raw.split(" | "):
                 condition_name = condition_name.strip().lower()
-                if condition_name:
-                    conn.execute(
-                        "INSERT INTO conditions"
-                        " (run_id, user_id, post_id, condition_type, condition_name)"
-                        " VALUES (?, ?, ?, ?, ?)",
-                        (run_id, author_hash, post_id, "illness", condition_name),
-                    )
-                    conditions_inserted += 1
+                if not condition_name or condition_name in seen_conditions:
+                    continue
+                seen_conditions.add(condition_name)
+                conn.execute(
+                    "INSERT INTO conditions"
+                    " (run_id, user_id, post_id, condition_type, condition_name)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (run_id, author_hash, post_id, "illness", condition_name),
+                )
+                conditions_inserted += 1
 
     conn.commit()
     return run_id

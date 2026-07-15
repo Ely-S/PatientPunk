@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 
-LLM-only demographic extraction for PatientPunk.
+LLM-only demographic extraction for PatientPunk (legacy deductive-only path).
+
+Prefer ``patientpunk.demographics.run_demographic_coding(..., mode="deductive")``
+for new work; this module remains for CLI/import compatibility.
 
 Extracts age, sex/gender, and location from:
   - subreddit_posts.json  (one record per post author)
@@ -42,7 +45,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
-from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
+from ._utils import (
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    parse_json_response,
+    split_retry_batch,
+    get_llm_client,
+    strip_markdown_fences,
+)
 from .phase import PhaseResult
 MODEL = MODEL_FAST
 
@@ -141,38 +151,13 @@ def _make_empty_result(author_hash: str, source_type: str, evidence: str = "") -
 
 
 def _strip_markdown_fences(raw: str) -> str:
-    # Handles both multi-line fences (```json\n{...}\n```) and SINGLE-LINE
-    # fences (```json{...}```). The old splitlines() filter blanked the
-    # single-line form (its only line starts with ```), breaking the default
-    # single-record path; _parse_one_object's {...} span also handles oddities.
-    raw = raw.strip()
-    if raw.startswith("```"):
-        nl = raw.find("\n")
-        if nl != -1:
-            raw = raw[nl + 1:]          # multi-line: drop the ```lang opening line
-        else:
-            raw = raw[3:]               # single-line: drop the opening ```
-            if raw[:4].lower() == "json":
-                raw = raw[4:]           # ... and the json language tag
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    return raw.strip()
+    """Compatibility alias for the shared fence stripper in ``_utils``."""
+    return strip_markdown_fences(raw)
 
 
 def _parse_one_object(text: str) -> dict | None:
-    """Tolerant single-object JSON parse: strip fences, then isolate the {...}
-    span so leading/trailing prose doesn't break json.loads."""
-    text = _strip_markdown_fences(text.strip())
-    try:
-        obj = json.loads(text)
-    except json.JSONDecodeError:
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end <= start:
-            return None
-        try:
-            obj = json.loads(text[start:end + 1])
-        except json.JSONDecodeError:
-            return None
+    """Tolerant single-object JSON parse via shared ``parse_json_response``."""
+    obj = parse_json_response(text)
     return obj if isinstance(obj, dict) else None
 
 

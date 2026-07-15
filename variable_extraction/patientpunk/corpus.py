@@ -26,6 +26,8 @@ from typing import Any, Iterator
 
 from pydantic import BaseModel, Field
 
+from ._utils import collect_texts_from_post as _collect_texts_from_post
+
 
 # ---------------------------------------------------------------------------
 # Models
@@ -203,18 +205,17 @@ class CorpusLoader:
 
     @staticmethod
     def _texts_from_post(post: dict) -> list[str]:
-        """Extract non-empty text segments from a subreddit post dict."""
+        """Extract non-empty text segments from a subreddit post dict.
+
+        Title + body only: comments are other users' text and must not be
+        attributed to the post author (same rule as biomedical / llm_extract /
+        discover). Commenters are captured via the aggregate path.
+        """
         texts: list[str] = []
-        title = (post.get("title") or "").strip()
-        body = (post.get("body") or "").strip()
-        if title:
-            texts.append(title)
-        if body and body not in ("[removed]", "[deleted]"):
-            texts.append(body)
-        for comment in post.get("comments", []):
-            comment_body = (comment.get("body") or "").strip()
-            if comment_body and comment_body not in ("[removed]", "[deleted]"):
-                texts.append(comment_body)
+        for raw in _collect_texts_from_post(post, include_comments=False):
+            kept = (raw or "").strip()
+            if kept and kept not in ("[removed]", "[deleted]"):
+                texts.append(kept)
         return texts
 
     @staticmethod

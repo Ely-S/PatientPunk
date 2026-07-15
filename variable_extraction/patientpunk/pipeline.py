@@ -230,8 +230,8 @@ class Pipeline:
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
                 json.dumps(prov, indent=2), encoding="utf-8")
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"  ! could not write llm_provenance.json: {e}")
         print(f"  LLM config: provider={prov['provider']}  fast={prov['model_fast']}  "
               f"strong={prov['model_strong']}  temp={prov['temperature']}"
               + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
@@ -409,7 +409,13 @@ class Pipeline:
         if matched_records:
             return max(matched_records, key=lambda p: p.stat().st_mtime)
 
-        return find_newest_glob(self._temp_dir, "discovered_records_*.json")
+        fallback = find_newest_glob(self._temp_dir, "discovered_records_*.json")
+        if fallback is not None:
+            print(
+                f"  ! no discovery report matched schema_id={self._schema_id!r}; "
+                f"falling back to newest records file: {fallback.name}"
+            )
+        return fallback
 
     def _find_discovered_schema(self) -> Path | None:
         """Return the discovered-schema JSON for the current base schema, if any.
