@@ -62,7 +62,7 @@ almost all false positives.
 
 - **Measured** (100- and 220-record r/covidlonghaulers samples): LLM coverage is
   **2–5× regex**. The only value regex uniquely catches that the LLM misses is the
-  compact `NNF`/`NNM` shorthand (~0.6% of records); every other regex-only demographic
+  compact `NNF`/`NNM` age+sex shorthand (e.g. `28F`, `34M`; ~0.6% of records); every other regex-only demographic
   hit was a false positive (multi-person or packed garbage) the LLM correctly rejected.
 - **Knob:** the demographic patterns in `biomedical.py`. **Default: regex on.**
 - **Recommended:** treat the LLM as authoritative for age/sex/location; if keeping
