@@ -41,6 +41,8 @@ from urllib.error import HTTPError, URLError
 API = "https://api.dispersed.com"
 
 
+# --- HTTP / auth --------------------------------------------------------------
+
 def _nonce() -> str:
     return os.urandom(16).hex()  # 16 bytes -> 32 hex chars
 
@@ -83,7 +85,152 @@ def _signed_request(method: str, path: str, body: dict | None = None,
                  f"  (check network / DNS / the API host, or that the job's port is open)")
 
 
-def main(argv=None) -> int:
+def _as_list(resp) -> list:
+    """Dispersed list endpoints return either `{"data": [...]}` or a bare list."""
+    if isinstance(resp, dict):
+        return resp.get("data") or []
+    return resp or []
+
+
+# --- launch helpers -----------------------------------------------------------
+
+def _detect_public_ip() -> str:
+    """Return `<public-ip>/32`, or exit asking the caller to pass --allowed-ip."""
+    try:
+        with urlopen("https://api.ipify.org", timeout=10) as r:
+            return r.read().decode().strip() + "/32"
+    except Exception:
+        sys.exit("Could not detect public IP; pass --allowed-ip <cidr> explicitly.")
+
+
+def _build_job_body(args, allowed_ip: str) -> dict:
+    """Assemble the PERSISTENT-job request body from parsed CLI args."""
+    env: dict = {}
+    if "ollama" in args.image.lower():
+        # Ollama must bind all interfaces to be reachable via node_urls.
+        env["OLLAMA_HOST"] = f"0.0.0.0:{args.port}"
+    body: dict = {
+        "task": "PERSISTENT",   # long-running query-responsive server
+        "title": args.title,
+        "gpu_count": args.gpu_count,
+        "min_vram_gb": args.min_vram_gb,
+        "parameters": {"type": "docker", "parameters": {
+            "image": args.image,
+            "tag": "latest",
+            "ports": [args.port],
+            "allowed_ips": [allowed_ip],
+            "env": env,
+        }},
+    }
+    if args.gpu_name:
+        body["gpu_name"] = args.gpu_name
+    return body
+
+
+def _poll_for_node(uuid: str, port: int, deadline: float, *, pk: str, sk: str) -> dict | None:
+    """Poll job-runs until one for `uuid` exposes node_urls; return the matching entry.
+
+    node_urls lives on the job-RUN, not the job object. Each url's `port` is the
+    EXTERNAL proxy port; its `description` is the container port (str) we asked
+    for, so match on that to pick the right mapping. Returns None on timeout.
+    """
+    while time.time() < deadline:
+        time.sleep(10)
+        runs = _signed_request("GET", "/v1/job-runs", pk=pk, sk=sk)
+        run = next((r for r in _as_list(runs) if r.get("job_uuid") == uuid), None)
+        urls = (run or {}).get("node_urls") or []
+        if urls:
+            return next((u for u in urls if str(u.get("description")) == str(port)),
+                        urls[0])
+        print(f"    run status={run.get('status') if run else '?'} ...")
+    return None
+
+
+def _pull_model(base: str, model: str) -> None:
+    """Pull `model` into the running Ollama server via its HTTP API (best effort)."""
+    print(f"  pulling model '{model}' via Ollama (one-time, can take minutes)...")
+    try:
+        req = Request(f"{base}/api/pull",
+                      data=json.dumps({"name": model}).encode(),
+                      headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(req, timeout=3600) as r:
+            r.read()
+        print("  pull complete.")
+    except Exception as e:
+        print(f"  ! pull request failed ({e}); pull manually: "
+              f"curl {base}/api/pull -d '{{\"name\":\"{model}\"}}'")
+
+
+def _print_endpoint(base: str, model: str) -> None:
+    """Print the env exports that point PatientPunk extraction at the server."""
+    print("\n=== point PatientPunk extraction at it ===")
+    print(f"  export LLM_PROVIDER=openai")
+    print(f"  export LLM_BASE_URL={base}/v1")
+    print(f"  export LLM_API_KEY=EMPTY")
+    print(f"  export MODEL_FAST={model}")
+    print(f"  export MODEL_STRONG={model}")
+    print(f"\n  then: validate the model (per-field, vs your Claude reference) before scaling:")
+    print(f"    python variable_extraction/main.py validate --reference gold.csv --candidate <run>.csv")
+
+
+# --- subcommands --------------------------------------------------------------
+
+def cmd_check(*, pk: str, sk: str) -> int:
+    """Verify API auth with a read-only call. No job, no billing."""
+    jobs = _signed_request("GET", "/v1/jobs", pk=pk, sk=sk)
+    print(f"  auth OK -- API reachable (jobs visible: {len(_as_list(jobs))})")
+    return 0
+
+
+def cmd_stop(uuid: str, *, pk: str, sk: str) -> int:
+    """Cancel a running job by uuid (stops billing)."""
+    r = _signed_request("PUT", f"/v1/jobs/{uuid}/cancel",
+                        {"reason": "stopped via launch_job.py"}, pk=pk, sk=sk)
+    print(f"  cancel {uuid} -> status: {r.get('status')}")
+    return 0
+
+
+def cmd_launch(args, *, pk: str, sk: str) -> int:
+    """Launch a PERSISTENT model-server job, wait for it, and print the endpoint."""
+    if not args.model:
+        sys.exit("--model is required to launch (or use --check to verify auth only).")
+
+    allowed_ip = args.allowed_ip or _detect_public_ip()
+    if not args.allowed_ip:
+        print(f"  detected public IP -> allowed_ips = {allowed_ip}")
+
+    body = _build_job_body(args, allowed_ip)
+    print(f"Launching PERSISTENT job: image={args.image} port={args.port} "
+          f"gpu={args.gpu_name or args.gpu_count}")
+    created = _signed_request("POST", "/v1/jobs", body, pk=pk, sk=sk)
+    uuid = created.get("uuid")
+    if not uuid:
+        sys.exit(f"No job uuid in response: {created}")
+    print(f"  job uuid: {uuid}  status: {created.get('status')}")
+
+    print("  waiting for a job-run with node_urls (reachable host:port)...")
+    deadline = time.time() + args.poll_seconds
+    node = _poll_for_node(uuid, args.port, deadline, pk=pk, sk=sk)
+    if not node:
+        sys.exit(f"Timed out waiting for node_urls. Check job {uuid} in the console.")
+
+    host = node.get("hostname")
+    port = node.get("port")
+    if not host or port is None:
+        sys.exit(f"Dispersed returned an incomplete node_urls entry: {node}")
+    scheme = "https" if node.get("tls") else "http"
+    base = f"{scheme}://{host}:{port}"
+    print(f"\n  Reachable at: {base}")
+
+    if args.pull:
+        _pull_model(base, args.model)
+    _print_endpoint(base, args.model)
+    return 0
+
+
+# --- CLI ----------------------------------------------------------------------
+
+def _parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=None, help="Ollama model tag, e.g. qwen2.5:32b")
@@ -103,7 +250,11 @@ def main(argv=None) -> int:
                     help="After the job is reachable, pull --model via Ollama's API.")
     ap.add_argument("--poll-seconds", type=int, default=600,
                     help="How long to wait for node_urls (default 600s).")
-    args = ap.parse_args(argv)
+    return ap.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = _parse_args(argv)
 
     pk = os.environ.get("DISPERSED_PUBLIC_KEY", "")
     sk = os.environ.get("DISPERSED_SECRET_KEY", "")
@@ -111,112 +262,10 @@ def main(argv=None) -> int:
         sys.exit("Set DISPERSED_PUBLIC_KEY (pk_...) and DISPERSED_SECRET_KEY (sk_...).")
 
     if args.check:
-        jobs = _signed_request("GET", "/v1/jobs", pk=pk, sk=sk)
-        if isinstance(jobs, dict):
-            count = len(jobs.get("data") or [])
-        elif isinstance(jobs, list):
-            count = len(jobs)
-        else:
-            count = 0
-        print(f"  auth OK -- API reachable (jobs visible: {count})")
-        return 0
+        return cmd_check(pk=pk, sk=sk)
     if args.stop:
-        r = _signed_request("PUT", f"/v1/jobs/{args.stop}/cancel",
-                            {"reason": "stopped via launch_job.py"}, pk=pk, sk=sk)
-        print(f"  cancel {args.stop} -> status: {r.get('status')}")
-        return 0
-    if not args.model:
-        sys.exit("--model is required to launch (or use --check to verify auth only).")
-
-    allowed_ip = args.allowed_ip
-    if not allowed_ip:
-        try:
-            with urlopen("https://api.ipify.org", timeout=10) as r:
-                allowed_ip = r.read().decode().strip() + "/32"
-            print(f"  detected public IP -> allowed_ips = {allowed_ip}")
-        except Exception:
-            sys.exit("Could not detect public IP; pass --allowed-ip <cidr> explicitly.")
-
-    env: dict = {}
-    if "ollama" in args.image.lower():
-        # Ollama must bind all interfaces to be reachable via node_urls.
-        env["OLLAMA_HOST"] = f"0.0.0.0:{args.port}"
-    docker_params: dict = {
-        "image": args.image,
-        "tag": "latest",
-        "ports": [args.port],
-        "allowed_ips": [allowed_ip],
-        "env": env,
-    }
-    body: dict = {
-        "task": "PERSISTENT",   # long-running query-responsive server
-        "title": args.title,
-        "gpu_count": args.gpu_count,
-        "min_vram_gb": args.min_vram_gb,
-        "parameters": {"type": "docker", "parameters": docker_params},
-    }
-    if args.gpu_name:
-        body["gpu_name"] = args.gpu_name
-
-    print(f"Launching PERSISTENT job: image={args.image} port={args.port} "
-          f"gpu={args.gpu_name or args.gpu_count}")
-    created = _signed_request("POST", "/v1/jobs", body, pk=pk, sk=sk)
-    uuid = created.get("uuid")
-    if not uuid:
-        sys.exit(f"No job uuid in response: {created}")
-    print(f"  job uuid: {uuid}  status: {created.get('status')}")
-
-    # Poll for node_urls -- it lives on the job-RUN, not the job object. The
-    # url's `port` is the EXTERNAL proxy port; `description` is the container
-    # port (str) we asked for, so match on that to pick the right mapping.
-    print("  waiting for a job-run with node_urls (reachable host:port)...")
-    deadline = time.time() + args.poll_seconds
-    node = None
-    while time.time() < deadline:
-        time.sleep(10)
-        runs = _signed_request("GET", "/v1/job-runs", pk=pk, sk=sk)
-        data = runs.get("data") if isinstance(runs, dict) else runs
-        run = next((r for r in (data or []) if r.get("job_uuid") == uuid), None)
-        status = run.get("status") if run else "?"
-        urls = (run or {}).get("node_urls") or []
-        if urls:
-            node = next((u for u in urls if str(u.get("description")) == str(args.port)),
-                        urls[0])
-            break
-        print(f"    run status={status} ...")
-    if not node:
-        sys.exit(f"Timed out waiting for node_urls. Check job {uuid} in the console.")
-
-    host = node.get("hostname")
-    port = node.get("port")
-    if not host or port is None:
-        sys.exit(f"Dispersed returned an incomplete node_urls entry: {node}")
-    scheme = "https" if node.get("tls") else "http"
-    base = f"{scheme}://{host}:{port}"
-    print(f"\n  Reachable at: {base}")
-
-    if args.pull:
-        print(f"  pulling model '{args.model}' via Ollama (one-time, can take minutes)...")
-        try:
-            req = Request(f"{base}/api/pull",
-                          data=json.dumps({"name": args.model}).encode(),
-                          headers={"Content-Type": "application/json"}, method="POST")
-            with urlopen(req, timeout=3600) as r:
-                r.read()
-            print("  pull complete.")
-        except Exception as e:
-            print(f"  ! pull request failed ({e}); pull manually: "
-                  f"curl {base}/api/pull -d '{{\"name\":\"{args.model}\"}}'")
-
-    print("\n=== point PatientPunk extraction at it ===")
-    print(f"  export LLM_PROVIDER=openai")
-    print(f"  export LLM_BASE_URL={base}/v1")
-    print(f"  export LLM_API_KEY=EMPTY")
-    print(f"  export MODEL_FAST={args.model}")
-    print(f"  export MODEL_STRONG={args.model}")
-    print(f"\n  then: validate the model (per-field, vs your Claude reference) before scaling:")
-    print(f"    python variable_extraction/main.py validate --reference gold.csv --candidate <run>.csv")
-    return 0
+        return cmd_stop(args.stop, pk=pk, sk=sk)
+    return cmd_launch(args, pk=pk, sk=sk)
 
 
 if __name__ == "__main__":
