@@ -83,7 +83,7 @@ values are not.** The generated codebook lists each field's extraction method.
   wrong-person values, and it does not filter conditions at all. It is a backstop, not
   the primary self/other guard — that lives in the extraction prompt.
 - **`collect_texts_from_post` is duplicated and has diverged.** It should be title + body
-  only everywhere, but `discover.py`'s copy currently also folds in commenters' text (a
-  fix is proposed on the PR), and the copies differ on `[removed]`/`[deleted]` filtering
+  only everywhere, but `discover.py`'s copy currently also folds in commenters' text,
+  and the copies differ on `[removed]`/`[deleted]` filtering
   (`biomedical` filters via `_keep_text`; `llm_extract` does not). A shared helper would
   prevent this.
