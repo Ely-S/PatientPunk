@@ -148,7 +148,8 @@ def _poll_for_node(uuid: str, port: int, deadline: float, *, pk: str, sk: str) -
         if urls:
             return next((u for u in urls if str(u.get("description")) == str(port)),
                         urls[0])
-        print(f"    run status={run.get('status') if run else '?'} ...")
+        status = run.get("status") if run else "?"
+        print(f"    run status={status} ...")
     return None
 
 
@@ -201,8 +202,9 @@ def cmd_launch(args, *, pk: str, sk: str) -> int:
     if not args.model:
         sys.exit("--model is required to launch (or use --check to verify auth only).")
 
-    allowed_ip = args.allowed_ip or _detect_public_ip()
-    if not args.allowed_ip:
+    allowed_ip = args.allowed_ip
+    if not allowed_ip:
+        allowed_ip = _detect_public_ip()
         print(f"  detected public IP -> allowed_ips = {allowed_ip}")
 
     body = _build_job_body(args, allowed_ip)
@@ -236,7 +238,7 @@ def cmd_launch(args, *, pk: str, sk: str) -> int:
 
 # --- CLI ----------------------------------------------------------------------
 
-def _parse_args(argv=None):
+def _parse_args(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=None, help="Ollama model tag, e.g. qwen2.5:32b")
