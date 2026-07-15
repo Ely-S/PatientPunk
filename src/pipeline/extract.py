@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-extract_mentions.py — Extract drug mentions from Reddit posts.
+extract.py — Extract drug mentions from Reddit posts.
 
 Step 1 of the pipeline. Reads posts from SQLite and outputs tagged_mentions.json
 with drugs found in each post/comment (direct mentions + inherited from upstream comments).
@@ -26,7 +26,6 @@ from utilities.db import open_db, post_text
 from utilities.graph import find_parent_cycles
 
 BATCH_SIZE = 10
-SAVE_EVERY = 50  # batches between checkpoint writes
 
 
 def is_only_questions(text: str) -> bool:
@@ -69,7 +68,7 @@ def _detect_parent_cycles(id_to_parent: dict) -> None:
     The upstream-mentioned-drugs recursion below assumes id_to_parent is a
     forest (each node has at most one parent and chains terminate). A cycle
     in malformed imported data would cause the recursion to memoize on
-    (eid, remaining) and still never terminate (cache stores final values,
+    (post_id, remaining) and still never terminate (cache stores final values,
     not in-progress visits). Detect once up front and fail loudly.
 
     Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
@@ -93,17 +92,17 @@ def compute_upstream_mentioned_drugs(id_to_parent: dict, id_to_drugs: dict, max_
     _detect_parent_cycles(id_to_parent)
 
     @lru_cache(maxsize=None)
-    def upstream(eid: str, remaining: int | None) -> tuple[str, ...]:
+    def upstream(post_id: str, remaining: int | None) -> tuple[str, ...]:
         if remaining == 0:
             return ()
-        parent_id = id_to_parent.get(eid)
+        parent_id = id_to_parent.get(post_id)
         if not parent_id:
             return ()
         parent_drugs = tuple(id_to_drugs.get(parent_id, []))
         next_remaining = None if remaining is None else remaining - 1
         return tuple(dict.fromkeys(parent_drugs + upstream(parent_id, next_remaining)))
 
-    return {eid: list(upstream(eid, max_depth)) for eid in id_to_parent}
+    return {post_id: list(upstream(post_id, max_depth)) for post_id in id_to_parent}
 
 
 def load_posts_from_db(db_path: Path, limit: int | None = None):
@@ -153,6 +152,23 @@ def load_posts_from_db(db_path: Path, limit: int | None = None):
     return items, id_to_parent
 
 
+def _build_tagged(all_items: list, id_to_parent: dict, id_to_drugs: dict, max_depth) -> list:
+    """Compute upstream drug context and assemble the filtered tagged-entry list.
+
+    Spreads each item and attaches drugs_direct (direct matches) and
+    drugs_context (inherited from upstream comments), keeping only entries
+    that have at least one direct or context drug and are not question-only.
+    """
+    upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, max_depth)
+    return [
+        {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
+         "drugs_context": upstream_drugs.get(item["id"], [])}
+        for item in all_items
+        if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
+        and not is_only_questions(item["text"])
+    ]
+
+
 def run_extraction(config: "PipelineConfig"):
     """Main extraction logic — called by pipeline or standalone."""
     client = config.client
@@ -175,14 +191,7 @@ def run_extraction(config: "PipelineConfig"):
         }
         log.info(f"Substring-matched {sum(1 for v in id_to_drugs.values() if v)} posts against aliases for {target!r}.")
 
-        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
-        tagged = [
-            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
-             "drugs_context": upstream_drugs.get(item["id"], [])}
-            for item in all_items
-            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
-            and not is_only_questions(item["text"])
-        ]
+        tagged = _build_tagged(all_items, id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged_path.write_text(json.dumps(tagged, indent=2))
         log.info(f"Wrote {len(tagged)} entries to {tagged_path.name}.")
         return
@@ -194,20 +203,13 @@ def run_extraction(config: "PipelineConfig"):
     else:
         id_to_drugs = {}
 
-    to_do = [(item["id"], item["text"]) for item in all_items
+    pending_extractions = [(item["id"], item["text"]) for item in all_items
              if item["id"] not in id_to_drugs and item["text"].strip()]
-    log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
+    log.info(f"{len(id_to_drugs)} cached, {len(pending_extractions)} to extract...")
 
     def save_tagged_atomic() -> list:
         """Recompute upstream context and write atomically via a temp file."""
-        upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
-        tagged = [
-            {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
-             "drugs_context": upstream_drugs.get(item["id"], [])}
-            for item in all_items
-            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
-            and not is_only_questions(item["text"])
-        ]
+        tagged = _build_tagged(all_items, id_to_parent, id_to_drugs, config.max_upstream_depth)
         tmp = tagged_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(tagged, indent=2))
         tmp.replace(tagged_path)
@@ -215,11 +217,10 @@ def run_extraction(config: "PipelineConfig"):
 
     # Bounded parallel extraction: at most workers * 4 futures in flight at once.
     # As each future completes the next batch is submitted (backpressure).
-    # Checkpoint written every SAVE_EVERY completed batches.
-    all_batches = [to_do[i:i + BATCH_SIZE] for i in range(0, len(to_do), BATCH_SIZE)]
+    # Checkpoint written every BATCH_SIZE * 100 completed records.
+    all_batches = [pending_extractions[i:i + BATCH_SIZE] for i in range(0, len(pending_extractions), BATCH_SIZE)]
     batch_iter = iter(all_batches)
     done_ext = 0
-    batches_since_save = 0
     max_inflight = max(config.workers * 4, 1)
 
     with ThreadPoolExecutor(max_workers=config.workers) as pool:
@@ -235,13 +236,13 @@ def run_extraction(config: "PipelineConfig"):
             batch = pending.pop(future)
 
             for (item_id, _), drugs in zip(batch, future.result()):
-                flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
-                id_to_drugs[item_id] = flat
+                drug_names = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                id_to_drugs[item_id] = drug_names
 
             done_ext += len(batch)
             if done_ext % (BATCH_SIZE * 100) == 0:
                 save_tagged_atomic()
-            log.info(f"Extracted {done_ext}/{len(to_do)}...")
+            log.info(f"Extracted {done_ext}/{len(pending_extractions)}...")
 
             # Submit next batch to keep pool saturated
             next_batch = next(batch_iter, None)

@@ -113,7 +113,7 @@ def main():
             aliases = json.loads(aliases_json) if aliases_json else []
         except (TypeError, ValueError):
             aliases = []
-        cats = categorize_aliases(canonical_name, aliases)
+        alias_categories = categorize_aliases(canonical_name, aliases)
         lines.append(f"### {canonical_name} ({len(aliases)} aliases)")
         lines.append("")
         if treatment_class:
@@ -123,18 +123,18 @@ def main():
         lines.append("")
         for a in aliases:
             tags = []
-            if a in cats["short"]:
+            if a in alias_categories["short"]:
                 tags.append("short")
-            if a in cats["multi_word"]:
+            if a in alias_categories["multi_word"]:
                 tags.append("multi-word")
-            if a in cats["likely_misspellings"]:
+            if a in alias_categories["likely_misspellings"]:
                 tags.append("misspelling")
             tag_str = f"  *({', '.join(tags)})*" if tags else ""
             lines.append(f"- `{a}`{tag_str}")
         lines.append("")
-        if cats["short"]:
+        if alias_categories["short"]:
             lines.append(
-                f"_Heuristic flag: {len(cats['short'])} alias(es) at "
+                f"_Heuristic flag: {len(alias_categories['short'])} alias(es) at "
                 f"≤{SHORT_ALIAS_THRESHOLD} characters. Short aliases can match "
                 f"unrelated words via substring; verify these are intentional._"
             )

@@ -23,6 +23,10 @@ import anthropic
 TAGGED_MENTIONS = "tagged_mentions.json"
 CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 
+# Community name injected into the classifier prompt when the DB has no
+# source_subreddit (e.g. a writer-less / no-DB run).
+DEFAULT_SUBREDDIT = "Long COVID"
+
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
 @dataclass
@@ -71,8 +75,8 @@ _has_anthropic = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEY
 
 # Auto-detect provider from available keys, or use explicit override
 _explicit_provider = os.environ.get("LLM_PROVIDER", "").strip().lower() or None
-if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic"):
-    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter' or 'anthropic')")
+if _explicit_provider and _explicit_provider not in ("openrouter", "anthropic", "openai"):
+    sys.exit(f"Unsupported LLM_PROVIDER={_explicit_provider!r} (expected 'openrouter', 'anthropic', or 'openai')")
 if _explicit_provider:
     LLM_PROVIDER = _explicit_provider
 elif _has_openrouter:
@@ -86,6 +90,12 @@ if LLM_PROVIDER == "openrouter":
     _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
     _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
     _API_BASE = "https://openrouter.ai/api"
+elif LLM_PROVIDER == "openai":
+    # OpenAI-compatible server (OpenRouter /v1, vLLM, Ollama, DeepSeek). No model
+    # defaults -- set MODEL_FAST / MODEL_STRONG explicitly. base_url from LLM_BASE_URL.
+    _DEFAULT_FAST = ""
+    _DEFAULT_STRONG = ""
+    _API_BASE = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 else:
     _DEFAULT_FAST = "claude-haiku-4-5-20251001"
     _DEFAULT_STRONG = "claude-sonnet-4-6"
@@ -93,6 +103,12 @@ else:
 
 MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
 MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
+
+if LLM_PROVIDER == "openai" and not (MODEL_FAST and MODEL_STRONG):
+    sys.exit(
+        "LLM_PROVIDER=openai has no default model. Set MODEL_FAST and MODEL_STRONG "
+        "to the model your endpoint serves (e.g. Qwen/Qwen2.5-32B-Instruct-AWQ)."
+    )
 
 
 # ── Git ──────────────────────────────────────────────────────────────────────
@@ -136,14 +152,74 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+# ── OpenAI-compatible adapter (LLM_PROVIDER=openai: vLLM / OpenRouter / DeepSeek) ──
+# Mimics the slice of the Anthropic client that llm_call() uses:
+#   client.messages.stream(**kwargs).get_final_message().content[0].text
+# (plus .create() for completeness). No real streaming -- a single non-streamed
+# chat.completions call wrapped in the shape src/ expects. `system` is a plain str.
+class _Block:
+    def __init__(self, text: str): self.text = text
+class _Msg:
+    def __init__(self, text: str): self.content = [_Block(text)]
+class _Stream:
+    def __init__(self, text: str): self._text = text
+    def __enter__(self): return self
+    def __exit__(self, *exc): return False
+    def get_final_message(self): return _Msg(self._text)
+class _OpenAIMessages:
+    def __init__(self, client, temperature: float = 0.0):
+        self._client = client
+        self._temperature = temperature
+    def _call(self, model, messages, max_tokens, system) -> str:
+        msgs = []
+        if system:
+            msgs.append({"role": "system", "content": system if isinstance(system, str)
+                         else "\n".join(b.get("text", "") for b in system)})
+        msgs.extend(messages)
+        r = self._client.chat.completions.create(
+            model=model, messages=msgs, max_tokens=max_tokens, temperature=self._temperature)
+        if not r.choices:
+            raise RuntimeError(
+                f"OpenAI-compatible endpoint returned no choices for model {model!r} "
+                f"(empty response — transient backend failure or a filtered output)."
+            )
+        return r.choices[0].message.content or ""
+    def stream(self, *, model, messages, max_tokens=1024, system=None, **kw):
+        return _Stream(self._call(model, messages, max_tokens, system))
+    def create(self, *, model, messages, max_tokens=1024, system=None, **kw):
+        return _Msg(self._call(model, messages, max_tokens, system))
+class _OpenAIAdapter:
+    def __init__(self, client, temperature: float = 0.0):
+        self.messages = _OpenAIMessages(client, temperature)
+
+
 # ── Client ───────────────────────────────────────────────────────────────────
+# Request timeout (seconds) and retry budget, shared by both provider branches below.
+CLIENT_TIMEOUT_SECONDS = 60.0
+CLIENT_MAX_RETRIES = 4
+
+
 def get_client() -> anthropic.Anthropic:
-    """Return a configured Anthropic client (direct or via OpenRouter).
+    """Return a configured LLM client.
 
     Key selection is tied to the provider:
-      openrouter → requires OPENROUTER_API_KEY
+      openrouter → requires OPENROUTER_API_KEY (Anthropic SDK + base_url)
       anthropic  → requires ANTHROPIC_API_KEY
+      openai     → OpenAI-compatible server (DeepSeek/vLLM/Ollama via OpenRouter
+                   or any /v1 endpoint); uses LLM_API_KEY or OPENROUTER_API_KEY.
     """
+    if LLM_PROVIDER == "openai":
+        api_key = (os.environ.get("LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or "EMPTY")
+        try:
+            from openai import OpenAI
+        except ImportError:
+            sys.exit("LLM_PROVIDER=openai needs the openai package: pip install openai")
+        log.info(f"LLM provider: openai | base: {_API_BASE} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+        return _OpenAIAdapter(
+            OpenAI(api_key=api_key, base_url=_API_BASE, max_retries=CLIENT_MAX_RETRIES, timeout=CLIENT_TIMEOUT_SECONDS),
+            temperature=float(os.environ.get("LLM_TEMPERATURE", "0") or 0),
+        )
+
     if LLM_PROVIDER == "openrouter":
         api_key = os.environ.get("OPENROUTER_API_KEY", "")
         key_name = "OPENROUTER_API_KEY"
@@ -162,8 +238,8 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
-        "timeout": 60.0,
+        "max_retries": CLIENT_MAX_RETRIES,
+        "timeout": CLIENT_TIMEOUT_SECONDS,
     }
     if _API_BASE:
         kwargs["base_url"] = _API_BASE
@@ -187,28 +263,24 @@ import re
 
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
 
-def parse_json_array(raw: str) -> list:
+def _parse_json(raw: str, open_ch: str, close_ch: str, label: str):
     raw = _strip_markdown(raw)
-    start, end = raw.find("["), raw.rfind("]") + 1
+    start, end = raw.find(open_ch), raw.rfind(close_ch) + 1
     if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
+        raise LLMParseError(f"No JSON {label} in response: {raw[:200]}")
     text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+
+
+def parse_json_array(raw: str) -> list:
+    return _parse_json(raw, "[", "]", "array")
 
 
 def parse_json_object(raw: str) -> dict:
-    raw = _strip_markdown(raw)
-    start, end = raw.find("{"), raw.rfind("}") + 1
-    if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
-    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+    return _parse_json(raw, "{", "}", "object")
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────

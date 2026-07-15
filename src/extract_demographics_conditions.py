@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_demographics.py — Extract demographics and conditions from user posts.
+extract_demographics_conditions.py — Extract demographics and conditions from user posts.
 
 Reads from the posts table, groups by user, sends to a fast model for extraction,
 and writes to user_profiles and conditions tables.
@@ -11,22 +11,24 @@ along with the type of condition (illness or symptom), the severity of the condi
 and the date of diagnosis and resolution.
 Both of these may have empty values if the model fails to extract any information.
 Usage:
-    python src/run_demographics.py --db data/posts.db
-    python src/run_demographics.py --db data/posts.db --limit 50
+    python src/extract_demographics_conditions.py --db data/posts.db
+    python src/extract_demographics_conditions.py --db data/posts.db --limit 50
 """
 import argparse
-import json
 import sys
-import time
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities.db import open_db
+from utilities.db import create_extraction_run, open_db
 from utilities import get_client, get_git_commit, llm_call, log, parse_json_object, MODEL_FAST
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
+
+# Fallback condition type when the model omits it or returns an out-of-vocab
+# value. Must be one of the allowed ("illness", "symptom") DB enum values.
+DEFAULT_CONDITION_TYPE = "illness"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -63,12 +65,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
     with closing(open_db(db_path)) as conn:
         # Create extraction run
         run_config = {"limit": limit, "model": MODEL_FAST, "max_posts": max_posts, "max_chars": max_chars}
-        cursor = conn.execute(
-            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) VALUES (?, ?, ?, ?)",
-            (int(time.time()), get_git_commit(), "demographics", json.dumps(run_config)),
-        )
-        run_id = cursor.lastrowid
-        conn.commit()
+        run_id = create_extraction_run(conn, "demographics", run_config, get_git_commit())
         log.info(f"Extraction run {run_id}")
 
         # Load posts grouped by user (limit applies to number of distinct users)
@@ -114,14 +111,14 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
             for cond in result.get("conditions", []):
                 if isinstance(cond, dict):
                     name = (cond.get("condition_name") or "").strip().lower()
-                    ctype = (cond.get("condition_type") or "illness").strip().lower()
+                    ctype = (cond.get("condition_type") or DEFAULT_CONDITION_TYPE).strip().lower()
                 elif isinstance(cond, str):
                     name = cond.strip().lower()
-                    ctype = "illness"
+                    ctype = DEFAULT_CONDITION_TYPE
                 else:
                     continue
                 if ctype not in ("illness", "symptom"):
-                    ctype = "illness"
+                    ctype = DEFAULT_CONDITION_TYPE
                 if name:
                     conn.execute(
                         "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "

@@ -16,8 +16,7 @@ By default, reads the DB via the canonical resolver in
 package-anchor walk-up) and writes outputs into a `merged/` subdirectory of
 the package's `data/` folder. Both can be overridden via --db and --out.
 
-This is the CLEAN replacement for the earlier merge_and_analyze_historical.py
-script: there is no cross-DB merging — the single combined database is the
+There is no cross-DB merging — the single combined database is the
 sole source of truth.
 """
 from __future__ import annotations

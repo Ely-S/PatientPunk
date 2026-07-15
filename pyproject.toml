@@ -30,10 +30,6 @@ openai = [
 dev = [
     "pytest>=8.0",
 ]
-ui = [
-    "streamlit>=1.30",
-    "plotly>=5.18",
-]
 
 # The importable package (patientpunk) lives under variable_extraction/.
 [tool.setuptools]

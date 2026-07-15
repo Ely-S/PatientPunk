@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-classify_sentiment.py — Classify sentiment toward drugs.
+classify.py — Classify sentiment toward drugs.
 
 Step 3 of the pipeline. For each entry×drug pair, classifies sentiment
 (positive/negative/mixed/neutral) and signal strength. Note that this will take into
@@ -12,17 +12,13 @@ are skipped unless --reclassify is set.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs
-    # Or standalone (run from src/):
-    python -m scripts.classify_sentiment --output-dir ../outputs
 """
 from __future__ import annotations
 
-import argparse
 import itertools
 import json
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -31,7 +27,7 @@ from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
-    PipelineConfig, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
+    PipelineConfig, DEFAULT_SUBREDDIT, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
 )
 from utilities.db import load_synonyms, open_db, post_text
 
@@ -42,7 +38,7 @@ BATCH_SIZE = 5
 PREFILTER_BATCH_SIZE = 20
 
 
-def _pf_key(entry: dict, drug: str) -> str:
+def _prefilter_key(entry: dict, drug: str) -> str:
     """Cache/filter key for a single (entry, drug) pair."""
     return f"{entry['id']}:{drug}"
 
@@ -147,18 +143,18 @@ def run_classification(
     canonicalized_path = config.path(CANONICALIZED_MENTIONS)
     tagged_path = canonicalized_path if canonicalized_path.exists() else config.path(TAGGED_MENTIONS)
 
-    tagged = json.loads(tagged_path.read_text(encoding="utf-8"))
-    log.info(f"Loaded {len(tagged)} entries from {tagged_path.name}.")
+    mention_entries = json.loads(tagged_path.read_text(encoding="utf-8"))
+    log.info(f"Loaded {len(mention_entries)} entries from {tagged_path.name}.")
 
     # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
         synonyms_for = load_synonyms(config.db_path)
         with open_db(config.db_path) as conn:
             row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
-        subreddit = row[0] if row else "Long COVID"
+        subreddit = row[0] if row else DEFAULT_SUBREDDIT
     else:
         synonyms_for = {}
-        subreddit = "Long COVID"
+        subreddit = DEFAULT_SUBREDDIT
 
     target_aliases: set[str] | None = None
     if config.drug:
@@ -167,14 +163,14 @@ def run_classification(
         log.info(f"Restricting classification to: {sorted(target_aliases)}")
 
     if limit:
-        tagged = tagged[:limit]
+        mention_entries = mention_entries[:limit]
 
-    # Parent-context lookup: start from entries in `tagged` (text already loaded),
+    # Parent-context lookup: start from entries in `mention_entries` (text already loaded),
     # then backfill only parent_ids dropped upstream (e.g. question-only parents
     # filtered in extract) with a single DB query.
-    id_to_text: dict[str, str] = {e["id"]: e["text"] for e in tagged}
+    id_to_text: dict[str, str] = {e["id"]: e["text"] for e in mention_entries}
     missing = {
-        pid for e in tagged
+        pid for e in mention_entries
         if (pid := e.get("parent_id")) and pid not in id_to_text
     }
     if missing:
@@ -190,10 +186,10 @@ def run_classification(
 
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
-    to_do: list[tuple[dict, str]] = []
+    pairs_to_classify: list[tuple[dict, str]] = []
     skipped = 0
 
-    for entry in tagged:
+    for entry in mention_entries:
         all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
         for drug in all_drugs:
             if target_aliases is not None and drug not in target_aliases:
@@ -206,7 +202,7 @@ def run_classification(
                 skipped += 1
                 continue
 
-            to_do.append((entry, drug))
+            pairs_to_classify.append((entry, drug))
             if drug not in prompts:
                 # In --drug mode (target_aliases populated), use the resolved
                 # alias set (minus the matched drug itself) as the synonym
@@ -217,12 +213,12 @@ def run_classification(
                 # Without this fallback, classifier prompts for aliased
                 # mentions would lack the canonical-drug context.
                 if target_aliases is not None:
-                    syns = sorted(target_aliases - {drug})
+                    synonyms = sorted(target_aliases - {drug})
                 else:
-                    syns = synonyms_for.get(drug)
-                prompts[drug] = system_prompt(drug, syns, subreddit)
+                    synonyms = synonyms_for.get(drug)
+                prompts[drug] = system_prompt(drug, synonyms, subreddit)
 
-    log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
+    log.info(f"{skipped} already in DB, {len(pairs_to_classify)} entry×drug pairs to process...")
 
     # Prefilter with fast model — results cached to prefilter_results.json
     prefilter_path = config.path("prefilter_results.json")
@@ -230,23 +226,23 @@ def run_classification(
     if skip_prefilter:
         log.info("Skipping prefilter, sending all pairs to classify...")
     else:
-        cached_pf: dict[str, bool] = (
+        cached_prefilter_results: dict[str, bool] = (
             json.loads(prefilter_path.read_text(encoding="utf-8")) if prefilter_path.exists() else {}
         )
-        if cached_pf:
-            log.info(f"Loaded {len(cached_pf)} cached prefilter results.")
+        if cached_prefilter_results:
+            log.info(f"Loaded {len(cached_prefilter_results)} cached prefilter results.")
 
         # Single-pass split: cached → apply to filtered set; uncached → queue for LLM
         uncached: list[tuple[dict, str]] = []
-        for e, d in to_do:
-            key = _pf_key(e, d)
-            cached = cached_pf.get(key)
+        for e, d in pairs_to_classify:
+            key = _prefilter_key(e, d)
+            cached = cached_prefilter_results.get(key)
             if cached is None:
                 uncached.append((e, d))
             elif not cached:
                 filtered.add(key)
 
-        log.info(f"Prefiltering {len(uncached)} uncached pairs ({len(to_do) - len(uncached)} cached)...")
+        log.info(f"Prefiltering {len(uncached)} uncached pairs ({len(pairs_to_classify) - len(uncached)} cached)...")
 
         if uncached:
             prefilter_batches = [
@@ -263,18 +259,18 @@ def run_classification(
                     batch = futures[future]
                     results = future.result()
                     for (entry, drug), passed in zip(batch, results):
-                        key = _pf_key(entry, drug)
-                        cached_pf[key] = passed
+                        key = _prefilter_key(entry, drug)
+                        cached_prefilter_results[key] = passed
                         if not passed:
                             filtered.add(key)
                     done_pf += len(batch)
                     if done_pf % (PREFILTER_BATCH_SIZE * 10) == 0:
-                        prefilter_path.write_text(json.dumps(cached_pf))
+                        prefilter_path.write_text(json.dumps(cached_prefilter_results))
                     log.info(f"Prefiltered {done_pf}/{len(uncached)}...")
-            prefilter_path.write_text(json.dumps(cached_pf))
+            prefilter_path.write_text(json.dumps(cached_prefilter_results))
 
     # Only classify entries that passed prefilter
-    to_classify = [(e, d) for e, d in to_do if _pf_key(e, d) not in filtered]
+    to_classify = [(e, d) for e, d in pairs_to_classify if _prefilter_key(e, d) not in filtered]
     log.info(f"{len(filtered)} filtered out, {len(to_classify)} to classify...")
 
     # Group by drug for batching (shared system prompt per drug)
@@ -336,25 +332,3 @@ def run_classification(
     log.info("Top drugs:")
     for drug, count in drug_counter.most_common(10):
         log.info(f"  {drug:<30} {count}")
-
-
-def main():
-    """Standalone entry point (no database)."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", required=True, help="Directory containing tagged_mentions.json")
-    parser.add_argument("--limit", type=int)
-    parser.add_argument("--reclassify", action="store_true")
-    args = parser.parse_args()
-
-    config = PipelineConfig(
-        client=get_client(),
-        output_dir=Path(args.output_dir),
-        db_path=Path("."),  # Not used by classify
-        limit=args.limit or 0,
-        reclassify=args.reclassify,
-    )
-    run_classification(config)
-
-
-if __name__ == "__main__":
-    main()
