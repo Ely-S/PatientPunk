@@ -17,8 +17,8 @@ Usage:
     python transform_arctic_shift.py --posts posts.zst --comments comments.zst
     python transform_arctic_shift.py --posts posts.ndjson --comments comments.ndjson --output output/subreddit_posts.json
 
-The output is compatible with both pipelines (Scrapers/demographic_extraction/
-and src/run_pipeline.py).
+The output is compatible with both pipelines (variable_extraction/main.py
+and src/run_sentiment_pipeline.py).
 """
 
 import argparse
@@ -29,6 +29,8 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+DELETED_AUTHOR = "[deleted]"  # Reddit placeholder author; never hashed as a username
 
 
 def hash_username(username: str) -> str:
@@ -77,7 +79,7 @@ def open_ndjson(path: Path):
 def build_comment(c: dict) -> dict:
     """Transform an Arctic Shift comment into our format."""
     author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
@@ -91,7 +93,7 @@ def build_comment(c: dict) -> dict:
 def build_post(p: dict, comments: list[dict]) -> dict:
     """Transform an Arctic Shift post into our format."""
     author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author and author != DELETED_AUTHOR else None
     return {
         "post_id": f"t3_{p.get('id', '')}",
         "title": p.get("title", ""),
@@ -129,8 +131,8 @@ Examples:
     post_count = 0
     for p in open_ndjson(args.posts):
         # Filter to subreddit if specified
-        sub = (p.get("subreddit") or "").lower()
-        if args.subreddit and sub != args.subreddit.lower():
+        subreddit = (p.get("subreddit") or "").lower()
+        if args.subreddit and subreddit != args.subreddit.lower():
             continue
         post_id = p.get("id", "")
         posts_by_id[post_id] = p
