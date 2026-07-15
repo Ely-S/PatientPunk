@@ -13,8 +13,9 @@ patients too. Use ``min_items`` to drop authors with too little text to profile.
 The output is a normal ``subreddit_posts.json`` (each entry a synthetic post with
 the author's combined text in ``body``, no nested comments), so the rest of the
 pipeline -- regex, LLM fill, discovery, CSV, codebook -- runs UNCHANGED on the
-aggregated corpus. ``collect_texts_from_post`` reads title/body/comments, so the
-combined ``body`` is picked up as-is.
+aggregated corpus. ``collect_texts_from_post`` reads title/body (comments are
+excluded to avoid cross-author attribution), and the aggregated entries carry
+their combined text in ``body``, so it is picked up as-is.
 """
 
 from __future__ import annotations
