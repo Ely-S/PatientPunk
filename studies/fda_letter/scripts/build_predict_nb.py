@@ -3,7 +3,13 @@ import sys
 import os
 from pathlib import Path
 _HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parents[1] / "RCT_historical_validation"))  # build_notebook lives here
+# build_notebook.py lives in the RCT-validation study; support both the pre-reorg
+# (docs/RCT_historical_validation) and post-reorg (studies/rct_validation) layouts.
+for _rct in (_HERE.parents[1] / "rct_validation", _HERE.parents[2] / "docs" / "RCT_historical_validation"):
+    if (_rct / "build_notebook.py").exists():
+        sys.path.insert(0, str(_rct)); break
+else:
+    raise SystemExit("build_notebook.py not found (studies/rct_validation or docs/RCT_historical_validation)")
 _DATA = Path(os.environ.get("PP_DATA_DIR", _HERE.parent / "data"))  # source DBs not committed
 from build_notebook import build_notebook, execute_and_export
 

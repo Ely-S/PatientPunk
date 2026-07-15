@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 """Build the FDA supporting-evidence notebook (research-assistant skill format).
 
 Consolidates this session's analyses into one evidence document mapped to the
@@ -10,12 +9,19 @@ FDA submission (Docket FDA-2026-N-4492). Draws live from:
 §5 historical-validation values are sourced from our prior RCT-validation package.
 """
 from __future__ import annotations
+import os
 import sys
 from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 PKG = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("PP_DATA_DIR", PKG / "data"))  # source DBs are not committed; see ../README.md and MANIFEST.csv
-sys.path.insert(0, str(REPO / "docs" / "RCT_historical_validation"))  # build_notebook lives here
+# build_notebook.py lives in the RCT-validation study; support both the pre-reorg
+# (docs/RCT_historical_validation) and post-reorg (studies/rct_validation) layouts.
+for _rct in (REPO / "studies" / "rct_validation", REPO / "docs" / "RCT_historical_validation"):
+    if (_rct / "build_notebook.py").exists():
+        sys.path.insert(0, str(_rct)); break
+else:
+    raise SystemExit(f"build_notebook.py not found under {REPO}")
 from build_notebook import build_notebook, execute_and_export  # noqa: E402
 
 NB_DIR = PKG / "notebooks"

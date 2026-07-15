@@ -18,7 +18,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 PKG = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("PP_DATA_DIR", PKG / "data"))  # source DBs are not committed; see ../README.md and MANIFEST.csv
-sys.path.insert(0, str(REPO / "docs" / "RCT_historical_validation"))  # build_notebook lives here
+# build_notebook.py lives in the RCT-validation study; support both the pre-reorg
+# (docs/RCT_historical_validation) and post-reorg (studies/rct_validation) layouts.
+for _rct in (REPO / "studies" / "rct_validation", REPO / "docs" / "RCT_historical_validation"):
+    if (_rct / "build_notebook.py").exists():
+        sys.path.insert(0, str(_rct)); break
+else:
+    raise SystemExit(f"build_notebook.py not found under {REPO}")
 from build_notebook import build_notebook, execute_and_export  # noqa: E402
 
 DB = REPO / "FDA_analysis" / "notebooks" / "ldn_2yr.db"            # -> conn (CLH)
