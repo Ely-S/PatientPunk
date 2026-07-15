@@ -26,6 +26,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# POSIX "command not found / cannot execute" — used as the returncode when an
+# extractor subprocess can't be launched at all (missing script / un-spawnable
+# interpreter), so callers can tell "never ran" from a real non-zero script exit.
+_LAUNCH_FAILURE_EXIT_CODE = 127
+
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -175,7 +180,7 @@ class BaseExtractor(ABC):
             # Fail fast with an actionable message instead of letting the
             # interpreter exit with a cryptic "can't open file" code 2.
             result = ExtractorResult(
-                returncode=127,
+                returncode=_LAUNCH_FAILURE_EXIT_CODE,
                 elapsed=time.time() - t0,
                 args=cmd,
                 stdout=None,
@@ -195,7 +200,7 @@ class BaseExtractor(ABC):
             except OSError as exc:
                 # The interpreter itself could not be launched.
                 result = ExtractorResult(
-                    returncode=127,
+                    returncode=_LAUNCH_FAILURE_EXIT_CODE,
                     elapsed=time.time() - t0,
                     args=cmd,
                     stdout=None,

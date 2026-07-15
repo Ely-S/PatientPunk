@@ -204,7 +204,7 @@ def check_window_per_drug(conn) -> CheckResult:
     for drug, pub_date in DRUG_CUTOFFS.items():
         win_end = min(pub_date, END_2022_EXCLUSIVE)
         cutoff_ts = epoch_midnight(win_end)
-        mn, mx, n = conn.execute("""
+        min_post_date, max_post_date, n = conn.execute("""
             SELECT MIN(p.post_date), MAX(p.post_date), COUNT(*)
             FROM treatment_reports tr
             JOIN treatment t ON tr.drug_id = t.id
@@ -221,10 +221,10 @@ def check_window_per_drug(conn) -> CheckResult:
             JOIN posts p ON tr.post_id = p.post_id
             WHERE lower(t.canonical_name) = ? AND p.user_id != 'deleted'
         """, (drug,)).fetchone()[0] or 0
-        if mx is not None and mx >= cutoff_ts:
-            mx_iso = datetime.fromtimestamp(mx, tz=timezone.utc).isoformat()
+        if max_post_date is not None and max_post_date >= cutoff_ts:
+            max_post_date_iso = datetime.fromtimestamp(max_post_date, tz=timezone.utc).isoformat()
             violations.append(
-                f"{drug}: MAX(post_date) = {mx_iso} >= window_end ({win_end} 00:00 UTC)"
+                f"{drug}: MAX(post_date) = {max_post_date_iso} >= window_end ({win_end} 00:00 UTC)"
             )
         if n_null:
             violations.append(f"{drug}: {n_null} NULL post_dates entered the per-drug query")
@@ -268,7 +268,7 @@ def check_thread_reconstruction(conn) -> CheckResult:
 def check_dedup_audit(conn) -> CheckResult:
     """Informational — reports per-drug raw / unique / multi / mixed / flip
     counts. Never fails (no assertion); reviewer reads the numbers."""
-    bits: list[str] = []
+    summary_bits: list[str] = []
     for drug, pub_date in DRUG_CUTOFFS.items():
         win_end = min(pub_date, END_2022_EXCLUSIVE)
         cutoff_ts = epoch_midnight(win_end)
@@ -297,7 +297,7 @@ def check_dedup_audit(conn) -> CheckResult:
                     flip_majority += 1
                 if (n_pos > 0) != chosen_pos:
                     flip_any_pos += 1
-        bits.append(
+        summary_bits.append(
             f"{drug}: raw={len(rows)} users={n_users} multi={n_multi} "
             f"mixed={n_mixed} flip(maj)={flip_majority} flip(any+)={flip_any_pos}"
         )
@@ -305,7 +305,7 @@ def check_dedup_audit(conn) -> CheckResult:
         name="Dedup audit (informational)",
         passed=True,
         summary="see per-drug breakdown below",
-        details=bits,
+        details=summary_bits,
         informational=True,
     )
 
@@ -353,10 +353,10 @@ def check_expected_outputs(conn) -> CheckResult:
                     f"{drug}: p {pval:.3g} far from expected tiny {exp['p']:.3g}"
                 )
         else:
-            rel = abs(pval - exp["p"]) / exp["p"]
-            if rel > 1e-3:
+            rel_drift = abs(pval - exp["p"]) / exp["p"]
+            if rel_drift > 1e-3:
                 violations.append(
-                    f"{drug}: p {pval:.4f} differs from expected {exp['p']:.4f} (rel {rel:.4f})"
+                    f"{drug}: p {pval:.4f} differs from expected {exp['p']:.4f} (rel drift {rel_drift:.4f})"
                 )
         matched.append(f"{drug}: n={n} pos={pos} pos_pct={pos_pct:.3f} p={pval:.4g}")
     return CheckResult(

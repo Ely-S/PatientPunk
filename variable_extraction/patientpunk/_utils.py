@@ -45,6 +45,30 @@ from types import SimpleNamespace
 # repeating Path(__file__).parent.parent... chains.
 PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 
+# Reddit sentinel bodies/authors meaning "no usable text" (moderator-removed or
+# user-deleted). Membership-tested across the package; a Reddit contract value.
+REDDIT_REMOVED = frozenset({"[removed]", "[deleted]"})
+
+# Serialized record-schema version stamped into every extracted record under the
+# "_patientpunk_version" key. Bump everywhere together or readers see a mixed corpus.
+PATIENTPUNK_RECORD_VERSION = "2.0"
+
+# Transient-error backoff schedule (seconds) shared by the extraction scripts'
+# retry loops: enumerate([0] + RETRY_DELAYS) -> attempt 0 plus len(RETRY_DELAYS) retries.
+RETRY_DELAYS = [2, 5, 15, 30]
+
+# Controlled vocabulary of treatment-outcome buckets; unrecognized outcomes -> "unknown".
+OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
+
+# Bookkeeping columns in a records.csv that are metadata, not extracted variables;
+# membership-tested to separate metadata columns from data columns. NOTE: this is a
+# SUPERSET of records_to_csv.META_COLUMNS (a separate ORDERED list that omits
+# "source_type" and drives written-CSV column order); do not conflate the two.
+META_SKIP_COLUMNS = frozenset({
+    "author_hash", "source", "source_type", "post_id", "text_count",
+    "schema_id", "extraction_method", "extracted_at",
+})
+
 
 # ---------------------------------------------------------------------------
 # LLM client configuration

@@ -1,4 +1,9 @@
 # LDN (Low Dose Naltrexone) — Analysis Notes
+
+> ⚠️ **HISTORICAL / likely stale.** Standalone analysis notes; references a `scripts/classify_ldn.py`
+> that no longer exists and a hardcoded local path. For current architecture and commands, see
+> [`/CLAUDE.md`](../CLAUDE.md) and [`notes/codebase-understanding.md`](../notes/codebase-understanding.md).
+
 **Source:** `subreddit_posts.json` (100 posts, ~1,100 comments from r/covidlonghaulers)
 **Full data:** `ldn_mentions.json` (29 classified entries, 24 users)
 

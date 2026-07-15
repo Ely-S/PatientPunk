@@ -498,11 +498,11 @@ for _, _row in resp_df.iterrows():
                 f"{_drug}: p {_p_actual:.3g} far from expected tiny {_p_expected:.3g}"
             )
     else:
-        _rel = abs(_p_actual - _p_expected) / _p_expected
-        if _rel > 1e-3:
+        _rel_drift = abs(_p_actual - _p_expected) / _p_expected
+        if _rel_drift > 1e-3:
             _violations.append(
                 f"{_drug}: p {_p_actual:.4f} differs from expected {_p_expected:.4f} "
-                f"(relative drift {_rel:.4f} > 0.001)"
+                f"(relative drift {_rel_drift:.4f} > 0.001)"
             )
 
 # Also assert no missing or unexpected drugs
@@ -540,7 +540,7 @@ the raw user count contributing to that segment."""))
 
 cells.append(("code", r"""
 # ── Figure 1: Stacked horizontal bar of full sentiment breakdown ──
-cats   = ['positive', 'mixed', 'neutral', 'negative']
+sentiment_classes = ['positive', 'mixed', 'neutral', 'negative']
 colors = ['#2ecc71',  '#f39c12', '#95a5a6', '#e74c3c']
 
 pcts = pd.DataFrame({
@@ -562,18 +562,18 @@ y = np.arange(len(pcts))[::-1]
 
 # Stacked horizontal bars
 left = np.zeros(len(pcts))
-for cat, color in zip(cats, colors):
-    vals = pcts[cat].values
-    ax.barh(y, vals, left=left, height=BAR_H, color=color, label=cat,
+for sentiment_class, color in zip(sentiment_classes, colors):
+    vals = pcts[sentiment_class].values
+    ax.barh(y, vals, left=left, height=BAR_H, color=color, label=sentiment_class,
             edgecolor='white', linewidth=0.4)
     left += vals
 
 # Per-segment labels (% and raw n) below each bar segment
 for row_i, yi in enumerate(y):
     left_x = 0.0
-    for cat in cats:
-        pct = pcts[cat].values[row_i]
-        n   = raw[cat][row_i]
+    for sentiment_class in sentiment_classes:
+        pct = pcts[sentiment_class].values[row_i]
+        n   = raw[sentiment_class][row_i]
         cx  = left_x + pct / 2
         if pct > 0:
             ax.text(cx, yi - LABEL_Y_OFFSET, f"{pct:.0f}%\n(n={n})",
@@ -653,8 +653,8 @@ for i, r in resp_df.iterrows():
             color=RED, va='center', ha='left', fontsize=11)
 
 # Y-tick labels: drug + trial outcome tag (line 1), paper + n (line 2)
-def _trial_tag(td):
-    return '+ trial' if td == '+' else ('null trial' if td == '0' else f'{td} trial')
+def _trial_tag(trial_dir):
+    return '+ trial' if trial_dir == '+' else ('null trial' if trial_dir == '0' else f'{trial_dir} trial')
 
 ax.set_yticks(y_center)
 ax.set_yticklabels(
@@ -1012,7 +1012,7 @@ for _drug, (_pub_date, _paper_short, _source_date) in DRUG_CUTOFFS.items():
           AND p.post_date < ?
           AND p.user_id != 'deleted'
     ''', (_drug, _cutoff_ts)).fetchone()
-    _mn, _mx, _n, _n_null = _row
+    _min_post_date, _max_post_date, _n, _n_null = _row
     # Also check rows that the IS NOT NULL filter excluded — should be 0
     _null_check = combined_conn.execute('''
         SELECT SUM(CASE WHEN p.post_date IS NULL THEN 1 ELSE 0 END)
@@ -1025,9 +1025,9 @@ for _drug, (_pub_date, _paper_short, _source_date) in DRUG_CUTOFFS.items():
     _n_null_unfiltered = _null_check[0] or 0
 
     # Assertions: max must be strictly < cutoff_ts; zero nulls
-    if _mx is not None and _mx >= _cutoff_ts:
+    if _max_post_date is not None and _max_post_date >= _cutoff_ts:
         _violations.append(
-            f"{_drug}: MAX(post_date) = {_dt.fromtimestamp(_mx, tz=_tz.utc).isoformat()} "
+            f"{_drug}: MAX(post_date) = {_dt.fromtimestamp(_max_post_date, tz=_tz.utc).isoformat()} "
             f">= window_end_exclusive ({_win_end_excl} 00:00 UTC). LEAKAGE."
         )
     if _n_null_unfiltered:
@@ -1040,11 +1040,11 @@ for _drug, (_pub_date, _paper_short, _source_date) in DRUG_CUTOFFS.items():
         'drug': _drug,
         'pub_date': _pub_date,
         'win_end_excl': _win_end_excl,
-        'min_post_date': _dt.fromtimestamp(_mn, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _mn else '-',
-        'max_post_date': _dt.fromtimestamp(_mx, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _mx else '-',
+        'min_post_date': _dt.fromtimestamp(_min_post_date, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _min_post_date else '-',
+        'max_post_date': _dt.fromtimestamp(_max_post_date, tz=_tz.utc).strftime('%Y-%m-%d %H:%M UTC') if _max_post_date else '-',
         'n_reports_pre_dedup': _n,
         'n_post_date_null': _n_null_unfiltered,
-        'in_window': _mx is None or _mx < _cutoff_ts,
+        'in_window': _max_post_date is None or _max_post_date < _cutoff_ts,
     })
 
 # Render

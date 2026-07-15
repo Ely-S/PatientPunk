@@ -23,6 +23,10 @@ import anthropic
 TAGGED_MENTIONS = "tagged_mentions.json"
 CANONICALIZED_MENTIONS = "canonicalized_mentions.json"
 
+# Community name injected into the classifier prompt when the DB has no
+# source_subreddit (e.g. a writer-less / no-DB run).
+DEFAULT_SUBREDDIT = "Long COVID"
+
 
 # ── Pipeline Config ──────────────────────────────────────────────────────────
 @dataclass
@@ -158,22 +162,22 @@ class _Block:
 class _Msg:
     def __init__(self, text: str): self.content = [_Block(text)]
 class _Stream:
-    def __init__(self, text: str): self._t = text
+    def __init__(self, text: str): self._text = text
     def __enter__(self): return self
     def __exit__(self, *exc): return False
-    def get_final_message(self): return _Msg(self._t)
+    def get_final_message(self): return _Msg(self._text)
 class _OpenAIMessages:
     def __init__(self, client, temperature: float = 0.0):
-        self._c = client
-        self._temp = temperature
+        self._client = client
+        self._temperature = temperature
     def _call(self, model, messages, max_tokens, system) -> str:
         msgs = []
         if system:
             msgs.append({"role": "system", "content": system if isinstance(system, str)
                          else "\n".join(b.get("text", "") for b in system)})
         msgs.extend(messages)
-        r = self._c.chat.completions.create(
-            model=model, messages=msgs, max_tokens=max_tokens, temperature=self._temp)
+        r = self._client.chat.completions.create(
+            model=model, messages=msgs, max_tokens=max_tokens, temperature=self._temperature)
         if not r.choices:
             raise RuntimeError(
                 f"OpenAI-compatible endpoint returned no choices for model {model!r} "
@@ -190,6 +194,11 @@ class _OpenAIAdapter:
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
+# Request timeout (seconds) and retry budget, shared by both provider branches below.
+CLIENT_TIMEOUT_SECONDS = 60.0
+CLIENT_MAX_RETRIES = 4
+
+
 def get_client() -> anthropic.Anthropic:
     """Return a configured LLM client.
 
@@ -207,7 +216,7 @@ def get_client() -> anthropic.Anthropic:
             sys.exit("LLM_PROVIDER=openai needs the openai package: pip install openai")
         log.info(f"LLM provider: openai | base: {_API_BASE} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
         return _OpenAIAdapter(
-            OpenAI(api_key=api_key, base_url=_API_BASE, max_retries=4, timeout=60.0),
+            OpenAI(api_key=api_key, base_url=_API_BASE, max_retries=CLIENT_MAX_RETRIES, timeout=CLIENT_TIMEOUT_SECONDS),
             temperature=float(os.environ.get("LLM_TEMPERATURE", "0") or 0),
         )
 
@@ -229,8 +238,8 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
-        "timeout": 60.0,
+        "max_retries": CLIENT_MAX_RETRIES,
+        "timeout": CLIENT_TIMEOUT_SECONDS,
     }
     if _API_BASE:
         kwargs["base_url"] = _API_BASE
@@ -254,28 +263,24 @@ import re
 
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
 
-def parse_json_array(raw: str) -> list:
+def _parse_json(raw: str, open_ch: str, close_ch: str, label: str):
     raw = _strip_markdown(raw)
-    start, end = raw.find("["), raw.rfind("]") + 1
+    start, end = raw.find(open_ch), raw.rfind(close_ch) + 1
     if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
+        raise LLMParseError(f"No JSON {label} in response: {raw[:200]}")
     text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+
+
+def parse_json_array(raw: str) -> list:
+    return _parse_json(raw, "[", "]", "array")
 
 
 def parse_json_object(raw: str) -> dict:
-    raw = _strip_markdown(raw)
-    start, end = raw.find("{"), raw.rfind("}") + 1
-    if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
-    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+    return _parse_json(raw, "{", "}", "object")
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────

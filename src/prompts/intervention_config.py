@@ -1,8 +1,8 @@
 # intervention_config.py
 # Prompts for the drug mention pipeline
 
-# Used by extract_mentions.py
-# Note: in the future we may include diet and lifestyle changes. 
+# Used by extract.py
+# Note: in the future we may include diet and lifestyle changes.
 EXTRACT_PROMPT = """\
 For each text below, list all drugs, medications, supplements, and medical interventions mentioned.
 Include brand names, generic names, abbreviations (e.g. LDN, LDA), informal names,
@@ -52,9 +52,9 @@ def drug_aliases_prompt(target: str) -> str:
     )
 
 
-# Used by classify_sentiment.py (prefilter step)
-# Note: in the future we may include diet and lifestyle changes. 
-# Additionally, we may want to change the semantics of the reply. 
+# Used by classify.py (prefilter step)
+# Note: in the future we may include diet and lifestyle changes.
+# Additionally, we may want to change the semantics of the reply.
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
 Does the AUTHOR express personal experience with the specified treatment?
@@ -69,7 +69,7 @@ Answer 'no' if:
 Return a JSON array of strings, each 'yes' or 'no', in order.
 """
 
-# Used by classify_sentiment.py
+# Used by classify.py
 def system_prompt(drug: str, synonyms: list[str] | None = None, subreddit: str = "Long COVID") -> str:
     """Generate system prompt for sentiment classification."""
     # Keep acronyms uppercase, title-case regular words

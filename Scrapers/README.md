@@ -10,16 +10,15 @@ Reddit API key required**.
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
-python scrape_corpus.py --weeks 2 --comments
+uv sync   # from the repo root (this project uses uv, not pip)
+uv run python Scrapers/scrape_corpus.py --weeks 2 --comments
 ```
 
 Output goes to `output/` at the project root. Then run the extraction pipeline:
 
 ```bash
-cd ..
-python Scrapers/demographic_extraction/run_pipeline.py \
-    --schema Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json
+cd ../variable_extraction
+python main.py run --schema schemas/covidlonghaulers_schema.json
 ```
 
 ---

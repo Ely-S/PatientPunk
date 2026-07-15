@@ -8,7 +8,6 @@ tagged_mentions.json is left untouched.
 """
 import json
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -106,22 +105,3 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     log.info(f"{count} treatments in database.")
 
     return canon_map
-
-
-def main():
-    """Standalone entry point."""
-    import argparse
-    from utilities import PipelineConfig, get_client
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", required=True)
-    args = parser.parse_args()
-
-    config = PipelineConfig(
-        client=get_client(), output_dir=Path(args.output_dir), db_path=Path("."),
-    )
-    run_canonicalization(config)
-
-
-if __name__ == "__main__":
-    main()

@@ -34,14 +34,12 @@ Usage:
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import anthropic
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)  # PatientPunk/.env (canonical)
@@ -52,7 +50,7 @@ load_dotenv(Path(__file__).parent.parent / ".env", override=True)       # variab
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from patientpunk.qualitative_standards import DEMOGRAPHIC_STANDARDS
 
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, RETRY_DELAYS as _RETRY_DELAYS, split_retry_batch
 MODEL = MODEL_FAST
 
 # Per-record character budget. User histories can be very long - we take
@@ -61,7 +59,7 @@ MODEL = MODEL_FAST
 MAX_CHARS = 8000
 # Multi-record array prompts mis-split when a record's text holds several posts
 # (model emits one object per post -> count mismatch); default to 1 record/call
-# via the single-object path in _call_haiku_batch_raw. (>1 still works as a
+# via the single-object path in _extract_demographics_batch_raw. (>1 still works as a
 # best-effort batch with split_retry_batch falling back to single calls.)
 BATCH_SIZE = 1  # records per LLM call
 
@@ -185,13 +183,10 @@ def _parse_one_object(text: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
-_RETRY_DELAYS = [2, 5, 15, 30]
-
-
 def _create_with_retry(client, **kwargs):
     """client.messages.create with provider-agnostic retry/backoff on transient
     errors (429 / 5xx / connection / timeout) -- parity with
-    llm_extract.call_haiku, so a long demographics job survives a temporary blip
+    llm_extract.call_model, so a long demographics job survives a temporary blip
     instead of failing the batch. Non-transient errors re-raise immediately."""
     for attempt, delay in enumerate([0] + _RETRY_DELAYS):
         if delay:
@@ -212,7 +207,7 @@ def _create_with_retry(client, **kwargs):
                 raise
 
 
-def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
+def _extract_demographics_batch_raw(client, items: list[dict]) -> list[dict]:
     """Send record(s) in one API call. Returns a list of parsed dicts.
 
     Each item must have keys: author_hash, source_type, text.
@@ -304,7 +299,7 @@ def process_batch(client, batch: list[tuple], max_chars=MAX_CHARS) -> list[dict]
     non_empty_items = [items[i] for i in non_empty_indices]
 
     def call_fn(sub_items):
-        return _call_haiku_batch_raw(client, sub_items)
+        return _extract_demographics_batch_raw(client, sub_items)
 
     try:
         raw_results = split_retry_batch(call_fn, non_empty_items)

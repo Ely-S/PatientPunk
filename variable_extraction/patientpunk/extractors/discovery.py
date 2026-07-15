@@ -69,7 +69,7 @@ class FieldDiscoveryExtractor(BaseExtractor):
     candidates_file:
         Path to a saved ``phase1_candidates.json`` -- skips Stage 1 entirely.
         If *None* and ``{temp_dir}/phase1_candidates.json`` exists, it is
-        used automatically (the same auto-detect behaviour as ``run_pipeline.py``).
+        used automatically (the same auto-detect behaviour as the pipeline).
     sample:
         Randomly sample *N* corpus items for Stage 1 instead of using all
         (more representative than ``--limit``).
