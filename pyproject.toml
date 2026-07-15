@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "patientpunk"
 version = "0.1.0"
@@ -10,19 +14,46 @@ dependencies = [
     "nbformat>=5.10",
     "numpy>=2.0",
     "pandas>=2.2",
-    "pydantic>=2.0",
+    "pydantic>=2.5",
     "python-dotenv>=1.0",
     "requests>=2.32",
+    # `regex` supports a real, interruptible match timeout -- unlike stdlib `re`,
+    # which cannot be aborted mid-match. Discovery runs LLM-generated patterns that
+    # can catastrophically backtrack; see discover._finditer_with_timeout.
+    "regex>=2024.4",
     "scipy>=1.14",
     "seaborn>=0.13",
     "statsmodels>=0.14",
+]
+
+# Runtime extras -- installable with pip: `pip install '.[cluster,openai]'`
+# or `pip install 'patientpunk[cluster]'`.
+[project.optional-dependencies]
+cluster = [
+    "scikit-learn>=1.3",   # cluster-prep readiness report (silhouette); matrix builder works without it
+    "numpy>=1.24",
+]
+openai = [
+    "openai>=1.0",         # LLM_PROVIDER=openai: talk to vLLM / Ollama / any OpenAI-compatible endpoint
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
 ]
+ui = [
+    "streamlit>=1.30",
+    "plotly>=5.18",
+]
+
+# The importable package (patientpunk) lives under variable_extraction/.
+[tool.setuptools]
+package-dir = {"" = "variable_extraction"}
+
+[tool.setuptools.packages.find]
+where = ["variable_extraction"]
+include = ["patientpunk*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "Scrapers/demographic_extraction/tests"]
+testpaths = ["variable_extraction/tests", "tests"]
 pythonpath = ["src"]

@@ -90,7 +90,7 @@
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
     },
     "functional_status_tier": {
-      "description": "Functional capacity level with PEM awareness (housebound, bedbound, mild, moderate, severe)",
+      "description": "Functional capacity level (housebound, bedbound, mild, moderate, severe). PEM/crash are symptoms captured under 'conditions', not functional status.",
       "confidence": "high",
       "icd10": "Z73.6",
       "patterns": [
@@ -101,7 +101,6 @@
         "\\b(?:moderate(?:ly)?\\s+(?:affected|limited|disabled|ill))\\b",
         "\\b(?:mild(?:ly)?\\s+(?:affected|limited|disabled|ill))\\b",
         "\\b(?:mostly\\s+functional|working\\s+(?:part.?time|reduced\\s+hours)|reduced\\s+capacity)\\b",
-        "\\b(?:post.?exertional\\s+malaise|pem\\b|crash(?:ing|ed)?|boom.?bust)\\b",
         "\\b(?:[1-9][0-9]?)\\s*%\\s*(?:capacity|functional|of\\s+(?:my\\s+)?(?:normal|baseline|prior|pre.?covid))\\b"
       ],
       "_bleed_rate_last_run": null,

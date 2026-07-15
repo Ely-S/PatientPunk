@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Biomedical extractor for PatientPunk.
+"""
+
 
 Processes the corpus output from scrape_corpus.py and extracts structured
 biomedical signals from post and comment text using regex pattern matching.
 
 Usage:
-    python extract_biomedical.py                            # base fields, default input path
-    python extract_biomedical.py --input-dir ../../output/    # explicit input path
-    python extract_biomedical.py --text "I'm a 34F with POTS"  # test single string
-    python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
+    python -m patientpunk.biomedical                         # base fields, default input path
+    python -m patientpunk.biomedical --input-dir ../output/  # explicit input path
+    python -m patientpunk.biomedical --text "I'm a 34F with POTS"
+    python -m patientpunk.biomedical --schema schemas/covidlonghaulers_schema.json
 
 Output:
     output/patientpunk_records_base.json          # v2.0 records (base fields only)
@@ -16,12 +17,18 @@ Output:
     output/extraction_metadata_{schema_id}.json   # summary stats
 """
 
+
 import argparse
 import json
 import re
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from ._utils import collect_texts_from_post as _collect_texts_from_post
+from .phase import PhaseResult
 
 
 
@@ -34,9 +41,20 @@ BASE_FIELDS = frozenset({
     "conditions", "onset_trigger", "diagnosis_source", "time_to_diagnosis",
     "misdiagnosis", "symptom_duration", "symptom_trajectory", "age_at_onset",
     "medications", "treatment_outcome", "procedures",
-    "activity_level", "work_disability_status", "mental_health",
+    # activity_level removed -- redundant with functional_status_tier (extension).
+    "work_disability_status", "mental_health",
     "doctor_dismissal", "diagnostic_odyssey",
     "prior_infections", "hormonal_events", "family_history",
+})
+
+# Demographic fields are extracted by the LLM ONLY, never regex. Regex is the sole
+# extraction path with no self/other guard -- the LLM prompt, qualitative_standards'
+# "SELF-REFERENCE ONLY" block, and the demographics command all reject third-party
+# mentions, but a bare age/sex/location regex cannot tell the author from a commenter.
+# On measured data the guarded LLM strictly dominates these fields on coverage, so we
+# skip them in regex and let the Phase 2 gap-fill supply them.
+LLM_ONLY_FIELDS = frozenset({
+    "age", "sex_gender", "location_country", "location_us_state",
 })
 
 BASE_FIELD_CONFIDENCE: dict[str, str] = {
@@ -55,7 +73,6 @@ BASE_FIELD_CONFIDENCE: dict[str, str] = {
     "medications": "high",
     "treatment_outcome": "medium",
     "procedures": "high",
-    "activity_level": "high",
     "work_disability_status": "high",
     "mental_health": "medium",
     "doctor_dismissal": "medium",
@@ -119,9 +136,12 @@ US_STATES = (
     r"wisconsin|wyoming|district of columbia|washington d\.?c\.?"
 )
 
+# ME (Maine) and OR (Oregon) are excluded because in medical subreddits
+# they almost always mean ME/CFS or the conjunction "or". Both states are
+# still captured by their full names in US_STATES above.
 US_STATE_ABBREVS = (
-    r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|"
-    r"MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|"
+    r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|MD|MA|MI|"
+    r"MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|PA|RI|SC|SD|TN|TX|UT|VT|"
     r"VA|WA|WV|WI|WY|DC)\b"
 )
 
@@ -144,19 +164,19 @@ PATTERNS = {
     # AGE_RANGE restricts bare-number patterns to plausible adult ages (16-99),
     # filtering noise like "under age 8" or "Im 6 years in".
     "age": [
-        # "28F", "36M", "19F" — NF/NM shorthand (no range needed, structure is unambiguous)
+        # "28F", "36M", "19F" - NF/NM shorthand (no range needed, structure is unambiguous)
         re.compile(r"\b(\d{1,2})\s*[/|]?\s*[MFmf]\b"),
         re.compile(r"\b[MFmf]\s*/\s*(\d{1,2})\b"),
-        # "50 year old", "30 year old woman" — self or other, but low noise
+        # "50 year old", "30 year old woman" - self or other, but low noise
         re.compile(r"\b(\d{1,2})[\s-]?year[\s-]?old", re.I),
-        # "age 40", "aged 49" — restrict to 16-99 to avoid "under age 8"
+        # "age 40", "aged 49" - restrict to 16-99 to avoid "under age 8"
         re.compile(r"\bage[d]?\s+(1[6-9]|[2-9]\d)\b", re.I),
-        # "I am 41", "I'm 52" — restrict to 16-99 AND require NOT followed by
+        # "I am 41", "I'm 52" - restrict to 16-99 AND require NOT followed by
         # "year(s)" (which signals duration: "I'm 3 years in") or "month(s)"
         re.compile(r"\bi(?:'m| am)\s+(1[6-9]|[2-9]\d)\b(?!\s*years?\b)(?!\s*months?\b)", re.I),
-        # "turned 30" — low noise, keep as-is
+        # "turned 30" - low noise, keep as-is
         re.compile(r"\bturned\s+(\d{1,2})\b", re.I),
-        # "mid-30s", "early 40s", "late 50s" — decade approximations
+        # "mid-30s", "early 40s", "late 50s" - decade approximations
         re.compile(r"\b(mid|late|early)[- ](20s|30s|40s|50s|60s|70s)\b", re.I),
         # "in my 20s", "in my 40s"
         re.compile(r"\bin\s+my\s+(20s|30s|40s|50s|60s|70s)\b", re.I),
@@ -268,14 +288,22 @@ PATTERNS = {
         re.compile(r"\byears?\s+(?:of\s+)?(?:searching|looking|trying)\s+(?:for\s+)?(?:a\s+)?diagnos", re.I),
     ],
 
-    # Misdiagnosis
+    # Misdiagnosis -- the second pattern requires a dismissal-context prefix so
+    # it doesn't fire on genuine comorbidities ("I have anxiety from long COVID").
     "misdiagnosis": [
         re.compile(
-            r"\b(?:misdiagnosed|wrongly diagnosed|told it was|thought it was|"
-            r"dismissed as|written off as|diagnosed with .+ before)\b",
+            r"\b(misdiagnosed|wrongly diagnosed|told it was|thought it was|"
+            r"dismissed as|written off as)\b",
             re.I,
         ),
-        re.compile(r"\b(?:anxiety|depression|hypochondria|psychosomatic|all in (?:your|my) head)\b", re.I),
+        re.compile(
+            r"\b(?:misdiagnosed\s+(?:as|with)|dismissed\s+as|told\s+(?:it\s+was|I\s+(?:had|have))|"
+            r"written\s+off\s+as|blamed\s+(?:on|it\s+on)|put\s+(?:it\s+)?down\s+to|"
+            r"said\s+it\s+was)\s+"
+            r"(anxiety|depression|hypochondria|psychosomatic|stress|all in (?:your|my) head)",
+            re.I,
+        ),
+        re.compile(r"\b(diagnosed with .{3,60}? before (?:finally|eventually|they found|getting))\b", re.I),
     ],
 
     # Diagnosis source
@@ -295,8 +323,16 @@ PATTERNS = {
     # -------------------------------------------------------------------------
 
     # Age at onset
+    # NOTE: the optional anchor (?:at\s+|when\s+i\s+was\s+)? means the first
+    # pattern would match "symptoms started 5 years ago" (duration, not age).
+    # Negative lookahead (?!\s*(?:years?|yrs?|y/?o|months?|mos?|weeks?|days?))
+    # prevents that (including common abbreviations).
     "age_at_onset": [
-        re.compile(r"\b(?:onset|symptoms?\s+(?:started|began)|got sick|became ill)\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b", re.I),
+        re.compile(
+            r"\b(?:onset|symptoms?\s+(?:started|began)|got sick|became ill)"
+            r"\s+(?:at\s+|when\s+i\s+was\s+)?(\d{1,2})\b(?!\s*(?:years?|yrs?|y/?o|months?|mos?|weeks?|days?))",
+            re.I,
+        ),
         re.compile(r"\b(?:started|began)\s+(?:at\s+age\s+|when\s+i\s+was\s+)(\d{1,2})\b", re.I),
     ],
 
@@ -317,11 +353,12 @@ PATTERNS = {
         re.compile(r"\bno (?:known\s+)?(?:trigger|cause|reason)\b", re.I),
     ],
 
-    # Symptom duration
+    # Symptom duration -- captures number + unit together (e.g. "3 years")
+    # so the stored value is meaningful without context.
     "symptom_duration": [
-        re.compile(r"\b(\d+)\s+(year|month|week|day)s?\s+(?:of\s+)?(?:symptoms?|sick|ill)\b", re.I),
-        re.compile(r"\b(\d+)\s+(year|month|week|day)s?\s+(?:in|post|since)\b", re.I),
-        re.compile(r"\b(?:for|over)\s+(\d+)\s+(year|month|week|day)s?\b", re.I),
+        re.compile(r"\b(\d+\s+(?:year|month|week|day)s?)\s+(?:of\s+)?(?:symptoms?|sick|ill)\b", re.I),
+        re.compile(r"\b(\d+\s+(?:year|month|week|day)s?)\s+(?:in|post|since)\b", re.I),
+        re.compile(r"\b(?:for|over)\s+(\d+\s+(?:year|month|week|day)s?)\b", re.I),
     ],
 
     # Symptom trajectory
@@ -479,15 +516,8 @@ PATTERNS = {
         ),
     ],
 
-    "activity_level": [
-        re.compile(
-            r"\b(bedbound|bed.bound|mostly in bed|"
-            r"housebound|house.bound|can.t leave (?:the )?house|"
-            r"wheelchair|mobility aid|walking aid|cane\b|crutches|"
-            r"limited mobility|mostly functional|back to normal|fully functional)\b",
-            re.I,
-        ),
-    ],
+    # activity_level removed -- redundant with functional_status_tier (extension field).
+    # Its patterns (bedbound, housebound, etc.) are already in the extension schema.
 
     "mental_health": [
         re.compile(
@@ -597,6 +627,37 @@ PATTERNS = {
 
 
 # =============================================================================
+# POST-EXTRACTION CANONICALIZATION
+# =============================================================================
+
+# Condition synonyms -> canonical form. Checked in order, first match wins.
+_CONDITION_CANONICAL: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"^(?:long[\s-]?covid|post[\s-]?covid|pasc|post[\s-]?acute sequelae)$", re.I), "long covid"),
+    (re.compile(r"^(?:me/?cfs|myalgic encephalomyelitis|chronic fatigue syndrome)$", re.I), "me/cfs"),
+    (re.compile(r"^(?:post[\s-]?exertional malaise|post[\s-]?exertional|pem)$", re.I), "pem"),
+    (re.compile(r"^(?:post[\s-]?viral|post[\s-]?infectious)$", re.I), "post-viral"),
+    (re.compile(r"^(?:small fiber neuropathy|sfn)$", re.I), "small fiber neuropathy"),
+    (re.compile(r"^(?:ehlers[\s-]?danlos|eds|heds)$", re.I), "ehlers-danlos syndrome"),
+]
+
+
+def _canonicalize_conditions(values: list[str]) -> list[str]:
+    """Normalize condition names to canonical forms and deduplicate."""
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for raw_value in values:
+        normalized = raw_value.strip().lower()
+        for pattern, replacement in _CONDITION_CANONICAL:
+            if pattern.match(normalized):
+                normalized = replacement
+                break
+        if normalized not in seen:
+            seen.add(normalized)
+            canonical.append(normalized)
+    return canonical
+
+
+# =============================================================================
 # EXTRACTION ENGINE
 # =============================================================================
 
@@ -606,6 +667,8 @@ def extract_from_text(text: str, patterns: dict = None) -> dict:
         patterns = PATTERNS
     results = {}
     for field, pattern_list in patterns.items():
+        if field in LLM_ONLY_FIELDS:
+            continue  # demographics are LLM-only (regex has no self/other guard)
         matches = []
         for pat in pattern_list:
             for m in pat.finditer(text):
@@ -620,7 +683,11 @@ def extract_from_text(text: str, patterns: dict = None) -> dict:
 
 
 def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
-    """Merge extractions across multiple texts (all posts + comments for a user)."""
+    """Merge extractions across multiple texts (all posts + comments for a user).
+
+    After merging, applies field-specific canonicalization (e.g. normalizing
+    condition names) so downstream aggregation is cleaner.
+    """
     if patterns is None:
         patterns = PATTERNS
     merged: dict[str, list] = defaultdict(list)
@@ -632,6 +699,11 @@ def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
             for v in values:
                 if v not in merged[field]:
                     merged[field].append(v)
+
+    # Canonicalize condition names to merge variants
+    if "conditions" in merged:
+        merged["conditions"] = _canonicalize_conditions(merged["conditions"])
+
     return dict(merged)
 
 
@@ -642,61 +714,59 @@ def extract_from_texts(texts: list[str], patterns: dict = None) -> dict:
 def load_extension_schema(schema_path: Path) -> dict:
     """Load and validate a JSON extension schema file.
 
-    Raises SystemExit with a clear human-readable message on any failure.
+    Raises FileNotFoundError or ValueError on failure.
     """
-    import sys
-
     if not schema_path.exists():
-        sys.exit(f"Schema file not found: {schema_path}")
+        raise FileNotFoundError(f"Schema file not found: {schema_path}")
 
     try:
         with open(schema_path, encoding="utf-8") as f:
             schema = json.load(f)
     except json.JSONDecodeError as exc:
-        sys.exit(f"Schema file is not valid JSON: {schema_path}\n  {exc}")
+        raise ValueError(f"Schema file is not valid JSON: {schema_path}\n  {exc}") from exc
 
     if "schema_id" not in schema or not isinstance(schema["schema_id"], str):
-        sys.exit(f"Schema missing required string field 'schema_id': {schema_path}")
+        raise ValueError(f"Schema missing required string field 'schema_id': {schema_path}")
 
     for field in schema.get("include_base_fields", []):
         if field not in PATTERNS:
-            sys.exit(
+            raise ValueError(
                 f"Schema 'include_base_fields' references unknown field '{field}'. "
                 f"Available base-optional fields: {sorted(set(PATTERNS.keys()) - BASE_FIELDS)}"
             )
 
     for field, override in schema.get("override_base_patterns", {}).items():
         if "mode" not in override or override["mode"] not in ("append", "replace"):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'override_base_patterns.{field}' must have 'mode' of "
                 f"'append' or 'replace'."
             )
         if "patterns" not in override or not isinstance(override["patterns"], list):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'override_base_patterns.{field}' must have a 'patterns' list."
             )
         for i, p in enumerate(override["patterns"]):
             try:
                 re.compile(p, re.I)
             except re.error as exc:
-                sys.exit(
+                raise ValueError(
                     f"Schema 'override_base_patterns.{field}.patterns[{i}]' "
                     f"failed to compile: {exc}"
-                )
+                ) from exc
 
     for field, defn in schema.get("extension_fields", {}).items():
         if "patterns" not in defn or not isinstance(defn["patterns"], list):
-            sys.exit(
+            raise ValueError(
                 f"Schema 'extension_fields.{field}' must have a 'patterns' list."
             )
         for i, p in enumerate(defn["patterns"]):
             try:
                 re.compile(p, re.I)
             except re.error as exc:
-                sys.exit(
+                raise ValueError(
                     f"Schema 'extension_fields.{field}.patterns[{i}]' "
                     f"failed to compile: {exc}"
-                )
+                ) from exc
 
     return schema
 
@@ -723,10 +793,12 @@ def compile_extension_patterns(schema: dict) -> tuple[dict, set]:
         else:  # replace
             active_patterns[field] = compiled
 
-    # Add entirely new extension fields (skip llm_discovered — those are handled
-    # by discover_fields.py Phase 3 which has timeout protection and per-text processing)
+    # Add entirely new extension fields.  Raw llm_discovered fields are skipped
+    # (handled by patientpunk.discover Phase 3, which has timeout protection and
+    # per-text processing) -- UNLESS they have been promoted (_promoted_at), which
+    # makes them first-class regex fields like any other extension field.
     for field, defn in schema.get("extension_fields", {}).items():
-        if defn.get("source") == "llm_discovered":
+        if defn.get("source") == "llm_discovered" and not defn.get("_promoted_at"):
             continue
         active_patterns[field] = [re.compile(p, re.I) for p in defn["patterns"]]
 
@@ -760,7 +832,7 @@ def build_record(
     """
     provenance = "self_reported" if source == "user_history" else "mentioned_by_other"
 
-    # Build base namespace — all 24 BASE_FIELDS always present
+    # Build base namespace - all 24 BASE_FIELDS always present
     base: dict = {}
     for field in sorted(BASE_FIELDS):
         values = raw_extracted.get(field) or None
@@ -823,29 +895,39 @@ def build_record(
 # CORPUS PROCESSING
 # =============================================================================
 
+_REDDIT_REMOVED = frozenset({"[removed]", "[deleted]"})
+
+
+def _keep_text(raw: str | None) -> str | None:
+    """Strip whitespace and return None for empty or Reddit-removed placeholders."""
+    cleaned = (raw or "").strip()
+    return cleaned if cleaned and cleaned not in _REDDIT_REMOVED else None
+
+
 def collect_texts_from_user(user_data: dict) -> list[str]:
-    texts = []
+    """Collect non-empty, non-removed text segments from a user history dict."""
+    texts: list[str] = []
     for post in user_data.get("posts", []):
-        if post.get("title"):
-            texts.append(post["title"])
-        if post.get("body"):
-            texts.append(post["body"])
+        for raw in (post.get("title"), post.get("body")):
+            kept = _keep_text(raw)
+            if kept:
+                texts.append(kept)
     for comment in user_data.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
+        kept = _keep_text(comment.get("body"))
+        if kept:
+            texts.append(kept)
     return texts
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    texts = []
-    if post.get("title"):
-        texts.append(post["title"])
-    if post.get("body"):
-        texts.append(post["body"])
-    for comment in post.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
-    return texts
+    """Collect non-empty, non-removed text from a subreddit post.
+
+    Title + body ONLY: comments are written by OTHER users, so including them
+    here would attribute their conditions/treatments to the post author.
+    Commenters are captured as their own patients via the aggregate path.
+    """
+    kept = (_keep_text(t) for t in _collect_texts_from_post(post))
+    return [t for t in kept if t]
 
 
 def process_corpus(
@@ -919,110 +1001,49 @@ def process_corpus(
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Extract biomedical signals from PatientPunk corpus.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Step 1 of the PatientPunk extraction pipeline. Fast, free, no API key needed.
-Regex patterns match across 24 base fields plus any hand-crafted extension schema
-fields. Extension fields with source="llm_discovered" are SKIPPED here — those
-are handled exclusively by discover_fields.py Phase 3, which has timeout
-protection and per-text-segment processing to prevent cross-post bleed.
+def run_biomedical(
+    *,
+    input_dir: Path,
+    schema_path: Path | None = None,
+    temp_dir: Path | None = None,
+) -> PhaseResult:
+    """Run Phase 1 regex extraction over a corpus directory.
 
-Examples:
-  python extract_biomedical.py
-  python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
-  python extract_biomedical.py --text "34F with POTS, diagnosed after 3 years"
-  python extract_biomedical.py --input-dir /path/to/data
+    Writes ``patientpunk_records_{schema_id}.json`` and
+    ``extraction_metadata_{schema_id}.json`` under *temp_dir*.
+    """
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(
+            f"{input_dir} does not exist. Run scrape_corpus.py first."
+        )
 
-Output:
-  output/patientpunk_records_base.json         one v2.0 record per user/post
-  output/patientpunk_records_{schema_id}.json  with extension schema fields
-  output/extraction_metadata_{schema_id}.json  field hit counts and summary
-
-Every base field is always present (null if not extracted). Conditions include
-ICD-10 candidates. All fields include provenance and confidence tiers.
-
-Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on by default)
-        """,
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=Path(__file__).resolve().parent.parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py "
-             "(default: <repo>/output/)",
-    )
-    parser.add_argument(
-        "--text",
-        type=str,
-        default=None,
-        help="Test mode: extract from a single string and print results.",
-    )
-    parser.add_argument(
-        "--schema",
-        type=Path,
-        default=None,
-        help="Path to a JSON extension schema file. Adds bespoke fields on top of the "
-             "universal base. Example: schemas/covidlonghaulers_schema.json",
-    )
-    parser.add_argument(
-        "--temp-dir",
-        type=Path,
-        default=None,
-        help="Directory for intermediate output files (default: {input-dir}/temp/). "
-             "Keeps output/ clean — only records.csv and codebook.csv stay at the top level.",
-    )
-    args = parser.parse_args()
-
-    # Load schema and build active patterns
     schema = None
     active_patterns = {k: PATTERNS[k] for k in BASE_FIELDS if k in PATTERNS}
-    extension_field_names: set = set()
+    extension_field_names: set[str] = set()
 
-    if args.schema:
-        schema = load_extension_schema(args.schema)
+    if schema_path:
+        schema = load_extension_schema(Path(schema_path))
         active_patterns, extension_field_names = compile_extension_patterns(schema)
 
-    # Test mode
-    if args.text:
-        results = extract_from_text(args.text, patterns=active_patterns)
-        base_results = {k: v for k, v in results.items() if k in BASE_FIELDS}
-        ext_results = {k: v for k, v in results.items() if k in extension_field_names}
+    out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
+    out_temp.mkdir(parents=True, exist_ok=True)
 
-        print("=== Base fields ===")
-        print(json.dumps(base_results, indent=2))
-        if schema is not None:
-            print("\n=== Extension fields ===")
-            print(json.dumps(ext_results, indent=2))
-        return
-
-    # Full corpus mode
-    output_dir = args.input_dir
-    if not output_dir.exists():
-        print(f"Error: {output_dir} does not exist. Run scrape_corpus.py first.")
-        return
-
-    temp_dir = args.temp_dir if args.temp_dir else output_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"Extracting biomedical signals from {output_dir}...\n")
+    print(f"Extracting biomedical signals from {input_dir}...\n")
 
     extractions, metadata = process_corpus(
-        output_dir,
+        input_dir,
         active_patterns=active_patterns,
         extension_field_names=extension_field_names,
         schema=schema,
     )
 
-    # Write outputs to temp/
     schema_id = schema["schema_id"] if schema else "base"
-    extractions_file = temp_dir / f"patientpunk_records_{schema_id}.json"
-    metadata_file = temp_dir / f"extraction_metadata_{schema_id}.json"
+    extractions_file = out_temp / f"patientpunk_records_{schema_id}.json"
+    metadata_file = out_temp / f"extraction_metadata_{schema_id}.json"
 
     with open(extractions_file, "w", encoding="utf-8") as f:
         json.dump(extractions, f, ensure_ascii=False, indent=2)
@@ -1031,7 +1052,6 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
         json.dump(metadata, f, ensure_ascii=False, indent=2)
 
     schema_label = schema["schema_id"] if schema else "base only"
-    ext_count = len(extension_field_names)
     reactivated = len(schema.get("include_base_fields", [])) if schema else 0
     new_ext = len(schema.get("extension_fields", {})) if schema else 0
 
@@ -1045,6 +1065,92 @@ Next step: python llm_extract.py  (fills gaps with Claude Haiku; --merge is on b
     print(f"\n  Field hit counts:")
     for field, count in metadata["field_hit_counts"].items():
         print(f"    {field:<30} {count}")
+
+    hits = metadata.get("field_hit_counts", {})
+    n_hit = sum(1 for hit_count in hits.values() if hit_count > 0)
+    stats: dict[str, Any] = {
+        "records processed": metadata.get("total_records_processed", 0),
+        "fields with hits": f"{n_hit}/{len(hits)}",
+        "zero-coverage fields": len(hits) - n_hit,
+    }
+    return PhaseResult(
+        artifacts={"records": extractions_file, "metadata": metadata_file},
+        stats=stats,
+    )
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract biomedical signals from PatientPunk corpus.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Step 1 of the PatientPunk extraction pipeline. Fast, free, no API key needed.
+
+Examples:
+  python -m patientpunk.biomedical
+  python -m patientpunk.biomedical --schema schemas/covidlonghaulers_schema.json
+  python -m patientpunk.biomedical --text "34F with POTS, diagnosed after 3 years"
+        """,
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "output",
+        help="Path to the output/ directory from scrape_corpus.py",
+    )
+    parser.add_argument(
+        "--text",
+        type=str,
+        default=None,
+        help="Test mode: extract from a single string and print results.",
+    )
+    parser.add_argument(
+        "--schema",
+        type=Path,
+        default=None,
+        help="Path to a JSON extension schema file.",
+    )
+    parser.add_argument(
+        "--temp-dir",
+        type=Path,
+        default=None,
+        help="Directory for intermediate output files (default: {input-dir}/temp/).",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        schema = None
+        active_patterns = {k: PATTERNS[k] for k in BASE_FIELDS if k in PATTERNS}
+        extension_field_names: set[str] = set()
+
+        if args.schema:
+            schema = load_extension_schema(args.schema)
+            active_patterns, extension_field_names = compile_extension_patterns(schema)
+
+        if args.text:
+            results = extract_from_text(args.text, patterns=active_patterns)
+            base_results = {k: v for k, v in results.items() if k in BASE_FIELDS}
+            ext_results = {k: v for k, v in results.items() if k in extension_field_names}
+
+            print("=== Base fields ===")
+            print(json.dumps(base_results, indent=2))
+            if schema is not None:
+                print("\n=== Extension fields ===")
+                print(json.dumps(ext_results, indent=2))
+            return
+
+        run_biomedical(
+            input_dir=args.input_dir,
+            schema_path=args.schema,
+            temp_dir=args.temp_dir,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

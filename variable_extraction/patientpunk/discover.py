@@ -1,45 +1,48 @@
 #!/usr/bin/env python3
-"""Multi-model field discovery pipeline for PatientPunk.
+"""
+
 
 Automatically discovers new biomedical fields from patient-authored text,
 generates regex patterns for them, validates the patterns, and extracts
 across the full corpus. Uses a two-model architecture:
 
-  - Haiku: cheap, fast — scans corpus for field candidates, extracts bulk data
-  - Sonnet: precise — writes and validates regex patterns
+  - Haiku: cheap, fast - scans corpus for field candidates, extracts bulk data
+  - Sonnet: precise - writes and validates regex patterns
 
 Pipeline phases:
   Phase 1 (Haiku)  : Scan corpus → discover new field candidates with examples
   Phase 2 (Sonnet) : For each candidate → write regex → test against examples → iterate
   Phase 3 (regex)  : Run validated patterns across full corpus (no LLM, free)
-  Phase 4 (Haiku)  : Fill gaps — for records where regex missed, Haiku extracts directly
+  Phase 4 (Haiku)  : Fill gaps - for records where regex missed, Haiku extracts directly
 
 Usage:
     # Full pipeline on default corpus
-    python discover_fields.py
+    python -m patientpunk.discover
 
     # Include existing schema as context (so it doesn't rediscover known fields)
-    python discover_fields.py --schema schemas/covidlonghaulers_schema.json
+    python -m patientpunk.discover --schema schemas/covidlonghaulers_schema.json
 
     # Limit corpus scan to N records (cost control for Phase 1)
-    python discover_fields.py --limit 20
+    python -m patientpunk.discover --limit 20
 
     # Skip Phase 4 (no gap-filling, just discovery + regex)
-    python discover_fields.py --no-fill
+    python -m patientpunk.discover --no-fill
 
     # Custom input path
-    python discover_fields.py --input-dir ../../output/
+    python -m patientpunk.discover --input-dir ../output/
 
 Requires:
     pip install anthropic python-dotenv
 
 Output:
     schemas/discovered_{timestamp}.json                  # Generated extension schema
-    output/discovered_records_{schema_id}.json             # Full extraction results
-    output/discovered_field_report_{schema_id}.json        # Discovery report + coverage stats
+    output/discovered_records_{schema_id}.json           # Full extraction results
+    output/discovered_field_report_{schema_id}.json      # Discovery report + coverage stats
 """
 
+
 import argparse
+import builtins
 import json
 import os
 import random
@@ -47,33 +50,75 @@ import re
 import sys
 import threading
 import time
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
-from pathlib import Path
 
 try:
-    from dotenv import load_dotenv
-except ImportError:
-    sys.exit("python-dotenv is required: pip install python-dotenv")
+    import regex as _regex  # real, interruptible match timeout (see _finditer_with_timeout)
+except ImportError:  # pragma: no cover - regex is a declared dependency
+    _regex = None
+
+
+def _re_flags_to_regex(flags: int) -> int:
+    """Translate the compile flags off a stdlib `re` pattern to `regex` flags.
+
+    Only the flags that can appear on our LLM-generated patterns are mapped; we
+    avoid copying raw flag ints because the two modules don't share all values.
+    """
+    out = 0
+    if _regex is not None:
+        for re_flag, name in (
+            (re.IGNORECASE, "IGNORECASE"),
+            (re.MULTILINE, "MULTILINE"),
+            (re.DOTALL, "DOTALL"),
+            (re.VERBOSE, "VERBOSE"),
+            (re.ASCII, "ASCII"),
+        ):
+            if flags & re_flag:
+                out |= getattr(_regex, name)
+    return out
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Windows cp1252 terminal can't encode unicode arrows, emoji, etc. from LLM output.
+# Override print globally in this module to replace non-ASCII chars.
+_original_print = builtins.print
+
+def print(*args, **kwargs):
+    safe_args = [
+        str(a).encode("ascii", "replace").decode("ascii") if isinstance(a, str) else a
+        for a in args
+    ]
+    _original_print(*safe_args, **kwargs)
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Literal
 
 try:
     import anthropic
 except ImportError:
-    sys.exit("anthropic is required: pip install anthropic")
+    raise ImportError("anthropic is required: pip install anthropic") from None
 
-load_dotenv(Path(__file__).parent / ".env")              # demographic_extraction/.env
-load_dotenv(Path(__file__).parent.parent / ".env")        # Scrapers/.env (fallback)
-load_dotenv(Path(__file__).parent.parent.parent / ".env") # project root .env (fallback)
+from .qualitative_standards import FIELD_DESIGN_STANDARDS
+from .phase import PhaseResult
+from .biomedical import PATTERNS
 
 
 def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
-    """Run pattern.finditer(text) in a thread; raise TimeoutError if it takes too long.
+    """Run pattern.finditer(text), raising TimeoutError if it takes too long.
 
     Catastrophic backtracking in LLM-generated patterns can hang indefinitely.
-    This caps each pattern at `timeout` seconds and returns whatever matched so far,
-    raising TimeoutError so the caller can log and skip the offending pattern.
+    The `regex` module enforces a real timeout that *interrupts* the running match,
+    so a pathological pattern is genuinely abandoned. The stdlib-`re` fallback runs
+    the match in a daemon thread and can only *stop waiting* on it -- Python cannot
+    kill the thread, so a backtracking pattern keeps burning a core in the
+    background. We prefer `regex`; the thread path exists only if it's unavailable.
     """
+    if _regex is not None:
+        try:
+            compiled = _regex.compile(pattern.pattern, _re_flags_to_regex(pattern.flags))
+            return list(compiled.finditer(text, timeout=timeout))
+        except TimeoutError:
+            raise TimeoutError(f"Pattern timed out after {timeout}s") from None
+
     results: list = []
     exc: list = []
 
@@ -87,6 +132,8 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
     t.start()
     t.join(timeout)
     if t.is_alive():
+        # The thread is still running the match and cannot be killed; it will keep
+        # consuming a CPU core until the (LLM-generated) pattern finally returns.
         raise TimeoutError(f"Pattern timed out after {timeout}s")
     if exc:
         raise exc[0]
@@ -97,11 +144,28 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # CONSTANTS
 # =============================================================================
 
-HAIKU = "claude-haiku-4-5-20251001"
-SONNET = "claude-sonnet-4-6"
-MAX_TOKENS_HAIKU = 4096
-MAX_TOKENS_SONNET = 4096
-MAX_TEXT_CHARS = 30_000
+# Model names resolved from _utils (OpenRouter or Anthropic direct)
+from ._utils import (
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    MODEL_STRONG,
+    collect_texts_from_post as _collect_texts_from_post,
+    get_llm_client,
+    parse_json_response,
+)
+HAIKU = MODEL_FAST
+SONNET = MODEL_STRONG
+# Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
+# 4096 was too low -- batches of 14+ posts regularly hit the ceiling and returned
+# truncated JSON, causing PARSE FAILED on every batch. Haiku's hard max is 8192;
+# Sonnet 3.5+ supports up to 8192 as well.
+MAX_TOKENS_HAIKU = 8192
+MAX_TOKENS_SONNET = 8192
+# Each discovered field requires ~600-800 chars of JSON (description, examples,
+# vocabulary). 14 posts already generates ~16k chars of response which barely
+# fits in 8192 tokens. Keeping batches to ~10 posts each stays comfortably under
+# the output limit. 30k was too large.
+MAX_TEXT_CHARS = 10_000
 # Text cap for Phase 3 regex matching. Keeps each operation bounded even for
 # users with thousands of posts. Patterns generally match early in text.
 MAX_TEXT_CHARS_PHASE3 = 30_000
@@ -119,20 +183,6 @@ MAX_REGEX_ITERATIONS = 3
 MIN_EXAMPLES = 3
 
 
-# =============================================================================
-# API HELPERS
-# =============================================================================
-
-def get_client() -> anthropic.Anthropic:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key or api_key.startswith("sk-ant-your-"):
-        sys.exit(
-            "ANTHROPIC_API_KEY not set or still placeholder.\n"
-            "  1. Copy .env.example to .env\n"
-            "  2. Add your key from https://console.anthropic.com/settings/keys"
-        )
-    return anthropic.Anthropic(api_key=api_key)
-
 
 def call_model(
     client: anthropic.Anthropic,
@@ -149,6 +199,7 @@ def call_model(
         try:
             response = client.messages.create(
                 model=model,
+                temperature=LLM_TEMPERATURE,
                 max_tokens=max_tokens,
                 system=[
                     {
@@ -160,39 +211,19 @@ def call_model(
                 messages=[{"role": "user", "content": user_message}],
             )
             return response.content[0].text
-        except anthropic.RateLimitError:
+        except (anthropic.RateLimitError, anthropic.InternalServerError):
             if attempt == len(RETRY_DELAYS):
                 raise
-            print(f"    Rate limited.")
+            print(f"    Rate limited / server error.")
         except anthropic.APIStatusError as e:
-            if e.status_code >= 500 and attempt < len(RETRY_DELAYS):
+            if e.status_code in (429, 500, 502, 503, 529) and attempt < len(RETRY_DELAYS):
                 print(f"    API error {e.status_code}.")
             else:
                 raise
     return ""
 
 
-def parse_json_response(text: str) -> dict | list | None:
-    """Extract JSON from an LLM response, handling markdown code fences."""
-    text = text.strip()
-    if text.startswith("```"):
-        first_newline = text.index("\n")
-        text = text[first_newline + 1:]
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Find the outermost JSON structure
-        for opener, closer in [("{", "}"), ("[", "]")]:
-            start = text.find(opener)
-            end = text.rfind(closer) + 1
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(text[start:end])
-                except json.JSONDecodeError:
-                    continue
-    return None
+# parse_json_response lives in _utils (shared with llm_extract / demographics)
 
 
 # =============================================================================
@@ -213,24 +244,33 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
 
 def collect_texts_from_post(post: dict) -> list[str]:
-    texts = []
-    if post.get("title"):
-        texts.append(post["title"])
-    if post.get("body"):
-        texts.append(post["body"])
-    for comment in post.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
+    """Title + body ONLY: comments are written by OTHER users, so including
+    them attributes their content to the post author (same as biomedical.py /
+    llm_extract.py; commenters are captured via the aggregate path)."""
+    texts: list[str] = []
+    for raw in _collect_texts_from_post(post, include_comments=False):
+        kept = (raw or "").strip()
+        if kept and kept not in ("[removed]", "[deleted]"):
+            texts.append(kept)
     return texts
 
 
-def load_corpus_texts(input_dir: Path, limit: int | None = None) -> list[dict]:
-    """Load corpus into a list of {source, author_hash, post_id, texts} dicts."""
+def load_corpus_texts(
+    input_dir: Path,
+    limit: int | None = None,
+    posts_only: bool = False,
+) -> list[dict]:
+    """Load corpus into a list of {source, author_hash, post_id, texts} dicts.
+
+    When posts_only=True, skip user histories. This is useful for field
+    discovery (Phase 3) where user histories introduce noise from
+    unrelated subreddits -- we only want patterns from the target subreddit.
+    """
     items = []
     users_dir = input_dir / "users"
     posts_file = input_dir / "subreddit_posts.json"
 
-    if users_dir.exists():
+    if users_dir.exists() and not posts_only:
         for user_file in sorted(users_dir.glob("*.json")):
             with open(user_file, encoding="utf-8") as f:
                 user_data = json.load(f)
@@ -285,11 +325,11 @@ def build_discovery_prompt(known_fields: list, schema_data: dict | None = None) 
         ]
         if high_bleed:
             lines = "\n".join(
-                f"  - {name} ({rate:.0%} bleed) — patterns are capturing too much context"
+                f"  - {name} ({rate:.0%} bleed) - patterns are capturing too much context"
                 for name, rate in sorted(high_bleed, key=lambda x: -x[1])
             )
             health_block = f"""
-HIGH BLEED WARNING — these existing fields had excessive bleed in the last run.
+HIGH BLEED WARNING - these existing fields had excessive bleed in the last run.
 Do NOT re-suggest these fields. If you see similar patterns, define them more narrowly:
 {lines}
 """
@@ -307,13 +347,13 @@ WHAT TO LOOK FOR:
 - Information a medical researcher would want to query or filter on
 - Things that are specific enough to define clearly, not vague categories
 
-IDEAL FIELD TYPES — in order of preference:
+IDEAL FIELD TYPES - in order of preference:
 1. CATEGORICAL (best): a small fixed set of labels. e.g. "bedbound", "housebound", "mild", "moderate"
-2. NAMED ENTITY (good): a specific thing — drug name, test name, specialist type, supplement name
+2. NAMED ENTITY (good): a specific thing - drug name, test name, specialist type, supplement name
 3. SHORT MEASUREMENT (acceptable): a number + unit. e.g. "6 months", "100mg", "3 years"
 4. Avoid: open-ended free text, narrative summaries, multi-clause values
 
-MODEL CODEBOOK — emulate these field definitions exactly:
+MODEL CODEBOOK - emulate these field definitions exactly:
 
   vaccination_status:
     description: COVID vaccination status (categorical)
@@ -336,86 +376,35 @@ MODEL CODEBOOK — emulate these field definitions exactly:
       "my doctor referred me somewhere" (no specific specialty named)
 
   functional_status_tier:
-    description: Functional capacity level (categorical — one of: bedbound, housebound, severe, moderate, mild)
+    description: Functional capacity level (categorical - one of: bedbound, housebound, severe, moderate, mild)
     examples:
       "I've been bedbound for 3 months"  →  extracted_value: "bedbound"
       "mostly housebound, can't leave without crashing"  →  extracted_value: "housebound"
-      "I'm moderate — can do light tasks"  →  extracted_value: "moderate"
+      "I'm moderate - can do light tasks"  →  extracted_value: "moderate"
     negative_examples:
       "I went to bed early" (bedtime, not disability)
       "I stayed home today" (one-off, not chronic limitation)
 
-CODEBOOK BEST PRACTICES (graduate research methods level):
-
-1. LEVELS OF MEASUREMENT — choose the right one:
-   - Nominal: unordered categories. e.g. vaccine brand (Pfizer, Moderna, AstraZeneca).
-     Use when categories have no natural order. Each value is just a label.
-   - Ordinal: ordered categories. e.g. severity (mild < moderate < severe < bedbound).
-     Use when rank matters but intervals between ranks are not equal.
-   - Avoid interval/ratio for text extraction — you can't reliably extract "pain = 7.3".
-   Rule of thumb: if you can't sort the values meaningfully, it's nominal.
-   If you can sort them but can't do math on them, it's ordinal.
-
-2. MUTUALLY EXCLUSIVE AND EXHAUSTIVE (MEE):
-   Every observation should fit into exactly ONE category, and every possible
-   observation should fit into SOME category.
-   - Bad: categories "mild" and "moderate" overlap if "mildly moderate" is possible
-   - Bad: categories that don't cover "unknown" or "not mentioned" leave gaps
-   - Fix: design categories so no value could reasonably belong to two of them,
-     and add catch-all options for edge cases if needed.
-
-3. OPERATIONALIZATION — the bridge between concept and measurement:
-   A field is only useful if you can define exactly what text evidence counts as
-   an instance of it. Ask: "Would two independent coders agree on whether this
-   sentence belongs in this field?" If not, the definition is too loose.
-   - Bad operationalization: "supplement_efficacy" — too vague, coders will disagree
-   - Good operationalization: "supplement_reported_helpful" with categorical values
-     (helped / no effect / worsened / mixed) — coders will agree
-
-4. PARSIMONY — fewer, cleaner categories beat many overlapping ones:
-   3-7 categories per field is a good target. More than 10 usually means the field
-   is actually two fields, or the categories aren't truly distinct.
-   - Bad: 15 different specialist types with overlapping scope
-   - Good: 6-8 core specialist types (rheumatologist, cardiologist, neurologist,
-     immunologist, gastroenterologist, psychiatrist, endocrinologist, "other")
-
-5. AVOID DOUBLE-BARRELED FIELDS — one field, one concept:
-   If a field tries to capture two things at once, split it.
-   - Bad: "medication_and_outcome" (two concepts)
-   - Good: separate "medication_tried" and "treatment_outcome" fields
-   A signal that a field is double-barreled: the extracted_value needs punctuation
-   (→, ;, :) to hold it together.
-
-6. CONSTRUCT VALIDITY — does the extracted value actually measure the concept?
-   The text evidence must be a reliable indicator of the underlying concept,
-   not just a surface-level linguistic match.
-   - Bad construct validity: capturing "worked" as treatment_outcome — "it worked out
-     that I couldn't go" is not a treatment outcome
-   - Good construct validity: require "worked" adjacent to a medication name
-
-7. UNIT OF OBSERVATION — what does one extracted value represent?
-   Be explicit: is one value per sentence? Per post? Per medication? Per patient?
-   Most fields here are per-patient. If a field is per-medication, the value should
-   be just the medication name (not a sentence about it).
+{FIELD_DESIGN_STANDARDS}
 
 BAD field suggestions (avoid these patterns):
-- "general_health" (too vague — fails operationalization test)
-- "patient_narrative" (not queryable — fails parsimony)
-- "medication_details" (double-barreled — overlaps existing fields)
+- "general_health" (too vague - fails operationalization test)
+- "patient_narrative" (not queryable - fails parsimony)
+- "medication_details" (double-barreled - overlaps existing fields)
 - ANY field whose extracted_value would be a full sentence or multi-clause summary
-  (fails the "would two coders agree?" test — the answer is always no for free text)
+  (fails the "would two coders agree?" test - the answer is always no for free text)
 
 CRITICAL RULES FOR extracted_value:
 - 1-2 words is IDEAL. 3-4 words is acceptable. 5 words is the absolute maximum.
-- It is the LITERAL VALUE the regex capture group will return — not a narrative, not a summary
+- It is the LITERAL VALUE the regex capture group will return - not a narrative, not a summary
 - GOOD: "bedbound", "rheumatologist", "Pfizer", "no effect", "LDN", "6 months"
-- BAD: "LDN started at 6-month mark, reported as helpful" (narrative — fails parsimony)
-- BAD: "saw improvement after starting magnesium glycinate" (sentence — not a category)
-- BAD: "LDN → partial; Zepbound → none; Luvox initiated" (double-barreled — split it)
+- BAD: "LDN started at 6-month mark, reported as helpful" (narrative - fails parsimony)
+- BAD: "saw improvement after starting magnesium glycinate" (sentence - not a category)
+- BAD: "LDN → partial; Zepbound → none; Luvox initiated" (double-barreled - split it)
 - If the field captures entity names → extracted_value = just the entity name (1-2 words)
 - If the field captures outcomes/labels → extracted_value = just the label word(s)
 
-NEGATIVE EXAMPLES — for each field, also provide 2-3 sentences that look superficially
+NEGATIVE EXAMPLES - for each field, also provide 2-3 sentences that look superficially
 similar but should NOT be extracted. These help the regex engine avoid false positives.
 A negative example is a sentence from the same community that uses similar words but
 does NOT actually contain the field value. Think about construct validity: what sentence
@@ -423,11 +412,11 @@ would FAIL the operationalization test even though it uses the right words?
 
 Set `regex_extractable: false` for fields where the value requires semantic understanding,
 is too variable in phrasing, or is inherently relational/sequential (e.g.
-'medication_trial_sequence' — the value depends on understanding a multi-step narrative
+'medication_trial_sequence' - the value depends on understanding a multi-step narrative
 that no pattern can reliably capture). Set true for entity names, categorical labels,
 and measurements.
 
-RESPONSE FORMAT — return valid JSON:
+RESPONSE FORMAT - return valid JSON:
 {{
   "discovered_fields": [
     {{
@@ -447,7 +436,7 @@ RESPONSE FORMAT — return valid JSON:
       "frequency_hint": "common|occasional|rare",
       "research_value": "One sentence on why a researcher would want this field",
       "regex_extractable": true,
-      "extractability_note": "brief reason if false — what makes this hard to regex",
+      "extractability_note": "brief reason if false - what makes this hard to regex",
       "allowed_values": ["value1", "value2", "value3"],
       "trigger_vocabulary": ["diagnosed with", "started taking", "housebound"]
     }}
@@ -462,12 +451,12 @@ categories, outcome labels.
 
 For each field, include `trigger_vocabulary`: a list of 3-5 words or short phrases that
 typically appear near a true positive in patient text. These are NOT the extracted values
-— they are trigger words in context (e.g. 'diagnosed with', 'started taking',
+- they are trigger words in context (e.g. 'diagnosed with', 'started taking',
 'housebound').
 
 Find {EXAMPLES_PER_FIELD} example snippets per field. Only suggest fields where you found
 at least {MIN_EXAMPLES} distinct examples. Return 5-15 fields maximum.
-If you find no new fields, return {{"discovered_fields": []}} — do NOT return plain text."""
+If you find no new fields, return {{"discovered_fields": []}} - do NOT return plain text."""
 
 
 def run_phase1_discovery(
@@ -491,7 +480,7 @@ def run_phase1_discovery(
     print_lock = threading.Lock()
 
     # Split corpus into batches. Each item is truncated to per_item_chars so more
-    # items fit per batch — fewer API calls, lower cost.
+    # items fit per batch - fewer API calls, lower cost.
     batch_texts = []
     current_batch = []
     current_len = 0
@@ -577,8 +566,8 @@ def run_phase1_discovery(
                         entry["frequency_hints"].append(field["frequency_hint"])
                     for ex in field.get("examples", []):
                         if ex.get("text") and len(entry["examples"]) < EXAMPLES_PER_FIELD * 2:
-                            existing_vals = {e.get("extracted_value", "").lower() for e in entry["examples"]}
-                            if ex.get("extracted_value", "").lower() not in existing_vals:
+                            existing_vals = {(e.get("extracted_value") or "").lower() for e in entry["examples"]}
+                            if (ex.get("extracted_value") or "").lower() not in existing_vals:
                                 entry["examples"].append(ex)
                     for neg in field.get("negative_examples", []):
                         if neg.get("text") and len(entry["negative_examples"]) < EXAMPLES_PER_FIELD:
@@ -643,7 +632,7 @@ informal patient-authored Reddit text.
 
 RULES FOR WRITING PATTERNS:
 1. Use Python re module syntax (not PCRE or other flavors)
-2. All patterns will be compiled with re.IGNORECASE flag — do NOT include (?i) in patterns
+2. All patterns will be compiled with re.IGNORECASE flag - do NOT include (?i) in patterns
 3. Patterns should capture the VALUE in a group when possible (use parentheses)
 4. Be generous with word boundaries (\\b) to avoid false matches inside other words
 5. Account for informal spelling, abbreviations, and Reddit conventions
@@ -656,22 +645,22 @@ RULES FOR WRITING PATTERNS:
 10. FALSE POSITIVES MATTER: you will be shown negative examples that must NOT match.
     A pattern scoring 100% hit rate but firing on negatives is a failing pattern.
 
-NEGATION HANDLING — a critical source of false positives:
+NEGATION HANDLING - a critical source of false positives:
 Patient text frequently negates the exact terms you want to capture:
 "not bedbound", "never tried LDN", "I don't have POTS", "no longer housebound".
 A naive pattern fires on all of these incorrectly.
 
-CORRECT APPROACH — use positive context anchors instead of the bare term:
+CORRECT APPROACH - use positive context anchors instead of the bare term:
 Rather than matching the term alone, require a positive context verb before it
 that would not appear in a negated sentence.
 
-  BAD:  \\b(bedbound)\\b  — fires on "not bedbound"
+  BAD:  \\b(bedbound)\\b  - fires on "not bedbound"
   GOOD: \\b(?:I(?:'m| am)|currently|have been|been|become)\\s+(?:\\w+\\s+)?(bedbound)\\b
 
-  BAD:  \\b(LDN)\\b  — fires on "never tried LDN"
+  BAD:  \\b(LDN)\\b  - fires on "never tried LDN"
   GOOD: \\b(?:taking|started|on|tried|using|began)\\s+(?:low.dose\\s+)?(LDN)\\b
 
-  BAD:  \\b(POTS)\\b  — fires on "don't have POTS"
+  BAD:  \\b(POTS)\\b  - fires on "don't have POTS"
   GOOD: \\b(?:diagnosed with|have|my|confirmed)\\s+(POTS)\\b
 
 Python's `re` module requires fixed-width lookbehinds, so you CANNOT write
@@ -683,34 +672,34 @@ Common positive anchors by field type:
   Diagnosis:        "diagnosed with", "have", "confirmed", "positive for"
   Specialist visit: "saw", "seeing", "referred to", "appointment with", "consulted"
 
-MODEL PATTERNS — write patterns like these:
+MODEL PATTERNS - write patterns like these:
 
-  GOOD — categorical field with enumerated values (best):
+  GOOD - categorical field with enumerated values (best):
     Field: vaccination_status
     \\b(unvaccinated|not vaccinated|no vaccine)\\b
     \\b(pfizer|moderna|astrazeneca|johnson|novavax|mrna)\\b(?:\\s+vaccine)?
     \\b(boosted|double vaxxed|triple vaxxed|fully vaccinated)\\b
     → capture group returns one word from a known list. Cannot bleed.
 
-  GOOD — named entity anchored by context verb (good):
+  GOOD - named entity anchored by context verb (good):
     Field: specialist_type_seen
     \\b(?:saw|seeing|referred to|consulted?|appointment with)\\s+(?:a|my|an)?\\s*(rheumatologist|cardiologist|neurologist|immunologist|endocrinologist|gastroenterologist|psychiatrist|pulmonologist)\\b
     → captures exactly one known word, context verb prevents false positives.
 
-  GOOD — short measurement (acceptable):
+  GOOD - short measurement (acceptable):
     Field: long_covid_duration_months
     \\b([1-9][0-9]?)\\s*months?\\s+(?:of\\s+)?(?:long.?covid|pasc|symptoms|this)\\b
     → captures a number, \\b stops it at the word boundary.
 
-  BAD — open capture group (never do this):
+  BAD - open capture group (never do this):
     \\b(?:tried|started|took)\\s+([A-Za-z][A-Za-z0-9\\-]+(?:\\s+[A-Za-z][A-Za-z0-9\\-]+){{0,3}})
     → ({0,3}) still matches 1-4 arbitrary words. Use a named word list instead.
 
-  BAD — no anchor, grabs context:
+  BAD - no anchor, grabs context:
     ([A-Za-z]+(?:[- ][A-Za-z]+){{0,3}})\\s+(?:helps?|works?)
-    → matches "pages and security guards are really good" — anything before "helps".
+    → matches "pages and security guards are really good" - anything before "helps".
 
-RESPONSE FORMAT — return valid JSON:
+RESPONSE FORMAT - return valid JSON:
 {{
   "patterns": [
     "regex_pattern_1",
@@ -723,13 +712,13 @@ MEASUREMENT PRINCIPLES FOR PATTERN DESIGN:
 
 - Sensitivity vs specificity tradeoff: a broad pattern catches more true positives
   but also more false positives. A narrow pattern misses edge cases but is reliable.
-  For research data, SPECIFICITY is usually more valuable than sensitivity — a smaller
+  For research data, SPECIFICITY is usually more valuable than sensitivity - a smaller
   clean dataset beats a large noisy one. Err on the side of precision.
 
 - Operationalization in regex: your pattern is your operationalization. It defines
   exactly what text evidence counts as an instance of the field. If the pattern fires
   on a sentence that a human coder would say "that's not really about X", your
-  operationalization is wrong — tighten the pattern.
+  operationalization is wrong - tighten the pattern.
 
 - Inter-rater reliability proxy: ask yourself "would two researchers looking at a
   match agree it belongs in this field?" If a match is ambiguous, the pattern is
@@ -788,7 +777,7 @@ def evaluate_patterns(
                 "expected_value": expected,
             })
 
-    # Test negative examples — these should NOT match
+    # Test negative examples - these should NOT match
     false_positives = []
     true_negatives = []
     for neg in (negative_examples or []):
@@ -858,7 +847,7 @@ def run_phase2_build_regex(
         # Improvement 2: skip fields that the LLM flagged as not regex-extractable
         if not candidate.get("regex_extractable", True):
             log.append(
-                f"  [{i}/{total}] {name} — SKIPPED "
+                f"  [{i}/{total}] {name} - SKIPPED "
                 f"(llm_only: {candidate.get('extractability_note', 'not regex-extractable')})"
             )
             return {
@@ -897,7 +886,7 @@ def run_phase2_build_regex(
             )
             negatives_block = (
                 f"\nTexts that look similar but must NOT match:\n{neg_lines}\n"
-                f"Your patterns must avoid matching these — they are false positive traps.\n"
+                f"Your patterns must avoid matching these - they are false positive traps.\n"
             )
 
         # Improvement 1: trigger vocabulary anchor block
@@ -918,13 +907,13 @@ def run_phase2_build_regex(
                 f"\nAllowed values for this field: {json.dumps(allowed_values)}\n"
                 f"Build tight alternation patterns using ONLY these values: "
                 f"\\b({'|'.join(re.escape(v) for v in allowed_values)})\\b\n"
-                f"Do NOT use open capture groups — the value MUST be one of the listed options.\n"
+                f"Do NOT use open capture groups - the value MUST be one of the listed options.\n"
             )
 
         user_message = (
             f"Write Python regex patterns to extract the field '{name}'.\n\n"
             f"Description: {desc}\n\n"
-            f"IMPORTANT: The capture group must return only a SHORT value (1-5 words) — "
+            f"IMPORTANT: The capture group must return only a SHORT value (1-5 words) - "
             f"just the entity name or label. Do NOT write patterns with broad capture groups "
             f"that grab long phrases or full sentences.\n\n"
             f"Positive examples (patterns MUST match these):\n{examples_block}\n"
@@ -966,11 +955,11 @@ def run_phase2_build_regex(
                         for fp in report["false_positive_details"]
                     )
                     fp_block = (
-                        f"\nFALSE POSITIVES — your patterns matched these but should NOT have "
+                        f"\nFALSE POSITIVES - your patterns matched these but should NOT have "
                         f"({report['false_positives']}/{report['total_negatives']} = "
                         f"{report['false_positive_rate']:.0%} false positive rate):\n"
                         f"{fp_lines}\n"
-                        f"Tighten these patterns — add anchors, require more specific context, "
+                        f"Tighten these patterns - add anchors, require more specific context, "
                         f"or narrow the capture group.\n"
                     )
 
@@ -1024,7 +1013,7 @@ def run_phase2_build_regex(
             )
 
             if report["compile_errors"]:
-                log.append(f"    ⚠ {len(report['compile_errors'])} compile error(s)")
+                log.append(f"    ! {len(report['compile_errors'])} compile error(s)")
 
             if report["hit_rate"] > best_hit_rate:
                 best_hit_rate = report["hit_rate"]
@@ -1152,7 +1141,7 @@ def run_phase3_regex_extract(
                     except TimeoutError:
                         record_timeouts += 1
                         timeout_msgs.append(
-                            f"    ⚠ timeout: '{field_name}' — {pat.pattern[:60]}"
+                            f"    ! timeout: '{field_name}' - {pat.pattern[:60]}"
                         )
                         continue
                     for m in found:
@@ -1165,11 +1154,18 @@ def run_phase3_regex_extract(
             # Improvement 3 / 7: normalize matches to canonical allowed values
             av_map = field_allowed_values.get(field_name)
             if av_map is not None:
-                normalized = []
+                normalized, dropped = [], []
                 for val in matches:
                     canonical = av_map.get(val.lower())
                     if canonical is not None:
                         normalized.append(canonical)
+                    else:
+                        dropped.append(val)
+                if dropped:
+                    print(
+                        f"    ! {field_name}: dropped {len(dropped)} value(s) "
+                        f"not in allowed_values: {dropped[:3]}"
+                    )
                 matches = normalized
             if matches:
                 extracted[field_name] = matches
@@ -1206,7 +1202,7 @@ def run_phase3_regex_extract(
             n = stats["done"]
 
         with print_lock:
-            timeout_str = f"  ⚠{record_timeouts}" if record_timeouts else ""
+            timeout_str = f"  !{record_timeouts}" if record_timeouts else ""
             print(
                 f"  [{n}/{total}] {(item.get('author_hash') or '?')[:10]}...  "
                 f"{record_hits} fields hit{timeout_str}",
@@ -1287,7 +1283,7 @@ def run_phase4_fill_gaps(
             gaps.append((i, item, record, null_fields))
 
     if not gaps:
-        print("  No gaps to fill — regex covered everything!")
+        print("  No gaps to fill - regex covered everything!")
         return phase3_records
 
     print(f"  {len(gaps)} records have gaps to fill\n")
@@ -1303,7 +1299,7 @@ def run_phase4_fill_gaps(
     for f in validated_fields:
         line = f"  - {f['field_name']}: {f['description']}"
         if f.get("allowed_values"):
-            line += f" — ONLY return one of: {json.dumps(f['allowed_values'])}"
+            line += f" - ONLY return one of: {json.dumps(f['allowed_values'])}"
         field_lines.append(line)
     field_desc_block = "\n".join(field_lines)
 
@@ -1314,7 +1310,7 @@ Only extract explicitly stated information. Return null for fields with no evide
 FIELDS TO EXTRACT:
 {field_desc_block}
 
-RESPONSE FORMAT — valid JSON:
+RESPONSE FORMAT - valid JSON:
 {{
   "fields": {{
     "field_name": ["value1", "value2"] or null
@@ -1415,7 +1411,7 @@ def generate_schema(
     schema = {
         "schema_id": schema_id,
         "_description": (
-            f"Auto-discovered extension schema generated by discover_fields.py. "
+            f"Auto-discovered extension schema generated by patientpunk.discover. "
             f"All fields are tagged source: llm_discovered."
         ),
         "_generated_at": discovered_at,
@@ -1451,7 +1447,7 @@ def merge_into_schema(
     """Merge newly discovered fields into an existing schema in-place.
 
     New fields are tagged with _discovered_at. Existing fields are never
-    overwritten — run again with an updated schema to skip them next time.
+    overwritten - run again with an updated schema to skip them next time.
 
     Returns (updated_schema, added_count, skipped_count).
     """
@@ -1537,152 +1533,48 @@ def run_schema_health_update(schema_path: Path, records_file: Path) -> None:
 
 
 # =============================================================================
-# MAIN
+# LIBRARY ENTRYPOINT
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Multi-model field discovery pipeline for PatientPunk.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Pipeline phases:
-  Phase 1 (Haiku)  : Scan corpus for new field candidates with examples
-  Phase 2 (Sonnet) : Write regex patterns, test against examples, self-iterate
-  Phase 3 (regex)  : Run validated patterns across full corpus (free).
-                     Each text segment is matched individually — regex never
-                     runs across a concatenated blob — to prevent cross-post
-                     bleed where capture groups would pull content from the
-                     wrong post or comment.
-  Phase 4 (Haiku)  : Fill gaps where regex missed. Posts are separated by
-                     ---NEW POST--- and Haiku is instructed not to span
-                     boundaries when extracting.
+def run_discovery(
+    *,
+    input_dir: Path,
+    schema_path: Path | None = None,
+    temp_dir: Path | None = None,
+    workers: int = 10,
+    limit: int | None = None,
+    fill_gaps: bool = True,
+    resume: bool = False,
+    candidates_file: Path | None = None,
+    sample: int | None = None,
+    per_item_chars: int = 0,
+    stop_after: Literal["candidates"] | None = None,
+) -> PhaseResult:
+    """Run Phase 3 multi-model field discovery.
 
-Defaults (fast mode on by default):
-  --workers 10           Phase 1 and Phase 4 run 10 concurrent API calls
-  --per-item-chars 0     Full text per item (default). Use --per-item-chars 3000
-                         for ~4x cheaper Phase 1 once you're done testing.
-  Phase 4 enabled        Use --no-fill to skip gap filling
-  No resume              Use --resume to continue a previous Phase 4 run
+    Parameters
+    ----------
+    stop_after:
+        If ``"candidates"``, run only candidate generation (or load
+        ``candidates_file``), write ``phase1_candidates.json``, and return.
+        Used by ``PipelineConfig.discovery_mode="review"`` for Marimo review.
+    """
+    from typing import Any
 
-Schema library workflow (recommended):
-  Pass --schema to merge discoveries into your disease-specific schema file.
-  Each new field is tagged _discovered_at. Existing fields are never overwritten.
-  Run repeatedly — each run adds only what's new.
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(
+            f"{input_dir} does not exist. Run scrape_corpus.py first."
+        )
 
-  python discover_fields.py --schema schemas/covidlonghaulers_schema.json
-  python discover_fields.py --schema schemas/covidlonghaulers_schema.json --limit 20 --no-fill
+    out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
+    out_temp.mkdir(parents=True, exist_ok=True)
 
-  Then use the same schema everywhere:
-  python extract_biomedical.py --schema schemas/covidlonghaulers_schema.json
-  python llm_extract.py --schema schemas/covidlonghaulers_schema.json
-
-Standalone workflow (no --schema):
-  Creates schemas/discovered_{timestamp}.json with this run's fields only.
-
-  python discover_fields.py                              # full pipeline (fast, 10 workers)
-  python discover_fields.py --limit 20 --no-fill         # cheap test run
-  python discover_fields.py --workers 1                  # sequential (debug)
-  python discover_fields.py --resume                     # continue interrupted Phase 4
-  python discover_fields.py --candidates ../../output/phase1_candidates.json  # skip Phase 1
-  python discover_fields.py --sample 50                  # random 50-item sample (diverse + cheap)
-  python discover_fields.py --per-item-chars 0           # send full text per item (thorough)
-
-Output:
-  --schema provided  : updates the schema file in place
-  no --schema        : schemas/discovered_{timestamp}.json  (new file each run)
-  output/discovered_records_{schema_id}.json             extraction results (saved incrementally)
-  output/discovered_field_report_{schema_id}.json        coverage stats and report
-
-All auto-discovered fields are tagged source: llm_discovered and _discovered_at (timestamp).
-
-Cost estimate (~220 posts corpus): Phase 1 ~$0.05-0.15, Phase 2 ~$0.50-2.00,
-Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first.
-        """,
-    )
-    parser.add_argument(
-        "--input-dir", type=Path,
-        default=Path(__file__).resolve().parent.parent.parent / "output",
-        help="Path to the output/ directory from scrape_corpus.py",
-    )
-    parser.add_argument(
-        "--schema", type=Path, default=None,
-        help=(
-            "Disease-specific schema file to update (e.g. schemas/covidlonghaulers_schema.json). "
-            "Discovered fields are merged INTO this file — existing fields are never overwritten, "
-            "new fields are tagged with _discovered_at. "
-            "Without --schema, a new discovered_{timestamp}.json file is created instead."
-        ),
-    )
-    parser.add_argument(
-        "--limit", type=int, default=None,
-        help="Limit Phase 1 corpus scan to N records (cost control)",
-    )
-    parser.add_argument(
-        "--no-fill", action="store_true",
-        help="Skip Phase 4 (gap filling). Only discover + generate regex.",
-    )
-    parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Concurrent API workers for Phase 1 and Phase 4 (default: 10). Use --workers 1 to disable.",
-    )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="Resume Phase 4 from an existing records file, skipping already-filled records.",
-    )
-    parser.add_argument(
-        "--candidates", type=Path, default=None,
-        help=(
-            "Load Phase 1 candidates from a saved JSON file and skip Phase 1 entirely. "
-            "Phase 1 results are always saved to output/phase1_candidates.json after each run. "
-            "Note: run_pipeline.py auto-detects output/phase1_candidates.json and passes it "
-            "automatically — use --candidates here to override or specify a different file."
-        ),
-    )
-    parser.add_argument(
-        "--sample", type=int, default=None,
-        help=(
-            "Randomly sample N corpus items for Phase 1 instead of using all (or --limit). "
-            "More representative than --limit (which takes the first N alphabetically). "
-            "Example: --sample 50"
-        ),
-    )
-    parser.add_argument(
-        "--per-item-chars", type=int, default=MAX_TEXT_CHARS_PER_ITEM_PHASE1,
-        help=(
-            "Max characters taken from each corpus item in Phase 1 (default: 0 = full text). "
-            "Smaller = denser batches = fewer API calls = lower cost. "
-            "Example: --per-item-chars 3000 for ~4x cheaper Phase 1."
-        ),
-    )
-    parser.add_argument(
-        "--temp-dir", type=Path, default=None,
-        help="Directory for intermediate output files (default: {input-dir}/temp/).",
-    )
-    args = parser.parse_args()
-
-    output_dir = args.input_dir
-    if not output_dir.exists():
-        sys.exit(f"Error: {output_dir} does not exist. Run scrape_corpus.py first.")
-
-    temp_dir = args.temp_dir if args.temp_dir else output_dir / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load existing schema for context
     existing_schema = None
-    _base_field_names = [
-        "age", "sex_gender", "location_country", "healthcare_system",
-        "conditions", "onset_trigger", "diagnosis_source", "time_to_diagnosis",
-        "misdiagnosis", "symptom_duration", "symptom_trajectory", "age_at_onset",
-        "medications", "treatment_outcome", "procedures",
-        "activity_level", "work_disability_status", "mental_health",
-        "doctor_dismissal", "diagnostic_odyssey",
-        "prior_infections", "hormonal_events", "family_history",
-        "location_us_state", "ethnicity", "occupation", "bmi_weight",
-        "dosage", "dietary_interventions", "alternative_treatments",
-        "genetic_testing", "social_impact", "trauma_history",
-        "toxic_exposures", "healthcare_costs",
-    ]
-    # Improvement 5: build known_fields as a list supporting both strings and dicts
+    # Known-to-discovery fields = every biomedical field with an established
+    # regex pattern, so removed/renamed fields (e.g. activity_level) can't
+    # silently reappear here after being dropped from PATTERNS.
+    _base_field_names = sorted(PATTERNS.keys())
     known_fields_seen: set[str] = set()
     known_fields: list = []
     for name in _base_field_names:
@@ -1690,124 +1582,150 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
             known_fields_seen.add(name)
             known_fields.append(name)
 
-    if args.schema:
-        if not args.schema.exists():
-            sys.exit(f"Schema file not found: {args.schema}")
-        with open(args.schema, encoding="utf-8") as f:
+    if schema_path:
+        schema_path = Path(schema_path)
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        with open(schema_path, encoding="utf-8") as f:
             existing_schema = json.load(f)
-        # Add extension fields WITH descriptions (Improvement 5: cross-field distinctiveness)
         for fname, fdata in existing_schema.get("extension_fields", {}).items():
             if fname not in known_fields_seen:
                 known_fields_seen.add(fname)
                 known_fields.append({"name": fname, "description": fdata.get("description", "")})
 
     base_schema_id = existing_schema["schema_id"] if existing_schema else None
-
-    client = get_client()
+    client = get_llm_client()
 
     print("=" * 60)
     print("  PatientPunk Field Discovery Pipeline")
     print(f"  Models      : Haiku (scan/fill) + Sonnet (regex)")
-    print(f"  Target schema : {args.schema or 'new file (no --schema)'}")
+    print(f"  Target schema : {schema_path or 'new file (no --schema)'}")
     print(f"  Known fields  : {len(known_fields)}")
-    print(f"  Corpus limit  : {args.sample and f'sample {args.sample}' or args.limit or 'all'}")
-    print(f"  Per-item chars: {args.per_item_chars or 'unlimited'}")
-    print(f"  Gap fill      : {'yes' if not args.no_fill else 'no'}")
-    print(f"  Workers       : {args.workers}")
-    print(f"  Resume        : {'yes' if args.resume else 'no'}")
+    print(f"  Corpus limit  : {sample and f'sample {sample}' or limit or 'all'}")
+    print(f"  Per-item chars: {per_item_chars or 'unlimited'}")
+    print(f"  Gap fill      : {'yes' if fill_gaps else 'no'}")
+    print(f"  Workers       : {workers}")
+    print(f"  Resume        : {'yes' if resume else 'no'}")
     print("=" * 60)
 
     start_time = datetime.now(timezone.utc)
-    candidates_file = temp_dir / "phase1_candidates.json"
+    phase1_candidates_path = out_temp / "phase1_candidates.json"
 
-    # Always load corpus — needed for Phase 3 and 4 regardless of whether
-    # Phase 1 runs or is loaded from cache.
     print("\nLoading corpus...")
-    corpus_items = load_corpus_texts(output_dir, limit=None)  # Phase 3 always uses full corpus
+    corpus_items = load_corpus_texts(input_dir, limit=None, posts_only=True)
     print(f"  {len(corpus_items)} items loaded")
 
-    # Phase 1: Discover (or load from cache)
-    if args.candidates:
-        if not args.candidates.exists():
-            sys.exit(f"Candidates file not found: {args.candidates}")
-        with open(args.candidates, encoding="utf-8") as f:
+    if candidates_file:
+        candidates_file = Path(candidates_file)
+        if not candidates_file.exists():
+            raise FileNotFoundError(f"Candidates file not found: {candidates_file}")
+        with open(candidates_file, encoding="utf-8") as f:
             candidates = json.load(f)
-        print(f"\nLoaded {len(candidates)} Phase 1 candidates from {args.candidates} (skipping Phase 1)")
-        print(f"  NOTE: Old cache files lack new keys (trigger_vocabulary, allowed_values, etc.).")
-        print(f"  If you see missing-key errors, regenerate by removing --candidates.")
+        print(f"\nLoaded {len(candidates)} Phase 1 candidates from {candidates_file} (skipping Phase 1)")
     else:
-        # Apply limit/sample only for Phase 1 scan
         phase1_items = corpus_items
-        if args.sample and args.sample < len(phase1_items):
-            phase1_items = random.sample(phase1_items, args.sample)
-            print(f"  Using random sample of {args.sample} items for Phase 1")
-        elif args.limit and args.limit < len(phase1_items):
-            phase1_items = phase1_items[:args.limit]
-            print(f"  Using first {args.limit} items for Phase 1")
+        if sample and sample < len(phase1_items):
+            phase1_items = random.sample(phase1_items, sample)
+            print(f"  Using random sample of {sample} items for Phase 1")
+        elif limit and limit < len(phase1_items):
+            phase1_items = phase1_items[:limit]
+            print(f"  Using first {limit} items for Phase 1")
 
         candidates = run_phase1_discovery(
             client, phase1_items, known_fields,
-            workers=args.workers,
-            per_item_chars=args.per_item_chars,
+            workers=workers,
+            per_item_chars=per_item_chars,
             schema_data=existing_schema,
         )
 
         if candidates:
-            with open(candidates_file, "w", encoding="utf-8") as f:
+            with open(phase1_candidates_path, "w", encoding="utf-8") as f:
                 json.dump(candidates, f, ensure_ascii=False, indent=2)
-            print(f"\n  Phase 1 saved: {candidates_file}")
-            print(f"  (If Phase 2 fails, resume with: --candidates {candidates_file})")
+            print(f"\n  Phase 1 saved: {phase1_candidates_path}")
 
+    if stop_after == "candidates":
+        with open(phase1_candidates_path, "w", encoding="utf-8") as f:
+            json.dump(candidates, f, ensure_ascii=False, indent=2)
+        print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+        print(f"\n  Stopped after candidates ({len(candidates)}) for review.")
+        return PhaseResult(
+            artifacts={"candidates": phase1_candidates_path},
+            stats={"candidates": len(candidates)},
+        )
+
+    def _write_empty_report(candidates_found: int, candidates_validated: int) -> Path:
+        # Written even when nothing was discovered so `promote` (which locates
+        # reports via find_latest_discovery/find_discovery_reports, matched on
+        # pipeline_run.base_schema) can tell "discovery ran and found nothing"
+        # apart from "discovery was never run" -- the two look identical to a
+        # caller if only a nonzero-candidate run leaves a report behind.
+        end_time = datetime.now(timezone.utc)
+        report = {
+            "pipeline_run": {
+                "started_at": start_time.isoformat(),
+                "finished_at": end_time.isoformat(),
+                "duration_seconds": (end_time - start_time).total_seconds(),
+                "corpus_items": len(corpus_items),
+                "discovery_limit": limit,
+                "base_schema": base_schema_id,
+            },
+            "discovery_results": {
+                "candidates_found": candidates_found,
+                "candidates_validated": candidates_validated,
+                "candidates_rejected": candidates_found - candidates_validated,
+            },
+            "field_stats": {},
+            "schema_file": None,
+            "records_file": None,
+        }
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_file = out_temp / f"discovered_field_report_empty_{timestamp}.json"
+        with open(report_file, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        return report_file
+
+    artifacts: dict[str, Path] = {}
     if not candidates:
         print("\nNo new fields discovered. The existing schema may already cover this corpus well.")
-        return
+        artifacts["report"] = _write_empty_report(0, 0)
+        return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
 
-    # Phase 2: Build regex
-    validated_fields = run_phase2_build_regex(client, candidates, workers=args.workers)
+    validated_fields = run_phase2_build_regex(client, candidates, workers=workers)
 
     if not validated_fields:
         print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
-        return
+        artifacts["report"] = _write_empty_report(len(candidates), 0)
+        return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
 
-    regex_fields = [f for f in validated_fields if not f.get("llm_only")]
     llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
     if llm_only_fields:
         print(f"\n  {len(llm_only_fields)} llm_only field(s) (no regex, Phase 4 gap-fill only):")
         for f in llm_only_fields:
             print(f"    {f['field_name']}: {f.get('extractability_note', 'not regex-extractable')}")
 
-    # Always generate a new discovery schema file in temp/.
-    # If --schema was provided it is used READ-ONLY for known-field context —
-    # discovered fields are never merged back into it, keeping the curated
-    # schema clean. Each run produces its own discovered_{timestamp}.json.
     schema = generate_schema(validated_fields, base_schema_id)
-    schema_file = temp_dir / f"{schema['schema_id']}.json"
+    schema_file = out_temp / f"{schema['schema_id']}.json"
     with open(schema_file, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
     print(f"\n  Discovery schema saved: {schema_file}")
+    artifacts["schema"] = schema_file
 
-    # Phase 3: Extract with new regex across the full corpus
-    records = run_phase3_regex_extract(validated_fields, corpus_items, workers=args.workers)
+    records = run_phase3_regex_extract(validated_fields, corpus_items, workers=workers)
 
-    # Phase 4: Fill gaps
     schema_id = schema["schema_id"]
-    records_file = temp_dir / f"discovered_records_{schema_id}.json"
-    if not args.no_fill:
+    records_file = out_temp / f"discovered_records_{schema_id}.json"
+    if fill_gaps:
         records = run_phase4_fill_gaps(
             client, validated_fields, corpus_items, records,
-            workers=args.workers,
-            resume=args.resume,
+            workers=workers,
+            resume=resume,
             records_file=records_file,
         )
 
-    # Save records (final write — Phase 4 also saves incrementally)
     with open(records_file, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
+    artifacts["records"] = records_file
 
-    # Schema health update skipped — discovered fields now live in temp/,
-    # not in the curated --schema file, so bleed rates are not written back.
-
-    # Build and save report
     end_time = datetime.now(timezone.utc)
     duration = (end_time - start_time).total_seconds()
 
@@ -1838,7 +1756,7 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
             "finished_at": end_time.isoformat(),
             "duration_seconds": duration,
             "corpus_items": len(corpus_items),
-            "discovery_limit": args.limit,
+            "discovery_limit": limit,
             "base_schema": base_schema_id,
         },
         "discovery_results": {
@@ -1851,11 +1769,11 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         "records_file": str(records_file),
     }
 
-    report_file = temp_dir / f"discovered_field_report_{schema_id}.json"
+    report_file = out_temp / f"discovered_field_report_{schema_id}.json"
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
+    artifacts["report"] = report_file
 
-    # Summary
     print(f"\n{'=' * 60}")
     print(f"  Pipeline Complete ({duration:.0f}s)")
     print(f"  Candidates discovered : {len(candidates)}")
@@ -1874,12 +1792,55 @@ Phase 4 ~$0.05-0.15. Total ~$1-3. Use --limit 20 --no-fill to test cheaply first
         )
     print(f"{'=' * 60}")
 
-    print(f"\n  Next steps:")
-    print(f"  1. Review {schema_file.name} — edit/remove fields as needed")
-    print(f"  2. Run regex extractor with the new schema:")
-    print(f"       python extract_biomedical.py --schema schemas/{schema_file.name}")
-    print(f"  3. Or use it with llm_extract.py for merged results:")
-    print(f"       python llm_extract.py --schema schemas/{schema_file.name} --merge")
+    record_count = len(records)
+    covered = sum(
+        1 for rec in records
+        if any(fd.get("values") for fd in rec.get("discovered_fields", {}).values())
+    )
+    out_stats: dict[str, Any] = {
+        "fields discovered": len(field_stats),
+        "records with any hit": f"{covered}/{record_count}",
+        "coverage %": f"{round(covered / record_count * 100, 1) if record_count else 0}%",
+    }
+    return PhaseResult(artifacts=artifacts, stats=out_stats)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Multi-model field discovery pipeline for PatientPunk.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--input-dir", type=Path,
+        default=Path(__file__).resolve().parent.parent / "output",
+    )
+    parser.add_argument("--schema", type=Path, default=None)
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--no-fill", action="store_true")
+    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--candidates", type=Path, default=None)
+    parser.add_argument("--sample", type=int, default=None)
+    parser.add_argument("--per-item-chars", type=int, default=MAX_TEXT_CHARS_PER_ITEM_PHASE1)
+    parser.add_argument("--temp-dir", type=Path, default=None)
+    args = parser.parse_args(argv)
+
+    try:
+        run_discovery(
+            input_dir=args.input_dir,
+            schema_path=args.schema,
+            temp_dir=args.temp_dir,
+            workers=args.workers,
+            limit=args.limit,
+            fill_gaps=not args.no_fill,
+            resume=args.resume,
+            candidates_file=args.candidates,
+            sample=args.sample,
+            per_item_chars=args.per_item_chars,
+        )
+    except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

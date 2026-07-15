@@ -181,6 +181,7 @@ class TestPopulateDbEndToEnd:
             "treatment_reports",
             "user_profiles",
             "users",
+            "variables",
         }
 
     def test_2_foreign_keys_enforced(self, db: DB):
