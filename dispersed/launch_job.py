@@ -193,7 +193,8 @@ def cmd_stop(uuid: str, *, pk: str, sk: str) -> int:
     """Cancel a running job by uuid (stops billing)."""
     r = _signed_request("PUT", f"/v1/jobs/{uuid}/cancel",
                         {"reason": "stopped via launch_job.py"}, pk=pk, sk=sk)
-    print(f"  cancel {uuid} -> status: {r.get('status')}")
+    status = r.get("status") if isinstance(r, dict) else "unknown"
+    print(f"  cancel {uuid} -> status: {status}")
     return 0
 
 
@@ -211,8 +212,7 @@ def cmd_launch(args, *, pk: str, sk: str) -> int:
     print(f"Launching PERSISTENT job: image={args.image} port={args.port} "
           f"gpu={args.gpu_name or args.gpu_count}")
     created = _signed_request("POST", "/v1/jobs", body, pk=pk, sk=sk)
-    uuid = created.get("uuid")
-    if not uuid:
+    if not isinstance(created, dict) or not (uuid := created.get("uuid")):
         sys.exit(f"No job uuid in response: {created}")
     print(f"  job uuid: {uuid}  status: {created.get('status')}")
 
