@@ -7,6 +7,9 @@ history files) and extracts demographic and clinical fields (age, sex/gender,
 conditions, medications, treatment outcomes, etc.) using a combination of
 hand-crafted regex patterns and Claude Haiku/Sonnet LLM calls.
 
+> **Interpreting the output?** See [`METHODS.md`](./METHODS.md) for the self/other
+> attribution model, known biases (and their tunable guards), and which fields to trust.
+
 ---
 
 ## Table of Contents
