@@ -86,10 +86,15 @@ def _signed_request(method: str, path: str, body: dict | None = None,
 
 
 def _as_list(resp) -> list:
-    """Dispersed list endpoints return either `{"data": [...]}` or a bare list."""
+    """Dispersed list endpoints return either `{"data": [...]}` or a bare list.
+
+    Always returns a list -- an unexpected scalar/None response yields [] rather
+    than propagating a non-iterable to callers that len()/iterate over it.
+    """
     if isinstance(resp, dict):
-        return resp.get("data") or []
-    return resp or []
+        data = resp.get("data")
+        return data if isinstance(data, list) else []
+    return resp if isinstance(resp, list) else []
 
 
 # --- launch helpers -----------------------------------------------------------
@@ -109,18 +114,19 @@ def _build_job_body(args, allowed_ip: str) -> dict:
     if "ollama" in args.image.lower():
         # Ollama must bind all interfaces to be reachable via node_urls.
         env["OLLAMA_HOST"] = f"0.0.0.0:{args.port}"
+    docker_params: dict = {
+        "image": args.image,
+        "tag": "latest",
+        "ports": [args.port],
+        "allowed_ips": [allowed_ip],
+        "env": env,
+    }
     body: dict = {
         "task": "PERSISTENT",   # long-running query-responsive server
         "title": args.title,
         "gpu_count": args.gpu_count,
         "min_vram_gb": args.min_vram_gb,
-        "parameters": {"type": "docker", "parameters": {
-            "image": args.image,
-            "tag": "latest",
-            "ports": [args.port],
-            "allowed_ips": [allowed_ip],
-            "env": env,
-        }},
+        "parameters": {"type": "docker", "parameters": docker_params},
     }
     if args.gpu_name:
         body["gpu_name"] = args.gpu_name
