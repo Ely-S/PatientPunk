@@ -31,6 +31,7 @@ ingestion — no direct identifiers are stored.
 | `phoenix_rwe_stats_appendix.md` | Deterministic recompute of the headline statistics (Wilson CIs, dose, AE profile) with definitions/denominators inline. No LLM calls. The citable numbers live here. |
 | `ldn_literature_review.md` | LDN mechanism + clinical-evidence review for post-viral conditions. |
 | `MANIFEST.csv` | Registry of the (uncommitted) source data files and rendered outputs: size, SHA-256, S3 location, row counts. |
+| `requirements.txt` | Python dependencies for the build scripts (+ the notebook-execution stack). |
 | `scripts/` | The 16 figure/notebook **builder** scripts. They regenerate the (uncommitted) `figures/` and `notebooks/` from the source databases; see note above. |
 
 ### Notebooks (built by `scripts/`, not committed)
@@ -46,6 +47,37 @@ figures and notebooks. The data-preparation and exploratory layer (corpus ingest
 `build_notebook.py` from the pilot-paper package
 ([`../rct_validation/`](../rct_validation/)); they are included as documentation of method,
 not as a turnkey rebuild (the source databases are not committed).
+
+## Reproducing the analysis
+
+With the source databases in place, the scripts are self-contained:
+
+```bash
+pip install -r requirements.txt
+export PP_DATA_DIR=/path/to/databases     # default: ./data (uncommitted)
+python scripts/build_ldn_combined_nb.py   # etc. -- one script per notebook/figure set
+```
+
+Notebook builders also need `build_notebook.py` from the sibling RCT-validation study
+([`../rct_validation/`](../rct_validation/)); the scripts locate it automatically.
+
+### Required databases
+
+Most scripts read from the **FDA-letter bundle** (all databases listed in `MANIFEST.csv`
+with sizes/SHA-256/S3 location). Two descriptive-statistics scripts also draw on
+**cross-corpus** databases that live outside this bundle:
+
+| Script | Databases | Where |
+|---|---|---|
+| The 7 notebook builders + `export_ldn_figures.py` | `covidlonghaulers_full.db`, `mestinon_run.db`, `mestinon_predict.db`, `ldn_2yr.db`, `ldn_phoenix.db`, `fda_evidence.db`, `dysautonomia.db` | FDA-letter bundle (`MANIFEST.csv`) |
+| `build_descstats_table.py` | `ldn_2yr.db`, `phoenixrising.db` | `ldn_2yr.db` in the bundle; `phoenixrising.db` in the Phoenix Rising study data |
+| `build_descriptives.py` | `covidlonghaulers_full.db`, `dysautonomia.db`, `rcfs_run.db`, `phoenix_eli_ourpipeline.db` | `rcfs_run.db` and `phoenix_eli_ourpipeline.db` are cross-corpus and **not part of any published bundle** |
+
+> **Need a database?** Not every source database is publicly archived (the cross-corpus
+> ones in particular). If you need any of them to reproduce a result, **contact the
+> PatientPunk team** and we can arrange access. The analysis *outputs* those scripts
+> produce are preserved regardless — the `corpus_stats` table is baked into
+> `fda_evidence.db` and the descriptive-stats figures are archived per `MANIFEST.csv`.
 
 ## Headline findings (honest summary)
 
