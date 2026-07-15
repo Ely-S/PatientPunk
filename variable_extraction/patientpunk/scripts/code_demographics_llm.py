@@ -44,13 +44,11 @@ Requires:
 import argparse
 import csv
 import json
-import os
 import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import anthropic
 from dotenv import load_dotenv
 
 # Load API key: project root first, then local fallback.
@@ -64,7 +62,7 @@ from patientpunk.qualitative_standards import (
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
-from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch
+from patientpunk._utils import LLM_TEMPERATURE, MODEL_FAST, REDDIT_REMOVED, split_retry_batch
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
 BATCH_SIZE = 10
@@ -186,13 +184,13 @@ def build_text(record: dict, source_type: str, max_chars: int = MAX_CHARS) -> st
         body = record.get("body", "") or ""
         if title:
             parts.append(f"Post title: {title}")
-        if body and body not in ("[removed]", "[deleted]"):
+        if body and body not in REDDIT_REMOVED:
             parts.append(f"Post body:\n{body}")
         author_hash = record.get("author_hash")
         for comment in record.get("comments", []):
             if comment.get("author_hash") == author_hash:
                 cb = comment.get("body", "") or ""
-                if cb and cb not in ("[removed]", "[deleted]"):
+                if cb and cb not in REDDIT_REMOVED:
                     parts.append(f"Author comment:\n{cb}")
         text = "\n\n".join(parts)
     else:  # user_history
@@ -218,87 +216,6 @@ def build_text(record: dict, source_type: str, max_chars: int = MAX_CHARS) -> st
 # API CALL
 # =============================================================================
 
-def call_haiku(
-    client: anthropic.Anthropic,
-    system_prompt: str,
-    text: str,
-    author_hash: str,
-    source_type: str,
-    mode: str,
-) -> dict:
-    """Single API call.  Returns a result dict."""
-    base = {
-        "author_hash": author_hash,
-        "source_type": source_type,
-    }
-
-    if not text.strip():
-        base["error"] = "no text content"
-        if mode in ("deductive", "both"):
-            base.update(age=None, sex_gender=None, location_country=None,
-                        location_state=None, confidence="none", evidence="")
-        if mode in ("inductive", "both"):
-            base["discovered_demographics"] = []
-        return base
-
-    user_msg = (
-        "Code demographic information from the following Reddit "
-        f"post(s) by a single author:\n\n{text}"
-    )
-
-    try:
-        response = client.messages.create(
-            model=MODEL,
-            temperature=LLM_TEMPERATURE,
-            max_tokens=800,  # larger than deductive-only to allow discoveries
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        raw = response.content[0].text.strip()
-
-        # Strip accidental markdown code fences
-        if raw.startswith("```"):
-            lines = raw.splitlines()
-            raw = "\n".join(
-                l for l in lines
-                if not l.strip().startswith("```") and l.strip() != "json"
-            )
-
-        data = json.loads(raw)
-
-        if mode in ("deductive", "both"):
-            base.update({
-                "age": data.get("age"),
-                "sex_gender": data.get("sex_gender"),
-                "location_country": data.get("location_country"),
-                "location_state": data.get("location_state"),
-                "confidence": data.get("confidence", "low"),
-                "evidence": str(data.get("evidence", ""))[:200],
-            })
-        if mode in ("inductive", "both"):
-            base["discovered_demographics"] = data.get("discovered_demographics", [])
-
-    except json.JSONDecodeError as e:
-        base["error"] = f"JSON parse error: {e}"
-        if mode in ("deductive", "both"):
-            base.update(age=None, sex_gender=None, location_country=None,
-                        location_state=None, confidence="parse_error", evidence="")
-        if mode in ("inductive", "both"):
-            base["discovered_demographics"] = []
-    except Exception as e:
-        base["error"] = str(e)[:200]
-        if mode in ("deductive", "both"):
-            base.update(age=None, sex_gender=None, location_country=None,
-                        location_state=None, confidence="error", evidence="")
-        if mode in ("inductive", "both"):
-            base["discovered_demographics"] = []
-
-    return base
-
 
 def _strip_markdown_fences(raw: str) -> str:
     if raw.startswith("```"):
@@ -310,7 +227,7 @@ def _strip_markdown_fences(raw: str) -> str:
     return raw
 
 
-def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: str) -> list[dict]:
+def _code_demographics_batch_raw(client, system_prompt: str, items: list[dict], mode: str) -> list[dict]:
     """Send multiple records in one API call. Returns list of parsed dicts."""
     msg = (
         "Code demographic information from the following Reddit records. "
@@ -365,13 +282,13 @@ def process_batch(client, system_prompt: str, batch: list[tuple], mode: str,
             output.append(base)
         return output
 
-    ne_items = [items[i] for i in non_empty]
+    non_empty_items = [items[i] for i in non_empty]
 
     def call_fn(sub_items):
-        return _call_haiku_batch_raw(client, system_prompt, sub_items, mode)
+        return _code_demographics_batch_raw(client, system_prompt, sub_items, mode)
 
     try:
-        raw_results = split_retry_batch(call_fn, ne_items)
+        raw_results = split_retry_batch(call_fn, non_empty_items)
     except Exception as e:
         # Total failure
         output = []

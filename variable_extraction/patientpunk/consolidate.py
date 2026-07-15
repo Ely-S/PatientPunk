@@ -26,7 +26,6 @@ Pure functions; the deterministic path makes no API calls.
 from __future__ import annotations
 
 import re
-from collections import Counter
 
 from pydantic import BaseModel, ConfigDict
 
@@ -107,7 +106,7 @@ class ConsolidateResult(BaseModel):
         )
 
 
-def _hit(defn: dict) -> float:
+def _discovery_hit_rate(defn: dict) -> float:
     v = defn.get("hit_rate_at_discovery", 0)
     return float(v) if isinstance(v, (int, float)) else 0.0
 
@@ -126,7 +125,7 @@ def _merge_group(members: list[tuple[str, int, dict]], n_runs: int) -> tuple[str
 
     def name_score(nm: str):
         defns = [d for n, _, d in members if n == nm]
-        return (len(name_runs[nm]), max((_hit(d) for d in defns), default=0.0), -len(nm))
+        return (len(name_runs[nm]), max((_discovery_hit_rate(d) for d in defns), default=0.0), -len(nm))
 
     canonical_name = max(name_runs, key=name_score)
     canonical_defn = next(d for n, _, d in members if n == canonical_name)
@@ -139,12 +138,12 @@ def _merge_group(members: list[tuple[str, int, dict]], n_runs: int) -> tuple[str
         for p in defn.get("patterns") or []:
             if p not in patterns:
                 patterns.append(p)
-        av = defn.get("allowed_values")
-        if isinstance(av, list):
-            for v in av:
+        allowed_values = defn.get("allowed_values")
+        if isinstance(allowed_values, list):
+            for v in allowed_values:
                 if v not in allowed:
                     allowed.append(v)
-        max_hit = max(max_hit, _hit(defn))
+        max_hit = max(max_hit, _discovery_hit_rate(defn))
 
     merged["patterns"] = patterns
     if allowed:
