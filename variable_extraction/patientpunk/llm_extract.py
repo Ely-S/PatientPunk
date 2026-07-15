@@ -237,8 +237,11 @@ def build_field_descriptions(schema: dict | None) -> dict[str, str]:
 
 # Optional rule (off by default; enable with --group-guard / PP_GROUP_GUARD=1).
 # Stops the model from copying a collective outcome ("this stack helped") onto
-# every named treatment -- a measured source of `helped` inflation from stack
-# posts. Appended to the treatment_outcome guidance when enabled.
+# every named treatment -- a *confirmed, measured* source of `helped` inflation
+# from stack posts (3-arm week test: helped share 47% -> 43%; ~6% helped->unknown
+# vs a 1% noise floor). Left opt-in to preserve default reproducibility; RECOMMENDED
+# for any analysis that reports per-drug `helped` rates (see README). Appended to
+# the treatment_outcome guidance when enabled.
 GROUP_GUARD_RULE = (
     "- GROUPED treatments: when several treatments are named together but only a "
     "COLLECTIVE outcome is given (e.g. 'this stack helped', 'things are improving'), "
