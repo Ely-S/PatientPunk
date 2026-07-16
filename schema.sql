@@ -25,6 +25,7 @@ CREATE TABLE posts (
 
 CREATE INDEX idx_posts_user ON posts(user_id);
 CREATE INDEX idx_posts_date ON posts(post_date);
+CREATE INDEX idx_posts_parent ON posts(parent_id);
 
 -- ══════════════════════════════════════════════════════
 -- LAYER 2: Configuration
@@ -92,3 +93,25 @@ CREATE INDEX idx_tr_post ON treatment_reports(post_id);
 CREATE INDEX idx_tr_drug ON treatment_reports(drug_id);
 CREATE INDEX idx_tr_user ON treatment_reports(user_id);
 CREATE INDEX idx_tr_run  ON treatment_reports(run_id);
+
+-- ══════════════════════════════════════════════════════
+-- Extracted variables (EAV)
+-- ══════════════════════════════════════════════════════
+-- One row per non-empty extracted cell from records.csv, including the
+-- inductively-discovered variables.  load_extractions() maps a fixed set of
+-- demographic/condition columns into user_profiles/conditions; this table keeps
+-- the FULL wide variable matrix queryable.  Loaded by db.load_variables().
+-- (The wide, one-column-per-variable `unified` table that load_db.py also builds
+--  is data-driven -- created by pandas to_sql(), not declared here.)
+CREATE TABLE variables (
+    variable_id INTEGER PRIMARY KEY,
+    run_id  INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    user_id TEXT NOT NULL REFERENCES users(user_id),
+    post_id TEXT,                 -- no FK: user-history records have no single post
+    field   TEXT NOT NULL,
+    value   TEXT NOT NULL         -- raw cell text; multi-values keep " | "
+);
+
+CREATE INDEX idx_var_user  ON variables(user_id);
+CREATE INDEX idx_var_field ON variables(field);
+CREATE INDEX idx_var_run   ON variables(run_id);
