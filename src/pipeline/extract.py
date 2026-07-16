@@ -26,7 +26,7 @@ from utilities.db import open_db, post_text
 from utilities.graph import find_parent_cycles
 
 BATCH_SIZE = 10
-SAVE_EVERY = 50  # batches between checkpoint writes
+SAVE_EVERY = 5  # batches between checkpoint writes
 
 
 def is_only_questions(text: str) -> bool:

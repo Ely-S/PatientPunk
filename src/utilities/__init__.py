@@ -35,7 +35,7 @@ class PipelineConfig:
     reclassify: bool = False
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
-    workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
+    workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
 

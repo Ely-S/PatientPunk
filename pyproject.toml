@@ -24,6 +24,7 @@ dependencies = [
     "scipy>=1.14",
     "seaborn>=0.13",
     "statsmodels>=0.14",
+    "openai>=2.45.0",
 ]
 
 # Runtime extras -- installable with pip: `pip install '.[cluster,openai]'`
