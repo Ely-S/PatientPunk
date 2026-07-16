@@ -97,6 +97,14 @@ def test_cached_completion_hit_skips_call(tmp_path, monkeypatch):
     assert cache.cached_completion(**kwargs, call_fn=call_fn) == "RESPONSE"
     assert calls["n"] == 1
 
+    key = cache.make_key(**kwargs)
+    log_text = (tmp_path / "log.txt").read_text(encoding="utf-8")
+    assert f"M {key[:12]}" in log_text
+    assert f"W {key[:12]}" in log_text
+    assert f"H {key[:12]}" in log_text
+    # miss+write then hit
+    assert [ln[0] for ln in log_text.strip().splitlines()] == ["M", "W", "H"]
+
 
 def test_cached_completion_disabled_always_calls(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))

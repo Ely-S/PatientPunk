@@ -8,12 +8,19 @@ Layout::
 Enabled by default. Opt out with ``LLM_CACHE=0`` (or ``false`` / ``no`` / ``off``)
 or ``--no-llm-cache``. Root defaults to ``cache/`` (cwd-relative); override with
 ``LLM_CACHE_DIR``.
+
+Events are appended to ``{LLM_CACHE_DIR}/log.txt`` in a minimal format::
+
+    H <key12>   # hit
+    M <key12>   # miss
+    W <key12>   # write
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
@@ -27,6 +34,35 @@ _FALSE = {"0", "false", "no", "off"}
 # None = defer to LLM_CACHE env (default on when unset).
 _enabled_override: bool | None = None
 _lock = threading.Lock()
+
+
+class _CacheFileHandler(logging.Handler):
+    """Append-only handler that always writes to ``{cache_root()}/log.txt``."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            path = cache_root() / "log.txt"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            line = self.format(record) + "\n"
+            with _lock:
+                with path.open("a", encoding="utf-8") as f:
+                    f.write(line)
+        except Exception:
+            self.handleError(record)
+
+
+_log = logging.getLogger("patientpunk.llm_cache")
+_log.setLevel(logging.INFO)
+_log.propagate = False
+if not any(isinstance(h, _CacheFileHandler) for h in _log.handlers):
+    _handler = _CacheFileHandler()
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    _log.addHandler(_handler)
+
+
+def _elog(event: str, key: str) -> None:
+    """Extremely concise cache event: ``H|M|W <key[:12]>``."""
+    _log.info("%s %s", event, key[:12])
 
 
 def set_cache_enabled(enabled: bool | None) -> None:
@@ -182,8 +218,10 @@ def cached_completion(
     path = cache_path(provider, model, key)
     hit = get(path)
     if hit is not None:
+        _elog("H", key)
         return hit
 
+    _elog("M", key)
     text = call_fn()
     put(
         path,
@@ -194,4 +232,5 @@ def cached_completion(
         max_tokens=max_tokens,
         response_text=text,
     )
+    _elog("W", key)
     return text
