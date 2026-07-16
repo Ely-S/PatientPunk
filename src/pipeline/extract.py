@@ -199,14 +199,18 @@ def run_extraction(config: "PipelineConfig"):
     log.info(f"{len(id_to_drugs)} cached, {len(to_do)} to extract...")
 
     def save_tagged_atomic() -> list:
-        """Recompute upstream context and write atomically via a temp file."""
+        """Recompute upstream context and write atomically via a temp file.
+
+        Persists every processed id (including empty ``drugs_direct``) so
+        resume can skip LLM re-calls. Downstream consumers that need
+        drug-bearing entries should filter themselves.
+        """
         upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged = [
             {**item, "drugs_direct": id_to_drugs.get(item["id"], []),
              "drugs_context": upstream_drugs.get(item["id"], [])}
             for item in all_items
-            if (id_to_drugs.get(item["id"]) or upstream_drugs.get(item["id"]))
-            and not is_only_questions(item["text"])
+            if item["id"] in id_to_drugs
         ]
         tmp = tagged_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(tagged, indent=2))
@@ -222,37 +226,51 @@ def run_extraction(config: "PipelineConfig"):
     batches_since_save = 0
     max_inflight = max(config.workers * 4, 1)
 
-    with ThreadPoolExecutor(max_workers=config.workers) as pool:
-        pending: dict[Future, list] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=config.workers) as pool:
+            pending: dict[Future, list] = {}
 
-        # Seed the pool
-        for batch in itertools.islice(batch_iter, max_inflight):
-            f = pool.submit(extract_batch, client, [t for _, t in batch])
-            pending[f] = batch
+            # Seed the pool
+            for batch in itertools.islice(batch_iter, max_inflight):
+                f = pool.submit(extract_batch, client, [t for _, t in batch])
+                pending[f] = batch
 
-        while pending:
-            future = next(as_completed(pending))
-            batch = pending.pop(future)
+            while pending:
+                future = next(as_completed(pending))
+                batch = pending.pop(future)
 
-            for (item_id, _), drugs in zip(batch, future.result()):
-                flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
-                id_to_drugs[item_id] = flat
+                for (item_id, _), drugs in zip(batch, future.result()):
+                    flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                    id_to_drugs[item_id] = flat
 
-            done_ext += len(batch)
-            if done_ext % (BATCH_SIZE * 100) == 0:
-                save_tagged_atomic()
-            log.info(f"Extracted {done_ext}/{len(to_do)}...")
+                done_ext += len(batch)
+                batches_since_save += 1
+                if batches_since_save >= SAVE_EVERY:
+                    save_tagged_atomic()
+                    batches_since_save = 0
+                log.info(f"Extracted {done_ext}/{len(to_do)}...")
 
-            # Submit next batch to keep pool saturated
-            next_batch = next(batch_iter, None)
-            if next_batch is not None:
-                f = pool.submit(extract_batch, client, [t for _, t in next_batch])
-                pending[f] = next_batch
+                # Submit next batch to keep pool saturated
+                next_batch = next(batch_iter, None)
+                if next_batch is not None:
+                    f = pool.submit(extract_batch, client, [t for _, t in next_batch])
+                    pending[f] = next_batch
+    finally:
+        # Flush on interrupt / error so completed work survives restart
+        if id_to_drugs:
+            tagged = save_tagged_atomic()
+        else:
+            tagged = []
 
-    tagged = save_tagged_atomic()
+    # Prefer final filtered view for stats (entries with any drug signal, non-questions)
+    tagged_with_drugs = [
+        e for e in tagged
+        if (e.get("drugs_direct") or e.get("drugs_context"))
+        and not is_only_questions(e.get("text", ""))
+    ]
 
-    drug_counts = Counter(d for e in tagged for d in e["drugs_direct"])
-    log.info(f"{len(tagged)} entries tagged.")
+    drug_counts = Counter(d for e in tagged_with_drugs for d in e["drugs_direct"])
+    log.info(f"{len(tagged)} entries checkpointed ({len(tagged_with_drugs)} with drugs).")
     log.info("Top drug mentions:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")

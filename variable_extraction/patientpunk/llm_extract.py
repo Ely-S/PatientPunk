@@ -65,6 +65,7 @@ from .phase import PhaseResult
 
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
+    LLM_PROVIDER,
     LLM_TEMPERATURE,
     MODEL_FAST,
     collect_texts_from_post,
@@ -72,11 +73,14 @@ from ._utils import (
     parse_json_response,
     split_retry_batch,
 )
+from .llm_cache import cached_completion
 MODEL = MODEL_FAST
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
 # most prolific posters. Haiku's hard output ceiling is 8192; use it.
-MAX_TOKENS = 8192
+# Override via LLM_MAX_TOKENS for local models (e.g. 1024) so generation
+# cannot burn the full budget when the model fails to stop early.
+MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
 # single record's reply (full fields + verbose suggested_fields) overran 8192
 # output tokens and got truncated mid-JSON. The discovery script learned the
@@ -161,43 +165,56 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     temp-0 reply was deterministically malformed JSON).
     """
     temp = LLM_TEMPERATURE if temperature is None else temperature
-    for attempt, delay in enumerate([0] + RETRY_DELAYS):
-        if delay:
-            time.sleep(delay)
-        try:
-            response = client.messages.create(
-                model=MODEL,
-                temperature=temp,
-                max_tokens=MAX_TOKENS,
-                system=[
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": user_message}],
-            )
-            return response.content[0].text
-        except Exception as e:
-            # Provider-agnostic retry: works whether the error is raised by the
-            # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
-            # Retry on rate limits (429) and transient 5xx / connection errors;
-            # on a non-transient error or the last attempt, re-raise so
-            # split_retry_batch can fall back to a smaller batch.
-            status = getattr(e, "status_code", None)
-            if status is None:
-                status = getattr(getattr(e, "response", None), "status_code", None)
-            name = type(e).__name__
-            transient = (
-                status == 429
-                or (status is not None and 500 <= status < 600)
-                or "Connection" in name
-                or "Timeout" in name
-            )
-            if not transient or attempt == len(RETRY_DELAYS):
-                raise
-    return ""
+    system = [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+    def _call() -> str:
+        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+            if delay:
+                time.sleep(delay)
+            try:
+                response = client.messages.create(
+                    model=MODEL,
+                    temperature=temp,
+                    max_tokens=MAX_TOKENS,
+                    system=system,
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                return response.content[0].text
+            except Exception as e:
+                # Provider-agnostic retry: works whether the error is raised by the
+                # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
+                # Retry on rate limits (429) and transient 5xx / connection errors;
+                # on a non-transient error or the last attempt, re-raise so
+                # split_retry_batch can fall back to a smaller batch.
+                status = getattr(e, "status_code", None)
+                if status is None:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                name = type(e).__name__
+                transient = (
+                    status == 429
+                    or (status is not None and 500 <= status < 600)
+                    or "Connection" in name
+                    or "Timeout" in name
+                )
+                if not transient or attempt == len(RETRY_DELAYS):
+                    raise
+        return ""
+
+    return cached_completion(
+        provider=LLM_PROVIDER,
+        model=MODEL,
+        system=system_prompt,
+        prompt=user_message,
+        temperature=temp,
+        max_tokens=MAX_TOKENS,
+        call_fn=_call,
+    )
 
 
 # parse_json_response lives in _utils (shared with demographics / discover)

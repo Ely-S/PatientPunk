@@ -146,6 +146,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
+    LLM_PROVIDER,
     LLM_TEMPERATURE,
     MODEL_FAST,
     MODEL_STRONG,
@@ -153,6 +154,7 @@ from ._utils import (
     get_llm_client,
     parse_json_response,
 )
+from .llm_cache import cached_completion
 HAIKU = MODEL_FAST
 SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
@@ -192,35 +194,47 @@ def call_model(
     max_tokens: int = MAX_TOKENS_HAIKU,
 ) -> str:
     """Call a model with retry logic and prompt caching. Returns the text response."""
-    for attempt, delay in enumerate([0] + RETRY_DELAYS):
-        if delay:
-            print(f"    Retrying in {delay}s (attempt {attempt + 1})...")
-            time.sleep(delay)
-        try:
-            response = client.messages.create(
-                model=model,
-                temperature=LLM_TEMPERATURE,
-                max_tokens=max_tokens,
-                system=[
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": user_message}],
-            )
-            return response.content[0].text
-        except (anthropic.RateLimitError, anthropic.InternalServerError):
-            if attempt == len(RETRY_DELAYS):
-                raise
-            print(f"    Rate limited / server error.")
-        except anthropic.APIStatusError as e:
-            if e.status_code in (429, 500, 502, 503, 529) and attempt < len(RETRY_DELAYS):
-                print(f"    API error {e.status_code}.")
-            else:
-                raise
-    return ""
+
+    def _call() -> str:
+        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+            if delay:
+                print(f"    Retrying in {delay}s (attempt {attempt + 1})...")
+                time.sleep(delay)
+            try:
+                response = client.messages.create(
+                    model=model,
+                    temperature=LLM_TEMPERATURE,
+                    max_tokens=max_tokens,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system_prompt,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                return response.content[0].text
+            except (anthropic.RateLimitError, anthropic.InternalServerError):
+                if attempt == len(RETRY_DELAYS):
+                    raise
+                print(f"    Rate limited / server error.")
+            except anthropic.APIStatusError as e:
+                if e.status_code in (429, 500, 502, 503, 529) and attempt < len(RETRY_DELAYS):
+                    print(f"    API error {e.status_code}.")
+                else:
+                    raise
+        return ""
+
+    return cached_completion(
+        provider=LLM_PROVIDER,
+        model=model,
+        system=system_prompt,
+        prompt=user_message,
+        temperature=LLM_TEMPERATURE,
+        max_tokens=max_tokens,
+        call_fn=_call,
+    )
 
 
 # parse_json_response lives in _utils (shared with llm_extract / demographics)

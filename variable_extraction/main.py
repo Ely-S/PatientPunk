@@ -154,6 +154,10 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
                    help="Process at most N records (cost control / testing).")
     run_parser.add_argument("--resume", action="store_true",
                    help="Resume interrupted LLM / discovery runs.")
+    run_parser.add_argument("--llm-cache", action="store_true",
+                   help="Cache LLM API responses to disk (content-addressable under cache/).")
+    run_parser.add_argument("--no-llm-cache", action="store_true",
+                   help="Disable LLM API response cache (overrides LLM_CACHE=1).")
 
     # Phase 2
     run_parser.add_argument("--skip-threshold", type=float, default=0.7,
@@ -187,6 +191,17 @@ def _cmd_run(args: argparse.Namespace) -> None:
     if not schema_path.exists():
         sys.exit(f"Schema not found: {schema_path}")
 
+    from patientpunk.llm_cache import set_cache_enabled
+    if args.no_llm_cache:
+        set_cache_enabled(False)
+    elif args.llm_cache:
+        set_cache_enabled(True)
+
+    # --resume must not wipe intermediate checkpoints
+    clean = not args.no_clean
+    if args.resume:
+        clean = False
+
     config = PipelineConfig(
         schema_path=schema_path,
         input_dir=args.input_dir,
@@ -194,7 +209,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         start_at=args.start_at,
         run_llm=not args.no_llm,
         discovery_mode=args.discover,
-        clean=not args.no_clean,
+        clean=clean,
         workers=args.workers,
         limit=args.limit,
         resume=args.resume,

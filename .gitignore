@@ -31,6 +31,9 @@ Scrapers/output/
 # Dev scratch
 **/_manual_check_tmp/
 
+# LLM API response cache (content-addressable)
+cache/
+
 # Pipeline intermediate / temp files
 **/temp/
 **/patientpunk_records_*.json
