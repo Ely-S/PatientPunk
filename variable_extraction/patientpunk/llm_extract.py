@@ -803,8 +803,8 @@ def process_corpus(
 
                 if result is None or result.get("_failed"):
                     with print_lock:
-                        ah = (result.get("author_hash") or "?") if result else "?"
-                        print(f"  [{completed}/{total}] {ah[:12]} - PARSE FAILED")
+                        pid = (result.get("post_id") or "?") if result else "?"
+                        print(f"  [{completed}/{total}] {pid} - PARSE FAILED")
                     failed += 1
                     continue
 
@@ -816,15 +816,15 @@ def process_corpus(
                 with save_lock:
                     records.append(result)
                     for suggestion in result.get("suggested_fields") or []:
-                        suggestion["_from_record"] = (result["record_meta"].get("author_hash") or "unknown")[:12]
+                        suggestion["_from_record"] = result["record_meta"].get("post_id") or "unknown"
                         all_suggestions.append(suggestion)
 
                     n_fields = sum(1 for v in result.get("fields", {}).values() if v is not None)
                     n_suggestions = len(result.get("suggested_fields", []))
 
                     with print_lock:
-                        ah = (result["record_meta"].get("author_hash") or "?")[:12]
-                        print(f"  [{completed}/{total}] {ah} - {n_fields} fields, {n_suggestions} suggestions")
+                        pid = result["record_meta"].get("post_id") or "?"
+                        print(f"  [{completed}/{total}] {pid} - {n_fields} fields, {n_suggestions} suggestions")
 
                     if len(records) % SAVE_EVERY_N == 0:
                         save_incremental()
