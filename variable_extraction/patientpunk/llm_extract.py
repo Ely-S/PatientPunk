@@ -427,7 +427,7 @@ def build_llm_record(
             "post_id": post_id,
         },
         "fields": fields,
-        "suggested_fields": llm_output.get("suggested_fields", []),
+        "suggested_fields": llm_output.get("suggested_fields") or [],
     }
 
 
@@ -711,7 +711,7 @@ def process_corpus(
         for rec in records:
             meta = rec.get("record_meta", {})
             done_keys.add((meta.get("author_hash"), meta.get("post_id")))
-            for suggestion in rec.get("suggested_fields", []):
+            for suggestion in rec.get("suggested_fields") or []:
                 all_suggestions.append(suggestion)
         print(f"  Resuming - {len(records)} records already done, {len(done_keys)} keys loaded.\n")
 
@@ -815,7 +815,7 @@ def process_corpus(
 
                 with save_lock:
                     records.append(result)
-                    for suggestion in result.get("suggested_fields", []):
+                    for suggestion in result.get("suggested_fields") or []:
                         suggestion["_from_record"] = (result["record_meta"].get("author_hash") or "unknown")[:12]
                         all_suggestions.append(suggestion)
 
