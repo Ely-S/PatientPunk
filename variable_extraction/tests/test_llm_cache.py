@@ -144,10 +144,12 @@ def test_normalize_system_blocks():
 def test_cache_enabled_env(monkeypatch):
     cache.set_cache_enabled(None)
     monkeypatch.delenv("LLM_CACHE", raising=False)
-    assert cache.cache_enabled() is False
+    assert cache.cache_enabled() is True  # opt-out: default on
     monkeypatch.setenv("LLM_CACHE", "1")
     assert cache.cache_enabled() is True
     monkeypatch.setenv("LLM_CACHE", "0")
     assert cache.cache_enabled() is False
     cache.set_cache_enabled(True)
     assert cache.cache_enabled() is True
+    cache.set_cache_enabled(False)
+    assert cache.cache_enabled() is False

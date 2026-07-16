@@ -155,9 +155,9 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
     run_parser.add_argument("--resume", action="store_true",
                    help="Resume interrupted LLM / discovery runs.")
     run_parser.add_argument("--llm-cache", action="store_true",
-                   help="Cache LLM API responses to disk (content-addressable under cache/).")
+                   help="Force-enable LLM API response cache (default: on).")
     run_parser.add_argument("--no-llm-cache", action="store_true",
-                   help="Disable LLM API response cache (overrides LLM_CACHE=1).")
+                   help="Disable LLM API response cache (overrides default / LLM_CACHE=1).")
 
     # Phase 2
     run_parser.add_argument("--skip-threshold", type=float, default=0.7,

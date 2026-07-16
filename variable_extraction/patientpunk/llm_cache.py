@@ -5,8 +5,9 @@ Layout::
 
     {LLM_CACHE_DIR}/PROVIDER/MODEL/{hash[:3]}/{hash}.json
 
-Opt-in via ``LLM_CACHE=1`` (or ``true`` / ``yes``). Root defaults to ``cache/``
-(cwd-relative); override with ``LLM_CACHE_DIR``.
+Enabled by default. Opt out with ``LLM_CACHE=0`` (or ``false`` / ``no`` / ``off``)
+or ``--no-llm-cache``. Root defaults to ``cache/`` (cwd-relative); override with
+``LLM_CACHE_DIR``.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
 
 # Process-level override set by CLI (--llm-cache / --no-llm-cache).
-# None = defer to LLM_CACHE env.
+# None = defer to LLM_CACHE env (default on when unset).
 _enabled_override: bool | None = None
 _lock = threading.Lock()
 
@@ -35,15 +36,18 @@ def set_cache_enabled(enabled: bool | None) -> None:
 
 
 def cache_enabled() -> bool:
-    """Return True when the API response cache should be used."""
+    """Return True when the API response cache should be used (default: on)."""
     if _enabled_override is not None:
         return _enabled_override
     raw = (os.environ.get("LLM_CACHE") or "").strip().lower()
     if not raw:
-        return False
+        return True
     if raw in _FALSE:
         return False
-    return raw in _TRUE
+    if raw in _TRUE:
+        return True
+    # Unrecognized value: treat as enabled (same as unset) rather than silent off
+    return True
 
 
 def cache_root() -> Path:
