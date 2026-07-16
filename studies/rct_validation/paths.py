@@ -107,7 +107,7 @@ def find_package_root(start: Optional[Path] = None) -> Path:
         f"Markers searched for: {', '.join(PACKAGE_MARKERS)}\n"
         f"Walked up from:       {start_dir}\n"
         "Directories checked:\n  - " + "\n  - ".join(searched) + "\n\n"
-        "Fix: cd to docs/RCT_historical_validation/ before running, "
+        "Fix: cd to studies/rct_validation/ before running, "
         f"OR set {ENV_VAR}=/absolute/path/to/{DB_FILENAME}."
     )
 

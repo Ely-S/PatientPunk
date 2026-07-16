@@ -380,4 +380,4 @@ Showing 6 sampled users below.
 
 ## Reproducibility
 
-Re-running `scripts/dedup_sample_audit.py --db <db> --out <out> --seed 42 --per-drug 6` against the same DB reproduces the same sampled rows, aside from the `Generated` timestamp at the top of this file. Total sampled (user, drug) pairs: **36**.
+Re-running `studies/rct_validation/scripts/dedup_sample_audit.py --db <db> --out <out> --seed 42 --per-drug 6` against the same DB reproduces the same sampled rows, aside from the `Generated` timestamp at the top of this file. Total sampled (user, drug) pairs: **36**.

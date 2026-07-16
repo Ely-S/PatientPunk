@@ -27,7 +27,7 @@ proportion with a 95% Wilson score CI.
 
 Usage
 -----
-    cd docs/RCT_historical_validation/
+    cd studies/rct_validation/
     python _build_paper_figures.py
 
 Output
@@ -1219,7 +1219,7 @@ def _resolve_db_path():
         "Could not locate the RCT historical validation package root.\\n"
         f"Searched: {searched}\\n"
         f"Set {_ENV_VAR}=/absolute/path/to/{_DB_FILENAME} or cd into "
-        f"docs/RCT_historical_validation/."
+        f"studies/rct_validation/."
     )
 
 

@@ -37,8 +37,8 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
-# Make src/ importable
-ROOT = Path(__file__).resolve().parents[1]
+# Make src/ importable (script now lives at studies/rct_validation/scripts/)
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 from utilities.db import open_db
 from import_posts import import_reddit_posts

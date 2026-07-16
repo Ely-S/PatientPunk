@@ -22,7 +22,7 @@ What this checks:
 
 Usage:
 
-    cd docs/RCT_historical_validation/
+    cd studies/rct_validation/
     python verify.py
     # or with an explicit DB path:
     python verify.py --db data/historical_validation_2020-07_to_2022-12.db
@@ -118,7 +118,7 @@ def _detect_cycles(parent_map: dict[str, str | None]) -> list[list[str]]:
     The same iterative-DFS / white-gray-black-coloring logic lives in
     ``src/utilities/graph.py:find_parent_cycles``; ``extract.py`` uses it
     via a fail-fast wrapper. We duplicate it inline here on purpose so
-    the reproducibility package (``docs/RCT_historical_validation/``)
+    the reproducibility package (``studies/rct_validation/``)
     stays self-contained — it does NOT import from ``src/`` because
     reviewers can extract the package and run ``verify.py`` without
     pulling the full repo. Behavior must stay in sync with the shared

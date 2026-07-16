@@ -20,7 +20,7 @@ Checks performed:
 Usage:
     python scripts/thread_audit.py \\
         --db data/historical_validation/historical_validation_2020-07_to_2022-12.db \\
-        --out docs/RCT_historical_validation/THREAD_AUDIT.md
+        --out studies/rct_validation/THREAD_AUDIT.md
 
 Pass --seed for reproducibility of the 50-chain sample.
 """

@@ -1,7 +1,7 @@
 # Drug aliases used in extraction
 
 **Generated:** 2026-05-10 22:06 UTC from `data/historical_validation_2020-07_to_2022-12.db`
-**Generator:** `scripts/dump_drug_aliases.py`
+**Generator:** `studies/rct_validation/scripts/dump_drug_aliases.py`
 
 This file is a static export of the `treatment.aliases` column from
 the analysis SQLite DB. The lists are what every pipeline run
@@ -298,7 +298,7 @@ task before publication.
 
 Re-running
 ```
-python scripts/dump_drug_aliases.py --db data/historical_validation_2020-07_to_2022-12.db --out DRUG_ALIASES.md
+python studies/rct_validation/scripts/dump_drug_aliases.py --db data/historical_validation_2020-07_to_2022-12.db --out DRUG_ALIASES.md
 ```
 against the same DB reproduces the same alias content (deterministic
 ordering); only the `Generated` timestamp at the top of this file changes.
