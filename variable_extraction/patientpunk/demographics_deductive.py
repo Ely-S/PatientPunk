@@ -52,6 +52,7 @@ from ._utils import (
     LLM_TEMPERATURE,
     MODEL_FAST,
     parse_json_response,
+    response_text,
     split_retry_batch,
     get_llm_client,
     strip_markdown_fences,
@@ -223,7 +224,7 @@ def _cached_create(
             messages=messages,
             **other_api_kwargs,
         )
-        return check_response(response, model).content[0].text
+        return response_text(check_response(response, model))
 
     return cached_completion(
         provider=LLM_PROVIDER,

@@ -73,6 +73,7 @@ from ._utils import (
     collect_texts_from_post,
     get_llm_client,
     parse_json_response,
+    response_text,
     split_retry_batch,
 )
 from .llm_cache import cached_completion
@@ -187,7 +188,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return check_response(response, MODEL).content[0].text
+                return response_text(check_response(response, MODEL))
             except Exception as e:
                 # Provider-agnostic retry: works whether the error is raised by the
                 # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).

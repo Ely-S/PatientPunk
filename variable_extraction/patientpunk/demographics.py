@@ -62,6 +62,7 @@ from ._utils import (
     MODEL_FAST,
     check_response,
     get_llm_client,
+    response_text,
     split_retry_batch,
 )
 from .llm_cache import cached_completion
@@ -260,7 +261,7 @@ def call_haiku(
                 }],
                 messages=[{"role": "user", "content": user_msg}],
             )
-            return check_response(response, MODEL).content[0].text.strip()
+            return response_text(check_response(response, MODEL)).strip()
 
         raw = cached_completion(
             provider=LLM_PROVIDER,
@@ -346,7 +347,7 @@ def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: s
             }],
             messages=[{"role": "user", "content": msg}],
         )
-        return check_response(response, MODEL).content[0].text.strip()
+        return response_text(check_response(response, MODEL)).strip()
 
     raw = _strip_markdown_fences(
         cached_completion(
