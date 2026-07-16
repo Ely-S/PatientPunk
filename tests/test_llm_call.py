@@ -7,6 +7,7 @@ string a call_fn returns, so that "" would be replayed forever.
 
 from __future__ import annotations
 
+import json
 import os
 from types import SimpleNamespace
 
@@ -78,3 +79,42 @@ def test_good_reply_passes_through():
     text = SimpleNamespace(type="text", text="hello")
     client = _client(_msg(text))
     assert llm_call(client, "prompt") == "hello"
+
+
+def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
+    """Cache key claims temperature=0.0; the API request must send the same value.
+
+    Regression for Airwhale review on #63: kwargs previously omitted temperature,
+    so the key asserted 0.0 while the provider default could differ.
+    """
+    from patientpunk import llm_cache
+    from utilities import LLM_PROVIDER, MODEL_FAST
+
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))
+    llm_cache.set_cache_enabled(True)
+
+    captured = {}
+
+    def stream(**kwargs):
+        captured.update(kwargs)
+        return _FakeStream(_msg(SimpleNamespace(type="text", text="ok")))
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
+    assert llm_call(client, "prompt", model=MODEL_FAST, max_tokens=100) == "ok"
+
+    assert "temperature" in captured
+    assert captured["temperature"] == 0.0
+
+    # The on-disk entry must be keyed with that same temperature — otherwise a
+    # later run that actually sends 0.0 would miss this cache entry (or vice versa).
+    key = llm_cache.make_key(
+        provider=LLM_PROVIDER,
+        model=MODEL_FAST,
+        system=None,
+        prompt="prompt",
+        temperature=0.0,
+        max_tokens=100,
+    )
+    path = llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
+    assert path.exists()
+    assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == 0.0

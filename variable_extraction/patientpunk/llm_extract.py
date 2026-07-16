@@ -87,6 +87,13 @@ _dropped_fields: Counter = Counter()
 _dropped_lock = threading.Lock()
 
 
+def _write_json_atomic(path: Path, data) -> None:
+    """Write JSON via ``.tmp`` then ``replace`` so an interrupt can't truncate the file."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
 def _record_dropped_fields(names: list[str]) -> None:
     with _dropped_lock:
         _dropped_fields.update(names)
@@ -803,8 +810,9 @@ def process_corpus(
     print_lock = threading.Lock()
 
     def save_incremental():
-        with open(records_file, "w", encoding="utf-8") as f:
-            json.dump(records, f, ensure_ascii=False, indent=2)
+        # Atomic: write .tmp then replace, so an interrupt can't truncate the
+        # checkpoint and break --resume (same pattern as llm_cache.put).
+        _write_json_atomic(records_file, records)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_batch_idx = {}
@@ -1287,13 +1295,11 @@ def run_llm_extract(
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
     records_file = out_temp / f"llm_records_{schema_id}.json"
-    with open(records_file, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+    _write_json_atomic(records_file, records)
 
     ranked_suggestions = aggregate_suggestions(all_suggestions)
     suggestions_file = out_temp / f"llm_field_suggestions_{schema_id}.json"
-    with open(suggestions_file, "w", encoding="utf-8") as f:
-        json.dump(ranked_suggestions, f, ensure_ascii=False, indent=2)
+    _write_json_atomic(suggestions_file, ranked_suggestions)
 
     artifacts = {
         "llm_records": records_file,
@@ -1308,8 +1314,7 @@ def run_llm_extract(
                 regex_records = json.load(f)
             merged = merge_records(regex_records, records)
             merged_file = out_temp / f"merged_records_{schema_id}.json"
-            with open(merged_file, "w", encoding="utf-8") as f:
-                json.dump(merged, f, ensure_ascii=False, indent=2)
+            _write_json_atomic(merged_file, merged)
             print(f"  Merged {len(merged)} records -> {merged_file}")
             artifacts["merged_records"] = merged_file
         else:

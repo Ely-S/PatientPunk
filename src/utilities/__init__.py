@@ -265,6 +265,7 @@ def llm_call(
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
+            "temperature": 0.0,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
