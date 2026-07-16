@@ -1,4 +1,13 @@
 # LDN (Low Dose Naltrexone) — Analysis Notes
+
+> **Provenance — superseded, kept for reference.** This is the original
+> hackathon-era LDN analysis on a 100-post sample. It lives beside the IRR
+> codebook because its sentiment / signal-strength definitions are the ancestor
+> of [`CODING_INSTRUCTIONS.md`](./CODING_INSTRUCTIONS.md) (v1.4). The LDN analysis
+> itself was later redone at ~25× scale in the FDA letter RWE work
+> (`studies/fda_letter/`). Read this for where the codebook's definitions came
+> from, not for current numbers.
+
 **Source:** `subreddit_posts.json` (100 posts, ~1,100 comments from r/covidlonghaulers)
 **Full data:** `ldn_mentions.json` (29 classified entries, 24 users)
 
