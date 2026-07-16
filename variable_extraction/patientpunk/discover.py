@@ -154,6 +154,7 @@ from ._utils import (
     collect_texts_from_post as _collect_texts_from_post,
     get_llm_client,
     parse_json_response,
+    response_text,
 )
 from .llm_cache import cached_completion
 HAIKU = MODEL_FAST
@@ -215,7 +216,7 @@ def call_model(
                     ],
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return check_response(response, model).content[0].text
+                return response_text(check_response(response, model))
             except (anthropic.RateLimitError, anthropic.InternalServerError):
                 if attempt == len(RETRY_DELAYS):
                     raise

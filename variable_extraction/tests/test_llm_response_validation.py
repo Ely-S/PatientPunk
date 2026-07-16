@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from patientpunk import llm_cache as cache
-from patientpunk._utils import LLMResponseError, _OpenAIMessages, check_response
+from patientpunk._utils import LLMResponseError, _OpenAIMessages, check_response, response_text
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +37,10 @@ def _create(choices):
     return _OpenAIMessages(_client(choices)).create(
         model="m", messages=[{"role": "user", "content": "p"}]
     )
+
+
+def _msg(*blocks, stop_reason="end_turn"):
+    return SimpleNamespace(content=list(blocks), stop_reason=stop_reason)
 
 
 def test_adapter_raises_on_empty_choices():
@@ -65,7 +69,28 @@ def test_check_response_raises_on_truncated_and_empty():
 
 def test_check_response_passes_good_reply():
     resp = _create(_choice('{"ok": 1}'))
-    assert check_response(resp, "m").content[0].text == '{"ok": 1}'
+    assert response_text(check_response(resp, "m")) == '{"ok": 1}'
+
+
+def test_response_text_skips_thinking_blocks():
+    thinking = SimpleNamespace(type="thinking", thinking="internal reason...")
+    text = SimpleNamespace(type="text", text='{"ok": 1}')
+    assert response_text(_msg(thinking, text)) == '{"ok": 1}'
+    assert response_text(_msg(text)) == '{"ok": 1}'
+    assert response_text(_msg(thinking)) == ""
+
+
+def test_check_response_thinking_then_text_passes():
+    thinking = SimpleNamespace(type="thinking", thinking="...")
+    text = SimpleNamespace(type="text", text='{"ok": 1}')
+    resp = check_response(_msg(thinking, text), "m")
+    assert response_text(resp) == '{"ok": 1}'
+
+
+def test_check_response_thinking_only_is_empty():
+    thinking = SimpleNamespace(type="thinking", thinking="no visible output")
+    with pytest.raises(LLMResponseError, match="empty"):
+        check_response(_msg(thinking), "m")
 
 
 def test_response_error_is_retried_not_cached():

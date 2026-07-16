@@ -570,7 +570,7 @@ def _cmd_promote(args: argparse.Namespace) -> None:
 def _build_llm_group_fn(schemas: list[dict]):
     """Return ``fn(names) -> list[list[str]]`` that asks the strong model to group
     semantically-synonymous variable names (for the optional --llm pass)."""
-    from patientpunk._utils import get_llm_client, MODEL_STRONG
+    from patientpunk._utils import MODEL_STRONG, get_llm_client, response_text
 
     descs: dict[str, str] = {}
     for s in schemas:
@@ -592,7 +592,7 @@ def _build_llm_group_fn(schemas: list[dict]):
                 model=MODEL_STRONG, max_tokens=4000, temperature=0,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = resp.content[0].text
+            text = response_text(resp)
             start, end = text.find("["), text.rfind("]")
             groups = json.loads(text[start:end + 1]) if start >= 0 else []
             return [g for g in groups if isinstance(g, list) and len(g) > 1]

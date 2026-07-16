@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +15,57 @@ def _reset_cache_override():
     cache.set_cache_enabled(None)
     yield
     cache.set_cache_enabled(None)
+
+
+def test_cache_root_is_cwd_independent(tmp_path, monkeypatch):
+    """The root must not move with the cwd.
+
+    main.py is run from variable_extraction/ but the pipeline is also driven
+    from the repo root; when the root was cwd-relative each got its own cache
+    and the second silently re-paid for every response the first had bought.
+    """
+    monkeypatch.delenv("LLM_CACHE_DIR", raising=False)
+
+    monkeypatch.chdir(tmp_path)
+    from_tmp = cache.cache_root()
+
+    monkeypatch.chdir(Path(__file__).parent)
+    from_tests = cache.cache_root()
+
+    # .resolve() is what makes this a real regression test: the old root was the
+    # relative Path("cache"), which compares equal to itself from any cwd but
+    # resolves to a different directory under each one.
+    assert from_tmp.resolve() == from_tests.resolve()
+    assert from_tmp.is_absolute()
+    # Anchored on the repo, not on wherever the process started.
+    assert from_tmp == cache._repo_root() / "cache"
+    assert tmp_path not in from_tmp.parents
+
+
+def test_repo_root_finds_marker():
+    root = cache._repo_root()
+    assert root.is_absolute()
+    assert any((root / m).exists() for m in cache._ROOT_MARKERS)
+    # patientpunk/ lives under the located root.
+    assert Path(cache.__file__).resolve().is_relative_to(root)
+
+
+def test_repo_root_falls_back_to_cwd_without_marker(tmp_path, monkeypatch):
+    """Installed into site-packages with no marker above: keep old behaviour."""
+    monkeypatch.setattr(cache, "_repo_root_cache", None)
+    monkeypatch.setattr(cache, "_ROOT_MARKERS", ("__no_such_marker__",))
+    monkeypatch.chdir(tmp_path)
+    try:
+        assert cache._repo_root() == Path.cwd()
+    finally:
+        cache._repo_root_cache = None
+
+
+def test_cache_dir_env_override_is_resolved(tmp_path, monkeypatch):
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "sub" / ".." / "sub"))
+    root = cache.cache_root()
+    assert root.is_absolute()
+    assert root == (tmp_path / "sub").resolve()
 
 
 def test_make_key_stable_and_sensitive():

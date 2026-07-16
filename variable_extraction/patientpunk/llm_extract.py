@@ -45,7 +45,7 @@ import re
 import sys
 import threading
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,10 +73,23 @@ from ._utils import (
     collect_texts_from_post,
     get_llm_client,
     parse_json_response,
+    response_text,
     split_retry_batch,
 )
 from .llm_cache import cached_completion
+from .llm_schema import LLMExtraction, parse_extraction
 MODEL = MODEL_FAST
+
+# Field names the model invented that aren't in the schema. Dropped from the
+# record, but counted here so they surface in the run summary instead of
+# vanishing -- a hallucinated name is a prompt/schema signal worth seeing.
+_dropped_fields: Counter = Counter()
+_dropped_lock = threading.Lock()
+
+
+def _record_dropped_fields(names: list[str]) -> None:
+    with _dropped_lock:
+        _dropped_fields.update(names)
 # 4096 truncated the JSON response on long user histories (verbose fields +
 # suggested_fields), causing PARSE FAILED and silently dropping ~half of the
 # most prolific posters. Haiku's hard output ceiling is 8192; use it.
@@ -187,7 +200,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return check_response(response, MODEL).content[0].text
+                return response_text(check_response(response, MODEL))
             except Exception as e:
                 # Provider-agnostic retry: works whether the error is raised by the
                 # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
@@ -394,24 +407,19 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 # =============================================================================
 
 def build_llm_record(
-    llm_output: dict,
+    llm_output: LLMExtraction,
     source: str,
     author_hash: str,
     text_count: int,
     schema: dict | None,
     post_id: str | None = None,
 ) -> dict:
-    schema_id = schema["schema_id"] if schema else "base"
-    fields = llm_output.get("fields", {})
+    """Assemble a record from an already-validated extraction.
 
-    for key in fields:
-        val = fields[key]
-        if val is None:
-            continue
-        if isinstance(val, str):
-            fields[key] = [val]
-        elif isinstance(val, list):
-            fields[key] = [v for v in val if v] or None
+    Normalisation lives in llm_schema.parse_extraction, so ``llm_output.fields``
+    is guaranteed ``dict[str, list[str] | None]`` by the time it gets here.
+    """
+    schema_id = schema["schema_id"] if schema else "base"
 
     return {
         "_patientpunk_version": "2.0",
@@ -425,8 +433,8 @@ def build_llm_record(
             "text_count": text_count,
             "post_id": post_id,
         },
-        "fields": fields,
-        "suggested_fields": llm_output.get("suggested_fields", []),
+        "fields": dict(llm_output.fields),
+        "suggested_fields": [s.model_dump() for s in llm_output.suggested_fields],
     }
 
 
@@ -551,7 +559,10 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
                 )
             except LLMResponseError:
                 continue
-            if parsed is not None:
+            # Gate on shape, not just decodability: a reply that decodes but has
+            # no 'fields' key would otherwise be recorded as a legitimately empty
+            # extraction. Re-asking hotter is the same cure as for bad JSON.
+            if parsed is not None and parse_extraction(parsed) is not None:
                 return [parsed]
         raise ValueError("could not parse single-record response after retries")
 
@@ -594,6 +605,11 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         raise ValueError(f"Expected JSON array, got {type(results).__name__}")
     if len(results) != len(items):
         raise ValueError(f"Expected {len(items)} results, got {len(results)}")
+    # Raise rather than record a malformed element as empty: split_retry_batch
+    # halves the batch and the single-item path above re-asks at hotter temps.
+    for i, result in enumerate(results):
+        if parse_extraction(result) is None:
+            raise ValueError(f"malformed result object at index {i} of batch response")
     return results
 
 
@@ -655,19 +671,39 @@ def _process_batch(
         raw_results = split_retry_batch(call_fn, items)
 
         for idx, item, parsed in zip(indices, items, raw_results):
-            if parsed is None or not isinstance(parsed, dict):
-                output[idx] = {"_failed": True, "author_hash": item["author_hash"],
-                               "post_id": item["post_id"]}
-            else:
-                record = build_llm_record(
-                    llm_output=parsed,
+            def _failed(reason: str) -> dict:
+                return {"_failed": True, "reason": reason,
+                        "author_hash": item["author_hash"], "post_id": item["post_id"]}
+
+            if parsed is None:
+                output[idx] = _failed("no_response")
+                continue
+
+            allowed = set(build_field_descriptions(item["schema"]))
+            validated = parse_extraction(parsed, allowed_fields=allowed)
+            if validated is None:
+                output[idx] = _failed("malformed_response")
+                continue
+
+            extraction, dropped = validated
+            if dropped:
+                _record_dropped_fields(dropped)
+
+            # Containment: a single unexpected shape must never abort the run.
+            # A null suggested_fields once took down 1000 records at record 47,
+            # because split_retry_batch only absorbs parse failures and anything
+            # raised here escapes it.
+            try:
+                output[idx] = build_llm_record(
+                    llm_output=extraction,
                     source=item["source"],
                     author_hash=item["author_hash"],
                     text_count=item["text_count"],
                     schema=item["schema"],
                     post_id=item["post_id"],
                 )
-                output[idx] = record
+            except Exception as exc:
+                output[idx] = _failed(f"build_error: {type(exc).__name__}")
 
     return output
 
@@ -703,6 +739,8 @@ def process_corpus(
     records = []
     all_suggestions = []
     done_keys: set[tuple] = set()
+    with _dropped_lock:
+        _dropped_fields.clear()
 
     if resume and records_file.exists():
         with open(records_file, encoding="utf-8") as f:
@@ -710,7 +748,7 @@ def process_corpus(
         for rec in records:
             meta = rec.get("record_meta", {})
             done_keys.add((meta.get("author_hash"), meta.get("post_id")))
-            for suggestion in rec.get("suggested_fields", []):
+            for suggestion in rec.get("suggested_fields") or []:
                 all_suggestions.append(suggestion)
         print(f"  Resuming - {len(records)} records already done, {len(done_keys)} keys loaded.\n")
 
@@ -802,8 +840,8 @@ def process_corpus(
 
                 if result is None or result.get("_failed"):
                     with print_lock:
-                        ah = (result.get("author_hash") or "?") if result else "?"
-                        print(f"  [{completed}/{total}] {ah[:12]} - PARSE FAILED")
+                        pid = (result.get("post_id") or "?") if result else "?"
+                        print(f"  [{completed}/{total}] {pid} - PARSE FAILED")
                     failed += 1
                     continue
 
@@ -814,16 +852,16 @@ def process_corpus(
 
                 with save_lock:
                     records.append(result)
-                    for suggestion in result.get("suggested_fields", []):
-                        suggestion["_from_record"] = (result["record_meta"].get("author_hash") or "unknown")[:12]
+                    for suggestion in result.get("suggested_fields") or []:
+                        suggestion["_from_record"] = result["record_meta"].get("post_id") or "unknown"
                         all_suggestions.append(suggestion)
 
                     n_fields = sum(1 for v in result.get("fields", {}).values() if v is not None)
                     n_suggestions = len(result.get("suggested_fields", []))
 
                     with print_lock:
-                        ah = (result["record_meta"].get("author_hash") or "?")[:12]
-                        print(f"  [{completed}/{total}] {ah} - {n_fields} fields, {n_suggestions} suggestions")
+                        pid = result["record_meta"].get("post_id") or "?"
+                        print(f"  [{completed}/{total}] {pid} - {n_fields} fields, {n_suggestions} suggestions")
 
                     if len(records) % SAVE_EVERY_N == 0:
                         save_incremental()
@@ -832,6 +870,12 @@ def process_corpus(
     save_incremental()
 
     print(f"\n  Total: {already_done} resumed + {completed} new, {skipped} skipped, {failed} failed")
+    with _dropped_lock:
+        dropped = _dropped_fields.most_common()
+    if dropped:
+        total = sum(n for _, n in dropped)
+        summary = ", ".join(f"{name} ({n}x)" for name, n in dropped[:5])
+        print(f"  Dropped {total} value(s) for {len(dropped)} field name(s) not in the schema: {summary}")
     return records, all_suggestions
 
 

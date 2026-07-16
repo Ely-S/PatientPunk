@@ -6,8 +6,10 @@ Layout::
     {LLM_CACHE_DIR}/PROVIDER/MODEL/{hash[:3]}/{hash}.json
 
 Enabled by default. Opt out with ``LLM_CACHE=0`` (or ``false`` / ``no`` / ``off``)
-or ``--no-llm-cache``. Root defaults to ``cache/`` (cwd-relative); override with
-``LLM_CACHE_DIR``.
+or ``--no-llm-cache``. Root defaults to ``cache/`` at the repo root -- located
+from this file, not the cwd, so it is the same cache whether the pipeline is
+driven from the repo root or from ``variable_extraction/``. Override with
+``LLM_CACHE_DIR`` (resolved to an absolute path).
 
 Events are appended to ``{LLM_CACHE_DIR}/log.txt`` in a minimal format::
 
@@ -34,6 +36,12 @@ _FALSE = {"0", "false", "no", "off"}
 # None = defer to LLM_CACHE env (default on when unset).
 _enabled_override: bool | None = None
 _lock = threading.Lock()
+
+# Markers that identify the repo root, in priority order.
+_ROOT_MARKERS = (".git", "pyproject.toml")
+
+# cache_root() is called on every hit, miss and write; the walk is done once.
+_repo_root_cache: Path | None = None
 
 
 class _CacheFileHandler(logging.Handler):
@@ -86,9 +94,37 @@ def cache_enabled() -> bool:
     return True
 
 
+def _repo_root() -> Path:
+    """Return the repo root: nearest ancestor of this file holding a marker.
+
+    Anchored on ``__file__`` rather than the cwd so the answer does not change
+    with the directory the process happens to start in. Falls back to the cwd
+    when no marker is found (i.e. the package is installed into site-packages
+    rather than run from a checkout), which preserves the historical behaviour
+    for that case.
+    """
+    global _repo_root_cache
+    if _repo_root_cache is None:
+        here = Path(__file__).resolve()
+        _repo_root_cache = next(
+            (p for p in here.parents for m in _ROOT_MARKERS if (p / m).exists()),
+            Path.cwd(),
+        )
+    return _repo_root_cache
+
+
 def cache_root() -> Path:
-    """Return the cache root directory (default: ``cache``)."""
-    return Path(os.environ.get("LLM_CACHE_DIR") or "cache")
+    """Return the cache root directory (default: ``{repo_root}/cache``).
+
+    Absolute, and independent of the cwd: ``main.py`` is run from
+    ``variable_extraction/`` but the pipeline is also driven from the repo root,
+    and a cwd-relative root silently gave each its own cache -- so the second
+    invocation re-paid for every response the first had already bought.
+    """
+    override = os.environ.get("LLM_CACHE_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    return _repo_root() / "cache"
 
 
 def sanitize_path_segment(name: str) -> str:
