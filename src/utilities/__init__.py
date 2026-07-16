@@ -259,7 +259,7 @@ def llm_call(
     max_tokens: int = 100,
 ) -> str:
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import response_text
+    from patientpunk._utils import check_response, response_text
 
     def _call() -> str:
         kwargs = {
@@ -270,7 +270,7 @@ def llm_call(
         if system:
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
-            return response_text(stream.get_final_message())
+            return response_text(check_response(stream.get_final_message(), model=model))
 
     return cached_completion(
         provider=LLM_PROVIDER,
