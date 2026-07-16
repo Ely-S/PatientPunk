@@ -1751,6 +1751,31 @@ class TestLLMConfig:
     def test_llm_config_excludes_api_key(self):
         assert "api_key" not in llm_config()
 
+    def test_openai_prefers_openrouter_key_not_anthropic(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-should-not-win",
+        })
+        assert c["provider"] == "openai"
+        assert c["api_key"] == "sk-or-v1-realkey-abcdef"
+
+    def test_openai_ignores_anthropic_key_alone(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-alone",
+        })
+        assert c["api_key"] == ""
+
+    def test_openai_llm_api_key_wins(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "LLM_API_KEY": "explicit-openai-key",
+            "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-abc",
+        })
+        assert c["api_key"] == "explicit-openai-key"
+
 
 # =============================================================================
 # cluster_prep -- per-patient matrix + clusterability

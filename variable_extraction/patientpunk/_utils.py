@@ -83,7 +83,11 @@ load_env()
 #
 #   LLM_PROVIDER     openrouter | anthropic | openai   (default: auto-detect from keys)
 #                    openai -> OpenAI-compatible endpoint (vLLM / Ollama / etc.)
-#   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / LLM_API_KEY   (LLM_API_KEY wins)
+#   Key precedence (LLM_API_KEY always wins when set):
+#     openrouter → LLM_API_KEY | OPENROUTER_API_KEY | ANTHROPIC_API_KEY
+#     openai     → LLM_API_KEY | OPENROUTER_API_KEY
+#                  (never ANTHROPIC_API_KEY — wrong key against OpenAI-compat → 401)
+#     anthropic  → LLM_API_KEY | ANTHROPIC_API_KEY | OPENROUTER_API_KEY
 #   LLM_BASE_URL     override the API base URL (point extraction at any endpoint:
 #                    an Anthropic-compatible gateway, or an OpenAI-compatible
 #                    server like vLLM on a dispersed node with LLM_PROVIDER=openai)
@@ -133,9 +137,15 @@ def resolve_llm_config(env: dict | None = None) -> dict:
         default_fast, default_strong = "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
         default_base = None
 
-    api_key = (_real_key(env, "LLM_API_KEY")
-               or (or_key if provider == "openrouter" else an_key)
-               or or_key or an_key)
+    llm_key = _real_key(env, "LLM_API_KEY")
+    if provider == "openrouter":
+        api_key = llm_key or or_key or an_key
+    elif provider == "openai":
+        # OpenAI-compat must not inherit ANTHROPIC_API_KEY (e.g. OpenRouter via
+        # LLM_PROVIDER=openai + LLM_BASE_URL=.../v1 would 401 on an Anthropic key).
+        api_key = llm_key or or_key
+    else:
+        api_key = llm_key or an_key or or_key
     try:
         temperature = float(env.get("LLM_TEMPERATURE", "0") or 0)
     except ValueError:
@@ -176,6 +186,20 @@ class LLMResponseError(RuntimeError):
     """
 
 
+def response_text(response) -> str:
+    """Concatenate text content blocks; skip thinking/tool blocks without ``.text``.
+
+    Thinking models (e.g. DeepSeek via Anthropic Messages) may return
+    ``[ThinkingBlock, TextBlock, ...]``. Indexing ``content[0].text`` raises
+    ``AttributeError`` on the thinking block; this helper only joins blocks that
+    expose a text payload.
+    """
+    return "".join(
+        t for b in (getattr(response, "content", None) or [])
+        if (t := getattr(b, "text", None))
+    )
+
+
 def check_response(response, model: str = ""):
     """Raise LLMResponseError if a 200-OK response is empty or truncated.
 
@@ -188,7 +212,7 @@ def check_response(response, model: str = ""):
             f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
             f"or shrink the batch)"
         )
-    if not response.content or not (response.content[0].text or "").strip():
+    if not response_text(response).strip():
         raise LLMResponseError(f"{model}: response was empty")
     return response
 
@@ -253,7 +277,8 @@ def get_llm_client():
     ``LLM_PROVIDER=openai`` routes to an OpenAI-compatible endpoint (vLLM /
     Ollama / any self-hosted open model) via a thin adapter; otherwise the native
     Anthropic SDK is used (Anthropic, OpenRouter, or any Anthropic-compatible
-    endpoint via ``LLM_BASE_URL``).  Key precedence: ``LLM_API_KEY`` > provider key.
+    endpoint via ``LLM_BASE_URL``).  Key precedence is provider-specific
+    (see ``resolve_llm_config``); ``LLM_API_KEY`` always wins when set.
     """
     cfg = resolve_llm_config()
 
