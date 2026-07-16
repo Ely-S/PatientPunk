@@ -147,6 +147,7 @@ def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
     MODEL_STRONG,
@@ -214,7 +215,7 @@ def call_model(
                     ],
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return response.content[0].text
+                return check_response(response, model).content[0].text
             except (anthropic.RateLimitError, anthropic.InternalServerError):
                 if attempt == len(RETRY_DELAYS):
                     raise

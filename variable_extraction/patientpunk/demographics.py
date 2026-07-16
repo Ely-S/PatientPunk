@@ -56,7 +56,14 @@ from .qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
-from ._utils import LLM_PROVIDER, LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
+from ._utils import (
+    LLM_PROVIDER,
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    check_response,
+    get_llm_client,
+    split_retry_batch,
+)
 from .llm_cache import cached_completion
 from .phase import PhaseResult
 MODEL = MODEL_FAST
@@ -253,7 +260,7 @@ def call_haiku(
                 }],
                 messages=[{"role": "user", "content": user_msg}],
             )
-            return response.content[0].text.strip()
+            return check_response(response, MODEL).content[0].text.strip()
 
         raw = cached_completion(
             provider=LLM_PROVIDER,
@@ -339,7 +346,7 @@ def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: s
             }],
             messages=[{"role": "user", "content": msg}],
         )
-        return response.content[0].text.strip()
+        return check_response(response, MODEL).content[0].text.strip()
 
     raw = _strip_markdown_fences(
         cached_completion(

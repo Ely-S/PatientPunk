@@ -165,6 +165,34 @@ def llm_config() -> dict:
     return cfg
 
 
+# --- Response validation ------------------------------------------------------
+
+class LLMResponseError(RuntimeError):
+    """A provider returned a 200 whose body is unusable (empty / truncated).
+
+    Raised rather than returned so the retry loops treat it like any other API
+    failure and the response cache -- which only stores successful returns --
+    never persists it.
+    """
+
+
+def check_response(response, model: str = ""):
+    """Raise LLMResponseError if a 200-OK response is empty or truncated.
+
+    ``stop_reason == "max_tokens"`` means the reply was cut off mid-generation:
+    for the JSON callers here that reply is unparseable, and caching it would
+    make the loss permanent across re-runs.
+    """
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise LLMResponseError(
+            f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
+            f"or shrink the batch)"
+        )
+    if not response.content or not (response.content[0].text or "").strip():
+        raise LLMResponseError(f"{model}: response was empty")
+    return response
+
+
 # --- OpenAI-compatible adapter ------------------------------------------------
 # vLLM / Ollama / TGI and most self-hosted open-model servers speak the OpenAI
 # API. This thin adapter exposes the same ``.messages.create(...)`` surface as
@@ -172,9 +200,9 @@ def llm_config() -> dict:
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
         self.content = [SimpleNamespace(text=text)]
-        self.stop_reason = "end_turn"
+        self.stop_reason = stop_reason
 
 
 class _OpenAIMessages:
@@ -198,9 +226,17 @@ class _OpenAIMessages:
             model=model, messages=oai_messages,
             max_tokens=max_tokens, temperature=temperature,
         )
+        # A degenerate reply is a failure, not an empty answer: raise so callers
+        # retry and the response cache never stores it.
         if not resp.choices:
-            return _AnthropicShapedResponse("")
-        return _AnthropicShapedResponse(resp.choices[0].message.content or "")
+            raise LLMResponseError(f"{model}: provider returned no choices")
+        choice = resp.choices[0]
+        if choice.message.content is None:
+            raise LLMResponseError(f"{model}: provider returned null content")
+        # OpenAI spells truncation "length"; normalize to the Anthropic name so
+        # check_response() works the same on both backends.
+        stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
+        return _AnthropicShapedResponse(choice.message.content, stop_reason)
 
 
 class _OpenAIAdapter:

@@ -47,6 +47,7 @@ from pathlib import Path
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
 from ._utils import (
     LLM_PROVIDER,
+    check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
     parse_json_response,
@@ -210,7 +211,7 @@ def _cached_create(
             max_tokens=max_tokens,
             **api_kwargs,
         )
-        return response.content[0].text
+        return check_response(response, model).content[0].text
 
     return cached_completion(
         provider=LLM_PROVIDER,

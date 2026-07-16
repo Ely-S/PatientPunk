@@ -66,6 +66,7 @@ from .phase import PhaseResult
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
     collect_texts_from_post,
@@ -185,7 +186,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
                 )
-                return response.content[0].text
+                return check_response(response, MODEL).content[0].text
             except Exception as e:
                 # Provider-agnostic retry: works whether the error is raised by the
                 # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
