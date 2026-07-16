@@ -1,0 +1,13 @@
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+.fuse_hidden*
+
+# Generated analysis outputs are not committed -- they are rebuilt by scripts/
+# from the (uncommitted) source databases and archived per MANIFEST.csv.
+figures/
+notebooks/
+*.xlsx
+*.html
+*_executed.ipynb
