@@ -574,6 +574,14 @@ class TestPipelineConfig:
         assert cfg.workers == 10
         assert cfg.temp_dir == cfg.input_dir / "temp"
 
+    def test_resume_forces_clean_false(self, tmp_path):
+        """resume=True must keep checkpoints even if clean=True was requested."""
+        cfg = PipelineConfig(
+            schema_path=tmp_path / "s.json", resume=True, clean=True
+        )
+        assert cfg.resume is True
+        assert cfg.clean is False
+
     def test_discovery_mode_validation(self, tmp_path):
         """discovery_mode must be None, 'auto', or 'review'."""
         # Valid values

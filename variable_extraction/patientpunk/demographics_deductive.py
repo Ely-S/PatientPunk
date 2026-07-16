@@ -47,6 +47,7 @@ from pathlib import Path
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
 from ._utils import (
     LLM_PROVIDER,
+    LLMResponseError,
     check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
@@ -194,14 +195,23 @@ def _create_with_retry(client, **kwargs):
 def _cached_create(
     client,
     *,
-    system_prompt: str,
-    prompt: str,
+    model: str,
+    system: str | list | dict | None,
+    messages: list[dict],
     temperature: float,
     max_tokens: int,
-    model: str,
-    **api_kwargs,
+    **other_api_kwargs,
 ):
-    """messages.create with disk cache + retry. api_kwargs go to the API call."""
+    """messages.create with disk cache + retry.
+
+    Cache key is derived from the same ``system`` / ``messages`` passed to the
+    API, so the two cannot drift.
+    """
+    prompt = ""
+    for msg in messages:
+        if msg.get("role") == "user":
+            prompt = msg.get("content", "")
+            break
 
     def _call() -> str:
         response = _create_with_retry(
@@ -209,14 +219,16 @@ def _cached_create(
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            **api_kwargs,
+            system=system,
+            messages=messages,
+            **other_api_kwargs,
         )
         return check_response(response, model).content[0].text
 
     return cached_completion(
         provider=LLM_PROVIDER,
         model=model,
-        system=system_prompt,
+        system=system,
         prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -234,19 +246,26 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     temperature on a parse failure -- no array/count ambiguity and no multi-post
     mis-splitting. Multiple records use the JSON-array path below.
     """
+    system = [
+        {
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
     if len(items) == 1:
         for temp in (LLM_TEMPERATURE, 0.7, 1.0):
-            raw = _cached_create(
-                client,
-                system_prompt=SYSTEM_PROMPT,
-                prompt=items[0]["text"],
-                temperature=temp,
-                max_tokens=300,
-                model=MODEL,
-                system=[{"type": "text", "text": SYSTEM_PROMPT,
-                         "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": items[0]["text"]}],
-            )
+            try:
+                raw = _cached_create(
+                    client,
+                    model=MODEL,
+                    temperature=temp,
+                    max_tokens=300,
+                    system=system,
+                    messages=[{"role": "user", "content": items[0]["text"]}],
+                )
+            except LLMResponseError:
+                continue  # truncated/empty: try hotter temperature
             parsed = _parse_one_object(raw)
             if parsed is not None:
                 return [parsed]
@@ -268,18 +287,10 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     max_tokens = len(items) * 300
     raw = _cached_create(
         client,
-        system_prompt=SYSTEM_PROMPT,
-        prompt=msg,
+        model=MODEL,
         temperature=LLM_TEMPERATURE,
         max_tokens=max_tokens,
-        model=MODEL,
-        system=[
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
+        system=system,
         messages=[{"role": "user", "content": msg}],
     )
     # Reuse the canonical (single-line-fence-safe) stripper, then isolate the

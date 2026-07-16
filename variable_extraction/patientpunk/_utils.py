@@ -170,9 +170,9 @@ def llm_config() -> dict:
 class LLMResponseError(RuntimeError):
     """A provider returned a 200 whose body is unusable (empty / truncated).
 
-    Raised rather than returned so the retry loops treat it like any other API
-    failure and the response cache -- which only stores successful returns --
-    never persists it.
+    Raised rather than returned so callers can retry (hotter temperature /
+    split_retry_batch) and the response cache -- which only stores successful
+    returns -- never persists it.
     """
 
 
@@ -283,6 +283,11 @@ def get_llm_client():
     return anthropic.Anthropic(**kwargs)
 
 
+# Failures that split_retry_batch absorbs (parse errors + unusable 200-OK
+# bodies). Auth / non-transient API errors must still propagate.
+_SPLIT_RETRY_ERRORS = (ValueError, json.JSONDecodeError, LLMResponseError)
+
+
 def split_retry_batch(
     call_fn,
     items: list,
@@ -293,15 +298,16 @@ def split_retry_batch(
 
     This implements Polina's recursive split pattern for multi-item LLM calls:
     1. Try the full batch → expect a list with len == len(items)
-    2. On ValueError / JSONDecodeError (wrong count, bad JSON):
-       split in half and recurse
+    2. On ValueError / JSONDecodeError / LLMResponseError (wrong count, bad
+       JSON, empty/truncated reply): split in half and recurse
     3. At max depth or single item: call individually and collect results
 
     Parameters
     ----------
     call_fn : callable(list) -> list
         Function that sends items to the LLM and returns a list of results.
-        Must raise ValueError or json.JSONDecodeError on parse failure.
+        Must raise ValueError, json.JSONDecodeError, or LLMResponseError on
+        absorbable failure.
     items : list
         Batch of work items (records, texts, etc.)
     max_depth : int
@@ -322,18 +328,19 @@ def split_retry_batch(
                 f"Expected {len(items)} results, got {len(results)}"
             )
         return results
-    except (ValueError, json.JSONDecodeError):
+    except _SPLIT_RETRY_ERRORS:
         if _depth >= max_depth or len(items) <= 1:
-            # Fall back to individual calls. Only absorb parse failures here --
-            # anything else (auth errors, other non-transient API errors) is
-            # fatal and must propagate so the caller fails loudly instead of
-            # silently recording a "PARSE FAILED" that hides the real cause.
+            # Fall back to individual calls. Only absorb parse / truncated
+            # failures here -- anything else (auth errors, other non-transient
+            # API errors) is fatal and must propagate so the caller fails
+            # loudly instead of silently recording a "PARSE FAILED" that hides
+            # the real cause.
             individual = []
             for item in items:
                 try:
                     r = call_fn([item])
                     individual.append(r[0])
-                except (ValueError, json.JSONDecodeError):
+                except _SPLIT_RETRY_ERRORS:
                     individual.append(None)
             return individual
         mid = len(items) // 2

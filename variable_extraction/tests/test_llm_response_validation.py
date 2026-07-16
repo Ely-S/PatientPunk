@@ -83,3 +83,31 @@ def test_response_error_is_retried_not_cached():
 
     assert calls["n"] == 2, "second run must retry, not replay a cached failure"
     assert not cache.cache_path("openai", "m", cache.make_key(**kwargs)).exists()
+
+
+def test_split_retry_batch_absorbs_llm_response_error():
+    """Truncated/empty replies must split-and-retry, not abort the whole batch."""
+    from patientpunk._utils import split_retry_batch
+
+    calls: list[int] = []
+
+    def call_fn(items):
+        calls.append(len(items))
+        if len(items) > 1:
+            raise LLMResponseError("truncated")
+        return [{"ok": True} for _ in items]
+
+    results = split_retry_batch(call_fn, [{"a": 1}, {"a": 2}])
+    assert results == [{"ok": True}, {"ok": True}]
+    # Full batch fails, then halves (or individuals) succeed.
+    assert 2 in calls
+    assert any(n == 1 for n in calls)
+
+
+def test_split_retry_batch_gives_none_when_single_item_still_truncated():
+    from patientpunk._utils import split_retry_batch
+
+    def call_fn(items):
+        raise LLMResponseError("truncated")
+
+    assert split_retry_batch(call_fn, [{"a": 1}]) == [None]

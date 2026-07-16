@@ -66,6 +66,7 @@ from .phase import PhaseResult
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    LLMResponseError,
     check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
@@ -538,9 +539,18 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         # Re-ask at escalating temperature: at temp 0 a malformed reply (e.g. a
         # stray doubled bracket) is deterministic, so a plain retry repeats it;
         # nudging temperature breaks the determinism and yields valid JSON.
+        # LLMResponseError (empty/truncated) is absorbed the same way so hotter
+        # temps still get a chance before split_retry_batch falls back.
         for temp in (None, 0.7, 1.0):
-            parsed = parse_json_response(
-                call_haiku(client, system_prompt, items[0]["user_message"], temperature=temp))
+            try:
+                parsed = parse_json_response(
+                    call_haiku(
+                        client, system_prompt, items[0]["user_message"],
+                        temperature=temp,
+                    )
+                )
+            except LLMResponseError:
+                continue
             if parsed is not None:
                 return [parsed]
         raise ValueError("could not parse single-record response after retries")

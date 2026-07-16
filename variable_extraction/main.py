@@ -197,11 +197,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
     elif args.llm_cache:
         set_cache_enabled(True)
 
-    # --resume must not wipe intermediate checkpoints
-    clean = not args.no_clean
-    if args.resume:
-        clean = False
-
+    # PipelineConfig forces clean=False when resume=True (single source of truth).
     config = PipelineConfig(
         schema_path=schema_path,
         input_dir=args.input_dir,
@@ -209,7 +205,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         start_at=args.start_at,
         run_llm=not args.no_llm,
         discovery_mode=args.discover,
-        clean=clean,
+        clean=not args.no_clean,
         workers=args.workers,
         limit=args.limit,
         resume=args.resume,
