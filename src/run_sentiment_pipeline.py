@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
+from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG, LLM_TEMPERATURE
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
@@ -59,6 +59,10 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
+        # Provenance: record the two knobs the published run silently omitted (P1/P3).
+        "temperature": LLM_TEMPERATURE,
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
     }
 
     _banner("CLASSIFY")
@@ -81,7 +85,7 @@ def main():
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
     parser.add_argument("--skip-prefilter", action="store_true", help="Skip the fast-model prefilter; send all pairs to the strong model")
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
-    parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
+    parser.add_argument("--max-upstream-depth", type=int, default=2, help="Max upstream hops for drug context (default: 2, the depth the IRR reference data assumes; prereq P3)")
     drug_group = parser.add_mutually_exclusive_group()
     drug_group.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
     drug_group.add_argument("--drug-file", type=str, default=None, help="Text file of drug + aliases, one per line, first line canonical. Skips the LLM alias lookup.")

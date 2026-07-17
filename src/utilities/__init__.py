@@ -34,7 +34,9 @@ class PipelineConfig:
     limit: int = 100
     reclassify: bool = False
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
-    max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
+    max_upstream_depth: int | None = 2     # Pinned to 2 (decision D4 / prereq P3): the depth the IRR
+                                           # reference data was built at (sample_for_coding.py AI_UPSTREAM_DEPTH=2).
+                                           # None = unlimited; set explicitly for a depth-sensitivity sweep.
     workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
@@ -93,6 +95,13 @@ else:
 
 MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
 MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
+
+# Sampling temperature, pinned for reproducibility (decision D3 / prereq P1).
+# Extraction and classification want the argmax, not sampling, so that run-to-run
+# variability measures the model rather than the dice. Every llm_call defaults to
+# this; override per-call only for a deliberate temperature sweep. Recorded in the
+# provenance run_config so published numbers carry the temperature they were made at.
+LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
 
 
 # ── Git ──────────────────────────────────────────────────────────────────────
@@ -257,8 +266,14 @@ def llm_call(
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
+    temperature: float = LLM_TEMPERATURE,
 ) -> str:
-    kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
+    kwargs = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
     if system:
         kwargs["system"] = system
     with client.messages.stream(**kwargs) as stream:
