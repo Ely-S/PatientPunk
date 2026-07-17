@@ -104,6 +104,7 @@ MS["outlier"] = [1 - np.nanmean([MAT.loc[short(m), short(o)] for o in OK if o !=
 _best = MS.sort_values("f1", ascending=False).iloc[0]
 _bestP = MS.sort_values("precision", ascending=False).iloc[0]
 _bestR = MS.sort_values("recall", ascending=False).iloc[0]
+_fg = (MS.str_prec - MS.precision).mean()
 display(Markdown(f"""
 **Abstract.** Drug identification (judgement ②) reads a post and returns the *set* of drugs mentioned —
 `extract_batch`, the pipeline's second step. A missed drug is a lost treatment report; a hallucinated one
@@ -112,9 +113,10 @@ from **{MAN['n_posts']} posts** (temp 0), scored for **precision and recall agai
 reads the post, rules each extraction correct/hallucinated, and lists drugs everyone missed), with a
 string-in-post floor and an N×N divergence map beside it. **{_best.mshort}** has the best balance
 (F1={_best.f1:.2f}); the roster splits into precise-but-cautious ({_bestP.mshort}, {_bestP.precision:.0%}
-precision) and thorough-but-eager ({_bestR.mshort}, {_bestR.recall:.0%} recall) extractors. Note the string
-floor is too *loose* — a drug name in a post (e.g. "histamine" in "histamine issues") isn't a treatment the
-author used — so unlike RxNorm for ①, here the objective source over-credits, and the judge is stricter.
+precision) and thorough-but-eager ({_bestR.mshort}, {_bestR.recall:.0%} recall) extractors. The string-in-post
+floor is only a noisy corroborator (net {_fg:+.0%} vs the judge): it misses correct abbreviations
+(LDN → "low dose naltrexone") and admits the odd non-treatment mention ("histamine" as a condition), so
+Opus-as-judge — reading for *treatment* mention and resolving abbreviations — is the standard, not the floor.
 {(' No parseable extractions from: ' + ', '.join(FAILED) + '.') if FAILED else ''}
 """))
 '''.replace("__RUNS__", RUNS_JSON)
@@ -127,30 +129,33 @@ S1 = ("## 1. What this judgement is, and why correctness matters\n\n"
       "(are the extracted drugs really there?) and **recall** (did it find them all?), not agreement.")
 
 S2 = ("## 2. Two truth sources — and why the objective floor is not enough here\n\n"
-      "For ① alias, the objective source (RxNorm) was too *strict*. For ② the objective source — does the "
-      "extracted drug literally appear in the post? — is too *loose*: a drug name can appear as the author's "
-      "**condition**, not a treatment they took ('histamine issues'), so string-presence over-credits. "
-      "That's why Opus-as-judge, which reads the post and rules on *treatment* mention, is the standard, and "
-      "the string floor only corroborates.")
+      "For ① alias, the objective source (RxNorm) missed valid informal aliases. For ② the objective source — "
+      "does the extracted drug literally appear in the post? — is noisy in *both* directions: it misses "
+      "correct abbreviations and paraphrases (a model extracting 'low dose naltrexone' from 'LDN'), and it "
+      "counts drug names that appear as the author's **condition** rather than a treatment ('histamine "
+      "issues'). Neither error dominates, so string-presence can't rank models — Opus-as-judge, which reads "
+      "for *treatment* mention and resolves abbreviations, is the standard; the floor only corroborates.")
 S2_CODE = r'''
 fig, ax = plt.subplots(figsize=(7.5, 6))
 ax.scatter(MS.str_prec, MS.precision, s=55, color="#0e6b74", zorder=3)
 lim = [0, 1.02]
 ax.plot(lim, lim, ls=":", color="#999", lw=1, label="floor = judge")
-for _, r in MS.iterrows():
-    if abs(r.str_prec - r.precision) > 0.12:
-        ax.annotate(r.mshort, (r.str_prec, r.precision), fontsize=7.5, xytext=(4, 2), textcoords="offset points")
+_gap = (MS.str_prec - MS.precision).abs()
+for i in _gap.nlargest(6).index:
+    r = MS.loc[i]
+    ax.annotate(r.mshort, (r.str_prec, r.precision), fontsize=7.5, xytext=(4, 2), textcoords="offset points")
 ax.set_xlabel("string-in-post precision (objective floor)"); ax.set_ylabel("Opus-judge precision (truth)")
 ax.set_xlim(0, 1.02); ax.set_ylim(0, 1.02); ax.legend(frameon=False, loc="lower right")
 ax.set_title("The objective floor over-credits: string-present ≠ treatment")
 fig.tight_layout(); plt.show()
 gap = (MS.str_prec - MS.precision).mean()
+above = int((MS.precision > MS.str_prec).sum()); below = int((MS.precision < MS.str_prec).sum())
 display(Markdown(
-  f"**What this shows:** points below the diagonal are models whose string-precision **exceeds** their true "
-  f"precision by {gap:+.0%} on average — the extra 'hits' are drug names that appear in the post but aren't "
-  f"treatments the author used (conditions, drugs mentioned in passing). The naive objective check would "
-  f"score these as correct; the judge (reading for *treatment* mention) does not. RxNorm was too strict; the "
-  f"string floor is too generous — either alone misleads, which is why the validated judge is the standard."))
+  f"**What this shows:** the floor tracks the judge on average (net string − judge = {gap:+.0%}) but diverges "
+  f"case by case. **{above}** models sit above the diagonal — the judge credits correct abbreviations and "
+  f"paraphrases the literal string-match misses (e.g. 'low dose naltrexone' extracted from 'LDN'); **{below}** "
+  f"sit below, where the floor counts a drug name used as a condition, not a treatment ('histamine issues'). "
+  f"Neither cancels cleanly, so the string floor corroborates but cannot rank — the validated judge is the standard."))
 '''
 
 S3 = ("## 3. Correctness scorecard — the verdict\n\n"
@@ -183,8 +188,10 @@ S4_CODE = r'''
 fig, ax = plt.subplots(figsize=(7.5, 6.4))
 sizes = 40 + 500 * (MS.f1 - MS.f1.min()) / (MS.f1.max() - MS.f1.min() + 1e-9)
 sc = ax.scatter(MS.recall, MS.precision, s=sizes, c=MS.f1, cmap="viridis", zorder=3, edgecolor="white")
-for _, r in MS.iterrows():
-    ax.annotate(r.mshort, (r.recall, r.precision), fontsize=7, xytext=(4, 2), textcoords="offset points")
+_notable = {MS.precision.idxmax(), MS.recall.idxmax(), MS.f1.idxmax(), MS.f1.idxmin()}
+for i in _notable:
+    r = MS.loc[i]
+    ax.annotate(r.mshort, (r.recall, r.precision), fontsize=8, fontweight="bold", xytext=(5, 2), textcoords="offset points")
 for f in [0.5, 0.7, 0.85]:  # F1 iso-contours
     rr = np.linspace(0.01, 1, 100); pp = f * rr / (2 * rr - f)
     ok = (pp > 0) & (pp <= 1); ax.plot(rr[ok], pp[ok], ls=":", color="#ccc", lw=1)
@@ -220,10 +227,9 @@ od.columns = ["model","outlier (1 − mean agreement)","F1"]
 display(HTML("<b>Most divergent models</b>" + od.to_html(index=False)))
 display(Markdown(
   f"**What this shows:** the roster shares a mean "
-  f"**{np.nanmean(MAT.values[np.triu_indices(len(order),1)]):.0%}** extraction overlap — lower than alias "
-  f"generation, because *which* borderline mentions count as drugs is genuinely underdetermined. Read outliers "
-  f"against §3: a divergent low-F1 model is a problem; a divergent high-F1 one just draws the drug boundary "
-  f"differently."))
+  f"**{np.nanmean(MAT.values[np.triu_indices(len(order),1)]):.0%}** extraction overlap — models genuinely "
+  f"differ on which borderline mentions count as drugs. Read outliers against §3: a divergent low-F1 model is "
+  f"a problem; a divergent high-F1 one just draws the drug boundary differently."))
 '''
 
 S6 = ("## 6. Conclusion & scorecard — F1 per dollar\n\n"
@@ -245,8 +251,8 @@ lines = [
   + (", within 5 points of the best while cheaper." if pick.f1 < best_f1 else "."),
   f"- **Precision and recall trade off** — pick the end that matches the cost of a phantom vs a missed report; "
   f"for clustering, lean recall.",
-  f"- **The objective floor over-credits** (string-present ≠ treatment), so Opus-as-judge is the standard "
-  f"here, not the floor.",
+  f"- **The string floor is too noisy to rank** (it misses correct paraphrases and counts non-treatment "
+  f"mentions), so Opus-as-judge is the standard here, not the floor.",
 ]
 display(Markdown("### Verdict\n\n" + "\n".join(lines)))
 '''
