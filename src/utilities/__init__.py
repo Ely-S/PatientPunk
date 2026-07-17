@@ -266,15 +266,26 @@ def llm_call(
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
-    temperature: float = LLM_TEMPERATURE,
+    temperature: float | None = LLM_TEMPERATURE,
 ) -> str:
     kwargs = {
         "model": model,
         "max_tokens": max_tokens,
-        "temperature": temperature,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
     if system:
         kwargs["system"] = system
-    with client.messages.stream(**kwargs) as stream:
-        return stream.get_final_message().content[0].text
+    try:
+        with client.messages.stream(**kwargs) as stream:
+            return stream.get_final_message().content[0].text
+    except anthropic.BadRequestError as e:
+        # Some models (e.g. claude-opus-4-8 and the reasoning models) deprecate the
+        # temperature parameter and 400 if it is sent. Pinning temperature is a no-op
+        # for a model that ignores it, so drop it and retry once.
+        if "temperature" in kwargs and "temperature" in str(e).lower():
+            kwargs.pop("temperature")
+            with client.messages.stream(**kwargs) as stream:
+                return stream.get_final_message().content[0].text
+        raise
