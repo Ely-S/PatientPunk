@@ -35,7 +35,7 @@ class PipelineConfig:
     reclassify: bool = False
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
-    workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
+    workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
 
@@ -258,8 +258,27 @@ def llm_call(
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
-    kwargs = {"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]}
-    if system:
-        kwargs["system"] = system
-    with client.messages.stream(**kwargs) as stream:
-        return stream.get_final_message().content[0].text
+    from patientpunk.llm_cache import cached_completion
+    from patientpunk._utils import check_response, response_text
+
+    def _call() -> str:
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": 0.0,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            kwargs["system"] = system
+        with client.messages.stream(**kwargs) as stream:
+            return response_text(check_response(stream.get_final_message(), model=model))
+
+    return cached_completion(
+        provider=LLM_PROVIDER,
+        model=model,
+        system=system,
+        prompt=prompt,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        call_fn=_call,
+    )

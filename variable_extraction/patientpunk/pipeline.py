@@ -126,6 +126,9 @@ class PipelineConfig(BaseModel):
             raise ValueError(
                 f"discovery_mode must be None, 'auto', or 'review', got {self.discovery_mode!r}"
             )
+        # Resume must keep intermediate checkpoints
+        if self.resume:
+            self.clean = False
         return self
 
 

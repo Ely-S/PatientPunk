@@ -154,6 +154,10 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
                    help="Process at most N records (cost control / testing).")
     run_parser.add_argument("--resume", action="store_true",
                    help="Resume interrupted LLM / discovery runs.")
+    run_parser.add_argument("--llm-cache", action="store_true",
+                   help="Force-enable LLM API response cache (default: on).")
+    run_parser.add_argument("--no-llm-cache", action="store_true",
+                   help="Disable LLM API response cache (overrides default / LLM_CACHE=1).")
 
     # Phase 2
     run_parser.add_argument("--skip-threshold", type=float, default=0.7,
@@ -187,6 +191,13 @@ def _cmd_run(args: argparse.Namespace) -> None:
     if not schema_path.exists():
         sys.exit(f"Schema not found: {schema_path}")
 
+    from patientpunk.llm_cache import set_cache_enabled
+    if args.no_llm_cache:
+        set_cache_enabled(False)
+    elif args.llm_cache:
+        set_cache_enabled(True)
+
+    # PipelineConfig forces clean=False when resume=True (single source of truth).
     config = PipelineConfig(
         schema_path=schema_path,
         input_dir=args.input_dir,
@@ -559,7 +570,7 @@ def _cmd_promote(args: argparse.Namespace) -> None:
 def _build_llm_group_fn(schemas: list[dict]):
     """Return ``fn(names) -> list[list[str]]`` that asks the strong model to group
     semantically-synonymous variable names (for the optional --llm pass)."""
-    from patientpunk._utils import get_llm_client, MODEL_STRONG
+    from patientpunk._utils import MODEL_STRONG, get_llm_client, response_text
 
     descs: dict[str, str] = {}
     for s in schemas:
@@ -581,7 +592,7 @@ def _build_llm_group_fn(schemas: list[dict]):
                 model=MODEL_STRONG, max_tokens=4000, temperature=0,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = resp.content[0].text
+            text = response_text(resp)
             start, end = text.find("["), text.rfind("]")
             groups = json.loads(text[start:end + 1]) if start >= 0 else []
             return [g for g in groups if isinstance(g, list) and len(g) > 1]

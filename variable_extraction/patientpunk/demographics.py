@@ -56,7 +56,16 @@ from .qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
-from ._utils import LLM_TEMPERATURE, MODEL_FAST, split_retry_batch, get_llm_client
+from ._utils import (
+    LLM_PROVIDER,
+    LLM_TEMPERATURE,
+    MODEL_FAST,
+    check_response,
+    get_llm_client,
+    response_text,
+    split_retry_batch,
+)
+from .llm_cache import cached_completion
 from .phase import PhaseResult
 MODEL = MODEL_FAST
 MAX_CHARS = 8000
@@ -240,18 +249,29 @@ def call_haiku(
     )
 
     try:
-        response = client.messages.create(
+        def _call() -> str:
+            response = client.messages.create(
+                model=MODEL,
+                temperature=LLM_TEMPERATURE,
+                max_tokens=800,  # larger than deductive-only to allow discoveries
+                system=[{
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            return response_text(check_response(response, MODEL)).strip()
+
+        raw = cached_completion(
+            provider=LLM_PROVIDER,
             model=MODEL,
+            system=system_prompt,
+            prompt=user_msg,
             temperature=LLM_TEMPERATURE,
-            max_tokens=800,  # larger than deductive-only to allow discoveries
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{"role": "user", "content": user_msg}],
+            max_tokens=800,
+            call_fn=_call,
         )
-        raw = response.content[0].text.strip()
 
         # Strip accidental markdown code fences
         if raw.startswith("```"):
@@ -313,18 +333,33 @@ def _call_haiku_batch_raw(client, system_prompt: str, items: list[dict], mode: s
     for i, item in enumerate(items, 1):
         msg += f"--- Record {i} ---\n{item['text']}\n\n"
 
-    response = client.messages.create(
-        model=MODEL,
-        temperature=LLM_TEMPERATURE,
-        max_tokens=len(items) * 800,
-        system=[{
-            "type": "text",
-            "text": system_prompt,
-            "cache_control": {"type": "ephemeral"},
-        }],
-        messages=[{"role": "user", "content": msg}],
+    max_tokens = len(items) * 800
+
+    def _call() -> str:
+        response = client.messages.create(
+            model=MODEL,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=max_tokens,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": msg}],
+        )
+        return response_text(check_response(response, MODEL)).strip()
+
+    raw = _strip_markdown_fences(
+        cached_completion(
+            provider=LLM_PROVIDER,
+            model=MODEL,
+            system=system_prompt,
+            prompt=msg,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=max_tokens,
+            call_fn=_call,
+        )
     )
-    raw = _strip_markdown_fences(response.content[0].text.strip())
     results = json.loads(raw)
     if not isinstance(results, list) or len(results) != len(items):
         raise ValueError(f"Expected {len(items)} results, got {len(results) if isinstance(results, list) else type(results)}")

@@ -574,6 +574,14 @@ class TestPipelineConfig:
         assert cfg.workers == 10
         assert cfg.temp_dir == cfg.input_dir / "temp"
 
+    def test_resume_forces_clean_false(self, tmp_path):
+        """resume=True must keep checkpoints even if clean=True was requested."""
+        cfg = PipelineConfig(
+            schema_path=tmp_path / "s.json", resume=True, clean=True
+        )
+        assert cfg.resume is True
+        assert cfg.clean is False
+
     def test_discovery_mode_validation(self, tmp_path):
         """discovery_mode must be None, 'auto', or 'review'."""
         # Valid values
@@ -1742,6 +1750,31 @@ class TestLLMConfig:
 
     def test_llm_config_excludes_api_key(self):
         assert "api_key" not in llm_config()
+
+    def test_openai_prefers_openrouter_key_not_anthropic(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-should-not-win",
+        })
+        assert c["provider"] == "openai"
+        assert c["api_key"] == "sk-or-v1-realkey-abcdef"
+
+    def test_openai_ignores_anthropic_key_alone(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-alone",
+        })
+        assert c["api_key"] == ""
+
+    def test_openai_llm_api_key_wins(self):
+        c = resolve_llm_config({
+            "LLM_PROVIDER": "openai",
+            "LLM_API_KEY": "explicit-openai-key",
+            "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-abc",
+        })
+        assert c["api_key"] == "explicit-openai-key"
 
 
 # =============================================================================

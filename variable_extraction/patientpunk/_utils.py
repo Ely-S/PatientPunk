@@ -83,7 +83,11 @@ load_env()
 #
 #   LLM_PROVIDER     openrouter | anthropic | openai   (default: auto-detect from keys)
 #                    openai -> OpenAI-compatible endpoint (vLLM / Ollama / etc.)
-#   OPENROUTER_API_KEY / ANTHROPIC_API_KEY / LLM_API_KEY   (LLM_API_KEY wins)
+#   Key precedence (LLM_API_KEY always wins when set):
+#     openrouter → LLM_API_KEY | OPENROUTER_API_KEY | ANTHROPIC_API_KEY
+#     openai     → LLM_API_KEY | OPENROUTER_API_KEY
+#                  (never ANTHROPIC_API_KEY — wrong key against OpenAI-compat → 401)
+#     anthropic  → LLM_API_KEY | ANTHROPIC_API_KEY | OPENROUTER_API_KEY
 #   LLM_BASE_URL     override the API base URL (point extraction at any endpoint:
 #                    an Anthropic-compatible gateway, or an OpenAI-compatible
 #                    server like vLLM on a dispersed node with LLM_PROVIDER=openai)
@@ -133,9 +137,15 @@ def resolve_llm_config(env: dict | None = None) -> dict:
         default_fast, default_strong = "claude-haiku-4-5-20251001", "claude-sonnet-4-6"
         default_base = None
 
-    api_key = (_real_key(env, "LLM_API_KEY")
-               or (or_key if provider == "openrouter" else an_key)
-               or or_key or an_key)
+    llm_key = _real_key(env, "LLM_API_KEY")
+    if provider == "openrouter":
+        api_key = llm_key or or_key or an_key
+    elif provider == "openai":
+        # OpenAI-compat must not inherit ANTHROPIC_API_KEY (e.g. OpenRouter via
+        # LLM_PROVIDER=openai + LLM_BASE_URL=.../v1 would 401 on an Anthropic key).
+        api_key = llm_key or or_key
+    else:
+        api_key = llm_key or an_key or or_key
     try:
         temperature = float(env.get("LLM_TEMPERATURE", "0") or 0)
     except ValueError:
@@ -165,6 +175,48 @@ def llm_config() -> dict:
     return cfg
 
 
+# --- Response validation ------------------------------------------------------
+
+class LLMResponseError(RuntimeError):
+    """A provider returned a 200 whose body is unusable (empty / truncated).
+
+    Raised rather than returned so callers can retry (hotter temperature /
+    split_retry_batch) and the response cache -- which only stores successful
+    returns -- never persists it.
+    """
+
+
+def response_text(response) -> str:
+    """Concatenate text content blocks; skip thinking/tool blocks without ``.text``.
+
+    Thinking models (e.g. DeepSeek via Anthropic Messages) may return
+    ``[ThinkingBlock, TextBlock, ...]``. Indexing ``content[0].text`` raises
+    ``AttributeError`` on the thinking block; this helper only joins blocks that
+    expose a text payload.
+    """
+    return "".join(
+        t for b in (getattr(response, "content", None) or [])
+        if (t := getattr(b, "text", None))
+    )
+
+
+def check_response(response, model: str = ""):
+    """Raise LLMResponseError if a 200-OK response is empty or truncated.
+
+    ``stop_reason == "max_tokens"`` means the reply was cut off mid-generation:
+    for the JSON callers here that reply is unparseable, and caching it would
+    make the loss permanent across re-runs.
+    """
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise LLMResponseError(
+            f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
+            f"or shrink the batch)"
+        )
+    if not response_text(response).strip():
+        raise LLMResponseError(f"{model}: response was empty")
+    return response
+
+
 # --- OpenAI-compatible adapter ------------------------------------------------
 # vLLM / Ollama / TGI and most self-hosted open-model servers speak the OpenAI
 # API. This thin adapter exposes the same ``.messages.create(...)`` surface as
@@ -172,9 +224,9 @@ def llm_config() -> dict:
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
         self.content = [SimpleNamespace(text=text)]
-        self.stop_reason = "end_turn"
+        self.stop_reason = stop_reason
 
 
 class _OpenAIMessages:
@@ -198,9 +250,17 @@ class _OpenAIMessages:
             model=model, messages=oai_messages,
             max_tokens=max_tokens, temperature=temperature,
         )
+        # A degenerate reply is a failure, not an empty answer: raise so callers
+        # retry and the response cache never stores it.
         if not resp.choices:
-            return _AnthropicShapedResponse("")
-        return _AnthropicShapedResponse(resp.choices[0].message.content or "")
+            raise LLMResponseError(f"{model}: provider returned no choices")
+        choice = resp.choices[0]
+        if choice.message.content is None:
+            raise LLMResponseError(f"{model}: provider returned null content")
+        # OpenAI spells truncation "length"; normalize to the Anthropic name so
+        # check_response() works the same on both backends.
+        stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
+        return _AnthropicShapedResponse(choice.message.content, stop_reason)
 
 
 class _OpenAIAdapter:
@@ -217,7 +277,8 @@ def get_llm_client():
     ``LLM_PROVIDER=openai`` routes to an OpenAI-compatible endpoint (vLLM /
     Ollama / any self-hosted open model) via a thin adapter; otherwise the native
     Anthropic SDK is used (Anthropic, OpenRouter, or any Anthropic-compatible
-    endpoint via ``LLM_BASE_URL``).  Key precedence: ``LLM_API_KEY`` > provider key.
+    endpoint via ``LLM_BASE_URL``).  Key precedence is provider-specific
+    (see ``resolve_llm_config``); ``LLM_API_KEY`` always wins when set.
     """
     cfg = resolve_llm_config()
 
@@ -247,6 +308,11 @@ def get_llm_client():
     return anthropic.Anthropic(**kwargs)
 
 
+# Failures that split_retry_batch absorbs (parse errors + unusable 200-OK
+# bodies). Auth / non-transient API errors must still propagate.
+_SPLIT_RETRY_ERRORS = (ValueError, json.JSONDecodeError, LLMResponseError)
+
+
 def split_retry_batch(
     call_fn,
     items: list,
@@ -257,15 +323,16 @@ def split_retry_batch(
 
     This implements Polina's recursive split pattern for multi-item LLM calls:
     1. Try the full batch → expect a list with len == len(items)
-    2. On ValueError / JSONDecodeError (wrong count, bad JSON):
-       split in half and recurse
+    2. On ValueError / JSONDecodeError / LLMResponseError (wrong count, bad
+       JSON, empty/truncated reply): split in half and recurse
     3. At max depth or single item: call individually and collect results
 
     Parameters
     ----------
     call_fn : callable(list) -> list
         Function that sends items to the LLM and returns a list of results.
-        Must raise ValueError or json.JSONDecodeError on parse failure.
+        Must raise ValueError, json.JSONDecodeError, or LLMResponseError on
+        absorbable failure.
     items : list
         Batch of work items (records, texts, etc.)
     max_depth : int
@@ -286,18 +353,19 @@ def split_retry_batch(
                 f"Expected {len(items)} results, got {len(results)}"
             )
         return results
-    except (ValueError, json.JSONDecodeError):
+    except _SPLIT_RETRY_ERRORS:
         if _depth >= max_depth or len(items) <= 1:
-            # Fall back to individual calls. Only absorb parse failures here --
-            # anything else (auth errors, other non-transient API errors) is
-            # fatal and must propagate so the caller fails loudly instead of
-            # silently recording a "PARSE FAILED" that hides the real cause.
+            # Fall back to individual calls. Only absorb parse / truncated
+            # failures here -- anything else (auth errors, other non-transient
+            # API errors) is fatal and must propagate so the caller fails
+            # loudly instead of silently recording a "PARSE FAILED" that hides
+            # the real cause.
             individual = []
             for item in items:
                 try:
                     r = call_fn([item])
                     individual.append(r[0])
-                except (ValueError, json.JSONDecodeError):
+                except _SPLIT_RETRY_ERRORS:
                     individual.append(None)
             return individual
         mid = len(items) // 2

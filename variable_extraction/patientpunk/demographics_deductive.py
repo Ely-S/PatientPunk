@@ -46,13 +46,18 @@ from pathlib import Path
 
 from .qualitative_standards import DEMOGRAPHIC_STANDARDS
 from ._utils import (
+    LLM_PROVIDER,
+    LLMResponseError,
+    check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
     parse_json_response,
+    response_text,
     split_retry_batch,
     get_llm_client,
     strip_markdown_fences,
 )
+from .llm_cache import cached_completion
 from .phase import PhaseResult
 MODEL = MODEL_FAST
 
@@ -188,6 +193,50 @@ def _create_with_retry(client, **kwargs):
                 raise
 
 
+def _cached_create(
+    client,
+    *,
+    model: str,
+    system: str | list | dict | None,
+    messages: list[dict],
+    temperature: float,
+    max_tokens: int,
+    **other_api_kwargs,
+):
+    """messages.create with disk cache + retry.
+
+    Cache key is derived from the same ``system`` / ``messages`` passed to the
+    API, so the two cannot drift.
+    """
+    prompt = ""
+    for msg in messages:
+        if msg.get("role") == "user":
+            prompt = msg.get("content", "")
+            break
+
+    def _call() -> str:
+        response = _create_with_retry(
+            client,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system=system,
+            messages=messages,
+            **other_api_kwargs,
+        )
+        return response_text(check_response(response, model))
+
+    return cached_completion(
+        provider=LLM_PROVIDER,
+        model=model,
+        system=system,
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        call_fn=_call,
+    )
+
+
 def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     """Send record(s) in one API call. Returns a list of parsed dicts.
 
@@ -198,18 +247,27 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
     temperature on a parse failure -- no array/count ambiguity and no multi-post
     mis-splitting. Multiple records use the JSON-array path below.
     """
+    system = [
+        {
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
     if len(items) == 1:
         for temp in (LLM_TEMPERATURE, 0.7, 1.0):
-            response = _create_with_retry(
-                client,
-                model=MODEL,
-                temperature=temp,
-                max_tokens=300,
-                system=[{"type": "text", "text": SYSTEM_PROMPT,
-                         "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": items[0]["text"]}],
-            )
-            parsed = _parse_one_object(response.content[0].text)
+            try:
+                raw = _cached_create(
+                    client,
+                    model=MODEL,
+                    temperature=temp,
+                    max_tokens=300,
+                    system=system,
+                    messages=[{"role": "user", "content": items[0]["text"]}],
+                )
+            except LLMResponseError:
+                continue  # truncated/empty: try hotter temperature
+            parsed = _parse_one_object(raw)
             if parsed is not None:
                 return [parsed]
         raise ValueError("could not parse single-record demographics response")
@@ -227,23 +285,18 @@ def _call_haiku_batch_raw(client, items: list[dict]) -> list[dict]:
         text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", item["text"])
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    response = _create_with_retry(
+    max_tokens = len(items) * 300
+    raw = _cached_create(
         client,
         model=MODEL,
         temperature=LLM_TEMPERATURE,
-        max_tokens=len(items) * 300,
-        system=[
-            {
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
+        max_tokens=max_tokens,
+        system=system,
         messages=[{"role": "user", "content": msg}],
     )
     # Reuse the canonical (single-line-fence-safe) stripper, then isolate the
     # JSON array span so leading/trailing prose doesn't break json.loads.
-    raw = _strip_markdown_fences(response.content[0].text)
+    raw = _strip_markdown_fences(raw)
     start, end = raw.find("["), raw.rfind("]")
     if start != -1 and end > start:
         raw = raw[start:end + 1]
