@@ -35,6 +35,27 @@ import compute_alphas as ca  # canonical loaders + canonicalization + de-id
 OPUS_CODER = "anthropic/claude-opus-4.1"
 MIN_CORROBORATION = 2  # a treatment must be found by >=2 coders to enter the vocab
 
+# Generic categories / non-treatments — drop so they don't inflate the treatment
+# count (skill filtering rule 1). These are not actionable individual treatments.
+GENERIC = {
+    "supplements", "supplement", "supplementation", "medication", "medications",
+    "meds", "med", "treatment", "treatments", "therapy", "therapies", "drug",
+    "drugs", "vitamin", "vitamins", "prescription", "pill", "pills", "dosage",
+    "dose", "antibiotic", "antibiotics", "none", "__none__",
+}
+
+
+def _collapse_near_dupes(terms: list[str]) -> list[str]:
+    """Merge obvious near-duplicate canonicals where a shorter term is contained in
+    a longer one (e.g. 'histamine' ⊂ 'histamine issues', 'vitamin d' ⊂ 'vitamin d3').
+    Keeps the shorter, more-canonical form. A light touch — real canonicalization is
+    judgement 3; here we only need a trustworthy DISTINCT-treatment count."""
+    kept: list[str] = []
+    for t in sorted(set(terms), key=len):
+        if not any(k in t for k in kept):
+            kept.append(t)
+    return sorted(kept)
+
 
 def build_vocab(irr_dir: Path, db_path: Path) -> dict:
     raw = ca.load_all_coders(irr_dir)          # de-identified coder_ids
@@ -49,8 +70,11 @@ def build_vocab(irr_dir: Path, db_path: Path) -> dict:
         counts: Counter = Counter()
         for coder_set in by_coder:
             counts.update(coder_set)
-        # Corroborated treatments (Opus's vote counts as one of the >=2).
-        terms = sorted(t for t, n in counts.items() if n >= MIN_CORROBORATION)
+        # Corroborated treatments (Opus's vote counts as one of the >=2), with
+        # generic categories dropped and near-duplicates collapsed.
+        corroborated = [t for t, n in counts.items()
+                        if n >= MIN_CORROBORATION and t.lower() not in GENERIC]
+        terms = _collapse_near_dupes(corroborated)
         vocab[str(sample_id)] = {
             "treatments": terms,
             "n_treatments": len(terms),
