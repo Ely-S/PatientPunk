@@ -192,6 +192,18 @@ class LLMParseError(ValueError):
     """LLM response could not be parsed as JSON."""
 
 
+def _message_text(msg) -> str:
+    """Concatenate the text of all text blocks in an Anthropic message.
+
+    Reasoning models (and many general models when routed with reasoning on) return a
+    `ThinkingBlock` as the FIRST content block, so the old `content[0].text` raised
+    `AttributeError: 'ThinkingBlock' object has no attribute 'text'` and silently killed
+    those models across the whole pipeline. Skip non-text blocks and join the rest.
+    """
+    parts = [getattr(b, "text", "") for b in msg.content if getattr(b, "type", None) == "text"]
+    return "".join(parts)
+
+
 import re
 
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
@@ -279,7 +291,7 @@ def llm_call(
         kwargs["system"] = system
     try:
         with client.messages.stream(**kwargs) as stream:
-            return stream.get_final_message().content[0].text
+            return _message_text(stream.get_final_message())
     except anthropic.BadRequestError as e:
         # Some models (e.g. claude-opus-4-8 and the reasoning models) deprecate the
         # temperature parameter and 400 if it is sent. Pinning temperature is a no-op
@@ -287,5 +299,5 @@ def llm_call(
         if "temperature" in kwargs and "temperature" in str(e).lower():
             kwargs.pop("temperature")
             with client.messages.stream(**kwargs) as stream:
-                return stream.get_final_message().content[0].text
+                return _message_text(stream.get_final_message())
         raise
