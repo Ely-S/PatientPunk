@@ -148,7 +148,43 @@ tbl.columns = ["model","proposed","kept","keep-rate","divergence","$/1M in"]
 display(HTML("<b>Discovery scorecard</b>" + tbl.to_html(index=False)))
 '''
 
-S4 = ("## 4. Counterintuitive: more fields is not more signal\n\n"
+S_COMP = ("## 4. Which models find the valuable fields — and which find them alone\n\n"
+          "Count and keep-rate don't say whether models find the *same* good fields or *different* ones. "
+          "Looking only at the valid (Opus-kept) fields: is there a shared core every model catches, or does "
+          "each model contribute its own slice? This is what decides whether discovery is a job for one model "
+          "or an ensemble.")
+S_COMP_CODE = r'''
+kept = set(f for f in prop_count if VERD.get(f) == "keep")
+K = 6
+core = [f for f in kept if prop_count[f] >= K]
+uq = (pd.DataFrame([(short(m), sum(1 for f in fset[m] if f in kept and prop_count[f] == 1)) for m in OK],
+                   columns=["mshort", "n_unique"]).sort_values("n_unique"))
+ys = np.arange(len(uq))
+fig, ax = plt.subplots(figsize=(8, 1.2 + 0.42*len(uq)))
+ax.hlines(ys, 0, uq.n_unique, color="#d7c4e6", lw=3, zorder=1)
+ax.scatter(uq.n_unique, ys, color="#8e44ad", s=90, zorder=2)
+for y, v in zip(ys, uq.n_unique):
+    ax.text(v + 0.4, y, str(int(v)), va="center", fontsize=8)
+ax.set_yticks(ys); ax.set_yticklabels(uq.mshort); ax.set_xlim(0, max(uq.n_unique.max()*1.15, 1))
+ax.set_xlabel("valid fields this model found ALONE (Opus-kept, no other model proposed)")
+ax.set_title("Unique valuable discovery per model")
+fig.tight_layout(); plt.show()
+
+from collections import Counter as _C
+covdist = _C(prop_count[f] for f in kept)
+solo = [(f, next(short(m) for m in OK if f in fset[m])) for f in sorted(kept) if prop_count[f] == 1]
+display(Markdown(
+  f"**What this shows:** there is **no shared core** — of {len(kept)} Opus-kept fields, only **{len(core)}** were "
+  f"proposed by >={K} of {len(OK)} models, and **{covdist.get(1,0)}** were seen by a single model. Each model "
+  f"contributes a different valid slice: **{uq.iloc[-1].mshort}** alone surfaced **{int(uq.iloc[-1].n_unique)}** "
+  f"valid covariates no other model found, while {uq.iloc[0].mshort} added {int(uq.iloc[0].n_unique)}. So "
+  f"discovery models are **complementary, not rankable** — the fullest field set comes from unioning several, "
+  f"and a thorough model is worth keeping in a discovery ensemble even if its keep-rate is only middling."))
+ex = pd.DataFrame(solo[:14], columns=["valid field found by ONE model only", "the model"])
+display(HTML("<b>Differentiators — valuable covariates a single model caught</b>" + ex.to_html(index=False)))
+'''
+
+S4 = ("## 5. Counterintuitive: more fields is not more signal\n\n"
       "The intuition is that a model proposing more fields is more thorough. The data says the extra fields "
       "are disproportionately junk — volume trades against precision — and the fields that survive are the "
       "ones many models independently converge on.")
@@ -180,7 +216,7 @@ display(Markdown(
   f"fields multiple models converge on. Agreement tracks quality; idiosyncrasy tracks junk."))
 '''
 
-S5 = ("## 5. Divergence map & the frozen-GT implication\n\n"
+S5 = ("## 6. Divergence map & the frozen-GT implication\n\n"
       "The pairwise overlap of proposed field sets, and why this settles the design choice: with this little "
       "agreement, a consensus field set would keep only the trivially-obvious fields. Freezing **Opus's** "
       "reviewed set (the plan's call) is what the divergence forces.")
@@ -203,7 +239,7 @@ display(Markdown(
   f"they agree with each other about."))
 '''
 
-S6 = ("## 6. Conclusion\n\n"
+S6 = ("## 7. Conclusion\n\n"
       "Discovery is the highest-variance judgement in the pipeline, and that variance is the finding.")
 S6_CODE = r'''
 lines = [
@@ -221,7 +257,7 @@ lines = [
 display(Markdown("### Verdict\n\n" + "\n".join(lines)))
 '''
 
-S7 = '''## 7. Research limitations
+S7 = '''## 8. Research limitations
 
 - **No frozen GT yet.** Correctness here is Opus-as-judge on field *quality* (keep/junk), not recovery of a
   frozen Opus field set — that GT is the next fixture (it is exactly what ⑪ needs). So this measures whether
@@ -260,6 +296,7 @@ def main():
         ("md", S1),
         ("md", S2), ("code", S2_CODE),
         ("md", S3), ("code", S3_CODE),
+        ("md", S_COMP), ("code", S_COMP_CODE),
         ("md", S4), ("code", S4_CODE),
         ("md", S5), ("code", S5_CODE),
         ("md", S6), ("code", S6_CODE),
