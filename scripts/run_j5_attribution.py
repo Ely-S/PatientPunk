@@ -181,6 +181,18 @@ def main():
                 for i in range(0, len(samples), 5):
                     tasks.append((model, variant, drug, samples[i:i + 5]))
 
+    # interleave by model — a model-major submission order hammers each model in turn (the throttling
+    # that corrupted the Sol coding); round-robin across models spreads the load.
+    _bym = defaultdict(list)
+    for t in tasks:
+        _bym[t[0]].append(t)
+    interleaved = []
+    while any(_bym.values()):
+        for m in list(_bym):
+            if _bym[m]:
+                interleaved.append(_bym[m].pop(0))
+    tasks = interleaved
+
     client = get_client()
     print(f"{len(picked)} posts | {len(pairs)} (post,drug) pairs | {len(args.models)} models "
           f"| 2 variants | {len(tasks)} classify calls | temp={LLM_TEMPERATURE}")
@@ -191,18 +203,40 @@ def main():
         if variant == "B_strict":
             sp = strict_variant(sp)
         entries = [entry_of[s] for s in samples]
-        results = classify_drug_batch(client, model, entries, id_to_text, sp)
+        try:
+            results = classify_drug_batch(client, model, entries, id_to_text, sp)
+        except Exception:
+            return []   # API error (e.g. timeout) — skip; resume retries these tasks
         return [
             {"sample_id": s, "drug": drug, "model": model, "variant": variant,
              "sentiment": r.sentiment, "signal": r.signal, "parse_failed": bool(r.parse_failed)}
             for s, r in zip(samples, results)
         ]
 
-    records, done = [], 0
+    # crash-safe checkpoint: append each task's records to a partial jsonl and skip done tasks on
+    # resume (so a mid-run credit-out / rate-limit doesn't lose everything, as it did on the first run).
+    partial = args.out.with_suffix(".partial.jsonl")
+    done_keys, records = set(), []
+    if partial.exists():
+        for line in partial.read_text(encoding="utf-8").splitlines():
+            try:
+                r = json.loads(line); records.append(r); done_keys.add((r["model"], r["variant"], r["sample_id"], r["drug"]))
+            except Exception:
+                pass
+    tasks = [t for t in tasks if not all((t[0], t[1], s, t[2]) in done_keys for s in t[3])]
+    print(f"{len(done_keys)} records checkpointed; {len(tasks)} tasks to run")
+    import threading as _th
+    _wlock = _th.Lock()
+
+    done = 0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_task, t) for t in tasks]
         for fut in as_completed(futures):
-            records.extend(fut.result())
+            recs = fut.result()
+            with _wlock, partial.open("a", encoding="utf-8") as fh:
+                for r in recs:
+                    fh.write(json.dumps(r) + "\n")
+            records.extend(recs)
             done += 1
             if done % 25 == 0 or done == len(tasks):
                 print(f"  {done}/{len(tasks)} calls done, {len(records)} records")

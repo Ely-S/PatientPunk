@@ -67,9 +67,10 @@ def classify_one(client, model, entry, drug, id_to_text) -> dict:
     raw = _bounded_call(client, model, sysp, format_entry(entry, id_to_text) + JSON_TAIL, max_tokens=800, timeout=60.0)
     try:
         r = ClassificationResult.model_validate(parse_json_object(raw))
-        return {"sentiment": r.sentiment, "signal": r.signal, "parse_failed": False}
+        se = [str(x).lower().strip() for x in (r.side_effects or []) if str(x).strip()]
+        return {"sentiment": r.sentiment, "signal": r.signal, "side_effects": se, "parse_failed": False}
     except Exception:
-        return {"sentiment": None, "signal": None, "parse_failed": True}
+        return {"sentiment": None, "signal": None, "side_effects": [], "parse_failed": True}
 
 
 def main():
