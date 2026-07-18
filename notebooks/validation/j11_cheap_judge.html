@@ -7795,9 +7795,9 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=d6298fc0">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=cdfbaecf">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2f8f0d59">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d07bf6cc">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7808,7 +7808,22 @@ a.anchor-link {
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=502f0af5">
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=868407ad">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="The-problem-%E2%80%94-verifying-coded-values-at-corpus-scale">The problem — verifying coded values at corpus scale<a class="anchor-link" href="#The-problem-%E2%80%94-verifying-coded-values-at-corpus-scale">¶</a></h2><p><strong>Where this sits.</strong> Judgement ⑪ (<em>variable coding</em>) is the second step of the extraction track: given a fixed schema of ~37 patient covariates — age, conditions, medications, dosage, functional status, symptom trajectory, and so on — it reads each Reddit post and fills in the values. <strong>These covariates are exactly what the planned clustering study will cluster patients on.</strong> If their values are wrong or inconsistent, the clusters measure noise rather than patients, so the correctness of ⑪ is load-bearing for the whole project.</p>
+<p><strong>How we got here.</strong> ⑪ first looked alarming: coded values agreed with the Opus reference only ~28% of the time by Jaccard set-overlap. The sibling notebook (<code>j11_value_rejudge</code>) re-scored the same codings with an Opus <em>semantic</em> judge and showed most of that was a <strong>measurement artifact</strong> — <code>"2"</code> vs <code>"at least 2"</code> scores 0 by set-overlap but means the same thing (~82% of values are semantically right). But it left a real <strong>~18% genuine-error tail</strong>, concentrated in the interpretive free-text fields. Either way, the fix requires <em>verifying</em> values — canonicalising the artifacts, catching the real errors — not blindly trusting the raw extraction.</p>
+<p><strong>The cost problem this notebook is about.</strong> The plan's architecture is <strong>produce-then-verify</strong>: a cheap model extracts, and a strong model checks its work. Production is eventually <strong>Opus on the whole corpus</strong> — but Opus as the verifier costs ~$5 / 1M input tokens, and at corpus scale (hundreds of thousands of posts × 37 fields) you cannot run it on every value. Hence the question: <strong>can a <em>cheap</em> open-source model do the value-confirmation instead</strong>, keeping expensive Opus for only the hard residual?</p>
+<p><strong>What "confirm" means here, concretely.</strong> For each coded field-value the judge makes one narrow, checkable call — <em>is this value semantically equivalent to the reference?</em> — used as a <strong>triage gate</strong>: <em>confirm</em> → skip it, <em>flag</em> → escalate to a frontier panel. It is deliberately the <em>easy</em> confirm: the judge compares two short strings and never re-reads the post.</p>
+<p><strong>Why it is not obviously a yes.</strong> Verification is easier than generation, so a cheap judge <em>might</em> suffice — but four things can break it, and each is a section below: a cheap model may not reliably emit parseable output at all (<strong>reliability</strong>, §1); it may be a <strong>yes-man</strong> that confirms everything, real errors included (<strong>safety</strong>, §2); its agreement with Opus is <em>mimicry, not truth</em> — Opus is the reference here, not ground truth (§3, §7); and a free deterministic string-match may already do the easy job the LLM is being paid for (§5). This notebook is built to catch each of those, rather than report a single flattering "% agreement" number.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=14cf52d2">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7828,7 +7843,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=98fb6b6d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=b66bfdb6">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7856,7 +7871,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=01bef10a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ff5b114f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7866,7 +7881,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=833efcf5">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=28a7bb29">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7886,7 +7901,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=be306fbd">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=afd4b519">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7896,7 +7911,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=07158d26">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=eec25b9b">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7916,7 +7931,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a03b16e7">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=83eef675">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7926,7 +7941,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=7858c46f">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=de588bb5">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7946,7 +7961,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=42abf44a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ae56fe68">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7956,7 +7971,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=532e8340">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=9e20697b">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7976,7 +7991,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=459279ba">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4cab2924">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7986,7 +8001,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=0844d5ac">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=7ffd3508">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8061,7 +8076,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=70eba988">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fd1037a6">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8071,7 +8086,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=93de90cb">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=616c3d3e">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8091,7 +8106,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4ffea968">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=caf3e2ca">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8101,7 +8116,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=d68b8760">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=ba09b659">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8122,7 +8137,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1cc3b116">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=aa560875">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8143,7 +8158,7 @@ but a systematically-under-listing extractor is still lossy for clustering (a pr
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=5114d75d">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=16880274">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>

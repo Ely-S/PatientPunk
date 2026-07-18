@@ -57,6 +57,37 @@ RQ = ('**Research Question:** "Cost is the constraint. Can a *cheap* open-source
       'path?"\n\n*Grades cheap OSS judges against the Opus re-score on the same 4,237 field-values, with '
       'reliability, a false-confirm safety metric, cheap-consensus, and a $0 deterministic baseline.*')
 
+PROBLEM = (
+"## The problem — verifying coded values at corpus scale\n\n"
+"**Where this sits.** Judgement ⑪ (*variable coding*) is the second step of the extraction track: given a "
+"fixed schema of ~37 patient covariates — age, conditions, medications, dosage, functional status, symptom "
+"trajectory, and so on — it reads each Reddit post and fills in the values. **These covariates are exactly "
+"what the planned clustering study will cluster patients on.** If their values are wrong or inconsistent, the "
+"clusters measure noise rather than patients, so the correctness of ⑪ is load-bearing for the whole project.\n\n"
+"**How we got here.** ⑪ first looked alarming: coded values agreed with the Opus reference only ~28% of the "
+"time by Jaccard set-overlap. The sibling notebook (`j11_value_rejudge`) re-scored the same codings with an "
+"Opus *semantic* judge and showed most of that was a **measurement artifact** — `\"2\"` vs `\"at least 2\"` "
+"scores 0 by set-overlap but means the same thing (~82% of values are semantically right). But it left a real "
+"**~18% genuine-error tail**, concentrated in the interpretive free-text fields. Either way, the fix requires "
+"*verifying* values — canonicalising the artifacts, catching the real errors — not blindly trusting the raw "
+"extraction.\n\n"
+"**The cost problem this notebook is about.** The plan's architecture is **produce-then-verify**: a cheap "
+"model extracts, and a strong model checks its work. Production is eventually **Opus on the whole corpus** — "
+"but Opus as the verifier costs ~$5 / 1M input tokens, and at corpus scale (hundreds of thousands of posts × "
+"37 fields) you cannot run it on every value. Hence the question: **can a *cheap* open-source model do the "
+"value-confirmation instead**, keeping expensive Opus for only the hard residual?\n\n"
+"**What \"confirm\" means here, concretely.** For each coded field-value the judge makes one narrow, checkable "
+"call — *is this value semantically equivalent to the reference?* — used as a **triage gate**: *confirm* → "
+"skip it, *flag* → escalate to a frontier panel. It is deliberately the *easy* confirm: the judge compares "
+"two short strings and never re-reads the post.\n\n"
+"**Why it is not obviously a yes.** Verification is easier than generation, so a cheap judge *might* suffice — "
+"but four things can break it, and each is a section below: a cheap model may not reliably emit parseable "
+"output at all (**reliability**, §1); it may be a **yes-man** that confirms everything, real errors included "
+"(**safety**, §2); its agreement with Opus is *mimicry, not truth* — Opus is the reference here, not ground "
+"truth (§3, §7); and a free deterministic string-match may already do the easy job the LLM is being paid for "
+"(§5). This notebook is built to catch each of those, rather than report a single flattering "
+"\"% agreement\" number.")
+
 LOAD = r'''
 import json, re, difflib
 from collections import defaultdict
@@ -382,7 +413,7 @@ display(HTML('<div style="font-size:1.15em;font-weight:bold;font-style:italic;ma
 def main():
     prices = fetch_prices()
     cells = [
-        ("md", RQ), ("code", LOAD.replace("__PRICES__", repr(prices))),
+        ("md", RQ), ("md", PROBLEM), ("code", LOAD.replace("__PRICES__", repr(prices))),
         ("code", ABS),
         ("md", S1), ("code", S1_CODE),
         ("md", S2), ("code", S2_CODE),
