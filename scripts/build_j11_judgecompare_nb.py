@@ -88,6 +88,75 @@ PROBLEM = (
 "(§5). This notebook is built to catch each of those, rather than report a single flattering "
 "\"% agreement\" number.")
 
+# --- quantified problem: how many values off, of what type, and what each needs (from the Opus re-score) ---
+PROBLEM_QUANT = r'''
+import json
+from collections import defaultdict, Counter
+_RJ = json.load(open(r"__REF__", encoding="utf-8"))
+_V = [v for v in _RJ["verdicts"] if v["verdict"] in ("equivalent", "model_subset", "different")]
+_byf = defaultdict(lambda: [0, 0])                      # field -> [ruled, different]
+for v in _V:
+    _byf[v["field"]][0] += 1
+    if v["verdict"] == "different": _byf[v["field"]][1] += 1
+ferr = {f: (d / r if r else float("nan"), r, d) for f, (r, d) in _byf.items()}   # field -> (rate, ruled, different)
+TOTAL_DIFF = sum(d for _, _, d in ferr.values())
+
+TYPE = {   # the 37-field schema, classified by natural value type
+ "numeric": ["age","age_at_onset","infection_count","long_covid_duration_months","time_to_diagnosis","symptom_duration","dosage"],
+ "ontology": ["conditions","medications","alternative_treatments","procedures","prior_infections","onset_trigger","location_country","biomarker_results","mental_health","dietary_interventions","vaccination_status"],
+ "fixed enum": ["sex_gender","functional_status_tier","activity_level","work_disability_status","diagnosis_source","symptom_trajectory","clinical_trial_participation","covid_wave","location_us_state","ethnicity"],
+ "open text": ["social_impact","healthcare_costs","diagnostic_odyssey","doctor_dismissal","misdiagnosis","healthcare_system","treatment_outcome","family_history","hormonal_events"],
+}
+TIER = {   # what intervention each field needs — and whether post-collection cleanup can do it
+ "1. deterministic post-collection": ["age","age_at_onset","infection_count","long_covid_duration_months","time_to_diagnosis","symptom_duration","dosage","procedures","prior_infections","onset_trigger","location_country","biomarker_results","dietary_interventions","vaccination_status","sex_gender","work_disability_status","diagnosis_source","clinical_trial_participation","covid_wave","location_us_state","ethnicity"],
+ "2. tool + rule (ontology / designed enum)": ["conditions","medications","alternative_treatments","mental_health","functional_status_tier","activity_level","symptom_trajectory"],
+ "3. judge panel / field redesign": ["social_impact","healthcare_costs","diagnostic_odyssey","doctor_dismissal","misdiagnosis","healthcare_system","treatment_outcome","family_history","hormonal_events"],
+}
+def agg(fields):
+    r = sum(ferr[f][1] for f in fields if f in ferr); d = sum(ferr[f][2] for f in fields if f in ferr)
+    return (d / r if r else float("nan")), r, len(fields), d
+
+_c = Counter(v["verdict"] for v in _V); _tot = len(_V)
+off = sorted([(f, e) for f, (e, r, d) in ferr.items() if r >= 15 and e >= 0.25], key=lambda x: -x[1])
+clean = [f for f, (e, r, d) in ferr.items() if r >= 15 and e < 0.10]
+display(Markdown(
+ f"**How many values are off.** Across the **37-field schema** and **{_tot:,}** co-populated values, the Opus "
+ f"semantic judge ruled **{_c['equivalent']/_tot:.0%} equivalent**, **{_c['model_subset']/_tot:.0%} a correct-"
+ f"but-less-complete subset**, and **{_c['different']/_tot:.0%} genuinely different** — a real coding error. So "
+ f"~1 in 6 co-populated values is genuinely wrong, but the error is **not spread evenly**: **{len(off)} fields "
+ f"carry a genuine-error rate ≥ 25%** ({', '.join(f'`{f}` {e:.0%}' for f, e in off)}), while **{len(clean)} "
+ f"fields sit under 10%** (the numeric / identity / geo fields)."))
+
+t1 = pd.DataFrame([[k, n, f"{e:.0%}", d] for k in TYPE for e, r, n, d in [agg(TYPE[k])]],
+                  columns=["value type", "# fields", "genuine-error (wtd)", "# wrong values"])
+display(HTML("<b>By value type — the error climbs from numeric to open free-text</b>" + t1.to_html(index=False)))
+
+t2 = pd.DataFrame([[k, n, f"{e:.0%}", f"{d/TOTAL_DIFF:.0%}"] for k in TIER for e, r, n, d in [agg(TIER[k])]],
+                  columns=["fix tier", "# fields", "genuine-error (wtd)", "share of all errors"])
+display(HTML("<b>By fix tier — most FIELDS are cleanable; most ERRORS are not</b>" + t2.to_html(index=False)))
+'''.replace("__REF__", REF_JSON)
+
+PROBLEM_FIX = (
+"**Which errors can be fixed after collection, and which can't.** The three tiers above map directly onto "
+"post-collection feasibility:\n\n"
+"- **Tier 1 — deterministic post-collection (21 fields).** The correct value is recoverable from the extracted "
+"*string alone*: parse the number (`\"at least 2\"` → 2), look up the ontology (`\"b12\"` → RxNorm), or map to a "
+"fixed enum (`\"alabama\"` → AL). No LLM, no re-reading the post, fully re-runnable — and these already sit near "
+"zero error, so a normaliser just closes the residual. **Fully fixable after collection.**\n\n"
+"- **Tier 2 — tool *and* rule (7 fields, the messy middle).** An ontology map fixes the surface-form half "
+"post-collection, but the rest is a **schema-boundary** decision no map can make (is PEM a *condition*? is "
+"famotidine an *alternative treatment*?) — a one-time written rule — and the three ordinal fields "
+"(`functional_status_tier`, `activity_level`, `symptom_trajectory`) are better constrained to a designed scale "
+"**at extraction** than mapped afterward. **Partly post-collection, partly not.**\n\n"
+"- **Tier 3 — not fixable by cleanup (9 fields).** Here the disagreement is about *content*, not format, and "
+"Opus's own reference is just one debatable reading (on `healthcare_system`, a model saying \"US\" vs gold "
+"\"Canada\" can both be right when the post mentions both). No parser or ontology helps — you need a **judge "
+"panel** to decide whether it is a real error at all, or a **field redesign**. *(Three nominally-open fields — "
+"`family_history`, `hormonal_events`, `misdiagnosis` — score fine only because they are rare / small.)*\n\n"
+"**The one-line version:** most of the *count* of fields is Tier 1 and cleanable after collection, but most of "
+"the *volume* of genuine errors lives in Tiers 2–3 — and the Tier-3 residual is exactly what the rest of this "
+"notebook asks whether a cheap model can help triage, instead of paying for Opus on every value.")
+
 LOAD = r'''
 import json, re, difflib
 from collections import defaultdict
@@ -413,7 +482,8 @@ display(HTML('<div style="font-size:1.15em;font-weight:bold;font-style:italic;ma
 def main():
     prices = fetch_prices()
     cells = [
-        ("md", RQ), ("md", PROBLEM), ("code", LOAD.replace("__PRICES__", repr(prices))),
+        ("md", RQ), ("md", PROBLEM), ("code", PROBLEM_QUANT), ("md", PROBLEM_FIX),
+        ("code", LOAD.replace("__PRICES__", repr(prices))),
         ("code", ABS),
         ("md", S1), ("code", S1_CODE),
         ("md", S2), ("code", S2_CODE),

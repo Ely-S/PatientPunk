@@ -7795,9 +7795,9 @@ a.anchor-link {
 </style>
 <!-- End of mermaid configuration --></head>
 <body class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=cdfbaecf">
+<main><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs jp-mod-noInput" id="cell-id=47f5ffa1">
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d07bf6cc">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7d9a7513">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7809,7 +7809,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=868407ad">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b0d79b92">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7823,7 +7823,116 @@ a.anchor-link {
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=14cf52d2">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=34d08e2b">
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-OutputArea-output" data-mime-type="text/markdown" tabindex="0">
+<p><strong>How many values are off.</strong> Across the <strong>37-field schema</strong> and <strong>4,237</strong> co-populated values, the Opus semantic judge ruled <strong>62% equivalent</strong>, <strong>20% a correct-but-less-complete subset</strong>, and <strong>18% genuinely different</strong> — a real coding error. So ~1 in 6 co-populated values is genuinely wrong, but the error is <strong>not spread evenly</strong>: <strong>6 fields carry a genuine-error rate ≥ 25%</strong> (<code>healthcare_system</code> 47%, <code>alternative_treatments</code> 34%, <code>functional_status_tier</code> 30%, <code>conditions</code> 30%, <code>social_impact</code> 30%, <code>symptom_trajectory</code> 29%), while <strong>18 fields sit under 10%</strong> (the numeric / identity / geo fields).</p>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
+<b>By value type — the error climbs from numeric to open free-text</b><table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>value type</th>
+<th># fields</th>
+<th>genuine-error (wtd)</th>
+<th># wrong values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>numeric</td>
+<td>7</td>
+<td>11%</td>
+<td>62</td>
+</tr>
+<tr>
+<td>ontology</td>
+<td>11</td>
+<td>17%</td>
+<td>337</td>
+</tr>
+<tr>
+<td>fixed enum</td>
+<td>10</td>
+<td>19%</td>
+<td>176</td>
+</tr>
+<tr>
+<td>open text</td>
+<td>9</td>
+<td>23%</td>
+<td>170</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output" data-mime-type="text/html" tabindex="0">
+<b>By fix tier — most FIELDS are cleanable; most ERRORS are not</b><table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th>fix tier</th>
+<th># fields</th>
+<th>genuine-error (wtd)</th>
+<th>share of all errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. deterministic post-collection</td>
+<td>21</td>
+<td>8%</td>
+<td>21%</td>
+</tr>
+<tr>
+<td>2. tool + rule (ontology / designed enum)</td>
+<td>7</td>
+<td>27%</td>
+<td>56%</td>
+</tr>
+<tr>
+<td>3. judge panel / field redesign</td>
+<td>9</td>
+<td>23%</td>
+<td>23%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8cf0ef66">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Which errors can be fixed after collection, and which can't.</strong> The three tiers above map directly onto post-collection feasibility:</p>
+<ul>
+<li><p><strong>Tier 1 — deterministic post-collection (21 fields).</strong> The correct value is recoverable from the extracted <em>string alone</em>: parse the number (<code>"at least 2"</code> → 2), look up the ontology (<code>"b12"</code> → RxNorm), or map to a fixed enum (<code>"alabama"</code> → AL). No LLM, no re-reading the post, fully re-runnable — and these already sit near zero error, so a normaliser just closes the residual. <strong>Fully fixable after collection.</strong></p>
+</li>
+<li><p><strong>Tier 2 — tool <em>and</em> rule (7 fields, the messy middle).</strong> An ontology map fixes the surface-form half post-collection, but the rest is a <strong>schema-boundary</strong> decision no map can make (is PEM a <em>condition</em>? is famotidine an <em>alternative treatment</em>?) — a one-time written rule — and the three ordinal fields (<code>functional_status_tier</code>, <code>activity_level</code>, <code>symptom_trajectory</code>) are better constrained to a designed scale <strong>at extraction</strong> than mapped afterward. <strong>Partly post-collection, partly not.</strong></p>
+</li>
+<li><p><strong>Tier 3 — not fixable by cleanup (9 fields).</strong> Here the disagreement is about <em>content</em>, not format, and Opus's own reference is just one debatable reading (on <code>healthcare_system</code>, a model saying "US" vs gold "Canada" can both be right when the post mentions both). No parser or ontology helps — you need a <strong>judge panel</strong> to decide whether it is a real error at all, or a <strong>field redesign</strong>. <em>(Three nominally-open fields — <code>family_history</code>, <code>hormonal_events</code>, <code>misdiagnosis</code> — score fine only because they are rare / small.)</em></p>
+</li>
+</ul>
+<p><strong>The one-line version:</strong> most of the <em>count</em> of fields is Tier 1 and cleanable after collection, but most of the <em>volume</em> of genuine errors lives in Tiers 2–3 — and the Tier-3 residual is exactly what the rest of this notebook asks whether a cheap model can help triage, instead of paying for Opus on every value.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=e0543523">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7843,7 +7952,7 @@ a.anchor-link {
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=b66bfdb6">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=2f46d456">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7871,7 +7980,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ff5b114f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1e009535">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7881,7 +7990,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=28a7bb29">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=7e5af892">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7901,7 +8010,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=afd4b519">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=3f2150e7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7911,7 +8020,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=eec25b9b">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=c2d5f766">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7931,7 +8040,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=83eef675">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2e28461a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7941,7 +8050,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=de588bb5">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=8f166f3c">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7961,7 +8070,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ae56fe68">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d0987742">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -7971,7 +8080,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=9e20697b">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=e9fdc941">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -7991,7 +8100,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4cab2924">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8299c24c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8001,7 +8110,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=7ffd3508">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=c9fa5c06">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8076,7 +8185,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fd1037a6">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=c36d9826">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8086,7 +8195,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=616c3d3e">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=9f3ae4e3">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8106,7 +8215,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=caf3e2ca">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=abbf2161">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8116,7 +8225,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=ba09b659">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=fe5c8515">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
@@ -8137,7 +8246,7 @@ post-reading panel (Opus isn't ground truth here, and the judge never saw the po
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=aa560875">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e7b60f3d">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -8158,7 +8267,7 @@ but a systematically-under-listing extractor is still lossy for clustering (a pr
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=16880274">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noInput" id="cell-id=f8562053">
 <div class="jp-Cell-outputWrapper">
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
