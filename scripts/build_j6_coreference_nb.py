@@ -62,10 +62,12 @@ ax.set_xlabel("change-rate when parent context is removed (%)"); ax.legend(fonts
 ax.set_title("Coreference probe — answer changes on context-necessary vs control items"); fig.tight_layout(); plt.show()
 nec_all=np.mean([r[1] for r in rows]); ctl_all=np.mean([r[2] for r in rows])
 display(Markdown(f"**Context-necessary items change {nec_all:.0%} of the time when the parent is removed, vs "
- f"{ctl_all:.0%} for control items** — a **{nec_all-ctl_all:+.0%}** gap. That gap is the coreference signal: on "
- f"items where the drug is only in the upstream comment, models genuinely depend on the context and change "
- f"their answer when it's gone; on items where the drug is in the comment itself, removing the parent barely "
- f"matters. **Coreference is active** — the models are using the reply chain, not just the local text."))
+ f"{ctl_all:.0%} for control items** — a **{nec_all-ctl_all:+.0%}** gap in the expected direction, but a *weak* "
+ f"one. Two reasons to read it cautiously: the control change-rate is **{ctl_all:.0%}** — removing *redundant* "
+ f"context shouldn't move the answer at all, so the models are noticeably unstable to prompt edits, and the "
+ f"coreference signal sits only ~5 points above that noise floor. And the context-necessary group is tiny "
+ f"(**16 pairs**), so the gap is suggestive, not conclusive. **Best read: a hint that models use the reply "
+ f"chain, not proof — ⑥ stays the least-validated judgement.**"))
 '''
 
 S2 = "## 2. Which models depend on context most"
@@ -84,16 +86,17 @@ S3 = "## 3. Verdict"
 S3_CODE = r'''
 nec_all=np.mean([r[1] for r in rows]); ctl_all=np.mean([r[2] for r in rows])
 lines=[
- f"- **Coreference is working** — ablating the parent context changes the answer **{nec_all:.0%}** of the time "
- f"on context-necessary items vs **{ctl_all:.0%}** on controls. Models genuinely use the upstream comment when "
- f"the drug isn't in the local text.",
- f"- **The gap ({nec_all-ctl_all:+.0%}) is the validation** — because we can't grade coreference directly (no "
- "gold), the necessary-vs-control contrast is the evidence that context propagation is real and load-bearing at "
- "depth 2, not inert as it was in the frozen run.",
- "- **Per-model differences are real but secondary** — a small gap flags a model that under-uses context; a "
- "high control change-rate flags an unstable model (noise, not coreference).",
- "- **Caveat:** a change when context is removed shows the model *uses* context, not that it uses it "
- "*correctly*; and this is the ablation probe on real items, not a constructed gold — the honest ceiling for ⑥.",
+ f"- **Weak-positive, not a clean pass.** The gap is in the right direction (**{nec_all:.0%}** necessary vs "
+ f"**{ctl_all:.0%}** control, **{nec_all-ctl_all:+.0%}**), so models *lean* on the reply chain — but the effect "
+ f"is small and rides on only 16 context-necessary pairs. ⑥ remains the least-validated of the eleven.",
+ f"- **The {ctl_all:.0%} control change-rate is a red flag of its own** — removing redundant context shouldn't "
+ "change the answer, so the classifier is fairly unstable to prompt edits (temperature is pinned to 0, so this "
+ "is prompt-sensitivity, not sampling). That instability, not coreference, may be the bigger reliability story.",
+ "- **We could only ever show *use*, not *correctness*** — ablation shows the model depends on context, never "
+ "that it resolves it right. With no coreference gold and a defect-zeroed frozen run, this probe on real items "
+ "is the honest ceiling for ⑥.",
+ "- **Recommendation:** widen the context-necessary set (construct thread-structure items) and drive down the "
+ "control change-rate (prompt-stability check) before treating coreference as validated.",
 ]
 display(Markdown("\n".join(lines)))
 '''
