@@ -126,7 +126,7 @@ def _classify_one(
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
-        return ClassificationResult(sentiment="neutral", signal="n/a")
+        return ClassificationResult(sentiment="neutral", signal="n/a", parse_failed=True)
 
 
 def run_classification(
@@ -134,12 +134,19 @@ def run_classification(
     *,
     writer: ReportWriter | None = None,
     skip_prefilter: bool = False,
+    audit_sink: list | None = None,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
     If a ReportWriter is provided, results are written to the database
     incrementally after each result. Pairs already in the database are
     skipped unless config.reclassify is set.
+
+    If an audit_sink list is provided, EVERY classification is appended to it
+    *before* the `signal != "n/a"` writer gate, tagged with status
+    (written / neutral / parse_failure). This is the only way to see the
+    real-neutral and parse-failure rates the DB throws away — any analysis that
+    reads the DB alone measures the gate, not the model.
     """
     client = config.client
     limit = config.limit
@@ -315,6 +322,14 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
+                if audit_sink is not None:  # capture every result BEFORE the writer gate
+                    audit_sink.append({
+                        "post_id": entry["id"], "drug": drug,
+                        "sentiment": result.sentiment, "signal": result.signal,
+                        "status": ("parse_failure" if result.parse_failed
+                                   else "written" if result.signal != "n/a"
+                                   else "neutral"),
+                    })
                 if result.signal != "n/a":
                     drug_counter[drug] += 1
                     if writer is not None:
