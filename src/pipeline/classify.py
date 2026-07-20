@@ -62,33 +62,9 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call.
-
-    PREFILTER_PROMPT asks for a JSON array, so the reply is ["yes"] — which does NOT start with
-    "yes". Applying _is_yes to the raw text therefore returned False for EVERY item, and because
-    this is the fallback for a failed batch, a single unparseable batch silently dropped every
-    pair in it. Parse the array first; still accept a bare yes/no if a model ignores the format.
-
-    Two further traps this guards against, both of which turn a NON-ANSWER into a confident drop:
-      - a small max_tokens budget: a reasoning MODEL_FAST spends it internally and returns "",
-        so every pair looked rejected (measured: gpt-5-mini and gemini-3.5-flash return "" at 16
-        tokens and ["yes"] at 400)
-      - an unreadable reply: we cannot tell keep from drop, so we FAIL OPEN and keep the pair.
-        Passing a pair on costs one strong-model call; dropping it loses the report for good.
-    """
+    """Fallback single-item prefilter call."""
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=400)
-    try:
-        answers = parse_json_array(raw)
-        if answers:
-            return _is_yes(answers[0])
-    except LLMParseError:
-        pass
-    stripped = str(raw).strip().lower()
-    if stripped.startswith(("yes", "no")):
-        return _is_yes(stripped)
-    log.warning(f"Prefilter unreadable for {entry['id']}:{drug} ({raw[:40]!r}); keeping (fail-open).")
-    return True
+    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
@@ -96,11 +72,7 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        # Same reasoning-model trap as _prefilter_one: too tight a budget and the model spends it
-        # internally, returning "" — which fails to parse and sends the whole batch down the
-        # per-item fallback path. Floor it so the common case doesn't degrade into N extra calls.
-        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST,
-                                            max_tokens=max(400, len(items) * 20)))
+        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10))
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
         return [_is_yes(a) for a in answers]
@@ -131,11 +103,10 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
-        f'"attribution" (specific/collective), '
         f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
-    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=150 * len(items))
+    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
@@ -149,13 +120,13 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","attribution":"specific/collective","side_effects":["..."]}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
         )
-        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=250)
+        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100)
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
-        return ClassificationResult(sentiment="neutral", signal="n/a", parse_failed=True)
+        return ClassificationResult(sentiment="neutral", signal="n/a")
 
 
 def run_classification(
@@ -163,24 +134,12 @@ def run_classification(
     *,
     writer: ReportWriter | None = None,
     skip_prefilter: bool = False,
-    audit_sink: list | None = None,
-    write_neutrals: bool = True,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
     If a ReportWriter is provided, results are written to the database
     incrementally after each result. Pairs already in the database are
     skipped unless config.reclassify is set.
-
-    write_neutrals (default True) records genuine `signal="n/a"` neutrals in the
-    database. The gate used to be `signal != "n/a"`, which discarded every real
-    neutral *along with* parse failures — the "no effect" middle vanished before
-    the DB, irreversibly, and pushed the recorded distribution positive. Only
-    parse failures are dropped now. Pass False for the old lossy behaviour.
-
-    If an audit_sink list is provided, EVERY classification is appended to it
-    *before* the writer gate, tagged with status (written / neutral /
-    parse_failure) — so the dropped rates stay observable either way.
     """
     client = config.client
     limit = config.limit
@@ -232,17 +191,11 @@ def run_classification(
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
     to_do: list[tuple[dict, str]] = []
-    # (post_id, drug) -> 'direct' (the drug is named in this text) | 'context' (it was inherited
-    # from an upstream comment via coreference). Unioning the two loses which is which, and
-    # coreference is the least-validated judgement in the pipeline — so recording the basis lets
-    # per-drug rates filter to 'direct' and routes the inherited ones to review.
-    drug_source_by_pair: dict[tuple[str, str], str] = {}
     skipped = 0
 
     for entry in tagged:
-        direct_drugs = set(entry.get("drugs_direct", []))
-        context_drugs = set(entry.get("drugs_context", []))
-        for drug in direct_drugs | context_drugs:
+        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
+        for drug in all_drugs:
             if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
@@ -253,9 +206,6 @@ def run_classification(
                 skipped += 1
                 continue
 
-            drug_source_by_pair[(entry["id"], drug)] = (
-                "direct" if drug in direct_drugs else "context"
-            )
             to_do.append((entry, drug))
             if drug not in prompts:
                 # In --drug mode (target_aliases populated), use the resolved
@@ -365,32 +315,13 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
-                if audit_sink is not None:  # capture every result BEFORE the writer gate
-                    audit_sink.append({
-                        "post_id": entry["id"], "drug": drug,
-                        "sentiment": result.sentiment, "signal": result.signal,
-                        "attribution": result.attribution,
-                        "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
-                        # Mirrors the writer gate below exactly, so audit counts reconcile with
-                        # the DB. With write_neutrals on, a genuine neutral IS written — tagging
-                        # it "neutral" here would make status=="written" under-count real rows.
-                        # The neutral itself stays identifiable via signal == "n/a".
-                        "status": ("parse_failure" if result.parse_failed
-                                   else "written" if (write_neutrals or result.signal != "n/a")
-                                   else "dropped_neutral"),
-                    })
-                # Drop parse failures (garbage); keep genuine neutrals unless explicitly disabled.
-                # A real neutral is DATA — "this drug did nothing for me" — and discarding it
-                # skews every downstream rate positive.
-                if not result.parse_failed and (write_neutrals or result.signal != "n/a"):
+                if result.signal != "n/a":
                     drug_counter[drug] += 1
                     if writer is not None:
                         writer.write_one(
                             post_id=entry["id"], drug=drug, author=entry["author"],
                             sentiment=result.sentiment, signal=result.signal,
                             side_effects=result.side_effects,
-                            attribution=result.attribution,
-                            drug_source=drug_source_by_pair.get((entry["id"], drug), "direct"),
                         )
             done += len(batch)
             log.info(f"Classified {done}/{total}...")

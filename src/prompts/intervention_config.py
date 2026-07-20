@@ -132,17 +132,6 @@ signal: strong | moderate | weak | n/a
              where {name} is named but not specifically credited
   n/a      = neutral entry
 
-attribution: specific | collective
-  specific   = the author ties this outcome to {name} itself — named together with the outcome, or
-               singled out as the thing that helped/hurt
-               e.g. "LDN fixed my brain fog", "I stopped the LDN and the nausea went away"
-  collective = the outcome was reported for a GROUP of treatments that includes {name}, without
-               separating out {name}'s own effect
-               e.g. "LDN, LDA and pacing together finally helped", "this stack turned things around"
-  Report the sentiment you would give either way — do NOT downgrade or suppress a collective
-  outcome. This field only records WHY the outcome is attached to {name}, so per-drug rates can
-  exclude group attributions later.
-
 MULTIPLE DRUGS: If the author takes {name} alongside other treatments and reports
   improvement, classify as positive/weak if {name} is named in the stack.
   Only use mixed if the author themselves expresses uncertainty about whether it helped.
@@ -194,4 +183,4 @@ side_effects: list of short lowercase strings naming any side effects the author
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","attribution":"specific/collective","side_effects":[...]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[...]}}"""

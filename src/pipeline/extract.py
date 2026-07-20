@@ -38,15 +38,8 @@ def is_only_questions(text: str) -> bool:
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
 
-def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] | None]:
-    """Ask fast model to extract drug mentions from a batch of texts.
-
-    Returns one entry per input text: a list of drug strings on success — where an
-    empty list means "parsed, no drugs found" — or ``None`` for a text whose result
-    could not be parsed (bad JSON, or a count mismatch that survived splitting).
-    Keeping ``None`` distinct from ``[]`` lets the caller retry genuine failures
-    instead of silently recording them as "no drugs" (see ``run_extraction``).
-    """
+def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
+    """Ask fast model to extract drug mentions from a batch of texts."""
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
@@ -59,28 +52,15 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
         results = []
 
     if len(results) == len(texts):
-        # A model often answers a SINGLE-text batch with a flat ["ldn"] instead of the nested
-        # [["ldn"]] the format asks for — and the mismatch retry below splits batches down to one
-        # text, so this is reached routinely. Without normalising, the caller's flattening would
-        # iterate the bare string "ldn" character by character and record "l", "d", "n" as three
-        # separate drug mentions. Guarantee every entry really is a list.
-        return [r if isinstance(r, list) else [r] for r in results]
-
-    # Same flattening habit, but with SEVERAL drugs: a single-text batch often comes back as
-    # ["ldn", "aspirin"] rather than [["ldn", "aspirin"]]. The length check above then fails
-    # (2 != 1) and the text would be marked unparsed forever — never cached, re-sent every run,
-    # and its drugs never recorded. Multi-drug posts are common in this corpus, and the retry
-    # below drives batches down to one text, so this shape is hit routinely.
-    if len(texts) == 1 and results and not any(isinstance(r, list) for r in results):
-        return [list(results)]
+        return results
 
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
         mid = len(texts) // 2
         return extract_batch(client, texts[:mid], _depth + 1) + extract_batch(client, texts[mid:], _depth + 1)
 
-    log.warning(f"Expected {len(texts)} results, got {len(results)} — marking these texts unparsed")
-    return [None for _ in texts]
+    log.warning(f"Expected {len(texts)} results, got {len(results)}")
+    return [[] for _ in texts]
 
 
 def _detect_parent_cycles(id_to_parent: dict) -> None:
@@ -244,7 +224,6 @@ def run_extraction(config: "PipelineConfig"):
     batch_iter = iter(all_batches)
     done_ext = 0
     batches_since_save = 0
-    parse_failures = 0
     max_inflight = max(config.workers * 4, 1)
 
     try:
@@ -261,10 +240,7 @@ def run_extraction(config: "PipelineConfig"):
                 batch = pending.pop(future)
 
                 for (item_id, _), drugs in zip(batch, future.result()):
-                    if drugs is None:  # parse failure — leave uncached so a later run retries it, not recorded as "no drugs"
-                        parse_failures += 1
-                        continue
-                    flat = [str(d).lower().strip() for sublist in drugs for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                    flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
                     id_to_drugs[item_id] = flat
 
                 done_ext += len(batch)
@@ -295,9 +271,6 @@ def run_extraction(config: "PipelineConfig"):
 
     drug_counts = Counter(d for e in tagged_with_drugs for d in e["drugs_direct"])
     log.info(f"{len(tagged)} entries checkpointed ({len(tagged_with_drugs)} with drugs).")
-    if parse_failures:
-        log.warning(f"{parse_failures} entries could not be parsed and were left un-tagged for retry "
-                    f"(not counted as 'no drugs').")
     log.info("Top drug mentions:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")

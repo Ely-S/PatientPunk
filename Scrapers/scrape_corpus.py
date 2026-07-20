@@ -8,12 +8,12 @@ unique post author.
 All usernames are SHA-256 hashed before being written to disk.
 
 Usage:
-    python scrape_corpus.py                            # last 2 months, posts + comment trees
-    python scrape_corpus.py --no-comments              # posts only (quick sample)
+    python scrape_corpus.py                            # last 2 months, posts only
+    python scrape_corpus.py --comments                 # posts + comment trees
     python scrape_corpus.py --months 3                 # last 3 months
     python scrape_corpus.py --weeks 6                  # last 6 weeks
-    python scrape_corpus.py --user-histories                      # + full author histories
-    python scrape_corpus.py --user-histories --enrich-profiles    # everything
+    python scrape_corpus.py --comments --user-histories           # posts + comments + histories
+    python scrape_corpus.py --comments --user-histories --enrich-profiles  # everything
 
 Arctic Shift API docs: https://github.com/ArthurHeitmann/arctic_shift
 Base URL: https://arctic-shift.photon-reddit.com
@@ -350,8 +350,8 @@ Limits:
 
 EXAMPLES
 --------
-  python scrape_corpus.py                                  # posts + comments, last 2 months
-  python scrape_corpus.py --no-comments                    # posts only (quick sample)
+  python scrape_corpus.py                                  # posts only, last 2 months
+  python scrape_corpus.py --limit-posts 80                 # first 80 posts, last 2 months
   python scrape_corpus.py --weeks 1 --comments             # quick 1-week sample with comments
   python scrape_corpus.py --months 3 --comments            # 3 months of posts + comments
   python scrape_corpus.py --months 3 --comments \\
@@ -361,7 +361,7 @@ EXAMPLES
 
 OUTPUT
 ------
-  output/subreddit_posts.json       All posts in window (+ comments unless --no-comments)
+  output/subreddit_posts.json       All posts in window (+ comments if --comments)
   output/users/{hash}.json          One file per author (only with --user-histories)
   output/corpus_metadata.json       Run summary and stats
 
@@ -369,8 +369,8 @@ OUTPUT
 
 TIME ESTIMATES (3-month window, ~500 posts, ~400 authors)
 ----------------------------------------------------------
-  With --no-comments              ~30-45 min
-  Default (posts + comments)      ~1-2 hrs
+  Posts only                      ~30-45 min
+  + --comments                    ~1-2 hrs
   + --user-histories              +2-4 hrs
   + --enrich-profiles             +~1 hr
   Full run                        4-7 hrs total (run overnight)
@@ -398,13 +398,9 @@ def main():
     )
     parser.add_argument(
         "--comments",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Fetch full comment trees for each post (default: ON). Comments carry the "
-             "parent_id chain that thread reconstruction and coreference depend on, and they are "
-             "most of the corpus text -- a posts-only pull cannot be repaired without re-scraping. "
-             "Pass --no-comments only for a quick sample; it adds significant time on "
-             "high-volume subreddits.",
+        action="store_true",
+        help="Fetch full comment trees for each post. Adds significant time "
+             "for high-volume subreddits.",
     )
     parser.add_argument(
         "--user-histories",
