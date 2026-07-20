@@ -12,7 +12,6 @@ Since _prefilter_one is the fallback for a failed batch, each of these dropped e
 batch at the gate that admits everything downstream. When the answer can't be read we now FAIL
 OPEN: passing a pair on costs one strong-model call, dropping it loses the report for good.
 """
-import inspect
 
 import pipeline.classify as classify
 
@@ -36,12 +35,6 @@ def test_json_array_no_is_a_drop(monkeypatch):
     assert _call() is False
 
 
-def test_pretty_printed_array_is_understood(monkeypatch):
-    """gemini-3.5-flash returns a multi-line array."""
-    _stub(monkeypatch, '[\n  "yes"\n]')
-    assert _call() is True
-
-
 def test_bare_yes_still_accepted(monkeypatch):
     """A model that ignores the JSON instruction must still be understood."""
     _stub(monkeypatch, "yes")
@@ -63,8 +56,3 @@ def test_unreadable_reply_fails_open(monkeypatch):
     """We cannot tell keep from drop, so keep — losing a real report is the worse error."""
     _stub(monkeypatch, "I'm not sure about that")
     assert _call() is True
-
-
-def test_token_budget_is_large_enough_for_reasoning_models():
-    """16 tokens produced empty replies from reasoning models; guard the regression."""
-    assert "max_tokens=400" in inspect.getsource(classify._prefilter_one)

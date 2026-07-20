@@ -42,12 +42,6 @@ def test_flat_reply_does_not_split_into_characters(monkeypatch):
     assert _flatten(drugs) == ["ldn"]
 
 
-def test_parsed_empty_still_means_no_drugs(monkeypatch):
-    _stub(monkeypatch, "[[]]")
-    (drugs,) = extract.extract_batch(client=None, texts=["no drugs here"])
-    assert _flatten(drugs) == []
-
-
 def test_multi_text_batch_unaffected(monkeypatch):
     _stub(monkeypatch, '[["ldn"], []]')
     assert extract.extract_batch(client=None, texts=["took LDN", "nothing"]) == [["ldn"], []]

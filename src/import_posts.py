@@ -100,11 +100,35 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                parent_id=comment.get("parent_id") or None,   # resolved against known ids below
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
+
+    # Resolve each parent against the ids we actually hold. Reddit always sends parent_id
+    # prefixed ("t3_abc"), but whether post_id / comment_id are STORED prefixed depends on the
+    # source: the Arctic Shift scraper writes "t3_abc"/"t1_abc", while older exports store them
+    # bare. Stripping unconditionally matched the bare shape and silently broke the prefixed one —
+    # every parent then looked dangling, the cleanup below nulled all of them, and thread structure
+    # vanished. That is the defect that left parent_id NULL across 731k rows and made judgement 6
+    # structurally inert. Matching against the ids actually present handles both shapes.
+    known_ids = {p.post_id for p in posts}
+    resolved = dangling = 0
+    for i, row in enumerate(posts):
+        if row.parent_id is None:
+            continue
+        bare = strip_reddit_prefix(row.parent_id)
+        match = row.parent_id if row.parent_id in known_ids else (bare if bare in known_ids else None)
+        posts[i] = row._replace(parent_id=match)
+        resolved += match is not None
+        dangling += match is None
+    if resolved + dangling:
+        log.info(f"Thread links: {resolved} resolved, {dangling} dangling "
+                 f"({dangling / (resolved + dangling):.1%} — parents outside the pull window).")
+        if resolved == 0:
+            log.error("EVERY parent_id is dangling. That is the id-shape mismatch that silently "
+                      "destroys thread structure and makes coreference inert — do not proceed.")
 
     with conn:
         conn.executemany(
