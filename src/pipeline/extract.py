@@ -75,18 +75,12 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
         results = []
 
     if len(results) == len(texts):
-        # A model often answers a SINGLE-text batch with a flat ["ldn"] instead of the nested
-        # [["ldn"]] the format asks for — and the mismatch retry below splits batches down to one
-        # text, so this is reached routinely. Without normalising, the caller's flattening would
-        # iterate the bare string "ldn" character by character and record "l", "d", "n" as three
-        # separate drug mentions. Guarantee every entry really is a list.
+        # A single-text batch is commonly answered flat (["ldn"] not [["ldn"]]), and the retry
+        # below splits batches down to one text, so this is hit routinely. Guarantee a list.
         return [_as_drug_list(r) for r in results]
 
-    # Same flattening habit, but with SEVERAL drugs: a single-text batch often comes back as
-    # ["ldn", "aspirin"] rather than [["ldn", "aspirin"]]. The length check above then fails
-    # (2 != 1) and the text would be marked unparsed forever — never cached, re-sent every run,
-    # and its drugs never recorded. Multi-drug posts are common in this corpus, and the retry
-    # below drives batches down to one text, so this shape is hit routinely.
+    # Same flattening with SEVERAL drugs: ["ldn", "aspirin"] for one text fails the length
+    # check above (2 != 1) and would be marked unparsed forever.
     if len(texts) == 1 and results and not any(isinstance(r, list) for r in results):
         return [_as_drug_list(list(results))]
 
