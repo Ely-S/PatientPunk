@@ -134,7 +134,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
 
     # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift)
     # or bare (older exports), so match against the ids actually present rather than either shape.
-    known_ids = {p.post_id for p in posts}
+    known_ids = {row.post_id for row in posts}
     # A parent from an earlier run lives in the database, not this file; resolving against the
     # file alone severs every thread spanning two imports.
     unmatched = {row.parent_id for row in posts if row.parent_id} - known_ids
