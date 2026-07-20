@@ -82,7 +82,7 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
     # Same flattening with SEVERAL drugs: ["ldn", "aspirin"] for one text fails the length
     # check above (2 != 1) and would be marked unparsed forever.
     if len(texts) == 1 and results and not any(isinstance(r, list) for r in results):
-        return [_as_drug_list(list(results))]
+        return [_as_drug_list(results)]
 
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
@@ -274,7 +274,10 @@ def run_extraction(config: "PipelineConfig"):
                     if drugs is None:  # parse failure — leave uncached so a later run retries it, not recorded as "no drugs"
                         parse_failures += 1
                         continue
-                    flat = [str(d).lower().strip() for sublist in drugs for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                    # _as_drug_list guarantees list[str] here, so no nesting to unwrap.
+                    # strip() before the truth test: a whitespace-only entry was passing it
+                    # and landing in the treatment table as an empty drug name.
+                    flat = [d.lower().strip() for d in drugs if d.strip()]
                     id_to_drugs[item_id] = flat
 
                 done_ext += len(batch)

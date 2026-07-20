@@ -18,10 +18,7 @@ def _stub(monkeypatch, raw):
 
 def _flatten(drugs):
     """The exact flattening run_extraction applies to each entry."""
-    return [str(d).lower().strip()
-            for sublist in drugs
-            for d in (sublist if isinstance(sublist, list) else [sublist])
-            if d]
+    return [d.lower().strip() for d in drugs if d.strip()]
 
 
 def test_flat_single_item_reply_is_normalised(monkeypatch):
@@ -78,3 +75,9 @@ def test_object_shaped_reply_is_a_parse_failure_not_a_drug(monkeypatch):
 def test_a_list_with_a_non_string_member_is_a_parse_failure(monkeypatch):
     _stub(monkeypatch, '[["ldn", {"x": 1}]]')
     assert extract.extract_batch(client=None, texts=["I take LDN"]) == [None]
+
+
+def test_a_whitespace_only_entry_does_not_become_an_empty_drug(monkeypatch):
+    """`if d` passed "  ", which then stripped to "" and was written as a drug name."""
+    _stub(monkeypatch, '[["ldn", "  "]]')
+    assert _flatten(extract.extract_batch(client=None, texts=["x"])[0]) == ["ldn"]
