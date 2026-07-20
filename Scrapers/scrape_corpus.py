@@ -398,9 +398,13 @@ def main():
     )
     parser.add_argument(
         "--comments",
-        action="store_true",
-        help="Fetch full comment trees for each post. Adds significant time "
-             "for high-volume subreddits.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Fetch full comment trees for each post (default: ON). Comments carry the "
+             "parent_id chain that thread reconstruction and coreference depend on, and they are "
+             "most of the corpus text -- a posts-only pull cannot be repaired without re-scraping. "
+             "Pass --no-comments only for a quick sample; it adds significant time on "
+             "high-volume subreddits.",
     )
     parser.add_argument(
         "--user-histories",
