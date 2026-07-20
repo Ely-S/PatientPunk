@@ -60,5 +60,5 @@ def test_reply_keeps_its_thread_link_to_a_deleted_parent(conn):
 
 
 def test_no_user_row_is_invented_for_a_deleted_account(conn):
-    users = [r[0] for r in conn.execute("SELECT user_id FROM users")]
+    users = [row[0] for row in conn.execute("SELECT user_id FROM users")]
     assert users == ["u_alive"]
