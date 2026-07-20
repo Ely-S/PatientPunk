@@ -1,17 +1,12 @@
 """Thread links must survive import whichever id shape the source uses.
 
-Reddit always sends comment.parent_id prefixed ("t3_abc"). Whether post_id / comment_id are
-STORED prefixed depends on the source: the Arctic Shift scraper writes "t3_abc"/"t1_abc", older
-exports store them bare. The importer used to strip the prefix from parent_id unconditionally,
-which matched the bare shape and silently broke the prefixed one — every parent then looked
-dangling, the cleanup nulled all of them, and thread structure vanished.
+Reddit always sends comment.parent_id prefixed ("t3_abc"); post_id may be STORED prefixed
+(Arctic Shift) or bare (older exports). Stripping unconditionally matched only the bare shape,
+so every parent looked dangling and the cleanup nulled it -- 731,526 rows, and coreference had
+nothing to work with.
 
-That is the defect that left parent_id NULL across 731,526 rows and made judgement 6 structurally
-inert, and it was invisible in normal operation because nothing enforced the reference.
-
-These drive the real open_db, so they follow production's foreign-key setting rather than pinning
-one — an earlier version asserted FKs were OFF "to mirror production", which quietly became a lie
-the moment open_db started enforcing them.
+These drive the real open_db, so they follow production's foreign-key setting rather than
+pinning one.
 """
 import json
 import sqlite3
