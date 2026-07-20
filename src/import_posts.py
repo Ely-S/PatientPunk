@@ -73,7 +73,11 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     posts: list[PostRow] = []
     seen_users: set[str] = set()
 
-    def add_user(author: str, sub: str) -> None:
+    def add_user(author: str | None, sub: str) -> None:
+        # author is None when Reddit reports the account as [deleted]. There is no user row to
+        # create, but the post itself must still be imported — see the user_id note in schema.sql.
+        if author is None:
+            return
         if author not in seen_users:
             seen_users.add(author)
             users.append(UserRow(author, sub, now))
@@ -118,6 +122,14 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
+
+    # Deleted accounts leave text we can still analyse but cannot attribute to a patient. Report
+    # the share so it is disclosed up front rather than discovered as a shortfall later — these
+    # rows are silently absent from every per-user aggregation.
+    orphaned = conn.execute("SELECT COUNT(*) FROM posts WHERE user_id IS NULL").fetchone()[0]
+    if orphaned:
+        log.warning(f"{orphaned} of {n} rows ({orphaned / n:.1%}) have no author ([deleted] "
+                    f"account). Text is retained; they are excluded from per-user aggregation.")
 
 
 def main():

@@ -15,7 +15,10 @@ CREATE TABLE posts (
     post_id    TEXT PRIMARY KEY,
     title      TEXT, 
     parent_id  TEXT REFERENCES posts(post_id),
-    user_id    TEXT NOT NULL REFERENCES users(user_id),
+    -- NULL when the author is [deleted]: Reddit no longer exposes who wrote it. Nullable so the
+    -- TEXT is still imported -- NOT NULL + INSERT OR IGNORE silently dropped the whole row, which
+    -- also orphaned any replies to it. Per-patient queries filter `WHERE user_id IS NOT NULL`.
+    user_id    TEXT REFERENCES users(user_id),
     body_text  TEXT NOT NULL,
     flair   TEXT,
     post_date  INTEGER,
