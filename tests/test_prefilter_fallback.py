@@ -1,11 +1,19 @@
-"""The single-item prefilter fallback must understand the format the prompt asks for.
+"""The single-item prefilter fallback must never turn a NON-ANSWER into a confident drop.
 
-PREFILTER_PROMPT ends with "Return a JSON array of strings, each 'yes' or 'no'", so a compliant
-model replies ["yes"]. _prefilter_one applied _is_yes to the RAW reply, and '["yes"]' does not
-start with "yes" — so it returned False for every item. Since _prefilter_one is the fallback for a
-failed batch, one unparseable batch silently dropped every pair in it, on the gate that admits
-everything downstream.
+Three distinct ways this gate silently discarded content, all found while validating judgement 4:
+
+  1. PREFILTER_PROMPT asks for a JSON array, so a compliant model replies ["yes"] — which does not
+     start with "yes". _is_yes on the raw reply returned False for every item ever passed to it.
+  2. A small max_tokens budget: a reasoning MODEL_FAST spends it internally and returns "".
+     Measured: gpt-5-mini and gemini-3.5-flash return "" at 16 tokens and ["yes"] at 400.
+  3. An unreadable reply was treated as "no" rather than "don't know".
+
+Since _prefilter_one is the fallback for a failed batch, each of these dropped every pair in that
+batch at the gate that admits everything downstream. When the answer can't be read we now FAIL
+OPEN: passing a pair on costs one strong-model call, dropping it loses the report for good.
 """
+import inspect
+
 import pipeline.classify as classify
 
 
@@ -13,23 +21,50 @@ def _stub(monkeypatch, raw):
     monkeypatch.setattr(classify, "llm_call", lambda *a, **k: raw)
 
 
+def _call():
+    return classify._prefilter_one(None, {"id": "t3_x", "text": "I take LDN daily"}, "ldn", {})
+
+
 def test_json_array_yes_is_a_keep(monkeypatch):
-    """The regression: the compliant reply format used to evaluate as False."""
+    """The original regression: the compliant reply format evaluated as False."""
     _stub(monkeypatch, '["yes"]')
-    assert classify._prefilter_one(None, {"text": "I take LDN daily"}, "ldn", {}) is True
+    assert _call() is True
 
 
 def test_json_array_no_is_a_drop(monkeypatch):
     _stub(monkeypatch, '["no"]')
-    assert classify._prefilter_one(None, {"text": "has anyone tried LDN?"}, "ldn", {}) is False
+    assert _call() is False
+
+
+def test_pretty_printed_array_is_understood(monkeypatch):
+    """gemini-3.5-flash returns a multi-line array."""
+    _stub(monkeypatch, '[\n  "yes"\n]')
+    assert _call() is True
 
 
 def test_bare_yes_still_accepted(monkeypatch):
     """A model that ignores the JSON instruction must still be understood."""
     _stub(monkeypatch, "yes")
-    assert classify._prefilter_one(None, {"text": "I take LDN daily"}, "ldn", {}) is True
+    assert _call() is True
 
 
-def test_unparseable_reply_is_a_drop(monkeypatch):
+def test_bare_no_still_accepted(monkeypatch):
+    _stub(monkeypatch, "no")
+    assert _call() is False
+
+
+def test_empty_reply_fails_open(monkeypatch):
+    """A reasoning model that emits no text must not read as a rejection."""
+    _stub(monkeypatch, "")
+    assert _call() is True
+
+
+def test_unreadable_reply_fails_open(monkeypatch):
+    """We cannot tell keep from drop, so keep — losing a real report is the worse error."""
     _stub(monkeypatch, "I'm not sure about that")
-    assert classify._prefilter_one(None, {"text": "whatever"}, "ldn", {}) is False
+    assert _call() is True
+
+
+def test_token_budget_is_large_enough_for_reasoning_models():
+    """16 tokens produced empty replies from reasoning models; guard the regression."""
+    assert "max_tokens=400" in inspect.getsource(classify._prefilter_one)

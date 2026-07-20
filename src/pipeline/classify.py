@@ -68,14 +68,27 @@ def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstrea
     "yes". Applying _is_yes to the raw text therefore returned False for EVERY item, and because
     this is the fallback for a failed batch, a single unparseable batch silently dropped every
     pair in it. Parse the array first; still accept a bare yes/no if a model ignores the format.
+
+    Two further traps this guards against, both of which turn a NON-ANSWER into a confident drop:
+      - a small max_tokens budget: a reasoning MODEL_FAST spends it internally and returns "",
+        so every pair looked rejected (measured: gpt-5-mini and gemini-3.5-flash return "" at 16
+        tokens and ["yes"] at 400)
+      - an unreadable reply: we cannot tell keep from drop, so we FAIL OPEN and keep the pair.
+        Passing a pair on costs one strong-model call; dropping it loses the report for good.
     """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=16)
+    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=400)
     try:
         answers = parse_json_array(raw)
+        if answers:
+            return _is_yes(answers[0])
     except LLMParseError:
-        return _is_yes(raw)
-    return _is_yes(answers[0]) if answers else _is_yes(raw)
+        pass
+    stripped = str(raw).strip().lower()
+    if stripped.startswith(("yes", "no")):
+        return _is_yes(stripped)
+    log.warning(f"Prefilter unreadable for {entry['id']}:{drug} ({raw[:40]!r}); keeping (fail-open).")
+    return True
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
