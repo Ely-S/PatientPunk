@@ -20,15 +20,9 @@ class ClassificationResult(BaseModel):
     def from_llm(cls, data) -> "ClassificationResult":
         """Validate model output, ignoring any parse_failed the model invented.
 
-        parse_failed is ours, not the model's: it means "we could not read this reply." A model
-        that echoes the schema back — or hallucinates the key — would otherwise set it on a
-        perfectly good classification, and the writer gate would drop the row while the audit
-        recorded it as a parse failure. Only the except-path may set this flag.
-
-        Anything that isn't a dict (a model answering with `["positive"]` instead of objects) is
-        handed to pydantic untouched so it raises ValidationError, which callers already catch and
-        retry per item. Reaching for .items() first would turn that into an AttributeError nobody
-        handles, and one malformed batch would kill the run.
+        parse_failed is ours -- it means "we could not read this reply" -- so only the
+        except-path may set it. A non-dict passes through to pydantic so it raises
+        ValidationError, which callers already catch and retry per item.
         """
         if isinstance(data, dict):
             data = {k: v for k, v in data.items() if k != "parse_failed"}
