@@ -59,7 +59,12 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
         results = []
 
     if len(results) == len(texts):
-        return results
+        # A model often answers a SINGLE-text batch with a flat ["ldn"] instead of the nested
+        # [["ldn"]] the format asks for — and the mismatch retry below splits batches down to one
+        # text, so this is reached routinely. Without normalising, the caller's flattening would
+        # iterate the bare string "ldn" character by character and record "l", "d", "n" as three
+        # separate drug mentions. Guarantee every entry really is a list.
+        return [r if isinstance(r, list) else [r] for r in results]
 
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
