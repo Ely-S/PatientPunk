@@ -20,7 +20,7 @@ def _stub(monkeypatch, raw):
 
 def _flatten(drugs):
     """The exact flattening run_extraction applies to each entry."""
-    return [d.lower().strip() for d in drugs if d.strip()]
+    return [drug.lower().strip() for drug in drugs if drug.strip()]
 
 
 @pytest.mark.parametrize("raw,expected", [
