@@ -96,9 +96,8 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        # Same reasoning-model trap as _prefilter_one: too tight a budget and the model spends it
-        # internally, returning "" — which fails to parse and sends the whole batch down the
-        # per-item fallback path. Floor it so the common case doesn't degrade into N extra calls.
+        # Floored: a reasoning model spends a tight budget internally and returns "", which
+        # sends the whole batch down the per-item fallback path.
         answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST,
                                             max_tokens=max(400, len(items) * 20)))
         if len(answers) != len(items):
@@ -232,10 +231,8 @@ def run_classification(
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
     to_do: list[tuple[dict, str]] = []
-    # (post_id, drug) -> 'direct' (the drug is named in this text) | 'context' (it was inherited
-    # from an upstream comment via coreference). Unioning the two loses which is which, and
-    # coreference is the least-validated judgement in the pipeline — so recording the basis lets
-    # per-drug rates filter to 'direct' and routes the inherited ones to review.
+    # (post_id, drug) -> 'direct' (named in this text) | 'context' (inherited from an upstream
+    # comment via coreference). Unioning the two would lose which is which.
     drug_source_by_pair: dict[tuple[str, str], str] = {}
     skipped = 0
 
@@ -373,18 +370,14 @@ def run_classification(
                         "sentiment": result.sentiment, "signal": result.signal,
                         "attribution": result.attribution,
                         "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
-                        # Mirrors the writer gate below exactly, so audit counts reconcile with
-                        # the DB. With write_neutrals on, a genuine neutral IS written — tagging
-                        # it "neutral" here would make status=="written" under-count real rows.
-                        # The neutral itself stays identifiable via signal == "n/a".
+                        # Mirrors the writer gate below so audit counts reconcile with the DB;
+                        # a written neutral stays identifiable via signal == "n/a".
                         "status": ("parse_failure" if result.parse_failed
                                    else "written" if passes_gate
                                    else "dropped_neutral"),
                     }
                     audit_sink.append(record)
-                # Drop parse failures (garbage); keep genuine neutrals unless explicitly disabled.
-                # A real neutral is DATA — "this drug did nothing for me" — and discarding it
-                # skews every downstream rate positive.
+                # Drop parse failures; keep genuine neutrals unless explicitly disabled.
                 if passes_gate:
                     drug_counter[drug] += 1
                     if writer is not None:
@@ -396,10 +389,7 @@ def run_classification(
                             drug_source=drug_source_by_pair.get((entry["id"], drug), "direct"),
                         )
                         if not wrote and record is not None:
-                            # write_one refuses a drug missing from the treatment table. Until now
-                            # the audit still called that row "written", so the sidecar whose whole
-                            # job is reconciling against the DB over-counted exactly the rows the
-                            # DB never received.
+                            # write_one refuses a drug missing from the treatment table.
                             record["status"] = "drug_not_in_treatment_table"
             done += len(batch)
             log.info(f"Classified {done}/{total}...")

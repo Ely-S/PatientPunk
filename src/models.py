@@ -9,15 +9,11 @@ class ClassificationResult(BaseModel):
     sentiment: Literal["positive", "negative", "mixed", "neutral"]
     signal: Literal["strong", "moderate", "weak", "n/a"]
     side_effects: list[str] = []
-    # Whether the author tied this outcome to THIS drug ("specific") or reported it for a group of
-    # treatments that merely includes it ("collective" — "this stack helped"). Recording the basis
-    # keeps the outcome AND lets per-drug rates exclude group attributions at query time, instead of
-    # forcing a lossy choice in the prompt (judgement 5: group attribution inflates helped ~5%).
-    # Defaults to "specific" so a model that omits the field behaves as before.
+    # "specific" = the author tied this outcome to THIS drug; "collective" = reported for a group
+    # that merely includes it ("this stack helped"). Defaults to specific, i.e. prior behaviour.
     attribution: Literal["specific", "collective"] = "specific"
-    # Runtime-only flag (never emitted by the model, never written to the DB): True marks a
-    # fallback null produced when the LLM output could not be parsed. Lets an audit separate a
-    # genuine signal="n/a" neutral from a parse failure — otherwise both vanish at the writer gate.
+    # Runtime-only (never from the model, never written to the DB): marks a fallback null for an
+    # unparseable reply, so an audit can tell one from a genuine signal="n/a" neutral.
     parse_failed: bool = False
 
     @classmethod
