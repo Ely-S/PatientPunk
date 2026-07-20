@@ -45,7 +45,7 @@ def inspect(path: Path) -> dict:
     try:
         # sqlite_master preserves the declared case, so a database created with "Posts" would
         # otherwise be reported as having no posts table and skipped.
-        tables = {r[0].lower() for r in conn.execute(
+        tables = {row[0].lower() for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
         if "posts" not in tables:
             return {"db": str(path), "skipped": "no posts table"}
@@ -74,45 +74,45 @@ def main() -> int:
     parser.add_argument("databases", nargs="+", type=Path)
     args = parser.parse_args()
 
-    results = [inspect(p) for p in args.databases]
-    reports = [r for r in results if "violations" in r]
-    unreadable = [r for r in results if "error" in r]
-    skipped = [r for r in results if "skipped" in r]
+    results = [inspect(path) for path in args.databases]
+    reports = [item for item in results if "violations" in item]
+    unreadable = [item for item in results if "error" in item]
+    skipped = [item for item in results if "skipped" in item]
 
     if reports:
         header = f"{'database':44} {'posts':>10} {'has parent':>11} {'dangling':>9} {'FK viol':>8}"
         print(f"{header}\n{'-' * len(header)}")
-    for r in reports:
-        linked = r.get("linked", 0)
-        share = f"{linked / r['posts']:.1%}" if r["posts"] else "-"
-        print(f"{r['db']:44} {r['posts']:>10,} {share:>11} "
-              f"{r.get('dangling', 0):>9,} {len(r['violations']):>8,}")
+    for report in reports:
+        linked = report.get("linked", 0)
+        share = f"{linked / report['posts']:.1%}" if report["posts"] else "-"
+        print(f"{report['db']:44} {report['posts']:>10,} {share:>11} "
+              f"{report.get('dangling', 0):>9,} {len(report['violations']):>8,}")
 
     # Say what was not examined. Staying quiet about it is how "nothing to report" becomes
     # indistinguishable from "nothing was checked".
-    for r in skipped:
-        print(f"{r['db']:44} skipped — {r['skipped']}")
+    for report in skipped:
+        print(f"{report['db']:44} skipped — {report['skipped']}")
     if unreadable:
         print(f"\nERROR: {len(unreadable)} path(s) could not be read:")
-        for r in unreadable:
-            print(f"    {r['db']}: {r['error']}")
+        for report in unreadable:
+            print(f"    {report['db']}: {report['error']}")
         return 1
     if not reports:
         print("No pipeline databases found (none had a posts table).")
         return 0
 
-    severed = [r for r in reports if r["posts"] and not r.get("linked")]
-    broken = [r for r in reports if r["violations"]]
+    severed = [report for report in reports if report["posts"] and not report.get("linked")]
+    broken = [report for report in reports if report["violations"]]
     if severed:
         print(f"\nWARNING: {len(severed)} database(s) have ZERO thread links — the signature of "
               f"the id-shape import bug, not a constraint failure:")
-        for r in severed:
-            print(f"    {r['db']} ({r['posts']:,} posts)")
+        for report in severed:
+            print(f"    {report['db']} ({report['posts']:,} posts)")
     if broken:
         print(f"\nFAIL: {len(broken)} database(s) violate declared foreign keys:")
-        for r in broken:
-            tables = sorted({v[0] for v in r["violations"]})
-            print(f"    {r['db']}: {len(r['violations'])} in {', '.join(tables)}")
+        for report in broken:
+            tables = sorted({violation[0] for violation in report["violations"]})
+            print(f"    {report['db']}: {len(report['violations'])} in {', '.join(tables)}")
         return 1
     print("\nOK: no foreign-key violations.")
     return 0
