@@ -1,10 +1,8 @@
 """Each run must keep its own copy of the decisions it made.
 
-tagged_mentions.json, prefilter_results.json and aliases_*.json keep fixed names on purpose —
-the pipeline reads them back to resume without re-paying for extraction or the prefilter. The
-cost of that is every run overwriting the previous one's record, and the database cannot stand
-in: it holds only what survived the writer gate, so once prefilter_results.json is gone there is
-nothing left saying which pairs were dropped before classify ever saw them.
+tagged_mentions.json, prefilter_results.json and aliases_*.json keep fixed names on purpose, 
+these were kept as a cost saving mesure during a run. Previously these are re-written when 
+running something on new data, but this file creates a copy to retain those decisions for further analysis. 
 """
 import json
 import sys
