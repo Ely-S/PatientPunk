@@ -138,7 +138,7 @@ def classify_batch(
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
-    return [ClassificationResult.from_llm(r) for r in results]
+    return [ClassificationResult.from_llm(reply) for reply in results]
 
 
 def _classify_one(
