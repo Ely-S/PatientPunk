@@ -42,12 +42,13 @@ def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, 
     kept: list[str] = []
     for name in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json"):
         source = config.path(name)
-        if source.exists():
+        if source.is_file():
             shutil.copy2(source, dest / name)
             kept.append(name)
     for alias_file in sorted(config.output_dir.glob("aliases_*.json")):
-        shutil.copy2(alias_file, dest / alias_file.name)
-        kept.append(alias_file.name)
+        if alias_file.is_file():
+            shutil.copy2(alias_file, dest / alias_file.name)
+            kept.append(alias_file.name)
     return dest, kept
 
 
