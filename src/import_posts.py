@@ -139,7 +139,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     # file alone severs every thread spanning two imports.
     unmatched = {row.parent_id for row in posts if row.parent_id} - known_ids
     known_ids |= _post_ids_already_imported(
-        conn, unmatched | {strip_reddit_prefix(pid) for pid in unmatched})
+        conn, unmatched | {strip_reddit_prefix(parent) for parent in unmatched})
 
     resolved = dangling = 0
     for i, row in enumerate(posts):
