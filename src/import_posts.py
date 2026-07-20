@@ -90,10 +90,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     seen_users: set[str] = set()
 
     def add_user(author: str | None, sub: str | None) -> None:
-        # author is falsy (None, or "" from a non-scraper source) when Reddit reports the account
-        # as [deleted]. There is no user row to create, but the post itself must still be imported
-        # — see the user_id note in schema.sql. Guarding on truthiness keeps an empty string from
-        # being written as a real user, which would contradict the schema and the tests.
+        # Falsy author = [deleted]: no user row, but the post itself must still be imported.
         if not author:
             return
         if author not in seen_users:
@@ -125,10 +122,8 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
-    # users.source_subreddit is NOT NULL and users are written with INSERT OR IGNORE, so a user
-    # carrying an unresolved subreddit is dropped without an error — and the post keeps a user_id
-    # pointing at a row that was never created. That is the same silent discard as the [deleted]
-    # author case, reached by a different route, so refuse the import instead of half-doing it.
+    # users.source_subreddit is NOT NULL + INSERT OR IGNORE, so an unresolved subreddit drops the
+    # user row silently and leaves the post pointing at nobody. Refuse rather than half-import.
     if unattributed:
         sample = ", ".join(unattributed[:3])
         raise ValueError(
@@ -137,18 +132,12 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             f"would be silently dropped. Pass --subreddit to attribute them explicitly."
         )
 
-    # Resolve each parent against the ids we actually hold. Reddit always sends parent_id
-    # prefixed ("t3_abc"), but whether post_id / comment_id are STORED prefixed depends on the
-    # source: the Arctic Shift scraper writes "t3_abc"/"t1_abc", while older exports store them
-    # bare. Stripping unconditionally matched the bare shape and silently broke the prefixed one —
-    # every parent then looked dangling, the cleanup below nulled all of them, and thread structure
-    # vanished. That is the defect that left parent_id NULL across 731k rows and made judgement 6
-    # structurally inert. Matching against the ids actually present handles both shapes.
+    # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift)
+    # or bare (older exports). Stripping unconditionally broke the prefixed shape, so match against
+    # the ids actually present instead.
     known_ids = {p.post_id for p in posts}
-    # A parent imported by an EARLIER run lives in the database, not in this file. Resolving only
-    # against the file would null those links, severing every thread that spans two imports —
-    # exactly how a corpus pulled in chunks loses its structure, and indistinguishable afterwards
-    # from the id-shape bug above. Ask the database about the ids this file cannot account for.
+    # A parent from an earlier run lives in the database, not this file; resolving against the
+    # file alone severs every thread spanning two imports.
     unmatched = {row.parent_id for row in posts if row.parent_id} - known_ids
     known_ids |= _post_ids_already_imported(
         conn, unmatched | {strip_reddit_prefix(pid) for pid in unmatched})
@@ -175,13 +164,9 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             )
 
     with conn:
-        # posts.parent_id references posts(post_id), and SQLite checks foreign keys per-row by
-        # default — so a reply appearing before the comment it answers is rejected outright
-        # (INSERT OR IGNORE does NOT suppress foreign-key errors; ON CONFLICT never applies to
-        # them). Nothing guarantees Reddit lists a thread parent-first. Deferring moves the check
-        # to COMMIT, so order within this transaction stops mattering while a genuinely dangling
-        # parent still fails. The pragma resets at every COMMIT, so it belongs here rather than in
-        # open_db, where it would silently cover only the first transaction.
+        # Foreign keys are checked per row, and nothing guarantees Reddit lists a thread
+        # parent-first. Defer to COMMIT so insert order stops mattering. Resets at every COMMIT,
+        # hence here rather than in open_db.
         conn.execute("PRAGMA defer_foreign_keys = ON")
         conn.executemany(
             "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at) VALUES (?, ?, ?)",
@@ -192,11 +177,8 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             posts,
         )
-        # INSERT OR IGNORE leaves an already-present row exactly as it was, so re-importing over
-        # a database written before the id-shape fix repairs nothing — while the log above happily
-        # reports those links as resolved. A repair that silently does nothing is worse than one
-        # that refuses. Write the links we resolved onto rows that are still missing them; a
-        # genuine top-level post has no resolved parent, so it is never touched.
+        # INSERT OR IGNORE leaves existing rows untouched, so a repair re-import would fix
+        # nothing while the log claims success. Write resolved links onto rows still missing them.
         repaired = conn.executemany(
             "UPDATE posts SET parent_id = ? WHERE post_id = ? AND parent_id IS NULL",
             [(row.parent_id, row.post_id) for row in posts if row.parent_id],
