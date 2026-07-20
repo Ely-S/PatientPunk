@@ -221,7 +221,7 @@ class Pipeline:
             print(f"  ! could not snapshot run artifacts ({type(e).__name__}: {e})")
         return result
 
-    def _snapshot_run(self, result: PipelineResult) -> Path | None:
+    def _snapshot_run(self, result: PipelineResult) -> Path:
         """Copy this run's artifacts into ``<input_dir>/runs/run_<n>/``.
 
         Copied, not moved: downstream commands resolve ``output/records.csv`` by that exact name
@@ -253,11 +253,16 @@ class Pipeline:
             if source.is_file():
                 shutil.copy2(source, dest / source.name)
                 kept.append(source.name)
+        # PhaseResult.ok defaults True for a skipped phase, so recording it alone cannot tell
+        # "ran and passed" from "never ran" -- and an early return leaves the list short.
         (dest / "run_manifest.json").write_text(json.dumps({
             "schema_id": self._schema_id,
             "artifacts": kept,
-            "phases_ok": [p.ok for p in result.phases],
-            "elapsed": result.total_elapsed,
+            "phases": [{"phase": ph.phase, "label": ph.label,
+                        "status": "skipped" if ph.skipped else ("ok" if ph.ok else "failed"),
+                        "elapsed": round(ph.elapsed, 2)}
+                       for ph in result.phases],
+            "elapsed": round(result.total_elapsed, 2),
         }, indent=2), encoding="utf-8")
         print(f"  Run artifacts snapshotted to {dest} ({len(kept)} files).")
         return dest
