@@ -51,3 +51,25 @@ def test_snapshotting_a_run_with_no_artifacts_is_not_an_error(tmp_path):
     run_dir, kept = _snapshot_run_artifacts(_config(tmp_path), run_id=7)
     assert kept == []
     assert run_dir.is_dir()
+
+
+def test_one_unreadable_artifact_does_not_lose_the_rest(tmp_path, monkeypatch):
+    """A single failed copy must not cost the whole snapshot."""
+    import shutil
+    import run_sentiment_pipeline as rsp
+
+    config = _config(tmp_path)
+    (tmp_path / "prefilter_results.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "tagged_mentions.json").write_text("[]", encoding="utf-8")
+
+    real = shutil.copy2
+
+    def flaky(src, dst):
+        if "prefilter" in str(src):
+            raise OSError("simulated read failure")
+        return real(src, dst)
+
+    monkeypatch.setattr(rsp.shutil, "copy2", flaky)
+    run_dir, kept = _snapshot_run_artifacts(config, run_id=1)
+    assert "tagged_mentions.json" in kept
+    assert (run_dir / "tagged_mentions.json").exists()
