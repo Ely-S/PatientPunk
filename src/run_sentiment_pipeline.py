@@ -13,7 +13,9 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 # Add src to path for imports
@@ -35,7 +37,6 @@ def _banner(label: str) -> None:
 
 def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = False) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
-    import json
 
     if not skip_extract:
         _banner("EXTRACT")
@@ -62,9 +63,24 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
     }
 
     _banner("CLASSIFY")
+    # Capture every classification BEFORE the writer gate. The DB only ever sees what survives the
+    # gate, so without this sidecar the parse-failure rate is invisible and indistinguishable from
+    # a genuine neutral — any analysis reading the DB alone measures the gate, not the model.
+    classify_audit: list[dict] = []
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
-        run_classification(config, writer=writer, skip_prefilter=skip_prefilter)
+        run_classification(config, writer=writer, skip_prefilter=skip_prefilter,
+                           audit_sink=classify_audit)
+        run_id = writer.run_id
+
+    if classify_audit:
+        audit_path = config.path("classify_audit.jsonl")
+        with audit_path.open("w", encoding="utf-8") as fh:
+            for record in classify_audit:
+                fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
+        statuses = Counter(r["status"] for r in classify_audit)
+        log.info(f"Wrote {audit_path.name} ({len(classify_audit)} classifications: "
+                 + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")

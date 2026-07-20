@@ -73,13 +73,19 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     posts: list[PostRow] = []
     seen_users: set[str] = set()
 
-    def add_user(author: str, sub: str) -> None:
+    def add_user(author: str | None, sub: str) -> None:
+        # author is falsy (None, or "" from a non-scraper source) when Reddit reports the account
+        # as [deleted]. There is no user row to create, but the post itself must still be imported
+        # — see the user_id note in schema.sql. Guarding on truthiness keeps an empty string from
+        # being written as a real user, which would contradict the schema and the tests.
+        if not author:
+            return
         if author not in seen_users:
             seen_users.add(author)
             users.append(UserRow(author, sub, now))
 
     for post in data:
-        author = post["author_hash"]
+        author = post.get("author_hash") or None   # "" / missing -> NULL, same as [deleted]
         sub = subreddit or extract_subreddit(post.get("url"))
 
         add_user(author, sub)
@@ -90,15 +96,39 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             scraped_at=now,
         ))
         for comment in post.get("comments", []):
-            c_author = comment["author_hash"]
+            c_author = comment.get("author_hash") or None
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                parent_id=comment.get("parent_id") or None,   # resolved against known ids below
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
+
+    # Resolve each parent against the ids we actually hold. Reddit always sends parent_id
+    # prefixed ("t3_abc"), but whether post_id / comment_id are STORED prefixed depends on the
+    # source: the Arctic Shift scraper writes "t3_abc"/"t1_abc", while older exports store them
+    # bare. Stripping unconditionally matched the bare shape and silently broke the prefixed one —
+    # every parent then looked dangling, the cleanup below nulled all of them, and thread structure
+    # vanished. That is the defect that left parent_id NULL across 731k rows and made judgement 6
+    # structurally inert. Matching against the ids actually present handles both shapes.
+    known_ids = {p.post_id for p in posts}
+    resolved = dangling = 0
+    for i, row in enumerate(posts):
+        if row.parent_id is None:
+            continue
+        bare = strip_reddit_prefix(row.parent_id)
+        match = row.parent_id if row.parent_id in known_ids else (bare if bare in known_ids else None)
+        posts[i] = row._replace(parent_id=match)
+        resolved += match is not None
+        dangling += match is None
+    if resolved + dangling:
+        log.info(f"Thread links: {resolved} resolved, {dangling} dangling "
+                 f"({dangling / (resolved + dangling):.1%} — parents outside the pull window).")
+        if resolved == 0:
+            log.error("EVERY parent_id is dangling. That is the id-shape mismatch that silently "
+                      "destroys thread structure and makes coreference inert — do not proceed.")
 
     with conn:
         conn.executemany(
@@ -118,6 +148,14 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
+
+    # Deleted accounts leave text we can still analyse but cannot attribute to a patient. Report
+    # the share so it is disclosed up front rather than discovered as a shortfall later — these
+    # rows are silently absent from every per-user aggregation.
+    orphaned = conn.execute("SELECT COUNT(*) FROM posts WHERE user_id IS NULL").fetchone()[0]
+    if orphaned:
+        log.warning(f"{orphaned} of {n} rows ({orphaned / n:.1%}) have no author ([deleted] "
+                    f"account). Text is retained; they are excluded from per-user aggregation.")
 
 
 def main():
