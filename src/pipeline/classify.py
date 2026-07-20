@@ -204,11 +204,17 @@ def run_classification(
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
     to_do: list[tuple[dict, str]] = []
+    # (post_id, drug) -> 'direct' (the drug is named in this text) | 'context' (it was inherited
+    # from an upstream comment via coreference). Unioning the two loses which is which, and
+    # coreference is the least-validated judgement in the pipeline — so recording the basis lets
+    # per-drug rates filter to 'direct' and routes the inherited ones to review.
+    drug_source_by_pair: dict[tuple[str, str], str] = {}
     skipped = 0
 
     for entry in tagged:
-        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
-        for drug in all_drugs:
+        direct_drugs = set(entry.get("drugs_direct", []))
+        context_drugs = set(entry.get("drugs_context", []))
+        for drug in direct_drugs | context_drugs:
             if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
@@ -219,6 +225,9 @@ def run_classification(
                 skipped += 1
                 continue
 
+            drug_source_by_pair[(entry["id"], drug)] = (
+                "direct" if drug in direct_drugs else "context"
+            )
             to_do.append((entry, drug))
             if drug not in prompts:
                 # In --drug mode (target_aliases populated), use the resolved
@@ -333,6 +342,7 @@ def run_classification(
                         "post_id": entry["id"], "drug": drug,
                         "sentiment": result.sentiment, "signal": result.signal,
                         "attribution": result.attribution,
+                        "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
                         "status": ("parse_failure" if result.parse_failed
                                    else "written" if result.signal != "n/a"
                                    else "neutral"),
@@ -348,6 +358,7 @@ def run_classification(
                             sentiment=result.sentiment, signal=result.signal,
                             side_effects=result.side_effects,
                             attribution=result.attribution,
+                            drug_source=drug_source_by_pair.get((entry["id"], drug), "direct"),
                         )
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
