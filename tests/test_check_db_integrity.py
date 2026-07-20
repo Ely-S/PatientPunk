@@ -58,9 +58,9 @@ def test_it_does_not_create_a_database_at_the_truncated_path(pipeline_db):
     before = set(pipeline_db.parent.iterdir())
     run(pipeline_db)
     assert not truncated.exists(), f"checker created a database at {truncated.name}"
-    created = {p for p in pipeline_db.parent.iterdir()} - before
-    assert all(p.name.startswith(pipeline_db.name) for p in created), \
-        f"checker created unrelated files: {[p.name for p in created]}"
+    created = {path for path in pipeline_db.parent.iterdir()} - before
+    assert all(path.name.startswith(pipeline_db.name) for path in created), \
+        f"checker created unrelated files: {[path.name for path in created]}"
 
 
 def test_an_unreadable_path_fails_loudly_instead_of_passing(tmp_path):
