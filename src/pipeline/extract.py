@@ -77,11 +77,11 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
     if len(results) == len(texts):
         # A single-text batch is commonly answered flat (["ldn"] not [["ldn"]]), and the retry
         # below splits batches down to one text, so this is hit routinely. Guarantee a list.
-        return [_as_drug_list(r) for r in results]
+        return [_as_drug_list(reply) for reply in results]
 
     # Same flattening with SEVERAL drugs: ["ldn", "aspirin"] for one text fails the length
     # check above (2 != 1) and would be marked unparsed forever.
-    if len(texts) == 1 and results and not any(isinstance(r, list) for r in results):
+    if len(texts) == 1 and results and not any(isinstance(reply, list) for reply in results):
         return [_as_drug_list(results)]
 
     if len(texts) > 1 and _depth < 2:
@@ -277,7 +277,7 @@ def run_extraction(config: "PipelineConfig"):
                     # _as_drug_list guarantees list[str] here, so no nesting to unwrap.
                     # strip() before the truth test: a whitespace-only entry was passing it
                     # and landing in the treatment table as an empty drug name.
-                    flat = [d.lower().strip() for d in drugs if d.strip()]
+                    flat = [drug.lower().strip() for drug in drugs if drug.strip()]
                     id_to_drugs[item_id] = flat
 
                 done_ext += len(batch)
