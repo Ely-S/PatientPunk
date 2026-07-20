@@ -39,16 +39,18 @@ def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, 
     """
     dest = config.path("runs") / f"run_{run_id}"
     dest.mkdir(parents=True, exist_ok=True)
+    sources = [config.path(n) for n in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json")]
+    sources += sorted(config.output_dir.glob("aliases_*.json"))
     kept: list[str] = []
-    for name in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json"):
-        source = config.path(name)
-        if source.is_file():
-            shutil.copy2(source, dest / name)
-            kept.append(name)
-    for alias_file in sorted(config.output_dir.glob("aliases_*.json")):
-        if alias_file.is_file():
-            shutil.copy2(alias_file, dest / alias_file.name)
-            kept.append(alias_file.name)
+    for source in sources:
+        if not source.is_file():
+            continue
+        try:
+            shutil.copy2(source, dest / source.name)
+            kept.append(source.name)
+        except OSError as e:
+            # One unreadable file must not cost the rest of the snapshot.
+            log.warning(f"Could not snapshot {source.name}: {e}")
     return dest, kept
 
 
