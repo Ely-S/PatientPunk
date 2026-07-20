@@ -9,6 +9,8 @@ character by character and records "l", "d", "n" as three separate drug mentions
 poisoning the corpus with junk drugs. Reported by the Gemini review on PR #66; pre-existing on
 main, fixed here because this PR touches that code path.
 """
+import pytest
+
 import pipeline.extract as extract
 
 
@@ -21,59 +23,32 @@ def _flatten(drugs):
     return [d.lower().strip() for d in drugs if d.strip()]
 
 
-def test_flat_single_item_reply_is_normalised(monkeypatch):
-    """["ldn"] for one text must become [["ldn"]], not a bare string."""
-    _stub(monkeypatch, '["ldn"]')
-    assert extract.extract_batch(client=None, texts=["I take LDN"]) == [["ldn"]]
+@pytest.mark.parametrize("raw,expected", [
+    ('["ldn"]', [["ldn"]]),                        # the original regression: flat, one drug
+    ('[["ldn"]]', [["ldn"]]),                      # already nested -- must be left alone
+    ('["ldn", "aspirin"]', [["ldn", "aspirin"]]),  # flat, several drugs, one text
+])
+def test_single_text_reply_shapes_normalise(monkeypatch, raw, expected):
+    _stub(monkeypatch, raw)
+    assert extract.extract_batch(client=None, texts=["I take LDN"]) == expected
 
 
-def test_nested_reply_is_unchanged(monkeypatch):
-    _stub(monkeypatch, '[["ldn"]]')
-    assert extract.extract_batch(client=None, texts=["I take LDN"]) == [["ldn"]]
-
-
-def test_flat_reply_does_not_split_into_characters(monkeypatch):
-    """The actual damage: without normalisation this yields ['l','d','n']."""
-    _stub(monkeypatch, '["ldn"]')
-    (drugs,) = extract.extract_batch(client=None, texts=["I take LDN"])
-    assert _flatten(drugs) == ["ldn"]
-
-
-def test_multi_text_batch_unaffected(monkeypatch):
+def test_multi_text_batch_is_unaffected(monkeypatch):
     _stub(monkeypatch, '[["ldn"], []]')
     assert extract.extract_batch(client=None, texts=["took LDN", "nothing"]) == [["ldn"], []]
 
 
-def test_flat_multi_drug_reply_on_single_text(monkeypatch):
-    """["ldn","aspirin"] for ONE text used to fail the length check and be marked unparsed
-    forever — never cached, re-sent every run, drugs never recorded."""
-    _stub(monkeypatch, '["ldn", "aspirin"]')
-    result = extract.extract_batch(client=None, texts=["I take LDN and aspirin"])
-    assert result == [["ldn", "aspirin"]]
-    (drugs,) = result
-    assert _flatten(drugs) == ["ldn", "aspirin"]
-
-
 def test_genuine_count_mismatch_is_still_unparsed(monkeypatch):
-    """Two texts, three answers: still an honest parse failure, not silently reshaped."""
+    """Normalising must not swallow a real mismatch once splitting is exhausted."""
     _stub(monkeypatch, '[["ldn"], ["aspirin"], ["b12"]]')
     assert extract.extract_batch(client=None, texts=["a", "b"], _depth=2) == [None, None]
 
 
-def test_object_shaped_reply_is_a_parse_failure_not_a_drug(monkeypatch):
-    """A dict entry must come back None, not coerce into a drug name.
-
-    The caller flattens with str(d).lower(), so an unguarded dict is written to the
-    treatment table as the literal drug "{'drug': 'ldn'}". An unreadable shape is a parse
-    failure — the same distinction this module already draws for bad JSON. Raised by the
-    gpt-5.1 review panel.
-    """
-    _stub(monkeypatch, '[{"drug": "ldn"}]')
-    assert extract.extract_batch(client=None, texts=["I take LDN"]) == [None]
-
-
-def test_a_list_with_a_non_string_member_is_a_parse_failure(monkeypatch):
-    _stub(monkeypatch, '[["ldn", {"x": 1}]]')
+@pytest.mark.parametrize("raw", ['[{"drug": "ldn"}]', '[["ldn", {"x": 1}]]'])
+def test_a_shape_that_is_not_strings_is_a_parse_failure(monkeypatch, raw):
+    """The caller flattens with str(d).lower(), so an unguarded dict is written to the treatment
+    table as the drug "{'drug': 'ldn'}". An unreadable shape is a parse failure."""
+    _stub(monkeypatch, raw)
     assert extract.extract_batch(client=None, texts=["I take LDN"]) == [None]
 
 
