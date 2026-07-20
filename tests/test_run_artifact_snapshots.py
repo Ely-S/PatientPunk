@@ -56,7 +56,6 @@ def test_snapshotting_a_run_with_no_artifacts_is_not_an_error(tmp_path):
 def test_one_unreadable_artifact_does_not_lose_the_rest(tmp_path, monkeypatch):
     """A single failed copy must not cost the whole snapshot."""
     import shutil
-    import run_sentiment_pipeline as rsp
 
     config = _config(tmp_path)
     (tmp_path / "prefilter_results.json").write_text("{}", encoding="utf-8")
@@ -69,7 +68,7 @@ def test_one_unreadable_artifact_does_not_lose_the_rest(tmp_path, monkeypatch):
             raise OSError("simulated read failure")
         return real(src, dst)
 
-    monkeypatch.setattr(rsp.shutil, "copy2", flaky)
+    monkeypatch.setattr(shutil, "copy2", flaky)
     run_dir, kept = _snapshot_run_artifacts(config, run_id=1)
     assert "tagged_mentions.json" in kept
     assert (run_dir / "tagged_mentions.json").exists()
