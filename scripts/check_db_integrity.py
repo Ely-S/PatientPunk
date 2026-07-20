@@ -1,20 +1,13 @@
 """Report foreign-key violations and thread-link health for pipeline databases.
 
-Enforcement (open_db's `PRAGMA foreign_keys = ON`) only governs NEW writes, so it can never
-tell you about rows already on disk — including everything written before enforcement existed,
-and anything a raw sqlite3.connect() put there since. `PRAGMA foreign_key_check` is the only
-way to see that, and it is read-only and cheap.
-
-Thread-link health is reported alongside because the failure this pipeline actually suffered was
-not a constraint violation: the importer nulled every parent_id, which leaves a database that is
-perfectly valid and completely useless for coreference. A corpus with 0% of rows carrying a
-parent is the signature. Both metrics are shape-agnostic — ids appear prefixed ("t3_abc", Arctic
-Shift) or bare ("abc", older exports), and inferring comment-ness from the id silently reports
-zero for whichever shape you did not expect.
+Enforcement only governs NEW writes, so it can say nothing about rows already on disk.
+Thread-link health is reported alongside because the failure this pipeline suffered is not a
+constraint violation at all: nulling every parent_id leaves a database that is perfectly valid
+and useless, and foreign_key_check returns clean on it.
 
     python scripts/check_db_integrity.py data/*.db
 
-Exits non-zero if any database has a foreign-key violation, so it can gate a run.
+Exits non-zero on any violation so it can gate a run.
 """
 import argparse
 import sqlite3
@@ -25,16 +18,9 @@ from pathlib import Path
 def inspect(path: Path) -> dict:
     """Read-only integrity summary for one database.
 
-    Always returns a dict. A file that cannot be read comes back with an "error" key rather
-    than being dropped: a checker that silently reports nothing for a database it failed to
-    open is worse than one that crashes, because "no problems found" and "never looked" are
-    indistinguishable in the output — the exact confusion this script exists to surface.
-
-    The URI comes from Path.as_uri(), which percent-encodes. Interpolating the path directly
-    let a '#' in a filename truncate the URI, which discarded `mode=ro` along with it and had
-    SQLite create a stray empty file — a read-only tool writing to disk. as_uri() also refuses
-    a relative path, so resolve() first: `data/corpus.db` is how anyone would actually invoke
-    this, and it raised ValueError out of argument handling.
+    Always returns a dict; an unreadable file comes back with an "error" key rather than being
+    dropped, so "no problems found" can never be confused with "never looked". The URI comes
+    from Path.as_uri(), which percent-encodes and needs an absolute path.
     """
     if not path.is_file():
         return {"db": str(path), "error": "not a file"}
