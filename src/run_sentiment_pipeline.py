@@ -86,12 +86,8 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
-        # These three decide what the model actually SAW, so a run that omits them cannot be
-        # re-coded by a second model without silently changing the input: depth sets how many
-        # parent hops of context were included, chars where that context was truncated, and
-        # temperature whether the reply was the argmax. Without them a later disagreement
-        # between models is indistinguishable from a difference in what they were each shown.
-        # Unrecoverable after the fact, which is why they are recorded rather than inferred.
+        # What the model was actually shown. Unrecoverable afterwards, and a second model
+        # re-coding this data without them is silently fed different input.
         "max_upstream_depth": config.max_upstream_depth,
         "max_upstream_chars": config.max_upstream_chars,
         "temperature": LLM_TEMPERATURE,

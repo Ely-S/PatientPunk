@@ -251,9 +251,7 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
-# Pinned so variability measures the model rather than the sampler, and named so the value a
-# run RECORDS is the same object it USED — a literal repeated at the call site and again in
-# the provenance can drift apart, and the recorded one is the one nobody re-checks.
+# Named rather than inlined so a run's recorded provenance is the same value the call used.
 LLM_TEMPERATURE = 0.0
 
 
