@@ -251,6 +251,12 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+# Pinned so variability measures the model rather than the sampler, and named so the value a
+# run RECORDS is the same object it USED — a literal repeated at the call site and again in
+# the provenance can drift apart, and the recorded one is the one nobody re-checks.
+LLM_TEMPERATURE = 0.0
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
@@ -265,7 +271,7 @@ def llm_call(
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
-            "temperature": 0.0,
+            "temperature": LLM_TEMPERATURE,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
@@ -278,7 +284,7 @@ def llm_call(
         model=model,
         system=system,
         prompt=prompt,
-        temperature=0.0,
+        temperature=LLM_TEMPERATURE,
         max_tokens=max_tokens,
         call_fn=_call,
     )

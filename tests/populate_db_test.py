@@ -271,3 +271,12 @@ class TestPopulateDbEndToEnd:
         assert len(classify_prompts) == 1
         assert classify_prompts[0].count("--- Entry ") == 1
         assert "I love it so much" in classify_prompts[0]
+
+        # Provenance: the run must record what the model was SHOWN, not just which model.
+        # Depth and truncation decide the context window and are unrecoverable afterwards, so
+        # a second model re-coding this data later would silently be fed different input.
+        config_json = json.loads(db.conn.execute(
+            "SELECT config FROM extraction_runs ORDER BY run_id DESC LIMIT 1").fetchone()[0])
+        assert "max_upstream_depth" in config_json
+        assert "max_upstream_chars" in config_json
+        assert config_json["temperature"] == 0.0
