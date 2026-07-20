@@ -62,9 +62,20 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call."""
+    """Fallback single-item prefilter call.
+
+    PREFILTER_PROMPT asks for a JSON array, so the reply is ["yes"] — which does NOT start with
+    "yes". Applying _is_yes to the raw text therefore returned False for EVERY item, and because
+    this is the fallback for a failed batch, a single unparseable batch silently dropped every
+    pair in it. Parse the array first; still accept a bare yes/no if a model ignores the format.
+    """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=16)
+    try:
+        answers = parse_json_array(raw)
+    except LLMParseError:
+        return _is_yes(raw)
+    return _is_yes(answers[0]) if answers else _is_yes(raw)
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
