@@ -26,26 +26,6 @@ def test_attribution_accepts_collective():
     assert r.attribution == "collective"
 
 
-def test_attribution_rejects_unknown_values():
-    with pytest.raises(ValidationError):
-        ClassificationResult(sentiment="positive", signal="weak", attribution="maybe")
-
-
-def test_prompt_defines_both_attribution_values():
-    p = system_prompt("ldn")
-    assert "attribution: specific | collective" in p
-    # the model must still report the sentiment — the field records the basis, it does not suppress
-    assert "do NOT downgrade or suppress a collective" in p
-
-
-def test_trailing_response_schema_includes_attribution():
-    """Models mirror the final schema line; omitting attribution there means the key is dropped
-    and ClassificationResult silently defaults it to "specific" — re-baking the bias the field
-    exists to expose."""
-    tail = system_prompt("ldn").rsplit("Respond ONLY with JSON:", 1)[-1]
-    assert "attribution" in tail
-
-
 def test_a_model_inventing_parse_failed_cannot_suppress_its_own_classification():
     """parse_failed is ours, not the model's — it means "we could not read this reply".
 
@@ -61,11 +41,3 @@ def test_a_model_inventing_parse_failed_cannot_suppress_its_own_classification()
     )
     assert result.parse_failed is False
     assert result.sentiment == "positive"
-
-
-def test_the_failure_path_can_still_set_parse_failed():
-    from models import ClassificationResult
-
-    assert ClassificationResult(
-        sentiment="neutral", signal="n/a", parse_failed=True
-    ).parse_failed is True

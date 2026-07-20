@@ -13,6 +13,8 @@ batch at the gate that admits everything downstream. When the answer can't be re
 OPEN: passing a pair on costs one strong-model call, dropping it loses the report for good.
 """
 
+import pytest
+
 import pipeline.classify as classify
 
 
@@ -24,35 +26,20 @@ def _call():
     return classify._prefilter_one(None, {"id": "t3_x", "text": "I take LDN daily"}, "ldn", {})
 
 
-def test_json_array_yes_is_a_keep(monkeypatch):
-    """The original regression: the compliant reply format evaluated as False."""
-    _stub(monkeypatch, '["yes"]')
-    assert _call() is True
+@pytest.mark.parametrize("raw,expected", [
+    ('["yes"]', True),    # the original regression: the compliant format evaluated as False
+    ('["no"]', False),
+    ("yes", True),        # a model ignoring the JSON instruction must still be understood
+    ("no", False),
+])
+def test_readable_answers_are_honoured(monkeypatch, raw, expected):
+    _stub(monkeypatch, raw)
+    assert _call() is expected
 
 
-def test_json_array_no_is_a_drop(monkeypatch):
-    _stub(monkeypatch, '["no"]')
-    assert _call() is False
-
-
-def test_bare_yes_still_accepted(monkeypatch):
-    """A model that ignores the JSON instruction must still be understood."""
-    _stub(monkeypatch, "yes")
-    assert _call() is True
-
-
-def test_bare_no_still_accepted(monkeypatch):
-    _stub(monkeypatch, "no")
-    assert _call() is False
-
-
-def test_empty_reply_fails_open(monkeypatch):
-    """A reasoning model that emits no text must not read as a rejection."""
-    _stub(monkeypatch, "")
-    assert _call() is True
-
-
-def test_unreadable_reply_fails_open(monkeypatch):
-    """We cannot tell keep from drop, so keep — losing a real report is the worse error."""
-    _stub(monkeypatch, "I'm not sure about that")
+@pytest.mark.parametrize("raw", ["", "I'm not sure about that"])
+def test_a_non_answer_fails_open(monkeypatch, raw):
+    """Empty (a reasoning model spending its budget internally) or unreadable: we cannot tell
+    keep from drop, so keep. Losing a real report is the worse error."""
+    _stub(monkeypatch, raw)
     assert _call() is True
