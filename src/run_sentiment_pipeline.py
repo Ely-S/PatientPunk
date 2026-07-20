@@ -13,18 +13,46 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import json
+import shutil
 import sys
+from collections import Counter
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
+from utilities import PipelineConfig, TAGGED_MENTIONS, CANONICALIZED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG, LLM_TEMPERATURE
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
 
+
+
+def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, list[str]]:
+    """Copy this run's inputs and decisions into ``runs/run_<run_id>/``.
+
+    The working files keep their fixed names on purpose: the pipeline reads them back to resume
+    without re-paying for extraction or the prefilter. But that also means every run overwrites
+    the previous one's record, and the DB is no substitute — it holds only what survived the
+    writer gate. Once prefilter_results.json is overwritten there is nothing left saying which
+    pairs were dropped before classify ever saw them, and a second model cannot re-check work it
+    cannot see. So snapshot rather than rename: resume still works, and each run keeps its own
+    copy. run_id is the extraction_runs primary key, so a snapshot joins straight back to the row.
+    """
+    dest = config.path("runs") / f"run_{run_id}"
+    dest.mkdir(parents=True, exist_ok=True)
+    kept: list[str] = []
+    for name in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json"):
+        source = config.path(name)
+        if source.exists():
+            shutil.copy2(source, dest / name)
+            kept.append(name)
+    for alias_file in sorted(config.output_dir.glob("aliases_*.json")):
+        shutil.copy2(alias_file, dest / alias_file.name)
+        kept.append(alias_file.name)
+    return dest, kept
 
 
 def _banner(label: str) -> None:
@@ -35,7 +63,6 @@ def _banner(label: str) -> None:
 
 def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = True) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
-    import json
 
     if not skip_extract:
         _banner("EXTRACT")
@@ -59,12 +86,39 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
+        # These three decide what the model actually SAW, so a run that omits them cannot be
+        # re-coded by a second model without silently changing the input: depth sets how many
+        # parent hops of context were included, chars where that context was truncated, and
+        # temperature whether the reply was the argmax. Without them a later disagreement
+        # between models is indistinguishable from a difference in what they were each shown.
+        # Unrecoverable after the fact, which is why they are recorded rather than inferred.
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
+        "temperature": LLM_TEMPERATURE,
     }
 
     _banner("CLASSIFY")
+    # Capture every classification BEFORE the writer gate. The DB only ever sees what survives the
+    # gate, so without this sidecar the parse-failure rate is invisible and indistinguishable from
+    # a genuine neutral — any analysis reading the DB alone measures the gate, not the model.
+    classify_audit: list[dict] = []
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
-        run_classification(config, writer=writer, skip_prefilter=skip_prefilter)
+        run_classification(config, writer=writer, skip_prefilter=skip_prefilter,
+                           audit_sink=classify_audit)
+        run_id = writer.run_id
+
+    run_dir, snapshotted = _snapshot_run_artifacts(config, run_id)
+    if classify_audit:
+        audit_path = run_dir / "classify_audit.jsonl"
+        with audit_path.open("w", encoding="utf-8") as fh:
+            for record in classify_audit:
+                fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
+        statuses = Counter(r["status"] for r in classify_audit)
+        log.info(f"Wrote {audit_path} ({len(classify_audit)} classifications: "
+                 + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
+    log.info(f"Run {run_id} artifacts snapshotted to {run_dir} "
+             f"({', '.join(snapshotted) if snapshotted else 'nothing to copy'}).")
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
