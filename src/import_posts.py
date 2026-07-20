@@ -74,16 +74,18 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     seen_users: set[str] = set()
 
     def add_user(author: str | None, sub: str) -> None:
-        # author is None when Reddit reports the account as [deleted]. There is no user row to
-        # create, but the post itself must still be imported — see the user_id note in schema.sql.
-        if author is None:
+        # author is falsy (None, or "" from a non-scraper source) when Reddit reports the account
+        # as [deleted]. There is no user row to create, but the post itself must still be imported
+        # — see the user_id note in schema.sql. Guarding on truthiness keeps an empty string from
+        # being written as a real user, which would contradict the schema and the tests.
+        if not author:
             return
         if author not in seen_users:
             seen_users.add(author)
             users.append(UserRow(author, sub, now))
 
     for post in data:
-        author = post["author_hash"]
+        author = post.get("author_hash") or None   # "" / missing -> NULL, same as [deleted]
         sub = subreddit or extract_subreddit(post.get("url"))
 
         add_user(author, sub)
@@ -94,7 +96,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             scraped_at=now,
         ))
         for comment in post.get("comments", []):
-            c_author = comment["author_hash"]
+            c_author = comment.get("author_hash") or None
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,

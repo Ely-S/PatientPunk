@@ -51,3 +51,19 @@ def test_parsed_empty_still_means_no_drugs(monkeypatch):
 def test_multi_text_batch_unaffected(monkeypatch):
     _stub(monkeypatch, '[["ldn"], []]')
     assert extract.extract_batch(client=None, texts=["took LDN", "nothing"]) == [["ldn"], []]
+
+
+def test_flat_multi_drug_reply_on_single_text(monkeypatch):
+    """["ldn","aspirin"] for ONE text used to fail the length check and be marked unparsed
+    forever — never cached, re-sent every run, drugs never recorded."""
+    _stub(monkeypatch, '["ldn", "aspirin"]')
+    result = extract.extract_batch(client=None, texts=["I take LDN and aspirin"])
+    assert result == [["ldn", "aspirin"]]
+    (drugs,) = result
+    assert _flatten(drugs) == ["ldn", "aspirin"]
+
+
+def test_genuine_count_mismatch_is_still_unparsed(monkeypatch):
+    """Two texts, three answers: still an honest parse failure, not silently reshaped."""
+    _stub(monkeypatch, '[["ldn"], ["aspirin"], ["b12"]]')
+    assert extract.extract_batch(client=None, texts=["a", "b"], _depth=2) == [None, None]

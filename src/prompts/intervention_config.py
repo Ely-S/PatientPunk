@@ -194,4 +194,4 @@ side_effects: list of short lowercase strings naming any side effects the author
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[...]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","attribution":"specific/collective","side_effects":[...]}}"""

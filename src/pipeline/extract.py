@@ -66,6 +66,14 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] |
         # separate drug mentions. Guarantee every entry really is a list.
         return [r if isinstance(r, list) else [r] for r in results]
 
+    # Same flattening habit, but with SEVERAL drugs: a single-text batch often comes back as
+    # ["ldn", "aspirin"] rather than [["ldn", "aspirin"]]. The length check above then fails
+    # (2 != 1) and the text would be marked unparsed forever — never cached, re-sent every run,
+    # and its drugs never recorded. Multi-drug posts are common in this corpus, and the retry
+    # below drives batches down to one text, so this shape is hit routinely.
+    if len(texts) == 1 and results and not any(isinstance(r, list) for r in results):
+        return [list(results)]
+
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
         mid = len(texts) // 2

@@ -50,3 +50,11 @@ def test_direct_filter_excludes_context_inherited_rows():
         "SELECT attribution, drug_source FROM treatment_reports WHERE post_id='p2'").fetchone()
     assert row == ("specific", "context")
     conn.close()
+
+
+def test_empty_side_effects_is_not_collapsed_to_null():
+    """`[]` is a real answer ("looked, found none"); NULL means "not captured". The old
+    `if side_effects else None` wrote NULL for both."""
+    src = inspect.getsource(ReportWriter.write_one)
+    assert "side_effects is not None" in src
+    assert "json.dumps(side_effects) if side_effects else None" not in src

@@ -69,3 +69,11 @@ def test_attribution_round_trips_through_the_real_insert():
         "SELECT COUNT(*) FROM treatment_reports WHERE attribution = 'specific'").fetchone()[0]
     assert n_specific == 1
     conn.close()
+
+
+def test_trailing_response_schema_includes_attribution():
+    """Models mirror the final schema line; omitting attribution there means the key is dropped
+    and ClassificationResult silently defaults it to "specific" — re-baking the bias the field
+    exists to expose."""
+    tail = system_prompt("ldn").rsplit("Respond ONLY with JSON:", 1)[-1]
+    assert "attribution" in tail

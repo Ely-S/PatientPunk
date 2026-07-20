@@ -96,7 +96,11 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10))
+        # Same reasoning-model trap as _prefilter_one: too tight a budget and the model spends it
+        # internally, returning "" — which fails to parse and sends the whole batch down the
+        # per-item fallback path. Floor it so the common case doesn't degrade into N extra calls.
+        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST,
+                                            max_tokens=max(400, len(items) * 20)))
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
         return [_is_yes(a) for a in answers]
@@ -367,9 +371,13 @@ def run_classification(
                         "sentiment": result.sentiment, "signal": result.signal,
                         "attribution": result.attribution,
                         "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
+                        # Mirrors the writer gate below exactly, so audit counts reconcile with
+                        # the DB. With write_neutrals on, a genuine neutral IS written — tagging
+                        # it "neutral" here would make status=="written" under-count real rows.
+                        # The neutral itself stays identifiable via signal == "n/a".
                         "status": ("parse_failure" if result.parse_failed
-                                   else "written" if result.signal != "n/a"
-                                   else "neutral"),
+                                   else "written" if (write_neutrals or result.signal != "n/a")
+                                   else "dropped_neutral"),
                     })
                 # Drop parse failures (garbage); keep genuine neutrals unless explicitly disabled.
                 # A real neutral is DATA — "this drug did nothing for me" — and discarding it

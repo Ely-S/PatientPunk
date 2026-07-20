@@ -37,7 +37,6 @@ def _banner(label: str) -> None:
 
 def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = False) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
-    import json
 
     if not skip_extract:
         _banner("EXTRACT")
