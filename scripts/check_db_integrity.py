@@ -43,7 +43,9 @@ def inspect(path: Path) -> dict:
     except (sqlite3.Error, ValueError, OSError) as exc:
         return {"db": str(path), "error": str(exc)}
     try:
-        tables = {r[0] for r in conn.execute(
+        # sqlite_master preserves the declared case, so a database created with "Posts" would
+        # otherwise be reported as having no posts table and skipped.
+        tables = {r[0].lower() for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
         if "posts" not in tables:
             return {"db": str(path), "skipped": "no posts table"}
