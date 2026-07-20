@@ -145,12 +145,15 @@ ax.bar(barx, bary, color=["#27ae60","#c0392b","#95a5a6"])
 for i,y in enumerate(bary): ax.text(i,y+0.005,f"{y:.0%}",ha="center",fontweight="bold")
 ax.set_ylabel("leak: wrong | producers agree"); ax.set_title("When two cheap producers agree, how often are they both wrong?")
 fig.tight_layout(); plt.show()
+_lk = {barx[i]: bary[i] for i in range(len(barx))}
+_ag = {r[0]: r[2] for r in rows}
 display(Markdown(
- "**What this shows:** on **Tier 1** two producers agree often and are almost never both wrong (~2% leak) — "
- "agreement is trustworthy, auto-accept it. On **Tier 2** they agree moderately but are **wrong ~1-in-5 times "
- "when they agree** — they share the same schema-boundary blind spot (both call PEM a *condition*, both file a "
- "drug under *alternative*), so agreement does **not** mean correct. On **Tier 3** they rarely agree, so "
- "disagreement escalates it to judges on its own. **Tier 2 is the dangerous tier: the gate trusts it but "
+ f"**What this shows:** on **Tier 1** two producers agree {_ag['Tier 1']} of the time and are both wrong only "
+ f"**{_lk['Tier 1']:.0%}** of those — agreement is trustworthy, auto-accept it. On **Tier 2** they agree "
+ f"{_ag['Tier 2']} but are **wrong {_lk['Tier 2']:.0%} of the time when they agree** — they share the same "
+ f"schema-boundary blind spot (both call PEM a *condition*, both file a drug under *alternative*), so agreement "
+ f"does **not** mean correct. On **Tier 3** they agree only {_ag['Tier 3']}, so disagreement escalates it to "
+ f"judges on its own. **Tier 2 is the dangerous tier: the gate trusts it but "
  "shouldn't — until the fix makes agreement mean something.** *(Small n; the pattern is the signal.)*"))
 '''
 

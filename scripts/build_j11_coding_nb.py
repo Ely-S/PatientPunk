@@ -211,8 +211,9 @@ lines = [
   f"- **Best value:** **{pick.mshort}** — strict F1 {pick.strict_f1:.2f} at ${pick.price:g}/1M input"
   + (", within 5 points of the best while cheaper." if pick.strict_f1 < best else "."),
   f"- **Trust the field, not just the model:** {n_reliable} of {len(FS)} covariates code reliably (F1≥0.75); "
-  f"{n_bad} are near-unusable (F1<0.5) and should be dropped or hand-audited before clustering — this holds "
-  f"across every model.",
+  f"{n_bad} are near-unusable (F1<0.5) and should be dropped or hand-audited before clustering. Measured on "
+  f"presence-F1 **pooled across models**, so it is a property of the field rather than a per-model ranking — "
+  f"it does not establish that every individual model fails them.",
   f"- **Values drift more than presence** (mean value agreement {MS.value_acc.mean():.0%}), so even a good "
   f"presence-F1 needs the value check before a covariate is trusted.",
 ]

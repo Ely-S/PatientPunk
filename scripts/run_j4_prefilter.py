@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from utilities import get_client, LLM_TEMPERATURE
+from utilities import get_client, LLM_TEMPERATURE, parse_json_array, LLMParseError
 from roster_exec import parallel_map
 from pipeline.classify import PREFILTER_PROMPT, _prefilter_block, _is_yes
 
@@ -33,19 +33,38 @@ OUT_DIR = ROOT / "data" / "validation"
 
 
 def _bounded_prefilter(client, model, entry, drug, id_to_text, timeout=45.0):
+    """Single-item prefilter call, returning (keep, parse_failed).
+
+    PREFILTER_PROMPT asks for a JSON array, so a compliant model replies ["yes"] — which does NOT
+    start with "yes". An earlier version applied _is_yes to the raw reply and so scored every
+    model as dropping ~100% of pairs, invalidating the first ⑧ run of this judgement. Parse the
+    array first; still accept a bare yes/no from a model that ignores the format.
+    """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text)
     c = client.with_options(timeout=timeout, max_retries=1)
     try:
         try:
-            m = c.messages.create(model=model, max_tokens=10, temperature=0,
+            m = c.messages.create(model=model, max_tokens=400, temperature=0,
                                   messages=[{"role": "user", "content": msg}])
         except anthropic.BadRequestError as e:
             if "temperature" in str(e).lower():
-                m = c.messages.create(model=model, max_tokens=10, messages=[{"role": "user", "content": msg}])
+                m = c.messages.create(model=model, max_tokens=400, messages=[{"role": "user", "content": msg}])
             else:
                 raise
         txt = "".join(getattr(b, "text", "") for b in m.content if getattr(b, "type", None) == "text")
-        return _is_yes(txt), False
+        # An empty reply is a NON-ANSWER, not a "no". Reasoning models spend the token budget
+        # internally and emit no text, which scored as a confident drop and made them look like
+        # they rejected 100% of pairs. Count it as a parse failure so it can't masquerade as data.
+        if not txt.strip():
+            return None, True
+        try:
+            answers = parse_json_array(txt)
+        except LLMParseError:
+            stripped = txt.strip().lower()
+            if stripped.startswith(("yes", "no")):
+                return _is_yes(txt), False
+            return None, True
+        return (_is_yes(answers[0]) if answers else None), (not answers)
     except Exception:
         return None, True
 
