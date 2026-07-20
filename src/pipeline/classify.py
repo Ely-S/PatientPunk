@@ -62,19 +62,11 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call.
+    """Fallback single-item prefilter call, used when a batch could not be parsed.
 
-    PREFILTER_PROMPT asks for a JSON array, so the reply is ["yes"] — which does NOT start with
-    "yes". Applying _is_yes to the raw text therefore returned False for EVERY item, and because
-    this is the fallback for a failed batch, a single unparseable batch silently dropped every
-    pair in it. Parse the array first; still accept a bare yes/no if a model ignores the format.
-
-    Two further traps this guards against, both of which turn a NON-ANSWER into a confident drop:
-      - a small max_tokens budget: a reasoning MODEL_FAST spends it internally and returns "",
-        so every pair looked rejected (measured: gpt-5-mini and gemini-3.5-flash return "" at 16
-        tokens and ["yes"] at 400)
-      - an unreadable reply: we cannot tell keep from drop, so we FAIL OPEN and keep the pair.
-        Passing a pair on costs one strong-model call; dropping it loses the report for good.
+    Accepts the JSON array the prompt asks for (["yes"]) and a bare yes/no from a model that
+    ignores the format. Anything unreadable FAILS OPEN and keeps the pair: passing one on costs
+    a strong-model call, dropping it loses the report for good.
     """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
     raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=400)

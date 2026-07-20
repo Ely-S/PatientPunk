@@ -1,16 +1,8 @@
 """The single-item prefilter fallback must never turn a NON-ANSWER into a confident drop.
 
-Three distinct ways this gate silently discarded content, all found while validating judgement 4:
-
-  1. PREFILTER_PROMPT asks for a JSON array, so a compliant model replies ["yes"] — which does not
-     start with "yes". _is_yes on the raw reply returned False for every item ever passed to it.
-  2. A small max_tokens budget: a reasoning MODEL_FAST spends it internally and returns "".
-     Measured: gpt-5-mini and gemini-3.5-flash return "" at 16 tokens and ["yes"] at 400.
-  3. An unreadable reply was treated as "no" rather than "don't know".
-
-Since _prefilter_one is the fallback for a failed batch, each of these dropped every pair in that
-batch at the gate that admits everything downstream. When the answer can't be read we now FAIL
-OPEN: passing a pair on costs one strong-model call, dropping it loses the report for good.
+Three ways it did, all found while validating judgement 4: a compliant ["yes"] does not start
+with "yes"; a reasoning model given too few tokens returns ""; an unreadable reply was read as
+"no". Since this is the fallback for a failed batch, each dropped every pair in that batch.
 """
 
 import pytest
