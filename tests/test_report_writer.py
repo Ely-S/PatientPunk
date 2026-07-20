@@ -45,8 +45,8 @@ def _row(path):
 
 
 def test_persists_attribution_drug_source_and_empty_side_effects(db):
-    with ReportWriter(db, run_config={}, commit_hash="test") as w:
-        assert w.write_one(post_id="p1", drug="ldn", author="u1", sentiment="positive",
+    with ReportWriter(db, run_config={}, commit_hash="test") as writer:
+        assert writer.write_one(post_id="p1", drug="ldn", author="u1", sentiment="positive",
                            signal="weak", side_effects=[], attribution="collective",
                            drug_source="context") is not False
     # [] must survive as an empty JSON array, not collapse to NULL
@@ -55,15 +55,15 @@ def test_persists_attribution_drug_source_and_empty_side_effects(db):
 
 def test_defaults_are_specific_direct_and_null_side_effects(db):
     """A caller that ignores the new fields must behave exactly as before."""
-    with ReportWriter(db, run_config={}, commit_hash="test") as w:
-        w.write_one(post_id="p1", drug="ldn", author="u1", sentiment="neutral", signal="n/a")
+    with ReportWriter(db, run_config={}, commit_hash="test") as writer:
+        writer.write_one(post_id="p1", drug="ldn", author="u1", sentiment="neutral", signal="n/a")
     assert _row(db) == ("neutral", "n/a", "specific", "direct", None)
 
 
 def test_genuine_neutral_is_written(db):
     """The writer gate used to drop signal='n/a' rows; they are data and must reach the DB."""
-    with ReportWriter(db, run_config={}, commit_hash="test") as w:
-        w.write_one(post_id="p1", drug="ldn", author="u1", sentiment="neutral", signal="n/a")
+    with ReportWriter(db, run_config={}, commit_hash="test") as writer:
+        writer.write_one(post_id="p1", drug="ldn", author="u1", sentiment="neutral", signal="n/a")
     conn = sqlite3.connect(db)
     assert conn.execute("SELECT COUNT(*) FROM treatment_reports").fetchone()[0] == 1
     conn.close()
@@ -88,8 +88,8 @@ def test_audit_does_not_claim_a_row_the_writer_refused(tmp_path):
     conn.execute("INSERT INTO posts (post_id,user_id,body_text,scraped_at) VALUES ('p','u','x',0)")
     conn.commit(); conn.close()
 
-    with ReportWriter(db, run_config={}, commit_hash="x") as w:
-        assert w.write_one("p", "a_drug_never_canonicalised", "u", "positive", "strong") is False
+    with ReportWriter(db, run_config={}, commit_hash="x") as writer:
+        assert writer.write_one("p", "a_drug_never_canonicalised", "u", "positive", "strong") is False
 
-    with open_db(db) as c:
-        assert c.execute("SELECT COUNT(*) FROM treatment_reports").fetchone()[0] == 0
+    with open_db(db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM treatment_reports").fetchone()[0] == 0
