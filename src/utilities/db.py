@@ -93,20 +93,25 @@ class ReportWriter:
 
     def write_one(
         self, post_id: str, drug: str, author: str, sentiment: str, signal: str,
-        side_effects: list[str] | None = None,
+        side_effects: list[str] | None = None, attribution: str = "specific",
     ) -> bool:
-        """Insert a single result. Returns False if drug is unknown. Auto-commits periodically."""
+        """Insert a single result. Returns False if drug is unknown. Auto-commits periodically.
+
+        attribution records whether the author tied the outcome to THIS drug ("specific") or to a
+        group of treatments that merely includes it ("collective"). Per-drug rates should filter to
+        'specific'; storing both keeps that an analysis-time choice rather than a lossy prompt flag.
+        """
         drug_id = self._drug_ids.get(drug.lower())
         if drug_id is None:
             return False
 
         self._conn.execute(
             "INSERT INTO treatment_reports "
-            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength, side_effects) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength, side_effects, attribution) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 self.run_id, post_id, author, drug_id, sentiment, signal,
-                json.dumps(side_effects) if side_effects else None,
+                json.dumps(side_effects) if side_effects else None, attribution,
             ),
         )
         self._pending += 1

@@ -103,10 +103,11 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
+        f'"attribution" (specific/collective), '
         f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
-    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
+    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=150 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
@@ -120,9 +121,9 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","attribution":"specific/collective","side_effects":["..."]}'
         )
-        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100)
+        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=250)
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
@@ -331,6 +332,7 @@ def run_classification(
                     audit_sink.append({
                         "post_id": entry["id"], "drug": drug,
                         "sentiment": result.sentiment, "signal": result.signal,
+                        "attribution": result.attribution,
                         "status": ("parse_failure" if result.parse_failed
                                    else "written" if result.signal != "n/a"
                                    else "neutral"),
@@ -345,6 +347,7 @@ def run_classification(
                             post_id=entry["id"], drug=drug, author=entry["author"],
                             sentiment=result.sentiment, signal=result.signal,
                             side_effects=result.side_effects,
+                            attribution=result.attribution,
                         )
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
