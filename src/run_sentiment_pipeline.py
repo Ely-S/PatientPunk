@@ -111,7 +111,7 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
             with audit_path.open("w", encoding="utf-8") as fh:
                 for record in classify_audit:
                     fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
-            statuses = Counter(r["status"] for r in classify_audit)
+            statuses = Counter(entry["status"] for entry in classify_audit)
             log.info(f"Wrote {audit_path} ({len(classify_audit)} classifications: "
                      + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
     except OSError as e:
