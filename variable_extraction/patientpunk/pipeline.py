@@ -24,6 +24,7 @@ Example
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -207,6 +208,61 @@ class Pipeline:
     # ------------------------------------------------------------------
 
     def run(self) -> PipelineResult:
+        """Execute all configured phases, then keep a copy of what this run produced.
+
+        Wrapping rather than appending to _run_phases: it returns early on a failed phase and
+        on discovery "review" mode, and those runs still produced artifacts worth keeping —
+        phase1_candidates.json in particular is the discovery judgement's output, and the next
+        run's clean step deletes it.
+        """
+        result = self._run_phases()
+        try:
+            self._snapshot_run(result)
+        except OSError as e:      # a snapshot must never fail a completed run
+            print(f"  ! could not snapshot run artifacts: {e}")
+        return result
+
+    def _snapshot_run(self, result: PipelineResult) -> Path | None:
+        """Copy this run's artifacts into ``<input_dir>/runs/run_<n>/``.
+
+        Every run writes records.csv, codebook.csv and llm_provenance.json to fixed names, so
+        each run silently overwrites the last one's record — and records.csv is not even
+        schema-scoped, so runs against DIFFERENT schemas overwrite each other too. The temp
+        files are worse than overwritten: _clean_temp deletes them at the start of the next
+        full run.
+
+        Copy rather than move. Downstream commands (codebook, cluster-prep, validate,
+        db.load_extractions) all resolve ``output/records.csv`` by that name, and the pipeline
+        itself reads temp files back when resuming.
+        """
+        runs_root = self.config.input_dir / "runs"
+        existing = [int(p.name[4:]) for p in runs_root.glob("run_*") if p.name[4:].isdigit()]
+        dest = runs_root / f"run_{max(existing, default=0) + 1}"
+        dest.mkdir(parents=True, exist_ok=True)
+
+        # Driven off _TEMP_PATTERNS on purpose: that is exactly what _clean_temp deletes, so
+        # anything a future phase adds to it is saved here before the next run removes it,
+        # without the two lists drifting apart.
+        sources = [self.config.input_dir / name for name in
+                   ("records.csv", "codebook.csv", "codebook.md", "llm_provenance.json")]
+        for pattern in _TEMP_PATTERNS:
+            sources.extend(sorted(self._temp_dir.glob(pattern)))
+
+        kept = []
+        for source in sources:
+            if source.is_file():
+                shutil.copy2(source, dest / source.name)
+                kept.append(source.name)
+        (dest / "run_manifest.json").write_text(json.dumps({
+            "schema_id": self._schema_id,
+            "artifacts": kept,
+            "phases_ok": [p.ok for p in result.phases],
+            "elapsed": result.total_elapsed,
+        }, indent=2), encoding="utf-8")
+        print(f"  Run artifacts snapshotted to {dest} ({len(kept)} files).")
+        return dest
+
+    def _run_phases(self) -> PipelineResult:
         """Execute all configured phases in order."""
         cfg = self.config
         result = PipelineResult(
