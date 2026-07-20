@@ -33,13 +33,9 @@ from pipeline.classify import run_classification
 def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, list[str]]:
     """Copy this run's inputs and decisions into ``runs/run_<run_id>/``.
 
-    The working files keep their fixed names on purpose: the pipeline reads them back to resume
-    without re-paying for extraction or the prefilter. But that also means every run overwrites
-    the previous one's record, and the DB is no substitute — it holds only what survived the
-    writer gate. Once prefilter_results.json is overwritten there is nothing left saying which
-    pairs were dropped before classify ever saw them, and a second model cannot re-check work it
-    cannot see. So snapshot rather than rename: resume still works, and each run keeps its own
-    copy. run_id is the extraction_runs primary key, so a snapshot joins straight back to the row.
+    Copied, not renamed: the working files keep fixed names because the pipeline reads them back
+    to resume without re-paying for extraction or the prefilter. run_id is the extraction_runs
+    primary key, so a snapshot joins back to the row that produced it.
     """
     dest = config.path("runs") / f"run_{run_id}"
     dest.mkdir(parents=True, exist_ok=True)
@@ -94,9 +90,7 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
     }
 
     _banner("CLASSIFY")
-    # Capture every classification BEFORE the writer gate. The DB only ever sees what survives the
-    # gate, so without this sidecar the parse-failure rate is invisible and indistinguishable from
-    # a genuine neutral — any analysis reading the DB alone measures the gate, not the model.
+    # Every classification, captured BEFORE the writer gate.
     classify_audit: list[dict] = []
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
