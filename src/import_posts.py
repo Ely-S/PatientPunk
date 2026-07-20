@@ -133,8 +133,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
         )
 
     # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift)
-    # or bare (older exports). Stripping unconditionally broke the prefixed shape, so match against
-    # the ids actually present instead.
+    # or bare (older exports), so match against the ids actually present rather than either shape.
     known_ids = {p.post_id for p in posts}
     # A parent from an earlier run lives in the database, not this file; resolving against the
     # file alone severs every thread spanning two imports.
@@ -195,9 +194,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
 
-    # Deleted accounts leave text we can still analyse but cannot attribute to a patient. Report
-    # the share so it is disclosed up front rather than discovered as a shortfall later — these
-    # rows are silently absent from every per-user aggregation.
+    # These rows carry usable text but are absent from every per-user aggregation.
     orphaned = conn.execute("SELECT COUNT(*) FROM posts WHERE user_id IS NULL").fetchone()[0]
     if orphaned:
         log.warning(f"{orphaned} of {n} rows ({orphaned / n:.1%}) have no author ([deleted] "
