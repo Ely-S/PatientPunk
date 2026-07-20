@@ -135,6 +135,7 @@ def run_classification(
     writer: ReportWriter | None = None,
     skip_prefilter: bool = False,
     audit_sink: list | None = None,
+    write_neutrals: bool = True,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
@@ -142,11 +143,15 @@ def run_classification(
     incrementally after each result. Pairs already in the database are
     skipped unless config.reclassify is set.
 
+    write_neutrals (default True) records genuine `signal="n/a"` neutrals in the
+    database. The gate used to be `signal != "n/a"`, which discarded every real
+    neutral *along with* parse failures — the "no effect" middle vanished before
+    the DB, irreversibly, and pushed the recorded distribution positive. Only
+    parse failures are dropped now. Pass False for the old lossy behaviour.
+
     If an audit_sink list is provided, EVERY classification is appended to it
-    *before* the `signal != "n/a"` writer gate, tagged with status
-    (written / neutral / parse_failure). This is the only way to see the
-    real-neutral and parse-failure rates the DB throws away — any analysis that
-    reads the DB alone measures the gate, not the model.
+    *before* the writer gate, tagged with status (written / neutral /
+    parse_failure) — so the dropped rates stay observable either way.
     """
     client = config.client
     limit = config.limit
@@ -330,7 +335,10 @@ def run_classification(
                                    else "written" if result.signal != "n/a"
                                    else "neutral"),
                     })
-                if result.signal != "n/a":
+                # Drop parse failures (garbage); keep genuine neutrals unless explicitly disabled.
+                # A real neutral is DATA — "this drug did nothing for me" — and discarding it
+                # skews every downstream rate positive.
+                if not result.parse_failed and (write_neutrals or result.signal != "n/a"):
                     drug_counter[drug] += 1
                     if writer is not None:
                         writer.write_one(
