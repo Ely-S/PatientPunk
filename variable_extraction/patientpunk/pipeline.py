@@ -210,39 +210,27 @@ class Pipeline:
     def run(self) -> PipelineResult:
         """Execute all configured phases, then keep a copy of what this run produced.
 
-        Wrapping rather than appending to _run_phases: it returns early on a failed phase and
-        on discovery "review" mode, and those runs still produced artifacts worth keeping —
-        phase1_candidates.json in particular is the discovery judgement's output, and the next
-        run's clean step deletes it.
+        Wraps _run_phases because that returns early on a failed phase and on discovery
+        "review" mode, and those runs still produced artifacts worth keeping.
         """
         result = self._run_phases()
         try:
             self._snapshot_run(result)
         except Exception as e:
-            # Deliberately broad: this is a best-effort copy of work that is already finished,
-            # so no failure in it may discard a run that cost hours of API time. OSError alone
-            # left the manifest's json.dumps able to take the run down with it.
+            # Deliberately broad: a best-effort copy of finished work must never discard a run.
             print(f"  ! could not snapshot run artifacts ({type(e).__name__}: {e})")
         return result
 
     def _snapshot_run(self, result: PipelineResult) -> Path | None:
         """Copy this run's artifacts into ``<input_dir>/runs/run_<n>/``.
 
-        Every run writes records.csv, codebook.csv and llm_provenance.json to fixed names, so
-        each run silently overwrites the last one's record — and records.csv is not even
-        schema-scoped, so runs against DIFFERENT schemas overwrite each other too. The temp
-        files are worse than overwritten: _clean_temp deletes them at the start of the next
-        full run.
-
-        Copy rather than move. Downstream commands (codebook, cluster-prep, validate,
-        db.load_extractions) all resolve ``output/records.csv`` by that name, and the pipeline
-        itself reads temp files back when resuming.
+        Copied, not moved: downstream commands resolve ``output/records.csv`` by that exact name
+        and the pipeline reads temp files back when resuming. Temp files matter most here --
+        _clean_temp deletes them at the start of the next full run.
         """
         runs_root = self.config.input_dir / "runs"
-        # Claim the directory instead of computing a number and then creating it. mkdir with
-        # exist_ok=True would silently reuse a number another concurrent run already took and
-        # overwrite its snapshot — the exact loss this function exists to prevent. Creating with
-        # exist_ok=False is atomic, so whoever loses the race just takes the next number.
+        # Claimed with exist_ok=False so it is atomic: exist_ok=True would silently reuse a
+        # number a concurrent run already took. Whoever loses the race takes the next one.
         number = max((int(p.name[4:]) for p in runs_root.glob("run_*") if p.name[4:].isdigit()),
                      default=0)
         while True:
@@ -254,9 +242,7 @@ class Pipeline:
             except FileExistsError:
                 continue
 
-        # Driven off _TEMP_PATTERNS on purpose: that is exactly what _clean_temp deletes, so
-        # anything a future phase adds to it is saved here before the next run removes it,
-        # without the two lists drifting apart.
+        # Driven off _TEMP_PATTERNS -- exactly what _clean_temp deletes -- so the two cannot drift.
         sources = [self.config.input_dir / name for name in
                    ("records.csv", "codebook.csv", "codebook.md", "llm_provenance.json")]
         for pattern in _TEMP_PATTERNS:
