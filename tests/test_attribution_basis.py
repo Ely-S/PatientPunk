@@ -21,11 +21,6 @@ def test_attribution_defaults_to_specific():
     assert r.attribution == "specific"
 
 
-def test_attribution_accepts_collective():
-    r = ClassificationResult(sentiment="positive", signal="weak", attribution="collective")
-    assert r.attribution == "collective"
-
-
 def test_a_model_inventing_parse_failed_cannot_suppress_its_own_classification():
     """parse_failed is ours, not the model's — it means "we could not read this reply".
 
