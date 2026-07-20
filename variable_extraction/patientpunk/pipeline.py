@@ -218,8 +218,11 @@ class Pipeline:
         result = self._run_phases()
         try:
             self._snapshot_run(result)
-        except OSError as e:      # a snapshot must never fail a completed run
-            print(f"  ! could not snapshot run artifacts: {e}")
+        except Exception as e:
+            # Deliberately broad: this is a best-effort copy of work that is already finished,
+            # so no failure in it may discard a run that cost hours of API time. OSError alone
+            # left the manifest's json.dumps able to take the run down with it.
+            print(f"  ! could not snapshot run artifacts ({type(e).__name__}: {e})")
         return result
 
     def _snapshot_run(self, result: PipelineResult) -> Path | None:
@@ -236,9 +239,20 @@ class Pipeline:
         itself reads temp files back when resuming.
         """
         runs_root = self.config.input_dir / "runs"
-        existing = [int(p.name[4:]) for p in runs_root.glob("run_*") if p.name[4:].isdigit()]
-        dest = runs_root / f"run_{max(existing, default=0) + 1}"
-        dest.mkdir(parents=True, exist_ok=True)
+        # Claim the directory instead of computing a number and then creating it. mkdir with
+        # exist_ok=True would silently reuse a number another concurrent run already took and
+        # overwrite its snapshot — the exact loss this function exists to prevent. Creating with
+        # exist_ok=False is atomic, so whoever loses the race just takes the next number.
+        number = max((int(p.name[4:]) for p in runs_root.glob("run_*") if p.name[4:].isdigit()),
+                     default=0)
+        while True:
+            number += 1
+            dest = runs_root / f"run_{number}"
+            try:
+                dest.mkdir(parents=True, exist_ok=False)
+                break
+            except FileExistsError:
+                continue
 
         # Driven off _TEMP_PATTERNS on purpose: that is exactly what _clean_temp deletes, so
         # anything a future phase adds to it is saved here before the next run removes it,

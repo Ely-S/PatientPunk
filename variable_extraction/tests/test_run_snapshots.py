@@ -68,3 +68,31 @@ def test_a_snapshot_records_a_manifest(tmp_path):
     manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
     assert "records.csv" in manifest["artifacts"]
     assert manifest["schema_id"]
+
+
+def test_an_already_claimed_run_number_is_skipped_not_overwritten(tmp_path):
+    """mkdir(exist_ok=True) would silently reuse a directory another run already took.
+
+    That is the exact loss this feature exists to prevent, so the claim has to be atomic.
+    Raised by the grok-4.5 and gemini-3.1-pro panels.
+    """
+    pipe = _pipeline(tmp_path)
+    squatter = tmp_path / "runs" / "run_1"
+    squatter.mkdir(parents=True)
+    (squatter / "records.csv").write_text("someone else's run", encoding="utf-8")
+
+    _write_run_outputs(pipe, "mine")
+    run_dir = pipe._snapshot_run(PipelineResult())
+
+    assert run_dir != squatter
+    assert (squatter / "records.csv").read_text(encoding="utf-8") == "someone else's run"
+    assert "mine" in (run_dir / "records.csv").read_text(encoding="utf-8")
+
+
+def test_a_snapshot_failure_never_fails_a_finished_run(tmp_path, monkeypatch):
+    """Hours of API time must not be discarded by a failed best-effort copy."""
+    pipe = _pipeline(tmp_path)
+    monkeypatch.setattr(Pipeline, "_run_phases", lambda self: PipelineResult(total_elapsed=1.0))
+    monkeypatch.setattr(Pipeline, "_snapshot_run",
+                        lambda self, result: (_ for _ in ()).throw(TypeError("not serialisable")))
+    assert pipe.run().total_elapsed == 1.0
