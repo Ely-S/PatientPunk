@@ -250,9 +250,14 @@ class Pipeline:
 
         kept = []
         for source in sources:
-            if source.is_file():
+            if not source.is_file():
+                continue
+            try:
                 shutil.copy2(source, dest / source.name)
                 kept.append(source.name)
+            except OSError as e:
+                # One unreadable file must not cost the rest of the snapshot or the manifest.
+                print(f"  ! could not snapshot {source.name}: {e}")
         # PhaseResult.ok defaults True for a skipped phase, so recording it alone cannot tell
         # "ran and passed" from "never ran" -- and an early return leaves the list short.
         (dest / "run_manifest.json").write_text(json.dumps({

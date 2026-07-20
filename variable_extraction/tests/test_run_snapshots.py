@@ -96,3 +96,24 @@ def test_a_snapshot_failure_never_fails_a_finished_run(tmp_path, monkeypatch):
     monkeypatch.setattr(Pipeline, "_snapshot_run",
                         lambda self, result: (_ for _ in ()).throw(TypeError("not serialisable")))
     assert pipe.run().total_elapsed == 1.0
+
+
+def test_one_unreadable_artifact_does_not_cost_the_rest(tmp_path, monkeypatch):
+    """A single failed copy must not abort the snapshot or skip the manifest."""
+    import shutil
+
+    from patientpunk import pipeline as pipeline_mod
+
+    pipe = _pipeline(tmp_path)
+    _write_run_outputs(pipe, "first")
+    real = shutil.copy2
+
+    def flaky(src, dst):
+        if "phase1_candidates" in str(src):
+            raise OSError("simulated read failure")
+        return real(src, dst)
+
+    monkeypatch.setattr(pipeline_mod.shutil, "copy2", flaky)
+    run_dir = pipe._snapshot_run(PipelineResult())
+    assert (run_dir / "records.csv").exists(), "an unrelated copy was lost"
+    assert (run_dir / "run_manifest.json").exists(), "the manifest was skipped"
