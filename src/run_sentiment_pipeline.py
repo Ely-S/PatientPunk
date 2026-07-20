@@ -39,7 +39,8 @@ def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, 
     """
     dest = config.path("runs") / f"run_{run_id}"
     dest.mkdir(parents=True, exist_ok=True)
-    sources = [config.path(n) for n in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json")]
+    sources = [config.path(name)
+               for name in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json")]
     sources += sorted(config.output_dir.glob("aliases_*.json"))
     kept: list[str] = []
     for source in sources:
