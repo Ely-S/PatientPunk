@@ -241,7 +241,9 @@ class TestPopulateDbEndToEnd:
             output_dir=db.path.parent,
             db_path=db.path,
         )
-        run_pipeline(config)
+        # The prefilter is off by default now; this test exists to cover that path, so it
+        # opts in. See test_the_prefilter_is_off_by_default for the default itself.
+        run_pipeline(config, skip_prefilter=False)
 
         # Exactly one canonical treatment was written.
         treatments = db.conn.execute(
@@ -280,3 +282,20 @@ class TestPopulateDbEndToEnd:
         assert "max_upstream_depth" in config_json
         assert "max_upstream_chars" in config_json
         assert config_json["temperature"] == 0.0
+
+
+def test_the_prefilter_is_off_by_default():
+    """Off is the safe default and a silent flip back would not fail anything else.
+
+    Measured against the human reference it drops ~9% of posts that DO report personal
+    experience, and a dropped pair leaves no row and no audit entry -- the loss is invisible
+    and unrecoverable. Both entry points must agree, or a programmatic caller silently gets
+    different behaviour from the CLI.
+    """
+    import inspect
+
+    from pipeline.classify import run_classification
+    from run_sentiment_pipeline import run_pipeline
+
+    assert inspect.signature(run_pipeline).parameters["skip_prefilter"].default is True
+    assert inspect.signature(run_classification).parameters["skip_prefilter"].default is True

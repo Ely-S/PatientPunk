@@ -204,8 +204,25 @@ Add `--limit 50` for a quick demo run.
 | `--limit N` | Process only the first N posts/comments (default: all) |
 | `--skip-extract` | Skip extraction step (use existing tagged_mentions.json) |
 | `--skip-canonicalize` | Skip synonym normalization |
-| `--skip-prefilter` | Skip prefilter, send all pairs directly to classifier |
+| `--prefilter` | Run the fast-model prefilter (**off by default** — see the warning below) |
 | `--reclassify` | Re-classify all pairs, even those already in the database |
+
+> **⚠️ The prefilter is off by default and should stay off for data you intend to publish.**
+>
+> It asks a fast model whether each (post, drug) pair reports personal experience, and drops the
+> pair if the answer is no — before the classifier ever sees it. A dropped pair produces **no
+> database row and no audit entry**, so the loss leaves no trace and cannot be recovered without
+> re-running the whole classification.
+>
+> Measured against the human reference (judgement ④, 19 models over 2,399 judgements): it drops
+> **~9% of posts that DO report personal experience**, and its overall agreement (90.9%) is *below*
+> what a model that simply kept everything would score (91.5%) on that sample. The errors are also
+> unlikely to be evenly spread — short replies and posts that depend on upstream context are the
+> ones most at risk, so the loss is probably biased rather than merely noisy.
+>
+> What it buys is roughly **14% fewer strong-model calls**. That is a cost/coverage trade, not an
+> accuracy one. Enable it only for exploratory runs where a tenth of the reports going missing,
+> invisibly, does not matter.
 | `--max-upstream-chars N` | Truncate upstream comment text to N chars (default: unlimited) |
 | `--max-upstream-depth N` | Max upstream hops for drug context (default: unlimited) |
 | `--workers N` | Parallel workers for LLM calls during extract/classify (default: 3, use 1 for sequential) |
