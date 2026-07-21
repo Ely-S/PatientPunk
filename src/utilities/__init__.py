@@ -250,11 +250,7 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     return aliases
 
 
-# ── LLM Call Wrapper ─────────────────────────────────────────────────────────
-# Named rather than inlined so a run's recorded provenance is the same value the call used.
 LLM_TEMPERATURE = 0.0
-
-
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
