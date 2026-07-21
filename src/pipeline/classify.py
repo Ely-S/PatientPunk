@@ -84,7 +84,14 @@ def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstrea
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
-    """Ask fast model if each (entry, drug) pair expresses personal experience."""
+    """Ask fast model if each (entry, drug) pair expresses personal experience.
+
+    OFF by default, and it should stay off for data you intend to publish. A dropped pair never
+    reaches the classifier, so it leaves no row and no audit entry: the loss is silent and cannot
+    be recovered without re-running the classification. Measured against the human reference it
+    drops ~9% of posts that DO report personal experience, and scores below a model that keeps
+    everything. It buys ~14% fewer strong-model calls -- a cost trade, not an accuracy one.
+    """
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
@@ -153,7 +160,7 @@ def run_classification(
     config: PipelineConfig,
     *,
     writer: ReportWriter | None = None,
-    skip_prefilter: bool = False,
+    skip_prefilter: bool = True,
     audit_sink: list | None = None,
     write_neutrals: bool = True,
 ) -> None:
