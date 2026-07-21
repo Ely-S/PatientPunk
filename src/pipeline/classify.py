@@ -88,8 +88,8 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        # Floored: a reasoning model spends a tight budget internally and returns "", which
-        # sends the whole batch down the per-item fallback path.
+        # The 400 is a minimum, not a target: on a tighter allowance a reasoning model spends
+        # the budget internally and returns "", sending the whole batch to the per-item fallback.
         answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST,
                                             max_tokens=max(400, len(items) * 20)))
         if len(answers) != len(items):
