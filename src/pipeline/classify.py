@@ -76,7 +76,7 @@ def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstrea
             return _is_yes(answers[0])
     except LLMParseError:
         pass
-    stripped = str(raw).strip().lower()
+    stripped = raw.strip().lower()
     if stripped.startswith(("yes", "no")):
         return _is_yes(stripped)
     log.warning(f"Prefilter unreadable for {entry['id']}:{drug} ({raw[:40]!r}); keeping (fail-open).")
