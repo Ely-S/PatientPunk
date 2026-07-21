@@ -31,11 +31,8 @@ from pipeline.classify import run_classification
 
 
 def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, list[str]]:
-    """Copy this run's inputs and decisions into ``runs/run_<run_id>/``.
-
-    Copied, not renamed: the working files keep fixed names because the pipeline reads them back
-    to resume without re-paying for extraction or the prefilter. run_id is the extraction_runs
-    primary key, so a snapshot joins back to the row that produced it.
+    """Copy this run's inputs and decisions into ``runs/run_<run_id>/``. Be sure to keep the runs inputs
+    in this pipeline as well:  important for run-regeneration on failure.  
     """
     dest = config.path("runs") / f"run_{run_id}"
     dest.mkdir(parents=True, exist_ok=True)
