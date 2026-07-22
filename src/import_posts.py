@@ -6,6 +6,7 @@ import logging
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
+from itertools import batched
 from pathlib import Path
 from typing import NamedTuple
 
@@ -71,12 +72,18 @@ def _post_ids_already_imported(conn: sqlite3.Connection, candidates: set[str]) -
     Chunked because SQLite caps host parameters per statement (999 on older builds), and a large
     pull can present far more candidate parents than that in one file.
     """
-    ids = list(candidates)
     found: set[str] = set()
-    for start in range(0, len(ids), 500):
-        chunk = ids[start:start + 500]
-        found |= {row[0] for row in conn.execute(
-            f"SELECT post_id FROM posts WHERE post_id IN ({','.join('?' * len(chunk))})", chunk)}
+
+    for batch in batched(candidates, 500):
+        placeholders = ",".join(["?"] * len(batch))
+
+        found.update(
+            row[0]
+            for row in conn.execute(
+                f"SELECT post_id FROM posts WHERE post_id IN ({placeholders})",
+                batch,
+            )
+        )
     return found
 
 
