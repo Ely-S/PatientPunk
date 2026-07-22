@@ -56,11 +56,9 @@ def _as_drug_list(reply) -> list[str] | None:
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] | None]:
     """Ask fast model to extract drug mentions from a batch of texts.
 
-    Returns one entry per input text: a list of drug strings on success — where an
-    empty list means "parsed, no drugs found" — or ``None`` for a text whose result
-    could not be parsed (bad JSON, or a count mismatch that survived splitting).
-    Keeping ``None`` distinct from ``[]`` lets the caller retry genuine failures
-    instead of silently recording them as "no drugs" (see ``run_extraction``).
+    Returns one entry per input text: a list of drug strings on success, where an
+    empty list means "parsed, no drugs found",or ``None`` for a text whose result
+    could not be parsed
     """
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
@@ -99,7 +97,7 @@ def _detect_parent_cycles(id_to_parent: dict) -> None:
     forest (each node has at most one parent and chains terminate). A cycle
     in malformed imported data would cause the recursion to memoize on
     (eid, remaining) and still never terminate (cache stores final values,
-    not in-progress visits). Detect once up front and fail loudly.
+    not in-progress visits). 
 
     Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
     this wrapper turns the first cycle into a fail-fast ValueError.
