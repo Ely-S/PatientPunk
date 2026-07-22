@@ -91,7 +91,7 @@ class ReportWriter:
         drug_id = self._drug_ids.get(drug.lower())
         return drug_id is not None and (post_id, drug_id) in self._existing
 
-    def write_one(
+    def write_report(
         self, post_id: str, drug: str, author: str | None, sentiment: str, signal: str,
         side_effects: list[str] | None = None, attribution: str = "specific",
         drug_source: str = "direct",

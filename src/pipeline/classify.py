@@ -380,7 +380,7 @@ def run_classification(
                 if passes_gate:
                     drug_counter[drug] += 1
                     if writer is not None:
-                        wrote = writer.write_one(
+                        wrote = writer.write_report(
                             post_id=entry["id"], drug=drug, author=entry["author"],
                             sentiment=result.sentiment, signal=result.signal,
                             side_effects=result.side_effects,
@@ -388,7 +388,7 @@ def run_classification(
                             drug_source=drug_source_by_pair.get((entry["id"], drug), "direct"),
                         )
                         if not wrote and record is not None:
-                            # write_one refuses a drug missing from the treatment table.
+                            # write_report refuses a drug missing from the treatment table.
                             record["status"] = "drug_not_in_treatment_table"
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
