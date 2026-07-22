@@ -91,7 +91,6 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
     }
 
     _banner("CLASSIFY")
-    # Every classification, captured BEFORE the writer gate.
     classify_audit: list[dict] = []
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
