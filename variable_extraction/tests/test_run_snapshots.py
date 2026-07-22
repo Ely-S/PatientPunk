@@ -1,11 +1,4 @@
-"""Every Track B run must keep a copy of what it produced.
-
-records.csv, codebook.* and llm_provenance.json are written to fixed names, so each run
-overwrites the previous one's record — and records.csv is not even schema-scoped, so runs
-against DIFFERENT schemas clobber each other. The temp files are worse off than overwritten:
-_clean_temp deletes them at the start of the next full run, which is where the discovery
-judgement's phase1_candidates.json and field reports live.
-"""
+"""Variable coding runs must keep a copy of what it produced."""
 import json
 from pathlib import Path
 
