@@ -41,11 +41,10 @@ def is_only_questions(text: str) -> bool:
 def _as_drug_list(reply) -> list[str] | None:
     """One entry's drugs, or None when the reply's shape isn't usable.
 
-    Only strings and lists-of-strings are drugs. Anything else — a dict, a number — is a
+    Only strings and lists-of-strings are drugs. Anything else is a
     parse failure, not a discovery: the caller flattens with ``str(d).lower()``, which turns
     ``{"drug": "ldn"}`` into the drug name ``"{'drug': 'ldn'}"`` and writes it to the
-    treatment table. Coercing an unreadable shape into a plausible-looking row is the same
-    silent discard this module already refuses for bad JSON.
+    treatment table.
     """
     if isinstance(reply, str):
         return [reply]
