@@ -1,12 +1,8 @@
 """Thread links must survive import whichever id shape the source uses.
 
 Reddit always sends comment.parent_id prefixed ("t3_abc"); post_id may be STORED prefixed
-(Arctic Shift) or bare (older exports). Stripping unconditionally matched only the bare shape,
-so every parent looked dangling and the cleanup nulled it -- 731,526 rows, and coreference had
-nothing to work with.
-
-These drive the real open_db, so they follow production's foreign-key setting rather than
-pinning one.
+(Arctic Shift raw downloads) or bare (API calls). Stripping unconditionally matched only the bare shape,
+so every parent looked dangling and the cleanup nulled it.
 """
 import json
 import sqlite3
