@@ -12,8 +12,7 @@ class ClassificationResult(BaseModel):
     # "specific" = the author tied this outcome to THIS drug; "collective" = reported for a group
     # that merely includes it ("this stack helped"). Defaults to specific, i.e. prior behaviour.
     attribution: Literal["specific", "collective"] = "specific"
-    # Runtime-only (never from the model, never written to the DB): marks a fallback null for an
-    # unparseable reply, so an audit can tell one from a genuine signal="n/a" neutral.
+    # Set when the LLM reply could not be parsed. Not a model field, not stored in the DB.
     parse_failed: bool = False
 
     @classmethod
