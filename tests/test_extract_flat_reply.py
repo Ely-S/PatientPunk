@@ -6,8 +6,7 @@ they are one text long, so single-text batches happen routinely, not just at the
 
 Left unnormalised, the caller's flattening in run_extraction iterates the bare string "ldn"
 character by character and records "l", "d", "n" as three separate drug mentions — silently
-poisoning the corpus with junk drugs. Reported by the Gemini review on PR #66; pre-existing on
-main, fixed here because this PR touches that code path.
+poisoning the corpus with junk drugs. 
 """
 import pytest
 
