@@ -183,8 +183,6 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             posts,
         )
-        # INSERT OR IGNORE leaves existing rows untouched, so a repair re-import would fix
-        # nothing while the log claims success. Write resolved links onto rows still missing them.
         repaired = conn.executemany(
             "UPDATE posts SET parent_id = ? WHERE post_id = ? AND parent_id IS NULL",
             [(row.parent_id, row.post_id) for row in posts if row.parent_id],
