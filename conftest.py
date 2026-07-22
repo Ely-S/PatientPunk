@@ -1,9 +1,7 @@
 """Repo-wide pytest configuration.
 
-llm_call routes through an on-disk response cache that defaults to ON, so the first run stores
-the fake client's replies and every later run replays them without calling the fake. Point it at
-a per-run temp dir so each run starts cold. The trap is in llm_call, not in any one suite, hence
-the repo root.
+The LLM cache from llm_cache.py replays earlier test runs' responses, so pytest passes once and then fails forever after. 
+Tests now get a fresh cache dir each run; production caching is unchanged.
 """
 import pytest
 
