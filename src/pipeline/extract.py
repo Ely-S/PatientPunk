@@ -271,9 +271,6 @@ def run_extraction(config: "PipelineConfig"):
                     if drugs is None:  # parse failure — leave uncached so a later run retries it, not recorded as "no drugs"
                         parse_failures += 1
                         continue
-                    # _as_drug_list guarantees list[str] here, so no nesting to unwrap.
-                    # strip() before the truth test: a whitespace-only entry was passing it
-                    # and landing in the treatment table as an empty drug name.
                     flat = [drug.lower().strip() for drug in drugs if drug.strip()]
                     id_to_drugs[item_id] = flat
 
