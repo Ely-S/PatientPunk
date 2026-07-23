@@ -86,11 +86,12 @@ def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstrea
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
     """Ask fast model if each (entry, drug) pair expresses personal experience.
 
-    OFF by default, and it should stay off for data you intend to publish. A dropped pair never
-    reaches the classifier, so it leaves no row and no audit entry: the loss is silent and cannot
-    be recovered without re-running the classification. Measured against the human reference it
-    drops ~9% of posts that DO report personal experience, and scores below a model that keeps
-    everything. It buys ~14% fewer strong-model calls -- a cost trade, not an accuracy one.
+    OFF by default, and it should stay off for data we intend to publish. Currently it seems to
+    drops ~9 of posts that DO report personal experience, and scores below a model that keeps
+    everything. It buys ~14% fewer strong-model calls.
+
+    I'm not convinced we/I aren't doing this wrong,  and want to dig into it deeper to see if we can make the prefilter better. 
+    -SG
     """
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
