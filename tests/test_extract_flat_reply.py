@@ -43,12 +43,14 @@ def test_genuine_count_mismatch_is_still_unparsed(monkeypatch):
     assert extract.extract_batch(client=None, texts=["a", "b"], _depth=2) == [None, None]
 
 
-@pytest.mark.parametrize("raw", ['[{"drug": "ldn"}]', '[["ldn", {"x": 1}]]'])
-def test_a_shape_that_is_not_strings_is_a_parse_failure(monkeypatch, raw):
-    """The caller flattens with str(d).lower(), so an unguarded dict is written to the treatment
-    table as the drug "{'drug': 'ldn'}". An unreadable shape is a parse failure."""
+@pytest.mark.parametrize("raw", ['[{"drug": "ldn"}]', '[["ldn", {"x": 1}]]', '[1]'])
+def test_a_shape_that_is_not_strings_raises(monkeypatch, raw):
+    """A dict, a number, or a non-string list element means the model ignored the format. Raise
+    instead of coercing str(d).lower() -- which would write "{'drug': 'ldn'}" as a drug name --
+    since it never happens in practice and signals something systematic is wrong."""
     _stub(monkeypatch, raw)
-    assert extract.extract_batch(client=None, texts=["I take LDN"]) == [None]
+    with pytest.raises(ValueError):
+        extract.extract_batch(client=None, texts=["I take LDN"])
 
 
 def test_a_whitespace_only_entry_does_not_become_an_empty_drug(monkeypatch):

@@ -38,19 +38,16 @@ def is_only_questions(text: str) -> bool:
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
 
-def _as_drug_list(reply) -> list[str] | None:
-    """One entry's drugs, or None when the reply's shape isn't usable.
-
-    Only strings and lists-of-strings are drugs. Anything else is a
-    parse failure, not a discovery: the caller flattens with ``str(d).lower()``, which turns
-    ``{"drug": "ldn"}`` into the drug name ``"{'drug': 'ldn'}"`` and writes it to the
-    treatment table.
+def _as_drug_list(reply) -> list[str]:
+    """One entry's drugs: a string, or a list of strings. Any other shape means the model
+    ignored the output format, so raise instead of coercing ``str({"drug": "ldn"})`` into a
+    treatment-table row -- in practice this never fires, so it flags a real problem.
     """
     if isinstance(reply, str):
         return [reply]
-    if isinstance(reply, list):
-        return reply if all(isinstance(drug, str) for drug in reply) else None
-    return None
+    if isinstance(reply, list) and all(isinstance(drug, str) for drug in reply):
+        return reply
+    raise ValueError(f"unexpected extract reply shape: {reply!r}")
 
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] | None]:
