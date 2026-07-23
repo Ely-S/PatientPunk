@@ -361,7 +361,7 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. The config records the run parameters, including the models, `max_upstream_depth`, `max_upstream_chars`, and temperature. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
 
-Each run also writes `runs/run_<run_id>/` under `--output-dir`: `classify_audit.jsonl` — every classification including parse failures, recorded before the writer gate — plus copies of the input files the run used: `tagged_mentions.json`, `canonicalized_mentions.json`, `prefilter_results.json` (prefilter runs only), and any alias lists.
+Each run also writes `runs/run_<run_id>/` under `--output-dir`: `classify_audit.jsonl` — every classification, including parse failures, whether or not a row was written — plus copies of `tagged_mentions.json`, `canonicalized_mentions.json`, `prefilter_results.json`, and alias lists, whichever exist in the output dir.
 
 Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 
