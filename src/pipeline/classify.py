@@ -62,17 +62,44 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call."""
+    """Fallback single-item prefilter call, used when a batch could not be parsed.
+
+    Accepts the JSON array the prompt asks for (["yes"]) and a bare yes/no from a model that
+    ignores the format. Anything unreadable FAILS OPEN and keeps the pair: passing one on costs
+    a strong-model call, dropping it loses the report for good.
+    """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+    raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=400)
+    try:
+        answers = parse_json_array(raw)
+        if answers:
+            return _is_yes(answers[0])
+    except LLMParseError:
+        pass
+    stripped = raw.strip().lower()
+    if stripped.startswith(("yes", "no")):
+        return _is_yes(stripped)
+    log.warning(f"Prefilter unreadable for {entry['id']}:{drug} ({raw[:40]!r}); keeping (fail-open).")
+    return True
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
-    """Ask fast model if each (entry, drug) pair expresses personal experience."""
+    """Ask fast model if each (entry, drug) pair expresses personal experience.
+
+    OFF by default, and it should stay off for data we intend to publish. Currently it seems to
+    drops ~9 of posts that DO report personal experience, and scores below a model that keeps
+    everything. It buys ~14% fewer strong-model calls.
+
+    I'm not convinced we/I aren't doing this wrong,  and want to dig into it deeper to see if we can make the prefilter better. 
+    -SG
+    """
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10))
+        # The 400 is a minimum, not a target: on a tighter allowance a reasoning model spends
+        # the budget internally and returns "", sending the whole batch to the per-item fallback.
+        answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST,
+                                            max_tokens=max(400, len(items) * 20)))
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
         return [_is_yes(a) for a in answers]
@@ -103,14 +130,15 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
+        f'"attribution" (specific/collective), '
         f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
-    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
+    raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=150 * len(items))
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
-    return [ClassificationResult.model_validate(r) for r in results]
+    return [ClassificationResult.from_llm(reply) for reply in results]
 
 
 def _classify_one(
@@ -120,26 +148,32 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","attribution":"specific/collective","side_effects":["..."]}'
         )
-        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100)
-        return ClassificationResult.model_validate(parse_json_object(raw))
+        raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=250)
+        return ClassificationResult.from_llm(parse_json_object(raw))
     except (LLMParseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
-        return ClassificationResult(sentiment="neutral", signal="n/a")
+        return ClassificationResult(sentiment="neutral", signal="n/a", parse_failed=True)
 
 
 def run_classification(
     config: PipelineConfig,
     *,
     writer: ReportWriter | None = None,
-    skip_prefilter: bool = False,
+    skip_prefilter: bool = True,
+    audit_sink: list | None = None,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
     If a ReportWriter is provided, results are written to the database
     incrementally after each result. Pairs already in the database are
     skipped unless config.reclassify is set.
+
+    Every parsed result is written, genuine neutrals included; only parse
+    failures are dropped. If an audit_sink list is provided, every
+    classification is appended to it, tagged with status (written /
+    parse_failure / drug_not_in_treatment_table).
     """
     client = config.client
     limit = config.limit
@@ -191,11 +225,15 @@ def run_classification(
     # Build work queue, skipping pairs already persisted in the database
     prompts: dict[str, str] = {}
     to_do: list[tuple[dict, str]] = []
+    # (post_id, drug) -> 'direct' (named in this text) | 'context' (inherited from an upstream
+    # comment via coreference). Unioning the two would lose which is which.
+    drug_source_by_pair: dict[tuple[str, str], str] = {}
     skipped = 0
 
     for entry in tagged:
-        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
-        for drug in all_drugs:
+        direct_drugs = set(entry.get("drugs_direct", []))
+        context_drugs = set(entry.get("drugs_context", []))
+        for drug in direct_drugs | context_drugs:
             if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
@@ -206,6 +244,9 @@ def run_classification(
                 skipped += 1
                 continue
 
+            drug_source_by_pair[(entry["id"], drug)] = (
+                "direct" if drug in direct_drugs else "context"
+            )
             to_do.append((entry, drug))
             if drug not in prompts:
                 # In --drug mode (target_aliases populated), use the resolved
@@ -315,14 +356,29 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
-                if result.signal != "n/a":
+                record = None
+                if audit_sink is not None:
+                    record = {
+                        "post_id": entry["id"], "drug": drug,
+                        "sentiment": result.sentiment, "signal": result.signal,
+                        "attribution": result.attribution,
+                        "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
+                        "status": "parse_failure" if result.parse_failed else "written",
+                    }
+                    audit_sink.append(record)
+                if not result.parse_failed:
                     drug_counter[drug] += 1
                     if writer is not None:
-                        writer.write_one(
+                        wrote = writer.write_report(
                             post_id=entry["id"], drug=drug, author=entry["author"],
                             sentiment=result.sentiment, signal=result.signal,
                             side_effects=result.side_effects,
+                            attribution=result.attribution,
+                            drug_source=drug_source_by_pair.get((entry["id"], drug), "direct"),
                         )
+                        if not wrote and record is not None:
+                            # write_report refuses a drug missing from the treatment table.
+                            record["status"] = "drug_not_in_treatment_table"
             done += len(batch)
             log.info(f"Classified {done}/{total}...")
 

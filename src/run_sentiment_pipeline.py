@@ -33,7 +33,7 @@ def _banner(label: str) -> None:
     log.info(f"{'═' * 60}\n")
 
 
-def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = False) -> None:
+def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = True) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
     import json
 
@@ -79,7 +79,14 @@ def main():
     parser.add_argument("--reclassify", action="store_true", help="Re-run classification for all pairs, even those already in the database")
     parser.add_argument("--skip-extract", action="store_true", help="Skip extraction step (use existing tagged_mentions.json)")
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
-    parser.add_argument("--skip-prefilter", action="store_true", help="Skip the fast-model prefilter; send all pairs to the strong model")
+    parser.add_argument(
+        "--prefilter", action=argparse.BooleanOptionalAction, default=False,
+        help="Run the fast-model prefilter to drop pairs with no personal experience "
+             "before classification. OFF by default: measured against the human reference it "
+             "drops ~9%% of posts that DO report personal experience, and a dropped pair leaves "
+             "no row and no audit entry, so the loss is silent and unrecoverable. It saves "
+             "~14%% of strong-model calls. Do not enable it for data you intend to publish.",
+    )
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
     parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
     drug_group = parser.add_mutually_exclusive_group()
@@ -135,7 +142,7 @@ def main():
         drug_aliases=drug_aliases,
     )
 
-    run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=args.skip_prefilter)
+    run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=not args.prefilter)
 
 
 if __name__ == "__main__":
