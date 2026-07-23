@@ -165,6 +165,11 @@ uv run python src/import_posts.py \
     --output-db data/posts.db
 ```
 
+> **Import every file before running classification.** A later import can fill thread links on
+> rows that are already in the database, changing their upstream context. A row classified
+> before that repair was judged without the context, and the difference is recorded nowhere —
+> re-deriving its input afterwards no longer matches what the model actually saw.
+
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
