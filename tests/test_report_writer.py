@@ -72,9 +72,9 @@ def test_genuine_neutral_is_written(db):
 def test_audit_does_not_claim_a_row_the_writer_refused(tmp_path):
     """status="written" was predicted from the gate, never checked against the write.
 
-    write_report returns False for a drug absent from the treatment table, so the sidecar whose
-    entire job is reconciling against the DB over-counted exactly the rows the DB never
-    received. Raised by the grok-4.5 review panel.
+    write_report returns False for a drug absent from the treatment table. A refused write 
+    (drug missing from the treatment table) must not be audited as
+    "written", or the audit counts can no longer be checked against the DB.
     """
     import sqlite3
     from pathlib import Path
