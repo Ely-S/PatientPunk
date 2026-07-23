@@ -82,9 +82,7 @@ class PipelineConfig(BaseModel):
     # temp/phase1_candidates.json (edit out unwanted entries), then re-run
     # with discovery_mode="auto" and candidates_file pointed at that file
     # to build regex, extract, and gap-fill for the curated set.
-    # NOTE: --start-at 4 does NOT work here -- it skips Phase 3 entirely,
-    # and "review" mode never runs regex-build/extract, so no discovered
-    # records exist yet at that point.
+
     discovery_mode: str | None = None
     clean: bool = True
 
@@ -211,7 +209,7 @@ class Pipeline:
         """Execute all configured phases, then keep a copy of what this run produced.
 
         Wraps _run_phases because that returns early on a failed phase and on discovery
-        "review" mode, and those runs still produced artifacts worth keeping.
+        "review" mode.
         """
         result = self._run_phases()
         try:
@@ -223,10 +221,6 @@ class Pipeline:
 
     def _snapshot_run(self, result: PipelineResult) -> Path:
         """Copy this run's artifacts into ``<input_dir>/runs/run_<n>/``.
-
-        Copied, not moved: downstream commands resolve ``output/records.csv`` by that exact name
-        and the pipeline reads temp files back when resuming. Temp files matter most here --
-        _clean_temp deletes them at the start of the next full run.
         """
         runs_root = self.config.input_dir / "runs"
         # Claimed with exist_ok=False so it is atomic: exist_ok=True would silently reuse a
@@ -259,7 +253,7 @@ class Pipeline:
                 # One unreadable file must not cost the rest of the snapshot or the manifest.
                 print(f"  ! could not snapshot {source.name}: {e}")
         # PhaseResult.ok defaults True for a skipped phase, so recording it alone cannot tell
-        # "ran and passed" from "never ran" -- and an early return leaves the list short.
+        # "ran and passed" from "never ran".
         (dest / "run_manifest.json").write_text(json.dumps({
             "schema_id": self._schema_id,
             "artifacts": kept,
@@ -488,11 +482,6 @@ class Pipeline:
 
     def _find_discovered_schema(self) -> Path | None:
         """Return the discovered-schema JSON for the current base schema, if any.
-
-        Report-driven only: resolves ``schema_file`` from the newest matching
-        discovery report.  Unlike :meth:`_find_discovered_records` there is no
-        blind-glob fallback -- a bare ``discovered_*.json`` glob would also match
-        the report and records files and cannot be schema-verified.
 
         Used as resume / ``--start-at`` fallback when in-memory phase-3
         artifacts are empty.
