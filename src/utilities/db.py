@@ -101,7 +101,7 @@ class ReportWriter:
         attribution records whether the author tied the outcome to THIS drug ("specific") or to a
         group of treatments that merely includes it ("collective"). drug_source records whether the
         drug was named in this text ("direct") or inherited from an upstream comment ("context").
-        Both keep a filtering choice at analysis time instead of baking it into the pipeline.
+        This preserves this information for post-scraping/post-pull analysis.
         """
         drug_id = self._drug_ids.get(drug.lower())
         if drug_id is None:
