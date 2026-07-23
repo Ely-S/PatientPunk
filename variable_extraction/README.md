@@ -522,6 +522,14 @@ Key columns:
 One row per field: field name, source, description, confidence tier, ICD-10 code,
 observed coverage %, example values.
 
+### `output/runs/run_<n>/`
+
+Every full pipeline run snapshots its artifacts here before the next run can overwrite or
+clean them: `records.csv`, `codebook.csv`, `codebook.md`, `llm_provenance.json`, the phase
+temp files (`phase1_candidates.json`, discovery reports, LLM records), and a
+`run_manifest.json` with the schema id and per-phase status and timing. Runs are numbered
+sequentially and never reused.
+
 ### `output/demographics_deductive.csv` (LLM-only, deductive)
 
 Columns: `author_hash`, `source_type`, `age`, `sex_gender`, `location_country`,
