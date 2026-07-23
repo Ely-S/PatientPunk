@@ -114,9 +114,7 @@ class ReportWriter:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 self.run_id, post_id, author, drug_id, sentiment, signal,
-                # `[]` is a real answer ("the model looked and found none"), not missing data.
-                # Collapsing it to NULL erases the same absence-vs-answer distinction this
-                # pipeline now draws for neutrals and parse failures.
+                # `[]` ("looked, found none") is a real answer, kept distinct from NULL.
                 (json.dumps(side_effects) if side_effects is not None else None),
                 attribution, drug_source,
             ),

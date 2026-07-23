@@ -39,9 +39,8 @@ def is_only_questions(text: str) -> bool:
 
 
 def _as_drug_list(reply) -> list[str]:
-    """One entry's drugs: a string, or a list of strings. Any other shape means the model
-    ignored the output format, so raise instead of coercing ``str({"drug": "ldn"})`` into a
-    treatment-table row -- in practice this never fires, so it flags a real problem.
+    """One entry's drugs: a string, or a list of strings. Any other shape (dict, number)
+    raises -- coercing ``str({"drug": "ldn"})`` would enter the treatment table as a drug name.
     """
     if isinstance(reply, str):
         return [reply]
