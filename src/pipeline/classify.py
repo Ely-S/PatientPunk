@@ -162,7 +162,6 @@ def run_classification(
     writer: ReportWriter | None = None,
     skip_prefilter: bool = True,
     audit_sink: list | None = None,
-    write_neutrals: bool = True,
 ) -> None:
     """Main classification logic — called by pipeline or standalone.
 
@@ -170,15 +169,10 @@ def run_classification(
     incrementally after each result. Pairs already in the database are
     skipped unless config.reclassify is set.
 
-    write_neutrals (default True) records genuine `signal="n/a"` neutrals in the
-    database. The gate used to be `signal != "n/a"`, which discarded every real
-    neutral *along with* parse failures — the "no effect" middle vanished before
-    the DB, irreversibly, and pushed the recorded distribution positive. Only
-    parse failures are dropped now. Pass False for the old lossy behaviour.
-
-    If an audit_sink list is provided, EVERY classification is appended to it
-    *before* the writer gate, tagged with status (written / neutral /
-    parse_failure) — so the dropped rates stay observable either way.
+    Every parsed result is written, genuine neutrals included; only parse
+    failures are dropped. If an audit_sink list is provided, every
+    classification is appended to it, tagged with status (written /
+    parse_failure / drug_not_in_treatment_table).
     """
     client = config.client
     limit = config.limit
@@ -361,23 +355,17 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
-                passes_gate = not result.parse_failed and (write_neutrals or result.signal != "n/a")
                 record = None
-                if audit_sink is not None:  # capture every result BEFORE the writer gate
+                if audit_sink is not None:
                     record = {
                         "post_id": entry["id"], "drug": drug,
                         "sentiment": result.sentiment, "signal": result.signal,
                         "attribution": result.attribution,
                         "drug_source": drug_source_by_pair.get((entry["id"], drug), "direct"),
-                        # Mirrors the writer gate below so audit counts reconcile with the DB;
-                        # a written neutral stays identifiable via signal == "n/a".
-                        "status": ("parse_failure" if result.parse_failed
-                                   else "written" if passes_gate
-                                   else "dropped_neutral"),
+                        "status": "parse_failure" if result.parse_failed else "written",
                     }
                     audit_sink.append(record)
-                # Drop parse failures; keep genuine neutrals unless explicitly disabled.
-                if passes_gate:
+                if not result.parse_failed:
                     drug_counter[drug] += 1
                     if writer is not None:
                         wrote = writer.write_report(
