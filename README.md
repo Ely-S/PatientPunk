@@ -346,7 +346,7 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 **Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
 
-**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Genuine neutrals are written; only parse failures and drugs missing from the `treatment` table are excluded. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Genuine neutrals are written; of the pairs classified, only parse failures and drugs missing from the `treatment` table are excluded. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
 
 | Column | Values |
 |--------|--------|
@@ -359,9 +359,9 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 ## Run traceability
 
-Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. The config records the run parameters, including the models, `max_upstream_depth`, `max_upstream_chars`, and temperature. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
 
-Each run also writes `runs/run_<run_id>/` under `--output-dir`: `classify_audit.jsonl` — every classification, including parse failures, whether or not a row was written — plus copies of `tagged_mentions.json`, `canonicalized_mentions.json`, `prefilter_results.json`, and alias lists, whichever exist in the output dir.
+For the sentiment pipeline, the config records the models, `max_upstream_depth`, `max_upstream_chars`, and temperature, and each run writes `runs/run_<run_id>/` under `--output-dir`: `classify_audit.jsonl` — every classification, including parse failures — plus copies of `tagged_mentions.json`, `canonicalized_mentions.json`, `prefilter_results.json`, and alias lists, whichever exist in the output dir.
 
 Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 

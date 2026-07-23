@@ -527,8 +527,8 @@ observed coverage %, example values.
 Every full pipeline run snapshots its artifacts here (under the configured `--input-dir`,
 `output/` by default) before the next run can overwrite or clean them: `records.csv`, `codebook.csv`, `codebook.md`, `llm_provenance.json`, the phase
 temp files (`phase1_candidates.json`, discovery reports, LLM records), and a
-`run_manifest.json` with the schema id and per-phase status and timing. Runs are numbered
-sequentially and never reused.
+`run_manifest.json` with the schema id and per-phase status and timing. Each run takes the next
+free number; nothing is overwritten.
 
 ### `output/demographics_deductive.csv` (LLM-only, deductive)
 
