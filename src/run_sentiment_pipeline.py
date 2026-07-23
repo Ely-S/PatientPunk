@@ -43,12 +43,8 @@ def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, 
     for source in sources:
         if not source.is_file():
             continue
-        try:
-            shutil.copy2(source, dest / source.name)
-            kept.append(source.name)
-        except OSError as e:
-            # One unreadable file must not cost the rest of the snapshot.
-            log.warning(f"Could not snapshot {source.name}: {e}")
+        shutil.copy2(source, dest / source.name)
+        kept.append(source.name)
     return dest, kept
 
 
@@ -98,27 +94,20 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
                            audit_sink=classify_audit)
         run_id = writer.run_id
 
-    # The audit goes first: it lives only in memory, while everything else in the snapshot is
-    # a copy of a file still on disk. Both are best-effort -- neither may discard a finished run.
+    # Audit first: it is the only artifact not already a file on disk.
     run_dir = config.path("runs") / f"run_{run_id}"
-    try:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        if classify_audit:
-            audit_path = run_dir / "classify_audit.jsonl"
-            with audit_path.open("w", encoding="utf-8") as fh:
-                for record in classify_audit:
-                    fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
-            statuses = Counter(entry["status"] for entry in classify_audit)
-            log.info(f"Wrote {audit_path} ({len(classify_audit)} classifications: "
-                     + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
-    except OSError as e:
-        log.error(f"Could not write the classification audit: {e}")
-    try:
-        run_dir, snapshotted = _snapshot_run_artifacts(config, run_id)
-        log.info(f"Run {run_id} artifacts snapshotted to {run_dir} "
-                 f"({', '.join(snapshotted) if snapshotted else 'nothing to copy'}).")
-    except OSError as e:
-        log.error(f"Could not snapshot run artifacts: {e}")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if classify_audit:
+        audit_path = run_dir / "classify_audit.jsonl"
+        with audit_path.open("w", encoding="utf-8") as fh:
+            for record in classify_audit:
+                fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
+        statuses = Counter(entry["status"] for entry in classify_audit)
+        log.info(f"Wrote {audit_path} ({len(classify_audit)} classifications: "
+                 + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
+    run_dir, snapshotted = _snapshot_run_artifacts(config, run_id)
+    log.info(f"Run {run_id} artifacts snapshotted to {run_dir} "
+             f"({', '.join(snapshotted) if snapshotted else 'nothing to copy'}).")
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
