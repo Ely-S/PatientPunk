@@ -30,8 +30,6 @@ def open_db(db_path: Path) -> sqlite3.Connection:
     """
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode = WAL")
-    # Per-connection, and off by default -- schema.sql's declaration only ever bound the
-    # connection that created the file, so every pipeline connection ran unenforced.
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
