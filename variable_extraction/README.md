@@ -305,7 +305,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --discover MODE       Enable Phase 3: 'auto' (merge all) or 'review' (stop for human selection)
   --no-clean            Don't wipe temp/ before starting
   --workers N           Concurrent API workers (default: 10)
-  --limit N             Process at most N records (cost control)
+  --limit N             Process the first N records of the corpus (fixed window; cost control)
   --resume              Resume an interrupted run
   --skip-threshold F    LLM skips records where regex hit ≥ F fields (default: 0.7)
   --candidates PATH     Saved phase1_candidates.json (skips Phase 3 Stage 1)
@@ -317,6 +317,10 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --no-discovered       Exclude llm_discovered fields from codebook
   --group-guard         Route un-attributed stack members to `unknown` (see below)
 ```
+
+> `--limit` is a fixed window on the first N records, not a per-run work cap: `--resume --limit N`
+> reconsiders the same first N, so it does not advance through the corpus across runs. It is meant
+> for cheap smoke tests, not chunked processing.
 
 #### Group-attribution guard (optional)
 
