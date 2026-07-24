@@ -6,7 +6,8 @@ High-level orchestrator for the PatientPunk extraction pipeline.
 The :class:`Pipeline` class ties together all five phases -- regex extraction,
 LLM gap-filling, field discovery, CSV export, and codebook generation -- into
 a single, configurable object.  Each phase is optional and can be skipped via
-the ``PipelineConfig`` flags.
+the ``PipelineConfig`` flags. One might  want to do this if they wanted to 
+recover an interupted run, for example.
 
 Example
 -------
