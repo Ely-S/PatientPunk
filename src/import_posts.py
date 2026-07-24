@@ -129,7 +129,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
-
+    if unattributed:
         sample = ", ".join(unattributed[:3])
         raise ValueError(
             f"{len(unattributed)} of {len(data)} posts have no resolvable subreddit "
