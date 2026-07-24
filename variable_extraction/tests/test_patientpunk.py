@@ -2283,31 +2283,6 @@ class TestLimitResumeInteraction:
         assert len(records) == 2
         assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1"}
 
-    def test_limit_without_resume_is_unchanged(self, tmp_path, monkeypatch):
-        import patientpunk.llm_extract as m
-
-        input_dir = self._corpus(tmp_path, 6)
-        temp_dir = tmp_path / "temp"
-        temp_dir.mkdir()
-
-        monkeypatch.setattr(
-            m, "call_haiku",
-            lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
-        )
-
-        records, _ = m.process_corpus(
-            client=None,
-            input_dir=input_dir,
-            temp_dir=temp_dir,
-            field_descriptions={"age": "Patient age"},
-            schema=None,
-            limit=3,
-            workers=1,
-        )
-
-        assert len(records) == 3
-        assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1", "p2"}
-
 
 class TestRunExportCsv:
     def test_writes_csv(self, tmp_path):

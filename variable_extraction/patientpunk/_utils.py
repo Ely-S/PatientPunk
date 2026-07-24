@@ -234,9 +234,6 @@ class _AnthropicShapedResponse:
                  service_tier: str | None = None) -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
-        # Actual tier the provider billed/served at ("default"/"flex"/
-        # "priority"/None) -- distinct from the tier requested, since e.g. a
-        # "priority" request can fall back to a default-tier endpoint.
         self.service_tier = service_tier
 
 

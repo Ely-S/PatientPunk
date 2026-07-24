@@ -93,14 +93,6 @@ def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
 
 def _normalize_entry(value) -> dict:
     """Coerce one field entry to the ``{"values": ...}`` shape.
-
-    merged_records / discovered_records store
-    ``{"values": [...], "provenance": ..., "confidence": ...}``, but raw
-    llm_records store a bare ``list | None`` straight off
-    ``LLMExtraction.fields``.  Normalising once here means merge_records,
-    flatten_field and the coverage pass do not each need their own guard --
-    a bare list reaching merge_records raised
-    ``AttributeError: 'NoneType' object has no attribute 'get'``.
     """
     if isinstance(value, dict):
         return value
