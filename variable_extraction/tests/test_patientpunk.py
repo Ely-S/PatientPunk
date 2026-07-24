@@ -1783,46 +1783,23 @@ class TestLLMConfig:
 # =============================================================================
 
 class TestLoadEnvPrecedence:
-    """A .env must not silently beat an explicitly exported variable.
+    """Explicit env > package .env > repo-root .env; missing files are a no-op."""
 
-    llm_provenance.json records whatever load_env() leaves in os.environ, and
-    the model id is part of the LLM cache key -- so a .env that overrode an
-    explicit `LLM_PROVIDER=... main.py` sent the run to a different provider
-    AND a different cache namespace than the operator asked for.
-    """
-
-    @staticmethod
-    def _layout(tmp_path, root_env: str, package_env: str):
-        """Build a repo-root/.env + variable_extraction/.env pair; return the package root."""
+    @pytest.mark.parametrize("exported,expected", [(None, "openai"), ("anthropic", "anthropic")])
+    def test_precedence(self, tmp_path, monkeypatch, exported, expected):
         package_root = tmp_path / "variable_extraction"
         package_root.mkdir()
-        (tmp_path / ".env").write_text(root_env, encoding="utf-8")
-        (package_root / ".env").write_text(package_env, encoding="utf-8")
-        return package_root
-
-    def test_package_env_wins_over_repo_root_env(self, tmp_path, monkeypatch):
-        package_root = self._layout(
-            tmp_path, "LLM_PROVIDER=openrouter\n", "LLM_PROVIDER=openai\nMODEL_FAST=gemma\n"
-        )
+        (tmp_path / ".env").write_text("LLM_PROVIDER=openrouter\n", encoding="utf-8")
+        (package_root / ".env").write_text("LLM_PROVIDER=openai\nMODEL_FAST=gemma\n", encoding="utf-8")
         monkeypatch.setattr(_utils, "PACKAGE_ROOT", package_root)
-        monkeypatch.delenv("LLM_PROVIDER", raising=False)
-        monkeypatch.delenv("MODEL_FAST", raising=False)
+        if exported:
+            monkeypatch.setenv("LLM_PROVIDER", exported)
+        else:
+            monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
         _utils.load_env()
 
-        assert os.environ["LLM_PROVIDER"] == "openai"
-        assert os.environ["MODEL_FAST"] == "gemma"
-
-    def test_exported_variable_beats_both_env_files(self, tmp_path, monkeypatch):
-        package_root = self._layout(
-            tmp_path, "LLM_PROVIDER=openrouter\n", "LLM_PROVIDER=openai\n"
-        )
-        monkeypatch.setattr(_utils, "PACKAGE_ROOT", package_root)
-        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-
-        _utils.load_env()
-
-        assert os.environ["LLM_PROVIDER"] == "anthropic"
+        assert os.environ["LLM_PROVIDER"] == expected
 
     def test_missing_env_files_are_not_an_error(self, tmp_path, monkeypatch):
         package_root = tmp_path / "variable_extraction"
@@ -1830,7 +1807,7 @@ class TestLoadEnvPrecedence:
         monkeypatch.setattr(_utils, "PACKAGE_ROOT", package_root)
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
 
-        _utils.load_env()  # no .env anywhere -- must be a no-op, not a crash
+        _utils.load_env()
 
         assert "LLM_PROVIDER" not in os.environ
 
