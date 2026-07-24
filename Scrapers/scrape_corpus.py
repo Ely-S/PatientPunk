@@ -138,10 +138,9 @@ def paginate_all(endpoint: str, base_params: dict, label: str = "") -> list[dict
 # ---------------------------------------------------------------------------
 
 def count_posts_in_window(subreddit: str, after: str) -> tuple[int, list[dict]]:
-    """Paginate through all post stubs (id + created_utc only) to get a count.
-
-    Returns (count, list_of_stubs). The stubs are reused in Phase 1 so we
-    don't make a second full-metadata pass.
+    """
+    Returns (count, list_of_stubs). The stubs are reused in Phase 1 to save
+    compute
     """
     print(f"  Counting posts since {after[:10]}...")
     stubs = paginate_all(
