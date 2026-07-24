@@ -38,8 +38,24 @@ def is_only_questions(text: str) -> bool:
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
 
-def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
-    """Ask fast model to extract drug mentions from a batch of texts."""
+def _as_drug_list(reply) -> list[str]:
+    """One entry's drugs: a string, or a list of strings. Any other shape (dict, number)
+    raises -- coercing ``str({"drug": "ldn"})`` would enter the treatment table as a drug name.
+    """
+    if isinstance(reply, str):
+        return [reply]
+    if isinstance(reply, list) and all(isinstance(drug, str) for drug in reply):
+        return reply
+    raise ValueError(f"unexpected extract reply shape: {reply!r}")
+
+
+def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str] | None]:
+    """Ask fast model to extract drug mentions from a batch of texts.
+
+    Returns one entry per input text: a list of drug strings on success, where an
+    empty list means "parsed, no drugs found",or ``None`` for a text whose result
+    could not be parsed
+    """
     msg = EXTRACT_PROMPT + "\n" + "".join(
         f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
     )
@@ -52,15 +68,22 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
         results = []
 
     if len(results) == len(texts):
-        return results
+        # A single-text batch is commonly answered flat (["ldn"] not [["ldn"]]), and the retry
+        # below splits batches down to one text, so this is hit routinely. Guarantee a list.
+        return [_as_drug_list(reply) for reply in results]
+
+    # Same flattening with SEVERAL drugs: ["ldn", "aspirin"] for one text fails the length
+    # check above (2 != 1) and would be marked unparsed forever.
+    if len(texts) == 1 and results and not any(isinstance(reply, list) for reply in results):
+        return [_as_drug_list(results)]
 
     if len(texts) > 1 and _depth < 2:
         log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
         mid = len(texts) // 2
         return extract_batch(client, texts[:mid], _depth + 1) + extract_batch(client, texts[mid:], _depth + 1)
 
-    log.warning(f"Expected {len(texts)} results, got {len(results)}")
-    return [[] for _ in texts]
+    log.warning(f"Expected {len(texts)} results, got {len(results)} — marking these texts unparsed")
+    return [None for _ in texts]
 
 
 def _detect_parent_cycles(id_to_parent: dict) -> None:
@@ -70,7 +93,7 @@ def _detect_parent_cycles(id_to_parent: dict) -> None:
     forest (each node has at most one parent and chains terminate). A cycle
     in malformed imported data would cause the recursion to memoize on
     (eid, remaining) and still never terminate (cache stores final values,
-    not in-progress visits). Detect once up front and fail loudly.
+    not in-progress visits). 
 
     Cycle-finding logic lives in ``utilities.graph.find_parent_cycles``;
     this wrapper turns the first cycle into a fail-fast ValueError.
@@ -224,6 +247,7 @@ def run_extraction(config: "PipelineConfig"):
     batch_iter = iter(all_batches)
     done_ext = 0
     batches_since_save = 0
+    parse_failures = 0
     max_inflight = max(config.workers * 4, 1)
 
     try:
@@ -240,7 +264,10 @@ def run_extraction(config: "PipelineConfig"):
                 batch = pending.pop(future)
 
                 for (item_id, _), drugs in zip(batch, future.result()):
-                    flat = [str(d).lower().strip() for sublist in (drugs or []) for d in (sublist if isinstance(sublist, list) else [sublist]) if d]
+                    if drugs is None:  # parse failure — leave uncached so a later run retries it, not recorded as "no drugs"
+                        parse_failures += 1
+                        continue
+                    flat = [drug.lower().strip() for drug in drugs if drug.strip()]
                     id_to_drugs[item_id] = flat
 
                 done_ext += len(batch)
@@ -271,6 +298,9 @@ def run_extraction(config: "PipelineConfig"):
 
     drug_counts = Counter(d for e in tagged_with_drugs for d in e["drugs_direct"])
     log.info(f"{len(tagged)} entries checkpointed ({len(tagged_with_drugs)} with drugs).")
+    if parse_failures:
+        log.warning(f"{parse_failures} entries could not be parsed and were left un-tagged for retry "
+                    f"(not counted as 'no drugs').")
     log.info("Top drug mentions:")
     for drug, count in drug_counts.most_common(10):
         log.info(f"  {drug:<30} {count}")

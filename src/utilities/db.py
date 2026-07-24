@@ -91,22 +91,32 @@ class ReportWriter:
         drug_id = self._drug_ids.get(drug.lower())
         return drug_id is not None and (post_id, drug_id) in self._existing
 
-    def write_one(
-        self, post_id: str, drug: str, author: str, sentiment: str, signal: str,
-        side_effects: list[str] | None = None,
+    def write_report(
+        self, post_id: str, drug: str, author: str | None, sentiment: str, signal: str,
+        side_effects: list[str] | None = None, attribution: str = "specific",
+        drug_source: str = "direct",
     ) -> bool:
-        """Insert a single result. Returns False if drug is unknown. Auto-commits periodically."""
+        """Insert a single result. Returns False if drug is unknown. Auto-commits periodically.
+
+        attribution records whether the author tied the outcome to THIS drug ("specific") or to a
+        group of treatments that merely includes it ("collective"). drug_source records whether the
+        drug was named in this text ("direct") or inherited from an upstream comment ("context").
+        This preserves this information for post-scraping/post-pull analysis.
+        """
         drug_id = self._drug_ids.get(drug.lower())
         if drug_id is None:
             return False
 
         self._conn.execute(
             "INSERT INTO treatment_reports "
-            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength, side_effects) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(run_id, post_id, user_id, drug_id, sentiment, signal_strength, side_effects, "
+            "attribution, drug_source) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 self.run_id, post_id, author, drug_id, sentiment, signal,
-                json.dumps(side_effects) if side_effects else None,
+                # `[]` ("looked, found none") is a real answer, kept distinct from NULL.
+                (json.dumps(side_effects) if side_effects is not None else None),
+                attribution, drug_source,
             ),
         )
         self._pending += 1
