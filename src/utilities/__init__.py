@@ -250,7 +250,9 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
     return aliases
 
 
-# ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+LLM_TEMPERATURE = 0.0
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
@@ -265,7 +267,7 @@ def llm_call(
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
-            "temperature": 0.0,
+            "temperature": LLM_TEMPERATURE,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
@@ -278,7 +280,7 @@ def llm_call(
         model=model,
         system=system,
         prompt=prompt,
-        temperature=0.0,
+        temperature=LLM_TEMPERATURE,
         max_tokens=max_tokens,
         call_fn=_call,
     )

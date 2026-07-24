@@ -23,13 +23,14 @@ def post_text(title: str | None, body_text: str | None, parent_id: str | None) -
 
 
 def open_db(db_path: Path) -> sqlite3.Connection:
-    """Open a database connection with WAL journal mode.
+    """Open a database connection with WAL journal mode and foreign keys enforced.
 
     All code that touches the database should use this instead of
     sqlite3.connect() directly.
     """
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 

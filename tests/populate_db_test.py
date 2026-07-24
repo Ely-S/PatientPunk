@@ -273,6 +273,11 @@ class TestPopulateDbEndToEnd:
         assert len(classify_prompts) == 1
         assert classify_prompts[0].count("--- Entry ") == 1
         assert "I love it so much" in classify_prompts[0]
+        config_json = json.loads(db.conn.execute(
+            "SELECT config FROM extraction_runs ORDER BY run_id DESC LIMIT 1").fetchone()[0])
+        assert "max_upstream_depth" in config_json
+        assert "max_upstream_chars" in config_json
+        assert config_json["temperature"] == 0.0
 
 
 def test_the_prefilter_is_off_by_default():

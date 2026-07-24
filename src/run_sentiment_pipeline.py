@@ -13,18 +13,39 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import json
+import shutil
 import sys
+from collections import Counter
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
+from utilities import PipelineConfig, TAGGED_MENTIONS, CANONICALIZED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG, LLM_TEMPERATURE
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
 
+
+
+def _snapshot_run_artifacts(config: PipelineConfig, run_id: int) -> tuple[Path, list[str]]:
+    """Copy this run's inputs and decisions into ``runs/run_<run_id>/``. Be sure to keep the runs inputs
+    in this pipeline as well:  important for run-regeneration on failure.  
+    """
+    dest = config.path("runs") / f"run_{run_id}"
+    dest.mkdir(parents=True, exist_ok=True)
+    sources = [config.path(name)
+               for name in (TAGGED_MENTIONS, CANONICALIZED_MENTIONS, "prefilter_results.json")]
+    sources += sorted(config.output_dir.glob("aliases_*.json"))
+    kept: list[str] = []
+    for source in sources:
+        if not source.is_file():
+            continue
+        shutil.copy2(source, dest / source.name)
+        kept.append(source.name)
+    return dest, kept
 
 
 def _banner(label: str) -> None:
@@ -35,7 +56,6 @@ def _banner(label: str) -> None:
 
 def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = True) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
-    import json
 
     if not skip_extract:
         _banner("EXTRACT")
@@ -59,12 +79,35 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
+        # What the model was actually shown. Unrecoverable afterwards, and a second model
+        # re-coding this data without them is silently fed different input.
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
+        "temperature": LLM_TEMPERATURE,
     }
 
     _banner("CLASSIFY")
+    classify_audit: list[dict] = []
     with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
-        run_classification(config, writer=writer, skip_prefilter=skip_prefilter)
+        run_classification(config, writer=writer, skip_prefilter=skip_prefilter,
+                           audit_sink=classify_audit)
+        run_id = writer.run_id
+
+    # Audit first: it is the only artifact not already a file on disk.
+    run_dir = config.path("runs") / f"run_{run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if classify_audit:
+        audit_path = run_dir / "classify_audit.jsonl"
+        with audit_path.open("w", encoding="utf-8") as fh:
+            for record in classify_audit:
+                fh.write(json.dumps({"run_id": run_id, **record}) + "\n")
+        statuses = Counter(entry["status"] for entry in classify_audit)
+        log.info(f"Wrote {audit_path} ({len(classify_audit)} classifications: "
+                 + ", ".join(f"{n} {s}" for s, n in statuses.most_common()) + ")")
+    run_dir, snapshotted = _snapshot_run_artifacts(config, run_id)
+    log.info(f"Run {run_id} artifacts snapshotted to {run_dir} "
+             f"({', '.join(snapshotted) if snapshotted else 'nothing to copy'}).")
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
