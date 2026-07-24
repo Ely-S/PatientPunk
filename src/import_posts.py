@@ -129,9 +129,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
-    # users.source_subreddit is NOT NULL + INSERT OR IGNORE, so an unresolved subreddit drops the
-    # user row silently and leaves the post pointing at nobody. Refuse rather than half-import.
-    if unattributed:
+
         sample = ", ".join(unattributed[:3])
         raise ValueError(
             f"{len(unattributed)} of {len(data)} posts have no resolvable subreddit "
@@ -139,11 +137,9 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             f"would be silently dropped. Pass --subreddit to attribute them explicitly."
         )
 
-    # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift)
-    # or bare (older exports), so match against the ids actually present rather than either shape.
+    # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift Direct download)
+    # or bare (API call from Arctic shift), so we need to potentially match against both.
     known_ids = {row.post_id for row in posts}
-    # A parent from an earlier run lives in the database, not this file; resolving against the
-    # file alone severs every thread spanning two imports.
     unmatched = {row.parent_id for row in posts if row.parent_id} - known_ids
     known_ids |= _post_ids_already_imported(
         conn, unmatched | {strip_reddit_prefix(parent) for parent in unmatched})
@@ -170,9 +166,8 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             )
 
     with conn:
-        # Foreign keys are checked per row, and nothing guarantees Reddit lists a thread
-        # parent-first. Defer to COMMIT so insert order stops mattering. Resets at every COMMIT,
-        # hence here rather than in open_db.
+        # Comments do not necessarily come after posts,  so we defer to commit for orphaned comments
+        # as the parent may come later. 
         conn.execute("PRAGMA defer_foreign_keys = ON")
         conn.executemany(
             "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at) VALUES (?, ?, ?)",
@@ -199,7 +194,6 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
 
-    # These rows carry usable text but are absent from every per-user aggregation.
     orphaned = conn.execute("SELECT COUNT(*) FROM posts WHERE user_id IS NULL").fetchone()[0]
     if orphaned:
         log.warning(f"{orphaned} of {n} rows ({orphaned / n:.1%}) have no author ([deleted] "
