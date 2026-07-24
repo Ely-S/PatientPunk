@@ -25,6 +25,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2134,6 +2135,67 @@ class TestBatchExtraction:
         assert out[0]["fields"] == {"age": None}
         assert temps[:2] == [None, 0.7]   # escalated temperature after parse failure
 
+    def test_service_tier_is_sent_only_on_the_openai_dialect(self, monkeypatch):
+        """service_tier is an OpenAI-dialect param.
+
+        The Anthropic Messages API takes the name but accepts only
+        "auto"/"standard_only", and the SDK does not validate client-side --
+        so "flex" reaches the wire and returns a 400. That is non-transient,
+        split_retry_batch only absorbs parse failures, and the whole run dies
+        on the first batch.
+        """
+        import patientpunk.llm_extract as m
+
+        sent = []
+
+        class _Client:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    sent.append(kwargs)
+                    return SimpleNamespace(
+                        content=[SimpleNamespace(text='{"fields": {}}')],
+                        stop_reason="end_turn",
+                    )
+
+        # Bypass the response cache so every call reaches the fake client.
+        monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
+        monkeypatch.setattr(m, "SERVICE_TIER", "flex")
+
+        monkeypatch.setattr(m, "LLM_PROVIDER", "openai")
+        m.call_haiku(_Client(), "sys", "msg")
+        assert sent[-1].get("service_tier") == "flex"
+
+        for provider in ("anthropic", "openrouter"):
+            monkeypatch.setattr(m, "LLM_PROVIDER", provider)
+            m.call_haiku(_Client(), "sys", "msg")
+            assert "service_tier" not in sent[-1], (
+                f"service_tier must not be sent to the {provider} (Anthropic SDK) path"
+            )
+
+    def test_unset_service_tier_is_never_sent(self, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        sent = []
+
+        class _Client:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    sent.append(kwargs)
+                    return SimpleNamespace(
+                        content=[SimpleNamespace(text='{"fields": {}}')],
+                        stop_reason="end_turn",
+                    )
+
+        monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
+        monkeypatch.setattr(m, "SERVICE_TIER", None)
+        monkeypatch.setattr(m, "LLM_PROVIDER", "openai")
+
+        m.call_haiku(_Client(), "sys", "msg")
+
+        assert "service_tier" not in sent[-1]
+
     def test_demographics_parse_single_line_fence(self):
         # Regression: a single-line ```json{...}``` fence (no newline) must parse
         # on the default single-record demographics path, not blank to None.
@@ -2163,6 +2225,91 @@ class TestRunBiomedical:
             run_biomedical(input_dir=tmp_path / "missing")
 
 
+class TestLimitResumeInteraction:
+    """--limit must cap NEW work, not corpus position.
+
+    Slicing work_items before the resume filter made `--resume --limit N` a
+    position cap: a run that had already finished the first N items had nothing
+    left to do, and no number of resumes could ever reach item N+1.
+    """
+
+    @staticmethod
+    def _corpus(tmp_path, n_posts: int):
+        input_dir = tmp_path / "corpus"
+        input_dir.mkdir()
+        posts = [
+            {"author_hash": f"a{i}", "post_id": f"p{i}",
+             "title": f"post {i}", "body": "I am 34 with POTS"}
+            for i in range(n_posts)
+        ]
+        (input_dir / "subreddit_posts.json").write_text(
+            json.dumps(posts), encoding="utf-8")
+        return input_dir
+
+    def test_limit_counts_new_records_when_resuming(self, tmp_path, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        input_dir = self._corpus(tmp_path, 6)
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+
+        # Pretend the first two posts are already done.
+        done = [
+            {"record_meta": {"author_hash": f"a{i}", "post_id": f"p{i}"},
+             "fields": {"age": ["34"]}, "suggested_fields": []}
+            for i in range(2)
+        ]
+        (temp_dir / "llm_records_base.json").write_text(
+            json.dumps(done), encoding="utf-8")
+
+        monkeypatch.setattr(
+            m, "call_haiku",
+            lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
+        )
+
+        records, _ = m.process_corpus(
+            client=None,
+            input_dir=input_dir,
+            temp_dir=temp_dir,
+            field_descriptions={"age": "Patient age"},
+            schema=None,
+            limit=2,
+            workers=1,
+            resume=True,
+        )
+
+        # 2 resumed + 2 genuinely new. Before the fix: 2 + 0, because the slice
+        # took p0/p1 and the resume filter then removed both.
+        assert len(records) == 4
+        new_ids = {r["record_meta"]["post_id"] for r in records} - {"p0", "p1"}
+        assert new_ids == {"p2", "p3"}
+
+    def test_limit_without_resume_is_unchanged(self, tmp_path, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        input_dir = self._corpus(tmp_path, 6)
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+
+        monkeypatch.setattr(
+            m, "call_haiku",
+            lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
+        )
+
+        records, _ = m.process_corpus(
+            client=None,
+            input_dir=input_dir,
+            temp_dir=temp_dir,
+            field_descriptions={"age": "Patient age"},
+            schema=None,
+            limit=3,
+            workers=1,
+        )
+
+        assert len(records) == 3
+        assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1", "p2"}
+
+
 class TestRunExportCsv:
     def test_writes_csv(self, tmp_path):
         rec = {
@@ -2184,6 +2331,55 @@ class TestRunExportCsv:
     def test_empty_input_raises(self):
         with pytest.raises(ValueError):
             run_export_csv(input_files=[], output_path=Path("x.csv"))
+
+    def test_bare_llm_records_shape_merges_without_crashing(self, tmp_path):
+        """llm_records store `fields` as a bare list|None, not {"values": ...}.
+
+        Merging two files that both use that shape raised
+        AttributeError: 'NoneType' object has no attribute 'get' in
+        merge_records, because only merged_records were dict-shaped.
+        """
+        rec = {
+            "_schema_id": "base",
+            "_extraction_method": "llm",
+            "record_meta": {"author_hash": "a", "source": "user_history",
+                            "post_id": "p1", "text_count": 1},
+            "fields": {"age": ["34"], "conditions": None, "medications": ["LDN"]},
+        }
+        src = tmp_path / "llm_records_base.json"
+        src.write_text(json.dumps([rec]), encoding="utf-8")
+        dest = tmp_path / "out.csv"
+
+        # Same file twice -> identical keys collide -> merge_records runs.
+        out = run_export_csv(input_files=[src, src], output_path=dest)
+
+        assert out.stats["rows"] == 1
+        row = next(iter(csv.DictReader(dest.open(encoding="utf-8"))))
+        assert row["age"] == "34"
+        assert row["medications"] == "LDN"
+        assert row["conditions"] == ""      # null field -> blank cell, not a crash
+
+    def test_bare_shape_does_not_overwrite_a_populated_value(self, tmp_path):
+        """Gap-filling semantics must survive the shape normalisation."""
+        populated = {
+            "record_meta": {"author_hash": "a", "post_id": "p1"},
+            "fields": {"age": {"values": ["34"], "provenance": "regex"}},
+        }
+        bare = {
+            "record_meta": {"author_hash": "a", "post_id": "p1"},
+            "fields": {"age": ["99"], "conditions": ["POTS"]},
+        }
+        first = tmp_path / "a.json"
+        second = tmp_path / "b.json"
+        first.write_text(json.dumps([populated]), encoding="utf-8")
+        second.write_text(json.dumps([bare]), encoding="utf-8")
+        dest = tmp_path / "out.csv"
+
+        run_export_csv(input_files=[first, second], output_path=dest)
+
+        row = next(iter(csv.DictReader(dest.open(encoding="utf-8"))))
+        assert row["age"] == "34"           # first file wins; not clobbered
+        assert row["conditions"] == "POTS"  # gap still filled from the second
 
 
 class TestPipelineNoSubprocess:

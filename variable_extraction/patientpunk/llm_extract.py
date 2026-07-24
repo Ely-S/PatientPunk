@@ -68,6 +68,7 @@ from ._utils import (
     LLM_PROVIDER,
     LLMResponseError,
     check_response,
+    LLM_SERVICE_TIER,
     LLM_TEMPERATURE,
     MODEL_FAST,
     collect_texts_from_post,
@@ -79,6 +80,7 @@ from ._utils import (
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
 MODEL = MODEL_FAST
+SERVICE_TIER = LLM_SERVICE_TIER
 
 # Field names the model invented that aren't in the schema. Dropped from the
 # record, but counted here so they surface in the run summary instead of
@@ -200,12 +202,24 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
             if delay:
                 time.sleep(delay)
             try:
+                # service_tier is an OpenAI-dialect parameter. The Anthropic
+                # Messages API takes the name but only accepts "auto" /
+                # "standard_only", and the SDK does no client-side validation --
+                # so "flex" would go to the wire and come back a 400. A 400 is
+                # non-transient here, and split_retry_batch only absorbs parse
+                # failures, so it would abort the whole run on the first batch.
+                extra_kwargs = (
+                    {"service_tier": SERVICE_TIER}
+                    if SERVICE_TIER and LLM_PROVIDER == "openai"
+                    else {}
+                )
                 response = client.messages.create(
                     model=MODEL,
                     temperature=temp,
                     max_tokens=MAX_TOKENS,
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
+                    **extra_kwargs,
                 )
                 return response_text(check_response(response, MODEL))
             except Exception as e:
@@ -768,8 +782,6 @@ def process_corpus(
             posts = json.load(f)
         for post in posts:
             work_items.append(("post", post))
-    if limit:
-        work_items = work_items[:limit]
 
     # Filter out already-completed items when resuming
     if done_keys:
@@ -793,6 +805,13 @@ def process_corpus(
         work_items = remaining
         if skipped_resume:
             print(f"  Skipping {skipped_resume} already-completed records.\n")
+
+    # Cap AFTER the resume filter so --limit counts NEW records for this run.
+    # Slicing first made --limit a corpus-position cap: `--resume --limit 100`
+    # against a run that had already done 60 processed 40, and no number of
+    # resumes could ever reach item 101.
+    if limit:
+        work_items = work_items[:limit]
 
     total = len(work_items)
     already_done = len(records)

@@ -158,6 +158,11 @@ def resolve_llm_config(env: dict | None = None) -> dict:
         "base_url": (env.get("LLM_BASE_URL") or "").strip() or default_base,
         "temperature": temperature,
         "api_key": api_key,
+        # OpenRouter service tier: "flex" (cheaper/slower) or "priority"
+        # (faster/pricier). Unset/"" means the provider's default tier -- the
+        # param is omitted entirely rather than sent as "default", since
+        # only OpenAI/Vertex/AI-Studio/xAI endpoints recognize it at all.
+        "service_tier": (env.get("LLM_SERVICE_TIER") or "").strip().lower() or None,
     }
 
 
@@ -166,6 +171,7 @@ LLM_PROVIDER = _CFG["provider"]
 MODEL_FAST = _CFG["model_fast"]
 MODEL_STRONG = _CFG["model_strong"]
 LLM_TEMPERATURE = _CFG["temperature"]
+LLM_SERVICE_TIER = _CFG["service_tier"]
 
 
 def llm_config() -> dict:
@@ -224,9 +230,14 @@ def check_response(response, model: str = ""):
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn",
+                 service_tier: str | None = None) -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
+        # Actual tier the provider billed/served at ("default"/"flex"/
+        # "priority"/None) -- distinct from the tier requested, since e.g. a
+        # "priority" request can fall back to a default-tier endpoint.
+        self.service_tier = service_tier
 
 
 class _OpenAIMessages:
@@ -234,7 +245,7 @@ class _OpenAIMessages:
         self._client = client
 
     def create(self, *, model, messages, max_tokens=1024, system=None,
-               temperature=0.0, **_ignored):
+               temperature=0.0, service_tier: str | None = None, **_ignored):
         oai_messages = []
         if system:
             if isinstance(system, str):
@@ -246,9 +257,12 @@ class _OpenAIMessages:
                 oai_messages.append({"role": "system", "content": sys_text})
         for m in messages:
             oai_messages.append({"role": m["role"], "content": m["content"]})
+        extra: dict = {}
+        if service_tier:
+            extra["service_tier"] = service_tier
         resp = self._client.chat.completions.create(
             model=model, messages=oai_messages,
-            max_tokens=max_tokens, temperature=temperature,
+            max_tokens=max_tokens, temperature=temperature, **extra,
         )
         # A degenerate reply is a failure, not an empty answer: raise so callers
         # retry and the response cache never stores it.
@@ -260,7 +274,8 @@ class _OpenAIMessages:
         # OpenAI spells truncation "length"; normalize to the Anthropic name so
         # check_response() works the same on both backends.
         stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
-        return _AnthropicShapedResponse(choice.message.content, stop_reason)
+        served_tier = getattr(resp, "service_tier", None)
+        return _AnthropicShapedResponse(choice.message.content, stop_reason, served_tier)
 
 
 class _OpenAIAdapter:
