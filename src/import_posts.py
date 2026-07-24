@@ -6,6 +6,7 @@ import logging
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
+from itertools import batched
 from pathlib import Path
 from typing import NamedTuple
 
@@ -58,10 +59,32 @@ def strip_reddit_prefix(reddit_id: str | None) -> str | None:
     return reddit_id
 
 
-def extract_subreddit(url: str | None) -> str:
+def extract_subreddit(url: str | None) -> str | None:
+    """Recover the subreddit from a post URL, or None when the URL can't supply it."""
     if url and "/r/" in url:
         return url.split("/r/")[1].split("/")[0]
     return None
+
+
+def _post_ids_already_imported(conn: sqlite3.Connection, candidates: set[str]) -> set[str]:
+    """Of these ids, which does the database already hold?
+
+    Chunked because SQLite caps host parameters per statement (999 on older builds), and a large
+    pull can present far more candidate parents than that in one file.
+    """
+    found: set[str] = set()
+
+    for batch in batched(candidates, 500):
+        placeholders = ",".join(["?"] * len(batch))
+
+        found.update(
+            row[0]
+            for row in conn.execute(
+                f"SELECT post_id FROM posts WHERE post_id IN ({placeholders})",
+                batch,
+            )
+        )
+    return found
 
 
 def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> None:
@@ -73,14 +96,20 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     posts: list[PostRow] = []
     seen_users: set[str] = set()
 
-    def add_user(author: str, sub: str) -> None:
+    def add_user(author: str | None, sub: str | None) -> None:
+        # Falsy author = [deleted]: no user row, but the post itself must still be imported.
+        if not author:
+            return
         if author not in seen_users:
             seen_users.add(author)
             users.append(UserRow(author, sub, now))
 
+    unattributed = []   # post_ids whose subreddit could not be determined
     for post in data:
-        author = post["author_hash"]
+        author = post.get("author_hash") or None   # "" / missing -> NULL, same as [deleted]
         sub = subreddit or extract_subreddit(post.get("url"))
+        if sub is None:
+            unattributed.append(post["post_id"])
 
         add_user(author, sub)
         posts.append(PostRow(
@@ -90,17 +119,56 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             scraped_at=now,
         ))
         for comment in post.get("comments", []):
-            c_author = comment["author_hash"]
+            c_author = comment.get("author_hash") or None
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                parent_id=comment.get("parent_id") or None,   # resolved against known ids below
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
+    if unattributed:
+        sample = ", ".join(unattributed[:3])
+        raise ValueError(
+            f"{len(unattributed)} of {len(data)} posts have no resolvable subreddit "
+            f"(e.g. {sample}). Their URLs carry no '/r/' segment, so the users on those posts "
+            f"would be silently dropped. Pass --subreddit to attribute them explicitly."
+        )
+
+    # parent_id always arrives prefixed ("t3_abc"); post_id may be stored prefixed (Arctic Shift Direct download)
+    # or bare (API call from Arctic shift), so we need to potentially match against both.
+    known_ids = {row.post_id for row in posts}
+    unmatched = {row.parent_id for row in posts if row.parent_id} - known_ids
+    known_ids |= _post_ids_already_imported(
+        conn, unmatched | {strip_reddit_prefix(parent) for parent in unmatched})
+
+    resolved = dangling = 0
+    for i, row in enumerate(posts):
+        if row.parent_id is None:
+            continue
+        bare = strip_reddit_prefix(row.parent_id)
+        match = row.parent_id if row.parent_id in known_ids else (bare if bare in known_ids else None)
+        posts[i] = row._replace(parent_id=match)
+        resolved += match is not None
+        dangling += match is None
+    if resolved + dangling:
+        log.info(f"Thread links: {resolved} resolved, {dangling} dangling "
+                 f"({dangling / (resolved + dangling):.1%} — parents outside the pull window).")
+        if resolved == 0:
+            raise ValueError(
+                f"EVERY parent_id is dangling ({dangling} of them). That is the id-shape mismatch "
+                "that destroys thread structure and makes coreference inert. Refusing to write a "
+                "corpus with no thread links — the message used to be a log line that callers "
+                "missed while the import wrote anyway. (A comments-only export whose parents all "
+                "sit outside the pull window looks identical; re-export including the parents.)"
+            )
+
     with conn:
+        # Comments do not necessarily come after posts,  so we defer to commit for orphaned comments
+        # as the parent may come later. 
+        conn.execute("PRAGMA defer_foreign_keys = ON")
         conn.executemany(
             "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at) VALUES (?, ?, ?)",
             users,
@@ -110,14 +178,26 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             posts,
         )
+        repaired = conn.executemany(
+            "UPDATE posts SET parent_id = ? WHERE post_id = ? AND parent_id IS NULL",
+            [(row.parent_id, row.post_id) for row in posts if row.parent_id],
+        ).rowcount
+
         # Clean dangling parent_ids in SQL
         conn.execute(
             "UPDATE posts SET parent_id = NULL "
             "WHERE parent_id IS NOT NULL AND parent_id NOT IN (SELECT post_id FROM posts)"
         )
+    if repaired:
+        log.info(f"Repaired {repaired} thread links on rows that were already imported.")
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
+
+    orphaned = conn.execute("SELECT COUNT(*) FROM posts WHERE user_id IS NULL").fetchone()[0]
+    if orphaned:
+        log.warning(f"{orphaned} of {n} rows ({orphaned / n:.1%}) have no author ([deleted] "
+                    f"account). Text is retained; they are excluded from per-user aggregation.")
 
 
 def main():
