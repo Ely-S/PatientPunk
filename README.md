@@ -165,6 +165,11 @@ uv run python src/import_posts.py \
     --output-db data/posts.db
 ```
 
+> **Import every file before running classification.** A later import can fill thread links on
+> rows that are already in the database, changing their upstream context. A row classified
+> before that repair was judged without the context, and the difference is recorded nowhere —
+> re-deriving its input afterwards no longer matches what the model actually saw.
+
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
@@ -335,24 +340,28 @@ For each entry × drug pair, classifies the author's sentiment. Two-stage proces
 
 Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls back to `tagged_mentions.json`.
 
-1. **Fast Model prefilter** (cheap) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects research discussions, off-topic replies, and author-doesn't-use-it cases. (Pure question posts are already dropped at extract time.) Results cached to `prefilter_results.json` — skipped on re-run.
+1. **Fast Model prefilter** (opt-in via `--prefilter`, off by default) — asks "does this author express personal experience with this drug?" Batches 20 items per call. Explicitly rejects research discussions, off-topic replies, and author-doesn't-use-it cases. (Pure question posts are already dropped at extract time.) Results cached to `prefilter_results.json` — skipped on re-run.
 
 2. **Strong Model classifier** (accurate) — for entries that pass, classifies sentiment and signal strength. Batches 5 items per drug (shared system prompt). The system prompt includes synonym info from the `treatment` table so the model knows "naltrexone" in upstream comment text = "ldn". The subreddit name is read from the database and injected into the prompt.
 
 **Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
 
-**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Genuine neutrals are written; of the pairs classified, only parse failures and drugs missing from the `treatment` table are excluded. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
 
 | Column | Values |
 |--------|--------|
 | `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
 | `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
+| `attribution` | `specific` (outcome tied to this drug), `collective` (reported for a group of treatments that includes it) |
+| `drug_source` | `direct` (drug named in this text), `context` (inherited from an upstream comment) |
 
 ---
 
 ## Run traceability
 
 Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
+
+For the sentiment pipeline, the config records the models, `max_upstream_depth`, `max_upstream_chars`, and temperature, and each run writes `runs/run_<run_id>/` under `--output-dir`: `classify_audit.jsonl` — every classification, including parse failures — plus copies of `tagged_mentions.json`, `canonicalized_mentions.json`, `prefilter_results.json`, and alias lists, whichever exist in the output dir.
 
 Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 
