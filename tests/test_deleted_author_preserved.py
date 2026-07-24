@@ -1,12 +1,5 @@
-"""Posts by [deleted] accounts must survive import, not vanish.
-
-Drives the real importer. The scraper sets author_hash=None when Reddit reports the account as
-[deleted]. posts.user_id was NOT NULL and the importer uses INSERT OR IGNORE, so those rows failed
-the constraint and were silently discarded — body text and all, with no error and no count.
-
-Worse, dropping a [deleted] parent orphaned its surviving replies: their parent_id then matched no
-post, so the dangling-parent cleanup nulled it and severed the thread, breaking coreference for
-the children too. One fixture covers both, because they are the same failure.
+""""A post whose author is [deleted] must still be imported. Must have a null user_id, no invented user
+row, and its thread links to and from it intact.
 """
 import json
 import sqlite3
