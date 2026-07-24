@@ -202,12 +202,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
             if delay:
                 time.sleep(delay)
             try:
-                # service_tier is an OpenAI-dialect parameter. The Anthropic
-                # Messages API takes the name but only accepts "auto" /
-                # "standard_only", and the SDK does no client-side validation --
-                # so "flex" would go to the wire and come back a 400. A 400 is
-                # non-transient here, and split_retry_batch only absorbs parse
-                # failures, so it would abort the whole run on the first batch.
+                # service_tier is an OpenAI-dialect parameter. 
                 extra_kwargs = (
                     {"service_tier": SERVICE_TIER}
                     if SERVICE_TIER and LLM_PROVIDER == "openai"
