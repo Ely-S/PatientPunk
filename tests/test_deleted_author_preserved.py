@@ -1,4 +1,4 @@
-""""A post whose author is [deleted] must still be imported. Must have a null user_id, no invented user
+"""A post whose author is [deleted] must still be imported, with a null user_id, no invented user
 row, and its thread links to and from it intact.
 """
 import json

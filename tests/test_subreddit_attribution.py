@@ -1,9 +1,8 @@
 """An unresolvable subreddit must stop the import, not silently drop users.
 
-`users.source_subreddit` is NOT NULL and users are written with INSERT OR IGNORE, so a user row
-carrying sub=None fails the constraint and is discarded without an error — while the post keeps a
-user_id pointing at a row that was never created. Same silent discard as the [deleted]-author
-case, reached by a different route: a post URL with no '/r/' segment and no --subreddit argument.
+source_subreddit is NOT NULL, and users are inserted with INSERT OR IGNORE — so a user with no
+subreddit is skipped silently instead of erroring, and the guard has to refuse before that
+insert runs. Triggered by a post URL with no '/r/' segment and no --subreddit override.
 """
 import json
 import sqlite3
