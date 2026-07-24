@@ -64,11 +64,8 @@ def test_a_snapshot_records_a_manifest(tmp_path):
 
 
 def test_an_already_claimed_run_number_is_skipped_not_overwritten(tmp_path):
-    """mkdir(exist_ok=True) would silently reuse a directory another run already took.
-
-    That is the exact loss this feature exists to prevent, so the claim has to be atomic.
-    Raised by the grok-4.5 and gemini-3.1-pro panels.
-    """
+    """Each run claims a unique directory; mkdir(exist_ok=True) would let a concurrent run
+    reuse a number already taken."""
     pipe = _pipeline(tmp_path)
     squatter = tmp_path / "runs" / "run_1"
     squatter.mkdir(parents=True)
