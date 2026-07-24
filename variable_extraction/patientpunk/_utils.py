@@ -57,17 +57,24 @@ PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 def load_env() -> None:
     """Load .env from the repo root and variable_extraction/, if present.
 
-    The variable_extraction/.env values win (loaded second, override=True).
+    The variable_extraction/.env values win over the repo-root ones (merged
+    second).  Neither overrides a variable that is already set in the real
+    environment: ``LLM_PROVIDER=anthropic ... main.py`` must win over a stale
+    .env, and must be what llm_provenance.json records for the run.
     Runs once at import time here so every module that reads os.environ for
     LLM config (including this module's own _CFG below) sees .env values,
     regardless of which module a caller imports first.
     """
     try:
-        from dotenv import load_dotenv
+        from dotenv import dotenv_values
     except ImportError:
         raise ImportError("python-dotenv is required: pip install python-dotenv") from None
-    load_dotenv(PACKAGE_ROOT.parent / ".env", override=True)  # repo root
-    load_dotenv(PACKAGE_ROOT / ".env", override=True)         # variable_extraction/
+    merged: dict[str, str] = {}
+    for env_path in (PACKAGE_ROOT.parent / ".env",  # repo root
+                     PACKAGE_ROOT / ".env"):        # variable_extraction/
+        merged.update({k: v for k, v in dotenv_values(env_path).items() if v is not None})
+    for key, value in merged.items():
+        os.environ.setdefault(key, value)
 
 
 load_env()
