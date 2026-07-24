@@ -24,7 +24,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 
 __all__ = ["LLMExtraction", "SuggestedField", "parse_extraction"]
 
@@ -58,11 +65,17 @@ def _coerce_value(val: Any) -> list[str] | None:
 
 
 class SuggestedField(BaseModel):
-    """A field the model proposes adding. Extra keys are kept for discovery."""
+    """A field the model proposes adding. Extra keys are kept for discovery.
 
-    model_config = ConfigDict(extra="allow")
+    The key is ``field_name``, not ``name``: that is what both prompts ask the
+    model for (``build_system_prompt`` / ``build_gap_system_prompt``) and what
+    ``aggregate_suggestions`` reads back out. ``name`` is accepted as an alias
+    only so replies already sitting in the LLM cache still validate.
+    """
 
-    name: str
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    field_name: str = Field(validation_alias=AliasChoices("field_name", "name"))
     description: str = ""
 
 
@@ -94,7 +107,10 @@ class LLMExtraction(BaseModel):
         if not isinstance(v, list):
             return []
         # Drop members that cannot be a suggestion rather than failing the record.
-        return [s for s in v if isinstance(s, dict) and s.get("name")]
+        return [
+            s for s in v
+            if isinstance(s, dict) and (s.get("field_name") or s.get("name"))
+        ]
 
 
 def parse_extraction(

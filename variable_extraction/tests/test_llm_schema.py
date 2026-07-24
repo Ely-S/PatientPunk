@@ -104,31 +104,105 @@ def test_explicit_null_value_survives_as_none():
 
 # --- suggested_fields ---------------------------------------------------------
 
-def test_suggestion_missing_name_is_dropped():
+def test_suggestion_uses_the_key_the_prompt_asks_for():
+    """The exact shape build_system_prompt asks for must survive validation.
+
+    This is the case the suite never covered. The prompt asks for "field_name"
+    and aggregate_suggestions reads "field_name", but the validator required
+    "name" -- so every real suggestion was dropped and two 1000-record runs
+    produced an empty llm_field_suggestions_*.json with no error.
+    """
+    result = parse_extraction({
+        "fields": {},
+        "suggested_fields": [{
+            "field_name": "sleep_quality",
+            "description": "Sleep disruption patterns",
+            "values": ["poor"],
+            "frequency_hint": "common",
+        }],
+    })
+    assert result is not None
+    suggestion = result[0].suggested_fields[0]
+    assert suggestion.field_name == "sleep_quality"
+    # aggregate_suggestions consumes model_dump(), so the round-trip must keep
+    # the key it reads plus the extras it reports.
+    dumped = suggestion.model_dump()
+    assert dumped["field_name"] == "sleep_quality"
+    assert dumped["values"] == ["poor"]
+    assert dumped["frequency_hint"] == "common"
+
+
+def test_legacy_name_key_still_validates():
+    """Replies already in the LLM cache used "name"; they must not start failing."""
+    result = parse_extraction({"fields": {}, "suggested_fields": [{"name": "symptoms"}]})
+    assert result is not None
+    assert [s.field_name for s in result[0].suggested_fields] == ["symptoms"]
+
+
+def test_suggestion_missing_field_name_is_dropped():
     result = parse_extraction({"fields": {}, "suggested_fields": [{"description": "no name"}]})
     assert result is not None and result[0].suggested_fields == []
 
 
 def test_junk_suggestion_members_are_dropped_not_fatal():
     result = parse_extraction(
-        {"fields": {}, "suggested_fields": ["bare string", None, 7, {"name": "symptoms"}]}
+        {"fields": {}, "suggested_fields": ["bare string", None, 7, {"field_name": "symptoms"}]}
     )
     assert result is not None
-    assert [s.name for s in result[0].suggested_fields] == ["symptoms"]
+    assert [s.field_name for s in result[0].suggested_fields] == ["symptoms"]
 
 
 def test_lone_suggestion_dict_is_wrapped():
-    result = parse_extraction({"fields": {}, "suggested_fields": {"name": "symptoms"}})
+    result = parse_extraction({"fields": {}, "suggested_fields": {"field_name": "symptoms"}})
     assert result is not None
-    assert [s.name for s in result[0].suggested_fields] == ["symptoms"]
+    assert [s.field_name for s in result[0].suggested_fields] == ["symptoms"]
 
 
 def test_suggestion_extra_keys_are_kept_for_discovery():
     result = parse_extraction(
-        {"fields": {}, "suggested_fields": [{"name": "x", "example_value": "v"}]}
+        {"fields": {}, "suggested_fields": [{"field_name": "x", "example_value": "v"}]}
     )
     assert result is not None
     assert result[0].suggested_fields[0].model_dump()["example_value"] == "v"
+
+
+def test_prompt_and_validator_agree_on_the_suggestion_key():
+    """Pin the validator to the prompt so the contract cannot silently split again.
+
+    The original bug was not the key itself -- it was that nothing tied the key
+    the prompt asks for to the key the validator requires, so the suite stayed
+    green while every suggestion was discarded.
+    """
+    from patientpunk.llm_extract import build_system_prompt
+
+    prompt = build_system_prompt({"age": "Patient age"})
+    assert '"field_name"' in prompt
+    assert '"name"' not in prompt.replace('"field_name"', "")
+
+    # Whatever key the prompt advertises, SuggestedField must accept it.
+    assert parse_extraction(
+        {"fields": {}, "suggested_fields": [{"field_name": "x"}]}
+    )[0].suggested_fields != []
+
+
+def test_suggestion_survives_end_to_end_into_aggregation():
+    """parse_extraction -> model_dump -> aggregate_suggestions must not lose the name."""
+    from patientpunk.llm_extract import aggregate_suggestions
+
+    result = parse_extraction({
+        "fields": {},
+        "suggested_fields": [{
+            "field_name": "sleep_quality", "description": "d",
+            "values": ["poor"], "frequency_hint": "common",
+        }],
+    })
+    dumped = [s.model_dump() for s in result[0].suggested_fields]
+    ranked = aggregate_suggestions(dumped)
+
+    assert len(ranked) == 1
+    assert ranked[0]["field_name"] == "sleep_quality"
+    assert ranked[0]["times_suggested"] == 1
+    assert ranked[0]["example_values"] == ["poor"]
 
 
 def test_non_list_suggested_fields_is_empty_not_fatal():

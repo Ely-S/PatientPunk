@@ -1187,7 +1187,10 @@ def aggregate_suggestions(all_suggestions: list[dict]) -> list[dict]:
         if s.get("description"):
             entry["descriptions"].add(s["description"])
         for v in (s.get("values") or []):
-            if v and v not in entry["example_values"][:10]:
+            # Dedupe against the whole list, not just the first 10: the slice
+            # made every duplicate past index 10 append forever (50 identical
+            # suggestions -> a 110-entry list) even though only [:10] is emitted.
+            if v and v not in entry["example_values"]:
                 entry["example_values"].append(v)
         if s.get("frequency_hint"):
             entry["frequency_hints"].append(s["frequency_hint"])
