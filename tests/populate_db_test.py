@@ -241,8 +241,8 @@ class TestPopulateDbEndToEnd:
             output_dir=db.path.parent,
             db_path=db.path,
         )
-        # The prefilter is off by default now; this test exists to cover that path, so it
-        # opts in. See test_the_prefilter_is_off_by_default for the default itself.
+        # Prefilter is off by default; this opts in to exercise that path.
+        # See test_the_prefilter_is_off_by_default for the default itself.
         run_pipeline(config, skip_prefilter=False)
 
         # Exactly one canonical treatment was written.

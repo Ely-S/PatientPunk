@@ -45,9 +45,8 @@ def test_genuine_count_mismatch_is_still_unparsed(monkeypatch):
 
 @pytest.mark.parametrize("raw", ['[{"drug": "ldn"}]', '[["ldn", {"x": 1}]]', '[1]'])
 def test_a_shape_that_is_not_strings_raises(monkeypatch, raw):
-    """A dict, a number, or a non-string list element means the model ignored the format. Raise
-    instead of coercing str(d).lower() -- which would write "{'drug': 'ldn'}" as a drug name --
-    since it never happens in practice and signals something systematic is wrong."""
+    """A reply that is not a string or list of strings raises: coercing str(d).lower() would
+    write "{'drug': 'ldn'}" to the treatment table as a drug name."""
     _stub(monkeypatch, raw)
     with pytest.raises(ValueError):
         extract.extract_batch(client=None, texts=["I take LDN"])
