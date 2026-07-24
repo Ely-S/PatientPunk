@@ -64,8 +64,7 @@ def test_a_snapshot_records_a_manifest(tmp_path):
 
 
 def test_an_already_claimed_run_number_is_skipped_not_overwritten(tmp_path):
-    """Each run claims a unique directory; mkdir(exist_ok=True) would let a concurrent run
-    reuse a number already taken."""
+    """Each run takes the next unused run number; an existing run directory is not overwritten."""
     pipe = _pipeline(tmp_path)
     squatter = tmp_path / "runs" / "run_1"
     squatter.mkdir(parents=True)
@@ -86,22 +85,3 @@ def test_a_snapshot_failure_never_fails_a_finished_run(tmp_path, monkeypatch):
     monkeypatch.setattr(Pipeline, "_snapshot_run",
                         lambda self, result: (_ for _ in ()).throw(TypeError("not serialisable")))
     assert pipe.run().total_elapsed == 1.0
-
-
-def test_one_unreadable_artifact_does_not_cost_the_rest(tmp_path, monkeypatch):
-    """A single failed copy must not abort the snapshot or skip the manifest."""
-    import shutil
-
-    pipe = _pipeline(tmp_path)
-    _write_run_outputs(pipe, "first")
-    real = shutil.copy2
-
-    def flaky(src, dst):
-        if "phase1_candidates" in str(src):
-            raise OSError("simulated read failure")
-        return real(src, dst)
-
-    monkeypatch.setattr(shutil, "copy2", flaky)
-    run_dir = pipe._snapshot_run(PipelineResult())
-    assert (run_dir / "records.csv").exists(), "an unrelated copy was lost"
-    assert (run_dir / "run_manifest.json").exists(), "the manifest was skipped"

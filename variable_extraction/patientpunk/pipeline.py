@@ -23,6 +23,7 @@ Example
 
 from __future__ import annotations
 
+import itertools
 import json
 import shutil
 import time
@@ -223,18 +224,11 @@ class Pipeline:
         """Copy this run's artifacts into ``<input_dir>/runs/run_<n>/``.
         """
         runs_root = self.config.input_dir / "runs"
-        # Claimed with exist_ok=False so it is atomic: exist_ok=True would silently reuse a
-        # number a concurrent run already took. Whoever loses the race takes the next one.
-        number = max((int(p.name[4:]) for p in runs_root.glob("run_*") if p.name[4:].isdigit()),
-                     default=0)
-        while True:
-            number += 1
+        for number in itertools.count(1):
             dest = runs_root / f"run_{number}"
-            try:
-                dest.mkdir(parents=True, exist_ok=False)
+            if not dest.exists():
+                dest.mkdir(parents=True)
                 break
-            except FileExistsError:
-                continue
 
         # Driven off _TEMP_PATTERNS -- exactly what _clean_temp deletes -- so the two cannot drift.
         sources = [self.config.input_dir / name for name in
