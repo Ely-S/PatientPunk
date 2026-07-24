@@ -783,6 +783,9 @@ def process_corpus(
         for post in posts:
             work_items.append(("post", post))
 
+    if limit:
+        work_items = work_items[:limit]
+
     # Filter out already-completed items when resuming
     if done_keys:
         def item_key(item_type, item):
@@ -805,13 +808,6 @@ def process_corpus(
         work_items = remaining
         if skipped_resume:
             print(f"  Skipping {skipped_resume} already-completed records.\n")
-
-    # Cap AFTER the resume filter so --limit counts NEW records for this run.
-    # Slicing first made --limit a corpus-position cap: `--resume --limit 100`
-    # against a run that had already done 60 processed 40, and no number of
-    # resumes could ever reach item 101.
-    if limit:
-        work_items = work_items[:limit]
 
     total = len(work_items)
     already_done = len(records)

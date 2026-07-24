@@ -2246,7 +2246,7 @@ class TestLimitResumeInteraction:
             json.dumps(posts), encoding="utf-8")
         return input_dir
 
-    def test_limit_counts_new_records_when_resuming(self, tmp_path, monkeypatch):
+    def test_limit_caps_corpus_position_when_resuming(self, tmp_path, monkeypatch):
         import patientpunk.llm_extract as m
 
         input_dir = self._corpus(tmp_path, 6)
@@ -2278,11 +2278,10 @@ class TestLimitResumeInteraction:
             resume=True,
         )
 
-        # 2 resumed + 2 genuinely new. Before the fix: 2 + 0, because the slice
-        # took p0/p1 and the resume filter then removed both.
-        assert len(records) == 4
-        new_ids = {r["record_meta"]["post_id"] for r in records} - {"p0", "p1"}
-        assert new_ids == {"p2", "p3"}
+        # limit=2 caps the corpus window to p0/p1 before the resume filter
+        # runs; both are already done, so no new work happens this run.
+        assert len(records) == 2
+        assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1"}
 
     def test_limit_without_resume_is_unchanged(self, tmp_path, monkeypatch):
         import patientpunk.llm_extract as m
