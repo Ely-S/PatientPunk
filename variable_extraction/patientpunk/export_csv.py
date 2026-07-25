@@ -91,19 +91,28 @@ def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
     )
 
 
+def _normalize_entry(value) -> dict:
+    """Coerce one field entry to the ``{"values": ...}`` shape."""
+    if isinstance(value, dict):
+        return value
+    return {"values": value, "provenance": None, "confidence": None}
+
+
 def _all_fields_from_record(rec: dict) -> dict:
     """Return a flat field dict from whichever keys the record uses.
 
     Records from the regex extractor store fields under ``base`` and
     ``extension``.  Records from the LLM merge step use ``fields`` and
-    ``discovered_fields``.  Both are supported here.
+    ``discovered_fields``.  Both are supported, and every entry is
+    normalised to a dict so callers can assume one shape.
     """
-    return {
+    merged = {
         **(rec.get("base") or {}),
         **(rec.get("extension") or {}),
         **(rec.get("fields") or {}),
         **(rec.get("discovered_fields") or {}),
     }
+    return {name: _normalize_entry(entry) for name, entry in merged.items()}
 
 
 def merge_records(base: dict, incoming: dict, sep: str) -> dict:

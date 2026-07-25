@@ -14,8 +14,8 @@ Usage:
     python llm_extract.py --schema schemas/covidlonghaulers_schema.json
     python llm_extract.py --text "I'm a 34F with POTS, LDN helped my brain fog"
     python llm_extract.py --merge                      # combine with regex results
-    python llm_extract.py --limit 10                   # cost control / testing
-    python llm_extract.py --workers 10                 # more concurrency (default: 8)
+    python llm_extract.py --limit 10                   # first 10 records only
+    python llm_extract.py --workers 20                 # more concurrency (default: 10)
     python llm_extract.py --skip-threshold 0.7         # skip records regex covered 70%+
     python llm_extract.py --focus-gaps                 # only ask LLM about null fields
 
@@ -64,6 +64,7 @@ from .phase import PhaseResult
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    LLM_SERVICE_TIER,
     LLMResponseError,
     check_response,
     LLM_TEMPERATURE,
@@ -198,12 +199,16 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
             if delay:
                 time.sleep(delay)
             try:
+                # Other dialects 400 on service_tier, aborting the run.
+                tier = {"service_tier": LLM_SERVICE_TIER} if (
+                    LLM_SERVICE_TIER and LLM_PROVIDER == "openai") else {}
                 response = client.messages.create(
                     model=MODEL,
                     temperature=temp,
                     max_tokens=MAX_TOKENS,
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
+                    **tier,
                 )
                 return response_text(check_response(response, MODEL))
             except Exception as e:
@@ -744,6 +749,8 @@ def process_corpus(
             posts = json.load(f)
         for post in posts:
             work_items.append(("post", post))
+    # Before the resume filter, not after: --limit caps corpus position, so
+    # resuming a capped run never spills past item N.
     if limit:
         work_items = work_items[:limit]
 
@@ -1300,7 +1307,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--schema", type=Path, default=None,
                         help="Path to a JSON extension schema file.")
     parser.add_argument("--limit", type=int, default=None,
-                        help="Process at most N records (cost control / testing).")
+                        help="Process only the first N records. Caps position, "
+                             "so --resume never reaches N+1.")
     parser.add_argument("--no-merge", action="store_true",
                         help="Disable merging with regex results (merge is on by default).")
     parser.add_argument("--workers", type=int, default=10,
