@@ -230,11 +230,9 @@ def check_response(response, model: str = ""):
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str, stop_reason: str = "end_turn",
-                 service_tier: str | None = None) -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
-        self.service_tier = service_tier
 
 
 class _OpenAIMessages:
@@ -271,8 +269,7 @@ class _OpenAIMessages:
         # OpenAI spells truncation "length"; normalize to the Anthropic name so
         # check_response() works the same on both backends.
         stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
-        served_tier = getattr(resp, "service_tier", None)
-        return _AnthropicShapedResponse(choice.message.content, stop_reason, served_tier)
+        return _AnthropicShapedResponse(choice.message.content, stop_reason)
 
 
 class _OpenAIAdapter:

@@ -2226,11 +2226,12 @@ class TestRunBiomedical:
 
 
 class TestLimitResumeInteraction:
-    """--limit must cap NEW work, not corpus position.
+    """--limit caps corpus position, not new work.
 
-    Slicing work_items before the resume filter made `--resume --limit N` a
-    position cap: a run that had already finished the first N items had nothing
-    left to do, and no number of resumes could ever reach item N+1.
+    work_items is sliced before the resume filter, so `--resume --limit N`
+    stays inside the same first-N window the original run would have covered.
+    Resuming never reaches item N+1 -- that is deliberate, so a capped run is
+    repeatable and a smoke test keeps hitting the same records.
     """
 
     @staticmethod
