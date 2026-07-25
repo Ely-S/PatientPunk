@@ -110,8 +110,8 @@ def resolve_llm_config(env: dict | None = None) -> dict:
 
     Pure (no side effects): returns ``provider``, ``model_fast``,
     ``model_strong``, ``base_url``, ``temperature``, ``api_key`` and
-    ``service_tier``.  Used both
-    to build the client and -- minus the key -- to record run provenance.
+    ``service_tier``.  Used both to build the client and -- minus the key --
+    to record run provenance.
     """
     env = os.environ if env is None else env
     or_key = _real_key(env, "OPENROUTER_API_KEY")
