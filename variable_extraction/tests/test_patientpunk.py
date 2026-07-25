@@ -2160,7 +2160,7 @@ class TestBatchExtraction:
 
         # Bypass the response cache so every call reaches the fake client.
         monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
-        monkeypatch.setattr(m, "SERVICE_TIER", "flex")
+        monkeypatch.setattr(m, "LLM_SERVICE_TIER", "flex")
 
         monkeypatch.setattr(m, "LLM_PROVIDER", "openai")
         m.call_haiku(_Client(), "sys", "msg")
@@ -2189,7 +2189,7 @@ class TestBatchExtraction:
                     )
 
         monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
-        monkeypatch.setattr(m, "SERVICE_TIER", None)
+        monkeypatch.setattr(m, "LLM_SERVICE_TIER", None)
         monkeypatch.setattr(m, "LLM_PROVIDER", "openai")
 
         m.call_haiku(_Client(), "sys", "msg")

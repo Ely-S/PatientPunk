@@ -66,9 +66,9 @@ from .phase import PhaseResult
 # Model name resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    LLM_SERVICE_TIER,
     LLMResponseError,
     check_response,
-    LLM_SERVICE_TIER,
     LLM_TEMPERATURE,
     MODEL_FAST,
     collect_texts_from_post,
@@ -80,7 +80,6 @@ from ._utils import (
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
 MODEL = MODEL_FAST
-SERVICE_TIER = LLM_SERVICE_TIER
 
 # Field names the model invented that aren't in the schema. Dropped from the
 # record, but counted here so they surface in the run summary instead of
@@ -202,20 +201,16 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
             if delay:
                 time.sleep(delay)
             try:
-                # service_tier is an OpenAI-dialect parameter; other providers
-                # 400 on it, which aborts the whole run.
-                extra_kwargs = (
-                    {"service_tier": SERVICE_TIER}
-                    if SERVICE_TIER and LLM_PROVIDER == "openai"
-                    else {}
-                )
+                # Other dialects 400 on service_tier, aborting the run.
+                tier = {"service_tier": LLM_SERVICE_TIER} if (
+                    LLM_SERVICE_TIER and LLM_PROVIDER == "openai") else {}
                 response = client.messages.create(
                     model=MODEL,
                     temperature=temp,
                     max_tokens=MAX_TOKENS,
                     system=system,
                     messages=[{"role": "user", "content": user_message}],
-                    **extra_kwargs,
+                    **tier,
                 )
                 return response_text(check_response(response, MODEL))
             except Exception as e:
@@ -778,9 +773,8 @@ def process_corpus(
             posts = json.load(f)
         for post in posts:
             work_items.append(("post", post))
-    # Slice before the resume filter, not after: --limit caps corpus position,
-    # so resuming a capped run stays inside the window the original run would
-    # have covered and never spills past item N.
+    # Before the resume filter, not after: --limit caps corpus position, so
+    # resuming a capped run never spills past item N.
     if limit:
         work_items = work_items[:limit]
 
@@ -1384,9 +1378,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--schema", type=Path, default=None,
                         help="Path to a JSON extension schema file.")
     parser.add_argument("--limit", type=int, default=None,
-                        help="Process at most the first N records (cost control / "
-                             "testing). Caps corpus position, so --resume stays "
-                             "inside the same window and never reaches N+1.")
+                        help="Process only the first N records. Caps position, "
+                             "so --resume never reaches N+1.")
     parser.add_argument("--no-merge", action="store_true",
                         help="Disable merging with regex results (merge is on by default).")
     parser.add_argument("--workers", type=int, default=10,

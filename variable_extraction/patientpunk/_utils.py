@@ -93,6 +93,7 @@ load_env()
 #                    server like vLLM on a dispersed node with LLM_PROVIDER=openai)
 #   MODEL_FAST / MODEL_STRONG   override the default models
 #   LLM_TEMPERATURE  sampling temperature (default 0.0 -- deterministic)
+#   LLM_SERVICE_TIER flex | priority   (LLM_PROVIDER=openai only; others 400)
 
 _PLACEHOLDER_KEYS = {"", "XXX", "your_openrouter_key_here", "your_anthropic_key_here"}
 
@@ -108,7 +109,8 @@ def resolve_llm_config(env: dict | None = None) -> dict:
     """Resolve the active LLM configuration from environment variables.
 
     Pure (no side effects): returns ``provider``, ``model_fast``,
-    ``model_strong``, ``base_url``, ``temperature`` and ``api_key``.  Used both
+    ``model_strong``, ``base_url``, ``temperature``, ``api_key`` and
+    ``service_tier``.  Used both
     to build the client and -- minus the key -- to record run provenance.
     """
     env = os.environ if env is None else env
@@ -158,10 +160,7 @@ def resolve_llm_config(env: dict | None = None) -> dict:
         "base_url": (env.get("LLM_BASE_URL") or "").strip() or default_base,
         "temperature": temperature,
         "api_key": api_key,
-        # OpenRouter service tier: "flex" (cheaper/slower) or "priority"
-        # (faster/pricier). Unset/"" means the provider's default tier -- the
-        # param is omitted entirely rather than sent as "default", since
-        # only OpenAI/Vertex/AI-Studio/xAI endpoints recognize it at all.
+        # "flex" (cheaper/slower) or "priority"; None omits the param.
         "service_tier": (env.get("LLM_SERVICE_TIER") or "").strip().lower() or None,
     }
 
@@ -252,12 +251,10 @@ class _OpenAIMessages:
                 oai_messages.append({"role": "system", "content": sys_text})
         for m in messages:
             oai_messages.append({"role": m["role"], "content": m["content"]})
-        extra: dict = {}
-        if service_tier:
-            extra["service_tier"] = service_tier
+        tier = {"service_tier": service_tier} if service_tier else {}
         resp = self._client.chat.completions.create(
             model=model, messages=oai_messages,
-            max_tokens=max_tokens, temperature=temperature, **extra,
+            max_tokens=max_tokens, temperature=temperature, **tier,
         )
         # A degenerate reply is a failure, not an empty answer: raise so callers
         # retry and the response cache never stores it.
