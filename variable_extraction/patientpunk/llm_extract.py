@@ -707,7 +707,7 @@ def process_corpus(
     resume: bool = False,
     temp_dir: Path | None = None,
     group_guard: bool = False,
-) -> tuple[list[dict], list[dict]]:
+) -> list[dict]:
     """Process the corpus concurrently through Haiku."""
     system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
     field_names = list(field_descriptions.keys())
