@@ -4,11 +4,10 @@
 
 Second-pass extraction using Claude Haiku. Reads the same corpus as
 ``patientpunk.biomedical`` and produces structured records for the same schema
-fields, PLUS suggests new fields the schema doesn't cover yet.
+fields.
 
 Designed to run AFTER regex extraction. The merge step combines both passes:
-regex hits are high-confidence, LLM hits fill the gaps, and suggested fields
-inform future schema evolution.
+regex hits are high-confidence and LLM hits fill the gaps.
 
 Usage:
     python llm_extract.py                              # base fields, default input
@@ -32,9 +31,8 @@ Requires:
     Copy .env.example to .env and add your Anthropic API key.
 
 Output:
-    output/llm_records_{schema_id}.json           # LLM extraction records
-    output/llm_field_suggestions_{schema_id}.json  # Suggested new fields
-    output/merged_records_{schema_id}.json         # Combined regex + LLM (--merge)
+    output/llm_records_{schema_id}.json     # LLM extraction records
+    output/merged_records_{schema_id}.json  # Combined regex + LLM (--merge)
 """
 
 
@@ -97,16 +95,16 @@ def _write_json_atomic(path: Path, data) -> None:
 def _record_dropped_fields(names: list[str]) -> None:
     with _dropped_lock:
         _dropped_fields.update(names)
-# 4096 truncated the JSON response on long user histories (verbose fields +
-# suggested_fields), causing PARSE FAILED and silently dropping ~half of the
-# most prolific posters. Haiku's hard output ceiling is 8192; use it.
+# 4096 truncated the JSON response on long user histories (verbose fields),
+# causing PARSE FAILED and silently dropping ~half of the most prolific posters.
+# Haiku's hard output ceiling is 8192; use it.
 # Override via LLM_MAX_TOKENS for local models (e.g. 1024) so generation
 # cannot burn the full budget when the model fails to stop early.
 MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
-# single record's reply (full fields + verbose suggested_fields) overran 8192
-# output tokens and got truncated mid-JSON. The discovery script learned the
-# same lesson and uses 10_000; 8_000 keeps a comfortable margin.
+# single record's reply overran 8192 output tokens and got truncated mid-JSON.
+# The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
+# comfortable margin.
 MAX_TEXT_CHARS = 8_000
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
@@ -312,19 +310,10 @@ RESPONSE FORMAT - valid JSON only:
 {{
   "fields": {{
     "field_name": ["value1", "value2"] or null
-  }},
-  "suggested_fields": [
-    {{
-      "field_name": "proposed_field_name_in_snake_case",
-      "description": "What this captures and why it's scientifically useful",
-      "values": ["value from this text"],
-      "frequency_hint": "common|occasional|rare"
-    }}
-  ]
+  }}
 }}
 
-Include ALL schema fields. Use null when no evidence exists.
-For suggested_fields: 0-5 biomedically interesting observations that don't fit existing fields."""
+Include ALL schema fields. Use null when no evidence exists."""
 
 
 def build_gap_system_prompt(field_descriptions: dict[str, str], null_fields: list[str], *,
@@ -362,15 +351,7 @@ RESPONSE FORMAT - valid JSON only:
 {{
   "fields": {{
     "field_name": ["value1", "value2"] or null
-  }},
-  "suggested_fields": [
-    {{
-      "field_name": "proposed_field_name_in_snake_case",
-      "description": "What this captures and why it's scientifically useful",
-      "values": ["value from this text"],
-      "frequency_hint": "common|occasional|rare"
-    }}
-  ]
+  }}
 }}
 
 Only include the fields listed above. Use null when no evidence exists."""
@@ -441,7 +422,6 @@ def build_llm_record(
             "post_id": post_id,
         },
         "fields": dict(llm_output.fields),
-        "suggested_fields": [s.model_dump() for s in llm_output.suggested_fields],
     }
 
 
@@ -577,7 +557,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         "Extract biomedical information from the following patient-authored records. "
         "Each record is by a DIFFERENT author.\n\n"
         "Return a JSON array with one result object per record, in the same order. "
-        "Each object should have 'fields' and 'suggested_fields' as specified.\n\n"
+        "Each object should have 'fields' as specified.\n\n"
     )
     for i, item in enumerate(items, 1):
         # Strip the instruction prefix from each user_message to avoid repeating it
@@ -696,8 +676,7 @@ def _process_batch(
             if dropped:
                 _record_dropped_fields(dropped)
 
-            # Containment: a single unexpected shape must never abort the run.
-            # A null suggested_fields once took down 1000 records at record 47,
+            # Containment: a single unexpected shape must never abort the run,
             # because split_retry_batch only absorbs parse failures and anything
             # raised here escapes it.
             try:
@@ -728,7 +707,7 @@ def process_corpus(
     resume: bool = False,
     temp_dir: Path | None = None,
     group_guard: bool = False,
-) -> tuple[list[dict], list[dict]]:
+) -> list[dict]:
     """Process the corpus concurrently through Haiku."""
     system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
     field_names = list(field_descriptions.keys())
@@ -744,7 +723,6 @@ def process_corpus(
 
     # Resume: load existing records and build a set of already-done keys
     records = []
-    all_suggestions = []
     done_keys: set[tuple] = set()
     with _dropped_lock:
         _dropped_fields.clear()
@@ -755,8 +733,6 @@ def process_corpus(
         for rec in records:
             meta = rec.get("record_meta", {})
             done_keys.add((meta.get("author_hash"), meta.get("post_id")))
-            for suggestion in rec.get("suggested_fields") or []:
-                all_suggestions.append(suggestion)
         print(f"  Resuming - {len(records)} records already done, {len(done_keys)} keys loaded.\n")
 
     work_items = []
@@ -860,16 +836,12 @@ def process_corpus(
 
                 with save_lock:
                     records.append(result)
-                    for suggestion in result.get("suggested_fields") or []:
-                        suggestion["_from_record"] = result["record_meta"].get("post_id") or "unknown"
-                        all_suggestions.append(suggestion)
 
                     n_fields = sum(1 for v in result.get("fields", {}).values() if v is not None)
-                    n_suggestions = len(result.get("suggested_fields", []))
 
                     with print_lock:
                         pid = result["record_meta"].get("post_id") or "?"
-                        print(f"  [{completed}/{total}] {pid} - {n_fields} fields, {n_suggestions} suggestions")
+                        print(f"  [{completed}/{total}] {pid} - {n_fields} fields")
 
                     if len(records) % SAVE_EVERY_N == 0:
                         save_incremental()
@@ -884,7 +856,7 @@ def process_corpus(
         total = sum(n for _, n in dropped)
         summary = ", ".join(f"{name} ({n}x)" for name, n in dropped[:5])
         print(f"  Dropped {total} value(s) for {len(dropped)} field name(s) not in the schema: {summary}")
-    return records, all_suggestions
+    return records
 
 
 # =============================================================================
@@ -969,9 +941,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                     "confidence": None,
                 }
 
-        if llm_rec and llm_rec.get("suggested_fields"):
-            merged_record["suggested_fields"] = llm_rec["suggested_fields"]
-
         merged.append(merged_record)
 
     # LLM-only records with no matching regex record
@@ -994,8 +963,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                 "provenance": "llm_only" if llm_values else None,
                 "confidence": "medium" if llm_values else None,
             }
-        if llm_rec.get("suggested_fields"):
-            merged_record["suggested_fields"] = llm_rec["suggested_fields"]
         merged.append(merged_record)
 
     # Post-merge normalization: lowercase all values, canonicalize conditions
@@ -1176,33 +1143,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
     return merged
 
 
-def aggregate_suggestions(all_suggestions: list[dict]) -> list[dict]:
-    by_name = defaultdict(lambda: {"count": 0, "descriptions": set(), "example_values": [], "frequency_hints": []})
-    for s in all_suggestions:
-        name = s.get("field_name", "").strip().lower().replace(" ", "_")
-        if not name:
-            continue
-        entry = by_name[name]
-        entry["count"] += 1
-        if s.get("description"):
-            entry["descriptions"].add(s["description"])
-        for v in (s.get("values") or []):
-            if v and v not in entry["example_values"][:10]:
-                entry["example_values"].append(v)
-        if s.get("frequency_hint"):
-            entry["frequency_hints"].append(s["frequency_hint"])
-    return [
-        {
-            "field_name": name,
-            "times_suggested": data["count"],
-            "descriptions": sorted(data["descriptions"]),
-            "example_values": data["example_values"][:10],
-            "frequency_hints": data["frequency_hints"][:5],
-        }
-        for name, data in sorted(by_name.items(), key=lambda x: -x[1]["count"])
-    ]
-
-
 # =============================================================================
 # LIBRARY ENTRYPOINT
 # =============================================================================
@@ -1277,7 +1217,7 @@ def run_llm_extract(
 
     start_time = datetime.now(timezone.utc)
 
-    records, all_suggestions = process_corpus(
+    records = process_corpus(
         client=client,
         input_dir=input_dir,
         temp_dir=out_temp,
@@ -1297,13 +1237,8 @@ def run_llm_extract(
     records_file = out_temp / f"llm_records_{schema_id}.json"
     _write_json_atomic(records_file, records)
 
-    ranked_suggestions = aggregate_suggestions(all_suggestions)
-    suggestions_file = out_temp / f"llm_field_suggestions_{schema_id}.json"
-    _write_json_atomic(suggestions_file, ranked_suggestions)
-
     artifacts = {
         "llm_records": records_file,
-        "suggestions": suggestions_file,
     }
 
     if merge:
@@ -1330,15 +1265,9 @@ def run_llm_extract(
     print(f"\n{'=' * 60}")
     print(f"  Done! ({duration:.0f}s, {len(records)} records)")
     print(f"  LLM records       : {records_file}")
-    print(f"  Field suggestions : {suggestions_file}")
     print(f"\n  Field hit counts (LLM):")
     for field, count in sorted(fields_found.items(), key=lambda x: -x[1]):
         print(f"    {field:<30} {count}")
-    if ranked_suggestions:
-        print(f"\n  Top suggested new fields:")
-        for s in ranked_suggestions[:10]:
-            desc = s['descriptions'][0][:60] if s['descriptions'] else '?'
-            print(f"    {s['field_name']:<30} ({s['times_suggested']}x) - {desc}")
     print(f"{'=' * 60}")
 
     fills = sum(
@@ -1416,11 +1345,6 @@ def main(argv: list[str] | None = None) -> None:
                     val = parsed["fields"][field]
                     if val is not None:
                         print(f"  {field}: {val}")
-                suggestions = parsed.get("suggested_fields", [])
-                if suggestions:
-                    print(f"\n=== Suggested new fields ({len(suggestions)}) ===")
-                    for s in suggestions:
-                        print(f"  {s.get('field_name')}: {s.get('values')} - {s.get('description')}")
             else:
                 print("Failed to parse LLM response.\nRaw response:")
                 print(raw)

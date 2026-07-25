@@ -2,8 +2,7 @@
 
 The shapes here are not hypothetical: they were counted across 987 cached
 deepseek-v4-flash replies. Field values arrived as null (31768x), list (1788x),
-bare str (50x) and bare int (14x), and 5 replies sent "suggested_fields": null
-where Claude sends []. That null aborted a 1000-record run at record 47.
+bare str (50x) and bare int (14x).
 """
 
 from __future__ import annotations
@@ -20,12 +19,6 @@ def _fields(payload):
 
 
 # --- the shapes that actually crashed / leaked -------------------------------
-
-def test_null_suggested_fields_is_empty_not_a_crash():
-    result = parse_extraction({"fields": {"age": ["24"]}, "suggested_fields": None})
-    assert result is not None
-    assert result[0].suggested_fields == []
-
 
 def test_int_value_is_coerced_not_passed_through():
     """14 raw ints reached records.csv where every other value is list|None."""
@@ -51,7 +44,7 @@ def test_null_fields_is_an_empty_extraction():
 
 def test_missing_fields_key_is_malformed():
     """No 'fields' key at all is a broken reply, not an empty one."""
-    assert parse_extraction({"suggested_fields": []}) is None
+    assert parse_extraction({"commentary": "here you go"}) is None
 
 
 def test_non_object_fields_is_malformed():
@@ -102,40 +95,6 @@ def test_explicit_null_value_survives_as_none():
     assert _fields({"fields": {"age": None}}) == {"age": None}
 
 
-# --- suggested_fields ---------------------------------------------------------
-
-def test_suggestion_missing_name_is_dropped():
-    result = parse_extraction({"fields": {}, "suggested_fields": [{"description": "no name"}]})
-    assert result is not None and result[0].suggested_fields == []
-
-
-def test_junk_suggestion_members_are_dropped_not_fatal():
-    result = parse_extraction(
-        {"fields": {}, "suggested_fields": ["bare string", None, 7, {"name": "symptoms"}]}
-    )
-    assert result is not None
-    assert [s.name for s in result[0].suggested_fields] == ["symptoms"]
-
-
-def test_lone_suggestion_dict_is_wrapped():
-    result = parse_extraction({"fields": {}, "suggested_fields": {"name": "symptoms"}})
-    assert result is not None
-    assert [s.name for s in result[0].suggested_fields] == ["symptoms"]
-
-
-def test_suggestion_extra_keys_are_kept_for_discovery():
-    result = parse_extraction(
-        {"fields": {}, "suggested_fields": [{"name": "x", "example_value": "v"}]}
-    )
-    assert result is not None
-    assert result[0].suggested_fields[0].model_dump()["example_value"] == "v"
-
-
-def test_non_list_suggested_fields_is_empty_not_fatal():
-    result = parse_extraction({"fields": {}, "suggested_fields": "symptoms"})
-    assert result is not None and result[0].suggested_fields == []
-
-
 # --- hallucinated field names -------------------------------------------------
 
 def test_unknown_fields_are_dropped_and_reported():
@@ -160,7 +119,6 @@ def test_no_allowed_fields_means_no_filtering():
 @pytest.mark.parametrize("payload", [
     {"fields": {"a": 1, "b": "s", "c": [1, "2"], "d": None, "e": True, "f": {}, "g": []}},
     {"fields": None},
-    {"fields": {}, "suggested_fields": None},
 ])
 def test_validated_values_are_always_list_or_none(payload):
     extraction, _ = parse_extraction(payload)
@@ -171,9 +129,17 @@ def test_validated_values_are_always_list_or_none(payload):
 
 
 def test_extra_top_level_keys_are_ignored():
-    result = parse_extraction({"fields": {"age": ["24"]}, "commentary": "here you go"})
+    """Includes suggested_fields: cached replies still carry it, and it must be
+    dropped rather than resurrected as a field or a validation error."""
+    result = parse_extraction({
+        "fields": {"age": ["24"]},
+        "commentary": "here you go",
+        "suggested_fields": [{"field_name": "sleep_quality"}],
+    })
     assert result is not None
+    assert result[0].fields == {"age": ["24"]}
     assert not hasattr(result[0], "commentary")
+    assert not hasattr(result[0], "suggested_fields")
 
 
 def test_model_rejects_unvalidated_construction():
