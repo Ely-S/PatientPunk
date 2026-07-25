@@ -1785,21 +1785,31 @@ class TestLLMConfig:
 class TestLoadEnvPrecedence:
     """Explicit env > package .env > repo-root .env; missing files are a no-op."""
 
+    @pytest.fixture(autouse=True)
+    def _restore_environ(self):
+        """load_env() writes with setdefault, which monkeypatch cannot undo."""
+        saved = dict(os.environ)
+        yield
+        os.environ.clear()
+        os.environ.update(saved)
+
     @pytest.mark.parametrize("exported,expected", [(None, "openai"), ("anthropic", "anthropic")])
     def test_precedence(self, tmp_path, monkeypatch, exported, expected):
         package_root = tmp_path / "variable_extraction"
         package_root.mkdir()
-        (tmp_path / ".env").write_text("LLM_PROVIDER=openrouter\n", encoding="utf-8")
+        (tmp_path / ".env").write_text("LLM_PROVIDER=openrouter\nROOT_ONLY=r\n", encoding="utf-8")
         (package_root / ".env").write_text("LLM_PROVIDER=openai\nMODEL_FAST=gemma\n", encoding="utf-8")
         monkeypatch.setattr(_utils, "PACKAGE_ROOT", package_root)
         if exported:
             monkeypatch.setenv("LLM_PROVIDER", exported)
         else:
             monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        monkeypatch.delenv("ROOT_ONLY", raising=False)
 
         _utils.load_env()
 
         assert os.environ["LLM_PROVIDER"] == expected
+        assert os.environ["ROOT_ONLY"] == "r"   # both files merge, not replace
 
     def test_missing_env_files_are_not_an_error(self, tmp_path, monkeypatch):
         package_root = tmp_path / "variable_extraction"
