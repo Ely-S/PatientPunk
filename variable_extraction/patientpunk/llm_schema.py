@@ -2,14 +2,13 @@
 
 ``parse_json_response`` answers "is this JSON?"; this module answers "is this the
 shape we asked for?". Everything past ``parse_extraction`` can assume every field
-value is ``list[str] | None`` and that ``suggested_fields`` is a list.
+value is ``list[str] | None``.
 
 Shaped by what providers actually send. Across 987 cached deepseek-v4-flash
 replies the field values arrived as null (31768x), list (1788x), bare str (50x)
 and bare int (14x) -- so scalar coercion is the norm, not an edge case, and the
 ints were reaching the output as raw ints because the old inline normaliser had
-a branch for str but none for int. Five replies sent ``"suggested_fields": null``
-where Claude sends ``[]``; that null is what aborted a 1000-record run.
+a branch for str but none for int.
 
 The distinction that matters is *empty* vs *malformed*, because ~47% of records
 legitimately extract nothing (short posts) and must not be retried:
@@ -24,16 +23,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-    field_validator,
-)
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
-__all__ = ["LLMExtraction", "SuggestedField", "parse_extraction"]
+__all__ = ["LLMExtraction", "parse_extraction"]
 
 # Scalars a field value may arrive as instead of list[str]. bool is excluded on
 # purpose: True is not a plausible clinical value and silently becoming "True"
@@ -64,29 +56,13 @@ def _coerce_value(val: Any) -> list[str] | None:
     return None
 
 
-class SuggestedField(BaseModel):
-    """A field the model proposes adding. Extra keys are kept for discovery.
-
-    The key is ``field_name``, not ``name``: that is what both prompts ask the
-    model for (``build_system_prompt`` / ``build_gap_system_prompt``) and what
-    ``aggregate_suggestions`` reads back out. ``name`` is accepted as an alias
-    only so replies already sitting in the LLM cache still validate.
-    """
-
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
-
-    field_name: str = Field(validation_alias=AliasChoices("field_name", "name"))
-    description: str = ""
-
-
 class LLMExtraction(BaseModel):
-    """The contract: ``{"fields": {...}, "suggested_fields": [...]}``."""
+    """The contract: ``{"fields": {...}}``."""
 
     model_config = ConfigDict(extra="ignore")
 
     # No default: a reply with no "fields" key at all is malformed, not empty.
     fields: dict[str, list[str] | None]
-    suggested_fields: list[SuggestedField] = Field(default_factory=list)
 
     @field_validator("fields", mode="before")
     @classmethod
@@ -96,21 +72,6 @@ class LLMExtraction(BaseModel):
         if not isinstance(v, dict):
             raise ValueError("fields must be an object")
         return {str(k): _coerce_value(val) for k, val in v.items()}
-
-    @field_validator("suggested_fields", mode="before")
-    @classmethod
-    def _normalise_suggestions(cls, v: Any) -> Any:
-        if v is None:
-            return []
-        if isinstance(v, dict):  # a lone suggestion sent unwrapped
-            return [v]
-        if not isinstance(v, list):
-            return []
-        # Drop members that cannot be a suggestion rather than failing the record.
-        return [
-            s for s in v
-            if isinstance(s, dict) and (s.get("field_name") or s.get("name"))
-        ]
 
 
 def parse_extraction(

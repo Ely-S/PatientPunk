@@ -2115,16 +2115,16 @@ class TestBatchExtraction:
         temps = []
         def fake(client, sysp, um, temperature=None):
             temps.append(temperature)
-            return '```json\n{"fields": {"age": [33]}, "suggested_fields": []}\n```'
+            return '```json\n{"fields": {"age": [33]}}\n```'
         monkeypatch.setattr(m, "call_haiku", fake)
         out = m._call_batch_raw(None, "sys", [{"user_message": "x"}])
-        assert out == [{"fields": {"age": [33]}, "suggested_fields": []}]
+        assert out == [{"fields": {"age": [33]}}]
         assert temps == [None]   # parsed first try; no temperature escalation
 
     def test_single_record_retries_at_higher_temp_on_bad_json(self, monkeypatch):
         import patientpunk.llm_extract as m
         seq = iter(['{"fields": ] ]malformed',                       # deterministic bad JSON
-                    '{"fields": {"age": null}, "suggested_fields": []}'])
+                    '{"fields": {"age": null}}'])
         temps = []
         def fake(client, sysp, um, temperature=None):
             temps.append(temperature)

@@ -48,7 +48,6 @@ _TEMP_PATTERNS: list[str] = [
     "patientpunk_records_*.json",
     "extraction_metadata_*.json",
     "llm_records_*.json",
-    "llm_field_suggestions_*.json",
     "merged_records_*.json",
     "phase1_candidates.json",
     "discovered_records_*.json",
