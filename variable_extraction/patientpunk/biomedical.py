@@ -37,14 +37,12 @@ from .phase import PhaseResult
 # =============================================================================
 
 BASE_FIELDS = frozenset({
-    "age", "sex_gender", "location_country", "healthcare_system",
-    "conditions", "onset_trigger", "diagnosis_source", "time_to_diagnosis",
-    "misdiagnosis", "symptom_duration", "symptom_trajectory", "age_at_onset",
+    "age", "sex_gender", "location_country",
+    "conditions", "onset_trigger", "symptom_duration", "symptom_trajectory", "age_at_onset",
     "medications", "treatment_outcome", "procedures",
     # activity_level removed -- redundant with functional_status_tier (extension).
     "work_disability_status", "mental_health",
-    "doctor_dismissal", "diagnostic_odyssey",
-    "prior_infections", "hormonal_events", "family_history",
+    "prior_infections",
 })
 
 # Demographic fields are extracted by the LLM ONLY, never regex. Regex is the sole
@@ -54,19 +52,15 @@ BASE_FIELDS = frozenset({
 # On measured data the guarded LLM strictly dominates these fields on coverage, so we
 # skip them in regex and let the Phase 2 gap-fill supply them.
 LLM_ONLY_FIELDS = frozenset({
-    "age", "sex_gender", "location_country", "location_us_state",
+    "age", "sex_gender", "location_country",
 })
 
 BASE_FIELD_CONFIDENCE: dict[str, str] = {
     "age": "medium",
     "sex_gender": "high",
     "location_country": "medium",
-    "healthcare_system": "high",
     "conditions": "high",
     "onset_trigger": "medium",
-    "diagnosis_source": "high",
-    "time_to_diagnosis": "medium",
-    "misdiagnosis": "medium",
     "symptom_duration": "low",
     "symptom_trajectory": "medium",
     "age_at_onset": "medium",
@@ -75,11 +69,7 @@ BASE_FIELD_CONFIDENCE: dict[str, str] = {
     "procedures": "high",
     "work_disability_status": "high",
     "mental_health": "medium",
-    "doctor_dismissal": "medium",
-    "diagnostic_odyssey": "medium",
     "prior_infections": "medium",
-    "hormonal_events": "medium",
-    "family_history": "medium",
 }
 
 CONDITION_ICD10_MAP: dict[str, str] = {
@@ -126,33 +116,12 @@ CONDITION_ICD10_MAP: dict[str, str] = {
 # 1. DEMOGRAPHICS
 # ---------------------------------------------------------------------------
 
-US_STATES = (
-    r"alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|"
-    r"florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|"
-    r"maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|"
-    r"nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|"
-    r"north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|"
-    r"south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|"
-    r"wisconsin|wyoming|district of columbia|washington d\.?c\.?"
-)
-
-# ME (Maine) and OR (Oregon) are excluded because in medical subreddits
-# they almost always mean ME/CFS or the conjunction "or". Both states are
-# still captured by their full names in US_STATES above.
-US_STATE_ABBREVS = (
-    r"\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|MD|MA|MI|"
-    r"MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|PA|RI|SC|SD|TN|TX|UT|VT|"
-    r"VA|WA|WV|WI|WY|DC)\b"
-)
-
 COUNTRIES = (
     r"united states|united kingdom|canada|australia|germany|france|netherlands|"
     r"sweden|norway|denmark|finland|switzerland|austria|belgium|spain|italy|"
     r"portugal|ireland|new zealand|japan|south korea|brazil|india|mexico|"
     r"south africa|israel|u\.s\.a?\.?|u\.k\.?|usa|uk"
 )
-
-HEALTHCARE_SYSTEMS = r"nhs|medicare|medicaid|tricare|kaiser|va hospital|veterans affairs"
 
 PATTERNS = {
 
@@ -194,17 +163,9 @@ PATTERNS = {
     ],
 
     # Location
-    "location_us_state": [
-        re.compile(r"\b(?:in|from|based in|located in|living in|i live in)\s+(" + US_STATES + r")\b", re.I),
-        re.compile(r"\b(" + US_STATES + r")\b", re.I),
-        re.compile(r"\b(?:in|from)\s+" + US_STATE_ABBREVS, re.I),
-    ],
     "location_country": [
         re.compile(r"\b(?:in|from|based in|living in)\s+(" + COUNTRIES + r")\b", re.I),
         re.compile(r"\b(" + COUNTRIES + r")\b", re.I),
-    ],
-    "healthcare_system": [
-        re.compile(r"\b(" + HEALTHCARE_SYSTEMS + r")\b", re.I),
     ],
 
     # Occupation
@@ -216,16 +177,6 @@ PATTERNS = {
             r"pharmacist|dentist|veterinarian|scientist|researcher|professor|"
             r"student|caregiver|physical therapist|occupational therapist|"
             r"healthcare worker|medical professional|first responder)\b",
-            re.I,
-        ),
-    ],
-
-    # Ethnicity / race
-    "ethnicity": [
-        re.compile(
-            r"\b(white|caucasian|black|african american|hispanic|latino|latina|"
-            r"latinx|asian|east asian|south asian|middle eastern|native american|"
-            r"indigenous|pacific islander|mixed race|biracial|multiracial)\b",
             re.I,
         ),
     ],
@@ -273,49 +224,6 @@ PATTERNS = {
             r"pem\b|post.exertional malaise)\b",
             re.I,
         ),
-    ],
-
-    # Time to diagnosis
-    "time_to_diagnosis": [
-        re.compile(
-            r"\b(?:took|waited|spent|after)\s+(\d+)\s+"
-            r"(?:year|month|week)s?\s+(?:to\s+)?(?:get\s+)?(?:a\s+)?diagnos",
-            re.I,
-        ),
-        re.compile(r"\b(\d+)\s+(?:year|month)s?\s+(?:diagnostic\s+)?odyssey\b", re.I),
-        re.compile(r"\bdiagnos\w+\s+(?:after|in)\s+(\d+)\s+(?:year|month|week)s?\b", re.I),
-        re.compile(r"\bfinally\s+diagnos", re.I),
-        re.compile(r"\byears?\s+(?:of\s+)?(?:searching|looking|trying)\s+(?:for\s+)?(?:a\s+)?diagnos", re.I),
-    ],
-
-    # Misdiagnosis -- the second pattern requires a dismissal-context prefix so
-    # it doesn't fire on genuine comorbidities ("I have anxiety from long COVID").
-    "misdiagnosis": [
-        re.compile(
-            r"\b(misdiagnosed|wrongly diagnosed|told it was|thought it was|"
-            r"dismissed as|written off as)\b",
-            re.I,
-        ),
-        re.compile(
-            r"\b(?:misdiagnosed\s+(?:as|with)|dismissed\s+as|told\s+(?:it\s+was|I\s+(?:had|have))|"
-            r"written\s+off\s+as|blamed\s+(?:on|it\s+on)|put\s+(?:it\s+)?down\s+to|"
-            r"said\s+it\s+was)\s+"
-            r"(anxiety|depression|hypochondria|psychosomatic|stress|all in (?:your|my) head)",
-            re.I,
-        ),
-        re.compile(r"\b(diagnosed with .{3,60}? before (?:finally|eventually|they found|getting))\b", re.I),
-    ],
-
-    # Diagnosis source
-    "diagnosis_source": [
-        re.compile(
-            r"\b(?:diagnosed by|confirmed by|told by)\s+(?:a\s+|my\s+)?"
-            r"(gp|doctor|specialist|neurologist|cardiologist|rheumatologist|"
-            r"immunologist|geneticist|long covid clinic|infectious disease|"
-            r"endocrinologist|gastroenterologist|autonomic specialist)\b",
-            re.I,
-        ),
-        re.compile(r"\b(self.diagnosed|self diagnosed|no official diagnosis|awaiting diagnosis)\b", re.I),
     ],
 
     # -------------------------------------------------------------------------
@@ -377,18 +285,6 @@ PATTERNS = {
     # GENETICS & FAMILY HISTORY
     # -------------------------------------------------------------------------
 
-    "family_history": [
-        re.compile(
-            r"\b(?:my\s+)?(mother|father|sister|brother|parent|sibling|"
-            r"grandmother|grandfather|aunt|uncle|cousin|daughter|son|child|"
-            r"family member)\s+(?:also\s+)?(?:has|had|was diagnosed with|"
-            r"suffers? from|deals? with)\b",
-            re.I,
-        ),
-        re.compile(r"\b(?:runs? in (?:my|the|our) family|hereditary|genetic|familial)\b", re.I),
-        re.compile(r"\bfamily history\s+of\b", re.I),
-    ],
-
     "genetic_testing": [
         re.compile(r"\b(23andme|ancestry\.com|genetic test|gene panel|whole genome|exome|snp\b)\b", re.I),
         re.compile(r"\b(mthfr|comt|brca|hla-b27|hla\b|cftr|factor [vx]|prothrombin)\b", re.I),
@@ -439,12 +335,6 @@ PATTERNS = {
         ),
     ],
 
-    # Dosage
-    "dosage": [
-        re.compile(r"\b(\d+(?:\.\d+)?)\s*(mg|mcg|ug|ml|g\b|iu\b|units?)\b", re.I),
-        re.compile(r"\b(low dose|high dose|standard dose|microdose)\b", re.I),
-    ],
-
     # Treatment outcomes
     "treatment_outcome": [
         re.compile(
@@ -469,17 +359,6 @@ PATTERNS = {
             r"mri\b|ct scan|pet scan|echocardiogram|holter monitor|"
             r"lumbar puncture|spinal tap|colonoscopy|endoscopy|"
             r"skin punch biopsy|epigenetic testing)\b",
-            re.I,
-        ),
-    ],
-
-    # Dietary interventions
-    "dietary_interventions": [
-        re.compile(
-            r"\b(low histamine|low.fodmap|fodmap|gluten.free|dairy.free|"
-            r"carnivore diet|keto|ketogenic|paleo|anti.inflammatory diet|"
-            r"elimination diet|fasting|intermittent fasting|"
-            r"mast cell diet|low oxalate|low salicylate)\b",
             re.I,
         ),
     ],
@@ -540,40 +419,6 @@ PATTERNS = {
     ],
 
     # -------------------------------------------------------------------------
-    # HEALTHCARE EXPERIENCE
-    # -------------------------------------------------------------------------
-
-    "doctor_dismissal": [
-        re.compile(
-            r"\b(doctor didn.t believe|told it was anxiety|"
-            r"dismissed|gaslit|gaslighting|"
-            r"all in (?:your|my) head|"
-            r"psychosomatic|"
-            r"told to exercise more|"
-            r"doctor (?:said|told me) (?:i was|there was) (?:fine|nothing wrong|normal)|"
-            r"tests? (?:came back |were? )?(?:all )?normal but|"
-            r"no one believes?\s+me)\b",
-            re.I,
-        ),
-    ],
-
-    "diagnostic_odyssey": [
-        re.compile(r"\b(?:saw|visited|been to)\s+(\d+)\s+(?:doctors?|specialists?|physicians?)\b", re.I),
-        re.compile(r"\b(\d+)\s+(?:doctors?|specialists?)\s+(?:later|before|until)\b", re.I),
-        re.compile(r"\byears?\s+(?:of\s+)?(?:searching|looking|trying)\b", re.I),
-    ],
-
-    "healthcare_costs": [
-        re.compile(
-            r"\b(?:paid|spent|cost(?:ing)?|out of pocket)\s+"
-            r"\$[\d,]+|\b\$[\d,]+\s+(?:for|on|out)\b",
-            re.I,
-        ),
-        re.compile(r"\b(can.t afford|insurance (?:won.t|denied|refused)|"
-                   r"insurance coverage|out of pocket|self.pay|self.funded)\b", re.I),
-    ],
-
-    # -------------------------------------------------------------------------
     # EXPOSURES & RISK FACTORS
     # -------------------------------------------------------------------------
 
@@ -594,16 +439,6 @@ PATTERNS = {
             r"\b(trauma|traumatic|abuse|childhood trauma|"
             r"ptsd\b|adverse childhood|aces\b|"
             r"sexual abuse|physical abuse|domestic violence)\b",
-            re.I,
-        ),
-    ],
-
-    "hormonal_events": [
-        re.compile(
-            r"\b(pregnancy|postpartum|post.partum|after (?:giving )?birth|"
-            r"menopause|perimenopause|puberty|"
-            r"hormonal|hormone|birth control|oral contraceptive|"
-            r"hysterectomy|oophorectomy|endometriosis flare)\b",
             re.I,
         ),
     ],

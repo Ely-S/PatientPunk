@@ -125,7 +125,7 @@ Every record written to `patientpunk_records_*.json` has this structure:
       "provenance": "self_reported",
       "confidence": "medium"
     },
-    "time_to_diagnosis": {
+    "onset_trigger": {
       "values": null,
       "provenance": null,
       "confidence": null
@@ -134,10 +134,10 @@ Every record written to `patientpunk_records_*.json` has this structure:
   },
 
   "extension": {
-    "vaccination_status": {
-      "values": ["fully vaccinated"],
+    "functional_status_tier": {
+      "values": ["housebound"],
       "provenance": "self_reported",
-      "confidence": "medium"
+      "confidence": "high"
     }
     ...
   }
@@ -172,24 +172,22 @@ Every extracted field (in both `base` and `extension`) is an object with four ke
 
 ### Layer 1 — Base fields (always extracted)
 
-23 fields defined in `BASE_FIELDS` (a `frozenset` in `extract_biomedical.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
+14 fields defined in `BASE_FIELDS` (a `frozenset` in `extract_biomedical.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
 
 | Category | Fields |
 |---|---|
 | Demographics | `age`, `sex_gender`, `location_country` |
-| Healthcare access | `healthcare_system`, `diagnosis_source`, `time_to_diagnosis`, `misdiagnosis` |
 | Conditions | `conditions`, `onset_trigger` |
 | Symptoms | `symptom_duration`, `symptom_trajectory`, `age_at_onset` |
 | Treatments | `medications`, `treatment_outcome`, `procedures` |
-| Functional status | `activity_level`, `work_disability_status`, `mental_health` |
-| Experience | `doctor_dismissal`, `diagnostic_odyssey` |
-| History | `prior_infections`, `hormonal_events`, `family_history` |
+| Functional status | `work_disability_status`, `mental_health` |
+| History | `prior_infections` |
 
 ### Layer 2 — Base-optional fields
 
-12 additional fields exist in `PATTERNS` but are **not extracted by default**. They are available for extension schemas to activate via `include_base_fields`. These tend to be noisier or more study-specific:
+7 additional fields exist in `PATTERNS` but are **not extracted by default**. They are available for extension schemas to activate via `include_base_fields`. These tend to be noisier or more study-specific:
 
-`location_us_state`, `ethnicity`, `occupation`, `bmi_weight`, `dosage`, `dietary_interventions`, `alternative_treatments`, `genetic_testing`, `social_impact`, `trauma_history`, `toxic_exposures`, `healthcare_costs`
+`occupation`, `bmi_weight`, `alternative_treatments`, `genetic_testing`, `social_impact`, `trauma_history`, `toxic_exposures`
 
 ### Extension fields
 
@@ -227,9 +225,8 @@ Create a `.json` file in `demographic_extraction/schemas/`. It will be validated
   "_description": "optional — human-readable description, ignored at runtime",
 
   "include_base_fields": [
-    "dosage",
-    "location_us_state",
-    "healthcare_costs"
+    "occupation",
+    "bmi_weight"
   ],
 
   "override_base_patterns": {
@@ -417,12 +414,12 @@ python demographic_extraction/extract_biomedical.py \
     --text "I got omicron in 2022, fully vaccinated, 18 months of long covid, bedbound"
 ```
 
-Expected extension output should include `covid_wave`, `vaccination_status`, `functional_status_tier`.
+Expected extension output should include `long_covid_duration_months`, `functional_status_tier`.
 
 ### 3. Full corpus run
 
 After scraping with `scrape_corpus.py`, run the extractor on the real corpus and check:
-- `patientpunk_records_base.json` — every record has all 23 base fields (null where not found)
+- `patientpunk_records_base.json` — every record has all 14 base fields (null where not found)
 - `extraction_metadata_base.json` — `field_hit_counts` shows reasonable hit rates
 - No Python exceptions
 

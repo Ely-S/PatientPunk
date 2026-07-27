@@ -205,14 +205,13 @@ flowchart TD
 
 | Category | Fields |
 |---|---|
-| Demographics | Age, sex/gender, location (country + US state), occupation, ethnicity, BMI |
-| Conditions | 60+ named conditions, time to diagnosis, misdiagnosis, diagnosis source |
+| Demographics | Age, sex/gender, location (country), occupation, BMI |
+| Conditions | 60+ named conditions |
 | Symptom history | Age at onset, trigger, duration, trajectory |
-| Genetics | Family history, genetic testing |
-| Treatments | 80+ medications, dosage, outcomes, procedures, dietary and alternative interventions |
-| Functional status | Work/disability status, activity level, mental health, social impact |
-| Healthcare experience | Doctor dismissal, diagnostic odyssey, costs, system access |
-| Exposures | Toxic/environmental, trauma, hormonal events, prior infections |
+| Genetics | Genetic testing |
+| Treatments | 80+ medications, outcomes, procedures, alternative interventions |
+| Functional status | Work/disability status, mental health, social impact |
+| Exposures | Toxic/environmental, trauma, prior infections |
 
 ### What Phase 2 catches that regex cannot
 
@@ -637,7 +636,7 @@ Every record written to `output/temp/patientpunk_records_*.json`:
     "age": { "values": ["34"], "provenance": "self_reported", "confidence": "medium" }
   },
   "extension": {
-    "vaccination_status": { "values": ["fully vaccinated"], "provenance": "self_reported", "confidence": "medium" }
+    "functional_status_tier": { "values": ["housebound"], "provenance": "self_reported", "confidence": "high" }
   }
 }
 ```
@@ -648,14 +647,13 @@ Every field object: `values` (list or null), `icd10_candidates` (conditions only
 
 ### Two-layer schema system
 
-**Base fields** (always extracted): 23 universal fields in `BASE_FIELDS` covering
-demographics, conditions, treatments, functional status, and healthcare experience.
+**Base fields** (always extracted): 14 universal fields in `BASE_FIELDS` covering
+demographics, conditions, treatments, and functional status.
 
-**Base-optional fields**: 12 additional fields available via `include_base_fields`
+**Base-optional fields**: 7 additional fields available via `include_base_fields`
 in a schema (off by default — noisier or study-specific):
-`location_us_state`, `ethnicity`, `occupation`, `bmi_weight`, `dosage`,
-`dietary_interventions`, `alternative_treatments`, `genetic_testing`,
-`social_impact`, `trauma_history`, `toxic_exposures`, `healthcare_costs`
+`occupation`, `bmi_weight`, `alternative_treatments`, `genetic_testing`,
+`social_impact`, `trauma_history`, `toxic_exposures`
 
 **Extension fields**: new fields defined entirely in the schema's `extension_fields`
 block with custom regex patterns.
@@ -667,7 +665,7 @@ Create a `.json` file in `schemas/`. It will be validated at startup.
 ```json
 {
   "schema_id": "my_study_v1",
-  "include_base_fields": ["dosage", "location_us_state"],
+  "include_base_fields": ["occupation", "bmi_weight"],
   "override_base_patterns": {
     "conditions": {
       "mode": "append",

@@ -453,10 +453,8 @@ class TestSchemaPatterns:
 
     # Spot-check a few fields with known example texts
     @pytest.mark.parametrize("field,text,should_match", [
-        ("covid_wave",       "I got sick during the Delta wave",          True),
-        ("covid_wave",       "My cat knocked over a glass of water",      False),
-        ("vaccination_status", "I am fully vaccinated with Pfizer",       True),
-        ("vaccination_status", "I am unvaccinated",                       True),
+        ("long_covid_duration_months", "I've been sick with long covid for 8 months", True),
+        ("long_covid_duration_months", "My cat knocked over a glass of water", False),
         ("functional_status_tier", "I've been mostly bedbound for months", True),
         ("functional_status_tier", "I went for a 5km run this morning",   False),
         ("infection_count",  "I've been reinfected twice now",            True),

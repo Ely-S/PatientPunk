@@ -135,12 +135,8 @@ BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
     "location_country": "Country of residence",
-    "healthcare_system": "Healthcare system (NHS, Medicare, private insurance, etc.)",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "diagnosis_source": "Who provided the diagnosis (specialist, GP, self-diagnosed, etc.)",
-    "time_to_diagnosis": "How long it took to receive a diagnosis (e.g., '3 years', '14 months')",
-    "misdiagnosis": "Previous incorrect diagnoses received",
     "symptom_duration": "How long symptoms have lasted",
     "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
     "age_at_onset": "Patient's age when illness began",
@@ -150,26 +146,17 @@ BASE_FIELD_DESCRIPTIONS = {
     # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
     "mental_health": "Mental health conditions or impacts mentioned",
-    "doctor_dismissal": "Experiences of being dismissed or disbelieved by doctors",
-    "diagnostic_odyssey": "Long journey to diagnosis - many doctors, years undiagnosed",
     "prior_infections": "Prior infections relevant to current illness (EBV, COVID, Lyme, etc.)",
-    "hormonal_events": "Hormonal events related to illness (pregnancy, menopause, puberty, etc.)",
-    "family_history": "Family history of relevant medical conditions",
 }
 
 BASE_OPTIONAL_DESCRIPTIONS = {
-    "location_us_state": "US state of residence",
-    "ethnicity": "Patient's ethnicity or race (self-reported)",
     "occupation": "Patient's occupation or job type",
     "bmi_weight": "BMI or weight mentions",
-    "dosage": "Medication dosages (e.g., '4.5mg LDN', '200mg CoQ10')",
-    "dietary_interventions": "Dietary changes tried (gluten-free, low histamine, carnivore, etc.)",
     "alternative_treatments": "Alternative/complementary treatments (acupuncture, supplements, etc.)",
     "genetic_testing": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)",
     "social_impact": "Social impacts of illness (relationships, isolation, etc.)",
     "trauma_history": "Trauma or adverse childhood experiences",
     "toxic_exposures": "Environmental toxic exposures (mold, chemicals, etc.)",
-    "healthcare_costs": "Out-of-pocket costs, insurance denials, financial burden",
 }
 
 

@@ -1,16 +1,11 @@
 {
   "schema_id": "covidlonghaulers_v1",
-  "_description": "Extension schema for r/covidlonghaulers. Activates 7 base-optional fields and adds 7 COVID-specific extension fields.",
+  "_description": "Extension schema for r/covidlonghaulers. Activates 2 base-optional fields and adds 4 COVID-specific extension fields.",
   "_version": "1.0",
   "_target_subreddit": "r/covidlonghaulers",
   "include_base_fields": [
-    "location_us_state",
-    "ethnicity",
-    "dosage",
-    "dietary_interventions",
     "alternative_treatments",
-    "social_impact",
-    "healthcare_costs"
+    "social_impact"
   ],
   "override_base_patterns": {
     "onset_trigger": {
@@ -42,17 +37,6 @@
     }
   },
   "extension_fields": {
-    "covid_wave": {
-      "description": "Which COVID variant or wave the patient contracted",
-      "confidence": "medium",
-      "patterns": [
-        "\\b(?:original|alpha|beta|delta|omicron|ba\\.?[12345]|xbb|jn\\.?1|bq\\.?1)\\s*(?:wave|variant|strain|infection)?\\b",
-        "\\b(?:first|original)\\s+wave\\b",
-        "\\b(?:wuhan|wild.?type)\\s+(?:strain|variant)?\\b"
-      ],
-      "_bleed_rate_last_run": null,
-      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
-    },
     "infection_count": {
       "description": "How many times the patient has been infected with COVID",
       "confidence": "medium",
@@ -60,19 +44,6 @@
         "(?:infected|got\\s+covid|had\\s+covid|caught\\s+covid)\\s+(?:\\w+\\s+){0,3}(?:twice|three times|four times|[2-9]\\s+times)",
         "\\b(?:reinfection|re.?infected|second\\s+infection|third\\s+infection)\\b",
         "(?:my\\s+)?(?:first|second|third|fourth|[1-9](?:st|nd|rd|th))\\s+(?:covid\\s+)?infection"
-      ],
-      "_bleed_rate_last_run": null,
-      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
-    },
-    "vaccination_status": {
-      "description": "COVID vaccination status including doses and brand",
-      "confidence": "medium",
-      "patterns": [
-        "\\b(?:unvaccinated|not\\s+vaccinated|no\\s+vaccine|vaccine.?free|refused\\s+(?:the\\s+)?vaccine)\\b",
-        "\\b(?:fully\\s+vaccinated|double.?vaxxed|triple.?vaxxed|boosted|up.?to.?date\\s+on\\s+(?:vaccines?|shots?))\\b",
-        "\\b(?:[1-5]\\s+(?:doses?|shots?|jabs?)|one\\s+dose|two\\s+doses|three\\s+doses)\\b",
-        "\\b(?:pfizer|moderna|astrazeneca|janssen|johnson\\s*&\\s*johnson|j\\s*&\\s*j|novavax)\\s*(?:vaccine)?\\b",
-        "\\b(?:mrna\\s+vaccine|viral\\s+vector\\s+vaccine)\\b"
       ],
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
@@ -114,19 +85,6 @@
         "\\b(?:ana|anca|rf\\b|crp\\b|esr\\b|ferritin|d.?dimer|fibrinogen|cortisol|tsh|testosterone|igg|iga|igm)\\s+(?:of\\s+|was\\s+|is\\s+|=\\s*)?[0-9]+(?:\\.[0-9]+)?\\b",
         "\\b(?:microclots?|micro.?clots?|spike\\s+protein\\s+persistence|viral\\s+persistence|ebv\\s+reactivation|herpes\\s+reactivation)\\b",
         "\\b(?:low\\s+cortisol|adrenal\\s+insufficiency|low\\s+nk\\s+cells?|low\\s+testosterone|low\\s+igg)\\b"
-      ],
-      "_bleed_rate_last_run": null,
-      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
-    },
-    "clinical_trial_participation": {
-      "description": "Participation or exclusion from clinical trials",
-      "confidence": "medium",
-      "patterns": [
-        "\\b(?:clinical\\s+trial|research\\s+study|drug\\s+trial|experimental\\s+treatment|compassionate\\s+use)\\b",
-        "\\b(?:enrolled\\s+in|participating\\s+in|part\\s+of\\s+a)\\s+(?:a\\s+)?(?:trial|study|research)\\b",
-        "\\b(?:excluded\\s+from|denied\\s+(?:from\\s+)?(?:the\\s+)?|not\\s+eligible\\s+for)\\s+(?:a\\s+)?(?:trial|study|research)\\b",
-        "\\b(?:waitlisted?|waiting\\s+list)\\s+for\\s+(?:a\\s+)?(?:trial|study)\\b",
-        "\\b(?:recover|act2|reverse|long\\s+covid\\s+trials?|nih\\s+recover)\\b"
       ],
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
