@@ -4,8 +4,7 @@ Structured biomedical data extraction from patient-authored Reddit text.
 
 Reads a corpus produced by `scrape_corpus.py` (subreddit posts + per-user
 history files) and extracts demographic and clinical fields (age, sex/gender,
-conditions, medications, treatment outcomes, etc.) using a combination of
-hand-crafted regex patterns and Claude Haiku/Sonnet LLM calls.
+conditions, medications, treatment outcomes, etc.) using Claude Haiku LLM calls.
 
 > **Interpreting the output?** See [`METHODS.md`](./METHODS.md) for the self/other
 > attribution model, known biases (and their tunable guards), and which fields to trust.
@@ -37,7 +36,7 @@ uv sync
 # 2. Add your Anthropic API key to the project root .env
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
-# 3. Full pipeline run (regex + LLM gap-fill + CSV + codebook)
+# 3. Full pipeline run (LLM extraction + CSV + codebook)
 #    NOTE: raw post extraction uses each post's title + body ONLY (a post record
 #    belongs to the post author). For comment-heavy / subreddit corpora, run
 #    `python main.py aggregate ...` first so commenters are captured as their own
@@ -58,14 +57,14 @@ python main.py inspect --schema schemas/covidlonghaulers_schema.json
 Two distinct pipelines. They are complementary — both output records tagged
 with `author_hash` as the join key, and can be run in either order.
 
-### Approach A — Full Pipeline (regex + LLM)
+### Approach A — Full Pipeline (LLM extraction)
 
-Extracts **all 37+ fields** defined in the schema (age, sex/gender, conditions,
-medications, procedures, functional status, etc.).
+Extracts **every field** defined in the schema (age, sex/gender, conditions,
+medications, procedures, functional status, etc. — 20 fields for
+`covidlonghaulers_schema.json`).
 
-- **Phase 1** — regex patterns match known signals instantly and for free.
-- **Phase 2** — Claude Haiku extracts fields that regex missed (default).
-- **Phase 3** — (opt-in) discovers *new* fields not yet in the schema.
+- **Phase 1** — Claude Haiku extracts every field defined in the schema (default).
+- **Phase 2** — (opt-in) discovers *new* fields not yet in the schema.
 
 ```bash
 # Default: Phases 1-2-4-5 (no discovery)
@@ -80,7 +79,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json --discover revi
 
 ### Approach B — LLM-Only Demographics
 
-Extracts demographic fields only — no regex. Haiku is given a strict
+Extracts demographic fields only. Haiku is given a strict
 self-reference constraint: it only extracts values the author states explicitly
 about themselves. Works especially well with full user posting histories
 (typically 4–5× more coverage than single posts).
@@ -113,17 +112,16 @@ python main.py demographics --input-dir ../output --users-only
 
 | Phase | Module | `run_*` | Cost | Description |
 |-------|--------|---------|------|-------------|
-| 1 | `biomedical` | `run_biomedical` | Free | Regex patterns across all schema fields |
-| 2 | `llm_extract` | `run_llm_extract` | ~$0.05-0.10 | Claude Haiku extracts fields regex missed |
-| 3 | `discover` | `run_discovery` | ~$1-3 | Haiku discovers new fields; Sonnet writes regex (opt-in) |
-| 4 | `export_csv` | `run_export_csv` | Free | Flatten JSON records to `records.csv` |
-| 5 | `codebook` | `run_codebook` | Free | Generate `codebook.csv` data dictionary |
+| 1 | `llm_extract` | `run_llm_extract` | ~$0.05-0.10 | Claude Haiku extracts every schema field (default) |
+| 2 | `discover` | `run_discovery` | ~$1-3 | Haiku discovers new fields not yet in the schema (opt-in) |
+| 3 | `export_csv` | `run_export_csv` | Free | Flatten JSON records to `records.csv` |
+| 4 | `codebook` | `run_codebook` | Free | Generate `codebook.csv` data dictionary |
 
 ```bash
-# Default run (Phases 1-2-4-5, discovery off)
+# Default run (Phases 1-3-4, discovery off)
 python main.py run --schema schemas/...
 
-# Regex only -- no API key needed
+# Skip LLM extraction entirely (only useful with --start-at / resuming export)
 python main.py run --schema schemas/... --no-llm
 
 # With discovery (auto-merge)
@@ -137,10 +135,9 @@ python main.py run --schema schemas/... --discover review
 
 | Phase | Model | Cost |
 |---|---|---|
-| 1 — Regex | none | Free |
-| 2 — LLM gap-fill | Haiku | ~$0.10–0.50 |
-| 3 — Discovery | Haiku + Sonnet | ~$1–3 |
-| 4–5 — Export | none | Free |
+| 1 — LLM extraction | Haiku | ~$0.10–0.50 |
+| 2 — Discovery | Haiku | ~$1–3 |
+| 3–4 — Export | none | Free |
 
 Use `--limit 10` for a cheap test run before committing to the full corpus.
 
@@ -153,10 +150,7 @@ output/
 ├── records.csv
 ├── codebook.csv
 └── temp/
-    ├── patientpunk_records_{schema_id}.json
-    ├── extraction_metadata_{schema_id}.json
-    ├── llm_records_{schema_id}.json
-    ├── merged_records_{schema_id}.json
+    ├── records_{schema_id}.json
     ├── phase1_candidates.json
     ├── discovered_records_{schema_id}.json
     └── discovered_field_report_{schema_id}.json
@@ -181,16 +175,14 @@ flowchart TD
     posts & ufiles --> p1
     schema --> p1
 
-    p1["Phase 1 · patientpunk.biomedical<br/>37 hand-crafted regex patterns · free · seconds"]:::phase
-    p1 --> t1[("temp/ patientpunk_records<br/>extraction_metadata")]:::temp
-    t1 --> p2["Phase 2 · patientpunk.llm_extract<br/>Claude Haiku fills regex gaps · ~$0.10–0.50"]:::phase
-    p2 --> t2[("temp/ merged_records")]:::temp
-    t2 --> p3["Phase 3 · patientpunk.discover<br/>Haiku scans → Sonnet writes regex → Haiku fills gaps · ~$1–3"]:::phase
-    p3 --> t3[("temp/ discovered_records")]:::temp
-    t3 --> p4["Phase 4 · patientpunk.export_csv<br/>Flatten nested JSON to wide CSV"]:::phase
-    p4 --> p5["Phase 5 · patientpunk.codebook<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
-    p5 --> out1["output/records.csv"]:::out
-    p5 --> out2["output/codebook.csv"]:::out
+    p1["Phase 1 · patientpunk.llm_extract<br/>Claude Haiku extracts every schema field · ~$0.10–0.50"]:::phase
+    p1 --> t1[("temp/ records_{schema_id}")]:::temp
+    t1 --> p2["Phase 2 · patientpunk.discover (opt-in)<br/>Haiku scans corpus for new field candidates · ~$1–3"]:::phase
+    p2 --> t2[("temp/ discovered_records")]:::temp
+    t2 --> p3["Phase 3 · patientpunk.export_csv<br/>Flatten nested JSON to wide CSV"]:::phase
+    p3 --> p4["Phase 4 · patientpunk.codebook<br/>Descriptions · ICD-10 codes · coverage % · examples"]:::phase
+    p4 --> out1["output/records.csv"]:::out
+    p4 --> out2["output/codebook.csv"]:::out
 
     classDef src    fill:#FAECE7,stroke:#993C1D,color:#712B13
     classDef script fill:#EEEDFE,stroke:#534AB7,color:#3C3489
@@ -201,45 +193,42 @@ flowchart TD
     classDef out    fill:#E6F1FB,stroke:#185FA5,color:#0C447C
 ```
 
-### What Phase 1 extracts (regex)
+### What Phase 1 extracts
 
 | Category | Fields |
 |---|---|
 | Demographics | Age, sex/gender, location (country), occupation, BMI |
-| Conditions | 60+ named conditions |
+| Conditions | Named conditions |
 | Symptom history | Age at onset, trigger, duration, trajectory |
 | Genetics | Genetic testing |
-| Treatments | 80+ medications, outcomes, procedures, alternative interventions |
+| Treatments | Medications, dosages, outcomes, procedures, alternative interventions |
 | Functional status | Work/disability status, mental health, social impact |
 | Exposures | Toxic/environmental, trauma, prior infections |
 
-### What Phase 2 catches that regex cannot
+Handles cases a fixed pattern set never could:
 
 - **Paraphrased mentions** — "my heart races when I stand" → POTS
 - **Negation** — "I don't have POTS" correctly excluded
 - **Treatment-outcome pairs** — "LDN helped my brain fog but worsened sleep"
 - **Temporal context** — "I had fatigue but it resolved" → past symptom, not current
 
-### How Phase 3 discovery works
+### How Phase 2 discovery works
 
 1. **Haiku** scans corpus for new field candidates with example snippets
-2. **Sonnet** writes regex patterns, tests against examples, iterates up to 3 times
-3. Validated regex runs across the full corpus (free)
-4. **Haiku** fills gaps where regex missed
+2. **Haiku** extracts the validated candidates across the full corpus
 
 Fields accepted at ≥ 50% hit rate. All auto-discovered fields carry `source: "llm_discovered"`.
 
 ### Promoting discovered fields
 
 Discovery is deliberately non-destructive: discovered fields are written to a
-throwaway `temp/discovered_{timestamp}.json` and are **not** merged into your
+throwaway `temp/discovered_{schema_id}.json` and are **not** merged into your
 curated schema. They are populated in the run that discovers them, but a *later*
-run can't deliberately extract them, and Phase 1 regex skips raw `llm_discovered`
-fields for safety.
+run can't deliberately extract them until they're promoted.
 
 `promote` is the explicit bridge — it merges selected discovered fields into a
 schema's `extension_fields` so future runs treat them as first-class variables
-(Phase 1 regex **and** Phase 2 LLM gap-fill) on **any** data:
+(extracted by Phase 1 LLM extraction) on **any** data:
 
 ```bash
 # 1. Discover (populates discovered fields for this run only)
@@ -253,9 +242,8 @@ python main.py promote --schema schemas/covidlonghaulers_schema.json --min-cover
 python main.py run --schema schemas/covidlonghaulers_schema_promoted.json
 ```
 
-Promoted fields are stamped `_promoted_at` (which is what re-enables their Phase 1
-regex). The default `run` wipes `temp/` first, so stale discovery records from
-step 1 are not double-counted in step 3.
+Promoted fields are stamped `_promoted_at`. The default `run` wipes `temp/`
+first, so stale discovery records from step 1 are not double-counted in step 3.
 
 ### Consolidating across discovery runs
 
@@ -299,25 +287,23 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
 
   --input-dir PATH      Corpus directory (default: ../output)
   --temp-dir PATH       Intermediate files (default: {input-dir}/temp/)
-  --start-at N          Resume from phase N (1–5)
-  --no-llm              Skip Phase 2
-  --discover MODE       Enable Phase 3: 'auto' (merge all) or 'review' (stop for human selection)
+  --start-at N          Resume from phase N (1–4)
+  --no-llm              Skip Phase 1 (LLM extraction)
+  --discover MODE       Enable Phase 2: 'auto' (merge all) or 'review' (stop for human selection)
   --no-clean            Don't wipe temp/ before starting
   --workers N           Concurrent API workers (default: 10)
   --limit N             Process at most N records (cost control)
   --resume              Resume an interrupted run
-  --skip-threshold F    LLM skips records where regex hit ≥ F fields (default: 0.7)
-  --candidates PATH     Saved phase1_candidates.json (skips Phase 3 Stage 1)
-  --sample N            Random N-item sample for Phase 3 Stage 1
-  --no-fill             Skip Phase 3 Stage 4 gap-filling
+  --llm-cache           Force-enable the LLM response cache
+  --no-llm-cache        Disable the LLM response cache
+  --candidates PATH     Saved phase1_candidates.json (skips discovery's candidate-scan stage)
+  --sample N            Random N-item sample for discovery's candidate-scan stage
   --sep STR             Multi-value separator in CSV (default: " | ")
-  --provenance          Add {field}__provenance and {field}__confidence columns
   --codebook-format     csv (default) or markdown
   --no-discovered       Exclude llm_discovered fields from codebook
-  --group-guard         Route un-attributed stack members to `unknown` (see below)
 ```
 
-#### Group-attribution guard (optional)
+#### Group-attribution guard (optional, env var only)
 
 "Stack" posts (several treatments named together, one *collective* outcome — very
 common in long-COVID/PSSD) can inflate per-drug `helped` rates, because the model
@@ -325,8 +311,7 @@ copies the collective outcome onto each named treatment. Enable the guard to rou
 un-attributed stack members to `unknown` instead of a guessed `helped`:
 
 ```bash
-PP_GROUP_GUARD=1        # env (dispersed / no-CLI path)
-... --group-guard       # CLI flag
+PP_GROUP_GUARD=1 python main.py run --schema schemas/...
 ```
 
 Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
@@ -352,7 +337,7 @@ python main.py demographics --input-dir ../output [options]
 python main.py inspect --schema schemas/covidlonghaulers_schema.json [options]
 
   --source STR          Filter by: base | base_optional | extension | llm_discovered
-  --verbose             Show regex patterns for each field
+  --verbose             Show allowed values for each field
 ```
 
 ### `corpus` — corpus statistics
@@ -362,7 +347,7 @@ python main.py corpus --input-dir ../output
 # Prints: post count, user history count, total records
 ```
 
-### `export` — re-run export only (Phases 4 + 5)
+### `export` — re-run export only (Phases 3 + 4)
 
 ```
 python main.py export --schema schemas/covidlonghaulers_schema.json [options]
@@ -514,7 +499,6 @@ Key columns:
 - `author_hash` — SHA-256 of the Reddit username (join key with Polina's pipeline)
 - `source_type` — `subreddit_post` or `user_history`
 - One column per schema field (`age`, `sex_gender`, `conditions`, ...)
-- With `--provenance`: additional `{field}__confidence` and `{field}__provenance` columns
 
 ### `output/codebook.csv`
 
@@ -542,7 +526,7 @@ cp ../.env.example ../.env
 # Edit ../.env: ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Phase 1 (regex) and Phases 4–5 (export) require no API key.
+Phases 3–4 (export) require no API key.
 
 Optional extras (install with `pip install '.[extra]'` / `uv pip install '.[extra]'`
 from the repo root, or add to a `uv sync --extra` invocation):
@@ -561,7 +545,7 @@ cd variable_extraction
 uv run pytest tests/ -v
 ```
 
-Comprehensive pytest suite (244 tests) with no live API calls. Covers corpus
+Comprehensive pytest suite (279 tests) with no live API calls. Covers corpus
 loading, schema parsing, extractor argument construction, pipeline config
 validation, qualitative standards injection, and codebook aggregation logic.
 
@@ -580,13 +564,13 @@ Shaun's extraction pipeline (this module) and Polina's drug sentiment pipeline.
 
 ```
 variable_extraction/
-├── main.py                        Entry point — CLI with 5 subcommands
+├── main.py                        Entry point — CLI with 11 subcommands
 ├── README.md                      This file
 ├── conftest.py                    Pytest package config
 ├── .env                           API keys (gitignored)
 │
 ├── schemas/
-│   ├── base_schema.json           23 universal biomedical fields
+│   ├── base_schema.json           14 base fields + 7 base-optional fields
 │   └── covidlonghaulers_schema.json  COVID-specific extension fields
 │
 ├── patientpunk/                   Importable Python library
@@ -598,11 +582,10 @@ variable_extraction/
 │   ├── pipeline.py                Pipeline + PipelineConfig (calls run_* in-process)
 │   ├── qualitative_standards.py   LLM coding standards (injected into prompts)
 │   ├── _utils.py                  Internal helpers
-│   ├── biomedical.py              Phase 1 — run_biomedical (+ CLI)
-│   ├── llm_extract.py             Phase 2 — run_llm_extract (+ CLI)
-│   ├── discover.py                Phase 3 — run_discovery (+ CLI)
-│   ├── export_csv.py              Phase 4 — run_export_csv (+ CLI)
-│   ├── codebook.py                Phase 5 — run_codebook (+ CLI)
+│   ├── llm_extract.py             Phase 1 — run_llm_extract (+ CLI)
+│   ├── discover.py                Phase 2 — run_discovery (+ CLI)
+│   ├── export_csv.py              Phase 3 — run_export_csv (+ CLI)
+│   ├── codebook.py                Phase 4 — run_codebook (+ CLI)
 │   ├── demographics.py            run_demographic_coding (+ CLI)
 │   └── demographics_deductive.py  run_demographics_deductive (+ CLI)
 │
@@ -613,11 +596,13 @@ variable_extraction/
 
 ### Data model — PatientPunk v2.0 record
 
-Every record written to `output/temp/patientpunk_records_*.json`:
+Every record written to `output/temp/records_{schema_id}.json`:
 
 ```json
 {
   "_patientpunk_version": "2.0",
+  "_extraction_method": "llm",
+  "_model": "claude-haiku-4-5",
   "_schema_id": "covidlonghaulers_v1",
   "_extracted_at": "2026-04-05T12:00:00+00:00",
   "record_meta": {
@@ -626,24 +611,18 @@ Every record written to `output/temp/patientpunk_records_*.json`:
     "text_count": 412,
     "post_id": null
   },
-  "base": {
-    "conditions": {
-      "values": ["long covid", "pots"],
-      "icd10_candidates": {"long covid": "U09.9", "pots": "G90.3"},
-      "provenance": "self_reported",
-      "confidence": "high"
-    },
-    "age": { "values": ["34"], "provenance": "self_reported", "confidence": "medium" }
-  },
-  "extension": {
-    "functional_status_tier": { "values": ["housebound"], "provenance": "self_reported", "confidence": "high" }
+  "fields": {
+    "conditions": { "values": ["long covid", "pots"], "confidence": "high" },
+    "age": { "values": ["34"], "confidence": "medium" },
+    "functional_status_tier": { "values": ["housebound"], "confidence": "high" }
   }
 }
 ```
 
-Every field object: `values` (list or null), `icd10_candidates` (conditions only),
-`provenance` (`"self_reported"` | `"mentioned_by_other"` | null),
-`confidence` (`"high"` | `"medium"` | `"low"` | null).
+Every field object: `values` (list or null) and `confidence`
+(`"high"` | `"medium"` | `"low"` | null, taken from the field's schema-declared
+confidence tier). `fields` is a flat namespace — base and extension fields are
+not split into separate sections in the record itself.
 
 ### Two-layer schema system
 
@@ -656,7 +635,7 @@ in a schema (off by default — noisier or study-specific):
 `social_impact`, `trauma_history`, `toxic_exposures`
 
 **Extension fields**: new fields defined entirely in the schema's `extension_fields`
-block with custom regex patterns.
+block.
 
 ### Writing an extension schema
 
@@ -666,48 +645,23 @@ Create a `.json` file in `schemas/`. It will be validated at startup.
 {
   "schema_id": "my_study_v1",
   "include_base_fields": ["occupation", "bmi_weight"],
-  "override_base_patterns": {
-    "conditions": {
-      "mode": "append",
-      "patterns": ["\\b(my disease|variant name)\\b"]
-    }
-  },
   "extension_fields": {
     "my_new_field": {
       "description": "What this captures",
-      "confidence": "medium",
-      "patterns": ["\\b(pattern one|pattern two)\\b"]
+      "confidence": "medium"
     }
   }
 }
 ```
 
-Test patterns before a full run:
+Inspect the merged field set before running a full extraction:
 
 ```bash
-python -m patientpunk.biomedical \
-    --text "your test sentence" \
-    --schema schemas/my_schema.json
+python main.py inspect --schema schemas/my_schema.json --verbose
 ```
-
-### Adding or modifying regex patterns
-
-Base patterns live in the `PATTERNS` dict in `patientpunk/biomedical.py`.
-
-```python
-# Append a pattern to an existing field
-"medications": [
-    re.compile(r"\b(existing|patterns)\b", re.I),
-    re.compile(r"\b(your new drug)\b", re.I),  # add here
-],
-```
-
-All patterns use `re.IGNORECASE`. Double-escape backslashes in JSON (`\\b`).
-Use captured groups — the matcher uses `m.group(1)` when present.
 
 ### Running the test suite
 
 ```bash
 python -m pytest tests/ -v                          # full suite
-python -m patientpunk.biomedical --text "34F with POTS and long COVID"  # spot-check
 ```

@@ -10,13 +10,12 @@ Core data classes::
     from patientpunk import CorpusLoader, CorpusRecord
     from patientpunk import Schema, FieldDefinition
 
-Pipeline orchestrator (Phases 1–5: regex → LLM → discovery → CSV → codebook)::
+Pipeline orchestrator (Phases 1–4: LLM → discovery → CSV → codebook)::
 
     from patientpunk import Pipeline, PipelineConfig
 
 In-process phase functions (also used by Pipeline)::
 
-    from patientpunk.biomedical import run_biomedical
     from patientpunk.llm_extract import run_llm_extract
     from patientpunk.discover import run_discovery
     from patientpunk.export_csv import run_export_csv

@@ -3,19 +3,17 @@ patientpunk.promote
 ~~~~~~~~~~~~~~~~~~~~
 Promote auto-discovered fields into a curated extension schema.
 
-Field discovery (Phase 3) deliberately writes its results to a throwaway
+Field discovery deliberately writes its results to a throwaway
 ``discovered_{timestamp}.json`` in temp/ and never merges them into the curated
 schema (see patientpunk.discover).  That keeps the curated schema clean,
 but it also makes discovered variables a dead end: the next run cannot
-deliberately re-extract them, Phase 2's LLM gap-fill never targets them, and
+deliberately re-extract them, the LLM extraction phase never targets them, and
 they are not documented in the codebook.
 
 ``promote`` is the explicit, opt-in bridge.  It copies selected discovered
-fields into a schema's ``extension_fields`` so subsequent runs treat them as
-first-class fields (Phase 1 regex + Phase 2 LLM fill) on any data.  Each
-promoted field is stamped with ``_promoted_at`` -- which is also the marker that
-re-enables Phase 1 regex compilation for it (raw ``llm_discovered`` fields are
-skipped by Phase 1 for safety; see patientpunk.biomedical).
+fields into a schema's ``extension_fields`` so subsequent runs extract them as
+first-class fields on any data.  Each promoted field is stamped with
+``_promoted_at`` / ``_promoted_from``.
 
 Pure functions, no API calls -- unit-testable.
 """
@@ -104,8 +102,8 @@ def promote_discovered_fields(
     """Merge ``discovered_schema['extension_fields']`` into the target schema.
 
     Each promoted field dict is copied verbatim (preserving all discovery
-    metadata -- ``_discovered_at``, ``hit_rate_at_discovery``, ``frequency_hint``,
-    ``research_value``, ``llm_only``, ``allowed_values``, ``patterns`` ...) plus
+    metadata -- ``_discovered_at``, ``frequency_hint``, ``research_value``,
+    ``allowed_values`` ...) plus
     ``_promoted_at`` / ``_promoted_from`` markers.
 
     Filters are applied in order: ``include`` allowlist -> ``exclude`` ->

@@ -238,7 +238,7 @@ Steps 3a and 3b are independent — run in either order. Both are keyed on `auth
 
 ### Step 3c — Variable extraction *(structured clinical fields)*
 
-A separate, more thorough extraction pipeline (regex + LLM) that pulls 37+
+A separate, more thorough LLM-based extraction pipeline that pulls 20+
 structured fields per patient (conditions, medications, functional status,
 demographics, etc.) — see [variable_extraction/README.md](variable_extraction/README.md)
 for the full CLI. Minimal run:

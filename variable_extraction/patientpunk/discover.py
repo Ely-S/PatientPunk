@@ -2,18 +2,11 @@
 """
 
 
-Automatically discovers new biomedical fields from patient-authored text,
-generates regex patterns for them, validates the patterns, and extracts
-across the full corpus. Uses a two-model architecture:
+Automatically discovers new biomedical fields from patient-authored text and
+extracts them across the full corpus. Both stages run on Haiku:
 
-  - Haiku: cheap, fast - scans corpus for field candidates, extracts bulk data
-  - Sonnet: precise - writes and validates regex patterns
-
-Pipeline phases:
-  Phase 1 (Haiku)  : Scan corpus → discover new field candidates with examples
-  Phase 2 (Sonnet) : For each candidate → write regex → test against examples → iterate
-  Phase 3 (regex)  : Run validated patterns across full corpus (no LLM, free)
-  Phase 4 (Haiku)  : Fill gaps - for records where regex missed, Haiku extracts directly
+  Stage 1 : Scan corpus → discover new field candidates with examples
+  Stage 2 : Extract the discovered fields from every corpus record
 
 Usage:
     # Full pipeline on default corpus
@@ -22,11 +15,8 @@ Usage:
     # Include existing schema as context (so it doesn't rediscover known fields)
     python -m patientpunk.discover --schema schemas/covidlonghaulers_schema.json
 
-    # Limit corpus scan to N records (cost control for Phase 1)
+    # Limit corpus scan to N records (cost control for Stage 1)
     python -m patientpunk.discover --limit 20
-
-    # Skip Phase 4 (no gap-filling, just discovery + regex)
-    python -m patientpunk.discover --no-fill
 
     # Custom input path
     python -m patientpunk.discover --input-dir ../output/
@@ -46,35 +36,10 @@ import builtins
 import json
 import os
 import random
-import re
 import sys
 import threading
 import time
 
-try:
-    import regex as _regex  # real, interruptible match timeout (see _finditer_with_timeout)
-except ImportError:  # pragma: no cover - regex is a declared dependency
-    _regex = None
-
-
-def _re_flags_to_regex(flags: int) -> int:
-    """Translate the compile flags off a stdlib `re` pattern to `regex` flags.
-
-    Only the flags that can appear on our LLM-generated patterns are mapped; we
-    avoid copying raw flag ints because the two modules don't share all values.
-    """
-    out = 0
-    if _regex is not None:
-        for re_flag, name in (
-            (re.IGNORECASE, "IGNORECASE"),
-            (re.MULTILINE, "MULTILINE"),
-            (re.DOTALL, "DOTALL"),
-            (re.VERBOSE, "VERBOSE"),
-            (re.ASCII, "ASCII"),
-        ):
-            if flags & re_flag:
-                out |= getattr(_regex, name)
-    return out
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -97,47 +62,9 @@ try:
 except ImportError:
     raise ImportError("anthropic is required: pip install anthropic") from None
 
+from . import llm_extract
 from .qualitative_standards import FIELD_DESIGN_STANDARDS
 from .phase import PhaseResult
-from .biomedical import PATTERNS
-
-
-def _finditer_with_timeout(pattern, text: str, timeout: float = 2.0) -> list:
-    """Run pattern.finditer(text), raising TimeoutError if it takes too long.
-
-    Catastrophic backtracking in LLM-generated patterns can hang indefinitely.
-    The `regex` module enforces a real timeout that *interrupts* the running match,
-    so a pathological pattern is genuinely abandoned. The stdlib-`re` fallback runs
-    the match in a daemon thread and can only *stop waiting* on it -- Python cannot
-    kill the thread, so a backtracking pattern keeps burning a core in the
-    background. We prefer `regex`; the thread path exists only if it's unavailable.
-    """
-    if _regex is not None:
-        try:
-            compiled = _regex.compile(pattern.pattern, _re_flags_to_regex(pattern.flags))
-            return list(compiled.finditer(text, timeout=timeout))
-        except TimeoutError:
-            raise TimeoutError(f"Pattern timed out after {timeout}s") from None
-
-    results: list = []
-    exc: list = []
-
-    def _run():
-        try:
-            results.extend(pattern.finditer(text))
-        except Exception as e:
-            exc.append(e)
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout)
-    if t.is_alive():
-        # The thread is still running the match and cannot be killed; it will keep
-        # consuming a CPU core until the (LLM-generated) pattern finally returns.
-        raise TimeoutError(f"Pattern timed out after {timeout}s")
-    if exc:
-        raise exc[0]
-    return results
 
 
 # =============================================================================
@@ -150,7 +77,6 @@ from ._utils import (
     check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
-    MODEL_STRONG,
     collect_texts_from_post as _collect_texts_from_post,
     get_llm_client,
     parse_json_response,
@@ -158,22 +84,17 @@ from ._utils import (
 )
 from .llm_cache import cached_completion
 HAIKU = MODEL_FAST
-SONNET = MODEL_STRONG
 # Discovery responses are verbose JSON (examples, descriptions, vocabulary per field).
 # 4096 was too low -- batches of 14+ posts regularly hit the ceiling and returned
 # truncated JSON, causing PARSE FAILED on every batch. Haiku's hard max is 8192;
 # Sonnet 3.5+ supports up to 8192 as well.
 MAX_TOKENS_HAIKU = 8192
-MAX_TOKENS_SONNET = 8192
 # Each discovered field requires ~600-800 chars of JSON (description, examples,
 # vocabulary). 14 posts already generates ~16k chars of response which barely
 # fits in 8192 tokens. Keeping batches to ~10 posts each stays comfortably under
 # the output limit. 30k was too large.
 MAX_TEXT_CHARS = 10_000
-# Text cap for Phase 3 regex matching. Keeps each operation bounded even for
-# users with thousands of posts. Patterns generally match early in text.
-MAX_TEXT_CHARS_PHASE3 = 30_000
-# Per-item text cap for Phase 1 discovery. Discovery only needs to *spot* patterns,
+# Per-item text cap for stage 1 discovery. Discovery only needs to *spot* patterns,
 # not read every word. Capping each item keeps batches dense (fewer API calls).
 MAX_TEXT_CHARS_PER_ITEM_PHASE1 = 0
 REQUEST_DELAY_S = 0.5
@@ -181,9 +102,7 @@ RETRY_DELAYS = [2, 5, 15, 30]
 
 # How many example snippets Haiku should find per candidate field
 EXAMPLES_PER_FIELD = 8
-# Max iterations for Sonnet to refine a regex
-MAX_REGEX_ITERATIONS = 3
-# Minimum examples a field must have to proceed to regex generation
+# Minimum examples a candidate field must have to qualify
 MIN_EXAMPLES = 3
 
 
@@ -279,7 +198,7 @@ def load_corpus_texts(
     """Load corpus into a list of {source, author_hash, post_id, texts} dicts.
 
     When posts_only=True, skip user histories. This is useful for field
-    discovery (Phase 3) where user histories introduce noise from
+    discovery where user histories introduce noise from
     unrelated subreddits -- we only want patterns from the target subreddit.
     """
     items = []
@@ -412,7 +331,7 @@ BAD field suggestions (avoid these patterns):
 
 CRITICAL RULES FOR extracted_value:
 - 1-2 words is IDEAL. 3-4 words is acceptable. 5 words is the absolute maximum.
-- It is the LITERAL VALUE the regex capture group will return - not a narrative, not a summary
+- It is the LITERAL VALUE the extractor will return - not a narrative, not a summary
 - GOOD: "bedbound", "rheumatologist", "Pfizer", "no effect", "LDN", "6 months"
 - BAD: "LDN started at 6-month mark, reported as helpful" (narrative - fails parsimony)
 - BAD: "saw improvement after starting magnesium glycinate" (sentence - not a category)
@@ -421,16 +340,10 @@ CRITICAL RULES FOR extracted_value:
 - If the field captures outcomes/labels → extracted_value = just the label word(s)
 
 NEGATIVE EXAMPLES - for each field, also provide 2-3 sentences that look superficially
-similar but should NOT be extracted. These help the regex engine avoid false positives.
+similar but should NOT be extracted. These help the extractor avoid false positives.
 A negative example is a sentence from the same community that uses similar words but
 does NOT actually contain the field value. Think about construct validity: what sentence
 would FAIL the operationalization test even though it uses the right words?
-
-Set `regex_extractable: false` for fields where the value requires semantic understanding,
-is too variable in phrasing, or is inherently relational/sequential (e.g.
-'medication_trial_sequence' - the value depends on understanding a multi-step narrative
-that no pattern can reliably capture). Set true for entity names, categorical labels,
-and measurements.
 
 RESPONSE FORMAT - return valid JSON:
 {{
@@ -451,8 +364,6 @@ RESPONSE FORMAT - return valid JSON:
       ],
       "frequency_hint": "common|occasional|rare",
       "research_value": "One sentence on why a researcher would want this field",
-      "regex_extractable": true,
-      "extractability_note": "brief reason if false - what makes this hard to regex",
       "allowed_values": ["value1", "value2", "value3"],
       "trigger_vocabulary": ["diagnosed with", "started taking", "housebound"]
     }}
@@ -569,8 +480,6 @@ def run_phase1_discovery(
                             "frequency_hints": [],
                             "research_value": "",
                             "trigger_vocabulary": [],
-                            "regex_extractable_votes": [],
-                            "extractability_note": "",
                             "allowed_values_sets": [],
                         }
                     entry = all_candidates[name]
@@ -595,10 +504,6 @@ def run_phase1_discovery(
                         if word and word.lower() not in {w.lower() for w in entry["trigger_vocabulary"]}:
                             if len(entry["trigger_vocabulary"]) < 8:
                                 entry["trigger_vocabulary"].append(word)
-                    # Improvement 2: accumulate regex_extractable votes and note
-                    entry["regex_extractable_votes"].append(field.get("regex_extractable", True))
-                    if not entry["extractability_note"] and field.get("extractability_note"):
-                        entry["extractability_note"] = field["extractability_note"]
                     # Improvement 3: accumulate allowed_values sets
                     av = field.get("allowed_values")
                     if av and isinstance(av, list):
@@ -608,9 +513,6 @@ def run_phase1_discovery(
     qualified = []
     for name, data in sorted(all_candidates.items(), key=lambda x: -len(x[1]["examples"])):
         if len(data["examples"]) >= MIN_EXAMPLES:
-            # Improvement 2: resolve regex_extractable votes
-            votes = data["regex_extractable_votes"]
-            regex_extractable = (sum(votes) / max(len(votes), 1)) >= 0.5 if votes else True
             # Improvement 3: resolve allowed_values union
             if data["allowed_values_sets"]:
                 union = set().union(*data["allowed_values_sets"])
@@ -626,8 +528,6 @@ def run_phase1_discovery(
                     if data["frequency_hints"] else "occasional",
                 "research_value": data["research_value"],
                 "trigger_vocabulary": data["trigger_vocabulary"],
-                "regex_extractable": regex_extractable,
-                "extractability_note": data["extractability_note"],
                 "allowed_values": allowed_values,
             })
 
@@ -639,557 +539,31 @@ def run_phase1_discovery(
 
 
 # =============================================================================
-# PHASE 2: BUILD REGEX (Sonnet)
+# STAGE 2: EXTRACT DISCOVERED FIELDS (Haiku)
 # =============================================================================
 
-SONNET_SYSTEM_PROMPT = """You are an expert regex engineer for the PatientPunk biomedical research project.
-Your job is to write Python regex patterns that extract specific biomedical information from
-informal patient-authored Reddit text.
-
-RULES FOR WRITING PATTERNS:
-1. Use Python re module syntax (not PCRE or other flavors)
-2. All patterns will be compiled with re.IGNORECASE flag - do NOT include (?i) in patterns
-3. Patterns should capture the VALUE in a group when possible (use parentheses)
-4. Be generous with word boundaries (\\b) to avoid false matches inside other words
-5. Account for informal spelling, abbreviations, and Reddit conventions
-6. Prefer multiple simple patterns over one complex monster pattern
-7. Use non-capturing groups (?:...) for alternation structure, capturing groups for values
-8. Avoid patterns that are so broad they'll match unrelated content
-9. CAPTURE GROUP LENGTH: 1-2 words is ideal, 3-4 acceptable, 5 the hard maximum.
-   NEVER write (.+), (.{{0,50}}), or any open-ended quantifier in a capture group.
-   Use specific word lists, \\b boundaries, or fixed short quantifiers instead.
-10. FALSE POSITIVES MATTER: you will be shown negative examples that must NOT match.
-    A pattern scoring 100% hit rate but firing on negatives is a failing pattern.
-
-NEGATION HANDLING - a critical source of false positives:
-Patient text frequently negates the exact terms you want to capture:
-"not bedbound", "never tried LDN", "I don't have POTS", "no longer housebound".
-A naive pattern fires on all of these incorrectly.
-
-CORRECT APPROACH - use positive context anchors instead of the bare term:
-Rather than matching the term alone, require a positive context verb before it
-that would not appear in a negated sentence.
-
-  BAD:  \\b(bedbound)\\b  - fires on "not bedbound"
-  GOOD: \\b(?:I(?:'m| am)|currently|have been|been|become)\\s+(?:\\w+\\s+)?(bedbound)\\b
-
-  BAD:  \\b(LDN)\\b  - fires on "never tried LDN"
-  GOOD: \\b(?:taking|started|on|tried|using|began)\\s+(?:low.dose\\s+)?(LDN)\\b
-
-  BAD:  \\b(POTS)\\b  - fires on "don't have POTS"
-  GOOD: \\b(?:diagnosed with|have|my|confirmed)\\s+(POTS)\\b
-
-Python's `re` module requires fixed-width lookbehinds, so you CANNOT write
-`(?<!not\\s+value)` with variable spacing. Use positive context anchors instead.
-
-Common positive anchors by field type:
-  Status/severity:  "I'm", "I am", "currently", "been", "become", "remain"
-  Medication use:   "taking", "on", "started", "tried", "prescribed", "began"
-  Diagnosis:        "diagnosed with", "have", "confirmed", "positive for"
-  Specialist visit: "saw", "seeing", "referred to", "appointment with", "consulted"
-
-MODEL PATTERNS - write patterns like these:
-
-  GOOD - categorical field with enumerated values (best):
-    Field: vaccination_status
-    \\b(unvaccinated|not vaccinated|no vaccine)\\b
-    \\b(pfizer|moderna|astrazeneca|johnson|novavax|mrna)\\b(?:\\s+vaccine)?
-    \\b(boosted|double vaxxed|triple vaxxed|fully vaccinated)\\b
-    → capture group returns one word from a known list. Cannot bleed.
-
-  GOOD - named entity anchored by context verb (good):
-    Field: specialist_type_seen
-    \\b(?:saw|seeing|referred to|consulted?|appointment with)\\s+(?:a|my|an)?\\s*(rheumatologist|cardiologist|neurologist|immunologist|endocrinologist|gastroenterologist|psychiatrist|pulmonologist)\\b
-    → captures exactly one known word, context verb prevents false positives.
-
-  GOOD - short measurement (acceptable):
-    Field: long_covid_duration_months
-    \\b([1-9][0-9]?)\\s*months?\\s+(?:of\\s+)?(?:long.?covid|pasc|symptoms|this)\\b
-    → captures a number, \\b stops it at the word boundary.
-
-  BAD - open capture group (never do this):
-    \\b(?:tried|started|took)\\s+([A-Za-z][A-Za-z0-9\\-]+(?:\\s+[A-Za-z][A-Za-z0-9\\-]+){{0,3}})
-    → ({0,3}) still matches 1-4 arbitrary words. Use a named word list instead.
-
-  BAD - no anchor, grabs context:
-    ([A-Za-z]+(?:[- ][A-Za-z]+){{0,3}})\\s+(?:helps?|works?)
-    → matches "pages and security guards are really good" - anything before "helps".
-
-RESPONSE FORMAT - return valid JSON:
-{{
-  "patterns": [
-    "regex_pattern_1",
-    "regex_pattern_2"
-  ],
-  "reasoning": "Brief explanation of what each pattern targets"
-}}
-
-MEASUREMENT PRINCIPLES FOR PATTERN DESIGN:
-
-- Sensitivity vs specificity tradeoff: a broad pattern catches more true positives
-  but also more false positives. A narrow pattern misses edge cases but is reliable.
-  For research data, SPECIFICITY is usually more valuable than sensitivity - a smaller
-  clean dataset beats a large noisy one. Err on the side of precision.
-
-- Operationalization in regex: your pattern is your operationalization. It defines
-  exactly what text evidence counts as an instance of the field. If the pattern fires
-  on a sentence that a human coder would say "that's not really about X", your
-  operationalization is wrong - tighten the pattern.
-
-- Inter-rater reliability proxy: ask yourself "would two researchers looking at a
-  match agree it belongs in this field?" If a match is ambiguous, the pattern is
-  too broad. Disambiguate with more context in the trigger (words before/after the
-  capture group), not by widening the capture group.
-
-Write 2-6 patterns per field. Each pattern should target a different way patients express
-the same concept. Prefer patterns with enumerated word lists over open capture groups."""
+SAVE_EVERY_N = 20
 
 
-def evaluate_patterns(
-    patterns: list[str],
-    examples: list[dict],
-    negative_examples: list[dict] | None = None,
-) -> dict:
-    """Test compiled patterns against positive and negative example texts.
-
-    Positive examples: patterns must match these (hit rate).
-    Negative examples: patterns must NOT match these (false positive rate).
-    Both rates are reported back to Sonnet so it can self-correct in both directions.
-    """
-    compiled = []
-    compile_errors = []
-    for p in patterns:
-        try:
-            compiled.append(re.compile(p, re.I))
-        except re.error as e:
-            compile_errors.append({"pattern": p, "error": str(e)})
-
-    # Test positive examples
-    hits = []
-    misses = []
-    for ex in examples:
-        text = ex.get("text", "")
-        expected = ex.get("extracted_value", "")
-        matched = False
-        matched_by = None
-        captured_value = None
-        for cp in compiled:
-            m = cp.search(text)
-            if m:
-                matched = True
-                matched_by = cp.pattern
-                captured_value = (m.group(1) if m.lastindex else m.group(0)) or m.group(0)
-                break
-        if matched:
-            hits.append({
-                "text": text,
-                "expected_value": expected,
-                "captured_value": captured_value,
-                "matched_by": matched_by,
-            })
-        else:
-            misses.append({
-                "text": text,
-                "expected_value": expected,
-            })
-
-    # Test negative examples - these should NOT match
-    false_positives = []
-    true_negatives = []
-    for neg in (negative_examples or []):
-        text = neg.get("text", "")
-        matched = False
-        matched_by = None
-        captured_value = None
-        for cp in compiled:
-            m = cp.search(text)
-            if m:
-                matched = True
-                matched_by = cp.pattern
-                captured_value = (m.group(1) if m.lastindex else m.group(0)) or m.group(0)
-                break
-        if matched:
-            false_positives.append({
-                "text": text,
-                "captured_value": captured_value,
-                "matched_by": matched_by,
-            })
-        else:
-            true_negatives.append({"text": text})
-
-    n_neg = len(negative_examples) if negative_examples else 0
-    fp_rate = len(false_positives) / n_neg if n_neg > 0 else 0.0
-
-    return {
-        "total_examples": len(examples),
-        "hits": len(hits),
-        "misses": len(misses),
-        "hit_rate": len(hits) / len(examples) if examples else 0,
-        "compile_errors": compile_errors,
-        "missed_examples": misses,
-        "hit_details": hits,
-        "total_negatives": n_neg,
-        "false_positives": len(false_positives),
-        "false_positive_rate": fp_rate,
-        "false_positive_details": false_positives,
-    }
-
-
-def run_phase2_build_regex(
+def run_discovered_extract(
     client: anthropic.Anthropic,
-    candidates: list[dict],
-    workers: int = 10,
-) -> list[dict]:
-    """Stage 2: Sonnet writes and tests regex for each candidate."""
-    print("\n" + "=" * 60)
-    print("  Stage 2: Regex Generation (Sonnet)")
-    print("  Writing and validating patterns for each field...")
-    print("=" * 60 + "\n")
-
-    validated_fields = []
-    print_lock = threading.Lock()
-    results_lock = threading.Lock()
-    total = len(candidates)
-
-    def process_field(i: int, candidate: dict, total: int):
-        """Process a single field candidate; returns (result_dict_or_None, list_of_log_lines)."""
-        log: list[str] = []
-
-        name = candidate["field_name"]
-        desc = candidate["description"]
-        examples = candidate["examples"]
-        negative_examples = candidate.get("negative_examples", [])
-
-        # Improvement 2: skip fields that the LLM flagged as not regex-extractable
-        if not candidate.get("regex_extractable", True):
-            log.append(
-                f"  [{i}/{total}] {name} - SKIPPED "
-                f"(llm_only: {candidate.get('extractability_note', 'not regex-extractable')})"
-            )
-            return {
-                "field_name": name,
-                "description": desc,
-                "patterns": [],
-                "hit_rate": 0,
-                "examples_tested": 0,
-                "confidence": "low",
-                "frequency_hint": candidate.get("frequency_hint", "occasional"),
-                "research_value": candidate.get("research_value", ""),
-                "source": "llm_discovered",
-                "llm_only": True,
-                "extractability_note": candidate.get("extractability_note", ""),
-                "allowed_values": candidate.get("allowed_values"),
-                "trigger_vocabulary": candidate.get("trigger_vocabulary", []),
-            }, log
-
-        log.append(f"  [{i}/{total}] {name}")
-        log.append(f"    Description: {desc[:80]}...")
-        log.append(f"    Examples: {len(examples)}  Negatives: {len(negative_examples)}")
-
-        # Build positive examples block
-        examples_block = "\n".join(
-            f"  - Text: \"{ex['text']}\"\n    Capture: \"{ex.get('extracted_value', '?')}\"  "
-            f"← this is the SHORT value (1-5 words) the capture group should return"
-            for ex in examples
-        )
-
-        # Build negative examples block
-        negatives_block = ""
-        if negative_examples:
-            neg_lines = "\n".join(
-                f"  - \"{neg['text']}\""
-                for neg in negative_examples
-            )
-            negatives_block = (
-                f"\nTexts that look similar but must NOT match:\n{neg_lines}\n"
-                f"Your patterns must avoid matching these - they are false positive traps.\n"
-            )
-
-        # Improvement 1: trigger vocabulary anchor block
-        trigger_vocab = candidate.get("trigger_vocabulary", [])
-        anchor_block = ""
-        if trigger_vocab:
-            anchor_block = (
-                f"\nAnchor vocabulary (words that typically appear near a true positive):\n"
-                f"  {', '.join(trigger_vocab)}\n"
-                f"Use these as context anchors in lookbehind/lookahead when designing patterns.\n"
-            )
-
-        # Improvement 3: allowed values block
-        allowed_values = candidate.get("allowed_values")
-        av_block = ""
-        if allowed_values:
-            av_block = (
-                f"\nAllowed values for this field: {json.dumps(allowed_values)}\n"
-                f"Build tight alternation patterns using ONLY these values: "
-                f"\\b({'|'.join(re.escape(v) for v in allowed_values)})\\b\n"
-                f"Do NOT use open capture groups - the value MUST be one of the listed options.\n"
-            )
-
-        user_message = (
-            f"Write Python regex patterns to extract the field '{name}'.\n\n"
-            f"Description: {desc}\n\n"
-            f"IMPORTANT: The capture group must return only a SHORT value (1-5 words) - "
-            f"just the entity name or label. Do NOT write patterns with broad capture groups "
-            f"that grab long phrases or full sentences.\n\n"
-            f"Positive examples (patterns MUST match these):\n{examples_block}\n"
-            f"{negatives_block}"
-            f"{anchor_block}"
-            f"{av_block}\n"
-            f"Remember: patterns are compiled with re.IGNORECASE."
-        )
-
-        best_patterns = []
-        best_hit_rate = 0.0
-        report = None
-
-        for iteration in range(MAX_REGEX_ITERATIONS):
-            if iteration > 0 and report is not None:
-                # Build detailed test results so Sonnet sees exactly what happened
-                passed_block = ""
-                if report["hit_details"]:
-                    passed_lines = []
-                    for h in report["hit_details"]:
-                        passed_lines.append(
-                            f"  PASS: \"{h['text']}\"\n"
-                            f"    Expected: \"{h['expected_value']}\"  |  Captured: \"{h['captured_value']}\"\n"
-                            f"    Matched by: {h['matched_by']}"
-                        )
-                    passed_block = "PASSED examples:\n" + "\n".join(passed_lines) + "\n\n"
-
-                missed_block = "\n".join(
-                    f"  FAIL: \"{m['text']}\"\n    Expected: \"{m['expected_value']}\"  |  Captured: nothing"
-                    for m in report["missed_examples"]
-                )
-
-                fp_block = ""
-                if report["false_positive_details"]:
-                    fp_lines = "\n".join(
-                        f"  FALSE POSITIVE: \"{fp['text']}\"\n"
-                        f"    Incorrectly captured: \"{fp['captured_value']}\"\n"
-                        f"    Matched by: {fp['matched_by']}"
-                        for fp in report["false_positive_details"]
-                    )
-                    fp_block = (
-                        f"\nFALSE POSITIVES - your patterns matched these but should NOT have "
-                        f"({report['false_positives']}/{report['total_negatives']} = "
-                        f"{report['false_positive_rate']:.0%} false positive rate):\n"
-                        f"{fp_lines}\n"
-                        f"Tighten these patterns - add anchors, require more specific context, "
-                        f"or narrow the capture group.\n"
-                    )
-
-                error_block = ""
-                if report["compile_errors"]:
-                    error_block = "\n\nCOMPILE ERRORS (fix or replace these):\n" + "\n".join(
-                        f"  - {e['pattern']} → {e['error']}" for e in report["compile_errors"]
-                    )
-
-                user_message = (
-                    f"Your previous patterns for '{name}' scored "
-                    f"{report['hit_rate']:.0%} hit rate ({report['hits']}/{report['total_examples']}) "
-                    f"and {report['false_positive_rate']:.0%} false positive rate "
-                    f"({report['false_positives']}/{report['total_negatives']}).\n\n"
-                    f"Goal: maximise hit rate AND minimise false positives.\n\n"
-                    f"Full test results:\n\n"
-                    f"{passed_block}"
-                    f"FAILED examples:\n{missed_block}"
-                    f"{fp_block}"
-                    f"{error_block}\n\n"
-                    f"{anchor_block}"
-                    f"{av_block}"
-                    f"Previous patterns:\n" +
-                    "\n".join(f"  - {p}" for p in best_patterns) +
-                    f"\n\nWrite an IMPROVED set of patterns. Keep patterns that worked. "
-                    f"Fix patterns that caused false positives by adding tighter anchors or "
-                    f"narrower capture groups. Add or modify patterns to catch FAILED examples. "
-                    f"Reminder: capture groups must return only 1-5 words."
-                )
-
-            iter_line = f"    Iteration {iteration + 1}/{MAX_REGEX_ITERATIONS}..."
-
-            raw = call_model(client, SONNET, SONNET_SYSTEM_PROMPT, user_message, MAX_TOKENS_SONNET)
-            parsed = parse_json_response(raw)
-
-            if not parsed or "patterns" not in parsed:
-                log.append(iter_line + " PARSE FAILED")
-                continue
-
-            patterns = parsed["patterns"]
-            report = evaluate_patterns(patterns, examples, negative_examples)
-
-            fp_info = (
-                f"  FP: {report['false_positives']}/{report['total_negatives']}"
-                if report["total_negatives"] > 0 else ""
-            )
-            log.append(
-                iter_line
-                + f" {report['hits']}/{report['total_examples']} matched ({report['hit_rate']:.0%})"
-                + fp_info
-            )
-
-            if report["compile_errors"]:
-                log.append(f"    ! {len(report['compile_errors'])} compile error(s)")
-
-            if report["hit_rate"] > best_hit_rate:
-                best_hit_rate = report["hit_rate"]
-                # Only keep patterns that actually compile
-                best_patterns = [
-                    p for p in patterns
-                    if p not in [e["pattern"] for e in report["compile_errors"]]
-                ]
-
-            if report["hit_rate"] >= 0.8:
-                break
-
-        if best_patterns and best_hit_rate >= 0.5:
-            result = {
-                "field_name": name,
-                "description": desc,
-                "patterns": best_patterns,
-                "hit_rate": best_hit_rate,
-                "examples_tested": len(examples),
-                "confidence": "medium",
-                "frequency_hint": candidate.get("frequency_hint", "occasional"),
-                "research_value": candidate.get("research_value", ""),
-                "source": "llm_discovered",
-                "llm_only": False,
-                "extractability_note": candidate.get("extractability_note", ""),
-                "allowed_values": candidate.get("allowed_values"),
-                "trigger_vocabulary": candidate.get("trigger_vocabulary", []),
-            }
-            log.append(f"    ACCEPTED ({best_hit_rate:.0%} hit rate, {len(best_patterns)} patterns)")
-        else:
-            result = None
-            log.append(f"    REJECTED (best hit rate: {best_hit_rate:.0%})")
-
-        return result, log
-
-    futures = {}
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        for i, candidate in enumerate(candidates, 1):
-            future = executor.submit(process_field, i, candidate, total)
-            futures[future] = i
-
-        for future in as_completed(futures):
-            result, log_lines = future.result()
-            with print_lock:
-                for line in log_lines:
-                    print(line)
-            if result is not None:
-                with results_lock:
-                    validated_fields.append(result)
-
-    print(f"\n  Validated fields: {len(validated_fields)}/{len(candidates)}")
-    return validated_fields
-
-
-# =============================================================================
-# PHASE 3: EXTRACT WITH NEW REGEX (free)
-# =============================================================================
-
-def run_phase3_regex_extract(
-    validated_fields: list[dict],
+    discovered_fields: list[dict],
     corpus_items: list[dict],
     workers: int = 10,
+    resume: bool = False,
+    records_file: Path | None = None,
 ) -> list[dict]:
-    """Stage 3: Run the new regex patterns across the full corpus (parallel)."""
+    """Stage 2: Haiku extracts the discovered fields from every corpus record."""
     print("\n" + "=" * 60)
-    print("  Stage 3: Regex Extraction")
-    print(f"  {len(corpus_items)} records, {workers} workers, "
-          f"text cap {MAX_TEXT_CHARS_PHASE3 // 1000}k chars/record")
+    print("  Stage 2: Extraction (Haiku)")
+    print(f"  {len(discovered_fields)} discovered field(s) x {len(corpus_items)} records")
     print("=" * 60 + "\n")
 
-    # Compile all patterns once, shared across threads (re compiled objects are thread-safe)
-    field_patterns: dict[str, list] = {}
-    field_allowed_values: dict[str, dict[str, str] | None] = {}
-    for field in validated_fields:
-        # Improvement 2: skip llm_only fields (no patterns to compile)
-        if field.get("llm_only"):
-            continue
-        compiled = []
-        for p in field["patterns"]:
-            try:
-                compiled.append(re.compile(p, re.I))
-            except re.error:
-                continue
-        if compiled:
-            field_patterns[field["field_name"]] = compiled
-        # Improvement 3: build allowed values map for normalization
-        av = field.get("allowed_values")
-        if av:
-            field_allowed_values[field["field_name"]] = {v.lower(): v for v in av}
-        else:
-            field_allowed_values[field["field_name"]] = None
-
-    total = len(corpus_items)
-    records: list[dict | None] = [None] * total  # pre-sized so order is preserved
-    field_hit_counts: dict[str, int] = defaultdict(int)
-    print_lock = threading.Lock()
-    counts_lock = threading.Lock()
-    stats = {"hits": 0, "timeouts": 0, "done": 0}
-
-    def process_item(idx: int, item: dict) -> None:
-        # Run each text segment individually to prevent cross-post regex bleed.
-        # Concatenating all texts into one blob lets capture groups span post
-        # boundaries, pulling in unrelated content from the next post/comment.
-        texts = item["texts"]
-
-        extracted: dict[str, list] = {}
-        record_hits = 0
-        record_timeouts = 0
-        timeout_msgs: list[str] = []
-
-        for field_name, patterns in field_patterns.items():
-            matches: list[str] = []
-            chars_seen = 0
-            for text in texts:
-                if chars_seen >= MAX_TEXT_CHARS_PHASE3:
-                    break
-                text_slice = text
-                remaining = MAX_TEXT_CHARS_PHASE3 - chars_seen
-                if len(text_slice) > remaining:
-                    text_slice = text_slice[:remaining]
-                chars_seen += len(text_slice)
-                for pat in patterns:
-                    try:
-                        found = _finditer_with_timeout(pat, text_slice, timeout=2.0)
-                    except TimeoutError:
-                        record_timeouts += 1
-                        timeout_msgs.append(
-                            f"    ! timeout: '{field_name}' - {pat.pattern[:60]}"
-                        )
-                        continue
-                    for m in found:
-                        value = m.group(1) if m.lastindex else m.group(0)
-                        if value is None:
-                            continue
-                        value = value.strip()
-                        if value and value.lower() not in [v.lower() for v in matches]:
-                            matches.append(value)
-            # Improvement 3 / 7: normalize matches to canonical allowed values
-            av_map = field_allowed_values.get(field_name)
-            if av_map is not None:
-                normalized, dropped = [], []
-                for val in matches:
-                    canonical = av_map.get(val.lower())
-                    if canonical is not None:
-                        normalized.append(canonical)
-                    else:
-                        dropped.append(val)
-                if dropped:
-                    print(
-                        f"    ! {field_name}: dropped {len(dropped)} value(s) "
-                        f"not in allowed_values: {dropped[:3]}"
-                    )
-                matches = normalized
-            if matches:
-                extracted[field_name] = matches
-                record_hits += 1
-
-        record = {
+    field_names = [f["field_name"] for f in discovered_fields]
+    records: list[dict] = [
+        {
             "_patientpunk_version": "2.0",
-            "_extraction_method": "discovered_regex",
+            "_extraction_method": "llm_discovered",
             "_extracted_at": datetime.now(timezone.utc).isoformat(),
             "record_meta": {
                 "author_hash": item["author_hash"],
@@ -1198,121 +572,42 @@ def run_phase3_regex_extract(
                 "text_count": len(item["texts"]),
             },
             "discovered_fields": {
-                fname: {
-                    "values": extracted.get(fname),
-                    "provenance": "regex" if extracted.get(fname) else None,
-                    "confidence": "medium" if extracted.get(fname) else None,
-                    "source": "llm_discovered",
-                }
-                for fname in field_patterns
+                name: {"values": None, "confidence": None, "source": "llm_discovered"}
+                for name in field_names
             },
         }
+        for item in corpus_items
+    ]
 
-        with counts_lock:
-            records[idx] = record
-            stats["hits"] += record_hits
-            stats["timeouts"] += record_timeouts
-            stats["done"] += 1
-            for fname in extracted:
-                field_hit_counts[fname] += 1
-            n = stats["done"]
-
-        with print_lock:
-            timeout_str = f"  !{record_timeouts}" if record_timeouts else ""
-            print(
-                f"  [{n}/{total}] {(item.get('author_hash') or '?')[:10]}...  "
-                f"{record_hits} fields hit{timeout_str}",
-                flush=True,
-            )
-            for msg in timeout_msgs:
-                print(msg, flush=True)
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [
-            executor.submit(process_item, i, item)
-            for i, item in enumerate(corpus_items)
-        ]
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                with print_lock:
-                    print(f"  ERROR: {e}", flush=True)
-
-    print(f"\n  Done. {stats['hits']} total field hits across {total} records"
-          + (f", {stats['timeouts']} timeout(s)" if stats["timeouts"] else ""))
-    print(f"\n  Regex hit counts:")
-    for field, count in sorted(field_hit_counts.items(), key=lambda x: -x[1]):
-        print(f"    {field:<35} {count}/{total} ({count/total:.0%})")
-
-    return records  # type: ignore[return-value]
-
-
-# =============================================================================
-# PHASE 4: FILL GAPS (Haiku)
-# =============================================================================
-
-SAVE_EVERY_N = 20
-
-
-def run_phase4_fill_gaps(
-    client: anthropic.Anthropic,
-    validated_fields: list[dict],
-    corpus_items: list[dict],
-    phase3_records: list[dict],
-    workers: int = 10,
-    resume: bool = False,
-    records_file: Path | None = None,
-) -> list[dict]:
-    """Stage 4: Haiku fills in fields that regex missed (concurrent)."""
-    print("\n" + "=" * 60)
-    print("  Stage 4: Gap Filling (Haiku)")
-    print("  LLM extracting where regex missed...")
-    print("=" * 60 + "\n")
-
-    # Resume: load existing records and merge back over the Phase 3 baseline
-    already_done = 0
+    # Resume: records already extracted in a previous run keep their values and
+    # are not re-sent to the model.
+    todo = list(enumerate(zip(corpus_items, records)))
     if resume and records_file and records_file.exists():
         with open(records_file, encoding="utf-8") as f:
             existing = json.load(f)
-        existing_index: dict[tuple, dict] = {}
-        for rec in existing:
-            meta = rec.get("record_meta", {})
-            key = (meta.get("author_hash"), meta.get("post_id"))
-            existing_index[key] = rec
-        for i, rec in enumerate(phase3_records):
-            meta = rec.get("record_meta", {})
-            key = (meta.get("author_hash"), meta.get("post_id"))
+        existing_index = {
+            (rec.get("record_meta", {}).get("author_hash"),
+             rec.get("record_meta", {}).get("post_id")): rec
+            for rec in existing
+        }
+        done = set()
+        for i, rec in enumerate(records):
+            meta = rec["record_meta"]
+            key = (meta["author_hash"], meta["post_id"])
             if key in existing_index:
-                phase3_records[i] = existing_index[key]
-        already_done = len(existing_index)
-        print(f"  Resumed: {already_done} records loaded from existing file")
+                records[i] = existing_index[key]
+                done.add(i)
+        todo = [(i, pair) for i, pair in todo if i not in done]
+        print(f"  Resumed: {len(done)} records loaded from existing file")
 
-    # Find records where at least one discovered field is still null
-    gaps = []
-    for i, (item, record) in enumerate(zip(corpus_items, phase3_records)):
-        null_fields = [
-            f for f, data in record.get("discovered_fields", {}).items()
-            if data.get("values") is None
-        ]
-        if null_fields:
-            gaps.append((i, item, record, null_fields))
-
-    if not gaps:
-        print("  No gaps to fill - regex covered everything!")
-        return phase3_records
-
-    print(f"  {len(gaps)} records have gaps to fill\n")
-
-    # Improvement 3 / 7: build allowed_values maps for normalization in Phase 4
+    # Controlled-vocabulary maps: values outside allowed_values are dropped.
     field_av_maps: dict[str, dict[str, str] | None] = {}
-    for f in validated_fields:
+    for f in discovered_fields:
         av = f.get("allowed_values")
         field_av_maps[f["field_name"]] = {v.lower(): v for v in av} if av else None
 
-    # Build field descriptions for the prompt (Improvement 3: include allowed values)
     field_lines = []
-    for f in validated_fields:
+    for f in discovered_fields:
         line = f"  - {f['field_name']}: {f['description']}"
         if f.get("allowed_values"):
             line += f" - ONLY return one of: {json.dumps(f['allowed_values'])}"
@@ -1322,6 +617,7 @@ def run_phase4_fill_gaps(
     system_prompt = f"""You are a biomedical data extraction assistant for PatientPunk.
 Extract ONLY the following discovered fields from patient-authored text.
 Only extract explicitly stated information. Return null for fields with no evidence.
+Any dose or quantity MUST keep its unit ("5 mg", "250 mcg"); a bare number is unusable.
 
 FIELDS TO EXTRACT:
 {field_desc_block}
@@ -1339,15 +635,15 @@ Include ALL listed fields. Use null when no evidence exists."""
     print_lock = threading.Lock()
     stats = {"filled": 0, "completed": 0, "failed": 0}
 
-    def process_gap(args: tuple) -> None:
-        record_i, item, record, null_fields = args
+    def process_item(args: tuple) -> None:
+        record_i, (item, record) = args
 
         combined = "\n\n---NEW POST---\n\n".join(item["texts"])
         if len(combined) > MAX_TEXT_CHARS:
             combined = combined[:MAX_TEXT_CHARS] + "\n[TRUNCATED]"
 
         user_message = (
-            f"Extract these specific fields: {', '.join(null_fields)}\n\n"
+            f"Extract these specific fields: {', '.join(field_names)}\n\n"
             f"Each section separated by ---NEW POST--- is a separate Reddit post or comment. "
             f"Do not quote or combine text that spans across these boundaries.\n\n"
             f"Text:\n{combined}"
@@ -1359,47 +655,44 @@ Include ALL listed fields. Use null when no evidence exists."""
         local_fills = 0
         if parsed and "fields" in parsed:
             for field_name, values in parsed["fields"].items():
-                if values and field_name in record.get("discovered_fields", {}):
-                    current = record["discovered_fields"][field_name]
-                    if current.get("values") is None:
-                        if isinstance(values, str):
-                            values = [values]
-                        values = [v for v in values if v]
-                        # Improvement 3 / 7: normalize to allowed values if applicable
-                        av_map = field_av_maps.get(field_name)
-                        if av_map is not None and isinstance(values, list):
-                            values = [av_map[v.lower()] for v in values if isinstance(v, str) and v.lower() in av_map]
-                        elif av_map is not None and isinstance(values, str):
-                            values = [av_map[values.lower()]] if values.lower() in av_map else []
-                        if not values:
-                            continue  # skip if normalization eliminated all values
-                        if values:
-                            current["values"] = values
-                            current["provenance"] = "llm_filled"
-                            current["confidence"] = "low"
-                            local_fills += 1
+                if not values or field_name not in record["discovered_fields"]:
+                    continue
+                if isinstance(values, str):
+                    values = [values]
+                values = [v for v in values if v]
+                av_map = field_av_maps.get(field_name)
+                if av_map is not None:
+                    values = [
+                        av_map[v.lower()] for v in values
+                        if isinstance(v, str) and v.lower() in av_map
+                    ]
+                if not values:
+                    continue  # nothing survived the allowed_values filter
+                record["discovered_fields"][field_name].update(
+                    {"values": values, "confidence": "medium"}
+                )
+                local_fills += 1
 
         with save_lock:
-            phase3_records[record_i] = record
+            records[record_i] = record
             stats["filled"] += local_fills
             if not parsed or "fields" not in parsed:
                 stats["failed"] += 1
             stats["completed"] += 1
             n = stats["completed"]
-            if n % 10 == 0 or n == len(gaps):
+            if n % 10 == 0 or n == len(todo):
                 with print_lock:
                     print(
-                        f"  {n}/{len(gaps)} "
+                        f"  {n}/{len(todo)} "
                         f"({stats['filled']} fills, {stats['failed']} failed)",
                         flush=True,
                     )
-            # Incremental save
             if records_file and n % SAVE_EVERY_N == 0:
                 with open(records_file, "w", encoding="utf-8") as f:
-                    json.dump(phase3_records, f, ensure_ascii=False, indent=2)
+                    json.dump(records, f, ensure_ascii=False, indent=2)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(process_gap, g) for g in gaps]
+        futures = [executor.submit(process_item, t) for t in todo]
         for future in as_completed(futures):
             try:
                 future.result()
@@ -1407,8 +700,8 @@ Include ALL listed fields. Use null when no evidence exists."""
                 with print_lock:
                     print(f"  Worker error: {e}")
 
-    print(f"\n  Filled {stats['filled']} field gaps across {len(gaps)} records")
-    return phase3_records
+    print(f"\n  Extracted {stats['filled']} field values across {len(todo)} records")
+    return records
 
 
 # =============================================================================
@@ -1434,7 +727,6 @@ def generate_schema(
         "_base_schema": base_schema_id,
         "_version": "1.0",
         "include_base_fields": [],
-        "override_base_patterns": {},
         "extension_fields": {},
     }
 
@@ -1444,12 +736,8 @@ def generate_schema(
             "confidence": field.get("confidence", "medium"),
             "source": "llm_discovered",
             "_discovered_at": discovered_at,
-            "hit_rate_at_discovery": field.get("hit_rate", 0),
             "frequency_hint": field.get("frequency_hint", "occasional"),
             "research_value": field.get("research_value", ""),
-            "patterns": field["patterns"],
-            "llm_only": field.get("llm_only", False),
-            "extractability_note": field.get("extractability_note", ""),
             "allowed_values": field.get("allowed_values"),
         }
 
@@ -1482,12 +770,8 @@ def merge_into_schema(
             "confidence": field.get("confidence", "medium"),
             "source": "llm_discovered",
             "_discovered_at": discovered_at,
-            "hit_rate_at_discovery": field.get("hit_rate", 0),
             "frequency_hint": field.get("frequency_hint", "occasional"),
             "research_value": field.get("research_value", ""),
-            "patterns": field["patterns"],
-            "llm_only": field.get("llm_only", False),
-            "extractability_note": field.get("extractability_note", ""),
             "allowed_values": field.get("allowed_values"),
         }
         added += 1
@@ -1559,14 +843,13 @@ def run_discovery(
     temp_dir: Path | None = None,
     workers: int = 10,
     limit: int | None = None,
-    fill_gaps: bool = True,
     resume: bool = False,
     candidates_file: Path | None = None,
     sample: int | None = None,
     per_item_chars: int = 0,
     stop_after: Literal["candidates"] | None = None,
 ) -> PhaseResult:
-    """Run Phase 3 multi-model field discovery.
+    """Run two-stage LLM field discovery.
 
     Parameters
     ----------
@@ -1587,10 +870,11 @@ def run_discovery(
     out_temp.mkdir(parents=True, exist_ok=True)
 
     existing_schema = None
-    # Known-to-discovery fields = every biomedical field with an established
-    # regex pattern, so removed/renamed fields (e.g. activity_level) can't
-    # silently reappear here after being dropped from PATTERNS.
-    _base_field_names = sorted(PATTERNS.keys())
+    # Known-to-discovery fields = every field the base LLM extraction already
+    # covers, so discovery doesn't re-suggest them.
+    _base_field_names = sorted(
+        set(llm_extract.BASE_FIELD_DESCRIPTIONS) | set(llm_extract.BASE_OPTIONAL_DESCRIPTIONS)
+    )
     known_fields_seen: set[str] = set()
     known_fields: list = []
     for name in _base_field_names:
@@ -1614,12 +898,11 @@ def run_discovery(
 
     print("=" * 60)
     print("  PatientPunk Field Discovery Pipeline")
-    print(f"  Models      : Haiku (scan/fill) + Sonnet (regex)")
+    print(f"  Models        : Haiku (scan + extract)")
     print(f"  Target schema : {schema_path or 'new file (no --schema)'}")
     print(f"  Known fields  : {len(known_fields)}")
     print(f"  Corpus limit  : {sample and f'sample {sample}' or limit or 'all'}")
     print(f"  Per-item chars: {per_item_chars or 'unlimited'}")
-    print(f"  Gap fill      : {'yes' if fill_gaps else 'no'}")
     print(f"  Workers       : {workers}")
     print(f"  Resume        : {'yes' if resume else 'no'}")
     print("=" * 60)
@@ -1637,15 +920,15 @@ def run_discovery(
             raise FileNotFoundError(f"Candidates file not found: {candidates_file}")
         with open(candidates_file, encoding="utf-8") as f:
             candidates = json.load(f)
-        print(f"\nLoaded {len(candidates)} Phase 1 candidates from {candidates_file} (skipping Phase 1)")
+        print(f"\nLoaded {len(candidates)} stage 1 candidates from {candidates_file} (skipping stage 1)")
     else:
         phase1_items = corpus_items
         if sample and sample < len(phase1_items):
             phase1_items = random.sample(phase1_items, sample)
-            print(f"  Using random sample of {sample} items for Phase 1")
+            print(f"  Using random sample of {sample} items for stage 1")
         elif limit and limit < len(phase1_items):
             phase1_items = phase1_items[:limit]
-            print(f"  Using first {limit} items for Phase 1")
+            print(f"  Using first {limit} items for stage 1")
 
         candidates = run_phase1_discovery(
             client, phase1_items, known_fields,
@@ -1657,12 +940,12 @@ def run_discovery(
         if candidates:
             with open(phase1_candidates_path, "w", encoding="utf-8") as f:
                 json.dump(candidates, f, ensure_ascii=False, indent=2)
-            print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+            print(f"\n  Stage 1 saved: {phase1_candidates_path}")
 
     if stop_after == "candidates":
         with open(phase1_candidates_path, "w", encoding="utf-8") as f:
             json.dump(candidates, f, ensure_ascii=False, indent=2)
-        print(f"\n  Phase 1 saved: {phase1_candidates_path}")
+        print(f"\n  Stage 1 saved: {phase1_candidates_path}")
         print(f"\n  Stopped after candidates ({len(candidates)}) for review.")
         return PhaseResult(
             artifacts={"candidates": phase1_candidates_path},
@@ -1706,18 +989,7 @@ def run_discovery(
         artifacts["report"] = _write_empty_report(0, 0)
         return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
 
-    validated_fields = run_phase2_build_regex(client, candidates, workers=workers)
-
-    if not validated_fields:
-        print("\nNo fields passed regex validation. Try with more corpus data (increase --limit).")
-        artifacts["report"] = _write_empty_report(len(candidates), 0)
-        return PhaseResult(artifacts=artifacts, stats={"fields discovered": 0})
-
-    llm_only_fields = [f for f in validated_fields if f.get("llm_only")]
-    if llm_only_fields:
-        print(f"\n  {len(llm_only_fields)} llm_only field(s) (no regex, Phase 4 gap-fill only):")
-        for f in llm_only_fields:
-            print(f"    {f['field_name']}: {f.get('extractability_note', 'not regex-extractable')}")
+    validated_fields = candidates
 
     schema = generate_schema(validated_fields, base_schema_id)
     schema_file = out_temp / f"{schema['schema_id']}.json"
@@ -1726,17 +998,14 @@ def run_discovery(
     print(f"\n  Discovery schema saved: {schema_file}")
     artifacts["schema"] = schema_file
 
-    records = run_phase3_regex_extract(validated_fields, corpus_items, workers=workers)
-
     schema_id = schema["schema_id"]
     records_file = out_temp / f"discovered_records_{schema_id}.json"
-    if fill_gaps:
-        records = run_phase4_fill_gaps(
-            client, validated_fields, corpus_items, records,
-            workers=workers,
-            resume=resume,
-            records_file=records_file,
-        )
+    records = run_discovered_extract(
+        client, validated_fields, corpus_items,
+        workers=workers,
+        resume=resume,
+        records_file=records_file,
+    )
 
     with open(records_file, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
@@ -1748,21 +1017,14 @@ def run_discovery(
     field_stats = {}
     for field in validated_fields:
         fname = field["field_name"]
-        regex_hits = sum(
+        hits = sum(
             1 for r in records
-            if r.get("discovered_fields", {}).get(fname, {}).get("provenance") == "regex"
-        )
-        llm_hits = sum(
-            1 for r in records
-            if r.get("discovered_fields", {}).get(fname, {}).get("provenance") == "llm_filled"
+            if r.get("discovered_fields", {}).get(fname, {}).get("values")
         )
         field_stats[fname] = {
-            "regex_hits": regex_hits,
-            "llm_filled": llm_hits,
-            "total_hits": regex_hits + llm_hits,
-            "coverage": (regex_hits + llm_hits) / len(records) if records else 0,
-            "hit_rate_at_discovery": field.get("hit_rate", 0),
-            "pattern_count": len(field["patterns"]),
+            "hits": hits,
+            "coverage": hits / len(records) if records else 0,
+            "frequency_hint": field.get("frequency_hint", "occasional"),
             "source": "llm_discovered",
         }
 
@@ -1799,13 +1061,8 @@ def run_discovery(
     print(f"  Records               : {records_file}")
     print(f"  Report                : {report_file}")
     print(f"\n  Discovered fields:")
-    for fname, stats in sorted(field_stats.items(), key=lambda x: -x[1]["total_hits"]):
-        print(
-            f"    {fname:<35} "
-            f"regex: {stats['regex_hits']:>3}  "
-            f"llm: {stats['llm_filled']:>3}  "
-            f"total: {stats['total_hits']:>3} ({stats['coverage']:.0%})"
-        )
+    for fname, stats in sorted(field_stats.items(), key=lambda x: -x[1]["hits"]):
+        print(f"    {fname:<35} hits: {stats['hits']:>3} ({stats['coverage']:.0%})")
     print(f"{'=' * 60}")
 
     record_count = len(records)
@@ -1832,7 +1089,6 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--schema", type=Path, default=None)
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--no-fill", action="store_true")
     parser.add_argument("--workers", type=int, default=10)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--candidates", type=Path, default=None)
@@ -1848,7 +1104,6 @@ def main(argv: list[str] | None = None) -> None:
             temp_dir=args.temp_dir,
             workers=args.workers,
             limit=args.limit,
-            fill_gaps=not args.no_fill,
             resume=args.resume,
             candidates_file=args.candidates,
             sample=args.sample,

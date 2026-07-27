@@ -3,10 +3,10 @@ patientpunk.pipeline
 ~~~~~~~~~~~~~~~~~~~~~
 High-level orchestrator for the PatientPunk extraction pipeline.
 
-The :class:`Pipeline` class ties together all five phases -- regex extraction,
-LLM gap-filling, field discovery, CSV export, and codebook generation -- into
-a single, configurable object.  Each phase is optional and can be skipped via
-the ``PipelineConfig`` flags.
+The :class:`Pipeline` class ties together all four phases -- LLM extraction,
+field discovery, CSV export, and codebook generation -- into a single,
+configurable object.  Each phase is optional and can be skipped via the
+``PipelineConfig`` flags.
 
 Example
 -------
@@ -30,7 +30,6 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._utils import clean_temp_dir, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
-from .biomedical import run_biomedical
 from .codebook import run_codebook
 from .discover import run_discovery
 from .export_csv import run_export_csv
@@ -45,10 +44,8 @@ from .phase import PhaseResult
 # schema's phase. The only exception is phase1_candidates.json, which is a
 # one-off pre-filter artifact that is never schema-multiplexed.
 _TEMP_PATTERNS: list[str] = [
-    "patientpunk_records_*.json",
-    "extraction_metadata_*.json",
     "llm_records_*.json",
-    "merged_records_*.json",
+    "records_*.json",
     "phase1_candidates.json",
     "discovered_records_*.json",
     "discovered_field_report_*.json",
@@ -75,13 +72,12 @@ class PipelineConfig(BaseModel):
     start_at: int = 1
     run_llm: bool = True
     # Discovery is off by default. Use discovery_mode="auto" for full
-    # discovery (candidates → regex → extract → gap-fill), or "review" to
-    # stop after candidate generation so the user can curate fields in
-    # temp/phase1_candidates.json (edit out unwanted entries), then re-run
-    # with discovery_mode="auto" and candidates_file pointed at that file
-    # to build regex, extract, and gap-fill for the curated set.
-    # NOTE: --start-at 4 does NOT work here -- it skips Phase 3 entirely,
-    # and "review" mode never runs regex-build/extract, so no discovered
+    # discovery (candidates → extract), or "review" to stop after candidate
+    # generation so the user can curate fields in temp/phase1_candidates.json
+    # (edit out unwanted entries), then re-run with discovery_mode="auto" and
+    # candidates_file pointed at that file to extract the curated set.
+    # NOTE: --start-at 3 does NOT work here -- it skips Phase 2 entirely,
+    # and "review" mode never runs the extraction stage, so no discovered
     # records exist yet at that point.
     discovery_mode: str | None = None
     clean: bool = True
@@ -92,19 +88,13 @@ class PipelineConfig(BaseModel):
     resume: bool = False
 
     # Phase 2
-    llm_skip_threshold: float = 0.7
-    llm_focus_gaps: bool = True
-
-    # Phase 3
     candidates_file: Path | None = None
     discovery_sample: int | None = None
-    discovery_fill_gaps: bool = True
+
+    # Phase 3
+    csv_sep: str = " | "
 
     # Phase 4
-    csv_sep: str = " | "
-    csv_provenance: bool = False
-
-    # Phase 5
     codebook_format: str = "csv"
     codebook_include_discovered: bool = True
 
@@ -119,8 +109,8 @@ class PipelineConfig(BaseModel):
             self.temp_dir = Path(self.temp_dir)
         if self.candidates_file:
             self.candidates_file = Path(self.candidates_file)
-        if self.start_at not in range(1, 6):
-            raise ValueError(f"start_at must be 1-5, got {self.start_at}")
+        if self.start_at not in range(1, 5):
+            raise ValueError(f"start_at must be 1-4, got {self.start_at}")
         if self.discovery_mode is not None and self.discovery_mode not in ("auto", "review"):
             raise ValueError(
                 f"discovery_mode must be None, 'auto', or 'review', got {self.discovery_mode!r}"
@@ -186,11 +176,10 @@ class Pipeline:
     """
 
     _PHASE_LABELS = {
-        1: "Regex extraction     (biomedical)",
-        2: "LLM gap-filling      (llm_extract)",
-        3: "Field discovery      (discover)",
-        4: "CSV export           (export_csv)",
-        5: "Codebook             (codebook)",
+        1: "LLM extraction       (llm_extract)",
+        2: "Field discovery      (discover)",
+        3: "CSV export           (export_csv)",
+        4: "Codebook             (codebook)",
     }
 
     def __init__(self, config: PipelineConfig) -> None:
@@ -238,21 +227,15 @@ class Pipeline:
               f"strong={prov['model_strong']}  temp={prov['temperature']}"
               + (f"  base_url={prov['base_url']}" if prov['base_url'] else ""))
 
-        # Phase 1 -- regex extraction
+        # Phase 1 -- LLM extraction
         result.phases.append(self._run_phase_1())
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 2 -- LLM gap-filling
-        result.phases.append(self._run_phase_2())
-        if not result.phases[-1].ok:
-            result.total_elapsed = time.time() - pipeline_start
-            return result
-
-        # Phase 3 -- field discovery
-        skip_discovery = cfg.start_at > 3 or cfg.discovery_mode is None
-        result.phases.append(self._run_phase_3(skip=skip_discovery))
+        # Phase 2 -- field discovery
+        skip_discovery = cfg.start_at > 2 or cfg.discovery_mode is None
+        result.phases.append(self._run_phase_2(skip=skip_discovery))
         if not result.phases[-1].ok and not result.phases[-1].skipped:
             result.total_elapsed = time.time() - pipeline_start
             return result
@@ -261,19 +244,19 @@ class Pipeline:
             print(f"\n  Discovery candidates saved to: {candidates_path}")
             print("  Edit that file to remove any fields you don't want, then re-run with:")
             print(f"    --discover auto --candidates {candidates_path} --no-clean")
-            print("  (--start-at 4 will NOT pick these up -- Phase 3 regex-build/extract/")
-            print("   gap-fill still needs to run on the curated candidates first.)")
+            print("  (--start-at 3 will NOT pick these up -- Phase 2 extraction still")
+            print("   needs to run on the curated candidates first.)")
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 4 -- CSV export
-        result.phases.append(self._run_phase_4())
+        # Phase 3 -- CSV export
+        result.phases.append(self._run_phase_3())
         if not result.phases[-1].ok:
             result.total_elapsed = time.time() - pipeline_start
             return result
 
-        # Phase 5 -- codebook
-        result.phases.append(self._run_phase_5())
+        # Phase 4 -- codebook
+        result.phases.append(self._run_phase_4())
 
         result.total_elapsed = time.time() - pipeline_start
         print(result.summary())
@@ -335,32 +318,18 @@ class Pipeline:
         cfg = self.config
         return self._call_phase(
             1,
-            skip=(cfg.start_at > 1),
-            runner=lambda: run_biomedical(
-                input_dir=cfg.input_dir,
-                schema_path=cfg.schema_path,
-                temp_dir=self._temp_dir,
-            ),
-        )
-
-    def _run_phase_2(self) -> PhaseResult:
-        cfg = self.config
-        return self._call_phase(
-            2,
-            skip=(cfg.start_at > 2 or not cfg.run_llm),
+            skip=(cfg.start_at > 1 or not cfg.run_llm),
             runner=lambda: run_llm_extract(
                 input_dir=cfg.input_dir,
                 schema_path=cfg.schema_path,
                 temp_dir=self._temp_dir,
                 workers=cfg.workers,
-                skip_threshold=cfg.llm_skip_threshold,
-                focus_gaps=cfg.llm_focus_gaps,
                 resume=cfg.resume,
                 limit=cfg.limit,
             ),
         )
 
-    def _run_phase_3(self, *, skip: bool) -> PhaseResult:
+    def _run_phase_2(self, *, skip: bool) -> PhaseResult:
         cfg = self.config
 
         def _runner() -> PhaseResult:
@@ -375,14 +344,13 @@ class Pipeline:
                 temp_dir=self._temp_dir,
                 workers=cfg.workers,
                 limit=cfg.limit,
-                fill_gaps=cfg.discovery_fill_gaps,
                 resume=cfg.resume,
                 candidates_file=candidates,
                 sample=cfg.discovery_sample,
                 stop_after="candidates" if cfg.discovery_mode == "review" else None,
             )
 
-        return self._call_phase(3, skip=skip, runner=_runner)
+        return self._call_phase(2, skip=skip, runner=_runner)
 
     def _find_discovered_records(self) -> Path | None:
         """
@@ -393,7 +361,7 @@ class Pipeline:
            ``pipeline_run.base_schema`` matches this pipeline's schema_id.
         2. Fallback to the newest discovered_records_*.json file in temp/.
 
-        Used as resume / ``--start-at`` fallback when in-memory phase-3
+        Used as resume / ``--start-at`` fallback when in-memory phase-2
         artifacts are empty.
         """
         matched_records: list[Path] = []
@@ -427,7 +395,7 @@ class Pipeline:
         blind-glob fallback -- a bare ``discovered_*.json`` glob would also match
         the report and records files and cannot be schema-verified.
 
-        Used as resume / ``--start-at`` fallback when in-memory phase-3
+        Used as resume / ``--start-at`` fallback when in-memory phase-2
         artifacts are empty.
         """
         reports = find_discovery_reports(self._temp_dir, self._schema_id)
@@ -443,29 +411,14 @@ class Pipeline:
                 return schema_path
         return None
 
-    def _resolve_phase4_input_files(self) -> list[Path]:
+    def _resolve_export_input_files(self) -> list[Path]:
         """Assemble CSV export inputs, preferring in-memory phase artifacts."""
-        merged = self._phase_artifact(2, "merged_records")
-        regex = self._phase_artifact(1, "records")
+        records = self._phase_artifact(1, "records")
+        if records is None:
+            records = self._temp_dir / f"records_{self._schema_id}.json"
+        input_files = [records]
 
-        if merged is None:
-            merged_path = self._temp_dir / f"merged_records_{self._schema_id}.json"
-            if merged_path.exists():
-                merged = merged_path
-        if regex is None:
-            regex_path = self._temp_dir / f"patientpunk_records_{self._schema_id}.json"
-            if regex_path.exists():
-                regex = regex_path
-
-        if merged is not None:
-            input_files = [merged]
-        elif regex is not None:
-            print("  merged_records not found -- falling back to regex-only records")
-            input_files = [regex]
-        else:
-            input_files = [self._temp_dir / f"merged_records_{self._schema_id}.json"]
-
-        disc = self._phase_artifact(3, "records")
+        disc = self._phase_artifact(2, "records")
         if disc is None:
             disc = self._find_discovered_records()
         if disc:
@@ -479,43 +432,42 @@ class Pipeline:
             print(f"  [Warning] Missing: {[path.name for path in missing]}")
         return [path for path in input_files if path.exists()]
 
-    def _run_phase_4(self) -> PhaseResult:
-        """Phase 4 -- assemble input files and call run_export_csv."""
-        if self.config.start_at > 4:
-            return self._call_phase(4, skip=True)
+    def _run_phase_3(self) -> PhaseResult:
+        """Phase 3 -- assemble input files and call run_export_csv."""
+        if self.config.start_at > 3:
+            return self._call_phase(3, skip=True)
 
-        input_files = self._resolve_phase4_input_files()
+        input_files = self._resolve_export_input_files()
         if not input_files:
-            print("  [Skipping phase 4 -- no input files available]")
+            print("  [Skipping phase 3 -- no input files available]")
             return PhaseResult(
-                phase=4, label=self._PHASE_LABELS[4], skipped=True,
+                phase=3, label=self._PHASE_LABELS[3], skipped=True,
             )
 
         output_csv = self.config.input_dir / "records.csv"
         return self._call_phase(
-            4,
+            3,
             skip=False,
             runner=lambda: run_export_csv(
                 input_files=input_files,
                 output_path=output_csv,
                 sep=self.config.csv_sep,
-                include_provenance=self.config.csv_provenance,
             ),
         )
 
     def _resolve_discovered_schema(self) -> Path | None:
-        """Prefer in-memory phase-3 schema; fall back to report rediscovery."""
+        """Prefer in-memory phase-2 schema; fall back to report rediscovery."""
         if not self.config.codebook_include_discovered:
             return None
-        disc = self._phase_artifact(3, "schema")
+        disc = self._phase_artifact(2, "schema")
         if disc is not None:
             return disc
         return self._find_discovered_schema()
 
-    def _run_phase_5(self) -> PhaseResult:
-        """Phase 5 -- codebook generation."""
-        if self.config.start_at > 5:
-            return self._call_phase(5, skip=True)
+    def _run_phase_4(self) -> PhaseResult:
+        """Phase 4 -- codebook generation."""
+        if self.config.start_at > 4:
+            return self._call_phase(4, skip=True)
 
         records_csv = self.config.input_dir / "records.csv"
         disc_schema = self._resolve_discovered_schema()
@@ -528,7 +480,7 @@ class Pipeline:
         output_path = self.config.input_dir / f"codebook.{ext}"
 
         return self._call_phase(
-            5,
+            4,
             skip=False,
             runner=lambda: run_codebook(
                 schema_path=self.config.schema_path,
@@ -553,9 +505,9 @@ class Pipeline:
         if cfg.start_at > 1:
             print(f"  Starting at phase {cfg.start_at}")
         if not cfg.run_llm:
-            print("  Skipping:  phase 2 (run_llm=False)")
+            print("  Skipping:  phase 1 (run_llm=False)")
         if cfg.discovery_mode is None:
-            print("  Skipping:  phase 3 (discovery off by default; use --discover auto|review)")
+            print("  Skipping:  phase 2 (discovery off by default; use --discover auto|review)")
         else:
             print(f"  Discovery: {cfg.discovery_mode}")
 

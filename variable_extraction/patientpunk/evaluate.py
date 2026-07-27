@@ -66,7 +66,6 @@ def _data_fields(sample_row: dict) -> list[str]:
     return [
         c for c in sample_row
         if c not in _META
-        and not c.endswith("__provenance")
         and not c.endswith("__confidence")
     ]
 

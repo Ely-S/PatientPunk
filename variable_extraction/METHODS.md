@@ -13,7 +13,7 @@ where a knob exists, the current default is stated explicitly.
 
 | Path | Command | Method | Output | Feeds analysis? |
 |---|---|---|---|---|
-| **Main pipeline** | `main.py run` | regex first pass (`biomedical`) + LLM gap-fill (`llm_extract`) + discovery | `records.csv` (all fields) | **Yes — authoritative.** Loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
+| **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes — authoritative.** Loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
 | **Demographics** | `main.py demographics` | LLM only (Haiku), deductive + inductive | `demographics.csv` | Optional/supplementary — `load_extractions` also accepts it. |
 
 Per-drug and per-patient analysis reads `records.csv` from the **main pipeline**
@@ -24,13 +24,12 @@ unless you deliberately load the demographics output.
 The pipeline extracts **only what the post author states about themselves.** This is
 enforced in every LLM prompt (`llm_extract`, `demographics`, `discover`) and in the
 shared `qualitative_standards` "SELF-REFERENCE ONLY" block — third-party mentions
-("my mom has POTS") are ignored.
+("my mom has POTS") are ignored. Every field is LLM-produced, so every field goes
+through this guard — there is no unguarded regex surface (the old regex first pass
+was removed; see [issue #86](https://github.com/Ely-S/PatientPunk/issues/86)).
 
-Two caveats to know:
+One caveat to know:
 
-- **Regex extraction (`biomedical`) has no self/other awareness.** It matches patterns
-  anywhere in the text, so regex-produced demographic/condition values are the one
-  *unguarded* surface. See *Regex vs LLM demographics* below.
 - **Post extraction uses title + body only.** Comments are written by other users, so
   they are excluded from the post-author record; commenters are captured as their own
   patients via the aggregate path.
@@ -47,32 +46,19 @@ treatment, inflating per-drug `helped` rates.
 
 - **Measured:** on a 3-arm test, enabling the guard moved `helped` share **47% → 43%**
   (~6% `helped`→`unknown` vs a 1% noise floor).
-- **Knob:** `PP_GROUP_GUARD=1` (env) / `--group-guard` (CLI). **Default: off** — chosen
+- **Knob:** `PP_GROUP_GUARD=1` (env var only — no CLI flag). **Default: off** — chosen
   to preserve reproducibility of prior runs.
 - **Recommended:** enable for any analysis that reports per-drug `helped` rates; leave
   off to reproduce pre-guard numbers.
 
-### Regex vs LLM demographics (age / sex / location)
-
-The main pipeline extracts demographics with regex (unguarded) plus LLM gap-fill
-(guarded). The LLM covers far more and is self/other-safe; regex's unique catches are
-almost all false positives.
-
-- **Measured** (100- and 220-record r/covidlonghaulers samples): LLM coverage is
-  **2–5× regex**. The only value regex uniquely catches that the LLM misses is the
-  compact `NNf`/`NNM` shorthand (~0.6% of records); every other regex-only demographic
-  hit was a false positive (multi-person or packed garbage) the LLM correctly rejected.
-- **Knob:** the demographic patterns in `biomedical.py`. **Default: regex on.**
-- **Recommended:** treat the LLM as authoritative for age/sex/location; if keeping
-  regex, keep only the `NNf`/`NNM` shorthand and drop the looser patterns.
-
 ## Field provenance
 
-Every field in `records.csv` comes from regex, LLM, or both (regex first pass, LLM
-gap-fill). The `confidence` column reflects the LLM's stated confidence. Self/other-
-sensitive fields (demographics, conditions, medications) are only as reliable as the
-guard on the path that produced them: **LLM-produced values are guarded; regex-produced
-values are not.** The generated codebook lists each field's extraction method.
+Every field in `records.csv` is LLM-produced (`llm_extract`, plus `discover` for
+`llm_discovered` fields). The `confidence` column reflects the field's schema-declared
+confidence tier. Self/other-sensitive fields (demographics, conditions, medications)
+all go through the same SELF-REFERENCE ONLY guard described above. The generated
+codebook lists each field's source (`base` / `base_optional` / `extension` /
+`llm_discovered`).
 
 ## Known limitations
 

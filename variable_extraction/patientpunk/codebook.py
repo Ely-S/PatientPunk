@@ -3,7 +3,7 @@
 
 
 Reads one base schema + one extension schema to collect field descriptions,
-confidence ratings, ICD-10 codes, and pattern counts. Optionally reads the
+confidence ratings, and ICD-10 codes. Optionally reads the
 output CSV to add real coverage stats and example values.
 
 Usage:
@@ -29,7 +29,7 @@ Usage:
 
 Output columns:
     field, source, description, confidence, icd10, frequency_hint,
-    research_value, n_patterns, discovered_at,
+    research_value, discovered_at,
     n_filled, coverage_pct, example_values
 """
 
@@ -74,7 +74,6 @@ def _ext_row(fname: str, fdata: dict) -> dict:
         "icd10":          fdata.get("icd10", ""),
         "frequency_hint": fdata.get("frequency_hint", ""),
         "research_value": fdata.get("research_value", ""),
-        "n_patterns":     len(fdata.get("patterns", [])),
         "discovered_at":  fdata.get("_discovered_at", ""),
     }
 
@@ -102,7 +101,6 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
             "icd10":          fdata.get("icd10", ""),
             "frequency_hint": "",
             "research_value": "",
-            "n_patterns":     "",   # base patterns live in patientpunk.biomedical, not the schema JSON
             "discovered_at":  "",
         })
 
@@ -119,7 +117,6 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
                 "icd10":          fdata.get("icd10", ""),
                 "frequency_hint": "",
                 "research_value": "",
-                "n_patterns":     "",
                 "discovered_at":  "",
             })
 
@@ -234,22 +231,21 @@ def write_codebook_md(rows: list[dict], output: Path, has_csv: bool) -> None:
             lines.append("| Field | Description | Confidence | ICD-10 | Coverage | Examples |")
             lines.append("|---|---|---|---|---|---|")
         else:
-            lines.append("| Field | Description | Confidence | ICD-10 | Patterns |")
-            lines.append("|---|---|---|---|---|")
+            lines.append("| Field | Description | Confidence | ICD-10 |")
+            lines.append("|---|---|---|---|")
 
         for row in group:
             field        = row["field"]
             desc         = (row["description"] or "").replace("|", "/")
             conf         = row["confidence"] or ""
             icd          = row["icd10"] or ""
-            n_pat        = str(row.get("n_patterns") or "")
             coverage     = row.get("coverage_pct") or ""
             examples     = (row.get("example_values") or "").replace("|", "/")
 
             if has_csv:
                 lines.append(f"| `{field}` | {desc} | {conf} | {icd} | {coverage} | {examples} |")
             else:
-                lines.append(f"| `{field}` | {desc} | {conf} | {icd} | {n_pat} |")
+                lines.append(f"| `{field}` | {desc} | {conf} | {icd} |")
 
     # Footnotes for llm_discovered
     discovered = by_source.get("llm_discovered", [])
@@ -351,7 +347,6 @@ def run_codebook(
             "icd10":          entry["icd10"],
             "frequency_hint": entry["frequency_hint"],
             "research_value": entry["research_value"],
-            "n_patterns":     entry["n_patterns"],
             "discovered_at":  entry["discovered_at"],
         }
         if has_csv:

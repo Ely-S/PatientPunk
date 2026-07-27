@@ -5,7 +5,7 @@ Covers:
     patientpunk._utils
     patientpunk.corpus
     patientpunk.schema
-    patientpunk.biomedical / llm_extract / discover / export_csv / codebook
+    patientpunk.llm_extract / discover / export_csv / codebook
     patientpunk.demographics / demographics_deductive
     patientpunk.pipeline
     patientpunk.qualitative_standards
@@ -63,7 +63,6 @@ from patientpunk.cluster_prep import (
 )
 from patientpunk.corpus import CorpusLoader, CorpusRecord
 from patientpunk.schema import FieldDefinition, Schema
-from patientpunk.biomedical import run_biomedical
 from patientpunk.export_csv import run_export_csv
 from patientpunk.phase import PhaseResult
 from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult
@@ -98,21 +97,21 @@ def tmp_corpus(tmp_path):
                 {"body": "Same here."},
                 {"body": ""},
                 {"body": "[removed]"},
-            ],
+            ]
         },
         {
             "author_hash": "bbb222",
             "post_id": "post_2",
             "title": "Looking for advice",
             "body": "[deleted]",
-            "comments": [],
+            "comments": []
         },
         {
             "author_hash": None,
             "post_id": "post_3",
             "title": "Removed post",
             "body": "",
-            "comments": [],
+            "comments": []
         },
     ]
     (tmp_path / "subreddit_posts.json").write_text(
@@ -131,7 +130,7 @@ def tmp_corpus(tmp_path):
         "comments": [
             {"body": "LDN helped my brain fog"},
             {"body": "[deleted]"},
-        ],
+        ]
     }
     (users_dir / "ccc333.json").write_text(
         json.dumps(user), encoding="utf-8"
@@ -149,10 +148,9 @@ def tmp_schema(tmp_path):
         "extension_fields": {
             "test_field": {
                 "description": "A test field",
-                "confidence": "high",
-                "patterns": [r"\btest\b"],
+                "confidence": "high"
             }
-        },
+        }
     }
     path = tmp_path / "test_schema.json"
     path.write_text(json.dumps(schema), encoding="utf-8")
@@ -441,13 +439,11 @@ class TestFieldDefinition:
             description="Patient age",
             confidence="medium",
             source="base",
-            patterns=[r"\d+"],
         )
         repr_str = repr(fd)
         assert "age" in repr_str
         assert "base" in repr_str
         assert "medium" in repr_str
-        assert "patterns=1" in repr_str
 
     def test_frozen(self):
         fd = FieldDefinition(
@@ -498,13 +494,6 @@ class TestSchema:
         repr_str = repr(schema)
         assert "covidlonghaulers_v1" in repr_str
 
-    def test_extension_fields_have_patterns(self):
-        schema = Schema.from_file(EXT_SCHEMA)
-        for name, fd in schema.extension_fields.items():
-            # All extension fields in the real schema have patterns
-            assert isinstance(fd.patterns, list)
-
-
 class TestSchemaWarning:
     def test_warns_when_base_schema_missing(self, tmp_schema, tmp_path):
         """Schema.from_file() should warn when base_schema.json is absent."""
@@ -545,15 +534,15 @@ class TestSchemaFromMinimalFile:
             "fields": {"age": {"description": "Age", "confidence": "medium"}},
             "base_optional_fields": {
                 "dosage": {"description": "Medication dosage", "confidence": "low"},
-                "ethnicity": {"description": "Ethnicity", "confidence": "low"},
-            },
+                "ethnicity": {"description": "Ethnicity", "confidence": "low"}
+            }
         }), encoding="utf-8")
 
         ext = tmp_path / "ext.json"
         ext.write_text(json.dumps({
             "schema_id": "activation_test",
             "include_base_fields": ["dosage"],  # only activate dosage
-            "extension_fields": {},
+            "extension_fields": {}
         }), encoding="utf-8")
 
         schema = Schema.from_file(ext, base_path=base)
@@ -601,7 +590,7 @@ class TestPipelineConfig:
         with pytest.raises(ValueError, match="start_at must be 1"):
             PipelineConfig(schema_path=tmp_path / "s.json", start_at=0)
         with pytest.raises(ValueError, match="start_at must be 1"):
-            PipelineConfig(schema_path=tmp_path / "s.json", start_at=6)
+            PipelineConfig(schema_path=tmp_path / "s.json", start_at=5)
 
     def test_custom_temp_dir(self, tmp_path):
         cfg = PipelineConfig(
@@ -643,11 +632,11 @@ class TestPipelineDiscoverySelection:
 
         report_a = {
             "pipeline_run": {"base_schema": "schema_a"},
-            "records_file": str(rec_a),
+            "records_file": str(rec_a)
         }
         report_b = {
             "pipeline_run": {"base_schema": "schema_b"},
-            "records_file": str(rec_b),
+            "records_file": str(rec_b)
         }
         (temp_dir / "discovered_field_report_discovered_a.json").write_text(
             json.dumps(report_a),
@@ -661,39 +650,39 @@ class TestPipelineDiscoverySelection:
         selected = pipeline._find_discovered_records()
         assert selected == rec_a
 
-    def test_phase4_prefers_in_memory_artifacts_over_filesystem(self, tmp_path):
+    def test_export_prefers_in_memory_artifacts_over_filesystem(self, tmp_path):
         """Consecutive runs should use PhaseResult artifacts, not rediscovery."""
         pipeline = self._make_pipeline(tmp_path, "schema_a")
         temp_dir = pipeline._temp_dir
 
-        mem_merged = temp_dir / "merged_records_from_memory.json"
+        mem_records = temp_dir / "records_from_memory.json"
         mem_disc = temp_dir / "discovered_records_from_memory.json"
-        mem_merged.write_text("[]", encoding="utf-8")
+        mem_records.write_text("[]", encoding="utf-8")
         mem_disc.write_text("[]", encoding="utf-8")
 
         # Filesystem decoys that would win if rediscovery ran first.
-        fs_merged = temp_dir / "merged_records_schema_a.json"
+        fs_records = temp_dir / "records_schema_a.json"
         fs_disc = temp_dir / "discovered_records_fs.json"
-        fs_merged.write_text("[]", encoding="utf-8")
+        fs_records.write_text("[]", encoding="utf-8")
         fs_disc.write_text("[]", encoding="utf-8")
         (temp_dir / "discovered_field_report_fs.json").write_text(
             json.dumps({
                 "pipeline_run": {"base_schema": "schema_a"},
-                "records_file": str(fs_disc),
+                "records_file": str(fs_disc)
             }),
             encoding="utf-8",
         )
 
-        pipeline._phase_outputs[2] = PhaseResult(
-            artifacts={"merged_records": mem_merged}, stats={},
+        pipeline._phase_outputs[1] = PhaseResult(
+            artifacts={"records": mem_records}, stats={},
         )
-        pipeline._phase_outputs[3] = PhaseResult(
+        pipeline._phase_outputs[2] = PhaseResult(
             artifacts={"records": mem_disc}, stats={},
         )
 
         captured: dict = {}
 
-        def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
+        def _fake_export_csv(*, input_files, output_path, sep):
             captured["input_files"] = list(input_files)
             Path(output_path).write_text("author_hash\n", encoding="utf-8")
             return PhaseResult(
@@ -702,15 +691,15 @@ class TestPipelineDiscoverySelection:
             )
 
         with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
-            result = pipeline._run_phase_4()
+            result = pipeline._run_phase_3()
 
         assert result.ok
         assert result.stats == {"rows": 0, "columns": 1, "fields": 0}
-        assert mem_merged in captured["input_files"]
+        assert mem_records in captured["input_files"]
         assert mem_disc in captured["input_files"]
-        assert fs_merged not in captured["input_files"]
+        assert fs_records not in captured["input_files"]
         assert fs_disc not in captured["input_files"]
-        assert 4 in pipeline._phase_outputs
+        assert 3 in pipeline._phase_outputs
 
     def test_falls_back_to_newest_records_when_reports_invalid(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
@@ -747,7 +736,7 @@ class TestPipelineDiscoverySelection:
 
         report = {
             "pipeline_run": {"base_schema": "schema_a"},
-            "records_file": "nested/path/discovered_records_rel.json",
+            "records_file": "nested/path/discovered_records_rel.json"
         }
         (temp_dir / "discovered_field_report_rel.json").write_text(
             json.dumps(report),
@@ -757,12 +746,12 @@ class TestPipelineDiscoverySelection:
         selected = pipeline._find_discovered_records()
         assert selected == rec
 
-    def test_phase4_uses_schema_matched_discovered_records(self, tmp_path):
+    def test_export_uses_schema_matched_discovered_records(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
         temp_dir = pipeline._temp_dir
 
-        merged = temp_dir / "merged_records_schema_a.json"
-        merged.write_text("[]", encoding="utf-8")
+        records = temp_dir / "records_schema_a.json"
+        records.write_text("[]", encoding="utf-8")
         rec_a = temp_dir / "discovered_records_discovered_a.json"
         rec_b = temp_dir / "discovered_records_discovered_b.json"
         rec_a.write_text("[]", encoding="utf-8")
@@ -783,40 +772,39 @@ class TestPipelineDiscoverySelection:
 
         captured: dict = {}
 
-        def _fake_export_csv(*, input_files, output_path, sep, include_provenance):
+        def _fake_export_csv(*, input_files, output_path, sep):
             captured["input_files"] = list(input_files)
             Path(output_path).write_text("author_hash\n", encoding="utf-8")
             return PhaseResult(artifacts={"csv": Path(output_path)}, stats={"rows": 0})
 
         with patch("patientpunk.pipeline.run_export_csv", _fake_export_csv):
-            result = pipeline._run_phase_4()
+            result = pipeline._run_phase_3()
 
         assert result.ok
-        assert merged in captured["input_files"]
+        assert records in captured["input_files"]
         assert rec_a in captured["input_files"]
         assert rec_b not in captured["input_files"]
 
     def test_export_only_run_does_not_require_prior_phases(self, tmp_path):
         pipeline = self._make_pipeline(tmp_path, "schema_a")
-        pipeline.config.start_at = 4
+        pipeline.config.start_at = 3
         pipeline.config.run_llm = False
         pipeline.config.discovery_mode = None
         pipeline.config.clean = False
 
-        phase4 = PhaseResult(phase=4, label="CSV export", ok=True, elapsed=0.01)
-        phase5 = PhaseResult(phase=5, label="Codebook", ok=True, elapsed=0.01)
+        phase3 = PhaseResult(phase=3, label="CSV export", ok=True, elapsed=0.01)
+        phase4 = PhaseResult(phase=4, label="Codebook", ok=True, elapsed=0.01)
 
-        with patch.object(Pipeline, "_run_phase_4", return_value=phase4), patch.object(
-            Pipeline, "_run_phase_5", return_value=phase5
+        with patch.object(Pipeline, "_run_phase_3", return_value=phase3), patch.object(
+            Pipeline, "_run_phase_4", return_value=phase4
         ):
             result = pipeline.run()
 
         assert result.ok
         assert result.phases[0].phase == 1 and result.phases[0].skipped
         assert result.phases[1].phase == 2 and result.phases[1].skipped
-        assert result.phases[2].phase == 3 and result.phases[2].skipped
+        assert result.phases[2].phase == 3 and result.phases[2].ok
         assert result.phases[3].phase == 4 and result.phases[3].ok
-        assert result.phases[4].phase == 5 and result.phases[4].ok
 
 
 class TestPipelineResult:
@@ -832,7 +820,7 @@ class TestPipelineResult:
     def test_summary_contains_phases(self):
         result = PipelineResult(
             phases=[
-                PhaseResult(phase=1, label="Regex", ok=True, elapsed=5.0,
+                PhaseResult(phase=1, label="LLM", ok=True, elapsed=5.0,
                             stats={"records": 100}),
                 PhaseResult(phase=2, label="LLM", skipped=True),
             ],
@@ -840,7 +828,6 @@ class TestPipelineResult:
         )
         summary = result.summary()
         assert "PIPELINE SUMMARY" in summary
-        assert "Regex" in summary
         assert "SKIPPED" in summary
         assert "records" in summary
 
@@ -959,14 +946,14 @@ class TestCodeDemographicsCodebook:
                      "evidence": "I'm a nurse", "confidence": "high"},
                     {"field_name": "marital_status", "value": "married",
                      "evidence": "my husband and I", "confidence": "medium"},
-                ],
+                ]
             },
             {
                 "author_hash": "bbb222",
                 "discovered_demographics": [
                     {"field_name": "occupation_sector", "value": "education",
                      "evidence": "I teach high school", "confidence": "high"},
-                ],
+                ]
             },
             {
                 "author_hash": "ccc333",
@@ -975,11 +962,11 @@ class TestCodeDemographicsCodebook:
                      "evidence": "ER nurse here", "confidence": "high"},
                     {"field_name": "veteran_status", "value": "veteran",
                      "evidence": "after my deployment", "confidence": "medium"},
-                ],
+                ]
             },
             {
                 "author_hash": "ddd444",
-                "discovered_demographics": [],
+                "discovered_demographics": []
             },
         ]
         codebook = build_codebook(results)
@@ -1065,7 +1052,7 @@ class TestCorpusLoaderNoPostsFile:
         user = {
             "author_hash": "zzz999",
             "posts": [{"title": "My title", "body": "My body"}],
-            "comments": [],
+            "comments": []
         }
         (users_dir / "zzz999.json").write_text(json.dumps(user), encoding="utf-8")
         loader = CorpusLoader(tmp_path)
@@ -1200,12 +1187,10 @@ def _write_discovery(temp_dir, base_schema_id, fields, suffix="x", stats=None):
                 "description": f"desc {name}",
                 "confidence": "low",
                 "source": "llm_discovered",
-                "patterns": meta.get("patterns", []),
-                "llm_only": meta.get("llm_only", True),
-                "allowed_values": meta.get("allowed_values"),
+                "allowed_values": meta.get("allowed_values")
             }
             for name, meta in fields.items()
-        },
+        }
     }
     schema_file = temp_dir / f"{schema_id}.json"
     schema_file.write_text(json.dumps(disc_schema), encoding="utf-8")
@@ -1213,7 +1198,7 @@ def _write_discovery(temp_dir, base_schema_id, fields, suffix="x", stats=None):
         "pipeline_run": {"base_schema": base_schema_id},
         "schema_file": str(schema_file),
         "records_file": str(temp_dir / f"discovered_records_{schema_id}.json"),
-        "field_stats": stats or {name: {"coverage": 0.5} for name in fields},
+        "field_stats": stats or {name: {"coverage": 0.5} for name in fields}
     }
     (temp_dir / f"discovered_field_report_{schema_id}.json").write_text(
         json.dumps(report), encoding="utf-8")
@@ -1224,7 +1209,7 @@ def _write_target_schema(path, schema_id="base_v1", extension_fields=None):
     path.write_text(json.dumps({
         "schema_id": schema_id,
         "include_base_fields": [],
-        "extension_fields": extension_fields or {},
+        "extension_fields": extension_fields or {}
     }), encoding="utf-8")
     return path
 
@@ -1254,7 +1239,7 @@ class TestPromote:
         target = _write_target_schema(tmp_path / "t.json")
         disc = {"schema_id": "discovered_x", "extension_fields": {
             "new_field": {"description": "d", "confidence": "low",
-                          "source": "llm_discovered", "patterns": ["foo"],
+                          "source": "llm_discovered",
                           "allowed_values": ["a", "b"], "research_value": "rv"}}}
         result = promote_discovered_fields(target, disc, output_path=tmp_path / "out.json")
         assert result.added == ["new_field"]
@@ -1270,10 +1255,10 @@ class TestPromote:
     def test_skips_existing_unless_overwrite(self, tmp_path):
         target = _write_target_schema(tmp_path / "t.json", extension_fields={
             "dup": {"description": "orig", "confidence": "high",
-                    "source": "extension", "patterns": []}})
+                    "source": "extension"}})
         disc = {"schema_id": "d", "extension_fields": {
             "dup": {"description": "new", "confidence": "low",
-                    "source": "llm_discovered", "patterns": []}}}
+                    "source": "llm_discovered"}}}
         r = promote_discovered_fields(target, disc, output_path=tmp_path / "o.json")
         assert r.added == [] and r.skipped_existing == ["dup"]
         assert load_json(tmp_path / "o.json")["extension_fields"]["dup"]["description"] == "orig"
@@ -1285,8 +1270,8 @@ class TestPromote:
     def test_min_coverage_filter(self, tmp_path):
         target = _write_target_schema(tmp_path / "t.json")
         disc = {"schema_id": "d", "extension_fields": {
-            "hi": {"source": "llm_discovered", "patterns": []},
-            "lo": {"source": "llm_discovered", "patterns": []}}}
+            "hi": {"source": "llm_discovered"},
+            "lo": {"source": "llm_discovered"}}}
         stats = {"hi": {"coverage": 0.5}, "lo": {"coverage": 0.05}}
         r = promote_discovered_fields(target, disc, field_stats=stats, min_coverage=0.1,
                                       output_path=tmp_path / "o.json")
@@ -1295,9 +1280,9 @@ class TestPromote:
     def test_include_exclude(self, tmp_path):
         target = _write_target_schema(tmp_path / "t.json")
         disc = {"schema_id": "d", "extension_fields": {
-            "a": {"source": "llm_discovered", "patterns": []},
-            "b": {"source": "llm_discovered", "patterns": []},
-            "c": {"source": "llm_discovered", "patterns": []}}}
+            "a": {"source": "llm_discovered"},
+            "b": {"source": "llm_discovered"},
+            "c": {"source": "llm_discovered"}}}
         r = promote_discovered_fields(target, disc, include={"a", "b"}, exclude={"b"},
                                       output_path=tmp_path / "o.json")
         assert r.added == ["a"]
@@ -1306,7 +1291,7 @@ class TestPromote:
     def test_dry_run_writes_nothing(self, tmp_path):
         target = _write_target_schema(tmp_path / "t.json")
         disc = {"schema_id": "d", "extension_fields": {
-            "x": {"source": "llm_discovered", "patterns": []}}}
+            "x": {"source": "llm_discovered"}}}
         out = tmp_path / "o.json"
         r = promote_discovered_fields(target, disc, output_path=out, dry_run=True)
         assert r.added == ["x"] and r.output_path is None
@@ -1315,7 +1300,7 @@ class TestPromote:
     def test_default_in_place_when_no_output(self, tmp_path):
         target = _write_target_schema(tmp_path / "t.json")
         disc = {"schema_id": "d", "extension_fields": {
-            "x": {"source": "llm_discovered", "patterns": []}}}
+            "x": {"source": "llm_discovered"}}}
         r = promote_discovered_fields(target, disc, output_path=None)
         assert r.output_path == target
         assert "x" in load_json(target)["extension_fields"]
@@ -1354,7 +1339,7 @@ class TestPipelineFindDiscoveredSchema:
         assert p._find_discovered_schema() is None
 
 
-class TestPhase5DiscoveredSchemaWiring:
+class TestCodebookDiscoveredSchemaWiring:
     def _pipeline(self, tmp_path, include_discovered=True):
         schema_path = tmp_path / "schema_a.json"
         schema_path.write_text(json.dumps({"schema_id": "schema_a", "extension_fields": {}}), encoding="utf-8")
@@ -1362,7 +1347,7 @@ class TestPhase5DiscoveredSchemaWiring:
         temp_dir.mkdir()
         (tmp_path / "records.csv").write_text("author_hash\n", encoding="utf-8")
         cfg = PipelineConfig(schema_path=schema_path, input_dir=tmp_path, temp_dir=temp_dir,
-                             start_at=5, codebook_include_discovered=include_discovered)
+                             start_at=4, codebook_include_discovered=include_discovered)
         return Pipeline(cfg)
 
     def test_passes_discovered_schema(self, tmp_path):
@@ -1370,7 +1355,7 @@ class TestPhase5DiscoveredSchemaWiring:
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
             mock_cb.return_value = PhaseResult(artifacts={}, stats={})
-            p._run_phase_5()
+            p._run_phase_4()
         kwargs = mock_cb.call_args.kwargs
         assert kwargs["discovered_schema_path"] is not None
         assert kwargs["discovered_schema_path"].name == "discovered_a.json"
@@ -1380,7 +1365,7 @@ class TestPhase5DiscoveredSchemaWiring:
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
             mock_cb.return_value = PhaseResult(artifacts={}, stats={})
-            p._run_phase_5()
+            p._run_phase_4()
         assert mock_cb.call_args.kwargs["discovered_schema_path"] is None
 
     def test_prefers_in_memory_schema_over_filesystem(self, tmp_path):
@@ -1388,14 +1373,14 @@ class TestPhase5DiscoveredSchemaWiring:
         _write_discovery(p._temp_dir, "schema_a", {"f1": {}}, suffix="a")
         mem_schema = p._temp_dir / "discovered_from_memory.json"
         mem_schema.write_text(json.dumps({"schema_id": "mem", "extension_fields": {}}), encoding="utf-8")
-        p._phase_outputs[3] = PhaseResult(artifacts={"schema": mem_schema}, stats={})
+        p._phase_outputs[2] = PhaseResult(artifacts={"schema": mem_schema}, stats={})
         with patch("patientpunk.pipeline.run_codebook") as mock_cb:
             mock_cb.return_value = PhaseResult(artifacts={"codebook": tmp_path / "codebook.csv"}, stats={"fields": 1})
-            result = p._run_phase_5()
+            result = p._run_phase_4()
         assert result.ok
         assert result.stats == {"fields": 1}
         assert mock_cb.call_args.kwargs["discovered_schema_path"] == mem_schema
-        assert 5 in p._phase_outputs
+        assert 4 in p._phase_outputs
 
 
 # =============================================================================
@@ -1415,29 +1400,19 @@ class TestDiscoveryReviewMode:
         schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}), encoding="utf-8")
 
         candidates = [{"field_name": "new_field", "examples": ["x"] * 8}]
-        called = {"phase2": False, "phase3": False, "phase4": False}
+        called = {"extract": False}
 
         def _fake_phase1(*_a, **_k):
             return candidates
 
-        def _fake_phase2(*_a, **_k):
-            called["phase2"] = True
-            return []
-
-        def _fake_phase3(*_a, **_k):
-            called["phase3"] = True
-            return []
-
-        def _fake_phase4(*_a, **_k):
-            called["phase4"] = True
+        def _fake_extract(*_a, **_k):
+            called["extract"] = True
             return []
 
         with patch("patientpunk.discover.get_llm_client", return_value=MagicMock()), \
              patch("patientpunk.discover.load_corpus_texts", return_value=[{"text": "hi"}]), \
              patch("patientpunk.discover.run_phase1_discovery", _fake_phase1), \
-             patch("patientpunk.discover.run_phase2_build_regex", _fake_phase2), \
-             patch("patientpunk.discover.run_phase3_regex_extract", _fake_phase3), \
-             patch("patientpunk.discover.run_phase4_fill_gaps", _fake_phase4):
+             patch("patientpunk.discover.run_discovered_extract", _fake_extract):
             out = run_discovery(
                 input_dir=input_dir,
                 schema_path=schema,
@@ -1445,7 +1420,7 @@ class TestDiscoveryReviewMode:
                 stop_after="candidates",
             )
 
-        assert called == {"phase2": False, "phase3": False, "phase4": False}
+        assert called == {"extract": False}
         assert out.artifacts["candidates"].name == "phase1_candidates.json"
         assert out.artifacts["candidates"].exists()
         assert out.stats["candidates"] == 1
@@ -1486,9 +1461,12 @@ class TestDiscoveryReviewMode:
         assert json.loads(stale_path.read_text(encoding="utf-8")) == new_candidates
         assert out.stats["candidates"] == 1
 
-    def test_run_discovery_known_fields_derived_from_patterns(self, tmp_path):
+    def test_run_discovery_known_fields_derived_from_base_fields(self, tmp_path):
         from patientpunk.discover import run_discovery
-        from patientpunk.biomedical import PATTERNS
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS,
+            BASE_OPTIONAL_DESCRIPTIONS,
+        )
 
         input_dir = tmp_path / "output"
         input_dir.mkdir()
@@ -1499,7 +1477,7 @@ class TestDiscoveryReviewMode:
         schema.write_text(
             json.dumps({
                 "schema_id": "s",
-                "extension_fields": {"functional_status_tier": {"description": "d"}},
+                "extension_fields": {"functional_status_tier": {"description": "d"}}
             }),
             encoding="utf-8",
         )
@@ -1523,7 +1501,7 @@ class TestDiscoveryReviewMode:
         known_fields = captured["known_fields"]
         plain_names = {f for f in known_fields if isinstance(f, str)}
         assert "activity_level" not in plain_names
-        assert plain_names == set(PATTERNS.keys())
+        assert plain_names == set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
         extension_names = {f["name"] for f in known_fields if isinstance(f, dict)}
         assert "functional_status_tier" in extension_names
 
@@ -1539,7 +1517,7 @@ class TestDiscoveryReviewMode:
             schema_path=schema,
             input_dir=tmp_path,
             temp_dir=temp_dir,
-            start_at=3,
+            start_at=2,
             run_llm=False,
             discovery_mode="review",
             clean=False,
@@ -1547,8 +1525,8 @@ class TestDiscoveryReviewMode:
         pipeline = Pipeline(cfg)
 
         with patch("patientpunk.pipeline.run_discovery") as mock_disc, \
-             patch.object(Pipeline, "_run_phase_4") as mock_p4, \
-             patch.object(Pipeline, "_run_phase_5") as mock_p5:
+             patch.object(Pipeline, "_run_phase_3") as mock_p3, \
+             patch.object(Pipeline, "_run_phase_4") as mock_p4:
             mock_disc.return_value = PhaseResult(
                 artifacts={"candidates": cand},
                 stats={"candidates": 0},
@@ -1557,11 +1535,11 @@ class TestDiscoveryReviewMode:
 
         mock_disc.assert_called_once()
         assert mock_disc.call_args.kwargs.get("stop_after") == "candidates"
+        mock_p3.assert_not_called()
         mock_p4.assert_not_called()
-        mock_p5.assert_not_called()
-        assert len(result.phases) == 3
-        assert result.phases[2].ok
-        assert result.phases[2].stats["candidates"] == 0
+        assert len(result.phases) == 2
+        assert result.phases[1].ok
+        assert result.phases[1].stats["candidates"] == 0
 
 
 # =============================================================================
@@ -1572,8 +1550,6 @@ def _disc_schema(fields: dict) -> dict:
     """Build a discovered-schema dict. fields: name -> overrides dict."""
     return {"schema_id": "d", "extension_fields": {
         n: {"description": n, "confidence": "low", "source": "llm_discovered",
-            "patterns": d.get("patterns", []),
-            "hit_rate_at_discovery": d.get("hit", 0.0),
             **({"allowed_values": d["allowed_values"]} if "allowed_values" in d else {})}
         for n, d in fields.items()}}
 
@@ -1611,7 +1587,7 @@ class TestConsolidate:
         assert set(r.consolidated_schema["extension_fields"]) == {"a"}
         assert r.n_dropped_low_runs == 1
 
-    def test_n_runs_and_provenance(self):
+    def test_n_runs_and_consolidated_from(self):
         r = consolidate_schemas([_disc_schema({"medication_trial_outcome_category": {}}),
                                  _disc_schema({"medication_trial_outcome": {}})])
         f = r.consolidated_schema["extension_fields"]["medication_trial_outcome"]
@@ -1619,13 +1595,12 @@ class TestConsolidate:
         assert set(f["_consolidated_from"]) == {
             "medication_trial_outcome_category", "medication_trial_outcome"}
 
-    def test_pattern_and_allowed_union(self):
+    def test_allowed_values_union(self):
         r = consolidate_schemas([
-            _disc_schema({"x": {"patterns": [r"\ba\b"], "allowed_values": ["p", "q"]}}),
-            _disc_schema({"x": {"patterns": [r"\bb\b"], "allowed_values": ["q", "r"]}}),
+            _disc_schema({"x": {"allowed_values": ["p", "q"]}}),
+            _disc_schema({"x": {"allowed_values": ["q", "r"]}}),
         ])
         f = r.consolidated_schema["extension_fields"]["x"]
-        assert set(f["patterns"]) == {r"\ba\b", r"\bb\b"}
         assert set(f["allowed_values"]) == {"p", "q", "r"}
 
     def test_llm_group_fn_merges_no_token_overlap(self):
@@ -1757,7 +1732,7 @@ class TestLLMConfig:
         c = resolve_llm_config({
             "LLM_PROVIDER": "openai",
             "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
-            "ANTHROPIC_API_KEY": "sk-ant-realkey-should-not-win",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-should-not-win"
         })
         assert c["provider"] == "openai"
         assert c["api_key"] == "sk-or-v1-realkey-abcdef"
@@ -1765,7 +1740,7 @@ class TestLLMConfig:
     def test_openai_ignores_anthropic_key_alone(self):
         c = resolve_llm_config({
             "LLM_PROVIDER": "openai",
-            "ANTHROPIC_API_KEY": "sk-ant-realkey-alone",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-alone"
         })
         assert c["api_key"] == ""
 
@@ -1774,7 +1749,7 @@ class TestLLMConfig:
             "LLM_PROVIDER": "openai",
             "LLM_API_KEY": "explicit-openai-key",
             "OPENROUTER_API_KEY": "sk-or-v1-realkey-abcdef",
-            "ANTHROPIC_API_KEY": "sk-ant-realkey-abc",
+            "ANTHROPIC_API_KEY": "sk-ant-realkey-abc"
         })
         assert c["api_key"] == "explicit-openai-key"
 
@@ -1924,13 +1899,8 @@ class TestActiveExtractorTextCollection:
             "comments": [
                 {"author_hash": "comment_author", "body": "Commenter's condition should not attach"},
                 {"author_hash": "post_author", "body": "Post author's reply is still comment text"},
-            ],
+            ]
         }
-
-    def test_biomedical_post_collection_uses_title_and_body_only(self):
-        from patientpunk.biomedical import collect_texts_from_post
-        texts = collect_texts_from_post(self._post_with_other_author_comment())
-        assert texts == ["Post title", "Post body"]
 
     def test_llm_post_collection_uses_title_and_body_only(self):
         from patientpunk.llm_extract import collect_texts_from_post
@@ -1946,25 +1916,6 @@ class TestActiveExtractorTextCollection:
         from patientpunk.corpus import CorpusLoader
         texts = CorpusLoader._texts_from_post(self._post_with_other_author_comment())
         assert texts == ["Post title", "Post body"]
-
-
-class TestAgeAtOnsetLookahead:
-    """Duration abbreviations must not be captured as age_at_onset."""
-
-    def test_years_ago_not_captured(self):
-        from patientpunk.biomedical import extract_from_text
-        result = extract_from_text("symptoms started 5 years ago")
-        assert "age_at_onset" not in result
-
-    def test_yrs_ago_not_captured(self):
-        from patientpunk.biomedical import extract_from_text
-        result = extract_from_text("symptoms started 5 yrs ago")
-        assert "age_at_onset" not in result
-
-    def test_explicit_age_still_captured(self):
-        from patientpunk.biomedical import extract_from_text
-        result = extract_from_text("symptoms started when I was 25")
-        assert result.get("age_at_onset") == ["25"]
 
 
 class TestAggregateByAuthor:
@@ -1999,7 +1950,7 @@ class TestAggregateByAuthor:
 
     def test_synthetic_post_shape_is_pipeline_consumable(self):
         from patientpunk.aggregate import aggregate_corpus_by_author
-        from patientpunk.biomedical import collect_texts_from_post
+        from patientpunk.discover import collect_texts_from_post
         out, _ = aggregate_corpus_by_author(self._corpus(), min_items=1)
         p = out[0]
         assert p["post_id"].startswith("agg_")
@@ -2152,6 +2103,34 @@ class TestNormalize:
         assert "conditions" in fields
 
 
+class TestLLMExtractNormalizeRecords:
+    """Regression coverage for llm_extract.normalize_records (issue #86): with
+    regex parsing removed, dosage strings pass through untouched by the LLM
+    extraction and must survive wrapping/canonicalization unchanged."""
+
+    def test_dosage_strings_survive_intact(self):
+        from patientpunk.llm_extract import normalize_records
+        dosages = ["5 mg", "250 mcg", "0.5 ml", "1 g", "5000 iu", "2 units"]
+        rec = {"fields": {"dosage": dosages}}
+        out = normalize_records([rec])[0]
+        assert out["fields"]["dosage"]["values"] == dosages
+
+    def test_canonicalization_still_applied(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"conditions": ["Long-COVID", "post covid"],
+                          "functional_status_tier": ["bed bound"]}}
+        out = normalize_records([rec])[0]
+        assert out["fields"]["conditions"]["values"] == ["long covid"]
+        assert out["fields"]["functional_status_tier"]["values"] == ["bedbound"]
+
+    def test_field_entries_carry_schema_declared_confidence(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"dosage": ["5 mg"], "conditions": ["me/cfs"]}}
+        out = normalize_records([rec], confidence_by_field={"dosage": "low"})[0]
+        assert out["fields"]["dosage"]["confidence"] == "low"
+        assert out["fields"]["conditions"]["confidence"] == "medium"  # default
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
@@ -2276,7 +2255,7 @@ class TestBatchExtraction:
         out = m._process_batch(
             [("post", {"post_id": "p0", "author_hash": "a0",
                        "title": "t", "body": "b"})],
-            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            None, "sys", None,
         )
         assert len(out) == 1
         assert out[0]["_failed"] and out[0]["post_id"] == "p0"
@@ -2298,7 +2277,7 @@ class TestBatchExtraction:
         out = m._process_batch(
             [("post", {"post_id": "p0", "author_hash": "a0",
                        "title": "t", "body": "b"})],
-            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            None, "sys", None,
         )
         assert out[0]["_failed"]
         assert out[0]["reason"] == "call_error: _HTTPError"
@@ -2320,7 +2299,7 @@ class TestBatchExtraction:
             m._process_batch(
                 [("post", {"post_id": "p0", "author_hash": "a0",
                            "title": "t", "body": "b"})],
-                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+                None, "sys", None,
             )
 
     def test_unexpected_programming_error_aborts_the_run(self, monkeypatch):
@@ -2334,7 +2313,7 @@ class TestBatchExtraction:
             m._process_batch(
                 [("post", {"post_id": "p0", "author_hash": "a0",
                            "title": "t", "body": "b"})],
-                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+                None, "sys", None,
             )
 
     def test_transient_failure_runs_fixed_retry_ladder(self, monkeypatch):
@@ -2377,22 +2356,6 @@ class TestBatchExtraction:
 # =============================================================================
 # In-process run_* phases (no subprocess)
 # =============================================================================
-
-class TestRunBiomedical:
-    def test_writes_artifacts(self, tmp_path):
-        posts = tmp_path / "subreddit_posts.json"
-        posts.write_text(json.dumps([
-            {"author_hash": "a1", "post_id": "p1", "title": "34F with POTS", "body": "LDN helped"},
-        ]), encoding="utf-8")
-        out = run_biomedical(input_dir=tmp_path, temp_dir=tmp_path / "temp")
-        assert out.artifacts["records"].exists()
-        assert out.artifacts["metadata"].exists()
-        assert out.stats["records processed"] == 1
-
-    def test_missing_input_raises(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
-            run_biomedical(input_dir=tmp_path / "missing")
-
 
 class TestLimitResumeInteraction:
     """--limit caps corpus position, not new work.
@@ -2461,7 +2424,7 @@ class TestRunExportCsv:
             "_extracted_at": "2020-01-01",
             "record_meta": {"author_hash": "a", "source": "subreddit_post",
                             "post_id": "p1", "text_count": 1},
-            "base": {"age": {"values": ["34"], "provenance": "self_reported", "confidence": "medium"}},
+            "fields": {"age": {"values": ["34"], "confidence": "medium"}}
         }
         src = tmp_path / "records.json"
         src.write_text(json.dumps([rec]), encoding="utf-8")
@@ -2481,14 +2444,14 @@ class TestRunExportCsv:
 
         Merging two files that both use that shape raised
         AttributeError: 'NoneType' object has no attribute 'get' in
-        merge_records, because only merged_records were dict-shaped.
+        merge_records, because only normalized records were dict-shaped.
         """
         rec = {
             "_schema_id": "base",
             "_extraction_method": "llm",
             "record_meta": {"author_hash": "a", "source": "user_history",
                             "post_id": "p1", "text_count": 1},
-            "fields": {"age": ["34"], "conditions": None, "medications": ["LDN"]},
+            "fields": {"age": ["34"], "conditions": None, "medications": ["LDN"]}
         }
         src = tmp_path / "llm_records_base.json"
         src.write_text(json.dumps([rec]), encoding="utf-8")
@@ -2507,11 +2470,11 @@ class TestRunExportCsv:
         """Gap-filling semantics must survive the shape normalisation."""
         populated = {
             "record_meta": {"author_hash": "a", "post_id": "p1"},
-            "fields": {"age": {"values": ["34"], "provenance": "regex"}},
+            "fields": {"age": {"values": ["34"], "confidence": "high"}}
         }
         bare = {
             "record_meta": {"author_hash": "a", "post_id": "p1"},
-            "fields": {"age": ["99"], "conditions": ["POTS"]},
+            "fields": {"age": ["99"], "conditions": ["POTS"]}
         }
         first = tmp_path / "a.json"
         second = tmp_path / "b.json"
@@ -2527,7 +2490,7 @@ class TestRunExportCsv:
 
 
 class TestPipelineNoSubprocess:
-    def test_phase1_does_not_call_subprocess(self, tmp_path, monkeypatch):
+    def test_pipeline_does_not_call_subprocess(self, tmp_path, monkeypatch):
         import subprocess
         calls = []
         real_run = subprocess.run
@@ -2552,26 +2515,8 @@ class TestPipelineNoSubprocess:
             start_at=1,
             clean=True,
         )
-        # Only run phase 1 then stop by failing phase 4 inputs intentionally via start_at tricks:
-        # run full but patch later phases.
-        with patch.object(Pipeline, "_run_phase_2", return_value=PhaseResult(phase=2, label="x", skipped=True)), \
-             patch.object(Pipeline, "_run_phase_3", return_value=PhaseResult(phase=3, label="x", skipped=True)), \
-             patch.object(Pipeline, "_run_phase_4", return_value=PhaseResult(phase=4, label="x", skipped=True)), \
-             patch.object(Pipeline, "_run_phase_5", return_value=PhaseResult(phase=5, label="x", skipped=True)):
+        with patch.object(Pipeline, "_run_phase_3", return_value=PhaseResult(phase=3, label="x", skipped=True)), \
+             patch.object(Pipeline, "_run_phase_4", return_value=PhaseResult(phase=4, label="x", skipped=True)):
             result = Pipeline(cfg).run()
-        assert result.phases[0].ok
+        assert result.ok
         assert calls == []
-
-
-class TestBiomedicalCliSmoke:
-    def test_help(self):
-        from patientpunk.biomedical import main
-        with pytest.raises(SystemExit) as exc:
-            main(["--help"])
-        assert exc.value.code == 0
-
-    def test_text_mode(self, capsys):
-        from patientpunk.biomedical import main
-        main(["--text", "34F with POTS"])
-        out = capsys.readouterr().out
-        assert "Base fields" in out

@@ -8,19 +8,19 @@ run
     Run the full extraction pipeline (or a subset of phases).
 
 demographics
-    LLM-only extraction of age, sex/gender, and location.  No regex.
+    LLM-only extraction of age, sex/gender, and location.
     Outputs a standalone demographics.csv.
 
 inspect
-    Inspect a schema file: print field counts, field names, and pattern counts
-    without running any extraction.
+    Inspect a schema file: print field counts and field names without running
+    any extraction.
 
 corpus
     Print corpus statistics (record counts, source breakdown) for a given
     input directory without running any extraction.
 
 export
-    Re-run only the export phases (Phase 4: CSV, Phase 5: codebook) from
+    Re-run only the export phases (Phase 3: CSV, Phase 4: codebook) from
     existing intermediate files.
 
 Usage examples
@@ -114,14 +114,13 @@ def _add_run_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[ty
         description="""
 Run all (or a subset of) pipeline phases:
 
-  Phase 1  extract_biomedical  Regex extraction (free, seconds)
-  Phase 2  llm_extract         LLM extraction   (Claude Haiku)
-  Phase 3  discover_fields     Field discovery   (Haiku + Sonnet) -- off by default
-  Phase 4  records_to_csv      Flatten to CSV
-  Phase 5  make_codebook       Generate data dictionary
+  Phase 1  llm_extract         LLM extraction   (Claude Haiku)
+  Phase 2  discover_fields     Field discovery  (Claude Haiku) -- off by default
+  Phase 3  records_to_csv      Flatten to CSV
+  Phase 4  make_codebook       Generate data dictionary
 
-Default runs Phases 1-2-4-5. Use --discover auto|review to enable Phase 3.
-Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
+Default runs Phases 1-3-4. Use --discover auto|review to enable Phase 2.
+Use --no-llm to skip Phase 1, or --start-at N to resume from a specific phase.
         """,
     )
     # Required
@@ -135,12 +134,12 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
                    help="Intermediate file directory (default: {input-dir}/temp/)")
 
     # Phase control
-    run_parser.add_argument("--start-at", type=int, default=1, choices=[1, 2, 3, 4, 5],
-                   help="Start from this phase (1-5).  Phases before this are skipped.")
+    run_parser.add_argument("--start-at", type=int, default=1, choices=[1, 2, 3, 4],
+                   help="Start from this phase (1-4).  Phases before this are skipped.")
     run_parser.add_argument("--no-llm", action="store_true",
-                   help="Skip phase 2 (LLM gap-filling).")
+                   help="Skip phase 1 (LLM extraction).")
     run_parser.add_argument("--discover", choices=["auto", "review"], default=None,
-                   help="Run Phase 3 field discovery. 'auto' runs all stages and "
+                   help="Run Phase 2 field discovery. 'auto' runs all stages and "
                         "merges candidates. 'review' stops after candidate generation "
                         "so you can select fields in the Marimo variable picker "
                         "(apps/discover.py). Default: skip discovery entirely.")
@@ -160,26 +159,16 @@ Use --no-llm to skip Phase 2, or --start-at N to resume from a specific phase.
                    help="Disable LLM API response cache (overrides default / LLM_CACHE=1).")
 
     # Phase 2
-    run_parser.add_argument("--skip-threshold", type=float, default=0.7,
-                   help="Skip LLM for records where regex hit >= this fraction (default: 0.7).")
-    run_parser.add_argument("--no-focus-gaps", action="store_true",
-                   help="Disable LLM focused-gap mode.")
-
-    # Phase 3
     run_parser.add_argument("--candidates", type=Path, default=None,
                    help="Saved phase1_candidates.json -- skips Stage 1 of discover_fields.")
     run_parser.add_argument("--sample", type=int, default=None,
                    help="Randomly sample N corpus items for discovery Stage 1.")
-    run_parser.add_argument("--no-fill", action="store_true",
-                   help="Skip discovery Stage 4 gap-filling.")
 
-    # Phase 4
+    # Phase 3
     run_parser.add_argument("--sep", default=" | ",
                    help="Multi-value separator for CSV (default: ' | ').")
-    run_parser.add_argument("--provenance", action="store_true",
-                   help="Include {field}__provenance and {field}__confidence columns in CSV.")
 
-    # Phase 5
+    # Phase 4
     run_parser.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
                    help="Codebook output format (default: csv).")
     run_parser.add_argument("--no-discovered", action="store_true",
@@ -209,13 +198,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
         workers=args.workers,
         limit=args.limit,
         resume=args.resume,
-        llm_skip_threshold=args.skip_threshold,
-        llm_focus_gaps=not args.no_focus_gaps,
         candidates_file=args.candidates,
         discovery_sample=args.sample,
-        discovery_fill_gaps=not args.no_fill,
         csv_sep=args.sep,
-        csv_provenance=args.provenance,
         codebook_format=args.codebook_format,
         codebook_include_discovered=not args.no_discovered,
     )
@@ -323,7 +308,7 @@ def _add_inspect_parser(sub: argparse._SubParsersAction) -> None:  # type: ignor
                    choices=["base", "base_optional", "extension", "llm_discovered"],
                    help="Filter fields by source.")
     inspect_parser.add_argument("--verbose", "-v", action="store_true",
-                   help="Print patterns for each field.")
+                   help="Print allowed values for each field.")
 
 
 def _cmd_inspect(args: argparse.Namespace) -> None:
@@ -352,9 +337,9 @@ def _cmd_inspect(args: argparse.Namespace) -> None:
         field_def = schema.all_fields[name]
         icd_label = f"  ICD-10: {field_def.icd10}" if field_def.icd10 else ""
         print(f"  {name:<40} [{field_def.confidence:<6}] [{field_def.source}]{icd_label}")
-        if args.verbose and field_def.patterns:
-            for pattern in field_def.patterns:
-                print(f"    pattern: {pattern}")
+        allowed = field_def.extra.get("allowed_values") if args.verbose else None
+        if allowed:
+            print(f"    allowed: {', '.join(str(v) for v in allowed)}")
 
     print()
 
@@ -389,7 +374,7 @@ def _cmd_corpus(args: argparse.Namespace) -> None:
 def _add_export_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     export_parser = sub.add_parser(
         "export",
-        help="Re-run export phases only (Phase 4 + 5).",
+        help="Re-run export phases only (Phase 3 + 4).",
         description="Flatten existing intermediate JSON records to CSV and regenerate the codebook.",
     )
     export_parser.add_argument("--schema", type=Path, required=True,
@@ -400,8 +385,6 @@ def _add_export_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore
                    help="Intermediate file directory (default: {input-dir}/temp/).")
     export_parser.add_argument("--sep", default=" | ",
                    help="Multi-value separator for CSV (default: ' | ').")
-    export_parser.add_argument("--provenance", action="store_true",
-                   help="Include provenance / confidence columns in CSV.")
     export_parser.add_argument("--codebook-format", choices=["csv", "markdown"], default="csv",
                    help="Codebook output format (default: csv).")
     export_parser.add_argument("--no-discovered", action="store_true",
@@ -417,12 +400,11 @@ def _cmd_export(args: argparse.Namespace) -> None:
         schema_path=schema_path,
         input_dir=args.input_dir,
         temp_dir=args.temp_dir,
-        start_at=4,             # skip phases 1-3
+        start_at=3,             # skip phases 1-2
         run_llm=False,
         discovery_mode=None,
         clean=False,
         csv_sep=args.sep,
-        csv_provenance=args.provenance,
         codebook_format=args.codebook_format,
         codebook_include_discovered=not args.no_discovered,
     )
