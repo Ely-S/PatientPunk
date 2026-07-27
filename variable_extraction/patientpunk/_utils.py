@@ -174,8 +174,7 @@ def resolve_llm_config(env: dict | None = None) -> dict:
     }
 
 
-# Both SDKs default to a 600s read timeout, so one unanswered request can stall
-# a whole run for 10 minutes (x2 retries) at the tail of the worker pool.
+# Sets the Timeout on LLM API Calls
 TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=60)
 
 _CFG = resolve_llm_config()
