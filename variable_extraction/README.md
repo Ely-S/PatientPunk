@@ -561,7 +561,7 @@ cd variable_extraction
 uv run pytest tests/ -v
 ```
 
-Comprehensive pytest suite (279 tests) with no live API calls. Covers corpus
+Comprehensive pytest suite (281 tests) with no live API calls. Covers corpus
 loading, schema parsing, extractor argument construction, pipeline config
 validation, qualitative standards injection, and codebook aggregation logic.
 

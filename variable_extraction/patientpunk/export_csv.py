@@ -108,7 +108,7 @@ def _all_fields_from_record(rec: dict) -> dict:
     return {name: _normalize_entry(entry) for name, entry in merged.items()}
 
 
-def merge_records(base: dict, incoming: dict, sep: str) -> dict:
+def merge_records(base: dict, incoming: dict) -> dict:
     """Merge fields from `incoming` into `base`, filling empty values only."""
     base_fields = base.setdefault("_fields_merged", _all_fields_from_record(base))
     for field_name, field_data in _all_fields_from_record(incoming).items():
@@ -183,7 +183,7 @@ def run_export_csv(
             if key not in merged:
                 merged[key] = rec
             else:
-                merge_records(merged[key], rec, sep)
+                merge_records(merged[key], rec)
 
     if not merged:
         raise ValueError("No records found.")

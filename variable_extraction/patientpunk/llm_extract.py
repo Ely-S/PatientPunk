@@ -1007,7 +1007,6 @@ def run_llm_extract(
     group_guard: bool | None = None,
 ) -> PhaseResult:
     """Run LLM extraction over a corpus directory."""
-    import os
     from typing import Any
 
     input_dir = Path(input_dir)
