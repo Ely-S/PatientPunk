@@ -2437,7 +2437,7 @@ class TestLimitResumeInteraction:
             lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
         )
 
-        records, _ = m.process_corpus(
+        records = m.process_corpus(
             client=None,
             input_dir=input_dir,
             temp_dir=temp_dir,
