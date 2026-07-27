@@ -2282,25 +2282,63 @@ class TestBatchExtraction:
         assert out[0]["_failed"] and out[0]["post_id"] == "p0"
         assert out[0]["reason"] == "call_error: APIConnectionError"
 
-    def test_auth_failure_still_aborts_the_run(self, monkeypatch):
+    @pytest.mark.parametrize("status", [429, 500, 503])
+    def test_transient_http_failure_fails_the_record_not_the_run(
+        self, monkeypatch, status,
+    ):
         import patientpunk.llm_extract as m
 
-        class _Auth(Exception):
-            status_code = 401
+        class _HTTPError(Exception):
+            status_code = status
 
         def boom(client, prompt, items):
-            raise _Auth("bad key")
+            raise _HTTPError(f"HTTP {status}")
 
         monkeypatch.setattr(m, "_call_batch_raw", boom)
-        with pytest.raises(_Auth):
+        out = m._process_batch(
+            [("post", {"post_id": "p0", "author_hash": "a0",
+                       "title": "t", "body": "b"})],
+            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+        )
+        assert out[0]["_failed"]
+        assert out[0]["reason"] == "call_error: _HTTPError"
+
+    @pytest.mark.parametrize("status", [400, 401, 402, 403, 404])
+    def test_nontransient_http_failure_aborts_the_run(
+        self, monkeypatch, status,
+    ):
+        import patientpunk.llm_extract as m
+
+        class _HTTPError(Exception):
+            status_code = status
+
+        def boom(client, prompt, items):
+            raise _HTTPError(f"HTTP {status}")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        with pytest.raises(_HTTPError):
             m._process_batch(
                 [("post", {"post_id": "p0", "author_hash": "a0",
                            "title": "t", "body": "b"})],
                 None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
             )
 
-    def test_record_deadline_bounds_the_retry_ladder(self, monkeypatch):
-        """Without a wall-clock budget the layers compose into hours per record."""
+    def test_unexpected_programming_error_aborts_the_run(self, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        def boom(client, prompt, items):
+            raise TypeError("bad adapter contract")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        with pytest.raises(TypeError, match="bad adapter contract"):
+            m._process_batch(
+                [("post", {"post_id": "p0", "author_hash": "a0",
+                           "title": "t", "body": "b"})],
+                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            )
+
+    def test_transient_failure_runs_fixed_retry_ladder(self, monkeypatch):
+        """The request timeout and fixed attempt count bound transport failures."""
         import patientpunk.llm_extract as m
 
         class _Timeout(Exception):
@@ -2308,25 +2346,24 @@ class TestBatchExtraction:
         _Timeout.__name__ = "APITimeoutError"
 
         attempts = []
+        sleeps = []
+        error = _Timeout("read timed out")
 
         class _Client:
             class messages:
                 @staticmethod
                 def create(**kwargs):
                     attempts.append(1)
-                    raise _Timeout("read timed out")
+                    raise error
 
         monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
-        monkeypatch.setattr(m, "time", SimpleNamespace(
-            sleep=lambda s: None,
-            monotonic=lambda: len(attempts) * 1000.0,
-        ))
-        monkeypatch.setattr(m, "RECORD_DEADLINE", 300.0)
+        monkeypatch.setattr(m.time, "sleep", sleeps.append)
 
-        with pytest.raises(TimeoutError):
+        with pytest.raises(_Timeout) as exc_info:
             m.call_haiku(_Client(), "sys", "msg", label="p0")
-        # Deadline trips after the first attempt instead of running all 5.
-        assert len(attempts) == 1
+        assert exc_info.value is error
+        assert len(attempts) == 5
+        assert sleeps == [2, 5, 15, 30]
 
     def test_demographics_parse_single_line_fence(self):
         # Regression: a single-line ```json{...}``` fence (no newline) must parse

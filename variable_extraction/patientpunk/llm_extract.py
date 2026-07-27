@@ -108,10 +108,6 @@ MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # comfortable margin.
 MAX_TEXT_CHARS = 8_000
 RETRY_DELAYS = [2, 5, 15, 30]
-# Wall-clock budget for one LLM call including its retries. Without it, the
-# retry layers compose into hours per record and a run looks frozen; with it a
-# stuck record gives up and is written as _failed like any other bad record.
-RECORD_DEADLINE = float(os.environ.get("LLM_RECORD_DEADLINE", "300") or "300")
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
 # posts and the model emits one object PER POST ("Expected 1, got N"),
@@ -178,18 +174,30 @@ BASE_OPTIONAL_DESCRIPTIONS = {
 
 
 
-def _is_global_failure(exc: BaseException) -> bool:
-    """True if *exc* means the whole run is broken, not just one record.
-
-    Bad credentials / permissions / a missing model fail identically for every
-    record, so limping on would just burn the corpus. Everything else (transport
-    errors, deadlines, bad output) is per-record and must not abort the run.
-    """
+def _exception_status(exc: BaseException) -> int | None:
+    """Return an SDK exception's HTTP status across provider dialects."""
     status = getattr(exc, "status_code", None)
     if status is None:
         status = getattr(getattr(exc, "response", None), "status_code", None)
-    return status in (401, 403, 404) or type(exc).__name__ in (
-        "AuthenticationError", "PermissionDeniedError", "NotFoundError",
+    return status
+
+
+def _is_transient_failure(exc: BaseException) -> bool:
+    """True only for failures that are safe to exhaust on one record.
+
+    Both SDKs expose status codes for HTTP failures but use different exception
+    classes for transport failures, so class-name matching is the common
+    provider-agnostic fallback. Unknown and nonretryable errors must propagate:
+    treating a bad request, billing failure, or programming bug as record-local
+    would silently fail the entire corpus one record at a time.
+    """
+    status = _exception_status(exc)
+    name = type(exc).__name__
+    return (
+        status == 429
+        or (status is not None and 500 <= status < 600)
+        or "Connection" in name
+        or "Timeout" in name
     )
 
 
@@ -204,9 +212,6 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     ``temperature`` overrides the default (used to re-ask at a higher temp when a
     temp-0 reply was deterministically malformed JSON).
     ``label`` identifies the record in retry logs (normally its post_id).
-
-    Every attempt is bounded by ``RECORD_DEADLINE`` wall-clock seconds so no
-    single record can stall a run regardless of how the retry layers compose.
     """
     temp = LLM_TEMPERATURE if temperature is None else temperature
     system = [
@@ -218,7 +223,6 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     ]
 
     def _call() -> str:
-        started = time.monotonic()
         for attempt, delay in enumerate([0] + RETRY_DELAYS):
             if delay:
                 time.sleep(delay)
@@ -239,31 +243,16 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                 # Provider-agnostic retry: works whether the error is raised by the
                 # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
                 # Retry on rate limits (429) and transient 5xx / connection errors;
-                # on a non-transient error or the last attempt, re-raise so
-                # split_retry_batch can fall back to a smaller batch.
-                status = getattr(e, "status_code", None)
-                if status is None:
-                    status = getattr(getattr(e, "response", None), "status_code", None)
+                # on a non-transient error or the last attempt, re-raise.
+                status = _exception_status(e)
                 name = type(e).__name__
-                # Always log: without this a record can burn its whole deadline
-                # and leave no trace of which transport error caused it.
+                # Always log so an exhausted retry ladder leaves enough evidence
+                # to diagnose the provider or transport failure.
                 print(f"  [retry] {label} attempt {attempt + 1}: {name}"
                       f"{f' status={status}' if status is not None else ''}: "
                       f"{str(e)[:200]}", flush=True)
-                transient = (
-                    status == 429
-                    or (status is not None and 500 <= status < 600)
-                    or "Connection" in name
-                    or "Timeout" in name
-                )
-                if not transient or attempt == len(RETRY_DELAYS):
+                if not _is_transient_failure(e) or attempt == len(RETRY_DELAYS):
                     raise
-                elapsed = time.monotonic() - started
-                if elapsed >= RECORD_DEADLINE:
-                    raise TimeoutError(
-                        f"{label}: gave up after {elapsed:.0f}s "
-                        f"({attempt + 1} attempts, last {name})"
-                    ) from e
         return ""
 
     return cached_completion(
@@ -697,14 +686,14 @@ def _process_batch(
                     "author_hash": item["author_hash"], "post_id": item["post_id"]}
 
         # split_retry_batch absorbs parse failures (bad/short JSON) into per-item
-        # None results. What escapes it is a transport error that exhausted its
-        # retries or hit the per-record deadline: that is a property of these
-        # records, not of the run, so record it and keep going. Only a genuinely
-        # global failure (auth) propagates and aborts.
+        # None results. Exhausted transient failures are record-local; unknown
+        # and nonretryable failures indicate a run-wide/configuration/code problem
+        # and must propagate rather than silently failing the corpus one item at
+        # a time.
         try:
             raw_results = split_retry_batch(call_fn, items)
         except Exception as exc:
-            if _is_global_failure(exc):
+            if not _is_transient_failure(exc):
                 raise
             reason = f"call_error: {type(exc).__name__}"
             print(f"  [failed] {len(items)} record(s): {reason}: {str(exc)[:200]}",
