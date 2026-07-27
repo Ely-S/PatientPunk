@@ -134,8 +134,16 @@ Use --no-llm to skip Phase 1, or --start-at N to resume from a specific phase.
                    help="Intermediate file directory (default: {input-dir}/temp/)")
 
     # Phase control
-    run_parser.add_argument("--start-at", type=int, default=1, choices=[1, 2, 3, 4],
-                   help="Start from this phase (1-4).  Phases before this are skipped.")
+    run_parser.add_argument(
+        "--start-at",
+        type=int,
+        default=1,
+        choices=[1, 2, 3, 4],
+        help=(
+            "Start from this phase (1-4). Phases before it are skipped: "
+            "3 rebuilds CSV from temp records; 4 rebuilds only the codebook."
+        ),
+    )
     run_parser.add_argument("--no-llm", action="store_true",
                    help="Skip phase 1 (LLM extraction).")
     run_parser.add_argument("--discover", choices=["auto", "review"], default=None,

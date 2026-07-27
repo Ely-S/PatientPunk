@@ -131,6 +131,22 @@ python main.py run --schema schemas/... --discover auto
 python main.py run --schema schemas/... --discover review
 ```
 
+### Resuming and re-exporting
+
+`--start-at` uses the current four-phase pipeline:
+
+| Command | Effect |
+|---|---|
+| `--start-at 3 --no-llm --no-clean` | Rebuild `records.csv` from existing `temp/records_{schema_id}.json`, then regenerate the codebook. |
+| `--start-at 4 --no-llm --no-clean` | Regenerate only the codebook from the existing `records.csv`; it does not rewrite CSV output. |
+| `python main.py export --schema schemas/...` | Re-run both export phases (CSV, then codebook) from existing intermediate records. |
+
+CSV output begins with metadata columns: `author_hash`, `source`, `post_id`,
+`text_count`, `schema_id`, `extraction_method`, and `extracted_at`. It then
+contains one column per extracted field and, when requested from the module API,
+per-field confidence columns. Per-field provenance columns are intentionally
+absent because every extracted value now uses the LLM extraction path.
+
 ### Cost estimates (220-post corpus)
 
 | Phase | Model | Cost |
@@ -287,7 +303,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
 
   --input-dir PATH      Corpus directory (default: ../output)
   --temp-dir PATH       Intermediate files (default: {input-dir}/temp/)
-  --start-at N          Resume from phase N (1–4)
+  --start-at N          Resume from phase N (1–4); 3 rebuilds CSV, 4 only rebuilds codebook
   --no-llm              Skip Phase 1 (LLM extraction)
   --discover MODE       Enable Phase 2: 'auto' (merge all) or 'review' (stop for human selection)
   --no-clean            Don't wipe temp/ before starting
@@ -626,8 +642,9 @@ not split into separate sections in the record itself.
 
 ### Two-layer schema system
 
-**Base fields** (always extracted): 14 universal fields in `BASE_FIELDS` covering
-demographics, conditions, treatments, and functional status.
+**Base fields** (always extracted): 15 universal fields in `BASE_FIELD_DESCRIPTIONS`
+covering demographics, conditions, treatments (including dosage), and functional
+status.
 
 **Base-optional fields**: 7 additional fields available via `include_base_fields`
 in a schema (off by default — noisier or study-specific):

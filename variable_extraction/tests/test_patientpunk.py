@@ -2108,9 +2108,42 @@ class TestLLMExtractNormalizeRecords:
     regex parsing removed, dosage strings pass through untouched by the LLM
     extraction and must survive wrapping/canonicalization unchanged."""
 
+    def test_dosage_is_always_requested_and_reaches_csv(self, tmp_path, monkeypatch):
+        """A model-produced dosage must survive validation through CSV export."""
+        import patientpunk.llm_extract as m
+
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        assert "dosage" in m.build_field_descriptions(None)
+        assert "dosage" in m.build_field_descriptions(schema)
+
+        monkeypatch.setattr(
+            m,
+            "_call_batch_raw",
+            lambda *_args: [{"fields": {"dosage": ["4.5 mg", "250 mcg"]}}],
+        )
+        records = m._process_batch(
+            [("post", {
+                "author_hash": "author",
+                "post_id": "post",
+                "title": "My LDN dose",
+                "body": "I take 4.5 mg LDN and 250 mcg B12.",
+            })],
+            None,
+            "system",
+            schema,
+        )
+        normalized = m.normalize_records(records)
+        src = tmp_path / "records.json"
+        src.write_text(json.dumps(normalized), encoding="utf-8")
+        output = tmp_path / "records.csv"
+        run_export_csv(input_files=[src], output_path=output)
+
+        row = next(iter(csv.DictReader(output.open(encoding="utf-8"))))
+        assert row["dosage"] == "4.5 mg | 250 mcg"
+
     def test_dosage_strings_survive_intact(self):
         from patientpunk.llm_extract import normalize_records
-        dosages = ["5 mg", "250 mcg", "0.5 ml", "1 g", "5000 iu", "2 units"]
+        dosages = ["5 mg", "250 mcg", "0.5 ml", "1 g", "5000 iu", "2 units", "5"]
         rec = {"fields": {"dosage": dosages}}
         out = normalize_records([rec])[0]
         assert out["fields"]["dosage"]["values"] == dosages

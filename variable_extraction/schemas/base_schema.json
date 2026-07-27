@@ -41,6 +41,10 @@
       "description": "Current or past medications mentioned",
       "confidence": "high"
     },
+    "dosage": {
+      "description": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit when stated",
+      "confidence": "medium"
+    },
     "treatment_outcome": {
       "description": "Response to treatments (helped, didn't help, worsened, etc.)",
       "confidence": "medium"

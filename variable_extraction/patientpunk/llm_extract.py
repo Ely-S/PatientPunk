@@ -131,6 +131,7 @@ BASE_FIELD_DESCRIPTIONS = {
     "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
     "age_at_onset": "Patient's age when illness began",
     "medications": "Current or past medications mentioned",
+    "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     # activity_level removed -- redundant with functional_status_tier (extension field).
@@ -300,11 +301,12 @@ VALUE FORMAT RULES:
 - GOOD: "LDN", "bedbound", "3 years", "isolation", "Paxlovid"
 - BAD: "Seed DS-01 probiotic (B. longum, B. infantis, B. adolescentis...)" -- just write "Seed DS-01"
 - BAD: "self-employed, lost clients, business continues but impaired" -- just write "lost clients"
-- Any dose or quantity MUST keep its unit: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". A bare "5" is ambiguous and unusable.
+- Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
+- dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
 - alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
