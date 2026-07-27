@@ -2159,7 +2159,7 @@ class TestBatchExtraction:
     def test_single_record_uses_object_path_no_retry(self, monkeypatch):
         import patientpunk.llm_extract as m
         temps = []
-        def fake(client, sysp, um, temperature=None):
+        def fake(client, sysp, um, temperature=None, label="?"):
             temps.append(temperature)
             return '```json\n{"fields": {"age": [33]}}\n```'
         monkeypatch.setattr(m, "call_haiku", fake)
@@ -2172,7 +2172,7 @@ class TestBatchExtraction:
         seq = iter(['{"fields": ] ]malformed',                       # deterministic bad JSON
                     '{"fields": {"age": null}}'])
         temps = []
-        def fake(client, sysp, um, temperature=None):
+        def fake(client, sysp, um, temperature=None, label="?"):
             temps.append(temperature)
             return next(seq)
         monkeypatch.setattr(m, "call_haiku", fake)
@@ -2240,6 +2240,93 @@ class TestBatchExtraction:
         m.call_haiku(_Client(), "sys", "msg")
 
         assert "service_tier" not in sent[-1]
+
+    def test_single_item_batch_is_not_retried_individually(self):
+        """A one-item batch that fails IS its own individual call.
+
+        Re-running call_fn([item]) in the fallback doubled an already-exhausted
+        retry ladder (#81): 3 temp-ladder calls became 6.
+        """
+        from patientpunk._utils import split_retry_batch
+
+        calls = []
+
+        def call_fn(items):
+            calls.append(list(items))
+            raise ValueError("unparseable")
+
+        assert split_retry_batch(call_fn, ["a"]) == [None]
+        assert len(calls) == 1
+
+    def test_transport_failure_fails_the_record_not_the_run(self, monkeypatch):
+        """A transport error that exhausts its retries must not abort the run.
+
+        Ten such records stranded 19,990 good ones with no CSV (#81).
+        """
+        import patientpunk.llm_extract as m
+
+        class _Conn(Exception):
+            pass
+        _Conn.__name__ = "APIConnectionError"
+
+        def boom(client, prompt, items):
+            raise _Conn("connection error")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        out = m._process_batch(
+            [("post", {"post_id": "p0", "author_hash": "a0",
+                       "title": "t", "body": "b"})],
+            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+        )
+        assert len(out) == 1
+        assert out[0]["_failed"] and out[0]["post_id"] == "p0"
+        assert out[0]["reason"] == "call_error: APIConnectionError"
+
+    def test_auth_failure_still_aborts_the_run(self, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        class _Auth(Exception):
+            status_code = 401
+
+        def boom(client, prompt, items):
+            raise _Auth("bad key")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        with pytest.raises(_Auth):
+            m._process_batch(
+                [("post", {"post_id": "p0", "author_hash": "a0",
+                           "title": "t", "body": "b"})],
+                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            )
+
+    def test_record_deadline_bounds_the_retry_ladder(self, monkeypatch):
+        """Without a wall-clock budget the layers compose into hours per record."""
+        import patientpunk.llm_extract as m
+
+        class _Timeout(Exception):
+            pass
+        _Timeout.__name__ = "APITimeoutError"
+
+        attempts = []
+
+        class _Client:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    attempts.append(1)
+                    raise _Timeout("read timed out")
+
+        monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
+        monkeypatch.setattr(m, "time", SimpleNamespace(
+            sleep=lambda s: None,
+            monotonic=lambda: len(attempts) * 1000.0,
+        ))
+        monkeypatch.setattr(m, "RECORD_DEADLINE", 300.0)
+
+        with pytest.raises(TimeoutError):
+            m.call_haiku(_Client(), "sys", "msg", label="p0")
+        # Deadline trips after the first attempt instead of running all 5.
+        assert len(attempts) == 1
 
     def test_demographics_parse_single_line_fence(self):
         # Regression: a single-line ```json{...}``` fence (no newline) must parse

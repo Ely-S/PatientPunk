@@ -108,6 +108,10 @@ MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # comfortable margin.
 MAX_TEXT_CHARS = 8_000
 RETRY_DELAYS = [2, 5, 15, 30]
+# Wall-clock budget for one LLM call including its retries. Without it, the
+# retry layers compose into hours per record and a run looks frozen; with it a
+# stuck record gives up and is written as _failed like any other bad record.
+RECORD_DEADLINE = float(os.environ.get("LLM_RECORD_DEADLINE", "300") or "300")
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
 # posts and the model emits one object PER POST ("Expected 1, got N"),
@@ -174,8 +178,23 @@ BASE_OPTIONAL_DESCRIPTIONS = {
 
 
 
+def _is_global_failure(exc: BaseException) -> bool:
+    """True if *exc* means the whole run is broken, not just one record.
+
+    Bad credentials / permissions / a missing model fail identically for every
+    record, so limping on would just burn the corpus. Everything else (transport
+    errors, deadlines, bad output) is per-record and must not abort the run.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status in (401, 403, 404) or type(exc).__name__ in (
+        "AuthenticationError", "PermissionDeniedError", "NotFoundError",
+    )
+
+
 def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
-               temperature: float | None = None) -> str:
+               temperature: float | None = None, label: str = "?") -> str:
     """Call Haiku with retry/backoff and prompt caching.
 
     Thread-safe - Anthropic client is thread-safe.
@@ -184,6 +203,10 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
 
     ``temperature`` overrides the default (used to re-ask at a higher temp when a
     temp-0 reply was deterministically malformed JSON).
+    ``label`` identifies the record in retry logs (normally its post_id).
+
+    Every attempt is bounded by ``RECORD_DEADLINE`` wall-clock seconds so no
+    single record can stall a run regardless of how the retry layers compose.
     """
     temp = LLM_TEMPERATURE if temperature is None else temperature
     system = [
@@ -195,6 +218,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     ]
 
     def _call() -> str:
+        started = time.monotonic()
         for attempt, delay in enumerate([0] + RETRY_DELAYS):
             if delay:
                 time.sleep(delay)
@@ -221,6 +245,11 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                 if status is None:
                     status = getattr(getattr(e, "response", None), "status_code", None)
                 name = type(e).__name__
+                # Always log: without this a record can burn its whole deadline
+                # and leave no trace of which transport error caused it.
+                print(f"  [retry] {label} attempt {attempt + 1}: {name}"
+                      f"{f' status={status}' if status is not None else ''}: "
+                      f"{str(e)[:200]}", flush=True)
                 transient = (
                     status == 429
                     or (status is not None and 500 <= status < 600)
@@ -229,6 +258,12 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                 )
                 if not transient or attempt == len(RETRY_DELAYS):
                     raise
+                elapsed = time.monotonic() - started
+                if elapsed >= RECORD_DEADLINE:
+                    raise TimeoutError(
+                        f"{label}: gave up after {elapsed:.0f}s "
+                        f"({attempt + 1} attempts, last {name})"
+                    ) from e
         return ""
 
     return cached_completion(
@@ -546,7 +581,7 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
                 parsed = parse_json_response(
                     call_haiku(
                         client, system_prompt, items[0]["user_message"],
-                        temperature=temp,
+                        temperature=temp, label=items[0].get("post_id") or "?",
                     )
                 )
             except LLMResponseError:
@@ -576,7 +611,8 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         text = re.sub(r"(?m)^[ \t]*-{3,}[ \t]*$", "", text)
         msg += f"--- Record {i} ---\n{text}\n\n"
 
-    raw = call_haiku(client, system_prompt, msg).strip()
+    label = f"batch[{items[0].get('post_id') or '?'}+{len(items) - 1}]"
+    raw = call_haiku(client, system_prompt, msg, label=label).strip()
 
     # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
     # leading prose line or trailing content after the array ("Extra data")
@@ -656,16 +692,30 @@ def _process_batch(
         def call_fn(sub_items, _prompt=prompt):
             return _call_batch_raw(client, _prompt, sub_items)
 
-        # split_retry_batch already absorbs parse failures (bad/short JSON) into
-        # per-item None results, so anything that escapes it (auth errors, other
-        # non-transient API errors) is fatal and must propagate, not be logged
-        # per-record as a generic "PARSE FAILED" that hides the real cause.
-        raw_results = split_retry_batch(call_fn, items)
+        def _failed_for(item: dict, reason: str) -> dict:
+            return {"_failed": True, "reason": reason,
+                    "author_hash": item["author_hash"], "post_id": item["post_id"]}
+
+        # split_retry_batch absorbs parse failures (bad/short JSON) into per-item
+        # None results. What escapes it is a transport error that exhausted its
+        # retries or hit the per-record deadline: that is a property of these
+        # records, not of the run, so record it and keep going. Only a genuinely
+        # global failure (auth) propagates and aborts.
+        try:
+            raw_results = split_retry_batch(call_fn, items)
+        except Exception as exc:
+            if _is_global_failure(exc):
+                raise
+            reason = f"call_error: {type(exc).__name__}"
+            print(f"  [failed] {len(items)} record(s): {reason}: {str(exc)[:200]}",
+                  flush=True)
+            for idx, item in group:
+                output[idx] = _failed_for(item, reason)
+            continue
 
         for idx, item, parsed in zip(indices, items, raw_results):
-            def _failed(reason: str) -> dict:
-                return {"_failed": True, "reason": reason,
-                        "author_hash": item["author_hash"], "post_id": item["post_id"]}
+            def _failed(reason: str, item=item) -> dict:
+                return _failed_for(item, reason)
 
             if parsed is None:
                 output[idx] = _failed("no_response")
@@ -789,6 +839,7 @@ def process_corpus(
     completed = 0
     skipped = 0
     failed = 0
+    failed_records: list[tuple[str, str]] = []  # (post_id, reason), for the summary
     save_lock = threading.Lock()
     print_lock = threading.Lock()
 
@@ -815,10 +866,10 @@ def process_corpus(
             try:
                 batch_results = future.result()
             except Exception as exc:
-                # A batch only raises for fatal, non-per-record errors (auth
-                # failures, non-transient API errors) -- cancel remaining work
-                # and fail the whole run loudly instead of limping on with
-                # partial/garbage results.
+                # _process_batch converts per-record failures into _failed
+                # results, so a raise here means the run itself is broken (auth):
+                # cancel remaining work and fail loudly instead of limping on
+                # with partial/garbage results.
                 for f in future_to_batch_idx:
                     f.cancel()
                 save_incremental()
@@ -830,9 +881,11 @@ def process_corpus(
                 completed += 1
 
                 if result is None or result.get("_failed"):
+                    pid = (result.get("post_id") or "?") if result else "?"
+                    reason = (result.get("reason") or "?") if result else "?"
+                    failed_records.append((pid, reason))
                     with print_lock:
-                        pid = (result.get("post_id") or "?") if result else "?"
-                        print(f"  [{completed}/{total}] {pid} - PARSE FAILED")
+                        print(f"  [{completed}/{total}] {pid} - FAILED ({reason})")
                     failed += 1
                     continue
 
@@ -857,6 +910,13 @@ def process_corpus(
     save_incremental()
 
     print(f"\n  Total: {already_done} resumed + {completed} new, {skipped} skipped, {failed} failed")
+    if failed_records:
+        by_reason = Counter(reason for _, reason in failed_records)
+        print("  Failed reasons: "
+              + ", ".join(f"{r} ({n}x)" for r, n in by_reason.most_common()))
+        shown = ", ".join(pid for pid, _ in failed_records[:20])
+        print(f"  Failed post_ids: {shown}"
+              + (f" ... (+{len(failed_records) - 20} more)" if len(failed_records) > 20 else ""))
     with _dropped_lock:
         dropped = _dropped_fields.most_common()
     if dropped:

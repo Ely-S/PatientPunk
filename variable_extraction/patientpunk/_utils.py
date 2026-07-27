@@ -48,6 +48,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
+
 # Root of the variable_extraction package tree.
 # All path resolution should reference this constant instead of
 # repeating Path(__file__).parent.parent... chains.
@@ -171,6 +173,10 @@ def resolve_llm_config(env: dict | None = None) -> dict:
         "service_tier": (env.get("LLM_SERVICE_TIER") or "").strip().lower() or None,
     }
 
+
+# Both SDKs default to a 600s read timeout, so one unanswered request can stall
+# a whole run for 10 minutes (x2 retries) at the tail of the worker pool.
+TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=60)
 
 _CFG = resolve_llm_config()
 LLM_PROVIDER = _CFG["provider"]
@@ -304,7 +310,8 @@ def get_llm_client():
             ) from None
         # Self-hosted servers (vLLM/Ollama) often need no real key -> send a dummy.
         client = OpenAI(api_key=cfg["api_key"] or "EMPTY",
-                        base_url=cfg["base_url"] or "http://localhost:8000/v1")
+                        base_url=cfg["base_url"] or "http://localhost:8000/v1",
+                        timeout=TIMEOUT, max_retries=0)
         return _OpenAIAdapter(client)
 
     try:
@@ -315,7 +322,9 @@ def get_llm_client():
         raise RuntimeError(
             "API key not set. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY, or LLM_API_KEY."
         )
-    kwargs: dict = {"api_key": cfg["api_key"]}
+    # max_retries=0: callers implement their own retry ladder with backoff, and
+    # the SDK's default 2 extra retries silently tripled every attempt.
+    kwargs: dict = {"api_key": cfg["api_key"], "timeout": TIMEOUT, "max_retries": 0}
     if cfg["base_url"]:
         kwargs["base_url"] = cfg["base_url"]
     return anthropic.Anthropic(**kwargs)
@@ -338,7 +347,8 @@ def split_retry_batch(
     1. Try the full batch → expect a list with len == len(items)
     2. On ValueError / JSONDecodeError / LLMResponseError (wrong count, bad
        JSON, empty/truncated reply): split in half and recurse
-    3. At max depth or single item: call individually and collect results
+    3. At max depth: call each item individually and collect results
+    4. A single item that fails is already its own individual call -> None
 
     Parameters
     ----------
@@ -367,7 +377,11 @@ def split_retry_batch(
             )
         return results
     except _SPLIT_RETRY_ERRORS:
-        if _depth >= max_depth or len(items) <= 1:
+        if len(items) <= 1:
+            # The batch attempt above WAS the individual attempt -- re-running
+            # call_fn here just doubles an already-exhausted retry ladder.
+            return [None] * len(items)
+        if _depth >= max_depth:
             # Fall back to individual calls. Only absorb parse / truncated
             # failures here -- anything else (auth errors, other non-transient
             # API errors) is fatal and must propagate so the caller fails
