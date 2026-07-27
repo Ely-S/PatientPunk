@@ -2159,7 +2159,7 @@ class TestBatchExtraction:
     def test_single_record_uses_object_path_no_retry(self, monkeypatch):
         import patientpunk.llm_extract as m
         temps = []
-        def fake(client, sysp, um, temperature=None):
+        def fake(client, sysp, um, temperature=None, label="?"):
             temps.append(temperature)
             return '```json\n{"fields": {"age": [33]}}\n```'
         monkeypatch.setattr(m, "call_haiku", fake)
@@ -2172,7 +2172,7 @@ class TestBatchExtraction:
         seq = iter(['{"fields": ] ]malformed',                       # deterministic bad JSON
                     '{"fields": {"age": null}}'])
         temps = []
-        def fake(client, sysp, um, temperature=None):
+        def fake(client, sysp, um, temperature=None, label="?"):
             temps.append(temperature)
             return next(seq)
         monkeypatch.setattr(m, "call_haiku", fake)
@@ -2240,6 +2240,130 @@ class TestBatchExtraction:
         m.call_haiku(_Client(), "sys", "msg")
 
         assert "service_tier" not in sent[-1]
+
+    def test_single_item_batch_is_not_retried_individually(self):
+        """A one-item batch that fails IS its own individual call.
+
+        Re-running call_fn([item]) in the fallback doubled an already-exhausted
+        retry ladder (#81): 3 temp-ladder calls became 6.
+        """
+        from patientpunk._utils import split_retry_batch
+
+        calls = []
+
+        def call_fn(items):
+            calls.append(list(items))
+            raise ValueError("unparseable")
+
+        assert split_retry_batch(call_fn, ["a"]) == [None]
+        assert len(calls) == 1
+
+    def test_transport_failure_fails_the_record_not_the_run(self, monkeypatch):
+        """A transport error that exhausts its retries must not abort the run.
+
+        Ten such records stranded 19,990 good ones with no CSV (#81).
+        """
+        import patientpunk.llm_extract as m
+
+        class _Conn(Exception):
+            pass
+        _Conn.__name__ = "APIConnectionError"
+
+        def boom(client, prompt, items):
+            raise _Conn("connection error")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        out = m._process_batch(
+            [("post", {"post_id": "p0", "author_hash": "a0",
+                       "title": "t", "body": "b"})],
+            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+        )
+        assert len(out) == 1
+        assert out[0]["_failed"] and out[0]["post_id"] == "p0"
+        assert out[0]["reason"] == "call_error: APIConnectionError"
+
+    @pytest.mark.parametrize("status", [429, 500, 503])
+    def test_transient_http_failure_fails_the_record_not_the_run(
+        self, monkeypatch, status,
+    ):
+        import patientpunk.llm_extract as m
+
+        class _HTTPError(Exception):
+            status_code = status
+
+        def boom(client, prompt, items):
+            raise _HTTPError(f"HTTP {status}")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        out = m._process_batch(
+            [("post", {"post_id": "p0", "author_hash": "a0",
+                       "title": "t", "body": "b"})],
+            None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+        )
+        assert out[0]["_failed"]
+        assert out[0]["reason"] == "call_error: _HTTPError"
+
+    @pytest.mark.parametrize("status", [400, 401, 402, 403, 404])
+    def test_nontransient_http_failure_aborts_the_run(
+        self, monkeypatch, status,
+    ):
+        import patientpunk.llm_extract as m
+
+        class _HTTPError(Exception):
+            status_code = status
+
+        def boom(client, prompt, items):
+            raise _HTTPError(f"HTTP {status}")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        with pytest.raises(_HTTPError):
+            m._process_batch(
+                [("post", {"post_id": "p0", "author_hash": "a0",
+                           "title": "t", "body": "b"})],
+                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            )
+
+    def test_unexpected_programming_error_aborts_the_run(self, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        def boom(client, prompt, items):
+            raise TypeError("bad adapter contract")
+
+        monkeypatch.setattr(m, "_call_batch_raw", boom)
+        with pytest.raises(TypeError, match="bad adapter contract"):
+            m._process_batch(
+                [("post", {"post_id": "p0", "author_hash": "a0",
+                           "title": "t", "body": "b"})],
+                None, "sys", lambda gaps: "gap", None, {}, ["age"], 0.0, False,
+            )
+
+    def test_transient_failure_runs_fixed_retry_ladder(self, monkeypatch):
+        """The request timeout and fixed attempt count bound transport failures."""
+        import patientpunk.llm_extract as m
+
+        class _Timeout(Exception):
+            pass
+        _Timeout.__name__ = "APITimeoutError"
+
+        attempts = []
+        sleeps = []
+        error = _Timeout("read timed out")
+
+        class _Client:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    attempts.append(1)
+                    raise error
+
+        monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
+        monkeypatch.setattr(m.time, "sleep", sleeps.append)
+
+        with pytest.raises(_Timeout) as exc_info:
+            m.call_haiku(_Client(), "sys", "msg", label="p0")
+        assert exc_info.value is error
+        assert len(attempts) == 5
+        assert sleeps == [2, 5, 15, 30]
 
     def test_demographics_parse_single_line_fence(self):
         # Regression: a single-line ```json{...}``` fence (no newline) must parse
@@ -2313,7 +2437,7 @@ class TestLimitResumeInteraction:
             lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
         )
 
-        records, _ = m.process_corpus(
+        records = m.process_corpus(
             client=None,
             input_dir=input_dir,
             temp_dir=temp_dir,
