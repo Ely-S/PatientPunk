@@ -832,9 +832,8 @@ def field_confidence(schema_path: Path | None) -> dict[str, str]:
     return {name: fd.confidence for name, fd in schema.all_fields.items()}
 
 
-# Fields the prompt restricts to a fixed value list ("use ONLY one of ...").
-# normalize_records drops anything outside the list -- see the closed-vocabulary
-# pass at the end of that function for why.
+# Fields the prompt restricts to a fixed value list. normalize_records drops
+# anything outside it.
 ILLNESS_TRAJECTORY_VALUES = frozenset(
     {"improving", "worsening", "stable", "relapsing", "recovered"})
 FUNCTIONAL_STATUS_VALUES = frozenset(
