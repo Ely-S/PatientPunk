@@ -460,7 +460,7 @@ class TestFieldDefinition:
 class TestSchema:
     def test_from_file(self):
         schema = Schema.from_file(EXT_SCHEMA)
-        assert schema.schema_id == "covidlonghaulers_v1"
+        assert schema.schema_id == "covidlonghaulers_v2"
         assert schema.target_subreddit is not None
         assert len(schema.all_fields) > 0
 
@@ -492,7 +492,7 @@ class TestSchema:
     def test_repr(self):
         schema = Schema.from_file(EXT_SCHEMA)
         repr_str = repr(schema)
-        assert "covidlonghaulers_v1" in repr_str
+        assert "covidlonghaulers_v2" in repr_str
 
 class TestSchemaWarning:
     def test_warns_when_base_schema_missing(self, tmp_schema, tmp_path):
@@ -1477,7 +1477,9 @@ class TestDiscoveryReviewMode:
         schema.write_text(
             json.dumps({
                 "schema_id": "s",
-                "extension_fields": {"functional_status_tier": {"description": "d"}}
+                # Must be a name absent from the base set -- known_fields dedups
+                # extension entries against base fields.
+                "extension_fields": {"infection_count": {"description": "d"}}
             }),
             encoding="utf-8",
         )
@@ -1503,7 +1505,7 @@ class TestDiscoveryReviewMode:
         assert "activity_level" not in plain_names
         assert plain_names == set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
         extension_names = {f["name"] for f in known_fields if isinstance(f, dict)}
-        assert "functional_status_tier" in extension_names
+        assert "infection_count" in extension_names
 
     def test_pipeline_review_mode_passes_stop_after_and_exits(self, tmp_path):
         schema = tmp_path / "s.json"
@@ -2162,6 +2164,58 @@ class TestLLMExtractNormalizeRecords:
         out = normalize_records([rec], confidence_by_field={"dosage": "low"})[0]
         assert out["fields"]["dosage"]["confidence"] == "low"
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
+
+
+class TestFieldSelection:
+    """36 -> 19 base fields, chosen on measured fill rates cross-referenced
+    against clinical outcome frameworks. Rates live in base_schema.json."""
+
+    def test_cut_fields_are_gone(self):
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        every = set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
+        for field in ("age_at_onset", "covid_wave", "healthcare_system",
+                      "ethnicity", "healthcare_costs", "location_us_state"):
+            assert field not in every
+
+    def test_promoted_fields_no_longer_need_activating(self):
+        """functional_status_tier came from the extension; social_impact and
+        alternative_treatments from base-optional. A schema with an empty
+        include_base_fields must still get them."""
+        from patientpunk.llm_extract import build_field_descriptions
+        fields = build_field_descriptions({"include_base_fields": [],
+                                           "extension_fields": {}})
+        for field in ("functional_status_tier", "social_impact",
+                      "alternative_treatments", "dietary_interventions",
+                      "misdiagnosis"):
+            assert field in fields
+
+    def test_shipped_extension_schema_has_no_base_field_collisions(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        assert set(schema["extension_fields"]) & set(BASE_FIELD_DESCRIPTIONS) == set()
+
+    def test_manifest_and_prompt_field_lists_agree(self):
+        """base_schema.json feeds the codebook and confidence lookup;
+        BASE_FIELD_DESCRIPTIONS feeds the prompt. Nothing syncs them, so a field
+        in one and not the other is either documented-but-never-extracted or
+        extracted-but-undocumented."""
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        manifest = json.loads(BASE_SCHEMA.read_text(encoding="utf-8"))
+        doc_base = {k for k in manifest["base_fields"] if not k.startswith("_")}
+        doc_opt = {k for k in manifest["base_optional_fields"] if not k.startswith("_")}
+        assert doc_base == set(BASE_FIELD_DESCRIPTIONS)
+        assert doc_opt == set(BASE_OPTIONAL_DESCRIPTIONS)
+
+    def test_restored_fields_have_coding_rules(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "- misdiagnosis:" in prompt and "not a misdiagnosis" in prompt
+        assert "- dietary_interventions:" in prompt
+        assert "Diet goes in dietary_interventions" in prompt
 
 
 class TestBatchExtraction:

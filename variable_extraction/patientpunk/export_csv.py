@@ -17,7 +17,7 @@ Usage:
     # Combine base + discovered fields into one CSV
     python -m patientpunk.export_csv \\
         --input output/records_base.json \\
-                output/discovered_records_covidlonghaulers_v1.json
+                output/discovered_records_covidlonghaulers_v2.json
 
     # Include confidence columns (age__confidence, conditions__confidence, …)
     python -m patientpunk.export_csv --confidence

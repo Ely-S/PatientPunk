@@ -12,7 +12,7 @@ Example
 -------
 >>> schema = Schema.from_file(Path("schemas/covidlonghaulers_schema.json"))
 >>> print(schema.schema_id)
-covidlonghaulers_v1
+covidlonghaulers_v2
 >>> for name, field in schema.extension_fields.items():
 ...     print(name, field.confidence)
 """
@@ -65,7 +65,7 @@ class Schema:
     Attributes
     ----------
     schema_id : str
-        Unique identifier (e.g. ``"covidlonghaulers_v1"``).
+        Unique identifier (e.g. ``"covidlonghaulers_v2"``).
     target_subreddit : str | None
         The subreddit this schema targets, if specified.
     base_fields : dict[str, FieldDefinition]
