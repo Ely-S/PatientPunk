@@ -2629,6 +2629,27 @@ class TestRunProvenance:
         assert _utils.git_commit() == "c" * 40
 
 
+class TestNamedButNotTaken:
+    """Scored against 100 human-coded IRR posts: the model put a declined
+    Z-Pak and a contraindicated Xanax into medications. The negation rule
+    covered only conditions, so nothing separated named from taken."""
+
+    def test_rule_is_stated_with_worked_examples(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "NAMING A TREATMENT IS NOT TAKING IT" in prompt
+        assert "didn't take it" in prompt
+        assert "haven't started yet" in prompt
+        assert "has anyone tried" in prompt
+
+    def test_stopping_still_counts_as_taken(self):
+        """The rule must not over-correct into dropping drugs the patient
+        genuinely took and later stopped."""
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "quit" in prompt and "DOES belong in medications" in prompt
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
