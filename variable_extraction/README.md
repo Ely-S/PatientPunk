@@ -60,14 +60,15 @@ with `author_hash` as the join key, and can be run in either order.
 ### Approach A — Full Pipeline (LLM extraction)
 
 Extracts **every field** defined in the schema (age, sex/gender, conditions,
-medications, procedures, functional status, etc. — 20 fields for
-`covidlonghaulers_schema.json`).
+medications, procedures, functional status, etc. — 28 fields for
+`covidlonghaulers_schema.json`: 25 universal base fields plus 3 COVID-specific
+extension fields).
 
 - **Phase 1** — Claude Haiku extracts every field defined in the schema (default).
 - **Phase 2** — (opt-in) discovers *new* fields not yet in the schema.
 
 ```bash
-# Default: Phases 1-2-4-5 (no discovery)
+# Default: Phases 1-3-4 (no discovery)
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
 # With discovery (auto-merge all candidates)
@@ -312,6 +313,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --resume              Resume an interrupted run
   --llm-cache           Force-enable the LLM response cache
   --no-llm-cache        Disable the LLM response cache
+  --no-cross-domain-fanout  Disable cross-domain symptom routing (on by default)
   --candidates PATH     Saved phase1_candidates.json (skips discovery's candidate-scan stage)
   --sample N            Random N-item sample for discovery's candidate-scan stage
   --sep STR             Multi-value separator in CSV (default: " | ")
@@ -332,6 +334,37 @@ PP_GROUP_GUARD=1 python main.py run --schema schemas/...
 
 Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
 analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix numbers.
+
+#### Cross-domain symptom fan-out (on by default)
+
+Some symptoms belong in more than one symptom domain — a migraine is both `pain` and
+`cognitive_neurological`. The prompt tells the model to record those in every domain
+they belong to, but **measured on 300 posts it complies only 21% of the time** (25% for
+headaches). The result is not merely incomplete: the same symptom lands in one domain on
+one post and two on the next, so the domain split carries model variance that clustering
+would read as patient variance.
+
+So the routing runs in code instead: the model finds the symptom once, wherever it filed
+it, and a fixed table copies it into the rest — **21% -> 100%** on the listed symptoms,
+reproducible across model versions because it is a lookup rather than a judgement.
+
+The table is deliberately short. A symptom qualifies only if it is multi-domain *by
+definition* — a headache is head pain and a neurological symptom, always. Symptoms that
+are multi-domain only *in context* are excluded, because this is a substring lookup and
+cannot see context the value does not carry: bare `insomnia`, `vertigo`, and `chest pain`
+all stay where the model filed them.
+
+To reproduce raw model placement instead:
+
+```bash
+python main.py run --schema schemas/... --no-cross-domain-fanout
+```
+
+Equivalently `PP_CROSS_DOMAIN_FANOUT=0`. Only symptoms in
+`llm_extract.CROSS_DOMAIN_SYMPTOMS` fan out; see
+[`METHODS.md`](./METHODS.md#cross-domain-symptoms-inconsistent-domain-assignment) for the
+measurements, the reason this defaults on where the group-guard defaults off, and the
+limits.
 
 ### `demographics` — LLM-only demographics
 
@@ -465,7 +498,7 @@ python main.py normalize --records output/records.csv [options]
 ```
 
 Maps dense free-text fields (`conditions`, `treatment_outcome`,
-`illness_trajectory`, ...) onto a small curated vocabulary so `cluster-prep`
+`illness_trajectory`, the six symptom domains, ...) onto a small curated vocabulary so `cluster-prep`
 encodes real signal instead of surface noise. Run before `cluster-prep`.
 
 ---
@@ -586,7 +619,7 @@ variable_extraction/
 ├── .env                           API keys (gitignored)
 │
 ├── schemas/
-│   ├── base_schema.json           19 base fields + 5 base-optional fields
+│   ├── base_schema.json           25 base fields + 5 base-optional fields
 │   └── covidlonghaulers_schema.json  COVID-specific extension fields
 │
 ├── patientpunk/                   Importable Python library
@@ -619,7 +652,7 @@ Every record written to `output/temp/records_{schema_id}.json`:
   "_patientpunk_version": "2.0",
   "_extraction_method": "llm",
   "_model": "claude-haiku-4-5",
-  "_schema_id": "covidlonghaulers_v1",
+  "_schema_id": "covidlonghaulers_v2",
   "_extracted_at": "2026-04-05T12:00:00+00:00",
   "record_meta": {
     "author_hash": "a3f8c2...",
@@ -642,7 +675,7 @@ not split into separate sections in the record itself.
 
 ### Two-layer schema system
 
-**Base fields** (always extracted): 15 universal fields in `BASE_FIELD_DESCRIPTIONS`
+**Base fields** (always extracted): 25 universal fields in `BASE_FIELD_DESCRIPTIONS`
 covering demographics, conditions, treatments (including dosage), and functional
 status.
 

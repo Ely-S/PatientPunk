@@ -86,6 +86,12 @@ class PipelineConfig(BaseModel):
     workers: int = 10
     limit: int | None = None
     resume: bool = False
+    # Route multi-domain symptoms into every domain they belong to. Tri-state:
+    # None defers to PP_CROSS_DOMAIN_FANOUT and then to on, so the env var still
+    # works when nothing set the flag explicitly. On by default -- raw model
+    # placement is only 21% consistent (see
+    # llm_extract.fan_out_cross_domain_symptoms).
+    cross_domain_fanout: bool | None = None
 
     # Phase 2
     candidates_file: Path | None = None
@@ -326,6 +332,7 @@ class Pipeline:
                 workers=cfg.workers,
                 resume=cfg.resume,
                 limit=cfg.limit,
+                cross_domain_fanout=cfg.cross_domain_fanout,
             ),
         )
 
