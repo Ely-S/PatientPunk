@@ -2267,12 +2267,12 @@ class TestIllnessMarkerRenames:
         assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
         assert "illness_trajectory" in FIELD_VOCAB
 
-    def test_prompt_scopes_them_to_the_whole_illness(self):
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "OVERALL" in prompt
-        assert "Never a per-symptom duration." in prompt
-        assert "for their condition as a whole" in prompt
+    def test_prompt_scopes_them_to_the_whole_illness(self, base_prompt):
+        duration = field_rule(base_prompt, "illness_duration")
+        assert "OVERALL" in duration
+        assert "Never a per-symptom duration." in duration
+        assert "for their condition as a whole" in field_rule(
+            base_prompt, "illness_trajectory")
 
     def test_clustering_vocab_follows_the_rename(self):
         from patientpunk.normalize import normalize_value
