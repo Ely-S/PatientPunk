@@ -1,7 +1,7 @@
 {
-  "_manifest_version": "2.0",
-  "_description": "Documentation manifest for PatientPunk universal base fields. This file is NOT loaded at runtime — it is a reference for researchers building extension schemas.",
-
+  "_manifest_version": "2.1",
+  "_description": "Manifest of PatientPunk universal base fields: descriptions, confidence tiers and ICD-10 hints. How this field set was chosen is documented in METHODS.md.",
+  "_loaded_by": "Read at runtime by Schema.from_file (schema.py), the codebook generator (codebook.py), and per-field confidence lookup. The field list the extractor actually prompts on is BASE_FIELD_DESCRIPTIONS in llm_extract.py — keep the two in step; a field added here but not there is documented and never extracted.",
   "base_fields": {
     "age": {
       "description": "Patient's current age in years (numeric string)",
@@ -17,24 +17,12 @@
       "confidence": "medium"
     },
     "conditions": {
-      "description": "Medical diagnoses and conditions mentioned",
+      "description": "Diagnosed medical conditions only — not symptoms",
       "confidence": "high",
       "icd10": "Applied via CONDITION_ICD10_MAP where available"
     },
     "onset_trigger": {
       "description": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-      "confidence": "medium"
-    },
-    "symptom_duration": {
-      "description": "Duration of symptoms (months, years, etc.)",
-      "confidence": "low"
-    },
-    "symptom_trajectory": {
-      "description": "Whether symptoms are improving, worsening, or stable",
-      "confidence": "medium"
-    },
-    "age_at_onset": {
-      "description": "Patient's age when illness began",
       "confidence": "medium"
     },
     "medications": {
@@ -46,8 +34,9 @@
       "confidence": "medium"
     },
     "treatment_outcome": {
-      "description": "Response to treatments (helped, didn't help, worsened, etc.)",
-      "confidence": "medium"
+      "description": "Response to treatments as 'drug: outcome: symptom' triples",
+      "confidence": "medium",
+      "notes": "PC-COS core outcome. Decomposed downstream by normalize.decompose_treatment_outcome into label / drug / symptom columns."
     },
     "procedures": {
       "description": "Medical procedures undergone (tilt table test, colonoscopy, etc.)",
@@ -55,34 +44,63 @@
     },
     "work_disability_status": {
       "description": "Ability to work; disability applications/awards",
-      "confidence": "high"
+      "confidence": "high",
+      "notes": "SF-36 role-physical / role-emotional"
     },
     "mental_health": {
       "description": "Mental health conditions or experiences mentioned",
-      "confidence": "medium"
+      "confidence": "medium",
+      "notes": "The only retained field present in every framework considered"
     },
     "prior_infections": {
       "description": "Prior infections that may be relevant to current illness (EBV, COVID, Lyme, etc.)",
       "confidence": "medium"
+    },
+    "functional_status_tier": {
+      "description": "Functional capacity level (bedbound, housebound, severe, moderate, mild, mostly_functional)",
+      "confidence": "high",
+      "icd10": "Z73.6",
+      "notes": "Promoted from the covidlonghaulers extension in manifest 3.0 — EQ-5D mobility+self-care and SF-36 physical functioning make it universal, not COVID-specific."
+    },
+    "social_impact": {
+      "description": "Social impacts of illness (isolation, relationship strain, lost friends)",
+      "confidence": "medium",
+      "notes": "Promoted from base-optional in manifest 3.0. EQ-5D usual activities; SF-36 social functioning; PROMIS social participation."
+    },
+    "alternative_treatments": {
+      "description": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
+      "confidence": "medium",
+      "notes": "Promoted from base-optional in manifest 3.0. No framework equivalent — clinical trials do not capture self-directed non-pharmaceutical interventions, which is exactly why patient-authored text is worth mining for it."
+    },
+    "dietary_interventions": {
+      "description": "Dietary changes tried (low-histamine, elimination, carnivore, gluten-free)",
+      "confidence": "medium",
+      "notes": "No framework equivalent; retained for the same reason as alternative_treatments."
+    },
+    "misdiagnosis": {
+      "description": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
+      "confidence": "medium",
+      "notes": "No outcome-framework equivalent, but grounded in the diagnostic-odyssey literature and not capturable from clinical records."
+    },
+    "symptom_duration": {
+      "description": "How long the patient has been ill overall",
+      "confidence": "low"
+    },
+    "symptom_trajectory": {
+      "description": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
+      "confidence": "medium"
     }
   },
-
   "base_optional_fields": {
-    "_description": "These fields exist in PATTERNS but are NOT extracted by default. Activate them in an extension schema via 'include_base_fields'.",
+    "_description": "Defined but NOT extracted by default. Activate in an extension schema via 'include_base_fields'.",
     "occupation": {
       "description": "Patient's occupation or job type"
     },
     "bmi_weight": {
       "description": "BMI or weight mentions"
     },
-    "alternative_treatments": {
-      "description": "Alternative/complementary treatments (acupuncture, supplements, etc.)"
-    },
     "genetic_testing": {
       "description": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)"
-    },
-    "social_impact": {
-      "description": "Social impacts of illness (relationships, isolation, etc.)"
     },
     "trauma_history": {
       "description": "Trauma or adverse childhood experiences"
