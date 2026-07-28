@@ -70,15 +70,16 @@ Measured on 300 r/covidlonghaulers posts (Haiku 4.5, temperature 0):
 28 record-symptom pairs: 6 placed in both domains, 22 in one. A small sample, and the
 only one there is.
 
-The problem is not *which* domain the model picks — for many symptoms there is no single
+The problem is not *which* domain the model picks; for many symptoms there is no single
 right answer, which is why cross-listing exists. It is that the same symptom is placed
-differently on different posts, so a `pain` / `cognitive_neurological` split carries
+differently on different posts with the same or similar language,
+so a `pain` / `cognitive_neurological` split carries
 variance that has nothing to do with the patient.
 
-**Routing therefore happens in code**, not in the prompt. The model finds the symptom
+**Routing therefore happens during the run**, not in the prompt. The model finds the symptom
 once, wherever it filed it, and `llm_extract.fan_out_cross_domain_symptoms` copies it
-into the others from `CROSS_DOMAIN_SYMPTOMS`. Placement becomes deterministic — not
-because that was measured, but because a table is.
+into the others from `CROSS_DOMAIN_SYMPTOMS`. Placement becomes deterministic through this
+constructed lookup table.
 
 - **Effect:** on the same 300 records, `pain` +1.7 points, `cognitive_neurological`
   +1.3, every other field unchanged, 24 values added. Records with at least one symptom
