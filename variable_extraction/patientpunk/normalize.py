@@ -92,9 +92,9 @@ FIELD_VOCAB: dict[str, dict[str, list[str]]] = {
                                "limited activity", "mild"],
         "severe_unspecified": ["severe", "very severe", "profound"],
     },
-    # Symptom domains. Collapsed harder than the extraction-side maps in
-    # llm_extract because clustering needs low cardinality more than it needs
-    # the patient's exact wording -- the raw values stay in the records file.
+    # Symptom domains. Unlike the extraction-side maps these may merge concepts:
+    # clustering needs low cardinality, and the patient's wording is preserved
+    # in the records file.
     "fatigue_pem": {
         "pem": ["pem", "post-exertional malaise", "post exertional malaise",
                 "post-exertional", "pese", "crash", "crashes", "crashing", "payback"],

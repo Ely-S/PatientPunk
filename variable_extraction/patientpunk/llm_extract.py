@@ -944,17 +944,10 @@ def normalize_records(
             "flare": "relapsing",
             "bedbound": "severe decline", "housebound": "severe decline",
         },
-        # Symptom domains: SURFACE FORMS ONLY -- spelling, hyphenation, plurals,
-        # and abbreviations of the identical term. Nothing here may merge two
-        # words a clinician would distinguish.
-        #
-        # This file writes records_*.json, the archival extraction output, and
-        # the prompt tells the model to record symptoms in the patient's own
-        # words. Collapsing "vertigo" onto "dizziness" or "air hunger" onto
-        # "shortness of breath" would overwrite that wording at the point it is
-        # persisted, and the distinction is not recoverable afterwards.
-        # Concept-level merges belong in patientpunk.normalize, which runs on a
-        # copy for clustering and already covers every one of them.
+        # Surface forms only: spelling, hyphenation, plurals, abbreviations of
+        # the same term. Nothing here may merge two words a clinician would
+        # distinguish -- these records keep the patient's wording. Concept
+        # merges belong in patientpunk.normalize.
         "fatigue_pem": {
             "post-exertional malaise": "pem", "post exertional malaise": "pem",
             "post-exertional": "pem", "post exertional": "pem", "pese": "pem",
