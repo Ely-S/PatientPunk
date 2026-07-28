@@ -2633,19 +2633,16 @@ class TestNamedButNotTaken:
     """Prompt-text assertions: the named-vs-taken rule is present, and so is
     the exception that keeps a treatment the patient stopped."""
 
-    def test_rule_is_stated_with_worked_examples(self):
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "NAMING A TREATMENT IS NOT TAKING IT" in prompt
-        assert "didn't take it" in prompt
-        assert "haven't started yet" in prompt
-        assert "has anyone tried" in prompt
+    def test_rule_is_stated_with_worked_examples(self, base_prompt):
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        for excluded in ("didn't take it", "haven't started yet",
+                         "has anyone tried"):
+            assert excluded in rule
 
-    def test_stopping_still_counts_as_taken(self):
+    def test_stopping_still_counts_as_taken(self, base_prompt):
         """Stopping is not the same as never taking."""
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "quit" in prompt and "DOES belong in medications" in prompt
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        assert "quit" in rule and "DOES belong in medications" in rule
 
 
 class TestBatchExtraction:
