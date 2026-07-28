@@ -311,7 +311,13 @@ EXTRACTION RULES:
 2. If a field cannot be determined from the text, set it to null.
 3. Distinguish between what the AUTHOR says about THEMSELVES vs. what they say about OTHERS. Only extract self-reported information for the structured fields.
 4. Pay attention to NEGATION: "I don't have POTS" means POTS should NOT be in conditions.
-5. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
+5. NAMING A TREATMENT IS NOT TAKING IT. A treatment goes in medications, alternative_treatments, or dietary_interventions only if the patient conveys they actually took or are taking it. Exclude one they were offered and declined, hold but do not take, are asking about, were warned off, or say they intend to try. Examples that must NOT be extracted:
+   "I was given a Z-Pak but I didn't take it"        -> Z-Pak is not a medication of theirs
+   "I have Xanax but I can't take it with my SSRI"   -> Xanax is not a medication of theirs
+   "my doctor suggested LDN, I haven't started yet"  -> LDN is not a medication of theirs
+   "has anyone tried nattokinase?"                    -> nattokinase is not a medication of theirs
+   Stopping counts as having taken it: "I was on gabapentin but quit" DOES belong in medications.
+6. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
 
 VALUE FORMAT RULES:
 - Each value MUST be 1-5 words. Never write sentences. Never include explanations or mechanisms.

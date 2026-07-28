@@ -2629,6 +2629,22 @@ class TestRunProvenance:
         assert _utils.git_commit() == "c" * 40
 
 
+class TestNamedButNotTaken:
+    """Prompt-text assertions: the named-vs-taken rule is present, and so is
+    the exception that keeps a treatment the patient stopped."""
+
+    def test_rule_is_stated_with_worked_examples(self, base_prompt):
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        for excluded in ("didn't take it", "haven't started yet",
+                         "has anyone tried"):
+            assert excluded in rule
+
+    def test_stopping_still_counts_as_taken(self, base_prompt):
+        """Stopping is not the same as never taking."""
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        assert "quit" in rule and "DOES belong in medications" in rule
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
