@@ -970,7 +970,7 @@ def _add_normalize_parser(sub: argparse._SubParsersAction) -> None:  # type: ign
         help="Collapse free-text backbone fields to a controlled vocabulary.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="""
-Map the dense free-text fields (conditions, treatment_outcome, symptom_trajectory,
+Map the dense free-text fields (conditions, treatment_outcome, illness_trajectory,
 functional_status_tier, ...) onto a small curated vocabulary so cluster-prep
 encodes real signal instead of surface noise ("bedbound"/"bedridden",
 "helped"/"60% better" -> one value each). Writes a normalized records.csv and

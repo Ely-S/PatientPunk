@@ -130,8 +130,8 @@ BASE_FIELD_DESCRIPTIONS = {
     "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "symptom_duration": "How long the patient has been ill overall",
-    "symptom_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
+    "illness_duration": "How long the patient has been ill overall",
+    "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
     "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
@@ -325,6 +325,8 @@ FIELD-SPECIFIC RULES:
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
+- illness_duration: How long the patient has been ill OVERALL, as stated ("3 years", "18 months", "since March 2020"). One value for the whole illness. Never a per-symptom duration.
+- illness_trajectory: The overall course of the illness. Use ONLY one of: improving, worsening, stable, relapsing, recovered. If different symptoms are moving in different directions, use the direction the patient gives for their condition as a whole; if they give none, use null.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
 
 SCHEMA FIELDS to extract:
@@ -935,7 +937,7 @@ def normalize_records(
             "part time": "working reduced", "part-time": "working reduced",
             "reduced hours": "working reduced",
         },
-        "symptom_trajectory": {
+        "illness_trajectory": {
             "getting worse": "worsening", "worse": "worsening",
             "deteriorating": "worsening", "declining": "worsening",
             "getting better": "improving", "improved": "improving",

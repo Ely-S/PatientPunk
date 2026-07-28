@@ -82,13 +82,15 @@
       "confidence": "medium",
       "notes": "No outcome-framework equivalent, but grounded in the diagnostic-odyssey literature and not capturable from clinical records."
     },
-    "symptom_duration": {
-      "description": "How long the patient has been ill overall",
-      "confidence": "low"
+    "illness_duration": {
+      "description": "How long the patient has been ill overall — a whole-illness marker, not per-symptom",
+      "confidence": "low",
+      "notes": "Renamed from symptom_duration. The symptom_ prefix read as though it belonged to one symptom; it has always described the illness course as a whole."
     },
-    "symptom_trajectory": {
+    "illness_trajectory": {
       "description": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
-      "confidence": "medium"
+      "confidence": "medium",
+      "notes": "Renamed from symptom_trajectory. Per-symptom trajectories are not extracted separately — patients report a global illness course, and splitting it would drop each cell into single-digit fill."
     }
   },
   "base_optional_fields": {

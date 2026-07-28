@@ -2052,8 +2052,8 @@ class TestNormalize:
     def test_percent_regex_rule(self):
         from patientpunk.normalize import normalize_value
         assert normalize_value("treatment_outcome", "60% better") == "helped"
-        assert normalize_value("symptom_trajectory", "90% recovered") == "recovered"
-        assert normalize_value("symptom_trajectory", "50% better") == "improving"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+        assert normalize_value("illness_trajectory", "50% better") == "improving"
 
     def test_functional_tier_and_rank(self):
         from patientpunk.normalize import normalize_value, FUNCTIONAL_RANK
@@ -2301,6 +2301,37 @@ class TestUntrustedTextWrapping:
         src = inspect.getsource(discover)
         assert "never invent a unit to supply one" in src
         assert "bare numbers by nature" in src
+
+
+class TestIllnessMarkerRenames:
+    """illness_duration and illness_trajectory describe the whole illness
+    course. No per-symptom timeline is extracted."""
+
+    def test_old_names_are_gone(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "symptom_duration" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in FIELD_VOCAB
+
+    def test_new_names_present_in_both_layers(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "illness_duration" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in FIELD_VOCAB
+
+    def test_prompt_scopes_them_to_the_whole_illness(self, base_prompt):
+        duration = field_rule(base_prompt, "illness_duration")
+        assert "OVERALL" in duration
+        assert "Never a per-symptom duration." in duration
+        assert "for their condition as a whole" in field_rule(
+            base_prompt, "illness_trajectory")
+
+    def test_clustering_vocab_follows_the_rename(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("illness_trajectory", "getting worse") == "declining"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
 
 
 class TestBatchExtraction:
