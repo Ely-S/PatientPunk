@@ -2250,8 +2250,8 @@ class TestFieldSelection:
 
 
 class TestIllnessMarkerRenames:
-    """symptom_duration/symptom_trajectory describe the whole illness, not any
-    one symptom. The prefix read as per-symptom."""
+    """illness_duration and illness_trajectory describe the whole illness
+    course. No per-symptom timeline is extracted."""
 
     def test_old_names_are_gone(self):
         from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
