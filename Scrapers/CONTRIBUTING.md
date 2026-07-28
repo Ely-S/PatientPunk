@@ -103,7 +103,9 @@ Every record written to `patientpunk_records_*.json` has this structure:
 ```json
 {
   "_patientpunk_version": "2.0",
-  "_schema_id": "covidlonghaulers_v1",
+  "_extraction_method": "llm",
+  "_model": "claude-haiku-4-5",
+  "_schema_id": "covidlonghaulers_v2",
   "_extracted_at": "2026-04-05T12:00:00+00:00",
 
   "record_meta": {
@@ -113,36 +115,18 @@ Every record written to `patientpunk_records_*.json` has this structure:
     "post_id": null
   },
 
-  "base": {
-    "conditions": {
-      "values": ["long covid", "pots"],
-      "icd10_candidates": {"long covid": "U09.9", "pots": "G90.3"},
-      "provenance": "self_reported",
-      "confidence": "high"
-    },
-    "age": {
-      "values": ["34"],
-      "provenance": "self_reported",
-      "confidence": "medium"
-    },
-    "onset_trigger": {
-      "values": null,
-      "provenance": null,
-      "confidence": null
-    }
-    ...
-  },
-
-  "extension": {
-    "functional_status_tier": {
-      "values": ["housebound"],
-      "provenance": "self_reported",
-      "confidence": "high"
-    }
-    ...
+  "fields": {
+    "conditions": { "values": ["long covid", "pots"], "confidence": "high" },
+    "age": { "values": ["34"], "confidence": "medium" },
+    "functional_status_tier": { "values": ["housebound"], "confidence": "high" },
+    "pain": { "values": ["migraines", "joint pain"], "confidence": "high" },
+    "cognitive_neurological": { "values": ["brain fog", "migraines"], "confidence": "high" },
+    "onset_trigger": { "values": null, "confidence": null }
   }
 }
 ```
+
+Base and extension fields share one flat `fields` namespace — the record does not say which layer a field came from. Use the schema files, or the `source` column in the generated codebook, to tell them apart. Note `migraines` appearing under both `pain` and `cognitive_neurological`: that is the intended cross-listing, not a duplicate.
 
 ### Field object schema
 
@@ -172,22 +156,28 @@ Every extracted field (in both `base` and `extension`) is an object with four ke
 
 ### Layer 1 — Base fields (always extracted)
 
-14 fields defined in `BASE_FIELDS` (a `frozenset` in `extract_biomedical.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
+25 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
 
 | Category | Fields |
 |---|---|
 | Demographics | `age`, `sex_gender`, `location_country` |
-| Conditions | `conditions`, `onset_trigger` |
-| Symptoms | `symptom_duration`, `symptom_trajectory`, `age_at_onset` |
-| Treatments | `medications`, `treatment_outcome`, `procedures` |
-| Functional status | `work_disability_status`, `mental_health` |
-| History | `prior_infections` |
+| Conditions | `conditions`, `onset_trigger`, `misdiagnosis`, `prior_infections` |
+| Illness course | `illness_duration`, `illness_trajectory` |
+| Symptom domains | `fatigue_pem`, `cognitive_neurological`, `cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms` |
+| Treatments | `medications`, `dosage`, `treatment_outcome`, `procedures`, `alternative_treatments`, `dietary_interventions` |
+| Function and impact | `functional_status_tier`, `work_disability_status`, `mental_health`, `social_impact` |
+
+The field set is chosen from measured fill rates cross-referenced against EQ-5D, SF-36, PROMIS, RECOVER, PC-COS, and the ME/CFS Canadian Consensus Criteria. Per-field rates, framework mappings, and the reasons each cut field was cut live in `variable_extraction/schemas/base_schema.json`.
+
+**Symptom domains carry the same symptom more than once on purpose.** A migraine is recorded in both `pain` and `cognitive_neurological`; dizziness on standing lands in both `cardiovascular_autonomic` and `cognitive_neurological`. Reddit patients do not write clinical intake forms, and forcing one symptom into one bucket loses more than the duplication costs. The routing rules given to the extraction model are in `llm_extract.build_system_prompt`.
+
+`illness_duration` and `illness_trajectory` describe the **whole illness**, not any one symptom — they were renamed off the old `symptom_` prefix because that prefix read as per-symptom. Per-symptom timelines are not extracted separately: patients report a global course, and splitting it six ways drops every cell into single-digit fill.
 
 ### Layer 2 — Base-optional fields
 
-7 additional fields exist in `PATTERNS` but are **not extracted by default**. They are available for extension schemas to activate via `include_base_fields`. These tend to be noisier or more study-specific:
+5 further fields are defined but **not extracted by default**. Extension schemas activate them via `include_base_fields`. These tend to be noisier or more study-specific:
 
-`occupation`, `bmi_weight`, `alternative_treatments`, `genetic_testing`, `social_impact`, `trauma_history`, `toxic_exposures`
+`occupation`, `bmi_weight`, `genetic_testing`, `trauma_history`, `toxic_exposures`
 
 ### Extension fields
 
@@ -414,7 +404,7 @@ python demographic_extraction/extract_biomedical.py \
     --text "I got omicron in 2022, fully vaccinated, 18 months of long covid, bedbound"
 ```
 
-Expected extension output should include `long_covid_duration_months`, `functional_status_tier`.
+Expected output should include `long_covid_duration_months` (extension) and `functional_status_tier` (base).
 
 ### 3. Full corpus run
 

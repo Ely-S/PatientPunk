@@ -460,7 +460,7 @@ class TestFieldDefinition:
 class TestSchema:
     def test_from_file(self):
         schema = Schema.from_file(EXT_SCHEMA)
-        assert schema.schema_id == "covidlonghaulers_v1"
+        assert schema.schema_id == "covidlonghaulers_v2"
         assert schema.target_subreddit is not None
         assert len(schema.all_fields) > 0
 
@@ -492,7 +492,7 @@ class TestSchema:
     def test_repr(self):
         schema = Schema.from_file(EXT_SCHEMA)
         repr_str = repr(schema)
-        assert "covidlonghaulers_v1" in repr_str
+        assert "covidlonghaulers_v2" in repr_str
 
 class TestSchemaWarning:
     def test_warns_when_base_schema_missing(self, tmp_schema, tmp_path):
@@ -1477,7 +1477,9 @@ class TestDiscoveryReviewMode:
         schema.write_text(
             json.dumps({
                 "schema_id": "s",
-                "extension_fields": {"functional_status_tier": {"description": "d"}}
+                # Must be a name absent from the base set -- known_fields dedups
+                # extension entries against base fields.
+                "extension_fields": {"infection_count": {"description": "d"}}
             }),
             encoding="utf-8",
         )
@@ -1503,7 +1505,7 @@ class TestDiscoveryReviewMode:
         assert "activity_level" not in plain_names
         assert plain_names == set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
         extension_names = {f["name"] for f in known_fields if isinstance(f, dict)}
-        assert "functional_status_tier" in extension_names
+        assert "infection_count" in extension_names
 
     def test_pipeline_review_mode_passes_stop_after_and_exits(self, tmp_path):
         schema = tmp_path / "s.json"
@@ -2018,8 +2020,8 @@ class TestNormalize:
     def test_percent_regex_rule(self):
         from patientpunk.normalize import normalize_value
         assert normalize_value("treatment_outcome", "60% better") == "helped"
-        assert normalize_value("symptom_trajectory", "90% recovered") == "recovered"
-        assert normalize_value("symptom_trajectory", "50% better") == "improving"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+        assert normalize_value("illness_trajectory", "50% better") == "improving"
 
     def test_functional_tier_and_rank(self):
         from patientpunk.normalize import normalize_value, FUNCTIONAL_RANK
@@ -2162,6 +2164,100 @@ class TestLLMExtractNormalizeRecords:
         out = normalize_records([rec], confidence_by_field={"dosage": "low"})[0]
         assert out["fields"]["dosage"]["confidence"] == "low"
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
+
+
+SYMPTOM_DOMAINS = [
+    "fatigue_pem", "cognitive_neurological", "cardiovascular_autonomic",
+    "pain", "sleep", "other_symptoms",
+]
+
+
+class TestSymptomDecompositionSchema:
+    """The flat `symptoms` field was replaced by six framework-backed domains,
+    and the two whole-illness markers were renamed off the `symptom_` prefix."""
+
+    def test_symptom_domains_are_base_fields(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        for field in SYMPTOM_DOMAINS:
+            assert field in BASE_FIELD_DESCRIPTIONS
+
+    def test_cut_fields_are_gone(self):
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        every = set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
+        for field in ("age_at_onset", "covid_wave", "symptoms",
+                      "symptom_duration", "symptom_trajectory"):
+            assert field not in every
+
+    def test_renamed_illness_markers_present(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        assert "illness_duration" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
+
+    def test_promoted_fields_no_longer_need_activating(self):
+        """functional_status_tier / social_impact / alternative_treatments are
+        base fields now, so a schema with an empty include_base_fields still
+        gets them."""
+        from patientpunk.llm_extract import build_field_descriptions
+        fields = build_field_descriptions({"include_base_fields": [],
+                                           "extension_fields": {}})
+        for field in ("functional_status_tier", "social_impact",
+                      "alternative_treatments", "dietary_interventions",
+                      "misdiagnosis"):
+            assert field in fields
+
+    def test_shipped_extension_schema_has_no_base_field_collisions(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        collisions = set(schema["extension_fields"]) & set(BASE_FIELD_DESCRIPTIONS)
+        assert collisions == set()
+
+    def test_prompt_states_the_cross_listing_rule(self):
+        """Cross-listing is the one instruction a model would otherwise get
+        wrong by default, so assert it survives prompt edits."""
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "CROSS-LISTING" in prompt
+        for field in SYMPTOM_DOMAINS:
+            assert field in prompt
+
+
+class TestSymptomDomainCanonicalization:
+    def test_surface_variants_collapse_per_domain(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {
+            "fatigue_pem": ["Post-Exertional Malaise", "exhaustion"],
+            "cognitive_neurological": ["brainfog", "ringing in ears"],
+            "cardiovascular_autonomic": ["heart palpitations", "racing heart"],
+            "sleep": ["can't sleep"],
+        }}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["fatigue_pem"]["values"] == ["pem", "fatigue"]
+        assert out["cognitive_neurological"]["values"] == ["brain fog", "tinnitus"]
+        assert out["cardiovascular_autonomic"]["values"] == ["palpitations", "tachycardia"]
+        assert out["sleep"]["values"] == ["insomnia"]
+
+    def test_cross_listed_symptom_kept_in_every_domain(self):
+        """A migraine belongs in both pain and cognitive_neurological; neither
+        copy may be dropped as a duplicate."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraine"], "cognitive_neurological": ["migraine"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+
+    def test_illness_trajectory_canonicalizes_under_new_name(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"illness_trajectory": ["getting worse"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["illness_trajectory"]["values"] == ["worsening"]
+
+    def test_clustering_vocab_collapses_symptom_domains(self):
+        from patientpunk.normalize import normalize_cell
+        assert normalize_cell("fatigue_pem", "crash | payback | PEM") == "pem"
+        assert normalize_cell("pain", "myalgia | muscle aches") == "muscle_pain"
+        assert normalize_cell("other_symptoms", "SOB | air hunger") == "shortness_of_breath"
 
 
 class TestBatchExtraction:

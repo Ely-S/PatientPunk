@@ -465,7 +465,7 @@ python main.py normalize --records output/records.csv [options]
 ```
 
 Maps dense free-text fields (`conditions`, `treatment_outcome`,
-`symptom_trajectory`, ...) onto a small curated vocabulary so `cluster-prep`
+`illness_trajectory`, the six symptom domains, ...) onto a small curated vocabulary so `cluster-prep`
 encodes real signal instead of surface noise. Run before `cluster-prep`.
 
 ---

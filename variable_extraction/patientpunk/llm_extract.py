@@ -121,31 +121,45 @@ HEALTH_SUBREDDITS = {
     "longcovidwarriors", "postcovidrecovery",
 }
 
+# Field set selected on measured fill rates (1,177 records, one month of
+# r/covidlonghaulers) cross-referenced against EQ-5D / SF-36 / PROMIS / RECOVER /
+# PC-COS / ME-CFS-CCC. Rates and framework mappings live in schemas/base_schema.json.
+# age_at_onset (0.7% fill) and covid_wave (0.5%) were cut; the flat `symptoms`
+# field became the six domain fields below.
 BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
     "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "symptom_duration": "How long symptoms have lasted",
-    "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
-    "age_at_onset": "Patient's age when illness began",
+    "illness_duration": "How long the patient has been ill overall (e.g., '3 years', '18 months')",
+    "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
     "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
-    # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
     "mental_health": "Mental health conditions or impacts mentioned",
     "prior_infections": "Prior infections relevant to current illness (EBV, COVID, Lyme, etc.)",
+    "functional_status_tier": "Functional capacity level (bedbound, housebound, severe, moderate, mild, mostly_functional)",
+    "social_impact": "Social impacts of illness (isolation, relationship strain, lost friends)",
+    "alternative_treatments": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
+    "dietary_interventions": "Dietary changes tried (low-histamine, elimination diet, carnivore, gluten-free)",
+    "misdiagnosis": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
+    # Symptom domains. Cross-listing is intended: one symptom may belong in
+    # several of these. Routing rules are in build_system_prompt.
+    "fatigue_pem": "Fatigue, post-exertional malaise, crashes, exercise intolerance",
+    "cognitive_neurological": "Brain fog, memory and concentration problems, neuropathy, tinnitus, dizziness, headaches",
+    "cardiovascular_autonomic": "POTS symptoms, palpitations, orthostatic intolerance, temperature dysregulation",
+    "pain": "Joint, muscle, chest, and nerve pain; headaches",
+    "sleep": "Insomnia, hypersomnia, unrefreshing sleep, sleep-cycle disruption",
+    "other_symptoms": "Symptoms outside the five domains above - respiratory, gastrointestinal, skin, hair loss, vision",
 }
 
 BASE_OPTIONAL_DESCRIPTIONS = {
     "occupation": "Patient's occupation or job type",
     "bmi_weight": "BMI or weight mentions",
-    "alternative_treatments": "Alternative/complementary treatments (acupuncture, supplements, etc.)",
     "genetic_testing": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)",
-    "social_impact": "Social impacts of illness (relationships, isolation, etc.)",
     "trauma_history": "Trauma or adverse childhood experiences",
     "toxic_exposures": "Environmental toxic exposures (mold, chemicals, etc.)",
 }
@@ -304,13 +318,32 @@ VALUE FORMAT RULES:
 - Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
-- conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
+- conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Symptoms belong in the six symptom-domain fields described below, never here.
+- misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
 - dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
-- alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
+- alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
+- dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
+- illness_duration: How long the patient has been ill OVERALL, as stated ("3 years", "18 months", "since March 2020"). One value for the whole illness. Never a per-symptom duration.
+- illness_trajectory: The overall course of the illness. Use ONLY one of: improving, worsening, stable, relapsing, recovered. If different symptoms are moving in different directions, use the direction the patient gives for their condition as a whole; if they give none, use null.
+
+SYMPTOM DOMAIN RULES:
+Six fields hold symptoms. Record each symptom in the patient's own words (1-5 words), not a clinical synonym.
+- fatigue_pem: fatigue, exhaustion, PEM, post-exertional malaise, crashes, exercise intolerance, "payback" after activity. PEM is symptom worsening AFTER exertion, often delayed a day or more -- record it here even when the patient calls it a crash.
+- cognitive_neurological: brain fog, memory loss, word-finding trouble, poor concentration, neuropathy, numbness, tinnitus, dizziness, vertigo, headaches, migraines.
+- cardiovascular_autonomic: palpitations, tachycardia, orthostatic intolerance, blood-pressure swings, temperature dysregulation, adrenaline dumps. Record the symptom here even when the patient also names POTS or dysautonomia as a diagnosis in conditions.
+- pain: joint pain, muscle pain, chest pain, nerve pain, body aches, headaches, migraines.
+- sleep: insomnia, hypersomnia, unrefreshing sleep, reversed sleep cycle, sleep apnea.
+- other_symptoms: anything the five domains above do not cover -- shortness of breath, GI problems, nausea, rashes, hair loss, vision changes, sensory sensitivities.
+
+CROSS-LISTING: a symptom that genuinely spans domains goes in EVERY domain it belongs to. This is intended, not an error.
+- "migraines" -> pain AND cognitive_neurological
+- "dizzy when I stand up" -> cardiovascular_autonomic AND cognitive_neurological
+- "sleep never refreshes me, I wake exhausted" -> sleep AND fatigue_pem
+Do not cross-list into a domain the text does not support: plain "I'm tired all the time" is fatigue_pem only.
 
 SCHEMA FIELDS to extract:
 {fields_block}
@@ -902,7 +935,7 @@ def normalize_records(
             "part time": "working reduced", "part-time": "working reduced",
             "reduced hours": "working reduced",
         },
-        "symptom_trajectory": {
+        "illness_trajectory": {
             "getting worse": "worsening", "worse": "worsening",
             "deteriorating": "worsening", "declining": "worsening",
             "getting better": "improving", "improved": "improving",
@@ -912,6 +945,73 @@ def normalize_records(
             "relapse": "relapsing", "relapsing-remitting": "relapsing",
             "flare": "relapsing",
             "bedbound": "severe decline", "housebound": "severe decline",
+        },
+        # Symptom domains: surface-form collapsing only. Patient wording carries
+        # severity and context ("crash" is not always PEM), so these maps fix
+        # spelling and abbreviation drift and stop short of semantic merges.
+        "fatigue_pem": {
+            "post-exertional malaise": "pem", "post exertional malaise": "pem",
+            "post-exertional": "pem", "post exertional": "pem", "pese": "pem",
+            "exhaustion": "fatigue", "tiredness": "fatigue", "tired": "fatigue",
+            "extreme fatigue": "severe fatigue", "severe exhaustion": "severe fatigue",
+            "exercise intolerance": "exercise intolerance",
+            "post-exertional symptom exacerbation": "pem",
+        },
+        "cognitive_neurological": {
+            "brainfog": "brain fog", "brain-fog": "brain fog",
+            "cognitive dysfunction": "brain fog", "cognitive impairment": "brain fog",
+            "cognitive issues": "brain fog", "mental fog": "brain fog",
+            "memory loss": "memory problems", "memory issues": "memory problems",
+            "poor memory": "memory problems", "forgetfulness": "memory problems",
+            "word finding": "word-finding difficulty",
+            "word finding issues": "word-finding difficulty",
+            "trouble concentrating": "poor concentration",
+            "can't concentrate": "poor concentration",
+            "difficulty concentrating": "poor concentration",
+            "migraine": "migraines", "headache": "headaches",
+            "ringing in ears": "tinnitus", "ringing in my ears": "tinnitus",
+            "light headed": "dizziness", "lightheaded": "dizziness",
+            "lightheadedness": "dizziness", "vertigo": "dizziness",
+        },
+        "cardiovascular_autonomic": {
+            "heart palpitations": "palpitations", "heart racing": "tachycardia",
+            "racing heart": "tachycardia", "rapid heart rate": "tachycardia",
+            "high heart rate": "tachycardia",
+            "oi": "orthostatic intolerance",
+            "orthostatic hypotension": "orthostatic intolerance",
+            "can't stand up": "orthostatic intolerance",
+            "temperature regulation": "temperature dysregulation",
+            "temp dysregulation": "temperature dysregulation",
+            "adrenaline dump": "adrenaline dumps",
+            "blood pressure swings": "blood pressure instability",
+        },
+        "pain": {
+            "joint pains": "joint pain", "arthralgia": "joint pain",
+            "muscle pains": "muscle pain", "myalgia": "muscle pain",
+            "muscle aches": "muscle pain",
+            "body ache": "body aches", "aches": "body aches",
+            "nerve pain": "nerve pain", "neuropathic pain": "nerve pain",
+            "migraine": "migraines", "headache": "headaches",
+            "chest pains": "chest pain",
+        },
+        "sleep": {
+            "can't sleep": "insomnia", "cannot sleep": "insomnia",
+            "trouble sleeping": "insomnia", "sleeplessness": "insomnia",
+            "non-restorative sleep": "unrefreshing sleep",
+            "unrefreshed sleep": "unrefreshing sleep",
+            "sleep doesn't refresh": "unrefreshing sleep",
+            "oversleeping": "hypersomnia", "sleeping too much": "hypersomnia",
+            "reversed sleep cycle": "sleep cycle disruption",
+            "sleep schedule": "sleep cycle disruption",
+        },
+        "other_symptoms": {
+            "sob": "shortness of breath", "breathlessness": "shortness of breath",
+            "air hunger": "shortness of breath",
+            "gi issues": "gi problems", "gi symptoms": "gi problems",
+            "digestive issues": "gi problems", "stomach issues": "gi problems",
+            "rash": "rashes", "skin rash": "rashes",
+            "hair falling out": "hair loss",
+            "blurry vision": "vision changes", "vision problems": "vision changes",
         },
     }
 

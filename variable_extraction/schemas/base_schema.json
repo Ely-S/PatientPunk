@@ -1,88 +1,204 @@
 {
-  "_manifest_version": "2.0",
+  "_manifest_version": "3.0",
   "_description": "Documentation manifest for PatientPunk universal base fields. This file is NOT loaded at runtime — it is a reference for researchers building extension schemas.",
+
+  "_field_selection": {
+    "method": "Fill rates measured on 1,177 extracted records (one month of r/covidlonghaulers). Fields below 10% fill were cut unless a clinical framework justified keeping them; no cut field cleared 1%. Retained fields are cross-referenced against the outcome frameworks used in post-viral illness research so the variable set is defensible outside this project.",
+    "frameworks": {
+      "EQ-5D": "EuroQol 5-dimension health status measure",
+      "SF-36": "36-Item Short Form Health Survey",
+      "PROMIS": "Patient-Reported Outcomes Measurement Information System",
+      "RECOVER": "NIH RECOVER Initiative long-COVID cohort protocol",
+      "PC-COS": "Post-COVID Core Outcome Set (Lancet Respiratory Medicine)",
+      "ME/CFS CCC": "Myalgic Encephalomyelitis Canadian Consensus Criteria"
+    },
+    "cut": {
+      "age_at_onset": "0.7% fill — lowest of any field considered",
+      "covid_wave": "0.5% fill — patients virtually never self-report infection wave",
+      "symptoms": "Replaced by six clinically-grounded sub-fields; the flat field was a 49.4%-fill bag with no internal structure for clustering"
+    },
+    "symptom_domains": {
+      "fields": ["fatigue_pem", "cognitive_neurological", "cardiovascular_autonomic",
+                 "pain", "sleep", "other_symptoms"],
+      "notes": "These six replace the former flat `symptoms` field. Each maps to at least three frameworks. Cross-listing is intentional and expected — a headache belongs in both pain and cognitive_neurological. Routing rules given to the extraction model live in llm_extract.build_system_prompt."
+    }
+  },
 
   "base_fields": {
     "age": {
       "description": "Patient's current age in years (numeric string)",
       "confidence": "medium",
+      "fill_rate": 0.227,
+      "frameworks": ["demographic standard"],
       "notes": "Restricted to 16-99 to reduce noise from non-demographic age mentions"
     },
     "sex_gender": {
       "description": "Patient's biological sex or gender identity",
-      "confidence": "high"
+      "confidence": "high",
+      "fill_rate": 0.205,
+      "frameworks": ["demographic standard"]
     },
     "location_country": {
       "description": "Country of residence",
-      "confidence": "medium"
+      "confidence": "medium",
+      "frameworks": ["demographic standard"]
     },
     "conditions": {
-      "description": "Medical diagnoses and conditions mentioned",
+      "description": "Diagnosed medical conditions only — not symptoms",
       "confidence": "high",
+      "fill_rate": 0.523,
+      "frameworks": ["RECOVER", "PC-COS"],
       "icd10": "Applied via CONDITION_ICD10_MAP where available"
     },
     "onset_trigger": {
       "description": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-      "confidence": "medium"
+      "confidence": "medium",
+      "fill_rate": 0.353,
+      "frameworks": ["RECOVER"]
     },
-    "symptom_duration": {
-      "description": "Duration of symptoms (months, years, etc.)",
-      "confidence": "low"
+    "illness_duration": {
+      "description": "How long the patient has been ill overall — a whole-illness marker, not per-symptom",
+      "confidence": "low",
+      "fill_rate": 0.183,
+      "frameworks": ["RECOVER"],
+      "notes": "Renamed from symptom_duration in manifest 3.0. The symptom_ prefix read as though it belonged to one symptom; it has always described the illness course as a whole."
     },
-    "symptom_trajectory": {
-      "description": "Whether symptoms are improving, worsening, or stable",
-      "confidence": "medium"
-    },
-    "age_at_onset": {
-      "description": "Patient's age when illness began",
-      "confidence": "medium"
+    "illness_trajectory": {
+      "description": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
+      "confidence": "medium",
+      "fill_rate": 0.172,
+      "frameworks": ["RECOVER"],
+      "notes": "Renamed from symptom_trajectory in manifest 3.0. Per-symptom trajectories are not extracted separately — Reddit patients report global illness course, and splitting it five ways would drop each cell into single-digit fill. Where a patient does state a per-symptom trajectory it lands inside that symptom sub-field's value."
     },
     "medications": {
       "description": "Current or past medications mentioned",
-      "confidence": "high"
+      "confidence": "high",
+      "fill_rate": 0.444,
+      "frameworks": ["clinical standard"]
     },
     "dosage": {
       "description": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit when stated",
-      "confidence": "medium"
+      "confidence": "medium",
+      "frameworks": ["clinical standard"]
     },
     "treatment_outcome": {
-      "description": "Response to treatments (helped, didn't help, worsened, etc.)",
-      "confidence": "medium"
+      "description": "Response to treatments as 'drug: outcome: symptom' triples",
+      "confidence": "medium",
+      "fill_rate": 0.387,
+      "frameworks": ["PC-COS"],
+      "notes": "PC-COS core outcome. Decomposed downstream by normalize.decompose_treatment_outcome into label / drug / symptom columns."
     },
     "procedures": {
       "description": "Medical procedures undergone (tilt table test, colonoscopy, etc.)",
-      "confidence": "high"
+      "confidence": "high",
+      "fill_rate": 0.122,
+      "frameworks": ["clinical standard"]
     },
     "work_disability_status": {
       "description": "Ability to work; disability applications/awards",
-      "confidence": "high"
+      "confidence": "high",
+      "fill_rate": 0.165,
+      "frameworks": ["SF-36"],
+      "notes": "SF-36 role-physical / role-emotional"
     },
     "mental_health": {
       "description": "Mental health conditions or experiences mentioned",
-      "confidence": "medium"
+      "confidence": "medium",
+      "fill_rate": 0.213,
+      "frameworks": ["EQ-5D", "SF-36", "PROMIS", "RECOVER", "PC-COS"],
+      "notes": "The only retained field present in every framework considered"
     },
     "prior_infections": {
       "description": "Prior infections that may be relevant to current illness (EBV, COVID, Lyme, etc.)",
-      "confidence": "medium"
+      "confidence": "medium",
+      "fill_rate": 0.113,
+      "frameworks": ["RECOVER"]
+    },
+    "functional_status_tier": {
+      "description": "Functional capacity level (bedbound, housebound, severe, moderate, mild, mostly_functional)",
+      "confidence": "high",
+      "fill_rate": 0.302,
+      "frameworks": ["EQ-5D", "SF-36", "PROMIS"],
+      "icd10": "Z73.6",
+      "notes": "Promoted from the covidlonghaulers extension in manifest 3.0 — EQ-5D mobility+self-care and SF-36 physical functioning make it universal, not COVID-specific."
+    },
+    "social_impact": {
+      "description": "Social impacts of illness (isolation, relationship strain, lost friends)",
+      "confidence": "medium",
+      "fill_rate": 0.335,
+      "frameworks": ["EQ-5D", "SF-36", "PROMIS"],
+      "notes": "Promoted from base-optional in manifest 3.0. EQ-5D usual activities; SF-36 social functioning; PROMIS social participation."
+    },
+    "alternative_treatments": {
+      "description": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
+      "confidence": "medium",
+      "fill_rate": 0.200,
+      "frameworks": [],
+      "notes": "Promoted from base-optional in manifest 3.0. No framework equivalent — clinical trials do not capture self-directed non-pharmaceutical interventions, which is exactly why patient-authored text is worth mining for it."
+    },
+    "dietary_interventions": {
+      "description": "Dietary changes tried (low-histamine, elimination, carnivore, gluten-free)",
+      "confidence": "medium",
+      "fill_rate": 0.138,
+      "frameworks": [],
+      "notes": "No framework equivalent; retained for the same reason as alternative_treatments."
+    },
+    "misdiagnosis": {
+      "description": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
+      "confidence": "medium",
+      "fill_rate": 0.104,
+      "frameworks": [],
+      "notes": "No outcome-framework equivalent, but grounded in the diagnostic-odyssey literature and not capturable from clinical records."
+    },
+
+    "fatigue_pem": {
+      "description": "Fatigue, post-exertional malaise, crashes, exercise intolerance",
+      "confidence": "high",
+      "frameworks": ["SF-36", "PROMIS", "RECOVER", "PC-COS", "ME/CFS CCC"],
+      "notes": "SF-36 vitality; PC-COS outcomes #1 and #3; ME/CFS CCC cardinal criterion. PEM is the delayed symptom worsening after exertion — distinct from ordinary tiredness but recorded in the same field."
+    },
+    "cognitive_neurological": {
+      "description": "Brain fog, memory and concentration problems, neuropathy, tinnitus, dizziness, headaches",
+      "confidence": "high",
+      "frameworks": ["PROMIS", "RECOVER", "PC-COS", "ME/CFS CCC"],
+      "notes": "ME/CFS CCC neurocognitive criterion"
+    },
+    "cardiovascular_autonomic": {
+      "description": "POTS symptoms, palpitations, orthostatic intolerance, temperature dysregulation",
+      "confidence": "medium",
+      "frameworks": ["RECOVER", "PC-COS", "ME/CFS CCC"],
+      "notes": "ME/CFS CCC autonomic criterion. Records the symptom even when the patient also names POTS as a diagnosis in `conditions`."
+    },
+    "pain": {
+      "description": "Joint, muscle, chest, and nerve pain; headaches",
+      "confidence": "high",
+      "frameworks": ["EQ-5D", "SF-36", "PROMIS", "RECOVER", "PC-COS", "ME/CFS CCC"],
+      "notes": "The only symptom domain present in all six frameworks"
+    },
+    "sleep": {
+      "description": "Insomnia, hypersomnia, unrefreshing sleep, sleep-cycle disruption",
+      "confidence": "high",
+      "frameworks": ["PROMIS", "RECOVER", "PC-COS", "ME/CFS CCC"],
+      "notes": "PC-COS outcome #8; ME/CFS CCC sleep criterion"
+    },
+    "other_symptoms": {
+      "description": "Symptoms outside the five domains above — respiratory, gastrointestinal, skin, hair loss, vision",
+      "confidence": "medium",
+      "frameworks": ["PROMIS", "RECOVER", "PC-COS"],
+      "notes": "Catch-all. PROMIS covers the GI subset. Watch this field's value distribution across runs — a domain that keeps recurring here is a candidate for promotion to its own field."
     }
   },
 
   "base_optional_fields": {
-    "_description": "These fields exist in PATTERNS but are NOT extracted by default. Activate them in an extension schema via 'include_base_fields'.",
+    "_description": "Defined but NOT extracted by default. Activate in an extension schema via 'include_base_fields'.",
     "occupation": {
       "description": "Patient's occupation or job type"
     },
     "bmi_weight": {
       "description": "BMI or weight mentions"
     },
-    "alternative_treatments": {
-      "description": "Alternative/complementary treatments (acupuncture, supplements, etc.)"
-    },
     "genetic_testing": {
       "description": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)"
-    },
-    "social_impact": {
-      "description": "Social impacts of illness (relationships, isolation, etc.)"
     },
     "trauma_history": {
       "description": "Trauma or adverse childhood experiences"

@@ -310,15 +310,15 @@ MODEL CODEBOOK - emulate these field definitions exactly:
       "I wish I could see a specialist" (desire, not actual visit)
       "my doctor referred me somewhere" (no specific specialty named)
 
-  functional_status_tier:
-    description: Functional capacity level (categorical - one of: bedbound, housebound, severe, moderate, mild)
+  symptom_onset_speed:
+    description: How quickly the illness began (categorical - one of: sudden, gradual, stepwise)
     examples:
-      "I've been bedbound for 3 months"  →  extracted_value: "bedbound"
-      "mostly housebound, can't leave without crashing"  →  extracted_value: "housebound"
-      "I'm moderate - can do light tasks"  →  extracted_value: "moderate"
+      "it hit me overnight and I never recovered"  →  extracted_value: "sudden"
+      "it crept up on me over about six months"  →  extracted_value: "gradual"
+      "each reinfection knocked me down another level"  →  extracted_value: "stepwise"
     negative_examples:
-      "I went to bed early" (bedtime, not disability)
-      "I stayed home today" (one-off, not chronic limitation)
+      "I got sick in March 2022" (a date, not onset speed)
+      "my symptoms come and go" (fluctuation, not onset)
 
 {FIELD_DESIGN_STANDARDS}
 
