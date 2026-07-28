@@ -162,7 +162,7 @@ being stamped onto each record.
 |---|---|
 | Demographics | `age`, `sex_gender`, `location_country` |
 | Conditions | `conditions`, `onset_trigger`, `misdiagnosis`, `prior_infections` |
-| Illness course | `symptom_duration`, `symptom_trajectory` |
+| Illness course | `illness_duration`, `illness_trajectory` |
 | Treatments | `medications`, `dosage`, `treatment_outcome`, `procedures`, `alternative_treatments`, `dietary_interventions` |
 | Function and impact | `functional_status_tier`, `work_disability_status`, `mental_health`, `social_impact` |
 

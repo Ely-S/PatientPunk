@@ -73,7 +73,7 @@ FIELD_VOCAB: dict[str, dict[str, list[str]]] = {
         "mixed": ["mixed", "mixed results", "varied"],
         "unknown": ["unknown", "unclear", "not sure"],
     },
-    "symptom_trajectory": {
+    "illness_trajectory": {
         "improving": ["improving", "improved", "getting better", "recovering"],
         "recovered": ["recovered", "recovery", "remission", "fully recovered"],
         "declining": ["worsening", "worse", "severe decline", "declining", "progressive",
@@ -110,7 +110,7 @@ _PCT = re.compile(r"\b(\d{1,3})\s?%")
 
 
 def _regex_rules(field: str, cleaned: str) -> str | None:
-    if field in ("treatment_outcome", "symptom_trajectory"):
+    if field in ("treatment_outcome", "illness_trajectory"):
         m = _PCT.search(cleaned)
         if m:
             pct = int(m.group(1))
@@ -118,7 +118,7 @@ def _regex_rules(field: str, cleaned: str) -> str | None:
             improved = any(w in cleaned for w in
                            ("better", "reduction", "improve", "recovered", "less"))
             if improved:
-                return "recovered" if (field == "symptom_trajectory" and pct >= 80) \
+                return "recovered" if (field == "illness_trajectory" and pct >= 80) \
                     else ("helped" if field == "treatment_outcome" else "improving")
     return None
 
