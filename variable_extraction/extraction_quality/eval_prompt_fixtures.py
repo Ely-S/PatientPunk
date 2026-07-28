@@ -56,8 +56,12 @@ from patientpunk.llm_schema import parse_extraction
 
 ROOT = Path(__file__).parent
 PROJECT_ROOT = ROOT.parent          # variable_extraction/ -- fixture paths are relative to it
-FIXTURE_PATH = ROOT / "fixtures" / "spotcheck_20.json"
+FIXTURE_PATH = ROOT / "fixtures" / "eval_50.json"
 RESULTS_DIR = ROOT / "results"
+PROMPTS_DIR = ROOT / "prompts"
+# Review worksheets live outside fixtures/ so nothing globbing that directory for
+# evaluation sets picks up a half-finished labeling file.
+REVIEW_DIR = ROOT / "review"
 SEP = " | "
 
 
@@ -68,6 +72,45 @@ def _to_cell(values: list[str] | str | None) -> str:
     if isinstance(values, str):
         return values
     return SEP.join(str(v) for v in values)
+
+
+def load_variant(name: str) -> str:
+    """Read a prompts/<name>.md rule overlay, dropping its markdown headings.
+
+    A variant is an additive rule block, so an experiment is a file plus a flag
+    rather than an edit to build_system_prompt -- which means two variants can be
+    compared as two runs instead of two working trees.
+    """
+    path = PROMPTS_DIR / f"{name}.md"
+    if not path.exists():
+        raise SystemExit(f"No such prompt variant: {path}")
+    return "\n".join(
+        line for line in path.read_text().splitlines() if not line.startswith("#")
+    ).strip()
+
+
+def _as_values(value: list[str] | str | None) -> list[str] | None:
+    """A field value from either source (parsed model output, or a CSV cell)."""
+    if value is None or isinstance(value, list):
+        return value
+    return [v.strip() for v in str(value).split(SEP) if v.strip()]
+
+
+def normalize_cells(fields: dict[str, list[str] | str | None]) -> dict[str, str]:
+    """Run one record's fields through the production normalization pass.
+
+    Applies the same lowercase/dedupe/_CANONICAL_MAPS treatment a real run does,
+    so scoring compares production-shaped output on both sides -- otherwise
+    vocabulary variants the pipeline already canonicalizes (e.g. "CFS" ->
+    "me/cfs") show up as false disagreements. Returns {field: cell}.
+    """
+    record = {"fields": {name: _as_values(value) for name, value in fields.items()}}
+    normalize_records([record])
+    return {
+        name: _to_cell(data["values"])
+        for name, data in record["fields"].items()
+        if data.get("values")
+    }
 
 
 def run_one(client, system_prompt: str, post_id: str,
@@ -94,14 +137,7 @@ def run_one(client, system_prompt: str, post_id: str,
     if validated is None:
         return {}, "schema_validation_failed"
     extraction, _dropped = validated
-    fake_record = {"fields": dict(extraction.fields)}
-    normalize_records([fake_record])
-    cells = {
-        name: _to_cell(field_data["values"])
-        for name, field_data in fake_record["fields"].items()
-        if field_data.get("values")
-    }
-    return cells, "ok"
+    return normalize_cells(dict(extraction.fields)), "ok"
 
 
 def main() -> None:
@@ -110,6 +146,7 @@ def main() -> None:
     parser.add_argument("--schema", type=Path, default=None, help="Extension schema JSON; defaults to the fixture's own schema.")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N fixture records.")
     parser.add_argument("--group-guard", action="store_true", help="Enable the group-attribution guard.")
+    parser.add_argument("--prompt-variant", default="", help="Comma-separated names of prompts/<name>.md rule overlays to append.")
     parser.add_argument("--no-cache", action="store_true", help="Bypass the LLM response cache (for measuring run-to-run noise).")
     parser.add_argument("--verbose", action="store_true", help="Print every field, not just mismatches.")
     parser.add_argument("--label", type=str, default="run", help="Short name for this run, used in the results filename.")
@@ -130,13 +167,19 @@ def main() -> None:
     )
     schema = json.loads(schema_path.read_text()) if schema_path else None
     field_descriptions = build_field_descriptions(schema)
-    system_prompt = build_system_prompt(field_descriptions, group_guard=args.group_guard)
+    variants = [v.strip() for v in args.prompt_variant.split(",") if v.strip()]
+    system_prompt = build_system_prompt(
+        field_descriptions,
+        group_guard=args.group_guard,
+        extra_rules=[load_variant(v) for v in variants],
+    )
     prompt_sha = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
 
     print(f"Model: {MODEL_FAST}   Label: {args.label}")
     print(f"Fixture: {args.fixture.name} ({len(records)} records)   "
           f"Schema: {schema_path.name if schema_path else 'base fields only'}   "
-          f"Prompt: {prompt_sha}\n")
+          f"Prompt: {prompt_sha}"
+          f"{'   Variants: ' + ','.join(variants) if variants else ''}\n")
 
     client = get_llm_client()
 
@@ -215,6 +258,7 @@ def main() -> None:
         "fixture": args.fixture.name,
         "schema": str(schema_path) if schema_path else None,
         "group_guard": args.group_guard,
+        "prompt_variants": variants,
         "cache": not args.no_cache,
         "prompt_sha": prompt_sha,
         "system_prompt": system_prompt,

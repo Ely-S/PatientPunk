@@ -63,18 +63,103 @@ because production calls `build_user_message([title, body])`, which joins with
 `normalize.py`, not the model. Stage 2 (`triage.py`) exists to split those out by
 count before any prompt is edited.
 
+## Where this is at (2026-07-27)
+
+The harness and the loop around it are built; **no prompt change has been
+evaluated yet**, deliberately -- the pre-existing scores were measured against
+the wrong input, and editing the prompt before fixing that would have been tuning
+on noise.
+
+Done:
+
+- **Fixture text fixed** and pinned by `tests/test_extraction_quality_fixture.py`.
+  `baseline-v2` above is the number to beat.
+- **`build_fixture.py`** -- deterministic (`--seed 42`) stratified sampler.
+  `fixtures/eval_50.json` exists: the 20 original records plus 30 new, stratified
+  by extraction density (12 high / 10 medium / 5 low / 3 empty, where "empty"
+  means the production run extracted nothing -- the only way to measure false
+  positives on posts with nothing to find). Subreddit share is capped at 50% per
+  stratum, giving 22 covidlonghaulers / 19 cfs / 8 LongCovid / 1
+  LongHaulersRecovery instead of the corpus's 55% covidlonghaulers.
+- **`label_fixture.py`** -- two-model adjudication. Labels each new record with
+  `anthropic/claude-opus-5`, compares against the production deepseek run's
+  labels for the same post, and promotes only the cells where both models agree
+  (after `normalize_records`) to gold, tagged `gold_source: "agreed"`.
+  Disagreements go to a `fixtures/review_*.json` file for a human pass and come
+  back via `--apply` as `gold_source: "adjudicated"`.
+- **`triage.py`** -- classifies every mismatch into the failure taxonomy (see
+  README) and prints a field x code matrix, so the next prompt edit is chosen by
+  count rather than by anecdote. `--propose-gold-fixes` emits gold corrections as
+  a review file rather than applying them, because a model that can silently
+  rewrite its own answer key is not being measured.
+- **`compare.py`** -- run-vs-run per-field deltas plus the named cells fixed and
+  newly broken. A macro-f1 gain that breaks a field is a regression, and the
+  macro number alone hides it.
+- **`--prompt-variant`** -- `build_system_prompt(..., extra_rules=...)` plus
+  `prompts/<name>.md` overlays, generalizing the mechanism `group_guard` already
+  used. An experiment is now a file and a flag, not an edit to the working tree;
+  runs record `prompt_sha` and the variant names.
+
+In flight -- **`eval_50.json` is not ready to score against yet**:
+
+The labeling pass over the 30 new records is done. `claude-opus-5` and the
+production `deepseek-v4-flash` run agreed on **102 cells** (now gold,
+`gold_source: "agreed"`) and disagreed on **146**, written to
+`fixtures/review_20260728T035253Z.json` awaiting adjudication. Those 146 fields
+currently have no gold, so scoring the 50-record set now would read them as MISS
+and manufacture a fake regression. Use `baseline-v2` on the 20-record set until
+the review is applied.
+
+The disagreement split says something useful on its own, before any of it is
+resolved:
+
+| shape | n | what it usually is |
+|---|---|---|
+| both models produced values, different | 62 | granularity and format (`covid` vs `covid-19`, `blood test` vs `blood tests`, `2-4 mg` vs `2-4 mg nicotine gum`) |
+| opus only | 50 | production model under-extracting -- recall gap |
+| production only | 34 | opus declining to infer where production inferred (`functional_status_tier`, `infection_count: 1` from a single mentioned infection) |
+
+Top disagreement fields: `prior_infections` (14), `symptom_duration` (12),
+`conditions` / `treatment_outcome` / `social_impact` / `mental_health` (11 each).
+`prior_infections` topping the list is mostly `covid` vs `covid-19` vs empty --
+a normalization question, not a prompt one.
+
+Adjudication needs the full post text per cell and real judgment; it is the one
+step in this pipeline that cannot be automated without letting a model grade its
+own work. Budget it as its own pass.
+
 ## Next up
 
-- Grow the fixture to 50 records (`build_fixture.py` + `label_fixture.py`).
-- Run `triage.py` on `baseline-v2` and let the field x code matrix pick the first
-  prompt variant, rather than guessing from anecdotes.
-- Measure the noise floor: two `--no-cache` baseline-v2 runs. Deltas below that
-  spread are not results.
-- Candidates carried forward, to be confirmed or dropped by the triage matrix:
-  - `treatment_outcome`: don't infer "helped" when the author still reports the
-    symptom (`t3_vkkcui`).
-  - `conditions`/`mental_health`: "the author is discussing X" vs "has X"
-    (`t3_lmu7ty`, `t3_sa85zi` -- candidate adds depression/anxiety to conditions).
-  - `functional_status_tier`/`social_impact`: require near-verbatim support
-    (`t3_156wgqv`, `t3_6ygbyh`).
-- Once the prompt is stable, compare cheaper/faster models at fixed prompt.
+1. **Adjudicate the 146 disagreements** in `fixtures/review_20260728T035253Z.json`
+   (fill `resolved`), then `label_fixture.py --apply`. Two decisions to settle
+   *before* starting, and to write down here, because inconsistency across 146
+   cells is worse than either choice:
+   - `dosage`: bare dose (`2-4 mg`) or dose+drug (`2-4 mg nicotine gum`)? The
+     field description says "retain the number and unit"; `medications` already
+     holds the drug name.
+   - `functional_status_tier`: does it require the author to state their function
+     level, or may it be read off described capacity? Production infers it freely
+     (that is most of the 34 production-only cells); opus almost never does.
+2. Re-run the baseline on the full 50 (`--label baseline-50`) and treat that as
+   the new reference row. `baseline-v2` stays as the 20-record reference.
+3. Measure the noise floor: two `--no-cache` runs of the same config. Record the
+   macro-f1 spread here. **Deltas below it are not results** -- without this
+   number every subsequent row is unfalsifiable.
+4. `triage.py` on the 50-record baseline; let the field x code matrix pick the
+   first variant. Route `vocab_variant` / `granularity` counts to
+   `patientpunk/normalize.py` and `gold_wrong` back into the fixture -- neither is
+   a prompt problem, and spending a prompt round on them is exactly the mistake
+   the `me/cfs` DIFFs already cost once.
+5. Write the top-count variant into `prompts/`, run, `compare.py` against the
+   baseline, add a row here. Repeat until the top code stops moving.
+6. Only once the prompt is stable: compare cheaper/faster models at fixed prompt.
+
+Prompt candidates carried forward from the baseline-v2 mismatches, to be
+confirmed or dropped by the triage matrix rather than assumed:
+
+- `treatment_outcome`: don't infer "helped" when the author still reports the
+  symptom (`t3_vkkcui`).
+- `conditions`/`mental_health`: "the author is discussing X" vs "has X"
+  (`t3_lmu7ty`, `t3_sa85zi` -- candidate adds depression/anxiety to conditions).
+- `functional_status_tier`/`social_impact`: require near-verbatim support
+  (`t3_156wgqv`, `t3_6ygbyh`).

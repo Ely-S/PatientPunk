@@ -37,6 +37,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Sequence
 
 try:
     import anthropic
@@ -279,11 +280,20 @@ GROUP_GUARD_RULE = (
 
 
 def build_system_prompt(field_descriptions: dict[str, str], *,
-                        group_guard: bool = False) -> str:
+                        group_guard: bool = False,
+                        extra_rules: Sequence[str] = ()) -> str:
+    """Build the extraction system prompt.
+
+    ``extra_rules`` are additional rule blocks appended to the field-specific
+    rules -- the mechanism ``group_guard`` uses, generalized so a prompt
+    experiment is a file plus a flag rather than an edit to this function.
+    Comparing two variants then means comparing two runs, not two working trees.
+    """
     fields_block = "\n".join(
         f"  - {field}: {desc}" for field, desc in sorted(field_descriptions.items())
     )
-    guard_block = f"\n{GROUP_GUARD_RULE}" if group_guard else ""
+    rules = ([GROUP_GUARD_RULE] if group_guard else []) + [r.strip() for r in extra_rules if r.strip()]
+    guard_block = "".join(f"\n{rule}" for rule in rules)
     return f"""You are a biomedical data extraction assistant for the PatientPunk research project.
 Your job is to read patient-authored text from Reddit and extract structured biomedical information.
 

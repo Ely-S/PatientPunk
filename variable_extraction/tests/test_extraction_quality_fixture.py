@@ -23,6 +23,7 @@ from patientpunk.llm_extract import build_field_descriptions
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = PROJECT_ROOT / "extraction_quality" / "fixtures"
 FIXTURE_PATHS = sorted(FIXTURE_DIR.glob("*.json"))
+assert FIXTURE_PATHS, f"no fixtures found in {FIXTURE_DIR}"
 
 
 @pytest.fixture(params=FIXTURE_PATHS, ids=lambda p: p.name)

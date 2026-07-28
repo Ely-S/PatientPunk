@@ -1,0 +1,1030 @@
+{
+  "timestamp": "20260728T035253Z",
+  "fixture": "eval_50.json",
+  "labeler": "anthropic/claude-opus-5",
+  "_instructions": "For each entry read the post's `texts` in the fixture and set `resolved` to the correct cell value (values joined with ' | '), or \"\" if the field should be empty. Leave null to skip. Then: python label_fixture.py --fixture eval_50.json --apply review_20260728T035253Z.json",
+  "disagreements": [
+    {
+      "post_id": "t3_yud4bw",
+      "field": "conditions",
+      "labeler": "long covid | cervical radiculopathy | neutropenia",
+      "production": "long covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "onset_trigger",
+      "labeler": "",
+      "production": "infection",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "medications",
+      "labeler": "nicotine gum | nicotine patch | butyrate | omega 3s",
+      "production": "nicotine gum | nicotine patch | butyrate | omega-3s (flaxseed meal)",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "dosage",
+      "labeler": "2-4 mg | 16 mg/day | 7 mg/24 h | 600 mg twice daily",
+      "production": "2-4 mg nicotine gum | 16 mg/day nicotine | 7 mg/24h nicotine patch | 600 mg butyrate twice daily | 600 mg butyrate 2-4 times daily",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "treatment_outcome",
+      "labeler": "nicotine gum: mixed | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch: helped: sleep",
+      "production": "nicotine gum: helped: overall functioning | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch + butyrate: helped: migraine",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "work_disability_status",
+      "labeler": "medical leave | unable to attend graduate program",
+      "production": "on medical leave",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "social_impact",
+      "labeler": "",
+      "production": "medical leave | unable to return to graduate program",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "mild",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "biomarker_results",
+      "labeler": "positive ana 1:80 speckled | mild neutropenia",
+      "production": "ana 1:80 speckled | mild neutropenia",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "symptom_trajectory",
+      "labeler": "full remission",
+      "production": "improving",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "medications",
+      "labeler": "low-dose abilify | vitamin d | iron | b-12 | b1 | co-q10 | omega 3 | iodine",
+      "production": "abilify | vitamin d | iron | vitamin b12 | vitamin b1 | coenzyme q10 | omega-3 | iodine",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "dosage",
+      "labeler": "0.75 mg daily | 1.0 mg | 3 l water | 650 g raw cruciferous veg | 1/2 cup chia or flax",
+      "production": "0.75 mg daily | 1.0 mg",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "treatment_outcome",
+      "labeler": "golder autoimmune protocol: helped: pem | low-dose abilify: helped: function | low-dose abilify: worsened: mood swings | low-dose abilify: worsened: menstrual irregularities | cold: helped: cfs symptoms | get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: mixed: crashes",
+      "production": "get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: helped: pem | autoimmune protocol: helped: pem | autoimmune protocol: helped: function | abilify: helped: fatigue | abilify: worsened: mood",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "work_disability_status",
+      "labeler": "unable to attend school",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "prior_infections",
+      "labeler": "repeat viral infections | covid | cold",
+      "production": "repeat viral infections",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "alternative_treatments",
+      "labeler": "golder autoimmune protocol | raw plant-based diet | pacing | get | naturopath | whole food plant based diet | green smoothies",
+      "production": "goldner autoimmune protocol | pacing | diet improvements",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "social_impact",
+      "labeler": "missed school",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "biomarker_results",
+      "labeler": "bmi 18 to 15",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "work_disability_status",
+      "labeler": "left college",
+      "production": "dropped out of college",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "mental_health",
+      "labeler": "trauma | depression | anxiety diagnosis dismissal",
+      "production": "depression | anxiety | trauma",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "social_impact",
+      "labeler": "isolation | family conflict | breakup | medical dismissal",
+      "production": "isolation | family conflict | relationship strain",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "severe",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "conditions",
+      "labeler": "long covid | covid-19",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "treatment_outcome",
+      "labeler": "hydroxyzine: no_effect: insomnia",
+      "production": "hydroxyzine: no_effect",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "procedures",
+      "labeler": "antibody test",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "long_covid_duration_months",
+      "labeler": "6",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "mild",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "conditions",
+      "labeler": "",
+      "production": "hypothyroidism",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "onset_trigger",
+      "labeler": "viral thyroid infection",
+      "production": "viral infection of thyroid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "treatment_outcome",
+      "labeler": "levothyroxine: no_effect: fatigue",
+      "production": "levothyroxine: no_effect",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "procedures",
+      "labeler": "blood tests",
+      "production": "blood test",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "work_disability_status",
+      "labeler": "cannot work in trained industry | retraining | part-time only",
+      "production": "retraining | part-time only",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "mental_health",
+      "labeler": "mental exhaustion | low self-worth",
+      "production": "mental fatigue | frustration | grief",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "prior_infections",
+      "labeler": "viral thyroid infection",
+      "production": "viral infection of thyroid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "functional_status_tier",
+      "labeler": "moderate",
+      "production": "severe",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "biomarker_results",
+      "labeler": "tsh 9.5 | positive thyroid antibodies | tsh slightly high",
+      "production": "tsh 9.5 | thyroid antibodies positive",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "conditions",
+      "labeler": "",
+      "production": "long covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "symptom_duration",
+      "labeler": "5 months",
+      "production": "a few days",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "social_impact",
+      "labeler": "",
+      "production": "academic impairment | reduced leisure",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "moderate",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "conditions",
+      "labeler": "covid-19 | ibs-m",
+      "production": "ibs-m | long covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "age_at_onset",
+      "labeler": "",
+      "production": "22",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "treatment_outcome",
+      "labeler": "antivert: no_effect: dizziness | scopolamine patch: mixed: dizziness | headache medication: mixed: headaches | metoprolol: helped | modafinil: mixed: fatigue | antibiotic: no_effect | steroid: no_effect",
+      "production": "metoprolol: helped | modafinil: helped: fatigue | modafinil: no_effect: fatigue | antivert: no_effect | scopolamine patch: helped: dizziness | scopolamine patch: worsened: nausea | scopolamine patch: worsened: dizziness | headache medication: helped: headaches | headache medication: worsened: dizziness | antibiotic: no_effect | steroid: no_effect",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "procedures",
+      "labeler": "mri | tcd | eeg | heart ultrasound | ekg | chest x-ray | blood tests | hearing test | vng balance test",
+      "production": "blood tests | mri | tcd | eeg | chest x-ray | ekg | hearing test | vng balance test",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "prior_infections",
+      "labeler": "covid-19",
+      "production": "covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "social_impact",
+      "labeler": "conversation difficulty",
+      "production": "relationship strain | new job stress",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "long_covid_duration_months",
+      "labeler": "",
+      "production": "6",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "biomarker_results",
+      "labeler": "normal tsh | negative ana | negative lyme | normal mri | normal eeg | normal tcd | extra heart beats",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "onset_trigger",
+      "labeler": "covid",
+      "production": "vaccine",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "symptom_duration",
+      "labeler": "a little over two months",
+      "production": "2 months",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "age_at_onset",
+      "labeler": "22",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "medications",
+      "labeler": "turmeric | vitamin d | vitamin c | zinc | fish oil | quercetin | melatonin | moderna vaccine",
+      "production": "turmeric | vitamin d | vitamin c | zinc | fish oil | quercetin | melatonin",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "treatment_outcome",
+      "labeler": "moderna vaccine: mixed: headache, fatigue",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "work_disability_status",
+      "labeler": "nursing student | job lined up",
+      "production": "student",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "alternative_treatments",
+      "labeler": "avoiding dairy, gluten, spinach",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "mild",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "sex_gender",
+      "labeler": "",
+      "production": "female",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "conditions",
+      "labeler": "",
+      "production": "long covid | chronic cough",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "onset_trigger",
+      "labeler": "",
+      "production": "covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "symptom_duration",
+      "labeler": "",
+      "production": "5 months",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "medications",
+      "labeler": "",
+      "production": "unspecified pill",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "treatment_outcome",
+      "labeler": "",
+      "production": "unspecified pill: unknown",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "mental_health",
+      "labeler": "stress",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "prior_infections",
+      "labeler": "",
+      "production": "covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "social_impact",
+      "labeler": "caregiver burden",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "long_covid_duration_months",
+      "labeler": "",
+      "production": "5",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "conditions",
+      "labeler": "me/cfs | fibromyalgia | ibs",
+      "production": "me/cfs | fibromyalgia | migraines | ibs",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "symptom_duration",
+      "labeler": "since age 22",
+      "production": "9 years",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "work_disability_status",
+      "labeler": "lost job | disability denied | working again",
+      "production": "working full-time | denied disability",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "social_impact",
+      "labeler": "no social life | family disbelief | financial hardship",
+      "production": "lost job | no social life | family rejection",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "severe",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "onset_trigger",
+      "labeler": "mono and covid infection",
+      "production": "mono and covid",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "symptom_trajectory",
+      "labeler": "improved then worsened",
+      "production": "relapsing",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "age_at_onset",
+      "labeler": "15",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "work_disability_status",
+      "labeler": "struggling with homeschool",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "mental_health",
+      "labeler": "low mood",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "long_covid_duration_months",
+      "labeler": "",
+      "production": "5-6 months",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "conditions",
+      "labeler": "covid-19 | gluten intolerance | anxiety",
+      "production": "anxiety | gluten intolerance",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "symptom_duration",
+      "labeler": "since january",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "symptom_trajectory",
+      "labeler": "slowly improving | waves of symptoms",
+      "production": "improving",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "age_at_onset",
+      "labeler": "23",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "mental_health",
+      "labeler": "anxiety | panic attack",
+      "production": "anxiety | panic attacks",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "alternative_treatments",
+      "labeler": "exercise | gluten-free diet",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "long_covid_duration_months",
+      "labeler": "2",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "functional_status_tier",
+      "labeler": "",
+      "production": "mild",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "biomarker_results",
+      "labeler": "normal cardiology evaluation",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16i22nr",
+      "field": "treatment_outcome",
+      "labeler": "pacing: helped: anxiety | pacing: helped: pem",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16i22nr",
+      "field": "alternative_treatments",
+      "labeler": "pacing",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "symptom_trajectory",
+      "labeler": "not improving",
+      "production": "worsening",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "mental_health",
+      "labeler": "extreme anxiety | intrusive thought cycles | feelings of doom",
+      "production": "anxiety | ocd | intrusive thoughts | feelings of doom",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "covid-19",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "conditions",
+      "labeler": "covid-19",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "symptom_duration",
+      "labeler": "since june 2022",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "symptom_trajectory",
+      "labeler": "persistent",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "treatment_outcome",
+      "labeler": "albuterol: worsened: lung burning | albuterol: worsened: tachycardia | levalbuterol: worsened: lung burning | spiriva: worsened: lung burning | ipratropium: worsened: lung burning | nac: worsened: lung burning | quercetin: worsened: lung burning | prednisone: worsened: lung burning | steam: helped: pain",
+      "production": "albuterol: worsened: burning | albuterol: worsened: tachycardia | levalbuterol: worsened: burning | spiriva: worsened: burning | ipratropium: worsened: burning | nac: worsened: burning | quercetin: worsened: burning | prednisone: worsened: burning | steam: helped: burning",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "prior_infections",
+      "labeler": "covid june 2022",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "alternative_treatments",
+      "labeler": "steam inhalation",
+      "production": "steam",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "symptom_duration",
+      "labeler": "since last march",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "symptom_trajectory",
+      "labeler": "improving",
+      "production": "relapsing",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "onset_trigger",
+      "labeler": "",
+      "production": "bronchitis",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "symptom_duration",
+      "labeler": "2 years",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "mental_health",
+      "labeler": "fear",
+      "production": "scared",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "symptom_duration",
+      "labeler": "since age 13",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "mental_health",
+      "labeler": "suicidal ideation | shame | hopelessness | childhood abuse trauma",
+      "production": "suicidal ideation | depression",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "social_impact",
+      "labeler": "no contact family | isolation | lack of support",
+      "production": "family estrangement | isolation | shame",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "conditions",
+      "labeler": "covid-19",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "symptom_duration",
+      "labeler": "",
+      "production": "10 days",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "work_disability_status",
+      "labeler": "affecting job",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "prior_infections",
+      "labeler": "covid-19",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "social_impact",
+      "labeler": "",
+      "production": "affecting job",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "location_country",
+      "labeler": "usa",
+      "production": "united states",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "treatment_outcome",
+      "labeler": "cymbalta: helped: pain | exercise: worsened",
+      "production": "cymbalta: helped: pain",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "mental_health",
+      "labeler": "emotional distress",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "alternative_treatments",
+      "labeler": "prescribed exercise | rest",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "conditions",
+      "labeler": "gerd | covid",
+      "production": "gerd",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "symptom_duration",
+      "labeler": "just over a month",
+      "production": "1 month",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "long_covid_duration_months",
+      "labeler": "1 month",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "symptom_duration",
+      "labeler": "5 months",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "procedures",
+      "labeler": "ecg | er visit",
+      "production": "ecg",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "mental_health",
+      "labeler": "sadness",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "prior_infections",
+      "labeler": "covid",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "social_impact",
+      "labeler": "disbelief from family | lack of support",
+      "production": "family disbelief",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "infection_count",
+      "labeler": "",
+      "production": "1",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "long_covid_duration_months",
+      "labeler": "5",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "biomarker_results",
+      "labeler": "ecg change",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_r6bzlh",
+      "field": "mental_health",
+      "labeler": "",
+      "production": "loss of hope",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "symptom_trajectory",
+      "labeler": "relapsing",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "treatment_outcome",
+      "labeler": "keto diet: worsened: swollen lymph nodes | reintroduced carbs: helped: swelling",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "procedures",
+      "labeler": "physical exam | blood work | urine test",
+      "production": "physical exam | blood work | urine ketone test",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "alternative_treatments",
+      "labeler": "keto diet | reintroduced carbs",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "biomarker_results",
+      "labeler": "high urine ketones | otherwise normal blood work",
+      "production": "high ketones in urine",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_l6strv",
+      "field": "symptom_trajectory",
+      "labeler": "not improving",
+      "production": "",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_w7kbly",
+      "field": "social_impact",
+      "labeler": "dating difficulty",
+      "production": "relationship difficulty",
+      "resolved": null
+    },
+    {
+      "post_id": "t3_z64xws",
+      "field": "symptom_trajectory",
+      "labeler": "relapsing",
+      "production": "",
+      "resolved": null
+    }
+  ]
+}
