@@ -339,14 +339,20 @@ analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix 
 
 Some symptoms belong in more than one symptom domain — a migraine is both `pain` and
 `cognitive_neurological`. The prompt tells the model to record those in every domain
-they belong to, but **measured on 300 posts it complies only 24% of the time** (21% for
-headaches; insomnia never once reached `fatigue_pem`). The result is not merely
-incomplete: the same symptom lands in one domain on one post and two on the next, so the
-domain split carries model variance that clustering would read as patient variance.
+they belong to, but **measured on 300 posts it complies only 21% of the time** (25% for
+headaches). The result is not merely incomplete: the same symptom lands in one domain on
+one post and two on the next, so the domain split carries model variance that clustering
+would read as patient variance.
 
 So the routing runs in code instead: the model finds the symptom once, wherever it filed
-it, and a fixed table copies it into the rest — **24% -> 100%** on the listed symptoms,
+it, and a fixed table copies it into the rest — **21% -> 100%** on the listed symptoms,
 reproducible across model versions because it is a lookup rather than a judgement.
+
+The table is deliberately short. A symptom qualifies only if it is multi-domain *by
+definition* — a headache is head pain and a neurological symptom, always. Symptoms that
+are multi-domain only *in context* are excluded, because this is a substring lookup and
+cannot see context the value does not carry: bare `insomnia`, `vertigo`, and `chest pain`
+all stay where the model filed them.
 
 To reproduce raw model placement instead:
 
@@ -613,7 +619,7 @@ variable_extraction/
 ├── .env                           API keys (gitignored)
 │
 ├── schemas/
-│   ├── base_schema.json           14 base fields + 7 base-optional fields
+│   ├── base_schema.json           25 base fields + 5 base-optional fields
 │   └── covidlonghaulers_schema.json  COVID-specific extension fields
 │
 ├── patientpunk/                   Importable Python library
@@ -669,7 +675,7 @@ not split into separate sections in the record itself.
 
 ### Two-layer schema system
 
-**Base fields** (always extracted): 15 universal fields in `BASE_FIELD_DESCRIPTIONS`
+**Base fields** (always extracted): 25 universal fields in `BASE_FIELD_DESCRIPTIONS`
 covering demographics, conditions, treatments (including dosage), and functional
 status.
 

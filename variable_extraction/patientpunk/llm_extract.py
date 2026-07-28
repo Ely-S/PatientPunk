@@ -847,51 +847,80 @@ _CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
 # Symptoms that belong in more than one domain, and where they belong.
 # A value whose text contains any trigger substring is copied into every domain
 # listed for it. Substring matching (not equality) because patients qualify the
-# symptom -- "terrible headache", "daily migraines", "chest pain when standing".
+# symptom -- "terrible headache", "daily migraines".
+#
+# ADMISSION RULE: a trigger belongs here only if it is multi-domain *by
+# definition*, never by context. This is a lookup on the value string, so it
+# cannot see context the string does not carry, and a rule that needs context to
+# be correct will be wrong on every value that omits it. Concretely:
+#   - "vertigo" is vestibular, not autonomic -- excluded.
+#   - bare "chest pain" may be musculoskeletal, costochondral, or cardiac --
+#     excluded; routing it to cardiovascular_autonomic is a diagnosis, not a
+#     lookup.
+#   - bare "insomnia" is sleep onset/maintenance, not post-exertional malaise --
+#     excluded. The model filed it under `sleep` alone in 16/16 records, which is
+#     it being *right*, not it being inconsistent.
+#   - "neuropathy" alone is often numbness with no pain -- excluded; the
+#     pain-bearing forms ("nerve pain", "burning pain") are kept.
+# Dizziness earns a place only with explicit orthostatic context, which is the
+# form the prompt's own example uses ("dizzy when I stand up").
 CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
-    (("headache", "migraine", "head pain", "head pressure"),
+    # A headache is head pain and a neurological symptom, both by definition.
+    (("headache", "migraine", "head pain"),
      frozenset({"pain", "cognitive_neurological"})),
-    (("dizz", "lighthead", "light-head", "vertigo"),
-     frozenset({"cardiovascular_autonomic", "cognitive_neurological"})),
-    (("chest pain", "chest tight", "chest pressure"),
-     frozenset({"pain", "cardiovascular_autonomic"})),
-    (("neuropath", "nerve pain", "burning pain", "burning feet"),
+    # Pain of neurological origin; both domains by definition.
+    (("nerve pain", "neuropathic pain", "burning pain", "burning feet"),
      frozenset({"pain", "cognitive_neurological"})),
+    # Sleep that does not relieve fatigue is a sleep symptom whose content is
+    # fatigue -- the prompt's own worked example.
     (("unrefreshing sleep", "unrefreshed sleep", "non-restorative sleep",
       "wake up exhausted", "wake exhausted"),
      frozenset({"sleep", "fatigue_pem"})),
-    (("insomnia",), frozenset({"sleep", "fatigue_pem"})),
+    # Orthostatic only: the standing context is what makes it autonomic.
+    (("dizzy when stand", "dizziness when stand", "dizzy on stand",
+      "dizziness on stand", "dizzy standing", "dizziness standing",
+      "dizzy when i stand", "orthostatic dizz", "dizzy getting up",
+      "lightheaded when stand", "lightheaded on stand", "lightheaded standing"),
+     frozenset({"cardiovascular_autonomic", "cognitive_neurological"})),
 )
 
 
-def fan_out_cross_domain_symptoms(records: list[dict]) -> int:
+def fan_out_cross_domain_symptoms(
+    records: list[dict],
+    confidence_by_field: dict[str, str] | None = None,
+) -> int:
     """Copy multi-domain symptoms into every domain they belong to.
 
     Returns the number of values added. Idempotent: a symptom the model already
     cross-listed is left alone.
 
     Measured on 300 r/covidlonghaulers posts, Haiku follows the prompt's
-    cross-listing instruction 28% of the time (17% for headaches, the prompt's
-    own worked example). The resulting split is not just incomplete but
-    *inconsistent* -- the same symptom lands in one domain on one post and two
-    on the next -- so a clustering feature built on it carries noise that looks
-    like signal. Routing a known symptom to known domains is a lookup, not a
-    judgement, so it belongs in code where it is 100% reproducible.
+    cross-listing instruction on a minority of records, and -- the part that
+    matters -- inconsistently: the same symptom lands in one domain on one post
+    and two on the next, so a clustering feature built on the split carries model
+    variance that looks like patient variance. Routing a known symptom to known
+    domains is a lookup, not a judgement, so it belongs in code where it is 100%
+    reproducible. See CROSS_DOMAIN_SYMPTOMS for which symptoms qualify and why
+    the bar is "multi-domain by definition".
+
+    ``confidence_by_field`` supplies the schema-declared confidence for a
+    destination domain that had no values before the fan-out; without it such a
+    domain would carry values with a null confidence.
 
     Only symptoms in CROSS_DOMAIN_SYMPTOMS fan out; a novel cross-domain symptom
     still depends on the model. That is a smaller gap than the one this closes.
     """
+    confidence_by_field = confidence_by_field or {}
     added = 0
     for rec in records:
-        fields = rec.get("fields", {})
-        present = {d: fields.get(d) for d in SYMPTOM_DOMAINS if d in fields}
-        if not present:
-            continue
+        fields = rec.setdefault("fields", {})
         for triggers, domains in CROSS_DOMAIN_SYMPTOMS:
-            # Collect matching values from wherever the model happened to file them.
+            # Read from every domain, so a symptom the model filed outside this
+            # rule's domains entirely still reaches the right ones.
             matched = [
-                v for entry in present.values()
-                for v in (entry.get("values") or [])
+                v
+                for domain in SYMPTOM_DOMAINS
+                for v in ((fields.get(domain) or {}).get("values") or [])
                 if isinstance(v, str) and any(t in v.lower() for t in triggers)
             ]
             if not matched:
@@ -899,7 +928,10 @@ def fan_out_cross_domain_symptoms(records: list[dict]) -> int:
             for domain in domains:
                 entry = fields.get(domain)
                 if entry is None:
-                    continue
+                    # The model omitted the key; materialise it rather than drop
+                    # the routing.
+                    entry = {"values": [], "confidence": None}
+                    fields[domain] = entry
                 values = entry.get("values") or []
                 existing = {v.lower() for v in values if isinstance(v, str)}
                 for v in matched:
@@ -908,6 +940,8 @@ def fan_out_cross_domain_symptoms(records: list[dict]) -> int:
                         existing.add(v.lower())
                         added += 1
                 entry["values"] = values
+                if values and entry.get("confidence") is None:
+                    entry["confidence"] = confidence_by_field.get(domain, "medium")
     return added
 
 
@@ -1175,7 +1209,7 @@ def normalize_records(
     # After canonicalization, so the fan-out copies canonical values ("migraines",
     # not "migraine") and one trigger covers every surface form.
     if cross_domain_fanout:
-        fan_out_cross_domain_symptoms(records)
+        fan_out_cross_domain_symptoms(records, confidence_by_field)
 
     return records
 

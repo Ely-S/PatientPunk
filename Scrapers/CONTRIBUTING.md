@@ -89,10 +89,9 @@ Writes are **incremental** — each user file is flushed to disk as soon as it i
 Reads the corpus and runs regex pattern matching across all text fields. Key design decisions:
 
 - **Two-layer schema**: a fixed universal *base* (23 fields always extracted) plus optional researcher-defined *extension* fields loaded from a JSON schema file (`--schema`).
-- **No model inference required** — pure Python regex, runs anywhere.
 - **Structured output** — every record is a fully-normalised v2.0 PatientPunk record; missing fields are `null`, not absent.
-- **ICD-10 mapping** — condition values in the `conditions` field are automatically mapped to ICD-10 codes where known.
-- **Provenance tracking** — every field carries `"self_reported"` (user history) or `"mentioned_by_other"` (subreddit post) provenance.
+- **ICD-10 mapping** — ICD-10 codes for known condition values are carried in the schema files and the generated codebook.
+- **Source tracking** — `record_meta.source` marks each record as `user_history` or `subreddit_post`.
 
 ---
 
@@ -130,14 +129,17 @@ Base and extension fields share one flat `fields` namespace — the record does 
 
 ### Field object schema
 
-Every extracted field (in both `base` and `extension`) is an object with four keys:
+Every extracted field is an object with two keys:
 
 | Key | Type | Notes |
 |---|---|---|
-| `values` | `list[str]` or `null` | Deduplicated match list; `null` if nothing found |
-| `icd10_candidates` | `dict` or `null` | `{value: code}` map; only present on `conditions` |
-| `provenance` | `"self_reported"` \| `"mentioned_by_other"` \| `null` | `null` when `values` is `null` |
-| `confidence` | `"high"` \| `"medium"` \| `"low"` \| `null` | From `BASE_FIELD_CONFIDENCE` or schema; `null` when `values` is `null` |
+| `values` | `list[str]` or `null` | Deduplicated value list; `null` or `[]` if nothing found |
+| `confidence` | `"high"` \| `"medium"` \| `"low"` \| `null` | The field's schema-declared tier; `null` when there are no values |
+
+`provenance` and `icd10_candidates` were removed with the regex extraction path — every
+value now comes from the LLM, so there is nothing for a per-value provenance key to
+distinguish. ICD-10 hints live in the schema files and the generated codebook instead of
+being stamped onto each record.
 
 ### `source` values
 
@@ -409,7 +411,7 @@ Expected output should include `long_covid_duration_months` (extension) and `fun
 ### 3. Full corpus run
 
 After scraping with `scrape_corpus.py`, run the extractor on the real corpus and check:
-- `patientpunk_records_base.json` — every record has all 14 base fields (null where not found)
+- `records_base.json` — every record has all 25 base fields (null where not found)
 - `extraction_metadata_base.json` — `field_hit_counts` shows reasonable hit rates
 - No Python exceptions
 

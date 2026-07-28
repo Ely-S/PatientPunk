@@ -66,16 +66,27 @@ least one of its domains:
 
 | Symptom | Both domains | One only | Compliance |
 |---|---|---|---|
-| insomnia | 0 | 16 | **0%** |
-| neuropathy | 1 | 6 | 14% |
-| headache / migraine | 5 | 19 | 21% |
-| chest pain | 4 | 10 | 29% |
+| nerve / burning pain | 0 | 5 | **0%** |
+| headache / migraine | 5 | 15 | 25% |
 | unrefreshing sleep | 1 | 2 | 33% |
-| dizziness | 8 | 8 | 50% |
-| **overall** | **19** | **61** | **24%** |
+| orthostatic dizziness | 0 | 0 | — (no instances) |
+| **overall** | **6** | **22** | **21%** |
 
-Insomnia never once reached `fatigue_pem`, and the prompt's own first worked example
-(migraine → `pain` + `cognitive_neurological`) lands at 21%.
+The prompt's own first worked example (migraine → `pain` + `cognitive_neurological`)
+lands at 25%. Orthostatic dizziness did not occur in this sample in a form the rule
+matches, so that rule is justified on definition but unvalidated on data.
+
+**Which symptoms qualify is a separate question, and an earlier version of this table
+got it wrong.** A first pass also routed bare `insomnia` into `fatigue_pem`, bare
+`vertigo` and `dizziness` into `cardiovascular_autonomic`, and bare `chest pain` into
+`cardiovascular_autonomic`. Those are not multi-domain by definition — insomnia is sleep
+onset, vertigo is vestibular, chest pain is as often musculoskeletal as cardiac — and
+routing them was a diagnosis dressed up as a lookup. The insomnia case is the instructive
+one: the model filed it under `sleep` alone in **16/16** records, which read as 0%
+compliance but was the model being *right*. Perfect consistency against a rule is
+evidence the rule is wrong, not that the model is. `CROSS_DOMAIN_SYMPTOMS` now admits a
+trigger only if it is multi-domain by definition, and the negative cases are pinned by
+tests.
 
 **Why this matters more than the raw miss rate.** The problem is not that the model
 picks the "wrong" domain — for many symptoms there is no single right answer, which is
@@ -93,10 +104,12 @@ once — in whichever domain it chose — and `llm_extract.fan_out_cross_domain_
 copies it into the others from `CROSS_DOMAIN_SYMPTOMS`. That is 100% consistent by
 construction, reproducible across model versions, and independent of temperature.
 
-- **Measured:** 24% → **100%** (81/81) re-normalising the same 300 records. The fan-out
-  also rescues symptoms the model filed entirely outside a rule's domains — a "chest
-  pain" left in `other_symptoms` still reaches `pain` and `cardiovascular_autonomic`,
-  which is why the ON total is one pair higher than the OFF total.
+- **Measured:** 21% → **100%** (28/28) re-normalising the same 300 records, adding 24
+  values. The fan-out also rescues symptoms the model filed entirely outside a rule's
+  domains — a migraine left in `other_symptoms` still reaches `pain` and
+  `cognitive_neurological`. Effect on fill: `pain` +1.7pt, `cognitive_neurological`
+  +1.3pt, everything else unchanged. Records with at least one symptom domain filled
+  stays at 57.7%, because the fan-out redistributes rather than invents.
 - **Knob:** `--no-cross-domain-fanout` (on `main.py run` and
   `python -m patientpunk.llm_extract`) or `PP_CROSS_DOMAIN_FANOUT=0` to disable.
   **Default: on.** This is the opposite of the group-attribution guard above, and
@@ -106,10 +119,11 @@ construction, reproducible across model versions, and independent of temperature
   without knowing to ask for better.
 - **Disable when:** you specifically want raw model placement, e.g. to re-measure
   compliance or to study how the model routes symptoms on its own.
-- **Limit:** only symptoms listed in `CROSS_DOMAIN_SYMPTOMS` fan out. A novel
-  cross-domain symptom still depends on the model, exactly as today — the knob closes
-  a known gap, it does not close the general case. The table is plain data; extending
-  it is a one-line edit.
+- **Limit:** only symptoms listed in `CROSS_DOMAIN_SYMPTOMS` fan out, and the list is
+  deliberately short — four rules, because the by-definition bar excludes most
+  candidates. A novel or context-dependent cross-domain symptom still depends on the
+  model. The knob closes a known gap; it does not close the general case. Extending the
+  table is a one-line edit, but each addition has to clear the same bar.
 - **Trade-off worth naming:** this moves a clinical-vocabulary decision from the prompt
   into code, so changing it needs a commit rather than a prompt edit. That is the right
   home for a mapping that must stay stable across runs, but it does mean the mapping is

@@ -2366,13 +2366,14 @@ class TestCrossDomainFanout:
         assert out["other_symptoms"]["values"] == []
 
     def test_finds_the_symptom_in_whichever_domain_the_model_chose(self):
-        """The model files dizziness under cognitive_neurological; it must still
-        reach cardiovascular_autonomic."""
+        """The model dumped the migraine in other_symptoms, outside either of the
+        rule's own domains; it must still reach both."""
         from patientpunk.llm_extract import normalize_records
-        rec = {"fields": {"cognitive_neurological": ["dizziness"],
-                          "cardiovascular_autonomic": []}}
+        rec = {"fields": {"other_symptoms": ["migraines"], "pain": [],
+                          "cognitive_neurological": []}}
         out = normalize_records([rec])[0]["fields"]
-        assert out["cardiovascular_autonomic"]["values"] == ["dizziness"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
 
     def test_idempotent_when_model_already_cross_listed(self):
         from patientpunk.llm_extract import normalize_records
@@ -2392,6 +2393,72 @@ class TestCrossDomainFanout:
         from patientpunk.pipeline import PipelineConfig
         cfg = PipelineConfig(schema_path=EXT_SCHEMA)
         assert cfg.cross_domain_fanout is True
+
+    def test_destination_gets_schema_confidence_not_null(self):
+        """A domain that was empty before the fan-out must not end up holding
+        values with a null confidence."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraine"], "cognitive_neurological": []}}
+        out = normalize_records([rec], {"cognitive_neurological": "high"})[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["confidence"] == "high"
+
+    def test_destination_materialised_when_model_omitted_the_key(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraine"]}}
+        out = normalize_records([rec], {"cognitive_neurological": "high"})[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["confidence"] == "high"
+
+
+class TestCrossDomainFanoutDoesNotOverRoute:
+    """A trigger earns its place only if it is multi-domain BY DEFINITION. These
+    pin the symptoms deliberately left out, where routing would be a diagnosis
+    rather than a lookup."""
+
+    def _domains(self, fields):
+        from patientpunk.llm_extract import normalize_records
+        return normalize_records([{"fields": fields}])[0]["fields"]
+
+    def test_plain_insomnia_stays_out_of_fatigue_pem(self):
+        """Insomnia is sleep onset/maintenance, not post-exertional malaise.
+        The model filed it under sleep alone in 16/16 records -- correctly."""
+        out = self._domains({"sleep": ["insomnia"], "fatigue_pem": []})
+        assert out["sleep"]["values"] == ["insomnia"]
+        assert out["fatigue_pem"]["values"] == []
+
+    def test_plain_vertigo_stays_out_of_cardiovascular(self):
+        """Vertigo is vestibular, not autonomic."""
+        out = self._domains({"cognitive_neurological": ["vertigo"],
+                             "cardiovascular_autonomic": []})
+        assert out["cardiovascular_autonomic"]["values"] == []
+
+    def test_plain_dizziness_stays_put_without_orthostatic_context(self):
+        out = self._domains({"cognitive_neurological": ["dizziness"],
+                             "cardiovascular_autonomic": []})
+        assert out["cardiovascular_autonomic"]["values"] == []
+
+    def test_orthostatic_dizziness_does_cross(self):
+        """The standing context is what makes it autonomic -- the prompt's
+        own worked example."""
+        out = self._domains({"cognitive_neurological": ["dizzy when standing"],
+                             "cardiovascular_autonomic": []})
+        assert out["cardiovascular_autonomic"]["values"] == ["dizzy when standing"]
+
+    def test_plain_chest_pain_stays_out_of_cardiovascular(self):
+        """Chest pain may be musculoskeletal or costochondral; routing it to
+        cardiovascular_autonomic would be a diagnosis."""
+        out = self._domains({"pain": ["chest pain"], "cardiovascular_autonomic": []})
+        assert out["cardiovascular_autonomic"]["values"] == []
+
+    def test_bare_neuropathy_stays_out_of_pain(self):
+        """Neuropathy is often numbness with no pain."""
+        out = self._domains({"cognitive_neurological": ["neuropathy"], "pain": []})
+        assert out["pain"]["values"] == []
+
+    def test_nerve_pain_does_cross(self):
+        out = self._domains({"cognitive_neurological": ["nerve pain"], "pain": []})
+        assert out["pain"]["values"] == ["nerve pain"]
 
     def test_reports_how_many_values_it_added(self):
         from patientpunk.llm_extract import fan_out_cross_domain_symptoms
