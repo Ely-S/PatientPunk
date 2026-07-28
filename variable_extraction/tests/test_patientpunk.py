@@ -2418,14 +2418,16 @@ class TestClosedVocabularies:
         assert set(out["functional_status_tier"]["values"]) <= FUNCTIONAL_STATUS_VALUES
         assert "bedbound" in out["functional_status_tier"]["values"]
 
-    def test_tiers_are_operationalised_not_just_listed(self):
+    def test_tiers_are_operationalised_not_just_listed(self, base_prompt):
         """Each tier carries a definition, and a patient who gives both a current
         and a worst level is coded at the current one."""
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "cannot get out of bed" in prompt
-        assert "cannot leave it" in prompt
-        assert "code the CURRENT one" in prompt
+        rule = field_rule(base_prompt, "functional_status_tier")
+        from patientpunk.llm_extract import FUNCTIONAL_STATUS_VALUES
+        for tier in FUNCTIONAL_STATUS_VALUES:
+            assert tier in rule
+        assert "cannot get out of bed" in rule
+        assert "cannot leave it" in rule
+        assert "code the CURRENT one" in rule
 
 
 class TestBatchExtraction:
