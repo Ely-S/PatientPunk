@@ -2262,6 +2262,15 @@ class TestRenderedPromptContract:
         assert "'test: result'" in prompt         # biomarker format
         assert "ANA: positive" in prompt          # worked biomarker example
 
+    def test_infection_count_forbids_inferring_one_from_silence(self, prompt):
+        """Measured: 12 of 12 newly-coded 1s came from posts that merely
+        described an infection without stating a count. In a long-COVID
+        community that turns the field into a membership flag."""
+        assert "DESCRIBING ONE INFECTION IS NOT STATING A COUNT OF ONE" in prompt
+        assert "never recovered' -> null" in prompt
+        # the explicit forms must still be codeable
+        assert "only had covid once" in prompt
+
     def test_closed_vocabularies_are_stated_with_definitions(self, prompt):
         from patientpunk.llm_extract import (
             ILLNESS_TRAJECTORY_VALUES, FUNCTIONAL_STATUS_VALUES,
