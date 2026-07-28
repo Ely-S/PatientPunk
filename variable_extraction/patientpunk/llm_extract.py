@@ -2,28 +2,19 @@
 """
 
 
-Second-pass extraction using Claude Haiku. Reads the same corpus as
-``patientpunk.biomedical`` and produces structured records for the same schema
-fields.
+Structured extraction using Claude Haiku. Reads the scraped corpus and produces
+one record per author/post with every schema field the model could evidence.
 
-Designed to run AFTER regex extraction. The merge step combines both passes:
-regex hits are high-confidence and LLM hits fill the gaps.
+This is the only extraction path -- every value in a record comes from the LLM.
+After extraction the records are normalized in place (lowercase, dedupe,
+canonicalize controlled vocabularies).
 
 Usage:
     python llm_extract.py                              # base fields, default input
     python llm_extract.py --schema schemas/covidlonghaulers_schema.json
     python llm_extract.py --text "I'm a 34F with POTS, LDN helped my brain fog"
-    python llm_extract.py --merge                      # combine with regex results
     python llm_extract.py --limit 10                   # first 10 records only
     python llm_extract.py --workers 20                 # more concurrency (default: 10)
-    python llm_extract.py --skip-threshold 0.7         # skip records regex covered 70%+
-    python llm_extract.py --focus-gaps                 # only ask LLM about null fields
-
-Speed tips:
-    --workers 8 (default) runs 8 requests in parallel - biggest single speedup.
-    --skip-threshold 0.7 skips records where regex already found 70%+ of fields.
-    --focus-gaps sends a shorter prompt asking only about the fields regex missed.
-    Combine all three for maximum speed: --workers 10 --skip-threshold 0.7 --focus-gaps
 
 Requires:
     pip install anthropic python-dotenv
@@ -31,8 +22,7 @@ Requires:
     Copy .env.example to .env and add your Anthropic API key.
 
 Output:
-    output/llm_records_{schema_id}.json     # LLM extraction records
-    output/merged_records_{schema_id}.json  # Combined regex + LLM (--merge)
+    output/records_{schema_id}.json     # normalized extraction records
 """
 
 
@@ -135,41 +125,29 @@ BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
     "location_country": "Country of residence",
-    "healthcare_system": "Healthcare system (NHS, Medicare, private insurance, etc.)",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "diagnosis_source": "Who provided the diagnosis (specialist, GP, self-diagnosed, etc.)",
-    "time_to_diagnosis": "How long it took to receive a diagnosis (e.g., '3 years', '14 months')",
-    "misdiagnosis": "Previous incorrect diagnoses received",
     "symptom_duration": "How long symptoms have lasted",
     "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
     "age_at_onset": "Patient's age when illness began",
     "medications": "Current or past medications mentioned",
+    "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
     "mental_health": "Mental health conditions or impacts mentioned",
-    "doctor_dismissal": "Experiences of being dismissed or disbelieved by doctors",
-    "diagnostic_odyssey": "Long journey to diagnosis - many doctors, years undiagnosed",
     "prior_infections": "Prior infections relevant to current illness (EBV, COVID, Lyme, etc.)",
-    "hormonal_events": "Hormonal events related to illness (pregnancy, menopause, puberty, etc.)",
-    "family_history": "Family history of relevant medical conditions",
 }
 
 BASE_OPTIONAL_DESCRIPTIONS = {
-    "location_us_state": "US state of residence",
-    "ethnicity": "Patient's ethnicity or race (self-reported)",
     "occupation": "Patient's occupation or job type",
     "bmi_weight": "BMI or weight mentions",
-    "dosage": "Medication dosages (e.g., '4.5mg LDN', '200mg CoQ10')",
-    "dietary_interventions": "Dietary changes tried (gluten-free, low histamine, carnivore, etc.)",
     "alternative_treatments": "Alternative/complementary treatments (acupuncture, supplements, etc.)",
     "genetic_testing": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)",
     "social_impact": "Social impacts of illness (relationships, isolation, etc.)",
     "trauma_history": "Trauma or adverse childhood experiences",
     "toxic_exposures": "Environmental toxic exposures (mold, chemicals, etc.)",
-    "healthcare_costs": "Out-of-pocket costs, insurance denials, financial burden",
 }
 
 
@@ -323,10 +301,12 @@ VALUE FORMAT RULES:
 - GOOD: "LDN", "bedbound", "3 years", "isolation", "Paxlovid"
 - BAD: "Seed DS-01 probiotic (B. longum, B. infantis, B. adolescentis...)" -- just write "Seed DS-01"
 - BAD: "self-employed, lost clients, business continues but impaired" -- just write "lost clients"
+- Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
+- dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
 - alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
@@ -343,47 +323,6 @@ RESPONSE FORMAT - valid JSON only:
 }}
 
 Include ALL schema fields. Use null when no evidence exists."""
-
-
-def build_gap_system_prompt(field_descriptions: dict[str, str], null_fields: list[str], *,
-                            group_guard: bool = False) -> str:
-    """Focused prompt for --focus-gaps mode: only asks about fields regex missed."""
-    gap_descs = {f: d for f, d in field_descriptions.items() if f in null_fields}
-    fields_block = "\n".join(
-        f"  - {field}: {desc}" for field, desc in sorted(gap_descs.items())
-    )
-    guard_block = f"\n{GROUP_GUARD_RULE}" if group_guard else ""
-    return f"""You are a biomedical data extraction assistant for the PatientPunk research project.
-Regex extraction already ran on this text. You are filling in ONLY the fields it missed.
-
-{EXTRACTION_STANDARDS}
-
-EXTRACTION RULES:
-1. Only extract information EXPLICITLY stated in the text. Never infer or guess.
-2. If a field cannot be determined, set it to null.
-3. Only extract what the AUTHOR says about THEMSELVES.
-4. Respect NEGATION: "I don't have POTS" means POTS not in conditions.
-5. Respect TEMPORAL context: past symptoms/treatments should be noted as such.
-
-VALUE FORMAT RULES:
-- Each value MUST be 1-5 words. Never write sentences.
-- conditions: ONLY diagnosed conditions (POTS, ME/CFS, long COVID). NOT symptoms (brain fog, fatigue, pain).
-- treatment_outcome: "drug: outcome: symptom" where outcome is helped/no_effect/worsened/mixed/unknown and symptom is the affected symptom (omit if unstated). E.g. "LDN: helped: brain fog".{guard_block}
-- functional_status_tier: ONLY one of: bedbound/housebound/severe/moderate/mild/mostly_functional.
-- social_impact: 1-3 word labels only (e.g., "isolation", "relationship strain").
-- alternative_treatments: Non-pharmaceutical only. Do NOT duplicate medications here.
-
-FIELDS TO EXTRACT (regex found nothing for these):
-{fields_block}
-
-RESPONSE FORMAT - valid JSON only:
-{{
-  "fields": {{
-    "field_name": ["value1", "value2"] or null
-  }}
-}}
-
-Only include the fields listed above. Use null when no evidence exists."""
 
 
 def build_user_message(texts: list[str]) -> str:
@@ -458,34 +397,6 @@ def build_llm_record(
 # SKIP / FOCUS-GAPS HELPERS
 # =============================================================================
 
-def build_regex_index(regex_file: Path) -> dict:
-    """Index regex records by (author_hash, post_id) for skip/focus-gap lookups."""
-    if not regex_file.exists():
-        return {}
-    with open(regex_file, encoding="utf-8") as f:
-        records = json.load(f)
-    index = {}
-    for rec in records:
-        meta = rec.get("record_meta", {})
-        key = (meta.get("author_hash"), meta.get("post_id"))
-        index[key] = rec
-    return index
-
-
-def regex_coverage(regex_rec: dict, field_names: list[str]) -> tuple[float, list[str]]:
-    """Return (coverage_fraction, list_of_null_fields) for a regex record."""
-    base = regex_rec.get("base", {})
-    ext = regex_rec.get("extension", {}) or {}
-    null_fields = []
-    for f in field_names:
-        entry = base.get(f) or ext.get(f)
-        has_value = bool(entry and isinstance(entry, dict) and entry.get("values"))
-        if not has_value:
-            null_fields.append(f)
-    coverage = 1.0 - (len(null_fields) / len(field_names)) if field_names else 1.0
-    return coverage, null_fields
-
-
 # =============================================================================
 # CONCURRENT CORPUS PROCESSING
 # =============================================================================
@@ -493,14 +404,8 @@ def regex_coverage(regex_rec: dict, field_names: list[str]) -> tuple[float, list
 def _process_one(
     item_type: str,
     item,
-    client: anthropic.Anthropic,
     system_prompt: str,
-    gap_system_prompt_fn,   # callable(null_fields) -> str, or None
     schema: dict | None,
-    regex_index: dict,
-    field_names: list[str],
-    skip_threshold: float,
-    focus_gaps: bool,
 ) -> dict | None:
     """Process a single work item. Runs inside a thread."""
     if item_type == "user":
@@ -519,28 +424,11 @@ def _process_one(
     if not texts or all(not t.strip() for t in texts):
         return {"_skipped": True, "reason": "no_text", "author_hash": author_hash, "post_id": post_id}
 
-    # Check regex coverage for skip / focus-gap logic
-    regex_rec = regex_index.get((author_hash, post_id))
-    null_fields = field_names[:]  # default: all fields are null
-
-    if regex_rec and field_names:
-        coverage, null_fields = regex_coverage(regex_rec, field_names)
-        if skip_threshold > 0 and coverage >= skip_threshold:
-            return {"_skipped": True, "reason": "regex_covered", "author_hash": author_hash, "post_id": post_id}
-
-    # Choose prompt
-    if focus_gaps and null_fields and len(null_fields) < len(field_names):
-        prompt = gap_system_prompt_fn(null_fields)
-    else:
-        prompt = system_prompt
-
-    user_message = build_user_message(texts)
-
     # Return prepared item for batching instead of calling LLM here
     return {
         "_ready": True,
-        "user_message": user_message,
-        "prompt": prompt,
+        "user_message": build_user_message(texts),
+        "prompt": system_prompt,
         "source": source,
         "author_hash": author_hash,
         "post_id": post_id,
@@ -634,23 +522,15 @@ def _process_batch(
     batch_items: list[tuple],
     client: anthropic.Anthropic,
     system_prompt: str,
-    gap_system_prompt_fn,
     schema: dict | None,
-    regex_index: dict,
-    field_names: list[str],
-    skip_threshold: float,
-    focus_gaps: bool,
 ) -> list[dict]:
     """Process a batch of work items. Pre-filters, then sends ready items
     to the LLM in a single multi-item call."""
 
-    # Phase 1: prepare each item (text collection, skip checks)
+    # Phase 1: prepare each item (text collection, empty-text skip)
     prepared = []
     for item_type, item in batch_items:
-        result = _process_one(
-            item_type, item, client, system_prompt, gap_system_prompt_fn,
-            schema, regex_index, field_names, skip_threshold, focus_gaps,
-        )
+        result = _process_one(item_type, item, system_prompt, schema)
         prepared.append((item_type, item, result))
 
     # Phase 2: separate ready items from skipped/failed
@@ -669,71 +549,64 @@ def _process_batch(
         return [o for o in output]
 
     # Phase 3: batch LLM call with split-retry
-    # Group by prompt (most will share system_prompt, gap prompts differ)
-    prompt_groups: dict[str, list[tuple[int, dict]]] = defaultdict(list)
-    for idx, item in zip(ready_indices, ready_items):
-        prompt_groups[item["prompt"]].append((idx, item))
+    indices, items = ready_indices, ready_items
 
-    for prompt, group in prompt_groups.items():
-        indices = [idx for idx, _ in group]
-        items = [item for _, item in group]
+    def call_fn(sub_items):
+        return _call_batch_raw(client, system_prompt, sub_items)
 
-        def call_fn(sub_items, _prompt=prompt):
-            return _call_batch_raw(client, _prompt, sub_items)
+    def _failed_for(item: dict, reason: str) -> dict:
+        return {"_failed": True, "reason": reason,
+                "author_hash": item["author_hash"], "post_id": item["post_id"]}
 
-        def _failed_for(item: dict, reason: str) -> dict:
-            return {"_failed": True, "reason": reason,
-                    "author_hash": item["author_hash"], "post_id": item["post_id"]}
+    # split_retry_batch absorbs parse failures (bad/short JSON) into per-item
+    # None results. Exhausted transient failures are record-local; unknown
+    # and nonretryable failures indicate a run-wide/configuration/code problem
+    # and must propagate rather than silently failing the corpus one item at
+    # a time.
+    try:
+        raw_results = split_retry_batch(call_fn, items)
+    except Exception as exc:
+        if not _is_transient_failure(exc):
+            raise
+        reason = f"call_error: {type(exc).__name__}"
+        print(f"  [failed] {len(items)} record(s): {reason}: {str(exc)[:200]}",
+              flush=True)
+        for idx, item in zip(indices, items):
+            output[idx] = _failed_for(item, reason)
+        return output
 
-        # split_retry_batch absorbs parse failures (bad/short JSON) into per-item
-        # None results. Exhausted transient failures are record-local; unknown
-        # and nonretryable failures indicate a run-wide/configuration/code problem
-        # and must propagate rather than silently failing the corpus one item at
-        # a time.
-        try:
-            raw_results = split_retry_batch(call_fn, items)
-        except Exception as exc:
-            if not _is_transient_failure(exc):
-                raise
-            reason = f"call_error: {type(exc).__name__}"
-            print(f"  [failed] {len(items)} record(s): {reason}: {str(exc)[:200]}",
-                  flush=True)
-            for idx, item in group:
-                output[idx] = _failed_for(item, reason)
+    for idx, item, parsed in zip(indices, items, raw_results):
+        def _failed(reason: str, item=item) -> dict:
+            return _failed_for(item, reason)
+
+        if parsed is None:
+            output[idx] = _failed("no_response")
             continue
 
-        for idx, item, parsed in zip(indices, items, raw_results):
-            def _failed(reason: str, item=item) -> dict:
-                return _failed_for(item, reason)
+        allowed = set(build_field_descriptions(item["schema"]))
+        validated = parse_extraction(parsed, allowed_fields=allowed)
+        if validated is None:
+            output[idx] = _failed("malformed_response")
+            continue
 
-            if parsed is None:
-                output[idx] = _failed("no_response")
-                continue
+        extraction, dropped = validated
+        if dropped:
+            _record_dropped_fields(dropped)
 
-            allowed = set(build_field_descriptions(item["schema"]))
-            validated = parse_extraction(parsed, allowed_fields=allowed)
-            if validated is None:
-                output[idx] = _failed("malformed_response")
-                continue
-
-            extraction, dropped = validated
-            if dropped:
-                _record_dropped_fields(dropped)
-
-            # Containment: a single unexpected shape must never abort the run,
-            # because split_retry_batch only absorbs parse failures and anything
-            # raised here escapes it.
-            try:
-                output[idx] = build_llm_record(
-                    llm_output=extraction,
-                    source=item["source"],
-                    author_hash=item["author_hash"],
-                    text_count=item["text_count"],
-                    schema=item["schema"],
-                    post_id=item["post_id"],
-                )
-            except Exception as exc:
-                output[idx] = _failed(f"build_error: {type(exc).__name__}")
+        # Containment: a single unexpected shape must never abort the run,
+        # because split_retry_batch only absorbs parse failures and anything
+        # raised here escapes it.
+        try:
+            output[idx] = build_llm_record(
+                llm_output=extraction,
+                source=item["source"],
+                author_hash=item["author_hash"],
+                text_count=item["text_count"],
+                schema=item["schema"],
+                post_id=item["post_id"],
+            )
+        except Exception as exc:
+            output[idx] = _failed(f"build_error: {type(exc).__name__}")
 
     return output
 
@@ -745,24 +618,19 @@ def process_corpus(
     schema: dict | None,
     limit: int | None = None,
     workers: int = 8,
-    skip_threshold: float = 0.0,
-    focus_gaps: bool = False,
-    regex_index: dict | None = None,
     resume: bool = False,
     temp_dir: Path | None = None,
     group_guard: bool = False,
 ) -> list[dict]:
     """Process the corpus concurrently through Haiku."""
     system_prompt = build_system_prompt(field_descriptions, group_guard=group_guard)
-    field_names = list(field_descriptions.keys())
-
-    def gap_system_prompt_fn(null_fields):
-        return build_gap_system_prompt(field_descriptions, null_fields, group_guard=group_guard)
 
     users_dir = input_dir / "users"
     posts_file = input_dir / "subreddit_posts.json"
     schema_id = schema["schema_id"] if schema else "base"
     _temp = temp_dir if temp_dir else input_dir
+    # Raw (un-normalized) checkpoint -- normalization happens once, afterwards,
+    # so an interrupted run resumes from values in exactly the shape it left them.
     records_file = _temp / f"llm_records_{schema_id}.json"
 
     # Resume: load existing records and build a set of already-done keys
@@ -843,9 +711,7 @@ def process_corpus(
             future = executor.submit(
                 _process_batch,
                 batch,
-                client, system_prompt, gap_system_prompt_fn,
-                schema, regex_index or {}, field_names,
-                skip_threshold, focus_gaps,
+                client, system_prompt, schema,
             )
             future_to_batch_idx[future] = batch_idx
 
@@ -916,113 +782,40 @@ def process_corpus(
 
 
 # =============================================================================
-# MERGE
+# NORMALIZATION
 # =============================================================================
 
-def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[dict]:
-    """Merge regex and LLM records by (author_hash, post_id)."""
-    llm_index = {}
-    for rec in llm_records:
-        meta = rec.get("record_meta", {})
-        key = (meta.get("author_hash"), meta.get("post_id"))
-        llm_index[key] = rec
+def field_confidence(schema_path: Path | None) -> dict[str, str]:
+    """Map field name -> the confidence the schema declares for it."""
+    if not schema_path:
+        return {}
+    from .schema import Schema
+    schema = Schema.from_file(Path(schema_path))
+    return {name: fd.confidence for name, fd in schema.all_fields.items()}
 
-    merged = []
-    for regex_rec in regex_records:
-        meta = regex_rec.get("record_meta", {})
-        key = (meta.get("author_hash"), meta.get("post_id"))
-        llm_rec = llm_index.pop(key, None)
 
-        merged_record = {
-            "_patientpunk_version": "2.0",
-            "_extraction_method": "merged",
-            "_schema_id": regex_rec.get("_schema_id", "base"),
-            "_extracted_at": datetime.now(timezone.utc).isoformat(),
-            "record_meta": meta,
-            "fields": {},
-        }
+def normalize_records(
+    records: list[dict],
+    confidence_by_field: dict[str, str] | None = None,
+) -> list[dict]:
+    """Wrap every field as ``{"values", "confidence"}`` and canonicalize in place.
 
-        regex_base = regex_rec.get("base", {})
-        regex_ext = regex_rec.get("extension", {}) or {}
-        llm_fields = llm_rec.get("fields", {}) if llm_rec else {}
+    ``confidence_by_field`` maps field name -> the confidence declared for it in
+    the schema; a field missing from the map falls back to "medium".
+    """
+    confidence_by_field = confidence_by_field or {}
 
-        all_field_names = set(regex_base.keys()) | set(regex_ext.keys()) | set(llm_fields.keys())
-
-        for field in sorted(all_field_names):
-            regex_entry = regex_base.get(field) or regex_ext.get(field)
-            regex_values = None
-            if regex_entry and isinstance(regex_entry, dict):
-                regex_values = regex_entry.get("values")
-            elif regex_entry and isinstance(regex_entry, list):
-                regex_values = regex_entry
-
-            llm_values = llm_fields.get(field)
-
-            if regex_values and llm_values:
-                combined = list(regex_values)
-                for v in llm_values:
-                    v_lower = v.lower().strip() if isinstance(v, str) else v
-                    if not any(
-                        (e.lower().strip() if isinstance(e, str) else e) == v_lower
-                        for e in combined
-                    ):
-                        combined.append(v)
-                merged_record["fields"][field] = {
-                    "values": combined,
-                    "regex_values": regex_values,
-                    "llm_values": llm_values,
-                    "provenance": "both",
-                    "confidence": "high",
-                }
-            elif regex_values:
-                merged_record["fields"][field] = {
-                    "values": regex_values,
-                    "regex_values": regex_values,
-                    "llm_values": None,
-                    "provenance": "regex_only",
-                    "confidence": regex_entry.get("confidence") if isinstance(regex_entry, dict) else "medium",
-                }
-            elif llm_values:
-                merged_record["fields"][field] = {
-                    "values": llm_values,
-                    "regex_values": None,
-                    "llm_values": llm_values,
-                    "provenance": "llm_only",
-                    "confidence": "medium",
-                }
-            else:
-                merged_record["fields"][field] = {
-                    "values": None,
-                    "provenance": None,
-                    "confidence": None,
-                }
-
-        merged.append(merged_record)
-
-    # LLM-only records with no matching regex record
-    for llm_rec in llm_index.values():
-        llm_fields = llm_rec.get("fields", {})
-        merged_record = {
-            "_patientpunk_version": "2.0",
-            "_extraction_method": "llm_only",
-            "_schema_id": llm_rec.get("_schema_id", "base"),
-            "_extracted_at": datetime.now(timezone.utc).isoformat(),
-            "record_meta": llm_rec.get("record_meta", {}),
-            "fields": {},
-        }
-        for field in sorted(llm_fields.keys()):
-            llm_values = llm_fields[field]
-            merged_record["fields"][field] = {
-                "values": llm_values,
-                "regex_values": None,
-                "llm_values": llm_values,
-                "provenance": "llm_only" if llm_values else None,
-                "confidence": "medium" if llm_values else None,
+    for rec in records:
+        rec["fields"] = {
+            name: {
+                "values": values,
+                "confidence": confidence_by_field.get(name, "medium") if values else None,
             }
-        merged.append(merged_record)
+            for name, values in sorted(rec.get("fields", {}).items())
+        }
 
-    # Post-merge normalization: lowercase all values, canonicalize conditions
-    for rec in merged:
+    # Lowercase and dedupe every value
+    for rec in records:
         for field_name, field_data in rec.get("fields", {}).items():
             values = field_data.get("values")
             if not values:
@@ -1099,14 +892,6 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
             "re infection": "reinfection", "re-infection": "reinfection",
             "second infection": "reinfection", "third infection": "reinfection",
         },
-        "doctor_dismissal": {
-            "gaslit": "gaslighting", "gas lit": "gaslighting",
-            "all in your head": "dismissed",
-            "all in my head": "dismissed",
-            "psychosomatic": "dismissed",
-            "it's just anxiety": "dismissed",
-            "no one believes me": "dismissed",
-        },
         "work_disability_status": {
             "can't work": "unable to work", "cannot work": "unable to work",
             "unable to work": "unable to work",
@@ -1130,7 +915,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
         },
     }
 
-    for rec in merged:
+    for rec in records:
         for field_name, canon_map in _CANONICAL_MAPS.items():
             field_data = rec.get("fields", {}).get(field_name, {})
             values = field_data.get("values")
@@ -1167,7 +952,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
     }
     _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
-    for rec in merged:
+    for rec in records:
         field_data = rec.get("fields", {}).get("treatment_outcome", {})
         values = field_data.get("values")
         if not values:
@@ -1196,7 +981,7 @@ def merge_records(regex_records: list[dict], llm_records: list[dict]) -> list[di
                 canonical.append(rejoined)
         field_data["values"] = canonical
 
-    return merged
+    return records
 
 
 # =============================================================================
@@ -1209,15 +994,11 @@ def run_llm_extract(
     schema_path: Path | None = None,
     temp_dir: Path | None = None,
     workers: int = 10,
-    skip_threshold: float = 0.7,
-    focus_gaps: bool = True,
-    merge: bool = True,
     resume: bool = False,
     limit: int | None = None,
     group_guard: bool | None = None,
 ) -> PhaseResult:
-    """Run Phase 2 LLM gap-filling over a corpus directory."""
-    import os
+    """Run LLM extraction over a corpus directory."""
     from typing import Any
 
     input_dir = Path(input_dir)
@@ -1245,16 +1026,6 @@ def run_llm_extract(
     out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
     out_temp.mkdir(parents=True, exist_ok=True)
 
-    regex_index = None
-    if skip_threshold > 0 or focus_gaps:
-        regex_file = out_temp / f"patientpunk_records_{schema_id}.json"
-        regex_index = build_regex_index(regex_file)
-        if not regex_index:
-            print(
-                f"Warning: skip-threshold/focus-gaps active but no regex file found "
-                f"({regex_file.name}). Run biomedical extraction first for best results."
-            )
-
     client = get_llm_client()
 
     print("=" * 60)
@@ -1264,9 +1035,6 @@ def run_llm_extract(
     print(f"  Fields          : {len(field_descriptions)}")
     print(f"  Workers         : {workers}")
     print(f"  Limit           : {limit or 'all'}")
-    print(f"  Skip threshold  : {skip_threshold or 'off'}")
-    print(f"  Focus gaps      : {'yes' if focus_gaps else 'no'}")
-    print(f"  Merge           : {'yes' if merge else 'no'}")
     print(f"  Resume          : {'yes' if resume else 'no'}")
     print(f"  Group guard     : {'on' if group_guard else 'off'}")
     print("=" * 60 + "\n")
@@ -1281,64 +1049,37 @@ def run_llm_extract(
         schema=schema,
         limit=limit,
         workers=workers,
-        skip_threshold=skip_threshold,
-        focus_gaps=focus_gaps,
-        regex_index=regex_index,
         resume=resume,
         group_guard=group_guard,
     )
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-    records_file = out_temp / f"llm_records_{schema_id}.json"
+    normalize_records(records, field_confidence(schema_path))
+    records_file = out_temp / f"records_{schema_id}.json"
     _write_json_atomic(records_file, records)
-
-    artifacts = {
-        "llm_records": records_file,
-    }
-
-    if merge:
-        regex_file = out_temp / f"patientpunk_records_{schema_id}.json"
-        if regex_file.exists():
-            print(f"\nMerging with {regex_file.name}...")
-            with open(regex_file, encoding="utf-8") as f:
-                regex_records = json.load(f)
-            merged = merge_records(regex_records, records)
-            merged_file = out_temp / f"merged_records_{schema_id}.json"
-            _write_json_atomic(merged_file, merged)
-            print(f"  Merged {len(merged)} records -> {merged_file}")
-            artifacts["merged_records"] = merged_file
-        else:
-            print(f"\nWarning: Cannot merge - {regex_file.name} not found.")
-            print(f"  Run biomedical extraction first.")
 
     fields_found = defaultdict(int)
     for rec in records:
-        for field, val in rec.get("fields", {}).items():
-            if val is not None:
+        for field, entry in rec.get("fields", {}).items():
+            if entry.get("values"):
                 fields_found[field] += 1
 
     print(f"\n{'=' * 60}")
     print(f"  Done! ({duration:.0f}s, {len(records)} records)")
-    print(f"  LLM records       : {records_file}")
-    print(f"\n  Field hit counts (LLM):")
+    print(f"  Records           : {records_file}")
+    print(f"\n  Field hit counts:")
     for field, count in sorted(fields_found.items(), key=lambda x: -x[1]):
         print(f"    {field:<30} {count}")
     print(f"{'=' * 60}")
 
-    fills = sum(
-        1 for rec in records
-        for field_value in rec.get("fields", {}).values()
-        if field_value is not None
-    )
+    fills = sum(fields_found.values())
     stats: dict[str, Any] = {
-        "LLM records": len(records),
-        "LLM field fills": fills,
+        "records": len(records),
+        "field fills": fills,
         "avg fills/record": round(fills / len(records), 2) if records else 0,
     }
-    if "merged_records" in artifacts:
-        stats["merged records"] = len(json.loads(artifacts["merged_records"].read_text(encoding="utf-8")))
-    return PhaseResult(artifacts=artifacts, stats=stats)
+    return PhaseResult(artifacts={"records": records_file}, stats=stats)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1358,14 +1099,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--limit", type=int, default=None,
                         help="Process only the first N records. Caps position, "
                              "so --resume never reaches N+1.")
-    parser.add_argument("--no-merge", action="store_true",
-                        help="Disable merging with regex results (merge is on by default).")
     parser.add_argument("--workers", type=int, default=10,
                         help="Number of concurrent API requests (default: 10).")
-    parser.add_argument("--skip-threshold", type=float, default=0.7,
-                        help="Skip records where regex already found this fraction of fields.")
-    parser.add_argument("--no-focus-gaps", action="store_true",
-                        help="Disable focused-gap mode.")
     parser.add_argument("--resume", action="store_true",
                         help="Resume a previous run.")
     parser.add_argument("--temp-dir", type=Path, default=None,
@@ -1412,9 +1147,6 @@ def main(argv: list[str] | None = None) -> None:
             schema_path=args.schema,
             temp_dir=args.temp_dir,
             workers=args.workers,
-            skip_threshold=args.skip_threshold,
-            focus_gaps=not args.no_focus_gaps,
-            merge=not args.no_merge,
             resume=args.resume,
             limit=args.limit,
             group_guard=group_guard,

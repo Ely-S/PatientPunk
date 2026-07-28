@@ -41,14 +41,13 @@ class FieldDefinition(BaseModel):
     description: str
     confidence: str                # "high" | "medium" | "low"
     source: str                    # "base" | "base_optional" | "extension" | "llm_discovered"
-    patterns: list[str] = Field(default_factory=list)
     icd10: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)   # any other schema keys
 
     def __repr__(self) -> str:
         return (
             f"FieldDefinition(name={self.name!r}, source={self.source!r}, "
-            f"confidence={self.confidence!r}, patterns={len(self.patterns)})"
+            f"confidence={self.confidence!r})"
         )
 
 
@@ -185,11 +184,10 @@ class Schema:
                     description=meta.get("description", ""),
                     confidence=meta.get("confidence", "medium"),
                     source=source,
-                    patterns=list(meta.get("patterns", [])),
                     icd10=meta.get("icd10"),
                     extra={
                         key: val for key, val in meta.items()
-                        if key not in {"description", "confidence", "patterns", "icd10"}
+                        if key not in {"description", "confidence", "icd10"}
                     },
                 )
 

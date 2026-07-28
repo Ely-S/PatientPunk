@@ -107,11 +107,6 @@ class ConsolidateResult(BaseModel):
         )
 
 
-def _hit(defn: dict) -> float:
-    v = defn.get("hit_rate_at_discovery", 0)
-    return float(v) if isinstance(v, (int, float)) else 0.0
-
-
 def _merge_group(members: list[tuple[str, int, dict]], n_runs: int) -> tuple[str, dict]:
     """Merge a synonym group's members -> (canonical_name, merged_defn).
 
@@ -125,32 +120,23 @@ def _merge_group(members: list[tuple[str, int, dict]], n_runs: int) -> tuple[str
         name_runs.setdefault(nm, set()).add(run_idx)
 
     def name_score(nm: str):
-        defns = [d for n, _, d in members if n == nm]
-        return (len(name_runs[nm]), max((_hit(d) for d in defns), default=0.0), -len(nm))
+        return (len(name_runs[nm]), -len(nm))
 
     canonical_name = max(name_runs, key=name_score)
     canonical_defn = next(d for n, _, d in members if n == canonical_name)
 
     merged = dict(canonical_defn)  # start verbatim from the consensus definition
-    patterns: list[str] = []
     allowed: list = []
-    max_hit = 0.0
     for _, _, defn in members:
-        for p in defn.get("patterns") or []:
-            if p not in patterns:
-                patterns.append(p)
         av = defn.get("allowed_values")
         if isinstance(av, list):
             for v in av:
                 if v not in allowed:
                     allowed.append(v)
-        max_hit = max(max_hit, _hit(defn))
 
-    merged["patterns"] = patterns
     if allowed:
         merged["allowed_values"] = allowed
     merged["source"] = "llm_discovered"
-    merged["hit_rate_at_discovery"] = max_hit
     merged["_n_runs_seen"] = n_runs
     merged["_consolidated_from"] = sorted(name_runs)
     return canonical_name, merged
@@ -239,7 +225,6 @@ def consolidate_schemas(
         ),
         "_base_schema": base_schema_id,
         "include_base_fields": [],
-        "override_base_patterns": {},
         "extension_fields": ext_fields,
     }
     merges.sort(key=lambda m: (-len(m["members"]), -m["n_runs"], m["canonical"]))

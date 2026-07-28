@@ -94,7 +94,7 @@ One record per user with age, sex, location — joined to treatment reports by `
 ### Pipeline
 
 **2a. Demographic extraction** — `Scrapers/demographic_extraction/run_pipeline.py`
-- Full pipeline: regex extraction → Haiku gap-fill → LLM field discovery
+- Full pipeline: Haiku LLM extraction → optional LLM field discovery (regex extraction removed, see issue #86)
 - Extracts age, sex, location from full user Reddit histories
 - Schema: `Scrapers/demographic_extraction/schemas/covidlonghaulers_schema.json`
 - Status: ⚠️ Still needs to be debugged a bit.

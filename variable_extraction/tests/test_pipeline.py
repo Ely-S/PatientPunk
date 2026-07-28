@@ -10,11 +10,6 @@ TestParseJsonResponse       parse_json_response() -- extract valid JSON from
                             raw LLM output that may include markdown fences,
                             prose preamble, or trailing text.
 
-TestPatternsAgainstExamples evaluate_patterns() -- run compiled regex patterns
-                            against example texts and return a hit/miss report.
-                            Used in Phase 3 Stage 2 to validate Sonnet-generated
-                            patterns before committing them to the schema.
-
 TestCollectTexts            collect_texts_from_post() / collect_texts_from_user()
                             -- extract non-empty text segments from raw JSON
                             post and user-history objects.
@@ -22,11 +17,6 @@ TestCollectTexts            collect_texts_from_post() / collect_texts_from_user(
 TestMergeIntoSchema         merge_into_schema() -- merge a list of newly
                             discovered field dicts into an existing extension
                             schema without overwriting existing fields.
-
-TestSchemaPatterns          Smoke-tests against the real
-                            schemas/covidlonghaulers_schema.json: verifies
-                            every pattern compiles and spot-checks known texts.
-                            Skipped automatically if the schema file is absent.
 
 Run with:
     cd Scrapers/variable_extraction
@@ -43,10 +33,8 @@ from patientpunk.discover import (
     collect_texts_from_user,
     merge_into_schema,
     parse_json_response,
-    evaluate_patterns,
 )
 from patientpunk.demographics_deductive import _default_output_path
-from patientpunk.biomedical import compile_extension_patterns, run_biomedical
 from patientpunk.codebook import build_field_registry
 
 
@@ -107,96 +95,6 @@ class TestParseJsonResponse:
         result = parse_json_response("42")
         # Either None or the integer 42; the key contract is no exception
         assert result is None or result == 42
-
-
-# =============================================================================
-# evaluate_patterns
-# =============================================================================
-
-class TestPatternsAgainstExamples:
-    def test_all_match(self):
-        patterns = [r"\b(\d+)\s*(?:years?\s+old|y/?o)\b"]
-        examples = [
-            {"text": "I am 34 years old", "extracted_value": "34"},
-            {"text": "She is 27yo", "extracted_value": "27"},
-        ]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hits"] == 2
-        assert report["misses"] == 0
-        assert report["hit_rate"] == 1.0
-
-    def test_all_miss(self):
-        patterns = [r"\bPOTS\b"]
-        examples = [
-            {"text": "I have fibromyalgia", "extracted_value": "fibromyalgia"},
-        ]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hits"] == 0
-        assert report["misses"] == 1
-        assert report["hit_rate"] == 0.0
-
-    def test_partial_match(self):
-        patterns = [r"\bfemale\b"]
-        examples = [
-            {"text": "I am a 34 year old female", "extracted_value": "female"},
-            {"text": "27 year old male patient", "extracted_value": "male"},
-        ]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hits"] == 1
-        assert report["misses"] == 1
-        assert report["hit_rate"] == 0.5
-
-    def test_compile_error_reported(self):
-        patterns = [r"(unclosed", r"\bvalid\b"]
-        examples = [{"text": "valid text", "extracted_value": "valid"}]
-        report = evaluate_patterns(patterns, examples)
-        assert len(report["compile_errors"]) == 1
-        assert report["compile_errors"][0]["pattern"] == r"(unclosed"
-        # valid pattern still matches
-        assert report["hits"] == 1
-
-    def test_empty_examples(self):
-        report = evaluate_patterns([r"\bfoo\b"], [])
-        assert report["hit_rate"] == 0
-        assert report["total_examples"] == 0
-
-    def test_captured_group_returned(self):
-        patterns = [r"(\d+)\s*years?\s+old"]
-        examples = [{"text": "I am 42 years old", "extracted_value": "42"}]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hit_details"][0]["captured_value"] == "42"
-
-    def test_case_insensitive(self):
-        # Patterns are compiled with re.IGNORECASE
-        patterns = [r"\bpots\b"]
-        examples = [{"text": "Diagnosed with POTS last year", "extracted_value": "POTS"}]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hits"] == 1
-
-    def test_missed_examples_in_report(self):
-        patterns = [r"\bPOTS\b"]
-        examples = [{"text": "I have fibromyalgia", "extracted_value": "fibromyalgia"}]
-        report = evaluate_patterns(patterns, examples)
-        assert len(report["missed_examples"]) == 1
-        assert report["missed_examples"][0]["text"] == "I have fibromyalgia"
-
-    def test_multiple_patterns_any_match_counts_as_hit(self):
-        """A hit from any pattern in the list should count the example as matched."""
-        patterns = [r"\bfemale\b", r"\bwoman\b"]
-        examples = [
-            {"text": "I am a woman with long COVID", "extracted_value": "woman"},
-            {"text": "I am female", "extracted_value": "female"},
-            {"text": "unknown gender", "extracted_value": ""},
-        ]
-        report = evaluate_patterns(patterns, examples)
-        assert report["hits"] == 2
-        assert report["misses"] == 1
-
-    def test_no_patterns_returns_all_misses(self):
-        examples = [{"text": "some text", "extracted_value": "something"}]
-        report = evaluate_patterns([], examples)
-        assert report["hits"] == 0
-        assert report["misses"] == 1
 
 
 # =============================================================================
@@ -291,7 +189,6 @@ class TestMergeIntoSchema:
             "extension_fields": {
                 "existing_field": {
                     "description": "Already here",
-                    "patterns": [r"\bexisting\b"],
                 }
             }
         }
@@ -301,18 +198,14 @@ class TestMergeIntoSchema:
             {
                 "field_name": "new_field_a",
                 "description": "A new field",
-                "patterns": [r"\bnew_a\b"],
                 "confidence": "medium",
-                "hit_rate": 0.75,
                 "frequency_hint": "common",
                 "research_value": "Useful for research",
             },
             {
                 "field_name": "new_field_b",
                 "description": "Another new field",
-                "patterns": [r"\bnew_b\b"],
                 "confidence": "low",
-                "hit_rate": 0.6,
                 "frequency_hint": "occasional",
                 "research_value": "",
             },
@@ -331,9 +224,7 @@ class TestMergeIntoSchema:
         fields = self._new_fields() + [{
             "field_name": "existing_field",
             "description": "Should NOT overwrite",
-            "patterns": [r"\boverwritten\b"],
             "confidence": "high",
-            "hit_rate": 1.0,
             "frequency_hint": "common",
             "research_value": "",
         }]
@@ -368,39 +259,6 @@ class TestMergeIntoSchema:
         assert added == 2
         assert "extension_fields" in updated
 
-    def test_patterns_stored_correctly(self):
-        schema = self._base_schema()
-        fields = [{
-            "field_name": "pattern_check",
-            "description": "Test",
-            "patterns": [r"\bfoo\b", r"\bbar\b"],
-            "confidence": "medium",
-            "hit_rate": 0.8,
-            "frequency_hint": "common",
-            "research_value": "",
-        }]
-        updated, _, _ = merge_into_schema(fields, schema)
-        stored = updated["extension_fields"]["pattern_check"]["patterns"]
-        assert stored == [r"\bfoo\b", r"\bbar\b"]
-
-    def test_schema_with_override_base_patterns_preserved(self):
-        """merge_into_schema must not clobber an existing override_base_patterns key."""
-        schema = {
-            "schema_id": "override_test",
-            "extension_fields": {},
-            "override_base_patterns": {
-                "age": {"patterns": [r"(\d+)\s*(?:year|yr)s?\s+old"]},
-            },
-        }
-        updated, added, _ = merge_into_schema(self._new_fields(), schema)
-        assert added == 2
-        # The override key must still be present and unchanged
-        assert "override_base_patterns" in updated
-        assert "age" in updated["override_base_patterns"]
-        assert updated["override_base_patterns"]["age"]["patterns"] == [
-            r"(\d+)\s*(?:year|yr)s?\s+old"
-        ]
-
     def test_merge_preserves_other_top_level_keys(self):
         """Arbitrary top-level keys in the schema should survive a merge."""
         schema = {
@@ -415,124 +273,39 @@ class TestMergeIntoSchema:
 
 
 # =============================================================================
-# Schema pattern smoke tests -- loads the real schema file and checks patterns
-# compile and match their embedded example values
-# =============================================================================
-
-SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "covidlonghaulers_schema.json"
-
-
-@pytest.mark.skipif(not SCHEMA_PATH.exists(), reason="Schema file not found")
-class TestSchemaPatterns:
-    @pytest.fixture(scope="class")
-    def schema(self):
-        with open(SCHEMA_PATH, encoding="utf-8") as f:
-            return json.load(f)
-
-    def test_all_patterns_compile(self, schema):
-        import re
-        errors = []
-        for field_name, field in schema.get("extension_fields", {}).items():
-            for pattern in field.get("patterns", []):
-                try:
-                    re.compile(pattern, re.IGNORECASE)
-                except re.error as e:
-                    errors.append(f"{field_name}: {pattern!r} → {e}")
-        assert not errors, "Compile errors:\n" + "\n".join(errors)
-
-    def test_override_patterns_compile(self, schema):
-        import re
-        errors = []
-        for field_name, override in schema.get("override_base_patterns", {}).items():
-            for pattern in override.get("patterns", []):
-                try:
-                    re.compile(pattern, re.IGNORECASE)
-                except re.error as e:
-                    errors.append(f"override {field_name}: {pattern!r} → {e}")
-        assert not errors, "Compile errors:\n" + "\n".join(errors)
-
-    # Spot-check a few fields with known example texts
-    @pytest.mark.parametrize("field,text,should_match", [
-        ("covid_wave",       "I got sick during the Delta wave",          True),
-        ("covid_wave",       "My cat knocked over a glass of water",      False),
-        ("vaccination_status", "I am fully vaccinated with Pfizer",       True),
-        ("vaccination_status", "I am unvaccinated",                       True),
-        ("functional_status_tier", "I've been mostly bedbound for months", True),
-        ("functional_status_tier", "I went for a 5km run this morning",   False),
-        ("infection_count",  "I've been reinfected twice now",            True),
-        ("biomarker_results", "I had elevated ferritin and low cortisol",  True),
-    ])
-    def test_spot_check(self, schema, field, text, should_match):
-        import re
-        patterns = schema.get("extension_fields", {}).get(field, {}).get("patterns", [])
-        assert patterns, f"No patterns found for field '{field}'"
-        matched = any(re.search(p, text, re.IGNORECASE) for p in patterns)
-        if should_match:
-            assert matched, f"Expected '{field}' to match: {text!r}"
-        else:
-            assert not matched, f"Expected '{field}' NOT to match: {text!r}"
-
-
-# =============================================================================
-# compile_extension_patterns -- promoted-field Phase 1 gate
-# =============================================================================
-
-class TestCompileExtensionPatternsPromoted:
-    def test_raw_discovered_skipped(self):
-        schema = {"extension_fields": {
-            "d": {"source": "llm_discovered", "patterns": ["foo"]}}}
-        active, names = compile_extension_patterns(schema)
-        assert "d" not in active           # raw discovered field skipped by Phase 1
-
-    def test_promoted_compiled(self):
-        schema = {"extension_fields": {
-            "d": {"source": "llm_discovered", "patterns": ["foo"],
-                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
-        active, names = compile_extension_patterns(schema)
-        assert "d" in active and len(active["d"]) == 1
-
-    def test_promoted_llm_only_empty_patterns(self):
-        schema = {"extension_fields": {
-            "d": {"source": "llm_discovered", "patterns": [],
-                  "_promoted_at": "2026-01-01T00:00:00Z"}}}
-        active, names = compile_extension_patterns(schema)
-        assert active["d"] == []           # empty pattern list, no error
-        assert "d" in names
-
-
-# =============================================================================
 # build_field_registry -- discovered-schema append + dedup
 # =============================================================================
 
 class TestBuildFieldRegistryDiscovered:
     _BASE = {"base_fields": {"age": {"description": "a", "confidence": "high"}}}
 
+    def test_shipped_base_schema_registers_dosage(self):
+        base_path = Path(__file__).parent.parent / "schemas" / "base_schema.json"
+        base = json.loads(base_path.read_text(encoding="utf-8"))
+        registry = build_field_registry(base, {"extension_fields": {}})
+        fields = {row["field"]: row for row in registry}
+
+        assert fields["dosage"]["source"] == "base"
+        assert fields["dosage"]["confidence"] == "medium"
+
     def test_appends_discovered(self):
         ext = {"extension_fields": {}}
         disc = {"extension_fields": {
             "newf": {"source": "llm_discovered", "description": "d",
-                     "confidence": "low", "patterns": []}}}
+                     "confidence": "low"}}}
         reg = build_field_registry(self._BASE, ext, disc)
         fields = {r["field"]: r for r in reg}
         assert fields["newf"]["source"] == "llm_discovered"
 
     def test_dedup_curated_wins(self):
         ext = {"extension_fields": {
-            "shared": {"source": "extension", "description": "curated", "patterns": []}}}
+            "shared": {"source": "extension", "description": "curated"}}}
         disc = {"extension_fields": {
-            "shared": {"source": "llm_discovered", "description": "disc", "patterns": []}}}
+            "shared": {"source": "llm_discovered", "description": "disc"}}}
         reg = build_field_registry(self._BASE, ext, disc)
         shared = [r for r in reg if r["field"] == "shared"]
         assert len(shared) == 1                       # not duplicated
         assert shared[0]["source"] == "extension"     # curated entry wins
-
-
-class TestRunBiomedicalMissingInput:
-    """run_biomedical raises FileNotFoundError when the corpus dir is missing."""
-
-    def test_missing_input_dir(self, tmp_path):
-        with pytest.raises(FileNotFoundError):
-            run_biomedical(input_dir=tmp_path / "does_not_exist")
 
 
 class TestDemographicsScriptDefaults:

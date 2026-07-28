@@ -2,7 +2,7 @@
 """
 
 
-Accepts one or more merged_records / discovered_records JSON files.
+Accepts one or more records / discovered_records JSON files.
 When multiple files are provided, records with the same (author_hash, post_id)
 are merged into a single row - fields from later files fill gaps left by earlier
 ones, so you can combine base + discovered schema outputs without duplicating rows.
@@ -12,15 +12,15 @@ Usage:
     python -m patientpunk.export_csv
 
     # Specific input / output
-    python -m patientpunk.export_csv --input output/merged_records_base.json --output output/records.csv
+    python -m patientpunk.export_csv --input output/records_base.json --output output/records.csv
 
     # Combine base + discovered fields into one CSV
     python -m patientpunk.export_csv \\
-        --input output/merged_records_base.json \\
+        --input output/records_base.json \\
                 output/discovered_records_covidlonghaulers_v1.json
 
-    # Include provenance columns (age__provenance, conditions__provenance, …)
-    python -m patientpunk.export_csv --provenance
+    # Include confidence columns (age__confidence, conditions__confidence, …)
+    python -m patientpunk.export_csv --confidence
 
     # Change multi-value separator (default: " | ")
     python -m patientpunk.export_csv --sep "; "
@@ -42,7 +42,7 @@ from .phase import PhaseResult
 
 
 _VE_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = _VE_ROOT / "output" / "merged_records_base.json"
+DEFAULT_INPUT = _VE_ROOT / "output" / "temp" / "records_base.json"
 DEFAULT_OUTPUT = _VE_ROOT / "output" / "records.csv"
 
 # Metadata columns always written first
@@ -73,10 +73,10 @@ def record_key(rec: dict) -> tuple:
     )
 
 
-def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
-    """Return (values_str, provenance, confidence) for one field."""
+def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str]:
+    """Return (values_str, confidence) for one field."""
     if not field_data:
-        return "", "", ""
+        return "", ""
     values = field_data.get("values") or []
     if isinstance(values, list):
         val_str = sep.join(
@@ -84,38 +84,31 @@ def flatten_field(field_data: dict | None, sep: str) -> tuple[str, str, str]:
         )
     else:
         val_str = str(values) if values is not None else ""
-    return (
-        val_str,
-        field_data.get("provenance") or "",
-        field_data.get("confidence") or "",
-    )
+    return val_str, field_data.get("confidence") or ""
 
 
 def _normalize_entry(value) -> dict:
     """Coerce one field entry to the ``{"values": ...}`` shape."""
     if isinstance(value, dict):
         return value
-    return {"values": value, "provenance": None, "confidence": None}
+    return {"values": value, "confidence": None}
 
 
 def _all_fields_from_record(rec: dict) -> dict:
     """Return a flat field dict from whichever keys the record uses.
 
-    Records from the regex extractor store fields under ``base`` and
-    ``extension``.  Records from the LLM merge step use ``fields`` and
-    ``discovered_fields``.  Both are supported, and every entry is
-    normalised to a dict so callers can assume one shape.
+    Base extraction stores fields under ``fields``; discovery uses
+    ``discovered_fields``.  Every entry is normalised to a dict so callers
+    can assume one shape.
     """
     merged = {
-        **(rec.get("base") or {}),
-        **(rec.get("extension") or {}),
         **(rec.get("fields") or {}),
         **(rec.get("discovered_fields") or {}),
     }
     return {name: _normalize_entry(entry) for name, entry in merged.items()}
 
 
-def merge_records(base: dict, incoming: dict, sep: str) -> dict:
+def merge_records(base: dict, incoming: dict) -> dict:
     """Merge fields from `incoming` into `base`, filling empty values only."""
     base_fields = base.setdefault("_fields_merged", _all_fields_from_record(base))
     for field_name, field_data in _all_fields_from_record(incoming).items():
@@ -138,7 +131,7 @@ def build_csv_row(
     rec: dict,
     field_names: list[str],
     sep: str,
-    include_provenance: bool,
+    include_confidence: bool,
 ) -> dict:
     meta = rec.get("record_meta", {})
     row: dict[str, str] = {
@@ -154,10 +147,9 @@ def build_csv_row(
     all_fields = rec.get("_fields_merged") or _all_fields_from_record(rec)
 
     for field_name in field_names:
-        val_str, provenance, confidence = flatten_field(all_fields.get(field_name), sep)
+        val_str, confidence = flatten_field(all_fields.get(field_name), sep)
         row[field_name] = val_str
-        if include_provenance:
-            row[f"{field_name}__provenance"] = provenance
+        if include_confidence:
             row[f"{field_name}__confidence"] = confidence
 
     return row
@@ -168,7 +160,7 @@ def run_export_csv(
     input_files: list[Path],
     output_path: Path,
     sep: str = " | ",
-    include_provenance: bool = False,
+    include_confidence: bool = False,
 ) -> PhaseResult:
     """Flatten one or more JSON record files into a CSV.
 
@@ -191,7 +183,7 @@ def run_export_csv(
             if key not in merged:
                 merged[key] = rec
             else:
-                merge_records(merged[key], rec, sep)
+                merge_records(merged[key], rec)
 
     if not merged:
         raise ValueError("No records found.")
@@ -200,10 +192,10 @@ def run_export_csv(
 
     field_names = collect_all_field_names(merged)
 
-    if include_provenance:
+    if include_confidence:
         field_cols: list[str] = []
         for f in field_names:
-            field_cols += [f, f"{f}__provenance", f"{f}__confidence"]
+            field_cols += [f, f"{f}__confidence"]
     else:
         field_cols = field_names
 
@@ -215,7 +207,7 @@ def run_export_csv(
         writer = csv.DictWriter(f, fieldnames=all_columns, extrasaction="ignore")
         writer.writeheader()
         for rec in merged.values():
-            row = build_csv_row(rec, field_names, sep, include_provenance)
+            row = build_csv_row(rec, field_names, sep, include_confidence)
             writer.writerow(row)
 
     total_rows = len(merged)
@@ -248,8 +240,8 @@ def main(argv: list[str] | None = None) -> None:
         epilog="""
 Examples:
   python -m patientpunk.export_csv
-  python -m patientpunk.export_csv --input output/merged_records_base.json --output output/records.csv
-  python -m patientpunk.export_csv --provenance
+  python -m patientpunk.export_csv --input output/records_base.json --output output/records.csv
+  python -m patientpunk.export_csv --confidence
         """,
     )
     parser.add_argument(
@@ -264,8 +256,8 @@ Examples:
         help=f"Output CSV path (default: {DEFAULT_OUTPUT})",
     )
     parser.add_argument(
-        "--provenance", action="store_true",
-        help="Include {field}__provenance and {field}__confidence columns.",
+        "--confidence", action="store_true",
+        help="Include {field}__confidence columns.",
     )
     parser.add_argument(
         "--sep", default=" | ",
@@ -278,7 +270,7 @@ Examples:
             input_files=args.input,
             output_path=args.output,
             sep=args.sep,
-            include_provenance=args.provenance,
+            include_confidence=args.confidence,
         )
     except (FileNotFoundError, ValueError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

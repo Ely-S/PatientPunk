@@ -262,7 +262,6 @@ def load_variables(
         value_cols = [
             c for c in fieldnames
             if c not in skip
-            and not c.endswith("__provenance")
             and not c.endswith("__confidence")
         ]
         inserted = 0

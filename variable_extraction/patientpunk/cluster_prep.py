@@ -47,7 +47,7 @@ _ANALYSIS_CARRY = {
 def _data_fields(header: list[str], meta: set[str]) -> list[str]:
     return [c for c in header
             if c not in meta and c not in _ANALYSIS_CARRY
-            and not c.endswith(("__provenance", "__confidence"))]
+            and not c.endswith("__confidence")]
 
 
 def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",
