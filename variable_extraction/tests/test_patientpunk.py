@@ -2198,6 +2198,43 @@ class TestLLMExtractNormalizeRecords:
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
 
 
+class TestExtensionFieldCodingRules:
+    """Each COVID extension field declares a value format: infection_count a
+    bare integer, long_covid_duration_months a count of months, and
+    biomarker_results a "test: result" pair."""
+
+    @pytest.fixture
+    def prompt(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        return build_system_prompt(build_field_descriptions(schema))
+
+    def test_infection_count_requires_a_stated_count(self, prompt):
+        assert "EXACT COUNTS ONLY" in prompt
+        assert "'my second infection' -> '2'" in prompt
+        # lower bounds are not counts, including the one that names a number
+        assert "'reinfected'" in prompt and "'multiple infections'" in prompt
+        assert "'my first infection' - calling an infection the first one" in prompt
+        # and neither is merely describing one infection
+        assert "DESCRIBING ONE INFECTION IS NOT STATING A COUNT OF ONE" in prompt
+        assert "never recovered' -> null" in prompt
+
+    def test_long_covid_duration_is_months_with_conversion(self, prompt):
+        assert "NUMBER OF MONTHS" in prompt
+        assert "'3 years' -> '36'" in prompt
+        # converting a stated duration is not the inference rule 1 forbids
+        assert "is not inference" in prompt
+        assert "sick since March 2020" in prompt
+
+    def test_biomarker_results_has_a_required_format(self, prompt):
+        assert "'test: result'" in prompt
+        assert "ANA: positive" in prompt
+        assert "are both unusable" in prompt
+
+    def test_every_extension_field_is_rendered(self, prompt):
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        for field in schema["extension_fields"]:
+            assert f"- {field}:" in prompt
 class TestFieldSelection:
     """35 -> 24 fields, kept or cut on measured fill rate. METHODS.md carries the
     rates, the framework cross-reference and the cut list."""
