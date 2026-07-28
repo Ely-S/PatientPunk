@@ -170,7 +170,8 @@ pass and the fan-out over that file reproduces `records_{schema_id}.json` exactl
 | Normalized records | `output/temp/records_{schema_id}.json` | No | Per-record extraction after normalization, with per-field confidence |
 
 The cache is on by default (`LLM_CACHE=0` to disable) and nothing in the pipeline deletes
-it, but it is gitignored — it lives only on the machine that ran the pipeline.
+it. Like every other dataset it stays out of the repo, so it belongs with the corpus it
+was produced from rather than with the code.
 
 `_clean_temp()` empties `temp/` at the start of any full run with `--clean`. Its patterns
 are schema-agnostic globs, so running one schema removes another schema's records too,
