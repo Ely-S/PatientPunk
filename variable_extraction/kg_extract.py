@@ -5,7 +5,9 @@ Claims-based knowledge-graph extraction prototype (issue #90).
 Extracts patient CLAIMS (free-text primary + typed payload + verbatim source span)
 into a SQLite tuple store, instead of forcing the LLM into ~40 fixed schema slots.
 Then compares the result head-to-head against the existing flat extraction of the
-SAME posts.
+SAME posts. The LLM call is a DSPy module (signature + typed pydantic outputs via
+JSONAdapter); the retry ladder, disk cache, tuple store, and compare command are
+unchanged from the hand-rolled version.
 
     python kg_extract.py run --limit 20      # smoke test
     python kg_extract.py run                 # full corpus (default 1000 posts)
@@ -36,15 +38,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import dspy
+from dspy.utils.exceptions import AdapterParseError
+from pydantic import BaseModel, Field
+
 from patientpunk._utils import (
     LLM_PROVIDER,
     LLM_TEMPERATURE,
     MODEL_FAST,
-    check_response,
+    LLMResponseError,
     collect_texts_from_post,
-    get_llm_client,
     parse_json_response,
-    response_text,
+    resolve_llm_config,
 )
 from patientpunk.llm_cache import cached_completion
 
@@ -85,7 +90,7 @@ CLAIM_TYPES: dict[str, tuple[str, tuple[str, ...]]] = {
 RELATIONS = {"TREATS", "CO_OCCURS_WITH", "CAUSED_BY", "SUPPORTS", "CONTRADICTS"}
 
 
-def build_system_prompt() -> str:
+def build_instructions() -> str:
     blocks = []
     for ctype, (primary, extras) in CLAIM_TYPES.items():
         keys = ", ".join([f"{primary} (REQUIRED)", *extras])
@@ -123,13 +128,66 @@ RULES
    (a GP visit, an ER visit, a waitlist, a referral); those belong in the *_text field or
    provider_type on a diagnostic claim, never in healthcare_system.
    vaccination_status: e.g. "unvaccinated", "2 doses Pfizer".
+8. local_id: short unique ids ("c1", "c2", ...) you assign to each claim you emit; edges
+   reference these ids.
 
-Return ONLY JSON, no prose:
-{{"claims": [{{"local_id": "c1", "claim_type": "symptom", "confidence": 0.9,
-    "source_span": "exact quote", "payload": {{"symptom_text": "brain fog", "severity": "severe"}}}}],
- "edges": [{{"from": "c2", "to": "c1", "relation": "TREATS", "confidence": 0.6}}]}}
+If the text contains nothing about the author's own health, return no claims and no edges."""
 
-If the text contains nothing about the author's own health, return {{"claims": [], "edges": []}}."""
+
+# =============================================================================
+# DSPy MODULE
+# =============================================================================
+
+class _Claim(BaseModel):
+    local_id: str = ""
+    claim_type: str
+    # float|str keeps a non-numeric model slip ("high") from failing the whole
+    # batch; parse_claims already tolerates it downstream.
+    confidence: float | str | None = None
+    source_span: str = ""
+    payload: dict = Field(default_factory=dict)
+
+
+class _Edge(BaseModel):
+    from_: str = Field(alias="from")
+    to: str
+    relation: str
+    confidence: float | str | None = None
+
+
+class ExtractClaims(dspy.Signature):
+    """Instructions are set at run time from build_instructions() so the
+    signature docstring always matches CLAIM_TYPES."""
+
+    post_text: str = dspy.InputField(desc="a patient's post, verbatim")
+    claims: list[_Claim] = dspy.OutputField(
+        desc="atomic claims about the author, each anchored to a verbatim source_span")
+    edges: list[_Edge] = dspy.OutputField(
+        desc="relations between emitted claims, by local_id; empty if none apply")
+
+
+def _lm_kwargs(cfg: dict) -> tuple[str, dict]:
+    """Map the repo's provider config onto a litellm model string + kwargs."""
+    provider, model = cfg["provider"], cfg["model_fast"]
+    kwargs: dict = {"api_key": cfg["api_key"] or "EMPTY"}
+    if provider == "openai":
+        name = f"openai/{model}"
+        kwargs["api_base"] = cfg["base_url"] or "http://localhost:8000/v1"
+        if cfg.get("service_tier"):
+            kwargs["service_tier"] = cfg["service_tier"]
+    elif provider == "openrouter":
+        # MODEL_FAST is already "anthropic/claude-haiku-4.5"-style; litellm
+        # knows OpenRouter's /v1 base URL itself. The provider default in
+        # _utils is the Anthropic-shaped endpoint (no /v1), which litellm
+        # must NOT receive -- only forward a base_url the user overrode.
+        name = f"openrouter/{model}"
+        if cfg["base_url"] and cfg["base_url"] != "https://openrouter.ai/api":
+            kwargs["api_base"] = cfg["base_url"]
+    else:
+        name = f"anthropic/{model}"
+        if cfg["base_url"]:
+            kwargs["api_base"] = cfg["base_url"]
+    return name, kwargs
 
 
 # =============================================================================
@@ -244,22 +302,62 @@ def _is_transient(exc: BaseException) -> bool:
             or (name == "LLMResponseError" and not _is_truncated(exc)))
 
 
-def call_llm(client, system_prompt: str, user_message: str, label: str = "?",
+def _finish_reason(lm: dspy.LM) -> str | None:
+    if not lm.history:
+        return None
+    try:
+        return lm.history[-1]["response"].choices[0].finish_reason
+    except (AttributeError, IndexError, TypeError, KeyError):
+        return None
+
+
+def _truncated(model: str) -> LLMResponseError:
+    return LLMResponseError(
+        f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
+        f"or shrink the batch)")
+
+
+def call_llm(extractor: dspy.Predict, cfg: dict, instructions: str,
+             user_message: str, label: str = "?",
              temperature: float = LLM_TEMPERATURE) -> str:
     """One cached, retried LLM call. Only transient failures are retried."""
+    model_name, lm_kwargs = _lm_kwargs(cfg)
+
     def _call() -> str:
         for attempt, delay in enumerate([0, *RETRY_DELAYS]):
             if delay:
                 time.sleep(delay)
+            # A fresh LM per attempt keeps lm.history unambiguous (this runs on
+            # many threads) and carries no state worth keeping -- DSPy's own
+            # cache is off; the disk cache below is the one that matters.
+            lm = dspy.LM(model_name, temperature=temperature, max_tokens=MAX_TOKENS,
+                         cache=False, num_retries=0, **lm_kwargs)
             try:
-                resp = client.messages.create(
-                    model=MODEL_FAST,
-                    temperature=temperature,
-                    max_tokens=MAX_TOKENS,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_message}],
-                )
-                return response_text(check_response(resp, MODEL_FAST))
+                with dspy.context(lm=lm, adapter=dspy.JSONAdapter()):
+                    pred = extractor(post_text=user_message)
+                # finish_reason is checked even on a clean parse: json_repair
+                # can silently close a truncated JSON payload, which would
+                # otherwise be cached as a quietly incomplete result.
+                if _finish_reason(lm) in ("length", "max_tokens"):
+                    raise _truncated(MODEL_FAST)
+                return json.dumps({
+                    "claims": [c.model_dump() for c in pred.claims],
+                    "edges": [e.model_dump(by_alias=True) for e in pred.edges],
+                }, ensure_ascii=False)
+            except AdapterParseError as e:
+                if _finish_reason(lm) in ("length", "max_tokens"):
+                    err: Exception = _truncated(MODEL_FAST)
+                elif "empty or null" in str(e):
+                    # Bare 200 with an empty body -- a blip worth retrying as-is.
+                    err = LLMResponseError(f"{MODEL_FAST}: provider returned null content")
+                else:
+                    # Genuinely unparseable structured output -> ValueError so
+                    # the caller's hotter-temperature retry gets a shot at it.
+                    err = ValueError(f"unparseable structured response: {str(e)[:200]}")
+                print(f"  [retry] {label} attempt {attempt + 1}: {type(err).__name__}: "
+                      f"{str(err)[:160]}", flush=True)
+                if not _is_transient(err) or attempt == len(RETRY_DELAYS):
+                    raise err from e
             except Exception as e:
                 print(f"  [retry] {label} attempt {attempt + 1}: {type(e).__name__}: "
                       f"{str(e)[:160]}", flush=True)
@@ -268,7 +366,7 @@ def call_llm(client, system_prompt: str, user_message: str, label: str = "?",
         return ""
 
     return cached_completion(
-        provider=LLM_PROVIDER, model=MODEL_FAST, system=system_prompt,
+        provider=LLM_PROVIDER, model=MODEL_FAST, system=instructions,
         prompt=user_message, temperature=temperature, max_tokens=MAX_TOKENS,
         call_fn=_call,
     )
@@ -406,10 +504,11 @@ def cmd_run(args: argparse.Namespace) -> None:
         posts = posts[:args.limit]
     posts = [p for p in posts if p.get("author_hash")]
 
-    system_prompt = build_system_prompt()
+    instructions = build_instructions()
     config = {
         "provider": LLM_PROVIDER, "model": MODEL_FAST, "temperature": LLM_TEMPERATURE,
-        "prompt_sha": hashlib.sha256(system_prompt.encode()).hexdigest()[:16],
+        "framework": "dspy",
+        "prompt_sha": hashlib.sha256(instructions.encode()).hexdigest()[:16],
         "corpus": str(args.corpus), "max_chars": args.max_chars,
     }
     conn = open_db(args.db)
@@ -427,7 +526,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         print("  nothing to do.")
         return
 
-    client = get_llm_client()
+    cfg = resolve_llm_config()
+    extractor = dspy.Predict(ExtractClaims.with_instructions(instructions))
     lock = threading.Lock()
     stats: Counter = Counter()
     counts = Counter()
@@ -445,7 +545,8 @@ def cmd_run(args: argparse.Namespace) -> None:
             body = full_text[:max_chars]
             try:
                 temp = LLM_TEMPERATURE + 0.3 if hot_retry_used else LLM_TEMPERATURE
-                raw = call_llm(client, system_prompt, body, label=label, temperature=temp)
+                raw = call_llm(extractor, cfg, instructions, body, label=label,
+                               temperature=temp)
                 claims, edges = parse_claims(raw, body, stats)
             except Exception as e:
                 # Long posts can generate more claims than fit in MAX_TOKENS output;
