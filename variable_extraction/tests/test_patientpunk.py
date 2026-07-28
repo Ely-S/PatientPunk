@@ -2165,8 +2165,9 @@ class TestLLMExtractNormalizeRecords:
 
 
 class TestExtensionFieldCodingRules:
-    """The three COVID extension fields shipped with one-line descriptions and
-    produced whatever the model felt like. Each now specifies a format."""
+    """Each COVID extension field declares a value format: infection_count a
+    bare integer, long_covid_duration_months a count of months, and
+    biomarker_results a "test: result" pair."""
 
     @pytest.fixture
     def prompt(self):
