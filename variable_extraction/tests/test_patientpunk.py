@@ -2386,13 +2386,12 @@ class TestSymptomDecomposition:
 
 
 class TestClosedVocabularies:
-    """The prompt tells the model "use ONLY one of" for these fields, so any
-    other value is a miscategorisation and must not reach the CSV."""
+    """illness_trajectory and functional_status_tier accept only their declared
+    values. Anything else is dropped rather than coerced into one."""
 
     def test_functional_status_never_leaks_into_trajectory(self):
-        """bedbound/housebound are functional_status_tier values. The old
-        canonical map sent them to "severe decline" -- a label the prompt does
-        not offer -- inventing a value to paper over a miscategorisation."""
+        """A functional-status value in the trajectory field is dropped, not
+        mapped onto a trajectory label."""
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"illness_trajectory": ["bedbound", "housebound"]}}
         out = normalize_records([rec])[0]["fields"]
@@ -2420,7 +2419,8 @@ class TestClosedVocabularies:
         assert "bedbound" in out["functional_status_tier"]["values"]
 
     def test_tiers_are_operationalised_not_just_listed(self):
-        """Six bare labels left the model inventing its own thresholds."""
+        """Each tier carries a definition, and a patient who gives both a current
+        and a worst level is coded at the current one."""
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
         prompt = build_system_prompt(build_field_descriptions(None))
         assert "cannot get out of bed" in prompt
