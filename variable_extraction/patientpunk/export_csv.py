@@ -42,7 +42,7 @@ from .phase import PhaseResult
 
 
 _VE_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = _VE_ROOT / "output" / "records_base.json"
+DEFAULT_INPUT = _VE_ROOT / "output" / "temp" / "records_base.json"
 DEFAULT_OUTPUT = _VE_ROOT / "output" / "records.csv"
 
 # Metadata columns always written first
