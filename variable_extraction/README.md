@@ -586,7 +586,7 @@ variable_extraction/
 ├── .env                           API keys (gitignored)
 │
 ├── schemas/
-│   ├── base_schema.json           14 base fields + 7 base-optional fields
+│   ├── base_schema.json           19 base fields + 5 base-optional fields
 │   └── covidlonghaulers_schema.json  COVID-specific extension fields
 │
 ├── patientpunk/                   Importable Python library

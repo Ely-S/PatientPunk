@@ -60,6 +60,62 @@ all go through the same SELF-REFERENCE ONLY guard described above. The generated
 codebook lists each field's source (`base` / `base_optional` / `extension` /
 `llm_discovered`).
 
+## Base field selection
+
+Fields were kept or cut on measured fill rate. The rates come from 1,177 records
+extracted from one month of r/covidlonghaulers under an earlier pipeline version, so
+they justify this cut but are not a baseline any current run can be compared against.
+
+35 fields went in (23 base, 12 optional) and 24 came out (19 base, 5 optional). Every
+retained field fills at 10.4% or better and every cut field fell below that, so no
+field was ever kept on clinical grounds against a low rate — the framework column
+below records where a field is grounded, it did not decide anything.
+
+| Field | Fill rate | Frameworks |
+|---|---|---|
+| `age` | 22.7% | demographic standard |
+| `sex_gender` | 20.5% | demographic standard |
+| `location_country` | — | demographic standard |
+| `conditions` | 52.3% | RECOVER, PC-COS |
+| `onset_trigger` | 35.3% | RECOVER |
+| `medications` | 44.4% | clinical standard |
+| `dosage` | — | clinical standard |
+| `treatment_outcome` | 38.7% | PC-COS |
+| `procedures` | 12.2% | clinical standard |
+| `work_disability_status` | 16.5% | SF-36 |
+| `mental_health` | 21.3% | EQ-5D, SF-36, PROMIS, RECOVER, PC-COS |
+| `prior_infections` | 11.3% | RECOVER |
+| `functional_status_tier` | 30.2% | EQ-5D, SF-36, PROMIS |
+| `social_impact` | 33.5% | EQ-5D, SF-36, PROMIS |
+| `alternative_treatments` | 20.0% | — |
+| `dietary_interventions` | 13.8% | — |
+| `misdiagnosis` | 10.4% | — |
+| `symptom_duration` | 18.3% | RECOVER |
+| `symptom_trajectory` | 17.2% | RECOVER |
+
+`location_country` and `dosage` were not measured separately.
+
+**Cut:** `activity_level`, `age_at_onset`, `diagnosis_source`, `diagnostic_odyssey`,
+`doctor_dismissal`, `ethnicity`, `family_history`, `healthcare_costs`,
+`healthcare_system`, `hormonal_events`, `location_us_state`, `time_to_diagnosis`.
+Their individual rates were not retained; only `age_at_onset` is recorded, at 0.7%.
+
+**Frameworks.** Retained fields are cross-referenced against the outcome instruments
+used in post-viral illness research, so the variable set is legible outside this
+project:
+
+| Tag | Instrument |
+|---|---|
+| EQ-5D | EuroQol 5-dimension health status measure |
+| SF-36 | 36-Item Short Form Health Survey |
+| PROMIS | Patient-Reported Outcomes Measurement Information System |
+| RECOVER | NIH RECOVER Initiative long-COVID cohort protocol |
+| PC-COS | Post-COVID Core Outcome Set (Lancet Respiratory Medicine) |
+| ME/CFS CCC | Myalgic Encephalomyelitis Canadian Consensus Criteria |
+
+`demographic standard` and `clinical standard` are not instruments; they mark fields
+any patient-record schema carries.
+
 ## Known limitations
 
 - **`db.py`'s "other people" backstop is coarse.** When loading demographics it rejects

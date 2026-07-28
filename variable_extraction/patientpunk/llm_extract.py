@@ -121,31 +121,35 @@ HEALTH_SUBREDDITS = {
     "longcovidwarriors", "postcovidrecovery",
 }
 
+# Keep in step with base_schema.json, which carries each field's confidence tier.
+# A field here but not there is extracted and undocumented; a field there but not
+# here is documented and never extracted. METHODS.md records how the set was chosen.
 BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
     "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "symptom_duration": "How long symptoms have lasted",
-    "symptom_trajectory": "Whether symptoms are improving, worsening, stable, or relapsing-remitting",
-    "age_at_onset": "Patient's age when illness began",
+    "symptom_duration": "How long the patient has been ill overall",
+    "symptom_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
     "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
-    # activity_level removed -- redundant with functional_status_tier (extension field).
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
     "mental_health": "Mental health conditions or impacts mentioned",
     "prior_infections": "Prior infections relevant to current illness (EBV, COVID, Lyme, etc.)",
+    "functional_status_tier": "Functional capacity level (bedbound, housebound, severe, moderate, mild, mostly_functional)",
+    "social_impact": "Social impacts of illness (isolation, relationship strain, lost friends)",
+    "alternative_treatments": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
+    "dietary_interventions": "Dietary changes tried (low-histamine, elimination diet, carnivore, gluten-free)",
+    "misdiagnosis": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
 }
 
 BASE_OPTIONAL_DESCRIPTIONS = {
     "occupation": "Patient's occupation or job type",
     "bmi_weight": "BMI or weight mentions",
-    "alternative_treatments": "Alternative/complementary treatments (acupuncture, supplements, etc.)",
     "genetic_testing": "Genetic testing mentions (23andMe, MTHFR, HLA typing, etc.)",
-    "social_impact": "Social impacts of illness (relationships, isolation, etc.)",
     "trauma_history": "Trauma or adverse childhood experiences",
     "toxic_exposures": "Environmental toxic exposures (mold, chemicals, etc.)",
 }
@@ -314,9 +318,11 @@ VALUE FORMAT RULES:
 
 FIELD-SPECIFIC RULES:
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
+- misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
+- dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
 - dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
-- alternative_treatments: Non-pharmaceutical interventions only (pacing, acupuncture, HBOT, cold exposure, dietary changes). Do NOT duplicate medications or supplements here.
+- alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".

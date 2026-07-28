@@ -83,6 +83,38 @@ BASE_SCHEMA = SCHEMAS_DIR / "base_schema.json"
 EXT_SCHEMA = SCHEMAS_DIR / "covidlonghaulers_schema.json"
 
 
+@pytest.fixture(scope="module")
+def base_prompt():
+    """The extraction prompt as rendered for the base field set."""
+    from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+    return build_system_prompt(build_field_descriptions(None))
+
+
+@pytest.fixture(scope="module")
+def ext_prompt():
+    """The extraction prompt as rendered for the shipped extension schema."""
+    from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+    schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+    return build_system_prompt(build_field_descriptions(schema))
+
+
+def prompt_section(prompt: str, start: str, end: str) -> str:
+    """The prompt text between two markers.
+
+    Assertions run against a section rather than the whole prompt, so a match
+    somewhere unrelated cannot stand in for the rule under test.
+    """
+    i = prompt.index(start)
+    return prompt[i:prompt.index(end, i + len(start))]
+
+
+def field_rule(prompt: str, field: str) -> str:
+    """One field's entry from the rules block, up to the next entry."""
+    i = prompt.index(f"\n- {field}: ")
+    j = prompt.find("\n- ", i + 1)
+    return prompt[i:j if j != -1 else len(prompt)]
+
+
 @pytest.fixture
 def tmp_corpus(tmp_path):
     """Create a minimal corpus directory with posts and a user file."""
@@ -460,7 +492,7 @@ class TestFieldDefinition:
 class TestSchema:
     def test_from_file(self):
         schema = Schema.from_file(EXT_SCHEMA)
-        assert schema.schema_id == "covidlonghaulers_v1"
+        assert schema.schema_id == "covidlonghaulers_v2"
         assert schema.target_subreddit is not None
         assert len(schema.all_fields) > 0
 
@@ -492,7 +524,7 @@ class TestSchema:
     def test_repr(self):
         schema = Schema.from_file(EXT_SCHEMA)
         repr_str = repr(schema)
-        assert "covidlonghaulers_v1" in repr_str
+        assert "covidlonghaulers_v2" in repr_str
 
 class TestSchemaWarning:
     def test_warns_when_base_schema_missing(self, tmp_schema, tmp_path):
@@ -1477,7 +1509,9 @@ class TestDiscoveryReviewMode:
         schema.write_text(
             json.dumps({
                 "schema_id": "s",
-                "extension_fields": {"functional_status_tier": {"description": "d"}}
+                # Must be a name absent from the base set -- known_fields dedups
+                # extension entries against base fields.
+                "extension_fields": {"infection_count": {"description": "d"}}
             }),
             encoding="utf-8",
         )
@@ -1503,7 +1537,7 @@ class TestDiscoveryReviewMode:
         assert "activity_level" not in plain_names
         assert plain_names == set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
         extension_names = {f["name"] for f in known_fields if isinstance(f, dict)}
-        assert "functional_status_tier" in extension_names
+        assert "infection_count" in extension_names
 
     def test_pipeline_review_mode_passes_stop_after_and_exits(self, tmp_path):
         schema = tmp_path / "s.json"
@@ -2164,6 +2198,55 @@ class TestLLMExtractNormalizeRecords:
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
 
 
+class TestFieldSelection:
+    """35 -> 24 fields, kept or cut on measured fill rate. METHODS.md carries the
+    rates, the framework cross-reference and the cut list."""
+
+    def test_cut_fields_are_gone(self):
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        every = set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
+        for field in ("age_at_onset", "covid_wave", "healthcare_system",
+                      "ethnicity", "healthcare_costs", "location_us_state"):
+            assert field not in every
+
+    def test_promoted_fields_no_longer_need_activating(self):
+        """functional_status_tier came from the extension; social_impact and
+        alternative_treatments from base-optional. A schema with an empty
+        include_base_fields must still get them."""
+        from patientpunk.llm_extract import build_field_descriptions
+        fields = build_field_descriptions({"include_base_fields": [],
+                                           "extension_fields": {}})
+        for field in ("functional_status_tier", "social_impact",
+                      "alternative_treatments", "dietary_interventions",
+                      "misdiagnosis"):
+            assert field in fields
+
+    def test_shipped_extension_schema_has_no_base_field_collisions(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        assert set(schema["extension_fields"]) & set(BASE_FIELD_DESCRIPTIONS) == set()
+
+    def test_manifest_and_prompt_field_lists_agree(self):
+        """base_schema.json feeds the codebook and confidence lookup;
+        BASE_FIELD_DESCRIPTIONS feeds the prompt. Nothing syncs them, so a field
+        in one and not the other is either documented-but-never-extracted or
+        extracted-but-undocumented."""
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        manifest = json.loads(BASE_SCHEMA.read_text(encoding="utf-8"))
+        doc_base = {k for k in manifest["base_fields"] if not k.startswith("_")}
+        doc_opt = {k for k in manifest["base_optional_fields"] if not k.startswith("_")}
+        assert doc_base == set(BASE_FIELD_DESCRIPTIONS)
+        assert doc_opt == set(BASE_OPTIONAL_DESCRIPTIONS)
+
+    def test_restored_fields_have_coding_rules(self, base_prompt):
+        assert "not a misdiagnosis" in field_rule(base_prompt, "misdiagnosis")
+        assert "supplement is a medication" in field_rule(base_prompt, "dietary_interventions")
+        assert "Diet goes in dietary_interventions" in field_rule(
+            base_prompt, "alternative_treatments")
 class TestUntrustedTextWrapping:
     """Corpus text reaches the model as data, never as direction. It is
     delimited by <patient_text> tags that a post cannot break out of."""

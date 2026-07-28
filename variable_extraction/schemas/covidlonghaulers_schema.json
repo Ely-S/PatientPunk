@@ -1,12 +1,9 @@
 {
-  "schema_id": "covidlonghaulers_v1",
-  "_description": "Extension schema for r/covidlonghaulers. Activates 2 base-optional fields and adds 4 COVID-specific extension fields.",
-  "_version": "1.0",
+  "schema_id": "covidlonghaulers_v2",
+  "_description": "Extension schema for r/covidlonghaulers. Adds 3 COVID-specific extension fields on top of the universal base set.",
+  "_version": "2.0",
   "_target_subreddit": "r/covidlonghaulers",
-  "include_base_fields": [
-    "alternative_treatments",
-    "social_impact"
-  ],
+  "include_base_fields": [],
   "extension_fields": {
     "infection_count": {
       "description": "How many times the patient has been infected with COVID",
@@ -21,18 +18,12 @@
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
     },
-    "functional_status_tier": {
-      "description": "Functional capacity level (housebound, bedbound, mild, moderate, severe). PEM/crash are symptoms captured under 'conditions', not functional status.",
-      "confidence": "high",
-      "icd10": "Z73.6",
-      "_bleed_rate_last_run": null,
-      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
-    },
     "biomarker_results": {
       "description": "Lab values, biomarkers, or test results mentioned",
       "confidence": "medium",
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
     }
-  }
+  },
+  "_changes_from_v1": "alternative_treatments and social_impact were promoted to base fields, so include_base_fields is now empty. functional_status_tier was promoted to base as well and is no longer redefined here."
 }
