@@ -215,18 +215,14 @@ def git_commit() -> str:
 
     The prompt, the canonical maps, the closed vocabularies and the field list
     all live in code, so the commit is what separates "the prompt changed" from
-    "the model wobbled" when two runs disagree. Extraction is otherwise close
-    to deterministic at temperature 0 -- field-level fill rates move about 0.1
-    points across identical runs -- and that only helps if the code version is
-    known.
+    "the model wobbled" when two runs disagree.
 
-    Read from ``.git`` rather than shelling out: the pipeline does not call
-    subprocess, which ``TestPipelineNoSubprocess`` enforces. The cost is that
-    a modified working tree cannot be detected here, so this reports which
-    commit was checked out, NOT that the code matched it.
+    Read from ``.git`` rather than by shelling out, since the pipeline does not
+    call subprocess. A modified working tree therefore cannot be detected: this
+    reports which commit was checked out, not that the code matched it.
 
-    Never raises. A repo it cannot read is a reason to record "unknown", not
-    to lose a completed extraction.
+    Never raises -- an unreadable repo records "unknown" rather than costing a
+    completed extraction.
     """
     g = _git_dir(PACKAGE_ROOT)
     if g is None:
