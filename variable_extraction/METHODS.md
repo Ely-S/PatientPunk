@@ -55,9 +55,9 @@ treatment, inflating per-drug `helped` rates.
 
 Symptoms are split across six domains (`fatigue_pem`, `cognitive_neurological`,
 `cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms`). Some belong to more than
-one: a migraine is both `pain` and `cognitive_neurological`; dizziness on standing is
-both `cardiovascular_autonomic` and `cognitive_neurological`. The prompt instructs the
-model to record those in every domain they belong to, with worked examples.
+one: a migraine is both `pain` and `cognitive_neurological`; nerve pain is both `pain`
+and `cognitive_neurological`. The prompt instructs the model to record those in every
+domain they belong to, with worked examples.
 
 Measured on 300 r/covidlonghaulers posts (Haiku 4.5, temperature 0):
 
@@ -85,9 +85,8 @@ constructed lookup table.
   +1.3, every other field unchanged, 24 values added. Records with at least one symptom
   domain filled stays at 57.7%, so nothing is invented — values are copied, not found.
 - **Not configurable.** There is no reason to want inconsistent domain assignment, and
-  raw model placement is preserved either way: `temp/llm_records_*.json` is written
-  before normalisation, so diffing it against `records_*.json` shows exactly what the
-  table added. A flag nobody would turn off is a code path nobody tests.
+  what the table added is recorded either way (see the routing log below). A flag nobody
+  would turn off is a code path nobody tests.
 - **Which symptoms qualify:** only where the symptom is multi-domain *by definition*.
   This is a substring lookup on the value, so a rule that needs context to be correct
   will be wrong on every value that omits it. An earlier pass routed bare `insomnia`,
@@ -95,20 +94,30 @@ constructed lookup table.
   onset, not post-exertional malaise; vertigo is vestibular; chest pain is as often
   costochondral as cardiac. Those pushed invented signal into `fatigue_pem`, the ME/CFS
   cardinal criterion. Removed, and pinned by negative tests.
-- **Limit:** four rules, because the by-definition bar excludes most candidates. Anything
-  novel, or multi-domain only in context, still depends on the model. Dizziness with
-  orthostatic context has no matching instances in this sample, so it is justified on
-  definition and unvalidated on data.
+- **Limit:** three rules, because the by-definition bar excludes most candidates. Anything
+  novel, or multi-domain only in context, still depends on the model.
+- **Why there is no orthostatic rule.** A trigger only matches if it appears in the value
+  the model wrote, and the model normalizes context away. Across 300 posts it wrote
+  `dizziness` 16 times and `orthostatic intolerance` 5, and never once a standing
+  phrasing — so a rule listing twelve variants of "dizzy when standing" matched nothing
+  and could not have. It was removed. Meanwhile `dizziness` alone split across
+  `cardiovascular_autonomic` (8), `cognitive_neurological` (6) and `fatigue_pem` (1),
+  which is the inconsistency this section is about and which a substring rule cannot
+  reach: bare `dizziness` is genuinely not always orthostatic.
 - **How far that reaches:** across the same 300 posts the table matches 42 of 894 symptom
-  mentions (4.7%) and 14 of 588 distinct strings (2.4%). Two of the four rules never fire.
-  So placement is deterministic for about one mention in twenty; the rest is model
-  judgement at an unmeasured consistency. The symptom vocabulary grows at roughly
-  corpus^0.72 — about 9,800 distinct strings at 15,000 posts — so a longer hand-written
-  table does not close this. Issue #105 tracks resolving each distinct string once and
-  caching it instead.
-- **Provenance:** the four rules and the by-definition bar are AI-authored and have had
+  mentions (4.7%) and 14 of 588 distinct strings (2.4%). So placement is deterministic for
+  about one mention in twenty; the rest is model judgement at an unmeasured consistency.
+  The symptom vocabulary grows at roughly corpus^0.72 — about 9,800 distinct strings at
+  15,000 posts — so a longer hand-written table does not close this. Issue #105 tracks
+  resolving each distinct string once and caching it instead.
+- **Provenance:** the rules and the by-definition bar are AI-authored and have had
   no clinical review. Freezing them into code makes application reproducible; it does not
   make the mapping correct.
+- **What was routed is recorded.** Each run writes `output/routing_{schema_id}.json`, one
+  entry per copied value giving the post, the value, the trigger that matched, the domain
+  it was found in and the domain it was copied to. The record itself does not mark a
+  routed value, so this is the account of what the table did — and unlike the temp files
+  it survives the next run.
 - **Trade-off worth naming:** this moves a clinical-vocabulary decision from the prompt
   into code, so changing it needs a commit rather than a prompt edit. That is the right
   home for a mapping that must stay stable across runs, but the mapping is no longer
@@ -126,9 +135,8 @@ above. The generated codebook lists each field's source (`base` / `base_optional
 **The one exception is the cross-domain fan-out.** Some symptom-domain values are copied
 from another domain by a lookup table rather than found by the model. The record does not
 mark which — a fanned-out value is indistinguishable from a model-placed one and carries
-the same confidence. Raw model placement is still available: `temp/llm_records_*.json` is
-written before normalisation, so diffing it against `records_*.json` shows exactly what
-the table added.
+the same confidence. What was copied is recorded separately, in
+`output/routing_{schema_id}.json`.
 
 ## Run provenance
 
@@ -166,6 +174,7 @@ pass and the fan-out over that file reproduces `records_{schema_id}.json` exactl
 | Flattened records | `output/records.csv` | **Yes** | One row per patient, values pipe-joined |
 | Codebook | `output/codebook.csv` | **Yes** | Field list with source and confidence tier |
 | Run provenance | `output/llm_provenance.json` | **Yes** | Provider, model, temperature, schema_id, git_commit |
+| Cross-domain routing log | `output/routing_{schema_id}.json` | **Yes** | One entry per copied symptom value: post, value, trigger, source and destination domain |
 | Raw model records | `output/temp/llm_records_{schema_id}.json` | No | Per-record extraction before normalization |
 | Normalized records | `output/temp/records_{schema_id}.json` | No | Per-record extraction after normalization, with per-field confidence |
 

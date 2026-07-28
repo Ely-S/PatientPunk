@@ -167,7 +167,7 @@ being stamped onto each record.
 | Treatments | `medications`, `dosage`, `treatment_outcome`, `procedures`, `alternative_treatments`, `dietary_interventions` |
 | Function and impact | `functional_status_tier`, `work_disability_status`, `mental_health`, `social_impact` |
 
-**Symptom domains carry the same symptom more than once on purpose.** A migraine is recorded in both `pain` and `cognitive_neurological`; dizziness on standing lands in both `cardiovascular_autonomic` and `cognitive_neurological`. Reddit patients do not write clinical intake forms, and forcing one symptom into one bucket loses more than the duplication costs. The routing rules given to the extraction model are in `llm_extract.build_system_prompt`.
+**Symptom domains carry the same symptom more than once on purpose.** A migraine is recorded in both `pain` and `cognitive_neurological`, as is nerve pain. Reddit patients do not write clinical intake forms, and forcing one symptom into one bucket loses more than the duplication costs. The routing rules given to the extraction model are in `llm_extract.build_system_prompt`.
 
 The field set is chosen on measured fill rates, cross-referenced against EQ-5D, SF-36, PROMIS, RECOVER, PC-COS, and the ME/CFS Canadian Consensus Criteria. Per-field rates, the framework mapping and the cut list are in `variable_extraction/METHODS.md`.
 

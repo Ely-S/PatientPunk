@@ -859,7 +859,12 @@ _CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
 #
 # This applies only where the symptom is multi-domain.
 #
-# These four rules are AI-authored and have had no clinical review, and they reach
+# A trigger has to appear in the value the model wrote. That rules out symptoms whose
+# extra domain depends on context, because the model normalises the context away: it
+# writes "dizziness", not "dizzy when standing", so an orthostatic rule cannot match
+# however many phrasings it lists.
+#
+# These three rules are AI-authored and have had no clinical review, and they reach
 # 4.7% of symptom mentions -- a floor under the cases that can be stated exactly,
 # not general coverage. Issue #105 tracks replacing them.
 CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
@@ -874,18 +879,13 @@ CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
     (("unrefreshing sleep", "unrefreshed sleep", "non-restorative sleep",
       "wake up exhausted", "wake exhausted"),
      frozenset({"sleep", "fatigue_pem"})),
-    # Orthostatic only: the standing context is what makes it autonomic.
-    (("dizzy when stand", "dizziness when stand", "dizzy on stand",
-      "dizziness on stand", "dizzy standing", "dizziness standing",
-      "dizzy when i stand", "orthostatic dizz", "dizzy getting up",
-      "lightheaded when stand", "lightheaded on stand", "lightheaded standing"),
-     frozenset({"cardiovascular_autonomic", "cognitive_neurological"})),
 )
 
 
 def fan_out_cross_domain_symptoms(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
+    routing_log: list[dict] | None = None,
 ) -> int:
     """Copy multi-domain symptoms into every domain they belong to.
 
@@ -895,21 +895,29 @@ def fan_out_cross_domain_symptoms(
     ``confidence_by_field`` gives a destination its schema-declared confidence
     when it held no values before, which would otherwise leave it null.
 
+    Pass ``routing_log`` to collect one entry per copied value, naming the
+    trigger that matched and where the value came from. The record itself does
+    not mark a routed value, so this is the only account of what was added.
+
     Only symptoms in CROSS_DOMAIN_SYMPTOMS are routed.
     """
     confidence_by_field = confidence_by_field or {}
     added = 0
     for rec in records:
         fields = rec.setdefault("fields", {})
+        post_id = (rec.get("record_meta") or {}).get("post_id")
         for triggers, domains in CROSS_DOMAIN_SYMPTOMS:
             # Read from every domain, so a symptom the model filed outside this
-            # rule's domains entirely still reaches the right ones.
-            matched = [
-                v
-                for domain in SYMPTOM_DOMAINS
-                for v in ((fields.get(domain) or {}).get("values") or [])
-                if isinstance(v, str) and any(t in v.lower() for t in triggers)
-            ]
+            # rule's domains entirely still reaches the right ones. The source
+            # domain and trigger ride along for the log.
+            matched: list[tuple[str, str, str]] = []
+            for domain in SYMPTOM_DOMAINS:
+                for v in ((fields.get(domain) or {}).get("values") or []):
+                    if not isinstance(v, str):
+                        continue
+                    hit = next((t for t in triggers if t in v.lower()), None)
+                    if hit is not None:
+                        matched.append((v, domain, hit))
             if not matched:
                 continue
             for domain in domains:
@@ -921,11 +929,19 @@ def fan_out_cross_domain_symptoms(
                     fields[domain] = entry
                 values = entry.get("values") or []
                 existing = {v.lower() for v in values if isinstance(v, str)}
-                for v in matched:
+                for v, source, trigger in matched:
                     if v.lower() not in existing:
                         values.append(v)
                         existing.add(v.lower())
                         added += 1
+                        if routing_log is not None:
+                            routing_log.append({
+                                "post_id": post_id,
+                                "value": v,
+                                "trigger": trigger,
+                                "found_in": source,
+                                "copied_to": domain,
+                            })
                 entry["values"] = values
                 if values and entry.get("confidence") is None:
                     entry["confidence"] = confidence_by_field.get(domain, "medium")
@@ -935,12 +951,14 @@ def fan_out_cross_domain_symptoms(
 def normalize_records(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
+    routing_log: list[dict] | None = None,
 ) -> list[dict]:
     """Wrap every field as ``{"values", "confidence"}`` and canonicalize in place.
 
     ``confidence_by_field`` maps field name -> the confidence declared for it in
     the schema; a field missing from the map falls back to "medium".
 
+    ``routing_log`` is passed to :func:`fan_out_cross_domain_symptoms`.
     """
     confidence_by_field = confidence_by_field or {}
 
@@ -1176,7 +1194,7 @@ def normalize_records(
 
     # After canonicalization, so the fan-out copies canonical values ("migraines",
     # not "migraine") and one trigger covers every surface form.
-    fan_out_cross_domain_symptoms(records, confidence_by_field)
+    fan_out_cross_domain_symptoms(records, confidence_by_field, routing_log)
 
     return records
 
@@ -1252,9 +1270,16 @@ def run_llm_extract(
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-    normalize_records(records, field_confidence(schema_path))
+    routing_log: list[dict] = []
+    normalize_records(records, field_confidence(schema_path), routing_log)
     records_file = out_temp / f"records_{schema_id}.json"
     _write_json_atomic(records_file, records)
+
+    # Beside records.csv rather than under temp/: a routed value is not marked in
+    # the record, so once temp/ is cleaned this is the only account of what the
+    # table added and which trigger added it.
+    routing_file = input_dir / f"routing_{schema_id}.json"
+    _write_json_atomic(routing_file, routing_log)
 
     fields_found = defaultdict(int)
     for rec in records:

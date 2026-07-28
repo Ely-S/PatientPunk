@@ -2486,6 +2486,44 @@ class TestCrossDomainFanout:
         assert fan_out_cross_domain_symptoms(recs) == 0  # idempotent
 
 
+class TestCrossDomainRoutingLog:
+    """A routed value is not marked in the record, so the log is the only
+    account of what the table added and why."""
+
+    def _route(self, fields):
+        from patientpunk.llm_extract import normalize_records
+        log: list[dict] = []
+        normalize_records([{"record_meta": {"post_id": "p1"}, "fields": fields}],
+                          None, log)
+        return log
+
+    def test_logs_the_trigger_and_both_domains(self):
+        log = self._route({"pain": ["migraines"], "cognitive_neurological": []})
+        assert log == [{"post_id": "p1", "value": "migraines", "trigger": "migraine",
+                        "found_in": "pain", "copied_to": "cognitive_neurological"}]
+
+    def test_nothing_logged_when_nothing_moves(self):
+        assert self._route({"pain": ["chest pain"], "cognitive_neurological": []}) == []
+
+    def test_nothing_logged_when_the_model_already_cross_listed(self):
+        assert self._route({"pain": ["migraines"],
+                            "cognitive_neurological": ["migraines"]}) == []
+
+    def test_log_entry_count_matches_the_return_value(self):
+        from patientpunk.llm_extract import fan_out_cross_domain_symptoms
+        recs = [{"record_meta": {"post_id": "p1"},
+                 "fields": {"pain": {"values": ["migraines", "nerve pain"]},
+                            "cognitive_neurological": {"values": []}}}]
+        log: list[dict] = []
+        assert fan_out_cross_domain_symptoms(recs, None, log) == len(log)
+
+    def test_collecting_the_log_is_optional(self):
+        from patientpunk.llm_extract import fan_out_cross_domain_symptoms
+        recs = [{"fields": {"pain": {"values": ["migraines"]},
+                            "cognitive_neurological": {"values": []}}}]
+        assert fan_out_cross_domain_symptoms(recs) == 1
+
+
 class TestCrossDomainFanoutDoesNotOverRoute:
     """A trigger qualifies only where the symptom is multi-domain by
     definition. Symptoms that span domains only in context stay where the
@@ -2511,11 +2549,13 @@ class TestCrossDomainFanoutDoesNotOverRoute:
                              "cardiovascular_autonomic": []})
         assert out["cardiovascular_autonomic"]["values"] == []
 
-    def test_orthostatic_dizziness_does_cross(self):
-        """The standing context is what makes it autonomic."""
+    def test_orthostatic_dizziness_stays_put_too(self):
+        """No rule covers dizziness, including with the standing context spelled
+        out. A rule for it would need the context inside the value, and the model
+        writes "dizziness" rather than "dizzy when standing"."""
         out = self._domains({"cognitive_neurological": ["dizzy when standing"],
                              "cardiovascular_autonomic": []})
-        assert out["cardiovascular_autonomic"]["values"] == ["dizzy when standing"]
+        assert out["cardiovascular_autonomic"]["values"] == []
 
     def test_plain_chest_pain_stays_out_of_cardiovascular(self):
         """Chest pain may be musculoskeletal or costochondral; routing it to
