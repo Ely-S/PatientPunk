@@ -2318,8 +2318,9 @@ SYMPTOM_DOMAINS = [
 
 
 class TestSymptomDecomposition:
-    """The flat `symptoms` field was the densest in the corpus and the least
-    useful for clustering: one bag of free text with no internal structure."""
+    """Symptoms live in six domains rather than one field. A symptom spanning
+    domains appears in each of them, and the archival records keep the
+    patient's wording -- concept merges belong to the clustering vocabulary."""
 
     def test_domains_are_base_fields(self):
         from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
@@ -2333,8 +2334,7 @@ class TestSymptomDecomposition:
         assert "symptoms" not in set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
 
     def test_prompt_states_the_cross_listing_rule(self):
-        """Cross-listing is the one instruction a model would otherwise get
-        wrong by default, so assert it survives prompt edits."""
+        """The prompt names every domain and states the cross-listing rule."""
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
         prompt = build_system_prompt(build_field_descriptions(None))
         assert "CROSS-LISTING" in prompt
@@ -2348,9 +2348,8 @@ class TestSymptomDecomposition:
         assert "Symptoms belong in the six symptom-domain fields" in prompt
 
     def test_extraction_tier_preserves_clinically_distinct_wording(self):
-        """records_*.json is the archival output and the prompt asks for the
-        patient's own words, so concept-level merges must not happen here --
-        vertigo is not dizziness and air hunger is not shortness of breath."""
+        """The archival records keep the patient's wording: vertigo is not
+        dizziness and air hunger is not shortness of breath."""
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {
             "cognitive_neurological": ["vertigo", "cognitive dysfunction"],
@@ -2372,8 +2371,7 @@ class TestSymptomDecomposition:
         assert out["cognitive_neurological"]["values"] == ["brain fog", "migraines"]
 
     def test_clustering_tier_merges_those_concepts(self):
-        """The merges deliberately absent from extraction must exist where low
-        cardinality matters more than the patient's exact wording."""
+        """The clustering vocabulary merges what extraction leaves distinct."""
         from patientpunk.normalize import normalize_value
         assert normalize_value("cognitive_neurological", "vertigo") == "dizziness"
         assert normalize_value("other_symptoms", "air hunger") == "shortness_of_breath"
