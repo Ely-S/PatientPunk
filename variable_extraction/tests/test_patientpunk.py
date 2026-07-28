@@ -2199,8 +2199,8 @@ class TestLLMExtractNormalizeRecords:
 
 
 class TestFieldSelection:
-    """36 -> 19 base fields, chosen on measured fill rates cross-referenced
-    against clinical outcome frameworks. Rates live in base_schema.json."""
+    """35 -> 24 fields, kept or cut on measured fill rate. METHODS.md carries the
+    rates, the framework cross-reference and the cut list."""
 
     def test_cut_fields_are_gone(self):
         from patientpunk.llm_extract import (

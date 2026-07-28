@@ -1,186 +1,94 @@
 {
   "_manifest_version": "2.1",
-  "_description": "Manifest of PatientPunk universal base fields: descriptions, confidence tiers, ICD-10 hints, measured fill rates, and framework mappings.",
+  "_description": "Manifest of PatientPunk universal base fields: descriptions, confidence tiers and ICD-10 hints. How this field set was chosen is documented in METHODS.md.",
   "_loaded_by": "Read at runtime by Schema.from_file (schema.py), the codebook generator (codebook.py), and per-field confidence lookup. The field list the extractor actually prompts on is BASE_FIELD_DESCRIPTIONS in llm_extract.py — keep the two in step; a field added here but not there is documented and never extracted.",
-  "_field_selection": {
-    "method": "Fill rates measured on 1,177 extracted records (one month of r/covidlonghaulers). Fields below 10% fill were cut unless a clinical framework justified keeping them; no cut field cleared 1%. Retained fields are cross-referenced against the outcome frameworks used in post-viral illness research so the variable set is defensible outside this project.",
-    "frameworks": {
-      "EQ-5D": "EuroQol 5-dimension health status measure",
-      "SF-36": "36-Item Short Form Health Survey",
-      "PROMIS": "Patient-Reported Outcomes Measurement Information System",
-      "RECOVER": "NIH RECOVER Initiative long-COVID cohort protocol",
-      "PC-COS": "Post-COVID Core Outcome Set (Lancet Respiratory Medicine)",
-      "ME/CFS CCC": "Myalgic Encephalomyelitis Canadian Consensus Criteria"
-    },
-    "cut": {
-      "age_at_onset": "0.7% fill — lowest of any field considered",
-      "covid_wave": "0.5% fill — patients virtually never self-report infection wave"
-    }
-  },
   "base_fields": {
     "age": {
       "description": "Patient's current age in years (numeric string)",
       "confidence": "medium",
-      "fill_rate": 0.227,
-      "frameworks": [
-        "demographic standard"
-      ],
       "notes": "Restricted to 16-99 to reduce noise from non-demographic age mentions"
     },
     "sex_gender": {
       "description": "Patient's biological sex or gender identity",
-      "confidence": "high",
-      "fill_rate": 0.205,
-      "frameworks": [
-        "demographic standard"
-      ]
+      "confidence": "high"
     },
     "location_country": {
       "description": "Country of residence",
-      "confidence": "medium",
-      "frameworks": [
-        "demographic standard"
-      ]
+      "confidence": "medium"
     },
     "conditions": {
       "description": "Diagnosed medical conditions only — not symptoms",
       "confidence": "high",
-      "fill_rate": 0.523,
-      "frameworks": [
-        "RECOVER",
-        "PC-COS"
-      ],
       "icd10": "Applied via CONDITION_ICD10_MAP where available"
     },
     "onset_trigger": {
       "description": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-      "confidence": "medium",
-      "fill_rate": 0.353,
-      "frameworks": [
-        "RECOVER"
-      ]
+      "confidence": "medium"
     },
     "medications": {
       "description": "Current or past medications mentioned",
-      "confidence": "high",
-      "fill_rate": 0.444,
-      "frameworks": [
-        "clinical standard"
-      ]
+      "confidence": "high"
     },
     "dosage": {
       "description": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit when stated",
-      "confidence": "medium",
-      "frameworks": [
-        "clinical standard"
-      ]
+      "confidence": "medium"
     },
     "treatment_outcome": {
       "description": "Response to treatments as 'drug: outcome: symptom' triples",
       "confidence": "medium",
-      "fill_rate": 0.387,
-      "frameworks": [
-        "PC-COS"
-      ],
       "notes": "PC-COS core outcome. Decomposed downstream by normalize.decompose_treatment_outcome into label / drug / symptom columns."
     },
     "procedures": {
       "description": "Medical procedures undergone (tilt table test, colonoscopy, etc.)",
-      "confidence": "high",
-      "fill_rate": 0.122,
-      "frameworks": [
-        "clinical standard"
-      ]
+      "confidence": "high"
     },
     "work_disability_status": {
       "description": "Ability to work; disability applications/awards",
       "confidence": "high",
-      "fill_rate": 0.165,
-      "frameworks": [
-        "SF-36"
-      ],
       "notes": "SF-36 role-physical / role-emotional"
     },
     "mental_health": {
       "description": "Mental health conditions or experiences mentioned",
       "confidence": "medium",
-      "fill_rate": 0.213,
-      "frameworks": [
-        "EQ-5D",
-        "SF-36",
-        "PROMIS",
-        "RECOVER",
-        "PC-COS"
-      ],
       "notes": "The only retained field present in every framework considered"
     },
     "prior_infections": {
       "description": "Prior infections that may be relevant to current illness (EBV, COVID, Lyme, etc.)",
-      "confidence": "medium",
-      "fill_rate": 0.113,
-      "frameworks": [
-        "RECOVER"
-      ]
+      "confidence": "medium"
     },
     "functional_status_tier": {
       "description": "Functional capacity level (bedbound, housebound, severe, moderate, mild, mostly_functional)",
       "confidence": "high",
-      "fill_rate": 0.302,
-      "frameworks": [
-        "EQ-5D",
-        "SF-36",
-        "PROMIS"
-      ],
       "icd10": "Z73.6",
       "notes": "Promoted from the covidlonghaulers extension in manifest 3.0 — EQ-5D mobility+self-care and SF-36 physical functioning make it universal, not COVID-specific."
     },
     "social_impact": {
       "description": "Social impacts of illness (isolation, relationship strain, lost friends)",
       "confidence": "medium",
-      "fill_rate": 0.335,
-      "frameworks": [
-        "EQ-5D",
-        "SF-36",
-        "PROMIS"
-      ],
       "notes": "Promoted from base-optional in manifest 3.0. EQ-5D usual activities; SF-36 social functioning; PROMIS social participation."
     },
     "alternative_treatments": {
       "description": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
       "confidence": "medium",
-      "fill_rate": 0.2,
-      "frameworks": [],
       "notes": "Promoted from base-optional in manifest 3.0. No framework equivalent — clinical trials do not capture self-directed non-pharmaceutical interventions, which is exactly why patient-authored text is worth mining for it."
     },
     "dietary_interventions": {
       "description": "Dietary changes tried (low-histamine, elimination, carnivore, gluten-free)",
       "confidence": "medium",
-      "fill_rate": 0.138,
-      "frameworks": [],
       "notes": "No framework equivalent; retained for the same reason as alternative_treatments."
     },
     "misdiagnosis": {
       "description": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
       "confidence": "medium",
-      "fill_rate": 0.104,
-      "frameworks": [],
       "notes": "No outcome-framework equivalent, but grounded in the diagnostic-odyssey literature and not capturable from clinical records."
     },
     "symptom_duration": {
       "description": "How long the patient has been ill overall",
-      "confidence": "low",
-      "fill_rate": 0.183,
-      "frameworks": [
-        "RECOVER"
-      ]
+      "confidence": "low"
     },
     "symptom_trajectory": {
       "description": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
-      "confidence": "medium",
-      "fill_rate": 0.172,
-      "frameworks": [
-        "RECOVER"
-      ]
+      "confidence": "medium"
     }
   },
   "base_optional_fields": {

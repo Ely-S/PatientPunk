@@ -121,9 +121,9 @@ HEALTH_SUBREDDITS = {
     "longcovidwarriors", "postcovidrecovery",
 }
 
-# Keep in step with base_schema.json, which carries each field's fill rate,
-# confidence tier and framework mapping. A field here but not there is extracted
-# and undocumented; a field there but not here is documented and never extracted.
+# Keep in step with base_schema.json, which carries each field's confidence tier.
+# A field here but not there is extracted and undocumented; a field there but not
+# here is documented and never extracted. METHODS.md records how the set was chosen.
 BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
