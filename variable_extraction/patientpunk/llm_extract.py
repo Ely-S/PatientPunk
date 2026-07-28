@@ -121,9 +121,9 @@ HEALTH_SUBREDDITS = {
     "longcovidwarriors", "postcovidrecovery",
 }
 
-# Field set selected on measured fill rates (1,177 records, one month of
-# r/covidlonghaulers) cross-referenced against EQ-5D / SF-36 / PROMIS / RECOVER /
-# PC-COS / ME-CFS-CCC. Rates and framework mappings live in schemas/base_schema.json.
+# Keep in step with base_schema.json, which carries each field's fill rate,
+# confidence tier and framework mapping. A field here but not there is extracted
+# and undocumented; a field there but not here is documented and never extracted.
 BASE_FIELD_DESCRIPTIONS = {
     "age": "Patient's current age in years (numeric)",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
