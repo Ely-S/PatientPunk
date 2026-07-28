@@ -2630,9 +2630,10 @@ class TestRunProvenance:
 
 
 class TestNamedButNotTaken:
-    """Scored against 100 human-coded IRR posts: the model put a declined
-    Z-Pak and a contraindicated Xanax into medications. The negation rule
-    covered only conditions, so nothing separated named from taken."""
+    """medications, alternative_treatments and dietary_interventions hold
+    treatments the patient took, not ones they mentioned. Declined,
+    held-but-unused, asked-about and planned treatments are excluded; a
+    treatment taken and later stopped is kept."""
 
     def test_rule_is_stated_with_worked_examples(self):
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
@@ -2643,8 +2644,7 @@ class TestNamedButNotTaken:
         assert "has anyone tried" in prompt
 
     def test_stopping_still_counts_as_taken(self):
-        """The rule must not over-correct into dropping drugs the patient
-        genuinely took and later stopped."""
+        """Stopping is not the same as never taking."""
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
         prompt = build_system_prompt(build_field_descriptions(None))
         assert "quit" in prompt and "DOES belong in medications" in prompt
