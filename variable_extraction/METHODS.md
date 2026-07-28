@@ -61,14 +61,14 @@ domain they belong to, with worked examples.
 
 Measured on 300 r/covidlonghaulers posts (Haiku 4.5, temperature 0):
 
-| Symptom | Both domains | One only |
-|---|---|---|
-| headache / migraine | 5 | 15 |
-| nerve / burning pain | 0 | 5 |
-| unrefreshing sleep | 1 | 2 |
+| Symptom | Both domains | One only | Compliance |
+|---|---|---|---|
+| headache / migraine | 4 | 14 | 22% |
+| nerve pain | 1 | 3 | 25% |
+| unrefreshing sleep | 0 | 6 | 0% |
+| **overall** | **5** | **23** | **18%** |
 
-28 record-symptom pairs: 6 placed in both domains, 22 in one. A small sample, and the
-only one there is.
+28 record-symptom pairs. A small sample, and the only one there is.
 
 The problem is not *which* domain the model picks; for many symptoms there is no single
 right answer, which is why cross-listing exists. It is that the same symptom is placed
@@ -81,9 +81,10 @@ once, wherever it filed it, and `llm_extract.fan_out_cross_domain_symptoms` copi
 into the others from `CROSS_DOMAIN_SYMPTOMS`. Placement becomes deterministic through this
 constructed lookup table.
 
-- **Effect:** on the same 300 records, `pain` +1.7 points, `cognitive_neurological`
-  +1.3, every other field unchanged, 24 values added. Records with at least one symptom
-  domain filled stays at 57.7%, so nothing is invented — values are copied, not found.
+- **Effect:** on the same 300 records, 31 values added — `pain` +1.3 points,
+  `cognitive_neurological` +1.0, `fatigue_pem` +0.3, every other field unchanged.
+  Records with at least one symptom domain filled stays at 55.3%, so nothing is
+  invented: values are copied, not found.
 - **Not configurable.** There is no reason to want inconsistent domain assignment, and
   what the table added is recorded either way (see the routing log below). A flag nobody
   would turn off is a code path nobody tests.
