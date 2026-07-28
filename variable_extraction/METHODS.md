@@ -154,9 +154,40 @@ nothing hashes the corpus, so the same commit and settings against a different i
 slice look identical in the record.
 
 Replay works for the deterministic half. `temp/llm_records_{schema_id}.json` holds raw
-model output before normalisation; re-running canonicalisation, the closed-vocabulary
-pass and the fan-out over that file reproduces `records_{schema_id}.json` exactly. It is
-overwritten by the next run of the same schema, so copy it aside if a run matters.
+model output before normalization; re-running canonicalization, the closed-vocabulary
+pass and the fan-out over that file reproduces `records_{schema_id}.json` exactly.
+
+### What a run persists
+
+| Artifact | Path | Survives the next run | Holds |
+|---|---|---|---|
+| API response cache | `cache/<provider>/<model>/…json` | **Yes** | One file per LLM call: response text, model, temperature, timestamp |
+| Scraped corpus | `output/subreddit_posts.json` | **Yes** | The extractor's input |
+| Flattened records | `output/records.csv` | **Yes** | One row per patient, values pipe-joined |
+| Codebook | `output/codebook.csv` | **Yes** | Field list with source and confidence tier |
+| Run provenance | `output/llm_provenance.json` | **Yes** | Provider, model, temperature, schema_id, git_commit |
+| Raw model records | `output/temp/llm_records_{schema_id}.json` | No | Per-record extraction before normalization |
+| Normalized records | `output/temp/records_{schema_id}.json` | No | Per-record extraction after normalization, with per-field confidence |
+
+The cache is on by default (`LLM_CACHE=0` to disable) and nothing in the pipeline deletes
+it, but it is gitignored — it lives only on the machine that ran the pipeline.
+
+`_clean_temp()` empties `temp/` at the start of any full run with `--clean`. Its patterns
+are schema-agnostic globs, so running one schema removes another schema's records too,
+not just its own. Re-running with a warm cache costs no API calls, so those two files are
+regenerable rather than lost, provided the corpus, schema and commit still match.
+
+Three things that follow, and are easy to get wrong:
+
+- **Per-field confidence exists only in the temp JSON.** `records.csv` carries values but
+  no confidence columns. `export_csv --confidence` adds them, but that flag is not wired
+  into `main.py run` (issue #94), so the durable CSV cannot currently carry confidence.
+- **The cache records answers, not questions.** An entry stores `response_text` and the
+  key, not the prompt behind it. Entries are interpretable only by regenerating the
+  identical prompt — same corpus, schema and commit, which is what `git_commit` pins.
+- **Analysis over symptom values does not need any of the temp files.** The domain columns
+  are in `records.csv`, so post-processing that only reads symptom strings can run off the
+  durable output long after the run.
 
 ## Base field selection
 

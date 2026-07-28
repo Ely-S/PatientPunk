@@ -22,7 +22,12 @@ Requires:
     Copy .env.example to .env and add your Anthropic API key.
 
 Output:
-    output/records_{schema_id}.json     # normalized extraction records
+    output/temp/llm_records_{schema_id}.json   # raw model output, pre-normalization
+    output/temp/records_{schema_id}.json       # normalized extraction records
+
+Both live under temp/ and are removed at the start of the next full run; the durable
+outputs are output/records.csv and output/llm_provenance.json. METHODS.md lists what a
+run persists.
 """
 
 
