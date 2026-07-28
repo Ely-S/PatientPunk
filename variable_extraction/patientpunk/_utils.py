@@ -192,6 +192,75 @@ def llm_config() -> dict:
     return cfg
 
 
+def _git_dir(start: Path) -> Path | None:
+    """The .git directory for ``start``, following a worktree pointer file."""
+    for d in [start, *start.parents]:
+        g = d / ".git"
+        if g.is_dir():
+            return g
+        if g.is_file():
+            # Worktrees and submodules store "gitdir: <path>" instead.
+            try:
+                ref = g.read_text(encoding="utf-8").strip()
+            except OSError:
+                return None
+            if ref.startswith("gitdir:"):
+                p = Path(ref.split(":", 1)[1].strip())
+                return p if p.is_absolute() else (d / p).resolve()
+    return None
+
+
+def git_commit() -> str:
+    """The checked-out commit, or ``"unknown"``.
+
+    The prompt, the canonical maps, the closed vocabularies and the field list
+    all live in code, so the commit is what separates "the prompt changed" from
+    "the model wobbled" when two runs disagree. Extraction is otherwise close
+    to deterministic at temperature 0 -- field-level fill rates move about 0.1
+    points across identical runs -- and that only helps if the code version is
+    known.
+
+    Read from ``.git`` rather than shelling out: the pipeline does not call
+    subprocess, which ``TestPipelineNoSubprocess`` enforces. The cost is that
+    a modified working tree cannot be detected here, so this reports which
+    commit was checked out, NOT that the code matched it.
+
+    Never raises. A repo it cannot read is a reason to record "unknown", not
+    to lose a completed extraction.
+    """
+    g = _git_dir(PACKAGE_ROOT)
+    if g is None:
+        return "unknown"
+    try:
+        head = (g / "HEAD").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+    if not head.startswith("ref:"):
+        return head or "unknown"          # detached HEAD holds the sha itself
+    ref = head.split(":", 1)[1].strip()
+    # A worktree keeps its own HEAD but shares refs with the main repo, which
+    # `commondir` points at. Without this, every ref lookup inside a worktree
+    # misses and the run records "unknown".
+    common = g
+    try:
+        rel = (g / "commondir").read_text(encoding="utf-8").strip()
+        common = Path(rel) if Path(rel).is_absolute() else (g / rel).resolve()
+    except OSError:
+        pass
+    for base in dict.fromkeys([g, common]):
+        try:
+            return (base / ref).read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+        try:                               # ref may only exist packed
+            for line in (base / "packed-refs").read_text(encoding="utf-8").splitlines():
+                if line.endswith(f" {ref}"):
+                    return line.split(" ", 1)[0]
+        except OSError:
+            pass
+    return "unknown"
+
+
 # --- Response validation ------------------------------------------------------
 
 class LLMResponseError(RuntimeError):

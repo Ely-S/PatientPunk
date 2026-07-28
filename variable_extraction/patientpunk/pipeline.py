@@ -29,11 +29,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import clean_temp_dir, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
+from ._utils import (clean_temp_dir, find_discovery_reports, find_newest_glob,
+                     get_schema_id, git_commit, llm_config)
 from .codebook import run_codebook
 from .discover import run_discovery
 from .export_csv import run_export_csv
-from .llm_extract import run_llm_extract
+from .llm_extract import resolve_cross_domain_fanout, run_llm_extract
 from .phase import PhaseResult
 
 # Intermediate file glob patterns that live in temp_dir.
@@ -222,8 +223,13 @@ class Pipeline:
 
         # Record the LLM configuration (model / provider / base_url / temperature)
         # so every output is traceable to the model + settings that produced it.
+        # The resolved value, not cfg's tri-state: None in the record would say
+        # nothing about what the run actually did.
         prov = {**llm_config(), "schema_id": self._schema_id,
-                "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode}
+                "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode,
+                "cross_domain_fanout": resolve_cross_domain_fanout(
+                    cfg.cross_domain_fanout),
+                "git_commit": git_commit()}
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
                 json.dumps(prov, indent=2), encoding="utf-8")

@@ -2600,6 +2600,82 @@ class TestCrossDomainFanoutDoesNotOverRoute:
         assert out["pain"]["values"] == ["nerve pain"]
 
 
+class TestRunProvenance:
+    """llm_provenance.json records what determined the output: the model
+    settings, the code version, and the post-processing switch."""
+
+    def test_commit_is_a_sha_or_unknown(self):
+        from patientpunk._utils import git_commit
+        c = git_commit()
+        assert c == "unknown" or (
+            len(c) == 40 and all(x in "0123456789abcdef" for x in c))
+
+    def test_matches_git_itself(self):
+        """The helper reimplements ref resolution rather than shelling out, so
+        pin it against real git."""
+        import subprocess
+        from patientpunk._utils import PACKAGE_ROOT, git_commit
+        try:
+            expected = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=PACKAGE_ROOT,
+                capture_output=True, text=True, check=True).stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            pytest.skip("git unavailable")
+        assert git_commit() == expected
+
+    def test_unreadable_repo_records_unknown_rather_than_raising(
+            self, monkeypatch, tmp_path):
+        """A completed extraction is not worth losing to an unreadable repo."""
+        from patientpunk import _utils
+        monkeypatch.setattr(_utils, "PACKAGE_ROOT", tmp_path)
+        assert _utils.git_commit() == "unknown"
+
+    def test_worktree_refs_resolve_via_commondir(self, monkeypatch, tmp_path):
+        """A worktree keeps its own HEAD but shares refs with the main repo via
+        commondir. Without following it every ref lookup misses."""
+        from patientpunk import _utils
+        common = tmp_path / "main.git"
+        (common / "refs" / "heads").mkdir(parents=True)
+        (common / "refs" / "heads" / "topic").write_text("b" * 40, encoding="utf-8")
+        wt = common / "worktrees" / "w"
+        wt.mkdir(parents=True)
+        (wt / "HEAD").write_text("ref: refs/heads/topic", encoding="utf-8")
+        (wt / "commondir").write_text("../..", encoding="utf-8")
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        (tree / ".git").write_text("gitdir: " + str(wt), encoding="utf-8")
+        monkeypatch.setattr(_utils, "PACKAGE_ROOT", tree)
+        assert _utils.git_commit() == "b" * 40
+
+    def test_detached_head_holds_the_sha_directly(self, monkeypatch, tmp_path):
+        from patientpunk import _utils
+        g = tmp_path / ".git"
+        g.mkdir()
+        (g / "HEAD").write_text("c" * 40, encoding="utf-8")
+        monkeypatch.setattr(_utils, "PACKAGE_ROOT", tmp_path)
+        assert _utils.git_commit() == "c" * 40
+
+    def test_provenance_records_the_resolved_fanout_not_the_tristate(
+            self, tmp_path, monkeypatch):
+        """cfg carries None so the env var still works; the record must carry
+        the value the run actually used."""
+        from patientpunk.pipeline import Pipeline, PipelineConfig
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
+                          encoding="utf-8")
+        (tmp_path / "subreddit_posts.json").write_text("[]", encoding="utf-8")
+        for env, expected in (("0", False), ("1", True)):
+            monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", env)
+            cfg = PipelineConfig(schema_path=schema, input_dir=tmp_path,
+                                 run_llm=False, start_at=4, clean=False)
+            assert cfg.cross_domain_fanout is None
+            Pipeline(cfg).run()
+            prov = json.loads(
+                (tmp_path / "llm_provenance.json").read_text(encoding="utf-8"))
+            assert prov["cross_domain_fanout"] is expected
+            assert "git_commit" in prov
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
