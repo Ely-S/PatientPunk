@@ -918,6 +918,20 @@ CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
 )
 
 
+def resolve_cross_domain_fanout(explicit: bool | None = None) -> bool:
+    """Resolve the fan-out setting: explicit argument > env var > on.
+
+    Callers that reach run_llm_extract through PipelineConfig must pass None
+    rather than a default bool, or PP_CROSS_DOMAIN_FANOUT is shadowed and never
+    read. Kept as a named function so that precedence is testable rather than
+    restated at each call site.
+    """
+    if explicit is not None:
+        return explicit
+    return os.environ.get(
+        "PP_CROSS_DOMAIN_FANOUT", "").strip().lower() not in ("0", "false", "no")
+
+
 def fan_out_cross_domain_symptoms(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
@@ -1286,12 +1300,10 @@ def run_llm_extract(
 
     if group_guard is None:
         group_guard = os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
-    if cross_domain_fanout is None:
-        # On unless explicitly disabled -- inverse of PP_GROUP_GUARD, whose
-        # off-default exists to reproduce published pre-guard runs. No such runs
-        # exist for the symptom domains; they ship in this schema version.
-        cross_domain_fanout = os.environ.get(
-            "PP_CROSS_DOMAIN_FANOUT", "").strip().lower() not in ("0", "false", "no")
+    # On unless explicitly disabled -- inverse of PP_GROUP_GUARD, whose
+    # off-default exists to reproduce published pre-guard runs. No such runs
+    # exist for the symptom domains; they ship in this schema version.
+    cross_domain_fanout = resolve_cross_domain_fanout(cross_domain_fanout)
 
     out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
     out_temp.mkdir(parents=True, exist_ok=True)

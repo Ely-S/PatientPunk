@@ -2487,20 +2487,70 @@ class TestCrossDomainFanout:
 
     @pytest.mark.parametrize("env,expected", [
         (None, True), ("", True), ("1", True), ("true", True),
-        ("0", False), ("false", False), ("no", False),
+        ("0", False), ("false", False), ("no", False), ("NO", False),
     ])
     def test_env_var_resolution(self, monkeypatch, env, expected):
-        import patientpunk.llm_extract as m
+        """Calls the resolver rather than restating its expression, so a change
+        to the precedence rule fails here."""
+        from patientpunk.llm_extract import resolve_cross_domain_fanout
         if env is None:
             monkeypatch.delenv("PP_CROSS_DOMAIN_FANOUT", raising=False)
         else:
             monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", env)
-        resolved = os.environ.get(
-            "PP_CROSS_DOMAIN_FANOUT", "").strip().lower() not in ("0", "false", "no")
-        assert resolved is expected
-        rec = {"fields": {"pain": ["migraine"], "cognitive_neurological": []}}
-        out = m.normalize_records([rec], cross_domain_fanout=resolved)[0]["fields"]
-        assert bool(out["cognitive_neurological"]["values"]) is expected
+        assert resolve_cross_domain_fanout(None) is expected
+
+    def test_explicit_argument_beats_the_env_var(self, monkeypatch):
+        from patientpunk.llm_extract import resolve_cross_domain_fanout
+        monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", "0")
+        assert resolve_cross_domain_fanout(True) is True
+        monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", "1")
+        assert resolve_cross_domain_fanout(False) is False
+
+    def test_cmd_run_leaves_the_setting_unresolved(self, monkeypatch, tmp_path):
+        """_cmd_run must build the config with None, not a bool -- a bool here
+        shadows the env var for every run launched through main.py."""
+        import argparse
+        import main as cli
+        captured = {}
+
+        def _stub_pipeline(cfg):
+            captured["cfg"] = cfg
+            return SimpleNamespace(run=lambda: SimpleNamespace(ok=True))
+
+        monkeypatch.setattr(cli, "Pipeline", _stub_pipeline)
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
+                          encoding="utf-8")
+        # Build args through the real parser so the flag's own wiring is covered.
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        cli._add_run_parser(sub)
+        base = ["run", "--schema", str(schema), "--input-dir", str(tmp_path)]
+
+        with pytest.raises(SystemExit):
+            cli._cmd_run(parser.parse_args(base))
+        assert captured["cfg"].cross_domain_fanout is None
+
+        captured.clear()
+        with pytest.raises(SystemExit):
+            cli._cmd_run(parser.parse_args(base + ["--no-cross-domain-fanout"]))
+        assert captured["cfg"].cross_domain_fanout is False
+
+    def test_phase_1_forwards_the_setting_to_the_extractor(self, tmp_path):
+        """_run_phase_1 must pass the config value through untouched."""
+        from unittest.mock import patch
+        from patientpunk.pipeline import Pipeline, PipelineConfig
+        schema = tmp_path / "s.json"
+        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
+                          encoding="utf-8")
+        (tmp_path / "subreddit_posts.json").write_text("[]", encoding="utf-8")
+        for value in (None, True, False):
+            cfg = PipelineConfig(schema_path=schema, input_dir=tmp_path,
+                                 cross_domain_fanout=value)
+            with patch("patientpunk.pipeline.run_llm_extract") as fake:
+                fake.return_value = PhaseResult(name="llm_extract", ok=True)
+                Pipeline(cfg)._run_phase_1()
+            assert fake.call_args.kwargs["cross_domain_fanout"] is value
 
     def test_destination_gets_schema_confidence_not_null(self):
         """A domain that was empty before the fan-out must not end up holding
