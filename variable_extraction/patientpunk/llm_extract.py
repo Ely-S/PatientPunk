@@ -848,26 +848,13 @@ _CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
     "functional_status_tier": FUNCTIONAL_STATUS_VALUES,
 }
 
-# Symptoms that belong in more than one domain, and where they belong.
-# A value whose text contains any trigger substring is copied into every domain
-# listed for it. Substring matching (not equality) because patients qualify the
-# symptom -- "terrible headache", "daily migraines".
+# Some symptoms belong in more than one domain. A value containing any trigger
+# substring is copied into every domain listed beside it -- substring rather
+# than equality, because patients qualify the symptom ("terrible headache").
 #
-# ADMISSION RULE: a trigger belongs here only if it is multi-domain *by
-# definition*, never by context. This is a lookup on the value string, so it
-# cannot see context the string does not carry, and a rule that needs context to
-# be correct will be wrong on every value that omits it. Concretely:
-#   - "vertigo" is vestibular, not autonomic -- excluded.
-#   - bare "chest pain" may be musculoskeletal, costochondral, or cardiac --
-#     excluded; routing it to cardiovascular_autonomic is a diagnosis, not a
-#     lookup.
-#   - bare "insomnia" is sleep onset/maintenance, not post-exertional malaise --
-#     excluded. The model filed it under `sleep` alone in 16/16 records, which is
-#     it being *right*, not it being inconsistent.
-#   - "neuropathy" alone is often numbness with no pain -- excluded; the
-#     pain-bearing forms ("nerve pain", "burning pain") are kept.
-# Dizziness earns a place only with explicit orthostatic context, which is the
-# form the prompt's own example uses ("dizzy when I stand up").
+# A trigger qualifies only where the symptom is multi-domain by definition. The
+# lookup sees only the value string, so a rule that depends on context is wrong
+# on every value that omits it.
 CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
     # A headache is head pain and a neurological symptom, both by definition.
     (("headache", "migraine", "head pain"),
