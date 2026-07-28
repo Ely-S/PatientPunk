@@ -2280,6 +2280,37 @@ class TestIllnessMarkerRenames:
         assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
 
 
+class TestIllnessMarkerRenames:
+    """symptom_duration/symptom_trajectory describe the whole illness, not any
+    one symptom. The prefix read as per-symptom."""
+
+    def test_old_names_are_gone(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "symptom_duration" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in FIELD_VOCAB
+
+    def test_new_names_present_in_both_layers(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "illness_duration" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in FIELD_VOCAB
+
+    def test_prompt_scopes_them_to_the_whole_illness(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "OVERALL" in prompt
+        assert "Never a per-symptom duration." in prompt
+        assert "for their condition as a whole" in prompt
+
+    def test_clustering_vocab_follows_the_rename(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("illness_trajectory", "getting worse") == "declining"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
