@@ -323,7 +323,14 @@ FIELD-SPECIFIC RULES:
 - dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
-- functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
+- functional_status_tier: Use ONLY one of the six values below, judged on what the patient can still do. No sentences. Use null when the text does not say.
+    bedbound          - cannot get out of bed, or only briefly
+    housebound        - can move around home but cannot leave it
+    severe            - leaves home rarely and pays for it; most activity given up
+    moderate          - manages part of normal life; regularly cuts activity to cope
+    mild              - most activity intact with some limits or pacing
+    mostly_functional - back to near-normal function, illness no longer limiting
+  Where a patient states both a worst and a current level, code the CURRENT one.
 - illness_duration: How long the patient has been ill OVERALL, as stated ("3 years", "18 months", "since March 2020"). One value for the whole illness. Never a per-symptom duration.
 - illness_trajectory: The overall course of the illness. Use ONLY one of: improving, worsening, stable, relapsing, recovered. If different symptoms are moving in different directions, use the direction the patient gives for their condition as a whole; if they give none, use null.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
@@ -825,6 +832,19 @@ def field_confidence(schema_path: Path | None) -> dict[str, str]:
     return {name: fd.confidence for name, fd in schema.all_fields.items()}
 
 
+# Fields the prompt restricts to a fixed value list ("use ONLY one of ...").
+# normalize_records drops anything outside the list -- see the closed-vocabulary
+# pass at the end of that function for why.
+ILLNESS_TRAJECTORY_VALUES = frozenset(
+    {"improving", "worsening", "stable", "relapsing", "recovered"})
+FUNCTIONAL_STATUS_VALUES = frozenset(
+    {"bedbound", "housebound", "severe", "moderate", "mild", "mostly_functional"})
+_CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
+    "illness_trajectory": ILLNESS_TRAJECTORY_VALUES,
+    "functional_status_tier": FUNCTIONAL_STATUS_VALUES,
+}
+
+
 def normalize_records(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
@@ -941,8 +961,9 @@ def normalize_records(
             "back to normal": "recovered", "fully recovered": "recovered",
             "partially recovered": "improving",
             "relapse": "relapsing", "relapsing-remitting": "relapsing",
-            "flare": "relapsing",
-            "bedbound": "severe decline", "housebound": "severe decline",
+            "flare": "relapsing", "fluctuating": "relapsing",
+            "plateau": "stable", "unchanged": "stable", "same": "stable",
+            "severe decline": "worsening",
         },
         # Surface forms only: spelling, hyphenation, plurals, abbreviations of
         # the same term. Nothing here may merge two words a clinician would
@@ -1047,6 +1068,21 @@ def normalize_records(
                 seen.add(rejoined)
                 canonical.append(rejoined)
         field_data["values"] = canonical
+
+    # Closed-vocabulary fields: the prompt says "use ONLY one of", so anything
+    # else is a miscategorisation, not a discovery. Dropping it keeps the column
+    # analysable; keeping it would put functional-status and free text into a
+    # field downstream code reads as an ordinal.
+    for rec in records:
+        for field_name, allowed in _CLOSED_VOCABULARIES.items():
+            field_data = rec.get("fields", {}).get(field_name)
+            if not field_data or not field_data.get("values"):
+                continue
+            kept = [v for v in field_data["values"]
+                    if isinstance(v, str) and v in allowed]
+            field_data["values"] = kept
+            if not kept:
+                field_data["confidence"] = None
 
     return records
 
