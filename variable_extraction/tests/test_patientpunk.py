@@ -2242,12 +2242,11 @@ class TestFieldSelection:
         assert doc_base == set(BASE_FIELD_DESCRIPTIONS)
         assert doc_opt == set(BASE_OPTIONAL_DESCRIPTIONS)
 
-    def test_restored_fields_have_coding_rules(self):
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "- misdiagnosis:" in prompt and "not a misdiagnosis" in prompt
-        assert "- dietary_interventions:" in prompt
-        assert "Diet goes in dietary_interventions" in prompt
+    def test_restored_fields_have_coding_rules(self, base_prompt):
+        assert "not a misdiagnosis" in field_rule(base_prompt, "misdiagnosis")
+        assert "supplement is a medication" in field_rule(base_prompt, "dietary_interventions")
+        assert "Diet goes in dietary_interventions" in field_rule(
+            base_prompt, "alternative_treatments")
 
 
 class TestBatchExtraction:
