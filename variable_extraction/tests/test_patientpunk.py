@@ -2333,19 +2333,18 @@ class TestSymptomDecomposition:
         )
         assert "symptoms" not in set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
 
-    def test_prompt_states_the_cross_listing_rule(self):
+    def test_prompt_states_the_cross_listing_rule(self, base_prompt):
         """The prompt names every domain and states the cross-listing rule."""
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "CROSS-LISTING" in prompt
-        assert "goes in EVERY domain it belongs to" in prompt
+        rules = prompt_section(base_prompt, "SYMPTOM DOMAIN RULES:",
+                               "SCHEMA FIELDS to extract:")
+        assert "goes in EVERY domain it belongs to" in prompt_section(
+            base_prompt, "CROSS-LISTING:", "SCHEMA FIELDS to extract:")
         for field in SYMPTOM_DOMAINS:
-            assert field in prompt
+            assert f"- {field}:" in rules
 
-    def test_conditions_symptom_boundary_is_stated(self):
-        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
-        prompt = build_system_prompt(build_field_descriptions(None))
-        assert "Symptoms belong in the six symptom-domain fields" in prompt
+    def test_conditions_symptom_boundary_is_stated(self, base_prompt):
+        assert "Symptoms belong in the six symptom-domain fields" in field_rule(
+            base_prompt, "conditions")
 
     def test_extraction_tier_preserves_clinically_distinct_wording(self):
         """The archival records keep the patient's wording: vertigo is not
