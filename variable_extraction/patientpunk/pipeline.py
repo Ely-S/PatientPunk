@@ -86,10 +86,10 @@ class PipelineConfig(BaseModel):
     workers: int = 10
     limit: int | None = None
     resume: bool = False
-    # Route multi-domain symptoms into every domain they belong to. Off by
-    # default so a plain run stays comparable with earlier ones; recommended
-    # for clustering (see llm_extract.fan_out_cross_domain_symptoms).
-    cross_domain_fanout: bool = False
+    # Route multi-domain symptoms into every domain they belong to. On by
+    # default -- raw model placement is only 24% consistent (see
+    # llm_extract.fan_out_cross_domain_symptoms).
+    cross_domain_fanout: bool = True
 
     # Phase 2
     candidates_file: Path | None = None
@@ -330,7 +330,7 @@ class Pipeline:
                 workers=cfg.workers,
                 resume=cfg.resume,
                 limit=cfg.limit,
-                cross_domain_fanout=cfg.cross_domain_fanout or None,
+                cross_domain_fanout=cfg.cross_domain_fanout,
             ),
         )
 

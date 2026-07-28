@@ -97,10 +97,15 @@ construction, reproducible across model versions, and independent of temperature
   also rescues symptoms the model filed entirely outside a rule's domains — a "chest
   pain" left in `other_symptoms` still reaches `pain` and `cardiovascular_autonomic`,
   which is why the ON total is one pair higher than the OFF total.
-- **Knob:** `--cross-domain-fanout` (on `main.py run` and `python -m patientpunk.llm_extract`)
-  or `PP_CROSS_DOMAIN_FANOUT=1`. **Default: off** — chosen to keep a plain run
-  comparable with earlier ones, matching the group-guard convention.
-- **Recommended:** enable for any run feeding clustering.
+- **Knob:** `--no-cross-domain-fanout` (on `main.py run` and
+  `python -m patientpunk.llm_extract`) or `PP_CROSS_DOMAIN_FANOUT=0` to disable.
+  **Default: on.** This is the opposite of the group-attribution guard above, and
+  deliberately so: that guard defaults off to reproduce *published pre-guard runs*,
+  and no such runs exist for the symptom domains — they ship in this schema version.
+  Defaulting off would make 24%-consistent domain assignment what anyone gets
+  without knowing to ask for better.
+- **Disable when:** you specifically want raw model placement, e.g. to re-measure
+  compliance or to study how the model routes symptoms on its own.
 - **Limit:** only symptoms listed in `CROSS_DOMAIN_SYMPTOMS` fan out. A novel
   cross-domain symptom still depends on the model, exactly as today — the knob closes
   a known gap, it does not close the general case. The table is plain data; extending

@@ -2246,7 +2246,8 @@ class TestSymptomDomainCanonicalization:
             "cardiovascular_autonomic": ["heart palpitations", "OI"],
             "sleep": ["non-restorative sleep"],
         }}
-        out = normalize_records([rec])[0]["fields"]
+        # fan-out off: this covers canonicalization alone
+        out = normalize_records([rec], cross_domain_fanout=False)[0]["fields"]
         assert out["fatigue_pem"]["values"] == ["pem"]
         assert out["cognitive_neurological"]["values"] == ["brain fog", "migraines"]
         assert out["cardiovascular_autonomic"]["values"] == ["palpitations",
@@ -2340,22 +2341,29 @@ class TestCrossDomainFanout:
     """Haiku follows the prompt's cross-listing instruction 28% of the time
     (measured, 300 posts), so the routing is done in code when enabled."""
 
-    def test_off_by_default(self):
+    def test_on_by_default(self):
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": []}}
         out = normalize_records([rec])[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+
+    def test_can_be_disabled_to_reproduce_raw_model_placement(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": []}}
+        out = normalize_records([rec], cross_domain_fanout=False)[0]["fields"]
         assert out["cognitive_neurological"]["values"] == []
 
-    def test_fans_out_to_every_domain(self):
+    def test_fans_out_to_every_domain_and_no_further(self):
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": [],
                           "cardiovascular_autonomic": [], "sleep": [],
                           "fatigue_pem": [], "other_symptoms": []}}
-        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        out = normalize_records([rec])[0]["fields"]
         assert out["pain"]["values"] == ["migraines"]
         assert out["cognitive_neurological"]["values"] == ["migraines"]
         # not a member of any other domain's set
         assert out["sleep"]["values"] == []
+        assert out["other_symptoms"]["values"] == []
 
     def test_finds_the_symptom_in_whichever_domain_the_model_chose(self):
         """The model files dizziness under cognitive_neurological; it must still
@@ -2363,13 +2371,13 @@ class TestCrossDomainFanout:
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"cognitive_neurological": ["dizziness"],
                           "cardiovascular_autonomic": []}}
-        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        out = normalize_records([rec])[0]["fields"]
         assert out["cardiovascular_autonomic"]["values"] == ["dizziness"]
 
     def test_idempotent_when_model_already_cross_listed(self):
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": ["migraines"]}}
-        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        out = normalize_records([rec])[0]["fields"]
         assert out["pain"]["values"] == ["migraines"]
         assert out["cognitive_neurological"]["values"] == ["migraines"]
 
@@ -2377,8 +2385,13 @@ class TestCrossDomainFanout:
         """Patients qualify symptoms -- 'terrible headache', not 'headache'."""
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"pain": ["terrible headache"], "cognitive_neurological": []}}
-        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        out = normalize_records([rec])[0]["fields"]
         assert out["cognitive_neurological"]["values"] == ["terrible headache"]
+
+    def test_pipeline_config_defaults_on(self):
+        from patientpunk.pipeline import PipelineConfig
+        cfg = PipelineConfig(schema_path=EXT_SCHEMA)
+        assert cfg.cross_domain_fanout is True
 
     def test_reports_how_many_values_it_added(self):
         from patientpunk.llm_extract import fan_out_cross_domain_symptoms

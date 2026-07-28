@@ -313,7 +313,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --resume              Resume an interrupted run
   --llm-cache           Force-enable the LLM response cache
   --no-llm-cache        Disable the LLM response cache
-  --cross-domain-fanout Route multi-domain symptoms into every domain they belong to
+  --no-cross-domain-fanout  Disable cross-domain symptom routing (on by default)
   --candidates PATH     Saved phase1_candidates.json (skips discovery's candidate-scan stage)
   --sample N            Random N-item sample for discovery's candidate-scan stage
   --sep STR             Multi-value separator in CSV (default: " | ")
@@ -335,7 +335,7 @@ PP_GROUP_GUARD=1 python main.py run --schema schemas/...
 Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
 analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix numbers.
 
-#### Cross-domain symptom fan-out (optional)
+#### Cross-domain symptom fan-out (on by default)
 
 Some symptoms belong in more than one symptom domain — a migraine is both `pain` and
 `cognitive_neurological`. The prompt tells the model to record those in every domain
@@ -344,19 +344,21 @@ headaches; insomnia never once reached `fatigue_pem`). The result is not merely
 incomplete: the same symptom lands in one domain on one post and two on the next, so the
 domain split carries model variance that clustering would read as patient variance.
 
-Enable the fan-out to do that routing in code instead — the model finds the symptom
-once, wherever it filed it, and a fixed table copies it into the rest:
+So the routing runs in code instead: the model finds the symptom once, wherever it filed
+it, and a fixed table copies it into the rest — **24% -> 100%** on the listed symptoms,
+reproducible across model versions because it is a lookup rather than a judgement.
+
+To reproduce raw model placement instead:
 
 ```bash
-python main.py run --schema schemas/... --cross-domain-fanout
+python main.py run --schema schemas/... --no-cross-domain-fanout
 ```
 
-Equivalently `PP_CROSS_DOMAIN_FANOUT=1`. Takes 28% -> 100% on the listed symptoms, and
-is reproducible across model versions because it is a lookup rather than a judgement.
-**Recommended for any run feeding clustering.** Only symptoms in
+Equivalently `PP_CROSS_DOMAIN_FANOUT=0`. Only symptoms in
 `llm_extract.CROSS_DOMAIN_SYMPTOMS` fan out; see
 [`METHODS.md`](./METHODS.md#cross-domain-symptoms-inconsistent-domain-assignment) for the
-measurements and the limits.
+measurements, the reason this defaults on where the group-guard defaults off, and the
+limits.
 
 ### `demographics` — LLM-only demographics
 
