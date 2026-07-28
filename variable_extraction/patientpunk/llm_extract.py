@@ -1073,12 +1073,8 @@ def normalize_records(
             "part time": "working reduced", "part-time": "working reduced",
             "reduced hours": "working reduced",
         },
-        # Every value must land in ILLNESS_TRAJECTORY_VALUES -- the prompt offers
-        # the model no other option, and anything else is dropped below.
-        # "bedbound"/"housebound" used to map here to "severe decline": both are
-        # functional_status_tier values, and the mapping invented a label the
-        # prompt does not allow. A model that files functional status under
-        # trajectory has miscategorised it; drop it rather than coin a value.
+        # Every target must be in ILLNESS_TRAJECTORY_VALUES; the
+        # closed-vocabulary pass drops anything else.
         "illness_trajectory": {
             "getting worse": "worsening", "worse": "worsening",
             "deteriorating": "worsening", "declining": "worsening",
