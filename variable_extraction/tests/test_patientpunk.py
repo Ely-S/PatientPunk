@@ -2178,8 +2178,9 @@ class TestExtensionFieldCodingRules:
     def test_infection_count_requires_a_stated_count(self, prompt):
         assert "EXACT COUNTS ONLY" in prompt
         assert "'my second infection' -> '2'" in prompt
-        # lower bounds are not counts
+        # lower bounds are not counts, including the one that names a number
         assert "'reinfected'" in prompt and "'multiple infections'" in prompt
+        assert "'my first infection' - calling an infection the first one" in prompt
         # and neither is merely describing one infection
         assert "DESCRIBING ONE INFECTION IS NOT STATING A COUNT OF ONE" in prompt
         assert "never recovered' -> null" in prompt
