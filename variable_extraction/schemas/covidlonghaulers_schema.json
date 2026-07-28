@@ -7,20 +7,20 @@
   "include_base_fields": [],
   "extension_fields": {
     "infection_count": {
-      "description": "How many times the patient has been infected with COVID",
+      "description": "Number of separate COVID infections, as a bare integer ('1', '2', '3'). Count only what the patient states: 'my second infection' -> '2'; 'reinfected' or 'got it again' with no number -> '2'; 'my first infection' or a single infection described -> '1'. A vague 'multiple infections' with no number gives no value - use null rather than guessing a count.",
       "confidence": "medium",
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
     },
     "long_covid_duration_months": {
-      "description": "How long the patient has had Long COVID specifically (in months)",
+      "description": "How long the patient has had Long COVID specifically, as a bare integer NUMBER OF MONTHS. Convert stated durations: '3 years' -> '36', '18 months' -> '18', 'a year and a half' -> '18'. Converting an explicitly stated duration is required and is not inference; inventing a duration the patient never gave is. A date with no stated duration ('sick since March 2020') gives no value - use null. This field is Long COVID specifically; whole-illness duration belongs in illness_duration, which keeps the patient's own wording.",
       "confidence": "low",
       "icd10": "U09.9",
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
     },
     "biomarker_results": {
-      "description": "Lab values, biomarkers, or test results mentioned",
+      "description": "Named test or biomarker with its stated result, formatted 'test: result' - for example 'ANA: positive', 'ferritin: 12 ng/mL', 'D-dimer: elevated', 'MCAS panel: normal', 'vitamin D: low'. Keep any stated number and unit in the result. A test named with no result ('had bloodwork done') and a result with no test ('my levels were low') are both unusable - use null. Do not restate diagnoses here; those belong in conditions.",
       "confidence": "medium",
       "_bleed_rate_last_run": null,
       "_last_health_check": "2026-04-06T08:14:42.289813+00:00"

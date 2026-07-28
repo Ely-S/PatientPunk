@@ -212,7 +212,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
         resume=args.resume,
         candidates_file=args.candidates,
         discovery_sample=args.sample,
-        cross_domain_fanout=not args.no_cross_domain_fanout,
+        # None, not True, when the flag is absent -- otherwise
+        # PP_CROSS_DOMAIN_FANOUT can never be seen downstream.
+        cross_domain_fanout=False if args.no_cross_domain_fanout else None,
         csv_sep=args.sep,
         codebook_format=args.codebook_format,
         codebook_include_discovered=not args.no_discovered,
