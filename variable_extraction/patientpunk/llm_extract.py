@@ -852,7 +852,11 @@ _CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
 # substring is copied into every domain listed beside it.  Note that we are matching to a 
 # substring rather than equality, because patients qualify the symptom ("terrible headache").
 #
-# This applies only where the symptom is multi-domain. 
+# This applies only where the symptom is multi-domain.
+#
+# These four rules are AI-authored and have had no clinical review, and they reach
+# 4.7% of symptom mentions -- a floor under the cases that can be stated exactly,
+# not general coverage. Issue #105 tracks replacing them.
 CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
     # A headache is head pain and a neurological symptom, both by definition.
     (("headache", "migraine", "head pain"),

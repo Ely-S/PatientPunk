@@ -99,6 +99,16 @@ constructed lookup table.
   novel, or multi-domain only in context, still depends on the model. Dizziness with
   orthostatic context has no matching instances in this sample, so it is justified on
   definition and unvalidated on data.
+- **How far that reaches:** across the same 300 posts the table matches 42 of 894 symptom
+  mentions (4.7%) and 14 of 588 distinct strings (2.4%). Two of the four rules never fire.
+  So placement is deterministic for about one mention in twenty; the rest is model
+  judgement at an unmeasured consistency. The symptom vocabulary grows at roughly
+  corpus^0.72 — about 9,800 distinct strings at 15,000 posts — so a longer hand-written
+  table does not close this. Issue #105 tracks resolving each distinct string once and
+  caching it instead.
+- **Provenance:** the four rules and the by-definition bar are AI-authored and have had
+  no clinical review. Freezing them into code makes application reproducible; it does not
+  make the mapping correct.
 - **Trade-off worth naming:** this moves a clinical-vocabulary decision from the prompt
   into code, so changing it needs a commit rather than a prompt edit. That is the right
   home for a mapping that must stay stable across runs, but the mapping is no longer
