@@ -340,7 +340,8 @@ def wrap_untrusted_text(text: str) -> str:
     A tag written inside the text is neutralised, so a post cannot close the
     block early and have its remainder read as an instruction.
 
-    Truncate before calling: a cut landing inside a tag leaves it unbalanced.
+    Truncate the text before passing it in; truncating the wrapped result
+    would cut through the closing tag.
     """
     text = (text.replace("</patient_text>", "<:/patient_text>")
                 .replace("<patient_text>", "<:patient_text>"))
