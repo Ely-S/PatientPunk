@@ -2289,6 +2289,15 @@ class TestRenderedPromptContract:
     def test_conditions_symptom_boundary_is_stated(self, prompt):
         assert "Symptoms belong in the six symptom-domain fields" in prompt
 
+    def test_mentioned_but_not_taken_rule_is_stated(self, prompt):
+        """Measured against human coding: the model put a declined Z-Pak and a
+        contraindicated Xanax into medications. The negation rule covered only
+        conditions, so nothing separated 'named' from 'taken'."""
+        assert "NAMING A TREATMENT IS NOT TAKING IT" in prompt
+        assert "didn't take it" in prompt
+        # stopping still counts -- the rule must not over-correct
+        assert "quit" in prompt and "DOES belong in medications" in prompt
+
 
 class TestUntrustedTextWrapping:
     def test_user_message_wraps_and_labels_the_text(self):
