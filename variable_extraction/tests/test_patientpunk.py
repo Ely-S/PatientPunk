@@ -83,6 +83,38 @@ BASE_SCHEMA = SCHEMAS_DIR / "base_schema.json"
 EXT_SCHEMA = SCHEMAS_DIR / "covidlonghaulers_schema.json"
 
 
+@pytest.fixture(scope="module")
+def base_prompt():
+    """The extraction prompt as rendered for the base field set."""
+    from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+    return build_system_prompt(build_field_descriptions(None))
+
+
+@pytest.fixture(scope="module")
+def ext_prompt():
+    """The extraction prompt as rendered for the shipped extension schema."""
+    from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+    schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+    return build_system_prompt(build_field_descriptions(schema))
+
+
+def prompt_section(prompt: str, start: str, end: str) -> str:
+    """The prompt text between two markers.
+
+    Assertions run against a section rather than the whole prompt, so a match
+    somewhere unrelated cannot stand in for the rule under test.
+    """
+    i = prompt.index(start)
+    return prompt[i:prompt.index(end, i + len(start))]
+
+
+def field_rule(prompt: str, field: str) -> str:
+    """One field's entry from the rules block, up to the next entry."""
+    i = prompt.index(f"\n- {field}: ")
+    j = prompt.find("\n- ", i + 1)
+    return prompt[i:j if j != -1 else len(prompt)]
+
+
 @pytest.fixture
 def tmp_corpus(tmp_path):
     """Create a minimal corpus directory with posts and a user file."""
