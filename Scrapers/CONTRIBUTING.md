@@ -156,15 +156,18 @@ being stamped onto each record.
 
 ### Layer 1 — Base fields (always extracted)
 
-19 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
+25 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
 
 | Category | Fields |
 |---|---|
 | Demographics | `age`, `sex_gender`, `location_country` |
 | Conditions | `conditions`, `onset_trigger`, `misdiagnosis`, `prior_infections` |
-| Illness course | `symptom_duration`, `symptom_trajectory` |
+| Illness course | `illness_duration`, `illness_trajectory` |
+| Symptom domains | `fatigue_pem`, `cognitive_neurological`, `cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms` |
 | Treatments | `medications`, `dosage`, `treatment_outcome`, `procedures`, `alternative_treatments`, `dietary_interventions` |
 | Function and impact | `functional_status_tier`, `work_disability_status`, `mental_health`, `social_impact` |
+
+**Symptom domains carry the same symptom more than once on purpose.** A migraine is recorded in both `pain` and `cognitive_neurological`; dizziness on standing lands in both `cardiovascular_autonomic` and `cognitive_neurological`. Reddit patients do not write clinical intake forms, and forcing one symptom into one bucket loses more than the duplication costs. The routing rules given to the extraction model are in `llm_extract.build_system_prompt`.
 
 The field set is chosen on measured fill rates, cross-referenced against EQ-5D, SF-36, PROMIS, RECOVER, PC-COS, and the ME/CFS Canadian Consensus Criteria. Per-field rates, the framework mapping and the cut list are in `variable_extraction/METHODS.md`.
 
@@ -404,7 +407,7 @@ Expected output should include `long_covid_duration_months` (extension) and `fun
 ### 3. Full corpus run
 
 After scraping with `scrape_corpus.py`, run the extractor on the real corpus and check:
-- `records_base.json` — every record has all 19 base fields (null where not found)
+- `records_base.json` — every record has all 25 base fields (null where not found)
 - `extraction_metadata_base.json` — `field_hit_counts` shows reasonable hit rates
 - No Python exceptions
 
