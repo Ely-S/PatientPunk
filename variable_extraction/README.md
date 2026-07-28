@@ -554,6 +554,14 @@ Key columns:
 One row per field: field name, source, description, confidence tier, ICD-10 code,
 observed coverage %, example values.
 
+### `output/llm_provenance.json`
+
+What produced the run: provider, model, temperature, schema, which phases ran,
+`cross_domain_fanout`, and `git_commit`. The commit is what separates "the prompt
+changed" from "the model wobbled" when two runs disagree — the prompt and every
+canonicalisation map live in code. See
+[`METHODS.md`](./METHODS.md#run-provenance) for what it does and does not pin.
+
 ### `output/demographics_deductive.csv` (LLM-only, deductive)
 
 Columns: `author_hash`, `source_type`, `age`, `sex_gender`, `location_country`,

@@ -131,12 +131,47 @@ construction, reproducible across model versions, and independent of temperature
 
 ## Field provenance
 
-Every field in `records.csv` is LLM-produced (`llm_extract`, plus `discover` for
-`llm_discovered` fields). The `confidence` column reflects the field's schema-declared
-confidence tier. Self/other-sensitive fields (demographics, conditions, medications)
-all go through the same SELF-REFERENCE ONLY guard described above. The generated
-codebook lists each field's source (`base` / `base_optional` / `extension` /
-`llm_discovered`).
+Almost every value in `records.csv` is LLM-produced (`llm_extract`, plus `discover`
+for `llm_discovered` fields). The `confidence` column reflects the field's
+schema-declared confidence tier. Self/other-sensitive fields (demographics,
+conditions, medications) all go through the same SELF-REFERENCE ONLY guard described
+above. The generated codebook lists each field's source (`base` / `base_optional` /
+`extension` / `llm_discovered`).
+
+**The one exception is the cross-domain fan-out.** With it enabled, some symptom-domain
+values are copied from another domain by a lookup table rather than found by the model.
+The record does not mark which values those are — a fanned-out value is
+indistinguishable from a model-placed one, and carries the same confidence. If you need
+per-value traceability, re-run with `--no-cross-domain-fanout` and diff.
+
+## Run provenance
+
+Each run writes `output/llm_provenance.json`:
+
+| Key | Why it is there |
+|---|---|
+| `provider`, `model_fast`, `model_strong`, `base_url` | Which model answered |
+| `temperature`, `service_tier` | Sampling settings |
+| `schema_id`, `run_llm`, `discovery_mode` | Which phases ran against which schema |
+| `cross_domain_fanout` | Post-processing changes the records, so it has to be recorded |
+| `git_commit` | The prompt, canonical maps, closed vocabularies and field list all live in code |
+
+The commit matters more than it looks. Extraction is close to deterministic at
+temperature 0 — field-level fill rates move about 0.1 points across identical runs — so
+a larger difference between two runs is a real effect. But it is only *attributable* if
+you know whether the code changed: prompt edits during this work moved `conditions` by 6
+points and `medications` by 5.3, and nothing in the output said so.
+
+**Two limits.** The commit is read from `.git` rather than by shelling out, because the
+pipeline does not call `subprocess`. That means a modified working tree is not detected:
+the record says which commit was *checked out*, not that the code matched it. And
+nothing hashes the corpus, so the same commit and settings against a different input
+slice look identical in the record.
+
+Replay works for the deterministic half. `temp/llm_records_{schema_id}.json` holds raw
+model output before normalisation; re-running canonicalisation, the closed-vocabulary
+pass and the fan-out over that file reproduces `records_{schema_id}.json` exactly. It is
+overwritten by the next run of the same schema, so copy it aside if a run matters.
 
 ## Base field selection
 
