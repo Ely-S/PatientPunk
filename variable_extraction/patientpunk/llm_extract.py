@@ -356,8 +356,8 @@ SYMPTOM DOMAIN RULES:
 Six fields hold symptoms. Record each symptom in the patient's own words (1-5 words), not a clinical synonym.
 - fatigue_pem: fatigue, exhaustion, PEM, post-exertional malaise, crashes, exercise intolerance, "payback" after activity. PEM is symptom worsening AFTER exertion, often delayed a day or more -- record it here even when the patient calls it a crash.
 - cognitive_neurological: brain fog, memory loss, word-finding trouble, poor concentration, neuropathy, numbness, tinnitus, dizziness, vertigo, headaches, migraines.
-- cardiovascular_autonomic: palpitations, tachycardia, orthostatic intolerance, blood-pressure swings, temperature dysregulation, adrenaline dumps. Record the symptom here even when the patient also names POTS or dysautonomia as a diagnosis in conditions.
-- pain: joint pain, muscle pain, chest pain, nerve pain, body aches, headaches, migraines.
+- cardiovascular_autonomic: palpitations, tachycardia, orthostatic intolerance, blood-pressure swings, temperature dysregulation, adrenaline dumps. Record the SYMPTOM, never the diagnosis name: a patient with POTS who describes a racing heart on standing gives "tachycardia" and "orthostatic intolerance" here. "POTS" and "dysautonomia" are diagnoses and belong in conditions only -- naming one does not by itself put anything in this field.
+- pain: pain anywhere the patient reports it, whatever the site or cause -- joint, muscle, chest, nerve, head, abdominal, pelvic, throat, ear, back. Body aches, headaches, and migraines all count. Do not send pain to other_symptoms just because the body part is not listed here.
 - sleep: insomnia, hypersomnia, unrefreshing sleep, reversed sleep cycle, sleep apnea.
 - other_symptoms: anything the five domains above do not cover -- shortness of breath, GI problems, nausea, rashes, hair loss, vision changes, sensory sensitivities.
 

@@ -2262,6 +2262,18 @@ class TestRenderedPromptContract:
         assert "'test: result'" in prompt         # biomarker format
         assert "ANA: positive" in prompt          # worked biomarker example
 
+    def test_diagnoses_do_not_belong_in_symptom_domains(self, prompt):
+        """Measured: POTS and dysautonomia -- diagnoses -- were landing in
+        cardiovascular_autonomic, because the old wording read as permission."""
+        assert "Record the SYMPTOM, never the diagnosis name" in prompt
+        assert "belong in conditions only" in prompt
+
+    def test_pain_is_scoped_by_symptom_not_body_part(self, prompt):
+        """Measured: the enumerated site list sent visceral pain (kidney, GI,
+        throat, ear) to other_symptoms, which had no reason to hold it."""
+        assert "pain anywhere the patient reports it" in prompt
+        assert "Do not send pain to other_symptoms" in prompt
+
     def test_infection_count_forbids_inferring_one_from_silence(self, prompt):
         """Measured: 12 of 12 newly-coded 1s came from posts that merely
         described an infection without stating a count. In a long-COVID

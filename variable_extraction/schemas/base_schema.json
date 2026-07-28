@@ -171,7 +171,7 @@
       "notes": "ME/CFS CCC autonomic criterion. Records the symptom even when the patient also names POTS as a diagnosis in `conditions`."
     },
     "pain": {
-      "description": "Joint, muscle, chest, and nerve pain; headaches",
+      "description": "Pain anywhere the patient reports it, whatever the site — joint, muscle, chest, nerve, head, abdominal, pelvic, throat, ear, back",
       "confidence": "high",
       "frameworks": ["EQ-5D", "SF-36", "PROMIS", "RECOVER", "PC-COS", "ME/CFS CCC"],
       "notes": "The only symptom domain present in all six frameworks"
