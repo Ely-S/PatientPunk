@@ -849,12 +849,10 @@ _CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
 }
 
 # Some symptoms belong in more than one domain. A value containing any trigger
-# substring is copied into every domain listed beside it -- substring rather
-# than equality, because patients qualify the symptom ("terrible headache").
+# substring is copied into every domain listed beside it.  Note that we are matching to a 
+# substring rather than equality, because patients qualify the symptom ("terrible headache").
 #
-# A trigger qualifies only where the symptom is multi-domain by definition. The
-# lookup sees only the value string, so a rule that depends on context is wrong
-# on every value that omits it.
+# This applies only where the symptom is multi-domain. 
 CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
     # A headache is head pain and a neurological symptom, both by definition.
     (("headache", "migraine", "head pain"),
