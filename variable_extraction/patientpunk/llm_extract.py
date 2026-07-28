@@ -335,12 +335,12 @@ Include ALL schema fields. Use null when no evidence exists."""
 
 
 def wrap_untrusted_text(text: str) -> str:
-    """Wrap corpus text in the delimiters the system prompts name.
+    """Wrap text in the <patient_text> tags the prompts declare as data.
 
-    A closing tag inside the corpus would otherwise let a post end the block
-    early and have the rest of it read as instructions, so any literal
-    occurrence is defanged first. Callers must truncate before wrapping, so a
-    cut cannot land mid-tag and leave the delimiter unbalanced.
+    A tag written inside the text is neutralised, so a post cannot close the
+    block early and have its remainder read as an instruction.
+
+    Truncate before calling: a cut landing inside a tag leaves it unbalanced.
     """
     text = (text.replace("</patient_text>", "<:/patient_text>")
                 .replace("<patient_text>", "<:patient_text>"))
