@@ -2431,8 +2431,9 @@ class TestClosedVocabularies:
 
 
 class TestCrossDomainFanout:
-    """Haiku follows the prompt's cross-listing instruction 21% of the time
-    (measured, 300 posts), so the routing is done in code."""
+    """Multi-domain symptoms are routed in code, not by the model: found once
+    in any domain, copied into every domain the table assigns them. On unless
+    disabled by flag or environment variable."""
 
     def test_on_by_default(self):
         from patientpunk.llm_extract import normalize_records
@@ -2447,8 +2448,7 @@ class TestCrossDomainFanout:
         assert out["cognitive_neurological"]["values"] == []
 
     def test_finds_the_symptom_in_whichever_domain_the_model_chose(self):
-        """The model dumped the migraine in other_symptoms, outside either of
-        the rule's own domains; it must still reach both."""
+        """A symptom filed outside the rule's own domains still reaches them."""
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"other_symptoms": ["migraines"], "pain": [],
                           "cognitive_neurological": []}}
@@ -2507,7 +2507,7 @@ class TestCrossDomainFanout:
         assert resolve_cross_domain_fanout(True) is True
 
     def test_pipeline_config_defers_so_the_env_var_still_works(self):
-        """None, not True: a bool here would shadow PP_CROSS_DOMAIN_FANOUT for
+        """None, not a bool: a bool here would shadow PP_CROSS_DOMAIN_FANOUT for
         every run launched through main.py."""
         from patientpunk.pipeline import PipelineConfig
         assert PipelineConfig(schema_path=EXT_SCHEMA).cross_domain_fanout is None
@@ -2554,17 +2554,16 @@ class TestCrossDomainFanout:
 
 
 class TestCrossDomainFanoutDoesNotOverRoute:
-    """A trigger earns its place only if it is multi-domain BY DEFINITION.
-    These pin the symptoms deliberately left out, where routing would be a
-    diagnosis rather than a lookup."""
+    """A trigger qualifies only where the symptom is multi-domain by
+    definition. Symptoms that span domains only in context stay where the
+    model filed them."""
 
     def _domains(self, fields):
         from patientpunk.llm_extract import normalize_records
         return normalize_records([{"fields": fields}])[0]["fields"]
 
     def test_plain_insomnia_stays_out_of_fatigue_pem(self):
-        """Insomnia is sleep onset, not post-exertional malaise. The model
-        filed it under sleep alone in 16/16 records -- correctly."""
+        """Insomnia is sleep onset, not post-exertional malaise."""
         out = self._domains({"sleep": ["insomnia"], "fatigue_pem": []})
         assert out["fatigue_pem"]["values"] == []
 
