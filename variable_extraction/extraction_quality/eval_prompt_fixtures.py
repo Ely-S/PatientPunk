@@ -13,7 +13,12 @@ not a pytest test. The loop it supports:
 Fixture: fixtures/spotcheck_20.json -- 20 real posts sampled from the
 deepseek-v4-flash 10k run reviewed in PR #92, with a `gold` field per record
 that corrects the baseline extraction where a spot-check found it wrong
-(see that file's `_description` and inline comments for provenance/caveats).
+(see that file's `_description` for provenance/caveats).
+
+Each record carries `texts`: the post's title/body segments exactly as the
+production pipeline collects them (include_comments=False). Feeding anything
+else -- comments included, or the segments pre-joined -- scores the model on
+input the gold labels were never derived from.
 
 Model/config selection: this always calls patientpunk.llm_extract with
 whatever prompt/model is currently active there, controlled by the same env
@@ -35,12 +40,14 @@ reference the exact scores and mismatches later.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 from patientpunk._utils import MODEL_FAST, get_llm_client, parse_json_response
 from patientpunk.evaluate import score_field
+from patientpunk.llm_cache import set_cache_enabled
 from patientpunk.llm_extract import (
     build_field_descriptions, build_system_prompt, build_user_message, call_haiku,
     normalize_records,
@@ -48,6 +55,7 @@ from patientpunk.llm_extract import (
 from patientpunk.llm_schema import parse_extraction
 
 ROOT = Path(__file__).parent
+PROJECT_ROOT = ROOT.parent          # variable_extraction/ -- fixture paths are relative to it
 FIXTURE_PATH = ROOT / "fixtures" / "spotcheck_20.json"
 RESULTS_DIR = ROOT / "results"
 SEP = " | "
@@ -62,50 +70,73 @@ def _to_cell(values: list[str] | str | None) -> str:
     return SEP.join(str(v) for v in values)
 
 
-def run_one(client, system_prompt: str, post_id: str, text: str) -> dict[str, str]:
-    """Call the model on one fixture post; return {field: cell} like a CSV row.
+def run_one(client, system_prompt: str, post_id: str,
+            texts: list[str]) -> tuple[dict[str, str], str]:
+    """Call the model on one fixture post; return ({field: cell}, status).
+
+    *texts* is the post's title/body segments as the production pipeline collects
+    them; they go through build_user_message exactly as in a real run.
 
     Runs the same normalize_records pass (lowercase/dedupe/_CANONICAL_MAPS) that
     a real extraction run applies, so scoring reflects production output rather
     than raw model text -- otherwise vocabulary variants the pipeline already
     canonicalizes (e.g. "CFS" -> "me/cfs") show up as false DIFFs.
+
+    A failed parse returns no cells, which scores identically to a model that
+    genuinely found nothing -- hence the status, so the run can report parse
+    failures separately instead of silently logging them as recall loss.
     """
-    raw = call_haiku(client, system_prompt, build_user_message([text]), label=post_id)
+    raw = call_haiku(client, system_prompt, build_user_message(texts), label=post_id)
     parsed = parse_json_response(raw)
     if parsed is None:
-        return {}
+        return {}, "json_parse_failed"
     validated = parse_extraction(parsed)
     if validated is None:
-        return {}
+        return {}, "schema_validation_failed"
     extraction, _dropped = validated
     fake_record = {"fields": dict(extraction.fields)}
     normalize_records([fake_record])
-    return {
+    cells = {
         name: _to_cell(field_data["values"])
         for name, field_data in fake_record["fields"].items()
         if field_data.get("values")
     }
+    return cells, "ok"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--schema", type=Path, default=None, help="Extension schema JSON (as in llm_extract.py).")
+    parser.add_argument("--fixture", type=Path, default=FIXTURE_PATH, help="Fixture JSON to evaluate against.")
+    parser.add_argument("--schema", type=Path, default=None, help="Extension schema JSON; defaults to the fixture's own schema.")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N fixture records.")
     parser.add_argument("--group-guard", action="store_true", help="Enable the group-attribution guard.")
+    parser.add_argument("--no-cache", action="store_true", help="Bypass the LLM response cache (for measuring run-to-run noise).")
     parser.add_argument("--verbose", action="store_true", help="Print every field, not just mismatches.")
     parser.add_argument("--label", type=str, default="run", help="Short name for this run, used in the results filename.")
     args = parser.parse_args()
 
-    print(f"Model: {MODEL_FAST}   Label: {args.label}\n")
+    if args.no_cache:
+        set_cache_enabled(False)
 
-    schema = json.loads(args.schema.read_text()) if args.schema else None
-    field_descriptions = build_field_descriptions(schema)
-    system_prompt = build_system_prompt(field_descriptions, group_guard=args.group_guard)
-
-    fixture = json.loads(FIXTURE_PATH.read_text())
+    fixture = json.loads(args.fixture.read_text())
     records = fixture["records"]
     if args.limit:
         records = records[: args.limit]
+
+    # The fixture's gold labels came from a run under a specific schema; scoring
+    # under a narrower one silently drops every gold value in the extra fields.
+    schema_path = args.schema or (
+        PROJECT_ROOT / fixture["schema"] if fixture.get("schema") else None
+    )
+    schema = json.loads(schema_path.read_text()) if schema_path else None
+    field_descriptions = build_field_descriptions(schema)
+    system_prompt = build_system_prompt(field_descriptions, group_guard=args.group_guard)
+    prompt_sha = hashlib.sha256(system_prompt.encode()).hexdigest()[:12]
+
+    print(f"Model: {MODEL_FAST}   Label: {args.label}")
+    print(f"Fixture: {args.fixture.name} ({len(records)} records)   "
+          f"Schema: {schema_path.name if schema_path else 'base fields only'}   "
+          f"Prompt: {prompt_sha}\n")
 
     client = get_llm_client()
 
@@ -113,10 +144,15 @@ def main() -> None:
     pairs_by_field: dict[str, list[tuple[str, str]]] = {f: [] for f in all_fields}
     mismatches: list[tuple[str, str, str, str, str]] = []  # post_id, field, gold, candidate, kind
 
+    parse_failures: list[dict[str, str]] = []
+
     for i, rec in enumerate(records, 1):
-        post_id, text, gold = rec["post_id"], rec["text"], rec["gold"]
+        post_id, gold = rec["post_id"], rec["gold"]
         print(f"[{i}/{len(records)}] {post_id}...", flush=True)
-        candidate = run_one(client, system_prompt, post_id, text)
+        candidate, status = run_one(client, system_prompt, post_id, rec["texts"])
+        if status != "ok":
+            print(f"    !! {status} -- scored as empty", flush=True)
+            parse_failures.append({"post_id": post_id, "status": status})
 
         for field in all_fields:
             gold_cell = _to_cell(gold.get(field))
@@ -164,6 +200,11 @@ def main() -> None:
         print(f"      gold:      {gold_cell or '(empty)'}")
         print(f"      candidate: {cand_cell or '(empty)'}")
 
+    if parse_failures:
+        print(f"\n=== Parse failures ({len(parse_failures)}) ===")
+        for pf in parse_failures:
+            print(f"  {pf['post_id']}: {pf['status']}")
+
     RESULTS_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_path = RESULTS_DIR / f"{timestamp}__{args.label}.json"
@@ -171,9 +212,14 @@ def main() -> None:
         "timestamp": timestamp,
         "label": args.label,
         "model": MODEL_FAST,
-        "schema": str(args.schema) if args.schema else None,
+        "fixture": args.fixture.name,
+        "schema": str(schema_path) if schema_path else None,
         "group_guard": args.group_guard,
+        "cache": not args.no_cache,
+        "prompt_sha": prompt_sha,
+        "system_prompt": system_prompt,
         "n_records": len(records),
+        "parse_failures": parse_failures,
         "field_scores": field_scores,
         "mismatches": [
             {"post_id": p, "field": f, "gold": g, "candidate": c, "kind": k}

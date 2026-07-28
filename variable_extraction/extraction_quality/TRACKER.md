@@ -1,69 +1,80 @@
 # Extraction quality tracker
 
-Log of prompt/model/config experiments run against `fixtures/spotcheck_20.json`
-via `eval_prompt_fixtures.py`. One row per run. Read `README.md`'s gold-label
+Log of prompt/model/config experiments run against the fixture set via
+`eval_prompt_fixtures.py`. One row per run. Read `README.md`'s gold-label
 caveats before reading scores as absolute rather than relative.
 
-`macro_f1` / `macro_agreement` below are the mean of `f1` / `agreement_present`
-across all fields with any gold or candidate data in that run (matches
-`evaluate.score_extraction`'s `overall` block) -- a quick single number per run,
-not a substitute for reading the mismatches in the linked results file.
+`macro_f1` / `macro_agreement` are the mean of `f1` / `agreement_present` across
+all fields with any gold or candidate data in that run -- a quick single number
+per run, not a substitute for reading the mismatches in the linked results file.
 
 | Date | Label | Model | Prompt/config change | macro_f1 | macro_agreement | MISS / DIFF / EXTRA | Results file |
 |------|-------|-------|----------------------|----------|------------------|----------------------|--------------|
-| 2026-07-27 | baseline | deepseek/deepseek-v4-flash | Prompt as of commit at project creation -- first tracked run, no change yet | 0.540 | 0.423 | 5 / 26 / 40 | `results/20260728T032402Z__baseline.json` |
-| 2026-07-27 | baseline-normalized | deepseek/deepseek-v4-flash | No prompt change -- fixed `eval_prompt_fixtures.py` to run candidate output through `normalize_records` (lowercase/dedupe/`_CANONICAL_MAPS`) before scoring, same as a real run. This is the true baseline; the row above scored raw un-normalized model text. | 0.556 | 0.440 | 5 / 20 / 42 | `results/20260728T032729Z__baseline-normalized.json` |
+| 2026-07-27 | baseline | deepseek/deepseek-v4-flash | Prompt as of project creation -- first tracked run | 0.540 | 0.423 | 5 / 26 / 40 | `results/20260728T032402Z__baseline.json` |
+| 2026-07-27 | baseline-normalized | deepseek/deepseek-v4-flash | No prompt change -- scored candidate output through `normalize_records` | 0.556 | 0.440 | 5 / 20 / 42 | `results/20260728T032729Z__baseline-normalized.json` |
 
-## Reading the baseline run
+### ⚠️ Fixture v2 divider -- the two rows above are void
 
-40 of 71 mismatches are EXTRA (candidate found a value gold doesn't have) vs. only
-5 MISS -- consistent with the README's caveat that `gold` is the *baseline*
-extraction, which itself under-extracted plenty of real fields (e.g. `t3_tc5p1a`,
-`t3_15e9j7b`, `t3_d0jyeu` all have long medication/treatment_outcome lists the
-original run simply didn't produce). Two things worth acting on surfaced in the
-DIFF/MISS rows specifically, not just from EXTRA noise:
+Both rows above were measured against **input the gold labels were never derived
+from**, so their numbers mean nothing and no conclusion drawn from them survives.
+See "The fixture-text defect" below. Compare all future runs to `baseline-v2`.
 
-- **CONFIRMED (read the source text)**: `t3_tc5p1a` is a concatenated multi-commenter
-  GI thread -- the original poster only says they take baking soda, milk of magnesia,
-  and "just started a probiotic." Every other drug the candidate extracted
-  (colestyramine, Colestipol, Welchol, klonopin, PPI, famotidine, Pepcid, digestive
-  enzymes, Yakult Probiotics, ...) is a *different commenter* describing their own
-  regimen ("What worked for me was...", "try ... colestyramine, Colestipol, or
-  Welchol", "Could also try famotidine instead"). Candidate is over-attributing --
-  this is the PR #92 author-vs-others failure mode, confirmed in the
-  over-attribution direction. Prompt rule 3 ("AUTHOR vs OTHERS") isn't enough when
-  the text is a jumble of replies with no author markup; needs a stronger rule
-  specific to multi-speaker/thread text (see Next up).
-- **`t3_156wgqv` treatment_outcome MISS**: candidate dropped
-  "stretching and massage: mixed: numbness" that gold (correctly, per the original
-  spot-check) has. Check whether current prompt wording for `treatment_outcome`
-  or `alternative_treatments` overlap is causing the model to file it under one
-  and not the other, or to drop it entirely.
-- **RESOLVED**: the `conditions` DIFF rows (`me/cfs` vs `chronic fatigue syndrome`/`CFS`)
-  were a pure scoring artifact, not a normalization-map gap. `eval_prompt_fixtures.py`
-  scored raw candidate output and never called `normalize_records`, so none of the
-  lowercase/dedupe/`_CANONICAL_MAPS` canonicalization a real run applies was in effect.
-  Fixed in `eval_prompt_fixtures.py::run_one` (wraps the parsed extraction in a fake
-  record and runs it through `normalize_records` before scoring) -- see the
-  `baseline-normalized` row above. This dropped DIFF count 26 -> 20 and is now the
-  baseline to compare future prompt changes against, not the original `baseline` row.
+| Date | Label | Model | Prompt/config change | macro_f1 | macro_agreement | MISS / DIFF / EXTRA | Results file |
+|------|-------|-------|----------------------|----------|------------------|----------------------|--------------|
+| 2026-07-27 | baseline-v2 | deepseek/deepseek-v4-flash | **Fixture v2**: `texts` rebuilt to the production title+body segments; eval now defaults to the fixture's own schema (21 fields scored, was 15). No prompt change. | 0.878 | 0.809 | 2 / 8 / 12 | `results/20260728T034411Z__baseline-v2.json` |
+
+## The fixture-text defect (fixed 2026-07-27)
+
+The fixture's `text` held **title + body + every comment**, but the production
+pipeline extracts from title+body only (`patientpunk/corpus.py` `_texts_from_post`,
+`include_comments=False` -- comments are other users' words and must not be
+attributed to the post author). `baseline_extracted` and `gold` came from a real
+title+body-only run, so the harness was scoring the model on text three to eight
+times longer than the text the labels describe:
+
+| post | old fixture `text` | production title+body |
+|---|---|---|
+| `t3_nma566` | 2829 chars | 479 |
+| `t3_tc5p1a` | 4000 (truncated) | 649 |
+| `t3_d0jyeu` | 2572 | 162 |
+
+Fixing it moved macro_f1 0.556 -> 0.878 and mismatches 67 -> 22, with EXTRA
+falling 42 -> 12 -- the candidate had been extracting other commenters' drugs
+and outcomes that gold could not contain because the labeling run never saw them.
+
+**What this retracts:** the previous "Next up" item calling for a
+multi-speaker/thread attribution rule, and the `t3_tc5p1a` over-attribution
+finding it rested on. That was an artifact of fixture construction. Production
+never feeds the model a multi-commenter thread, so a prompt rule for it would
+have been tuning against a problem that does not exist. (Genuine multi-speaker
+text can still appear *inside* a single post body, e.g. a pasted conversation --
+but that is rare and was not what the finding measured.)
+
+Records now carry `texts` (the segment list) rather than a pre-joined `text`,
+because production calls `build_user_message([title, body])`, which joins with
+`\n\n---\n\n`. A `tests/` assertion pins this so the drift cannot return.
+
+## Reading baseline-v2
+
+22 mismatches over 21 fields. The weakest fields are `prior_infections`
+(f1 0.400), `functional_status_tier` (0.727), `social_impact` (0.769) and
+`conditions` (0.800). Several mismatches are visibly *not* prompt problems --
+`covid` vs `covid-19` and `postcovid` vs `long covid` are vocabulary variants for
+`normalize.py`, not the model. Stage 2 (`triage.py`) exists to split those out by
+count before any prompt is edited.
 
 ## Next up
 
-- Candidates worth testing first (from the PR #92 spot-check failure modes):
-  - Tighten `treatment_outcome` guidance so the model doesn't infer "helped" from
-    an author still reporting the symptom (`t3_vkkcui` in the fixture set).
-  - Add a rule distinguishing "the author is discussing/theorizing about X" from
-    "the author has X" for `conditions` / `mental_health` (`t3_lmu7ty`).
-  - Tighten `functional_status_tier` / `social_impact` to require the tier or
-    impact label be stated close to verbatim, not inferred from adjacent context
-    (`t3_156wgqv`, `t3_15kwgjz`).
-  - Add a rule for multi-speaker/thread text: when the text contains multiple
-    distinct commenters (reply-style turns, "what worked for me", quoting another
-    comment), only extract what the ORIGINAL POST author says about themselves;
-    do not attribute a different commenter's treatment/outcome to the author
-    (`t3_tc5p1a`, confirmed above -- candidate pulled in ~10 other commenters'
-    medications).
-- Consider a cheaper/faster model pass (e.g. current `MODEL_FAST` vs. a Haiku vs.
-  DeepSeek comparison) once the prompt is stable, to see whether quality holds at
-  lower cost.
+- Grow the fixture to 50 records (`build_fixture.py` + `label_fixture.py`).
+- Run `triage.py` on `baseline-v2` and let the field x code matrix pick the first
+  prompt variant, rather than guessing from anecdotes.
+- Measure the noise floor: two `--no-cache` baseline-v2 runs. Deltas below that
+  spread are not results.
+- Candidates carried forward, to be confirmed or dropped by the triage matrix:
+  - `treatment_outcome`: don't infer "helped" when the author still reports the
+    symptom (`t3_vkkcui`).
+  - `conditions`/`mental_health`: "the author is discussing X" vs "has X"
+    (`t3_lmu7ty`, `t3_sa85zi` -- candidate adds depression/anxiety to conditions).
+  - `functional_status_tier`/`social_impact`: require near-verbatim support
+    (`t3_156wgqv`, `t3_6ygbyh`).
+- Once the prompt is stable, compare cheaper/faster models at fixed prompt.
