@@ -2630,10 +2630,8 @@ class TestRunProvenance:
 
 
 class TestNamedButNotTaken:
-    """medications, alternative_treatments and dietary_interventions hold
-    treatments the patient took, not ones they mentioned. Declined,
-    held-but-unused, asked-about and planned treatments are excluded; a
-    treatment taken and later stopped is kept."""
+    """Prompt-text assertions: the named-vs-taken rule is present, and so is
+    the exception that keeps a treatment the patient stopped."""
 
     def test_rule_is_stated_with_worked_examples(self):
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
