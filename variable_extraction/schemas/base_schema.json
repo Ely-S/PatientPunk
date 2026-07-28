@@ -1,6 +1,7 @@
 {
   "_manifest_version": "3.0",
-  "_description": "Documentation manifest for PatientPunk universal base fields. This file is NOT loaded at runtime — it is a reference for researchers building extension schemas.",
+  "_description": "Manifest of PatientPunk universal base fields: descriptions, confidence tiers, ICD-10 hints, measured fill rates, and framework mappings.",
+  "_loaded_by": "Read at runtime by Schema.from_file (schema.py), the codebook generator (codebook.py), and per-field confidence lookup. The field list the extractor actually prompts on is BASE_FIELD_DESCRIPTIONS in llm_extract.py — keep the two in step; a field added here but not there is documented and never extracted.",
 
   "_field_selection": {
     "method": "Fill rates measured on 1,177 extracted records (one month of r/covidlonghaulers). Fields below 10% fill were cut unless a clinical framework justified keeping them; no cut field cleared 1%. Retained fields are cross-referenced against the outcome frameworks used in post-viral illness research so the variable set is defensible outside this project.",

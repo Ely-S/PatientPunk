@@ -51,6 +51,65 @@ treatment, inflating per-drug `helped` rates.
 - **Recommended:** enable for any analysis that reports per-drug `helped` rates; leave
   off to reproduce pre-guard numbers.
 
+### Cross-domain symptoms (inconsistent domain assignment)
+
+Symptoms are split across six domains (`fatigue_pem`, `cognitive_neurological`,
+`cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms`). Some symptoms belong to
+more than one: a migraine is both `pain` and `cognitive_neurological`, dizziness on
+standing is both `cardiovascular_autonomic` and `cognitive_neurological`. The extraction
+prompt instructs the model to record those in **every** domain they belong to, with
+worked examples.
+
+**The model largely does not comply.** Measured on 300 r/covidlonghaulers posts
+(Haiku 4.5, temperature 0), counting each record where a rule's symptom appears in at
+least one of its domains:
+
+| Symptom | Both domains | One only | Compliance |
+|---|---|---|---|
+| insomnia | 0 | 16 | **0%** |
+| neuropathy | 1 | 6 | 14% |
+| headache / migraine | 5 | 19 | 21% |
+| chest pain | 4 | 10 | 29% |
+| unrefreshing sleep | 1 | 2 | 33% |
+| dizziness | 8 | 8 | 50% |
+| **overall** | **19** | **61** | **24%** |
+
+Insomnia never once reached `fatigue_pem`, and the prompt's own first worked example
+(migraine → `pain` + `cognitive_neurological`) lands at 21%.
+
+**Why this matters more than the raw miss rate.** The problem is not that the model
+picks the "wrong" domain — for many symptoms there is no single right answer, which is
+why cross-listing exists. The problem is that the choice is **inconsistent**: the same
+symptom lands in one domain on one post and two on the next, for reasons that have
+nothing to do with the patient. Any clustering feature built on the `pain` /
+`cognitive_neurological` split then encodes model variance as if it were patient
+variance. Either policy applied *uniformly* — always one domain, or always both —
+would be more analysable than 28% compliance. Inconsistency is the defect, not
+under-fanning.
+
+**The fix is to stop asking the model.** Routing a known symptom to known domains is a
+lookup, not a judgement. With the knob enabled, the model only has to find the symptom
+once — in whichever domain it chose — and `llm_extract.fan_out_cross_domain_symptoms`
+copies it into the others from `CROSS_DOMAIN_SYMPTOMS`. That is 100% consistent by
+construction, reproducible across model versions, and independent of temperature.
+
+- **Measured:** 24% → **100%** (81/81) re-normalising the same 300 records. The fan-out
+  also rescues symptoms the model filed entirely outside a rule's domains — a "chest
+  pain" left in `other_symptoms` still reaches `pain` and `cardiovascular_autonomic`,
+  which is why the ON total is one pair higher than the OFF total.
+- **Knob:** `--cross-domain-fanout` (on `main.py run` and `python -m patientpunk.llm_extract`)
+  or `PP_CROSS_DOMAIN_FANOUT=1`. **Default: off** — chosen to keep a plain run
+  comparable with earlier ones, matching the group-guard convention.
+- **Recommended:** enable for any run feeding clustering.
+- **Limit:** only symptoms listed in `CROSS_DOMAIN_SYMPTOMS` fan out. A novel
+  cross-domain symptom still depends on the model, exactly as today — the knob closes
+  a known gap, it does not close the general case. The table is plain data; extending
+  it is a one-line edit.
+- **Trade-off worth naming:** this moves a clinical-vocabulary decision from the prompt
+  into code, so changing it needs a commit rather than a prompt edit. That is the right
+  home for a mapping that must stay stable across runs, but it does mean the mapping is
+  no longer visible to someone reading only the prompt.
+
 ## Field provenance
 
 Every field in `records.csv` is LLM-produced (`llm_extract`, plus `discover` for

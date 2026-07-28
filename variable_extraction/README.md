@@ -60,14 +60,15 @@ with `author_hash` as the join key, and can be run in either order.
 ### Approach A — Full Pipeline (LLM extraction)
 
 Extracts **every field** defined in the schema (age, sex/gender, conditions,
-medications, procedures, functional status, etc. — 20 fields for
-`covidlonghaulers_schema.json`).
+medications, procedures, functional status, etc. — 28 fields for
+`covidlonghaulers_schema.json`: 25 universal base fields plus 3 COVID-specific
+extension fields).
 
 - **Phase 1** — Claude Haiku extracts every field defined in the schema (default).
 - **Phase 2** — (opt-in) discovers *new* fields not yet in the schema.
 
 ```bash
-# Default: Phases 1-2-4-5 (no discovery)
+# Default: Phases 1-3-4 (no discovery)
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
 # With discovery (auto-merge all candidates)
@@ -312,6 +313,7 @@ python main.py run --schema schemas/covidlonghaulers_schema.json [options]
   --resume              Resume an interrupted run
   --llm-cache           Force-enable the LLM response cache
   --no-llm-cache        Disable the LLM response cache
+  --cross-domain-fanout Route multi-domain symptoms into every domain they belong to
   --candidates PATH     Saved phase1_candidates.json (skips discovery's candidate-scan stage)
   --sample N            Random N-item sample for discovery's candidate-scan stage
   --sep STR             Multi-value separator in CSV (default: " | ")
@@ -332,6 +334,29 @@ PP_GROUP_GUARD=1 python main.py run --schema schemas/...
 
 Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
 analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix numbers.
+
+#### Cross-domain symptom fan-out (optional)
+
+Some symptoms belong in more than one symptom domain — a migraine is both `pain` and
+`cognitive_neurological`. The prompt tells the model to record those in every domain
+they belong to, but **measured on 300 posts it complies only 24% of the time** (21% for
+headaches; insomnia never once reached `fatigue_pem`). The result is not merely
+incomplete: the same symptom lands in one domain on one post and two on the next, so the
+domain split carries model variance that clustering would read as patient variance.
+
+Enable the fan-out to do that routing in code instead — the model finds the symptom
+once, wherever it filed it, and a fixed table copies it into the rest:
+
+```bash
+python main.py run --schema schemas/... --cross-domain-fanout
+```
+
+Equivalently `PP_CROSS_DOMAIN_FANOUT=1`. Takes 28% -> 100% on the listed symptoms, and
+is reproducible across model versions because it is a lookup rather than a judgement.
+**Recommended for any run feeding clustering.** Only symptoms in
+`llm_extract.CROSS_DOMAIN_SYMPTOMS` fan out; see
+[`METHODS.md`](./METHODS.md#cross-domain-symptoms-inconsistent-domain-assignment) for the
+measurements and the limits.
 
 ### `demographics` — LLM-only demographics
 
@@ -619,7 +644,7 @@ Every record written to `output/temp/records_{schema_id}.json`:
   "_patientpunk_version": "2.0",
   "_extraction_method": "llm",
   "_model": "claude-haiku-4-5",
-  "_schema_id": "covidlonghaulers_v1",
+  "_schema_id": "covidlonghaulers_v2",
   "_extracted_at": "2026-04-05T12:00:00+00:00",
   "record_meta": {
     "author_hash": "a3f8c2...",

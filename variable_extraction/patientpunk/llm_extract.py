@@ -827,14 +827,105 @@ def field_confidence(schema_path: Path | None) -> dict[str, str]:
     return {name: fd.confidence for name, fd in schema.all_fields.items()}
 
 
+SYMPTOM_DOMAINS = (
+    "fatigue_pem", "cognitive_neurological", "cardiovascular_autonomic",
+    "pain", "sleep", "other_symptoms",
+)
+
+# Fields the prompt restricts to a fixed value list ("use ONLY one of ...").
+# normalize_records drops anything outside the list -- see the closed-vocabulary
+# pass at the end of that function for why.
+ILLNESS_TRAJECTORY_VALUES = frozenset(
+    {"improving", "worsening", "stable", "relapsing", "recovered"})
+FUNCTIONAL_STATUS_VALUES = frozenset(
+    {"bedbound", "housebound", "severe", "moderate", "mild", "mostly_functional"})
+_CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
+    "illness_trajectory": ILLNESS_TRAJECTORY_VALUES,
+    "functional_status_tier": FUNCTIONAL_STATUS_VALUES,
+}
+
+# Symptoms that belong in more than one domain, and where they belong.
+# A value whose text contains any trigger substring is copied into every domain
+# listed for it. Substring matching (not equality) because patients qualify the
+# symptom -- "terrible headache", "daily migraines", "chest pain when standing".
+CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
+    (("headache", "migraine", "head pain", "head pressure"),
+     frozenset({"pain", "cognitive_neurological"})),
+    (("dizz", "lighthead", "light-head", "vertigo"),
+     frozenset({"cardiovascular_autonomic", "cognitive_neurological"})),
+    (("chest pain", "chest tight", "chest pressure"),
+     frozenset({"pain", "cardiovascular_autonomic"})),
+    (("neuropath", "nerve pain", "burning pain", "burning feet"),
+     frozenset({"pain", "cognitive_neurological"})),
+    (("unrefreshing sleep", "unrefreshed sleep", "non-restorative sleep",
+      "wake up exhausted", "wake exhausted"),
+     frozenset({"sleep", "fatigue_pem"})),
+    (("insomnia",), frozenset({"sleep", "fatigue_pem"})),
+)
+
+
+def fan_out_cross_domain_symptoms(records: list[dict]) -> int:
+    """Copy multi-domain symptoms into every domain they belong to.
+
+    Returns the number of values added. Idempotent: a symptom the model already
+    cross-listed is left alone.
+
+    Measured on 300 r/covidlonghaulers posts, Haiku follows the prompt's
+    cross-listing instruction 28% of the time (17% for headaches, the prompt's
+    own worked example). The resulting split is not just incomplete but
+    *inconsistent* -- the same symptom lands in one domain on one post and two
+    on the next -- so a clustering feature built on it carries noise that looks
+    like signal. Routing a known symptom to known domains is a lookup, not a
+    judgement, so it belongs in code where it is 100% reproducible.
+
+    Only symptoms in CROSS_DOMAIN_SYMPTOMS fan out; a novel cross-domain symptom
+    still depends on the model. That is a smaller gap than the one this closes.
+    """
+    added = 0
+    for rec in records:
+        fields = rec.get("fields", {})
+        present = {d: fields.get(d) for d in SYMPTOM_DOMAINS if d in fields}
+        if not present:
+            continue
+        for triggers, domains in CROSS_DOMAIN_SYMPTOMS:
+            # Collect matching values from wherever the model happened to file them.
+            matched = [
+                v for entry in present.values()
+                for v in (entry.get("values") or [])
+                if isinstance(v, str) and any(t in v.lower() for t in triggers)
+            ]
+            if not matched:
+                continue
+            for domain in domains:
+                entry = fields.get(domain)
+                if entry is None:
+                    continue
+                values = entry.get("values") or []
+                existing = {v.lower() for v in values if isinstance(v, str)}
+                for v in matched:
+                    if v.lower() not in existing:
+                        values.append(v)
+                        existing.add(v.lower())
+                        added += 1
+                entry["values"] = values
+    return added
+
+
 def normalize_records(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
+    *,
+    cross_domain_fanout: bool = False,
 ) -> list[dict]:
     """Wrap every field as ``{"values", "confidence"}`` and canonicalize in place.
 
     ``confidence_by_field`` maps field name -> the confidence declared for it in
     the schema; a field missing from the map falls back to "medium".
+
+    ``cross_domain_fanout`` additionally routes multi-domain symptoms into every
+    domain they belong to (see :func:`fan_out_cross_domain_symptoms`). Off by
+    default so a default run stays byte-comparable with earlier ones; recommended
+    for any run feeding clustering.
     """
     confidence_by_field = confidence_by_field or {}
 
@@ -935,83 +1026,66 @@ def normalize_records(
             "part time": "working reduced", "part-time": "working reduced",
             "reduced hours": "working reduced",
         },
+        # Every value must land in ILLNESS_TRAJECTORY_VALUES -- the prompt offers
+        # the model no other option, and anything else is dropped below.
+        # "bedbound"/"housebound" used to map here to "severe decline": both are
+        # functional_status_tier values, and the mapping invented a label the
+        # prompt does not allow. A model that files functional status under
+        # trajectory has miscategorised it; drop it rather than coin a value.
         "illness_trajectory": {
             "getting worse": "worsening", "worse": "worsening",
             "deteriorating": "worsening", "declining": "worsening",
+            "severe decline": "worsening",
             "getting better": "improving", "improved": "improving",
             "recovery": "improving",
             "back to normal": "recovered", "fully recovered": "recovered",
             "partially recovered": "improving",
             "relapse": "relapsing", "relapsing-remitting": "relapsing",
-            "flare": "relapsing",
-            "bedbound": "severe decline", "housebound": "severe decline",
+            "flare": "relapsing", "fluctuating": "relapsing",
+            "plateau": "stable", "unchanged": "stable", "same": "stable",
         },
-        # Symptom domains: surface-form collapsing only. Patient wording carries
-        # severity and context ("crash" is not always PEM), so these maps fix
-        # spelling and abbreviation drift and stop short of semantic merges.
+        # Symptom domains: SURFACE FORMS ONLY -- spelling, hyphenation, plurals,
+        # and abbreviations of the identical term. Nothing here may merge two
+        # words a clinician would distinguish.
+        #
+        # This file writes records_*.json, the archival extraction output, and
+        # the prompt tells the model to record symptoms in the patient's own
+        # words. Collapsing "vertigo" onto "dizziness" or "air hunger" onto
+        # "shortness of breath" would overwrite that wording at the point it is
+        # persisted, and the distinction is not recoverable afterwards.
+        # Concept-level merges belong in patientpunk.normalize, which runs on a
+        # copy for clustering and already covers every one of them.
         "fatigue_pem": {
             "post-exertional malaise": "pem", "post exertional malaise": "pem",
             "post-exertional": "pem", "post exertional": "pem", "pese": "pem",
-            "exhaustion": "fatigue", "tiredness": "fatigue", "tired": "fatigue",
-            "extreme fatigue": "severe fatigue", "severe exhaustion": "severe fatigue",
-            "exercise intolerance": "exercise intolerance",
             "post-exertional symptom exacerbation": "pem",
         },
         "cognitive_neurological": {
             "brainfog": "brain fog", "brain-fog": "brain fog",
-            "cognitive dysfunction": "brain fog", "cognitive impairment": "brain fog",
-            "cognitive issues": "brain fog", "mental fog": "brain fog",
-            "memory loss": "memory problems", "memory issues": "memory problems",
-            "poor memory": "memory problems", "forgetfulness": "memory problems",
-            "word finding": "word-finding difficulty",
-            "word finding issues": "word-finding difficulty",
-            "trouble concentrating": "poor concentration",
-            "can't concentrate": "poor concentration",
-            "difficulty concentrating": "poor concentration",
             "migraine": "migraines", "headache": "headaches",
-            "ringing in ears": "tinnitus", "ringing in my ears": "tinnitus",
-            "light headed": "dizziness", "lightheaded": "dizziness",
-            "lightheadedness": "dizziness", "vertigo": "dizziness",
+            "light headed": "lightheaded",
         },
         "cardiovascular_autonomic": {
-            "heart palpitations": "palpitations", "heart racing": "tachycardia",
-            "racing heart": "tachycardia", "rapid heart rate": "tachycardia",
-            "high heart rate": "tachycardia",
             "oi": "orthostatic intolerance",
-            "orthostatic hypotension": "orthostatic intolerance",
-            "can't stand up": "orthostatic intolerance",
-            "temperature regulation": "temperature dysregulation",
             "temp dysregulation": "temperature dysregulation",
             "adrenaline dump": "adrenaline dumps",
-            "blood pressure swings": "blood pressure instability",
+            "heart palpitations": "palpitations",
         },
         "pain": {
-            "joint pains": "joint pain", "arthralgia": "joint pain",
-            "muscle pains": "muscle pain", "myalgia": "muscle pain",
-            "muscle aches": "muscle pain",
-            "body ache": "body aches", "aches": "body aches",
-            "nerve pain": "nerve pain", "neuropathic pain": "nerve pain",
-            "migraine": "migraines", "headache": "headaches",
+            "joint pains": "joint pain",
+            "muscle pains": "muscle pain",
             "chest pains": "chest pain",
+            "body ache": "body aches",
+            "migraine": "migraines", "headache": "headaches",
         },
         "sleep": {
-            "can't sleep": "insomnia", "cannot sleep": "insomnia",
-            "trouble sleeping": "insomnia", "sleeplessness": "insomnia",
             "non-restorative sleep": "unrefreshing sleep",
             "unrefreshed sleep": "unrefreshing sleep",
-            "sleep doesn't refresh": "unrefreshing sleep",
-            "oversleeping": "hypersomnia", "sleeping too much": "hypersomnia",
-            "reversed sleep cycle": "sleep cycle disruption",
-            "sleep schedule": "sleep cycle disruption",
         },
         "other_symptoms": {
-            "sob": "shortness of breath", "breathlessness": "shortness of breath",
-            "air hunger": "shortness of breath",
+            "sob": "shortness of breath",
             "gi issues": "gi problems", "gi symptoms": "gi problems",
-            "digestive issues": "gi problems", "stomach issues": "gi problems",
-            "rash": "rashes", "skin rash": "rashes",
-            "hair falling out": "hair loss",
-            "blurry vision": "vision changes", "vision problems": "vision changes",
+            "rash": "rashes",
         },
     }
 
@@ -1081,6 +1155,26 @@ def normalize_records(
                 canonical.append(rejoined)
         field_data["values"] = canonical
 
+    # Closed-vocabulary fields: the prompt says "use ONLY one of", so anything
+    # else is a miscategorisation, not a discovery. Dropping it keeps the column
+    # analysable; keeping it would put functional-status and free text into a
+    # field downstream code reads as an ordinal.
+    for rec in records:
+        for field_name, allowed in _CLOSED_VOCABULARIES.items():
+            field_data = rec.get("fields", {}).get(field_name)
+            if not field_data or not field_data.get("values"):
+                continue
+            kept = [v for v in field_data["values"]
+                    if isinstance(v, str) and v in allowed]
+            field_data["values"] = kept
+            if not kept:
+                field_data["confidence"] = None
+
+    # After canonicalization, so the fan-out copies canonical values ("migraines",
+    # not "migraine") and one trigger covers every surface form.
+    if cross_domain_fanout:
+        fan_out_cross_domain_symptoms(records)
+
     return records
 
 
@@ -1097,6 +1191,7 @@ def run_llm_extract(
     resume: bool = False,
     limit: int | None = None,
     group_guard: bool | None = None,
+    cross_domain_fanout: bool | None = None,
 ) -> PhaseResult:
     """Run LLM extraction over a corpus directory."""
     from typing import Any
@@ -1122,6 +1217,9 @@ def run_llm_extract(
 
     if group_guard is None:
         group_guard = os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
+    if cross_domain_fanout is None:
+        cross_domain_fanout = os.environ.get(
+            "PP_CROSS_DOMAIN_FANOUT", "").strip().lower() in ("1", "true", "yes")
 
     out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
     out_temp.mkdir(parents=True, exist_ok=True)
@@ -1137,6 +1235,7 @@ def run_llm_extract(
     print(f"  Limit           : {limit or 'all'}")
     print(f"  Resume          : {'yes' if resume else 'no'}")
     print(f"  Group guard     : {'on' if group_guard else 'off'}")
+    print(f"  Symptom fan-out : {'on' if cross_domain_fanout else 'off'}")
     print("=" * 60 + "\n")
 
     start_time = datetime.now(timezone.utc)
@@ -1155,7 +1254,8 @@ def run_llm_extract(
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-    normalize_records(records, field_confidence(schema_path))
+    normalize_records(records, field_confidence(schema_path),
+                      cross_domain_fanout=cross_domain_fanout)
     records_file = out_temp / f"records_{schema_id}.json"
     _write_json_atomic(records_file, records)
 
@@ -1207,6 +1307,10 @@ def main(argv: list[str] | None = None) -> None:
                         help="Directory for intermediate output files.")
     parser.add_argument("--group-guard", action="store_true",
                         help="Opt-in group-attribution guard.")
+    parser.add_argument("--cross-domain-fanout", action="store_true",
+                        help="Route multi-domain symptoms (headache, dizziness, "
+                             "chest pain, ...) into every symptom domain they "
+                             "belong to. Recommended for clustering runs.")
     args = parser.parse_args(argv)
 
     try:
@@ -1250,6 +1354,7 @@ def main(argv: list[str] | None = None) -> None:
             resume=args.resume,
             limit=args.limit,
             group_guard=group_guard,
+            cross_domain_fanout=args.cross_domain_fanout or None,
         )
     except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

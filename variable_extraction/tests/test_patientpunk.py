@@ -2213,6 +2213,20 @@ class TestSymptomDecompositionSchema:
         collisions = set(schema["extension_fields"]) & set(BASE_FIELD_DESCRIPTIONS)
         assert collisions == set()
 
+    def test_manifest_and_prompt_field_lists_agree(self):
+        """base_schema.json feeds the codebook and confidence lookup;
+        BASE_FIELD_DESCRIPTIONS feeds the prompt. Nothing syncs them, so a field
+        in one and not the other is either documented-but-never-extracted or
+        extracted-but-undocumented."""
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        manifest = json.loads(BASE_SCHEMA.read_text(encoding="utf-8"))
+        doc_base = {k for k in manifest["base_fields"] if not k.startswith("_")}
+        doc_opt = {k for k in manifest["base_optional_fields"] if not k.startswith("_")}
+        assert doc_base == set(BASE_FIELD_DESCRIPTIONS)
+        assert doc_opt == set(BASE_OPTIONAL_DESCRIPTIONS)
+
     def test_prompt_states_the_cross_listing_rule(self):
         """Cross-listing is the one instruction a model would otherwise get
         wrong by default, so assert it survives prompt edits."""
@@ -2227,16 +2241,42 @@ class TestSymptomDomainCanonicalization:
     def test_surface_variants_collapse_per_domain(self):
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {
-            "fatigue_pem": ["Post-Exertional Malaise", "exhaustion"],
-            "cognitive_neurological": ["brainfog", "ringing in ears"],
-            "cardiovascular_autonomic": ["heart palpitations", "racing heart"],
-            "sleep": ["can't sleep"],
+            "fatigue_pem": ["Post-Exertional Malaise"],
+            "cognitive_neurological": ["brainfog", "migraine"],
+            "cardiovascular_autonomic": ["heart palpitations", "OI"],
+            "sleep": ["non-restorative sleep"],
         }}
         out = normalize_records([rec])[0]["fields"]
-        assert out["fatigue_pem"]["values"] == ["pem", "fatigue"]
-        assert out["cognitive_neurological"]["values"] == ["brain fog", "tinnitus"]
-        assert out["cardiovascular_autonomic"]["values"] == ["palpitations", "tachycardia"]
-        assert out["sleep"]["values"] == ["insomnia"]
+        assert out["fatigue_pem"]["values"] == ["pem"]
+        assert out["cognitive_neurological"]["values"] == ["brain fog", "migraines"]
+        assert out["cardiovascular_autonomic"]["values"] == ["palpitations",
+                                                             "orthostatic intolerance"]
+        assert out["sleep"]["values"] == ["unrefreshing sleep"]
+
+    def test_extraction_tier_preserves_clinically_distinct_wording(self):
+        """records_*.json is the archival output and the prompt asks for the
+        patient's own words, so concept-level merges must not happen here --
+        vertigo is not dizziness and air hunger is not shortness of breath."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {
+            "cognitive_neurological": ["vertigo", "cognitive dysfunction"],
+            "other_symptoms": ["air hunger"],
+            "fatigue_pem": ["exhaustion"],
+            "pain": ["myalgia"],
+        }}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["vertigo", "cognitive dysfunction"]
+        assert out["other_symptoms"]["values"] == ["air hunger"]
+        assert out["fatigue_pem"]["values"] == ["exhaustion"]
+        assert out["pain"]["values"] == ["myalgia"]
+
+    def test_clustering_tier_still_merges_those_concepts(self):
+        """The merges removed from extraction must survive where they belong."""
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("cognitive_neurological", "vertigo") == "dizziness"
+        assert normalize_value("other_symptoms", "air hunger") == "shortness_of_breath"
+        assert normalize_value("fatigue_pem", "exhaustion") == "fatigue"
+        assert normalize_value("pain", "myalgia") == "muscle_pain"
 
     def test_cross_listed_symptom_kept_in_every_domain(self):
         """A migraine belongs in both pain and cognitive_neurological; neither
@@ -2258,6 +2298,94 @@ class TestSymptomDomainCanonicalization:
         assert normalize_cell("fatigue_pem", "crash | payback | PEM") == "pem"
         assert normalize_cell("pain", "myalgia | muscle aches") == "muscle_pain"
         assert normalize_cell("other_symptoms", "SOB | air hunger") == "shortness_of_breath"
+
+
+class TestClosedVocabularies:
+    """The prompt tells the model "use ONLY one of" for these fields, so any
+    other value is a miscategorisation and must not reach the CSV."""
+
+    def test_functional_status_never_leaks_into_trajectory(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"illness_trajectory": ["bedbound", "housebound"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["illness_trajectory"]["values"] == []
+        assert out["illness_trajectory"]["confidence"] is None
+
+    def test_every_trajectory_output_is_in_the_allowed_set(self):
+        from patientpunk.llm_extract import normalize_records, ILLNESS_TRAJECTORY_VALUES
+        probes = [
+            # canonical-map inputs
+            "getting worse", "worse", "deteriorating", "declining", "severe decline",
+            "getting better", "improved", "recovery", "back to normal",
+            "fully recovered", "partially recovered", "relapse",
+            "relapsing-remitting", "flare", "fluctuating", "plateau",
+            "unchanged", "same",
+            # already-canonical
+            *ILLNESS_TRAJECTORY_VALUES,
+            # miscategorisations and free text the model might emit
+            "bedbound", "housebound", "who knows", "60% better", "up and down",
+        ]
+        out = normalize_records([{"fields": {"illness_trajectory": probes}}])[0]
+        assert set(out["fields"]["illness_trajectory"]["values"]) <= ILLNESS_TRAJECTORY_VALUES
+
+    def test_functional_status_tier_is_also_closed(self):
+        from patientpunk.llm_extract import normalize_records, FUNCTIONAL_STATUS_VALUES
+        rec = {"fields": {"functional_status_tier": ["bed bound", "worsening", "very severe"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert set(out["functional_status_tier"]["values"]) <= FUNCTIONAL_STATUS_VALUES
+        assert "bedbound" in out["functional_status_tier"]["values"]
+
+
+class TestCrossDomainFanout:
+    """Haiku follows the prompt's cross-listing instruction 28% of the time
+    (measured, 300 posts), so the routing is done in code when enabled."""
+
+    def test_off_by_default(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": []}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == []
+
+    def test_fans_out_to_every_domain(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": [],
+                          "cardiovascular_autonomic": [], "sleep": [],
+                          "fatigue_pem": [], "other_symptoms": []}}
+        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+        # not a member of any other domain's set
+        assert out["sleep"]["values"] == []
+
+    def test_finds_the_symptom_in_whichever_domain_the_model_chose(self):
+        """The model files dizziness under cognitive_neurological; it must still
+        reach cardiovascular_autonomic."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"cognitive_neurological": ["dizziness"],
+                          "cardiovascular_autonomic": []}}
+        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        assert out["cardiovascular_autonomic"]["values"] == ["dizziness"]
+
+    def test_idempotent_when_model_already_cross_listed(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": ["migraines"]}}
+        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+
+    def test_matches_qualified_wording(self):
+        """Patients qualify symptoms -- 'terrible headache', not 'headache'."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["terrible headache"], "cognitive_neurological": []}}
+        out = normalize_records([rec], cross_domain_fanout=True)[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["terrible headache"]
+
+    def test_reports_how_many_values_it_added(self):
+        from patientpunk.llm_extract import fan_out_cross_domain_symptoms
+        recs = [{"fields": {"pain": {"values": ["migraines"]},
+                            "cognitive_neurological": {"values": []}}}]
+        assert fan_out_cross_domain_symptoms(recs) == 1
+        assert fan_out_cross_domain_symptoms(recs) == 0  # idempotent
 
 
 class TestBatchExtraction:
