@@ -146,10 +146,6 @@ Use --no-llm to skip Phase 1, or --start-at N to resume from a specific phase.
     )
     run_parser.add_argument("--no-llm", action="store_true",
                    help="Skip phase 1 (LLM extraction).")
-    run_parser.add_argument("--no-cross-domain-fanout", action="store_true",
-                   help="Disable cross-domain symptom routing (on by default). "
-                        "Reproduces raw model placement, which assigns "
-                        "multi-domain symptoms consistently only 24%% of the time.")
     run_parser.add_argument("--discover", choices=["auto", "review"], default=None,
                    help="Run Phase 2 field discovery. 'auto' runs all stages and "
                         "merges candidates. 'review' stops after candidate generation "
@@ -212,9 +208,6 @@ def _cmd_run(args: argparse.Namespace) -> None:
         resume=args.resume,
         candidates_file=args.candidates,
         discovery_sample=args.sample,
-        # None, not True, when the flag is absent -- otherwise
-        # PP_CROSS_DOMAIN_FANOUT can never be seen downstream.
-        cross_domain_fanout=False if args.no_cross_domain_fanout else None,
         csv_sep=args.sep,
         codebook_format=args.codebook_format,
         codebook_include_discovered=not args.no_discovered,

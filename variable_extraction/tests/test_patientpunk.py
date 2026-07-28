@@ -2435,17 +2435,13 @@ class TestCrossDomainFanout:
     in any domain, copied into every domain the table assigns them. On unless
     disabled by flag or environment variable."""
 
-    def test_on_by_default(self):
+    def test_routing_is_unconditional(self):
+        """No switch: raw model placement stays available in the
+        llm_records_* checkpoint, which is written before normalisation."""
         from patientpunk.llm_extract import normalize_records
         rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": []}}
         out = normalize_records([rec])[0]["fields"]
         assert out["cognitive_neurological"]["values"] == ["migraines"]
-
-    def test_can_be_disabled_to_reproduce_raw_model_placement(self):
-        from patientpunk.llm_extract import normalize_records
-        rec = {"fields": {"pain": ["migraines"], "cognitive_neurological": []}}
-        out = normalize_records([rec], cross_domain_fanout=False)[0]["fields"]
-        assert out["cognitive_neurological"]["values"] == []
 
     def test_finds_the_symptom_in_whichever_domain_the_model_chose(self):
         """A symptom filed outside the rule's own domains still reaches them."""
@@ -2488,69 +2484,6 @@ class TestCrossDomainFanout:
                             "cognitive_neurological": {"values": []}}}]
         assert fan_out_cross_domain_symptoms(recs) == 1
         assert fan_out_cross_domain_symptoms(recs) == 0  # idempotent
-
-    @pytest.mark.parametrize("env,expected", [
-        (None, True), ("", True), ("1", True), ("true", True),
-        ("0", False), ("false", False), ("no", False), ("NO", False),
-    ])
-    def test_env_var_resolution(self, monkeypatch, env, expected):
-        from patientpunk.llm_extract import resolve_cross_domain_fanout
-        if env is None:
-            monkeypatch.delenv("PP_CROSS_DOMAIN_FANOUT", raising=False)
-        else:
-            monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", env)
-        assert resolve_cross_domain_fanout(None) is expected
-
-    def test_explicit_argument_beats_the_env_var(self, monkeypatch):
-        from patientpunk.llm_extract import resolve_cross_domain_fanout
-        monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", "0")
-        assert resolve_cross_domain_fanout(True) is True
-
-    def test_pipeline_config_defers_so_the_env_var_still_works(self):
-        """None, not a bool: a bool here would shadow PP_CROSS_DOMAIN_FANOUT for
-        every run launched through main.py."""
-        from patientpunk.pipeline import PipelineConfig
-        assert PipelineConfig(schema_path=EXT_SCHEMA).cross_domain_fanout is None
-
-    def test_cmd_run_leaves_the_setting_unresolved(self, monkeypatch, tmp_path):
-        import argparse
-        import main as cli
-        captured = {}
-
-        def _stub_pipeline(cfg):
-            captured["cfg"] = cfg
-            return SimpleNamespace(run=lambda: SimpleNamespace(ok=True))
-
-        monkeypatch.setattr(cli, "Pipeline", _stub_pipeline)
-        schema = tmp_path / "s.json"
-        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
-                          encoding="utf-8")
-        parser = argparse.ArgumentParser()
-        sub = parser.add_subparsers(dest="command")
-        cli._add_run_parser(sub)
-        base = ["run", "--schema", str(schema), "--input-dir", str(tmp_path)]
-        with pytest.raises(SystemExit):
-            cli._cmd_run(parser.parse_args(base))
-        assert captured["cfg"].cross_domain_fanout is None
-        captured.clear()
-        with pytest.raises(SystemExit):
-            cli._cmd_run(parser.parse_args(base + ["--no-cross-domain-fanout"]))
-        assert captured["cfg"].cross_domain_fanout is False
-
-    def test_phase_1_forwards_the_setting_to_the_extractor(self, tmp_path):
-        from unittest.mock import patch
-        from patientpunk.pipeline import Pipeline, PipelineConfig
-        schema = tmp_path / "s.json"
-        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
-                          encoding="utf-8")
-        (tmp_path / "subreddit_posts.json").write_text("[]", encoding="utf-8")
-        for value in (None, True, False):
-            cfg = PipelineConfig(schema_path=schema, input_dir=tmp_path,
-                                 cross_domain_fanout=value)
-            with patch("patientpunk.pipeline.run_llm_extract") as fake:
-                fake.return_value = PhaseResult(name="llm_extract", ok=True)
-                Pipeline(cfg)._run_phase_1()
-            assert fake.call_args.kwargs["cross_domain_fanout"] is value
 
 
 class TestCrossDomainFanoutDoesNotOverRoute:
@@ -2654,26 +2587,6 @@ class TestRunProvenance:
         (g / "HEAD").write_text("c" * 40, encoding="utf-8")
         monkeypatch.setattr(_utils, "PACKAGE_ROOT", tmp_path)
         assert _utils.git_commit() == "c" * 40
-
-    def test_provenance_records_the_resolved_fanout_not_the_tristate(
-            self, tmp_path, monkeypatch):
-        """cfg carries None so the env var still works; the record must carry
-        the value the run actually used."""
-        from patientpunk.pipeline import Pipeline, PipelineConfig
-        schema = tmp_path / "s.json"
-        schema.write_text(json.dumps({"schema_id": "s", "extension_fields": {}}),
-                          encoding="utf-8")
-        (tmp_path / "subreddit_posts.json").write_text("[]", encoding="utf-8")
-        for env, expected in (("0", False), ("1", True)):
-            monkeypatch.setenv("PP_CROSS_DOMAIN_FANOUT", env)
-            cfg = PipelineConfig(schema_path=schema, input_dir=tmp_path,
-                                 run_llm=False, start_at=4, clean=False)
-            assert cfg.cross_domain_fanout is None
-            Pipeline(cfg).run()
-            prov = json.loads(
-                (tmp_path / "llm_provenance.json").read_text(encoding="utf-8"))
-            assert prov["cross_domain_fanout"] is expected
-            assert "git_commit" in prov
 
 
 class TestBatchExtraction:

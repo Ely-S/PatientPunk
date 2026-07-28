@@ -34,7 +34,7 @@ from ._utils import (clean_temp_dir, find_discovery_reports, find_newest_glob,
 from .codebook import run_codebook
 from .discover import run_discovery
 from .export_csv import run_export_csv
-from .llm_extract import resolve_cross_domain_fanout, run_llm_extract
+from .llm_extract import run_llm_extract
 from .phase import PhaseResult
 
 # Intermediate file glob patterns that live in temp_dir.
@@ -87,12 +87,6 @@ class PipelineConfig(BaseModel):
     workers: int = 10
     limit: int | None = None
     resume: bool = False
-    # Route multi-domain symptoms into every domain they belong to. Tri-state:
-    # None defers to PP_CROSS_DOMAIN_FANOUT and then to on, so the env var still
-    # works when nothing set the flag explicitly. On by default -- raw model
-    # placement is only 21% consistent (see
-    # llm_extract.fan_out_cross_domain_symptoms).
-    cross_domain_fanout: bool | None = None
 
     # Phase 2
     candidates_file: Path | None = None
@@ -223,12 +217,8 @@ class Pipeline:
 
         # Record the LLM configuration (model / provider / base_url / temperature)
         # so every output is traceable to the model + settings that produced it.
-        # The resolved value, not cfg's tri-state: None in the record would say
-        # nothing about what the run actually did.
         prov = {**llm_config(), "schema_id": self._schema_id,
                 "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode,
-                "cross_domain_fanout": resolve_cross_domain_fanout(
-                    cfg.cross_domain_fanout),
                 "git_commit": git_commit()}
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
@@ -338,7 +328,6 @@ class Pipeline:
                 workers=cfg.workers,
                 resume=cfg.resume,
                 limit=cfg.limit,
-                cross_domain_fanout=cfg.cross_domain_fanout,
             ),
         )
 

@@ -915,20 +915,6 @@ CROSS_DOMAIN_SYMPTOMS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
 )
 
 
-def resolve_cross_domain_fanout(explicit: bool | None = None) -> bool:
-    """Resolve the fan-out setting: explicit argument > env var > on.
-
-    Callers that reach run_llm_extract through PipelineConfig must pass None
-    rather than a default bool, or PP_CROSS_DOMAIN_FANOUT is shadowed and never
-    read. Kept as a named function so that precedence is testable rather than
-    restated at each call site.
-    """
-    if explicit is not None:
-        return explicit
-    return os.environ.get(
-        "PP_CROSS_DOMAIN_FANOUT", "").strip().lower() not in ("0", "false", "no")
-
-
 def fan_out_cross_domain_symptoms(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
@@ -981,20 +967,12 @@ def fan_out_cross_domain_symptoms(
 def normalize_records(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
-    *,
-    cross_domain_fanout: bool = True,
 ) -> list[dict]:
     """Wrap every field as ``{"values", "confidence"}`` and canonicalize in place.
 
     ``confidence_by_field`` maps field name -> the confidence declared for it in
     the schema; a field missing from the map falls back to "medium".
 
-    ``cross_domain_fanout`` routes multi-domain symptoms into every domain they
-    belong to (see :func:`fan_out_cross_domain_symptoms`). **On by default**: the
-    symptom domains ship in this schema version, so there is no earlier run to
-    stay comparable with, and leaving it off would make 24%-consistent domain
-    assignment the default anyone gets without knowing to ask. Pass False to
-    reproduce raw model placement.
     """
     confidence_by_field = confidence_by_field or {}
 
@@ -1234,8 +1212,7 @@ def normalize_records(
 
     # After canonicalization, so the fan-out copies canonical values ("migraines",
     # not "migraine") and one trigger covers every surface form.
-    if cross_domain_fanout:
-        fan_out_cross_domain_symptoms(records, confidence_by_field)
+    fan_out_cross_domain_symptoms(records, confidence_by_field)
 
     return records
 
@@ -1253,7 +1230,6 @@ def run_llm_extract(
     resume: bool = False,
     limit: int | None = None,
     group_guard: bool | None = None,
-    cross_domain_fanout: bool | None = None,
 ) -> PhaseResult:
     """Run LLM extraction over a corpus directory."""
     from typing import Any
@@ -1279,10 +1255,6 @@ def run_llm_extract(
 
     if group_guard is None:
         group_guard = os.environ.get("PP_GROUP_GUARD", "").strip().lower() in ("1", "true", "yes")
-    # On unless explicitly disabled -- inverse of PP_GROUP_GUARD, whose
-    # off-default exists to reproduce published pre-guard runs. No such runs
-    # exist for the symptom domains; they ship in this schema version.
-    cross_domain_fanout = resolve_cross_domain_fanout(cross_domain_fanout)
 
     out_temp = Path(temp_dir) if temp_dir else input_dir / "temp"
     out_temp.mkdir(parents=True, exist_ok=True)
@@ -1298,7 +1270,6 @@ def run_llm_extract(
     print(f"  Limit           : {limit or 'all'}")
     print(f"  Resume          : {'yes' if resume else 'no'}")
     print(f"  Group guard     : {'on' if group_guard else 'off'}")
-    print(f"  Symptom fan-out : {'on' if cross_domain_fanout else 'off'}")
     print("=" * 60 + "\n")
 
     start_time = datetime.now(timezone.utc)
@@ -1317,8 +1288,7 @@ def run_llm_extract(
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-    normalize_records(records, field_confidence(schema_path),
-                      cross_domain_fanout=cross_domain_fanout)
+    normalize_records(records, field_confidence(schema_path))
     records_file = out_temp / f"records_{schema_id}.json"
     _write_json_atomic(records_file, records)
 
@@ -1370,11 +1340,6 @@ def main(argv: list[str] | None = None) -> None:
                         help="Directory for intermediate output files.")
     parser.add_argument("--group-guard", action="store_true",
                         help="Opt-in group-attribution guard.")
-    parser.add_argument("--no-cross-domain-fanout", action="store_true",
-                        help="Disable cross-domain symptom routing (on by "
-                             "default). Reproduces raw model placement, which "
-                             "assigns multi-domain symptoms consistently only "
-                             "24%% of the time.")
     args = parser.parse_args(argv)
 
     try:
@@ -1418,7 +1383,6 @@ def main(argv: list[str] | None = None) -> None:
             resume=args.resume,
             limit=args.limit,
             group_guard=group_guard,
-            cross_domain_fanout=False if args.no_cross_domain_fanout else None,
         )
     except (FileNotFoundError, ValueError, OSError, ImportError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
