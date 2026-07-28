@@ -892,14 +892,6 @@ def normalize_records(
             "re infection": "reinfection", "re-infection": "reinfection",
             "second infection": "reinfection", "third infection": "reinfection",
         },
-        "doctor_dismissal": {
-            "gaslit": "gaslighting", "gas lit": "gaslighting",
-            "all in your head": "dismissed",
-            "all in my head": "dismissed",
-            "psychosomatic": "dismissed",
-            "it's just anxiety": "dismissed",
-            "no one believes me": "dismissed",
-        },
         "work_disability_status": {
             "can't work": "unable to work", "cannot work": "unable to work",
             "unable to work": "unable to work",
