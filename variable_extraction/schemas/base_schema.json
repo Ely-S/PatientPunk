@@ -1,5 +1,5 @@
 {
-  "_manifest_version": "2.1",
+  "_manifest_version": "3.0",
   "_description": "Manifest of PatientPunk universal base fields: descriptions, confidence tiers and ICD-10 hints. How this field set was chosen is documented in METHODS.md.",
   "_loaded_by": "Read at runtime by Schema.from_file (schema.py), the codebook generator (codebook.py), and per-field confidence lookup. The field list the extractor actually prompts on is BASE_FIELD_DESCRIPTIONS in llm_extract.py — keep the two in step; a field added here but not there is documented and never extracted.",
   "base_fields": {
@@ -91,6 +91,36 @@
       "description": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
       "confidence": "medium",
       "notes": "Renamed from symptom_trajectory. Per-symptom trajectories are not extracted separately — patients report a global illness course, and splitting it would drop each cell into single-digit fill."
+    },
+    "fatigue_pem": {
+      "description": "Fatigue, post-exertional malaise, crashes, exercise intolerance",
+      "confidence": "high",
+      "notes": "SF-36 vitality; PC-COS outcomes #1 and #3; ME/CFS CCC cardinal criterion. PEM is the delayed symptom worsening after exertion — distinct from ordinary tiredness but recorded in the same field."
+    },
+    "cognitive_neurological": {
+      "description": "Brain fog, memory and concentration problems, neuropathy, tinnitus, dizziness, headaches",
+      "confidence": "high",
+      "notes": "ME/CFS CCC neurocognitive criterion"
+    },
+    "cardiovascular_autonomic": {
+      "description": "POTS symptoms, palpitations, orthostatic intolerance, temperature dysregulation",
+      "confidence": "medium",
+      "notes": "ME/CFS CCC autonomic criterion. Records the symptom even when the patient also names POTS as a diagnosis in `conditions`."
+    },
+    "pain": {
+      "description": "Pain anywhere the patient reports it, whatever the site — joint, muscle, chest, nerve, head, abdominal, pelvic, throat, ear, back",
+      "confidence": "high",
+      "notes": "The only symptom domain present in all six frameworks"
+    },
+    "sleep": {
+      "description": "Insomnia, hypersomnia, unrefreshing sleep, sleep-cycle disruption",
+      "confidence": "high",
+      "notes": "PC-COS outcome #8; ME/CFS CCC sleep criterion"
+    },
+    "other_symptoms": {
+      "description": "Symptoms outside the five domains above — respiratory, gastrointestinal, skin, hair loss, vision",
+      "confidence": "medium",
+      "notes": "Catch-all. PROMIS covers the GI subset. Watch this field's value distribution across runs — a domain that keeps recurring here is a candidate for promotion to its own field."
     }
   },
   "base_optional_fields": {
