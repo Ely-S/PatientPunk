@@ -2385,6 +2385,51 @@ class TestSymptomDecomposition:
         assert out["cognitive_neurological"]["values"] == ["migraines"]
 
 
+class TestClosedVocabularies:
+    """illness_trajectory and functional_status_tier accept only their declared
+    values. Anything else is dropped rather than coerced into one."""
+
+    def test_functional_status_never_leaks_into_trajectory(self):
+        """A functional-status value in the trajectory field is dropped, not
+        mapped onto a trajectory label."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"illness_trajectory": ["bedbound", "housebound"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["illness_trajectory"]["values"] == []
+        assert out["illness_trajectory"]["confidence"] is None
+
+    def test_every_trajectory_output_is_in_the_allowed_set(self):
+        from patientpunk.llm_extract import normalize_records, ILLNESS_TRAJECTORY_VALUES
+        probes = [
+            "getting worse", "worse", "deteriorating", "declining", "severe decline",
+            "getting better", "improved", "recovery", "back to normal",
+            "fully recovered", "partially recovered", "relapse",
+            "relapsing-remitting", "flare", "fluctuating", "plateau",
+            "unchanged", "same", *ILLNESS_TRAJECTORY_VALUES,
+            "bedbound", "housebound", "who knows", "60% better", "up and down",
+        ]
+        out = normalize_records([{"fields": {"illness_trajectory": probes}}])[0]
+        assert set(out["fields"]["illness_trajectory"]["values"]) <= ILLNESS_TRAJECTORY_VALUES
+
+    def test_functional_status_tier_is_also_closed(self):
+        from patientpunk.llm_extract import normalize_records, FUNCTIONAL_STATUS_VALUES
+        rec = {"fields": {"functional_status_tier": ["bed bound", "worsening", "very severe"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert set(out["functional_status_tier"]["values"]) <= FUNCTIONAL_STATUS_VALUES
+        assert "bedbound" in out["functional_status_tier"]["values"]
+
+    def test_tiers_are_operationalised_not_just_listed(self, base_prompt):
+        """Each tier carries a definition, and a patient who gives both a current
+        and a worst level is coded at the current one."""
+        rule = field_rule(base_prompt, "functional_status_tier")
+        from patientpunk.llm_extract import FUNCTIONAL_STATUS_VALUES
+        for tier in FUNCTIONAL_STATUS_VALUES:
+            assert tier in rule
+        assert "cannot get out of bed" in rule
+        assert "cannot leave it" in rule
+        assert "code the CURRENT one" in rule
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""
