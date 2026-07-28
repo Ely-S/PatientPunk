@@ -2311,6 +2311,83 @@ class TestIllnessMarkerRenames:
         assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
 
 
+SYMPTOM_DOMAINS = [
+    "fatigue_pem", "cognitive_neurological", "cardiovascular_autonomic",
+    "pain", "sleep", "other_symptoms",
+]
+
+
+class TestSymptomDecomposition:
+    """The flat `symptoms` field was the densest in the corpus and the least
+    useful for clustering: one bag of free text with no internal structure."""
+
+    def test_domains_are_base_fields(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        for field in SYMPTOM_DOMAINS:
+            assert field in BASE_FIELD_DESCRIPTIONS
+
+    def test_flat_symptoms_field_is_gone(self):
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        assert "symptoms" not in set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
+
+    def test_prompt_states_the_cross_listing_rule(self):
+        """Cross-listing is the one instruction a model would otherwise get
+        wrong by default, so assert it survives prompt edits."""
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "CROSS-LISTING" in prompt
+        assert "goes in EVERY domain it belongs to" in prompt
+        for field in SYMPTOM_DOMAINS:
+            assert field in prompt
+
+    def test_conditions_symptom_boundary_is_stated(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "Symptoms belong in the six symptom-domain fields" in prompt
+
+    def test_extraction_tier_preserves_clinically_distinct_wording(self):
+        """records_*.json is the archival output and the prompt asks for the
+        patient's own words, so concept-level merges must not happen here --
+        vertigo is not dizziness and air hunger is not shortness of breath."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {
+            "cognitive_neurological": ["vertigo", "cognitive dysfunction"],
+            "other_symptoms": ["air hunger"], "fatigue_pem": ["exhaustion"],
+            "pain": ["myalgia"],
+        }}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["vertigo", "cognitive dysfunction"]
+        assert out["other_symptoms"]["values"] == ["air hunger"]
+        assert out["fatigue_pem"]["values"] == ["exhaustion"]
+        assert out["pain"]["values"] == ["myalgia"]
+
+    def test_extraction_tier_still_fixes_surface_forms(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"fatigue_pem": ["Post-Exertional Malaise"],
+                          "cognitive_neurological": ["brainfog", "migraine"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["fatigue_pem"]["values"] == ["pem"]
+        assert out["cognitive_neurological"]["values"] == ["brain fog", "migraines"]
+
+    def test_clustering_tier_merges_those_concepts(self):
+        """The merges deliberately absent from extraction must exist where low
+        cardinality matters more than the patient's exact wording."""
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("cognitive_neurological", "vertigo") == "dizziness"
+        assert normalize_value("other_symptoms", "air hunger") == "shortness_of_breath"
+        assert normalize_value("fatigue_pem", "exhaustion") == "fatigue"
+        assert normalize_value("pain", "myalgia") == "muscle_pain"
+
+    def test_cross_listed_symptom_kept_in_every_domain(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraine"], "cognitive_neurological": ["migraine"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+
+
 class TestBatchExtraction:
     """Regression coverage for the batched-extraction parse path (was silently
     dropping ~half of records). Mocks the LLM call -- no API needed."""

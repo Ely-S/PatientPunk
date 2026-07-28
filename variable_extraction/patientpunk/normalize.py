@@ -92,6 +92,91 @@ FIELD_VOCAB: dict[str, dict[str, list[str]]] = {
                                "limited activity", "mild"],
         "severe_unspecified": ["severe", "very severe", "profound"],
     },
+    # Symptom domains. Collapsed harder than the extraction-side maps in
+    # llm_extract because clustering needs low cardinality more than it needs
+    # the patient's exact wording -- the raw values stay in the records file.
+    "fatigue_pem": {
+        "pem": ["pem", "post-exertional malaise", "post exertional malaise",
+                "post-exertional", "pese", "crash", "crashes", "crashing", "payback"],
+        "fatigue": ["fatigue", "exhaustion", "tired", "tiredness", "severe fatigue",
+                    "extreme fatigue", "debilitating fatigue"],
+        "exercise_intolerance": ["exercise intolerance", "can't exercise",
+                                 "activity intolerance"],
+    },
+    "cognitive_neurological": {
+        "brain_fog": ["brain fog", "brainfog", "cognitive dysfunction",
+                      "cognitive impairment", "mental fog", "cognitive issues"],
+        "memory_problems": ["memory problems", "memory loss", "memory issues",
+                            "poor memory", "forgetfulness"],
+        "concentration_problems": ["poor concentration", "difficulty concentrating",
+                                   "trouble concentrating", "can't focus", "attention problems"],
+        "word_finding": ["word-finding difficulty", "word finding", "aphasia"],
+        "neuropathy": ["neuropathy", "numbness", "tingling", "pins and needles",
+                       "small fiber neuropathy", "paresthesia"],
+        "tinnitus": ["tinnitus", "ringing in ears", "ear ringing"],
+        "dizziness": ["dizziness", "dizzy", "lightheaded", "lightheadedness", "vertigo"],
+        "headaches": ["headaches", "headache", "migraines", "migraine"],
+    },
+    "cardiovascular_autonomic": {
+        "palpitations": ["palpitations", "heart palpitations", "irregular heartbeat"],
+        "tachycardia": ["tachycardia", "racing heart", "heart racing", "rapid heart rate",
+                        "high heart rate"],
+        "orthostatic_intolerance": ["orthostatic intolerance", "oi",
+                                    "orthostatic hypotension", "can't stand up",
+                                    "dizzy standing", "blood pooling"],
+        "temperature_dysregulation": ["temperature dysregulation", "temperature regulation",
+                                      "heat intolerance", "cold intolerance", "night sweats"],
+        "blood_pressure_instability": ["blood pressure instability", "blood pressure swings",
+                                       "low blood pressure", "high blood pressure"],
+        "adrenaline_dumps": ["adrenaline dumps", "adrenaline dump", "adrenaline surges"],
+    },
+    "pain": {
+        "joint_pain": ["joint pain", "joint pains", "arthralgia"],
+        "muscle_pain": ["muscle pain", "muscle pains", "myalgia", "muscle aches"],
+        "chest_pain": ["chest pain", "chest pains", "chest tightness"],
+        "nerve_pain": ["nerve pain", "neuropathic pain", "burning pain"],
+        "headaches": ["headaches", "headache", "migraines", "migraine"],
+        "body_aches": ["body aches", "body ache", "aches", "generalized pain",
+                       "widespread pain"],
+    },
+    "sleep": {
+        "insomnia": ["insomnia", "can't sleep", "cannot sleep", "trouble sleeping",
+                     "sleeplessness"],
+        "unrefreshing_sleep": ["unrefreshing sleep", "non-restorative sleep",
+                               "unrefreshed sleep", "sleep doesn't refresh"],
+        "hypersomnia": ["hypersomnia", "oversleeping", "sleeping too much",
+                        "excessive sleep"],
+        "sleep_cycle_disruption": ["sleep cycle disruption", "reversed sleep cycle",
+                                   "sleep schedule", "circadian disruption"],
+        "sleep_apnea": ["sleep apnea", "sleep apnoea"],
+    },
+    # Deliberately coarse: other_symptoms is the catch-all, so it buckets by body
+    # system and lets everything else pass through tidied. A bucket that keeps
+    # growing is the signal to promote it to its own field.
+    "other_symptoms": {
+        "shortness_of_breath": ["shortness of breath", "sob", "breathlessness",
+                                "air hunger", "dyspnea", "breathing problems"],
+        "gi_problems": ["gi problems", "gi issues", "gi symptoms", "digestive issues",
+                        "stomach issues", "nausea", "bloating", "ibs", "diarrhea",
+                        "constipation", "acid reflux"],
+        "skin_problems": ["rashes", "rash", "skin rash", "hives", "itching",
+                          "skin problems"],
+        "hair_loss": ["hair loss", "hair falling out", "hair thinning"],
+        "vision_changes": ["vision changes", "blurry vision", "vision problems",
+                           "eye floaters", "light sensitivity"],
+        "sensory_sensitivity": ["sensory sensitivity", "noise sensitivity",
+                                "sound sensitivity", "smell sensitivity"],
+    },
+    "functional_status_tier": {
+        # ordinal severity (see FUNCTIONAL_RANK below)
+        "bedbound": ["bedbound", "bedridden", "bed bound", "mostly in bed"],
+        "housebound": ["housebound", "homebound", "house bound", "can't leave home"],
+        "mobility_limited": ["wheelchair", "rollator", "mobility aid", "walker",
+                             "mobility scooter", "cane"],
+        "ambulatory_limited": ["working part time", "part time", "reduced hours",
+                               "limited activity", "mild"],
+        "severe_unspecified": ["severe", "very severe", "profound"],
+    },
 }
 
 # Ordinal rank for the severity field (higher = more severe). Useful if you want
