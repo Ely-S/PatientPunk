@@ -1,0 +1,644 @@
+{
+  "timestamp": "20260728T032402Z",
+  "label": "baseline",
+  "model": "deepseek/deepseek-v4-flash",
+  "schema": null,
+  "group_guard": false,
+  "n_records": 20,
+  "field_scores": {
+    "age": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "agreement_present": 1.0,
+      "n_present": 3,
+      "ref_fill": 3,
+      "cand_fill": 3
+    },
+    "age_at_onset": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "agreement_present": 1.0,
+      "n_present": 1,
+      "ref_fill": 1,
+      "cand_fill": 1
+    },
+    "conditions": {
+      "precision": 0.435,
+      "recall": 0.667,
+      "f1": 0.526,
+      "agreement_present": 0.375,
+      "n_present": 16,
+      "ref_fill": 11,
+      "cand_fill": 16
+    },
+    "dosage": {
+      "precision": 0.143,
+      "recall": 1.0,
+      "f1": 0.25,
+      "agreement_present": 0.0,
+      "n_present": 5,
+      "ref_fill": 1,
+      "cand_fill": 5
+    },
+    "location_country": {
+      "precision": 0.333,
+      "recall": 0.5,
+      "f1": 0.4,
+      "agreement_present": 0.333,
+      "n_present": 3,
+      "ref_fill": 2,
+      "cand_fill": 3
+    },
+    "medications": {
+      "precision": 0.209,
+      "recall": 0.9,
+      "f1": 0.34,
+      "agreement_present": 0.1,
+      "n_present": 10,
+      "ref_fill": 5,
+      "cand_fill": 10
+    },
+    "mental_health": {
+      "precision": 0.6,
+      "recall": 0.9,
+      "f1": 0.72,
+      "agreement_present": 0.5,
+      "n_present": 10,
+      "ref_fill": 7,
+      "cand_fill": 9
+    },
+    "onset_trigger": {
+      "precision": 0.154,
+      "recall": 0.222,
+      "f1": 0.182,
+      "agreement_present": 0.167,
+      "n_present": 12,
+      "ref_fill": 9,
+      "cand_fill": 11
+    },
+    "prior_infections": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "agreement_present": 0.0,
+      "n_present": 8,
+      "ref_fill": 2,
+      "cand_fill": 8
+    },
+    "procedures": {
+      "precision": 0.857,
+      "recall": 0.857,
+      "f1": 0.857,
+      "agreement_present": 0.6,
+      "n_present": 5,
+      "ref_fill": 4,
+      "cand_fill": 4
+    },
+    "sex_gender": {
+      "precision": 0.667,
+      "recall": 1.0,
+      "f1": 0.8,
+      "agreement_present": 0.667,
+      "n_present": 3,
+      "ref_fill": 2,
+      "cand_fill": 3
+    },
+    "symptom_duration": {
+      "precision": 0.583,
+      "recall": 0.875,
+      "f1": 0.7,
+      "agreement_present": 0.636,
+      "n_present": 11,
+      "ref_fill": 8,
+      "cand_fill": 11
+    },
+    "symptom_trajectory": {
+      "precision": 0.714,
+      "recall": 0.833,
+      "f1": 0.769,
+      "agreement_present": 0.714,
+      "n_present": 7,
+      "ref_fill": 6,
+      "cand_fill": 7
+    },
+    "treatment_outcome": {
+      "precision": 0.147,
+      "recall": 0.5,
+      "f1": 0.227,
+      "agreement_present": 0.0,
+      "n_present": 10,
+      "ref_fill": 4,
+      "cand_fill": 9
+    },
+    "work_disability_status": {
+      "precision": 0.333,
+      "recall": 0.333,
+      "f1": 0.333,
+      "agreement_present": 0.25,
+      "n_present": 4,
+      "ref_fill": 3,
+      "cand_fill": 3
+    }
+  },
+  "mismatches": [
+    {
+      "post_id": "t3_nma566",
+      "field": "conditions",
+      "gold": "long covid | gerd | lpr",
+      "candidate": "long COVID",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_nma566",
+      "field": "dosage",
+      "gold": "",
+      "candidate": "Omeprazole 20 mg",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_nma566",
+      "field": "medications",
+      "gold": "",
+      "candidate": "Famotidine | Omeprazole | Sterimar nasal spray",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_nma566",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "COVID-19",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_nma566",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID-19",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_nma566",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "Famotidine: no_effect",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_cvrjvu",
+      "field": "mental_health",
+      "gold": "",
+      "candidate": "medical trauma",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_cvrjvu",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "since February",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_vkkcui",
+      "field": "onset_trigger",
+      "gold": "infection",
+      "candidate": "",
+      "kind": "MISS"
+    },
+    {
+      "post_id": "t3_vkkcui",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "exercise: helped: deconditioning",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "dosage",
+      "gold": "60 mg",
+      "candidate": "60 mg | 10 mg",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "medications",
+      "gold": "cymbalta | quetiapine",
+      "candidate": "Cymbalta | Quetiapine | trintellix | Zoloft | pregabalin | fluvoxamine | Prozac | Paxil | ADHD meds",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "onset_trigger",
+      "gold": "covid",
+      "candidate": "COVID-19",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID-19",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "procedures",
+      "gold": "psychiatric hospitalization",
+      "candidate": "",
+      "kind": "MISS"
+    },
+    {
+      "post_id": "t3_um93jm",
+      "field": "treatment_outcome",
+      "gold": "cymbalta: helped: nerve pain | cymbalta: helped: anxiety | cymbalta: helped: suicidal ideation",
+      "candidate": "Cymbalta: helped: nerve pain | Cymbalta: helped: anxiety | Cymbalta: helped: suicidal ideation | trintellix: helped: fatigue | trintellix: helped: brain fog | Cymbalta: worsened: suicidal ideation | Cymbalta: no_effect: long haul symptoms | fluvoxamine: helped",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_thegh9",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "ME/CFS",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_thegh9",
+      "field": "location_country",
+      "gold": "",
+      "candidate": "UK",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_mlhu8d",
+      "field": "conditions",
+      "gold": "long covid",
+      "candidate": "long COVID | histamine intolerance",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_mlhu8d",
+      "field": "medications",
+      "gold": "",
+      "candidate": "antihistamine",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_mlhu8d",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_mlhu8d",
+      "field": "symptom_duration",
+      "gold": "1 year",
+      "candidate": "almost a year",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_kmnxog",
+      "field": "onset_trigger",
+      "gold": "infection",
+      "candidate": "COVID-19 infection",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_kmnxog",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID-19",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "medications",
+      "gold": "",
+      "candidate": "vitamin B complex",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "onset_trigger",
+      "gold": "covid",
+      "candidate": "COVID infection",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "prior_infections",
+      "gold": "covid-19",
+      "candidate": "COVID",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "symptom_trajectory",
+      "gold": "relapsing",
+      "candidate": "mixed",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "vitamin B complex: no_effect",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "anhedonia | long COVID | depression | CFS",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "medications",
+      "gold": "",
+      "candidate": "Mirapex | ayahuasca",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "mental_health",
+      "gold": "anhedonia",
+      "candidate": "anhedonia | depression | loss of emotion",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "infection | sinus infection | COVID",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID | Spanish flu | sinus infection",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "Mirapex: unknown | ayahuasca: helped: mood | rest: helped: mood",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_11c65ge",
+      "field": "onset_trigger",
+      "gold": "covid",
+      "candidate": "COVID-19",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_6ygbyh",
+      "field": "mental_health",
+      "gold": "emotional instability",
+      "candidate": "",
+      "kind": "MISS"
+    },
+    {
+      "post_id": "t3_l29wd1",
+      "field": "conditions",
+      "gold": "me/cfs",
+      "candidate": "CFS",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_l29wd1",
+      "field": "location_country",
+      "gold": "united states",
+      "candidate": "USA",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_l29wd1",
+      "field": "work_disability_status",
+      "gold": "student",
+      "candidate": "",
+      "kind": "MISS"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "conditions",
+      "gold": "me/cfs",
+      "candidate": "chronic fatigue syndrome",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "dosage",
+      "gold": "",
+      "candidate": "600 mg",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "medications",
+      "gold": "",
+      "candidate": "potassium citrate",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "procedures",
+      "gold": "",
+      "candidate": "blood tests",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "sex_gender",
+      "gold": "",
+      "candidate": "male",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "work_disability_status",
+      "gold": "",
+      "candidate": "wants to quit job",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "GERD | gastritis",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "dosage",
+      "gold": "",
+      "candidate": "40 mg | 40 mg",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "medications",
+      "gold": "milk of magnesia | probiotic",
+      "candidate": "baking soda | milk of magnesia | probiotics | Pepcid | fiber | digestive enzymes | Nexium | colestyramine | Colestipol | Welchol | klonopin | PPI | famotidine | magnesium | Yakult Probiotics",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "mental_health",
+      "gold": "",
+      "candidate": "anxiety",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "COVID",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "8 months | since March 2020",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "symptom_trajectory",
+      "gold": "",
+      "candidate": "relapsing-remitting",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_tc5p1a",
+      "field": "treatment_outcome",
+      "gold": "baking soda: helped: heartburn | milk of magnesia: helped: constipation",
+      "candidate": "baking soda: helped: heartburn | milk of magnesia: helped: constipation | probiotics: mixed | fiber: worsened: diarrhea | Pepcid: helped: acid reflux | colestyramine: helped: diarrhea | klonopin: helped: gut issues | PPI: helped: nausea | famotidine: helped: nausea | Yakult Probiotics: helped: GI issues",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15e9j7b",
+      "field": "conditions",
+      "gold": "me/cfs",
+      "candidate": "CFS",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15e9j7b",
+      "field": "dosage",
+      "gold": "",
+      "candidate": "10 mg | 5 mg",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_15e9j7b",
+      "field": "medications",
+      "gold": "amitriptyline",
+      "candidate": "Amitriptyline | Venlafaxine | Cymbalta",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_15e9j7b",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "3 weeks",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_15e9j7b",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "Amitriptyline: mixed | Cymbalta: worsened",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_d0jyeu",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "chronic fatigue",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_d0jyeu",
+      "field": "medications",
+      "gold": "ssri",
+      "candidate": "St. John's Wort | SSRI | Wellbutrin | Bupropion",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_d0jyeu",
+      "field": "mental_health",
+      "gold": "",
+      "candidate": "anxiety | depression",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_d0jyeu",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "St. John's Wort: no_effect: anxiety | St. John's Wort: worsened: fatigue | St. John's Wort: worsened: insomnia | St. John's Wort: worsened: psychiatric symptoms | Wellbutrin: helped: energy",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_qd4asl",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "vaccine",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_qd4asl",
+      "field": "work_disability_status",
+      "gold": "applying for short-term disability",
+      "candidate": "applying for disability",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_156wgqv",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "dysautonomia",
+      "kind": "EXTRA"
+    },
+    {
+      "post_id": "t3_156wgqv",
+      "field": "onset_trigger",
+      "gold": "covid",
+      "candidate": "COVID-19",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_156wgqv",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "COVID-19",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_156wgqv",
+      "field": "treatment_outcome",
+      "gold": "stretching and massage: mixed: numbness",
+      "candidate": "",
+      "kind": "MISS"
+    },
+    {
+      "post_id": "t3_11l86xh",
+      "field": "onset_trigger",
+      "gold": "booster",
+      "candidate": "COVID booster",
+      "kind": "DIFF"
+    },
+    {
+      "post_id": "t3_11l86xh",
+      "field": "treatment_outcome",
+      "gold": "antihistamines: no_effect | pepcid: no_effect | quercetin: no_effect | dao: no_effect",
+      "candidate": "Pepcid: no_effect: itching/tingling | quercetin: no_effect: itching/tingling | DAO: no_effect: itching/tingling",
+      "kind": "DIFF"
+    }
+  ]
+}
