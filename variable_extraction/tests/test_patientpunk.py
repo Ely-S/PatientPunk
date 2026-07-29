@@ -1955,15 +1955,15 @@ class TestActiveExtractorTextCollection:
 class TestSubredditProvenance:
     def test_aggregate_counts_the_communities_each_patient_wrote_in(self):
         from patientpunk.aggregate import aggregate_corpus_by_author
-        posts = [{"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
-                 {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
-                 {"author_hash": "a", "title": "t", "body": "b", "subreddit": "clh",
-                  "comments": [{"author_hash": "b", "body": "reply"}]},
-                 {"author_hash": "c", "title": "t", "body": "b"}]
+        posts = [{"author_hash": "a", "body": "x", "subreddit": "cfs"},
+                 {"author_hash": "a", "body": "x", "subreddit": "cfs"},
+                 {"author_hash": "a", "body": "x", "subreddit": "clh",
+                  "comments": [{"author_hash": "b", "body": "x"}]},
+                 {"author_hash": "c", "body": "x"}]
         got = {p["author_hash"]: p["subreddits"]
                for p in aggregate_corpus_by_author(posts, min_items=1)[0]}
         assert got["a"] == "cfs:2 clh:1"   # counted per community
-        assert got["b"] == "clh:1"         # commenter credited where they commented
+        assert got["b"] == "clh:1"         # commenter credited to where they wrote
         assert got["c"] == ""              # absent subreddit not guessed
 
     def test_it_reaches_the_csv_row(self):
@@ -1976,13 +1976,10 @@ class TestSubredditProvenance:
     def test_every_metadata_column_is_known_downstream(self):
         """A column export_csv writes but a consumer does not know is read as an
         extracted field -- clustered on, loaded as a variable, scored."""
-        from patientpunk.cluster_prep import DEFAULT_META
-        from patientpunk.codebook import META_COLUMNS as codebook_meta
-        from patientpunk.db import VARIABLE_META_COLUMNS
-        from patientpunk.evaluate import _META
-        from patientpunk.export_csv import META_COLUMNS
-        for known in (DEFAULT_META, VARIABLE_META_COLUMNS, _META, codebook_meta):
-            assert not [c for c in META_COLUMNS if c not in known]
+        from patientpunk import cluster_prep, codebook, db, evaluate, export_csv
+        for known in (cluster_prep.DEFAULT_META, db.VARIABLE_META_COLUMNS,
+                      evaluate._META, codebook.META_COLUMNS):
+            assert set(export_csv.META_COLUMNS) <= known
 
 
 class TestAggregateByAuthor:
