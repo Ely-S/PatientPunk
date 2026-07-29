@@ -71,67 +71,58 @@ without discarding most of the corpus.
 > `created_utc`, because it spans many posts. Drift work (how one patient's reports
 > move over months) needs a separate posts-only run. That is not this run.
 
-## 1 · Setup
+## Steps 1–5 · Setup to run
+
+Copy the whole block. Everything except the final command is safe to paste and run
+as-is; the real run is left commented out so it does not start before you have
+looked at the ten-record test.
 
 ```bash
-uv sync                                   # from the repo root
-cp .env.example .env                      # then add ANTHROPIC_API_KEY or OPENROUTER_API_KEY
+# ---------------------------------------------------------------- 1 · setup
+uv sync                                              # from the repo root
+cp .env.example .env                                 # then edit: add ANTHROPIC_API_KEY
+                                                     # (or OPENROUTER_API_KEY)
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
-```
 
-## 2 · Convert to a corpus
+# ------------------------------------------------------------- 2 · convert
+# See what is in the database before converting any of it.
+python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
 
-```bash
-python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list   # what is in there
-
+# Every subreddit, hashing usernames on the way -- raw handles are in the
+# database and must not reach records.csv. Writes output/subreddit_posts.json.
+#   --subreddit NAME [NAME ...]   restrict to some, for a single-community run
+#   --since / --until YYYY-MM-DD  filter posts AND comments by their own
+#                                 timestamp, so a narrow window leaves comments
+#                                 whose parent post falls outside it; those are
+#                                 reported as orphans and still become patients
 python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --out-dir output
-```
 
-Exports every subreddit by default. Writes `output/subreddit_posts.json`, hashing
-every username on the way — raw handles are in the database and must not reach
-`records.csv`.
-
-`--subreddit NAME [NAME ...]` narrows it, for a deliberately single-community run.
-`--since` / `--until` take `YYYY-MM-DD` and filter posts *and* comments by their own
-timestamp, so a narrow window leaves comments whose parent post falls outside it.
-Those are reported as orphan comments; they still become patients via `aggregate`.
-
-## 3 · Aggregate
-
-```bash
+# ----------------------------------------------------------- 3 · aggregate
+# One record per patient rather than per post. This is what turns 4,996 posts
+# and 65,046 comments into 4,209 patients, and it is the only way a
+# comment-only patient is captured at all -- extraction reads title+body.
 cd variable_extraction
 python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
+
+# ---------------------------------------------------------------- 4 · test
+# Ten records first. Responses are cached under cache/ at the repo root (on by
+# default), so these ten are not billed again in the real run.
+python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient --limit 10
+
+# Now open ../output_perpatient/records.csv and check it looks sane.
+
+# ------------------------------------------------------------ 5 · real run
+# BATCH_SIZE = 1, so this is one LLM call per patient -- roughly 144,000 for
+# the full corpus at --min-items 3. The README's "~$0.10-0.50" is for a
+# 220-post corpus and does not transfer. Multiply what the ten cost.
+#
+# Uncomment when the test above looks right:
+#
+# python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient --workers 10
 ```
 
-This is the step that turns 4,996 posts and 65,046 comments into 4,209 patients.
-Skip it only for the drift case noted above.
-
-## 4 · Test on ten records first
-
-```bash
-python main.py run --schema schemas/covidlonghaulers_schema.json \
-  --input-dir ../output_perpatient --limit 10
-```
-
-Check `../output_perpatient/records.csv` looks sane before the real run. Responses
-are cached under `cache/` at the repo root, on by default, so these ten are not
-re-billed later.
-
-## 5 · The real run
-
-```bash
-python main.py run --schema schemas/covidlonghaulers_schema.json \
-  --input-dir ../output_perpatient --workers 10
-```
-
-**Scale, so it is not a surprise.** `BATCH_SIZE = 1`, so this is one LLM call per
-record. Posts-only on the full covidlonghaulers corpus is 118,675 calls; aggregated
-at `--min-items 3` it projects to roughly 144,000 patients from the one-month yield.
-The README's "~$0.10–0.50" is for a 220-post corpus and does not apply here — do the
-`--limit 10` run first and multiply.
-
-Interrupted runs resume with `--resume`. The cache means a re-run over already-seen
-records costs nothing.
+Interrupted runs resume with `--resume`. The cache means re-running over
+already-seen records costs nothing.
 
 ## 6 · What you get
 
