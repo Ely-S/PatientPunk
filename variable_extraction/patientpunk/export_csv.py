@@ -140,6 +140,7 @@ def build_csv_row(
         "source": meta.get("source") or "",
         "post_id": meta.get("post_id") or "",
         "text_count": str(meta.get("text_count") or ""),
+        "subreddits": meta.get("subreddits") or "",
         "schema_id": rec.get("_schema_id") or "",
         "extraction_method": rec.get("_extraction_method") or "",
         "extracted_at": rec.get("_extracted_at") or "",

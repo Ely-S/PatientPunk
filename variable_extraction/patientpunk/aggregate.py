@@ -55,7 +55,7 @@ def aggregate_corpus_by_author(
     back to.
     """
     segments: dict[str, list[str]] = defaultdict(list)
-    subs: dict[str, Counter] = defaultdict(Counter)
+    subreddit_counts: dict[str, Counter] = defaultdict(Counter)
     n_posts = 0
     n_comments = 0
     for post in posts:
@@ -64,20 +64,21 @@ def aggregate_corpus_by_author(
         title = _keep(post.get("title"))
         body = _keep(post.get("body"))
         block = "\n\n".join(t for t in (title, body) if t)
-        sub = (post.get("subreddit") or "").strip()
+        post_subreddit = (post.get("subreddit") or "").strip()
         if pa and block:
             segments[pa].append(block)
-            if sub:
-                subs[pa][sub] += 1
+            if post_subreddit:
+                subreddit_counts[pa][post_subreddit] += 1
         for comment in post.get("comments") or []:
             n_comments += 1
             ca = (comment.get("author_hash") or "").strip()
             cb = _keep(comment.get("body"))
             if ca and cb:
                 segments[ca].append(cb)
-                csub = (comment.get("subreddit") or sub).strip()
-                if csub:
-                    subs[ca][csub] += 1
+                comment_subreddit = (
+                    comment.get("subreddit") or post_subreddit).strip()
+                if comment_subreddit:
+                    subreddit_counts[ca][comment_subreddit] += 1
 
     out: list[dict] = []
     dropped = 0
@@ -94,7 +95,8 @@ def aggregate_corpus_by_author(
             "num_comments": 0,
             "n_items": len(segs),
             "subreddits": " ".join(
-                f"{name}:{n}" for name, n in subs[author].most_common()),
+                f"{name}:{count}"
+                for name, count in subreddit_counts[author].most_common()),
             "aggregated": True,
         })
 

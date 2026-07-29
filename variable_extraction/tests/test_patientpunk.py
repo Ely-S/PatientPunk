@@ -1990,6 +1990,17 @@ class TestSubredditProvenance:
             subreddits="covidlonghaulers:3 cfs:1")
         assert rec["record_meta"]["subreddits"] == "covidlonghaulers:3 cfs:1"
 
+    def test_it_reaches_the_csv_row(self):
+        """Listing it in META_COLUMNS only reserves the column -- build_csv_row
+        has to copy it there too, or the column ships empty."""
+        from patientpunk.export_csv import build_csv_row
+        row = build_csv_row(
+            {"record_meta": {"author_hash": "a", "post_id": "p1",
+                             "subreddits": "cfs:5 covidlonghaulers:2"},
+             "fields": {}},
+            field_names=[], sep=" | ", include_confidence=False)
+        assert row["subreddits"] == "cfs:5 covidlonghaulers:2"
+
     def test_it_is_a_metadata_column_not_an_extracted_field(self):
         from patientpunk.export_csv import META_COLUMNS
         assert "subreddits" in META_COLUMNS
