@@ -36,19 +36,29 @@ uv sync
 # 2. Add your Anthropic API key to the project root .env
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
-# 3. Full pipeline run (LLM extraction + CSV + codebook)
-#    NOTE: raw post extraction uses each post's title + body ONLY (a post record
-#    belongs to the post author). For comment-heavy / subreddit corpora, run
-#    `python main.py aggregate ...` first so commenters are captured as their own
-#    patients -- otherwise comment-only evidence is intentionally skipped.
+# 3. Scrape a corpus. Not a main.py subcommand -- run it from the repo root.
+#    Writes ../output/subreddit_posts.json, which every step below reads.
+uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
+
+# 4. Comment-heavy corpus? Fold each author's posts and comments into one
+#    synthetic post FIRST. Extraction reads title + body only, so a patient who
+#    only ever commented is skipped otherwise. Writes a NEW directory.
+python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
+
+# 5. Full pipeline run (LLM extraction + CSV + codebook).
+#    Defaults to ../output; point it at the aggregated dir if you ran step 4.
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
-# 4. LLM-only demographics (age / sex / location, deductive + inductive)
+# 6. LLM-only demographics (age / sex / location, deductive + inductive)
 python main.py demographics --input-dir ../output
 
-# 5. Inspect the schema without running anything
+# 7. Inspect the schema without running anything
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
 ```
+
+Steps 1–3 are the minimum to get from nothing to a corpus on disk; step 5 is the
+one that produces `records.csv`. Everything else is optional. Full scraper flags
+are in [`../Scrapers/SCRAPER_HELP.md`](../Scrapers/SCRAPER_HELP.md).
 
 ---
 
@@ -296,11 +306,12 @@ keeps the full emergent tail.
 
 ## CLI Reference
 
-Every command is `python main.py <command>`. Full list, in the order you would
-reach for them:
+Every command below is `python main.py <command>`, run from `variable_extraction/`.
+Full list, in the order you would reach for them:
 
 | Command | What it does |
 |---|---|
+| `Scrapers/scrape_corpus.py` | **Not a subcommand.** Run from the repo root to produce the corpus everything else reads — see [Quick Start](#quick-start) |
 | [`corpus`](#corpus--corpus-statistics) | Print corpus statistics |
 | [`inspect`](#inspect--schema-introspection) | Inspect a schema file |
 | [`aggregate`](#aggregate--collapse-postscomments-into-one-synthetic-post-per-author) | Collapse a posts+comments corpus into one synthetic post per author |
