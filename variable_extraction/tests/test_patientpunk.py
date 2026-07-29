@@ -1978,6 +1978,12 @@ class TestSubredditProvenance:
         posts = [{"author_hash": "a", "title": "t", "body": "b"}]
         assert self._agg(posts)["a"] == ""
 
+    def test_a_single_post_uses_the_same_name_count_shape(self):
+        from patientpunk.llm_extract import _process_one
+        item = {"post_id": "t3_a", "title": "t", "body": "b",
+                "author_hash": "a" * 64, "subreddit": "covidlonghaulers"}
+        assert _process_one("post", item, "sys", None)["subreddits"] ==             "covidlonghaulers:1"
+
     def test_extraction_record_carries_it(self):
         from patientpunk.llm_extract import build_llm_record
         from patientpunk.llm_schema import LLMExtraction

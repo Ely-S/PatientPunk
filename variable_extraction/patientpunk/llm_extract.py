@@ -497,7 +497,10 @@ def _process_one(
         author_hash = item.get("author_hash", "unknown")
         source = "subreddit_post"
         post_id = item.get("post_id")
-        subreddits = item.get("subreddits") or item.get("subreddit") or ""
+        # One post is one segment from one community, so it takes the same
+        # name:count shape an aggregated record uses.
+        one = (item.get("subreddit") or "").strip()
+        subreddits = item.get("subreddits") or (f"{one}:1" if one else "")
 
     if not texts or all(not t.strip() for t in texts):
         return {"_skipped": True, "reason": "no_text", "author_hash": author_hash, "post_id": post_id}
