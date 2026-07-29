@@ -31,28 +31,45 @@ it is the complete history rather than a window.
 
 It is **not** in the format the pipeline reads. That is step 2.
 
-## Two decisions to make before spending anything
+## Run everything, aggregated
 
-**Which subreddits.** `db_to_corpus.py` takes one per run, on purpose. Aggregation
-merges patients across whatever is in the corpus file, and after that a patient who
-posted in both covidlonghaulers and cfs is one record you cannot split — the
-synthetic `agg_<hash>` id has no post to join back to. Converting per subreddit
-keeps that choice open. (PR #109 adds a `subreddits` count column so a merged record
-at least says how mixed it is.)
+**All subreddits, in one corpus.** The unit is the patient, and a patient who posts
+in r/cfs and r/covidlonghaulers is one person. Splitting the corpus by community
+would fragment them into partial records. On a single month of this data **31.8% of
+patients wrote in more than one community**:
 
-**Posts-only or aggregated.** Extraction reads each post's title and body only, so a
-patient who only ever commented is invisible without `aggregate`. On a one-month
-slice of this data:
+| Communities | Patients |
+|---|---:|
+| 1 | 2,871 |
+| 2 | 1,007 |
+| 3 | 244 |
+| 4 | 70 |
+| 5+ | 17 |
+
+Which communities each patient wrote in is kept on the record as `subreddits`
+counts (`cfs:24 covidlonghaulers:11`), so nothing is lost by merging — you can still
+select or stratify afterwards.
+
+**Aggregated, not posts-only.** Extraction reads each post's title and body only, so
+a patient who only ever commented is invisible without `aggregate`. Comments are
+where most of the text is: that same month is 4,996 posts against 65,046 comments.
+Aggregating is also cheaper — one LLM call per patient rather than per post — and it
+is the unit `cluster-prep` uses anyway.
+
+`--min-items` sets how much text a patient needs to qualify:
 
 | | Patients out |
-|---|---|
-| posts only | 1,322 records, commenters dropped |
-| `aggregate --min-items 1` | 3,398 |
-| `aggregate --min-items 3` | 1,605 |
-| `aggregate --min-items 5` | 1,069 |
+|---|---:|
+| `--min-items 1` | 8,793 |
+| `--min-items 3` | 4,209 |
+| `--min-items 5` | 2,926 |
 
-Aggregation is also the cheaper unit — one call per patient instead of one per post —
-and it matches what `cluster-prep` does anyway.
+3 is a reasonable default: it drops one-line commenters who cannot support a profile
+without discarding most of the corpus.
+
+> **The exception.** Aggregation collapses time — a synthetic record has no
+> `created_utc`, because it spans many posts. Drift work (how one patient's reports
+> move over months) needs a separate posts-only run. That is not this run.
 
 ## 1 · Setup
 
@@ -62,23 +79,22 @@ cp .env.example .env                      # then add ANTHROPIC_API_KEY or OPENRO
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 ```
 
-## 2 · Convert the slice you want
+## 2 · Convert to a corpus
 
 ```bash
-python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
+python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list   # what is in there
 
-python Scrapers/db_to_corpus.py \
-  --db reddit_2026-06-13.db \
-  --subreddit covidlonghaulers \
-  --out-dir output
+python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --out-dir output
 ```
 
-Writes `output/subreddit_posts.json`, hashing every username on the way — raw
-handles are in the database and must not reach `records.csv`.
+Exports every subreddit by default. Writes `output/subreddit_posts.json`, hashing
+every username on the way — raw handles are in the database and must not reach
+`records.csv`.
 
+`--subreddit NAME [NAME ...]` narrows it, for a deliberately single-community run.
 `--since` / `--until` take `YYYY-MM-DD` and filter posts *and* comments by their own
 timestamp, so a narrow window leaves comments whose parent post falls outside it.
-The script reports them as orphan comments; they only become patients via `aggregate`.
+Those are reported as orphan comments; they still become patients via `aggregate`.
 
 ## 3 · Aggregate
 
@@ -87,8 +103,8 @@ cd variable_extraction
 python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
 ```
 
-Skip this only if you deliberately want post-level records and are willing to lose
-every comment-only patient.
+This is the step that turns 4,996 posts and 65,046 comments into 4,209 patients.
+Skip it only for the drift case noted above.
 
 ## 4 · Test on ten records first
 

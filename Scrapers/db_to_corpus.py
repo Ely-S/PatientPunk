@@ -9,14 +9,17 @@ posts with their comments nested, usernames hashed.
 Output matches transform_arctic_shift.py field for field, so both routes into
 the pipeline produce the same shape.
 
-One subreddit per run. A database may hold several; the pipeline merges patients
-across whatever is in the corpus file, and that merge cannot be undone
-afterwards, so the selection happens here rather than later.
+Exports every subreddit in the database by default. The unit of analysis is the
+patient, and a patient who posts in two communities is still one person, so
+splitting the corpus by community would fragment them into partial records.
+Which communities a patient wrote in is kept on the record itself as
+``subreddits`` counts. Narrow with --subreddit only for a deliberately
+single-community run.
 
 Usage:
-    python db_to_corpus.py --db reddit.db --subreddit covidlonghaulers
-    python db_to_corpus.py --db reddit.db --subreddit cfs --out-dir ../output_cfs
-    python db_to_corpus.py --db reddit.db --subreddit covidlonghaulers --since 2024-01-01
+    python db_to_corpus.py --db reddit.db
+    python db_to_corpus.py --db reddit.db --subreddit covidlonghaulers cfs
+    python db_to_corpus.py --db reddit.db --since 2024-01-01 --out-dir ../output
     python db_to_corpus.py --db reddit.db --list
 """
 
@@ -25,7 +28,7 @@ import hashlib
 import json
 import sqlite3
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -80,7 +83,7 @@ def build_comment(row: sqlite3.Row) -> dict:
     }
 
 
-def build_post(row: sqlite3.Row, comments: list[dict], subreddit: str) -> dict:
+def build_post(row: sqlite3.Row, comments: list[dict]) -> dict:
     return {
         "post_id": f"t3_{row['id']}",
         "title": row["title"] or "",
@@ -92,25 +95,28 @@ def build_post(row: sqlite3.Row, comments: list[dict], subreddit: str) -> dict:
         "comments_fetched": len(comments),
         "url": f"https://reddit.com{row['permalink'] or ''}",
         "flair": None,
-        "subreddit": subreddit,
+        "subreddit": row["subreddit"],
         "comments": comments,
     }
 
 
-def convert(db: Path, subreddit: str, out_path: Path,
+def convert(db: Path, subreddits: list[str] | None, out_path: Path,
             since: int | None, until: int | None) -> dict:
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
 
-    where = ["subreddit = ?"]
-    args: list = [subreddit]
+    where: list[str] = []
+    args: list = []
+    if subreddits:
+        where.append(f"subreddit IN ({','.join('?' * len(subreddits))})")
+        args.extend(subreddits)
     if since is not None:
         where.append("created_utc >= ?")
         args.append(since)
     if until is not None:
         where.append("created_utc < ?")
         args.append(until)
-    clause = " AND ".join(where)
+    clause = " AND ".join(where) if where else "1"
 
     # Comments first, bucketed by their post, so each post is emitted once.
     by_post: dict[str, list[dict]] = defaultdict(list)
@@ -121,7 +127,7 @@ def convert(db: Path, subreddit: str, out_path: Path,
 
     posts = []
     for row in conn.execute(f"SELECT * FROM posts WHERE {clause}", args):
-        posts.append(build_post(row, by_post.get(row["id"], []), subreddit))
+        posts.append(build_post(row, by_post.get(row["id"], [])))
 
     posts.sort(key=lambda p: p["created_utc"])
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,7 +136,9 @@ def convert(db: Path, subreddit: str, out_path: Path,
 
     orphans = sum(len(v) for k, v in by_post.items()
                   if k not in {p["post_id"][3:] for p in posts})
+    per_sub = Counter(p["subreddit"] for p in posts)
     return {
+        "per_subreddit": per_sub,
         "posts": len(posts),
         "comments": n_comments,
         "orphan_comments": orphans,
@@ -144,7 +152,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="Transform a scraped Reddit SQLite DB into subreddit_posts.json")
     ap.add_argument("--db", required=True, type=Path)
-    ap.add_argument("--subreddit", help="Which subreddit to export (one per run)")
+    ap.add_argument("--subreddit", nargs="+", metavar="NAME",
+                    help="Restrict to these subreddits (default: all of them)")
     ap.add_argument("--out-dir", type=Path, default=Path("output"),
                     help="Directory to write subreddit_posts.json into")
     ap.add_argument("--since", help="Only posts/comments on or after YYYY-MM-DD")
@@ -159,19 +168,19 @@ def main() -> int:
     if a.list:
         list_subreddits(sqlite3.connect(f"file:{a.db}?mode=ro", uri=True))
         return 0
-    if not a.subreddit:
-        print("--subreddit is required (or use --list)", file=sys.stderr)
-        return 1
 
     out = a.out_dir / "subreddit_posts.json"
     stats = convert(a.db, a.subreddit, out,
                     parse_date(a.since) if a.since else None,
                     parse_date(a.until) if a.until else None)
     if not stats["posts"]:
-        print(f"No posts for r/{a.subreddit}. Try --list.", file=sys.stderr)
+        which = ", ".join(a.subreddit) if a.subreddit else "any subreddit"
+        print(f"No posts for {which}. Try --list.", file=sys.stderr)
         return 1
 
-    print(f"  r/{a.subreddit}  ->  {out}")
+    print(f"  -> {out}")
+    for name, n in stats["per_subreddit"].most_common():
+        print(f"     r/{name:<26}{n:>9,} posts")
     print(f"  posts             {stats['posts']:,}")
     print(f"  comments          {stats['comments']:,}")
     print(f"  distinct authors  {stats['authors']:,}")
