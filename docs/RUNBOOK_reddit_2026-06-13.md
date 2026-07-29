@@ -31,6 +31,18 @@ it is the complete history rather than a window.
 
 It is **not** in the format the pipeline reads. That is step 2.
 
+> **The database holds raw Reddit usernames** — `posts.author` and `comments.author`
+> are plain handles, 133,675 distinct ones, attached to posts about people's medical
+> conditions. Everywhere else in this project a patient is a SHA-256 `author_hash`.
+>
+> **The pipeline path is safe.** `db_to_corpus.py` hashes every author on the way out
+> and has no flag to disable it, so nothing downstream of step 2 ever sees a handle.
+>
+> **Analysis that reads the database directly is not.** A notebook, an ad-hoc query, a
+> join for a sanity check — any of those can put real usernames into a chart, a CSV, or
+> a figure that gets shared. Hash on the way in, the same way the converter does:
+> `hashlib.sha256(name.encode()).hexdigest()`.
+
 ## Run everything, aggregated
 
 **All subreddits, in one corpus.** The unit is the patient, and a patient who posts
@@ -96,6 +108,10 @@ python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
 #                                 whose parent post falls outside it; those are
 #                                 reported as orphans and still become patients
 python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --out-dir output
+
+# Confirm no raw handles got through -- every author_hash should be 64 hex
+# characters, and this should print 0.
+python -c "import json;d=json.load(open('output/subreddit_posts.json'));print(sum(1 for p in d if p['author_hash'] and len(p['author_hash'])!=64))"
 
 # ----------------------------------------------------------- 3 · aggregate
 # One record per patient rather than per post. This is what turns 4,996 posts
