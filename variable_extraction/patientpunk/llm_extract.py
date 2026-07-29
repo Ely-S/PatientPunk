@@ -448,8 +448,7 @@ def build_llm_record(
     is guaranteed ``dict[str, list[str] | None]`` by the time it gets here.
 
     ``subreddits`` names the communities the text came from, as
-    ``name:count`` pairs. An aggregated record covers one patient across
-    several, so it is a distribution rather than a single label.
+    ``name:count`` pairs.
     """
     schema_id = schema["schema_id"] if schema else "base"
 
