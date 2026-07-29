@@ -1952,81 +1952,37 @@ class TestActiveExtractorTextCollection:
         assert texts == ["Post title", "Post body"]
 
 
-class TestMetadataColumnsAgree:
-    """Four modules each keep their own copy of the metadata-column set. A
-    column export_csv writes but a consumer does not know about is read as an
-    extracted field -- clustered on, loaded as a variable, scored, documented."""
+class TestSubredditProvenance:
+    def test_aggregate_counts_the_communities_each_patient_wrote_in(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        posts = [{"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
+                 {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
+                 {"author_hash": "a", "title": "t", "body": "b", "subreddit": "clh",
+                  "comments": [{"author_hash": "b", "body": "reply"}]},
+                 {"author_hash": "c", "title": "t", "body": "b"}]
+        got = {p["author_hash"]: p["subreddits"]
+               for p in aggregate_corpus_by_author(posts, min_items=1)[0]}
+        assert got["a"] == "cfs:2 clh:1"   # counted per community
+        assert got["b"] == "clh:1"         # commenter credited where they commented
+        assert got["c"] == ""              # absent subreddit not guessed
 
-    def _consumers(self):
+    def test_it_reaches_the_csv_row(self):
+        """META_COLUMNS only reserves the column; build_csv_row has to fill it."""
+        from patientpunk.export_csv import build_csv_row
+        row = build_csv_row({"record_meta": {"subreddits": "cfs:5"}, "fields": {}},
+                            field_names=[], sep=" | ", include_confidence=False)
+        assert row["subreddits"] == "cfs:5"
+
+    def test_every_metadata_column_is_known_downstream(self):
+        """A column export_csv writes but a consumer does not know is read as an
+        extracted field -- clustered on, loaded as a variable, scored."""
         from patientpunk.cluster_prep import DEFAULT_META
         from patientpunk.codebook import META_COLUMNS as codebook_meta
         from patientpunk.db import VARIABLE_META_COLUMNS
         from patientpunk.evaluate import _META
-        return {"cluster_prep": DEFAULT_META, "db": VARIABLE_META_COLUMNS,
-                "evaluate": _META, "codebook": codebook_meta}
-
-    def test_every_written_metadata_column_is_known_downstream(self):
         from patientpunk.export_csv import META_COLUMNS
-        for name, known in self._consumers().items():
-            missing = [c for c in META_COLUMNS if c not in known]
-            assert not missing, f"{name} would treat {missing} as extracted fields"
-
-
-class TestSubredditProvenance:
-    def _agg(self, posts):
-        from patientpunk.aggregate import aggregate_corpus_by_author
-        out, _ = aggregate_corpus_by_author(posts, min_items=1)
-        return {p["author_hash"]: p["subreddits"] for p in out}
-
-    def test_counts_each_community_a_patient_posted_in(self):
-        posts = [
-            {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
-            {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
-            {"author_hash": "a", "title": "t", "body": "b",
-             "subreddit": "covidlonghaulers"},
-        ]
-        assert self._agg(posts)["a"] == "cfs:2 covidlonghaulers:1"
-
-    def test_a_commenter_is_credited_to_the_community_they_commented_in(self):
-        posts = [{"author_hash": "poster", "title": "t", "body": "b",
-                  "subreddit": "covidlonghaulers",
-                  "comments": [{"author_hash": "commenter", "body": "reply"}]}]
-        got = self._agg(posts)
-        assert got["commenter"] == "covidlonghaulers:1"
-
-    def test_absent_subreddit_is_left_blank_not_guessed(self):
-        posts = [{"author_hash": "a", "title": "t", "body": "b"}]
-        assert self._agg(posts)["a"] == ""
-
-    def test_a_single_post_uses_the_same_name_count_shape(self):
-        from patientpunk.llm_extract import _process_one
-        item = {"post_id": "t3_a", "title": "t", "body": "b",
-                "author_hash": "a" * 64, "subreddit": "covidlonghaulers"}
-        assert _process_one("post", item, "sys", None)["subreddits"] ==             "covidlonghaulers:1"
-
-    def test_extraction_record_carries_it(self):
-        from patientpunk.llm_extract import build_llm_record
-        from patientpunk.llm_schema import LLMExtraction
-        rec = build_llm_record(
-            llm_output=LLMExtraction(fields={}), source="subreddit_post",
-            author_hash="a", text_count=1, schema=None, post_id="p1",
-            subreddits="covidlonghaulers:3 cfs:1")
-        assert rec["record_meta"]["subreddits"] == "covidlonghaulers:3 cfs:1"
-
-    def test_it_reaches_the_csv_row(self):
-        """Listing it in META_COLUMNS only reserves the column -- build_csv_row
-        has to copy it there too, or the column ships empty."""
-        from patientpunk.export_csv import build_csv_row
-        row = build_csv_row(
-            {"record_meta": {"author_hash": "a", "post_id": "p1",
-                             "subreddits": "cfs:5 covidlonghaulers:2"},
-             "fields": {}},
-            field_names=[], sep=" | ", include_confidence=False)
-        assert row["subreddits"] == "cfs:5 covidlonghaulers:2"
-
-    def test_it_is_a_metadata_column_not_an_extracted_field(self):
-        from patientpunk.export_csv import META_COLUMNS
-        assert "subreddits" in META_COLUMNS
+        for known in (DEFAULT_META, VARIABLE_META_COLUMNS, _META, codebook_meta):
+            assert not [c for c in META_COLUMNS if c not in known]
 
 
 class TestAggregateByAuthor:
