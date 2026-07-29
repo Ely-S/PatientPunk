@@ -49,10 +49,9 @@ def aggregate_corpus_by_author(
 
     Authors with fewer than ``min_items`` non-empty segments are dropped.
 
-    ``subreddits`` counts where the patient's segments came from. A patient is
-    one person whether they posted in one community or five, so this is the only
-    thing left that says which -- the synthetic post_id has no corpus to join
-    back to.
+    ``subreddits`` counts which communities the patient's segments came from. We
+    want to keep this information for analysis later as the redditors' posts are
+    aggregated into one document.
     """
     segments: dict[str, list[str]] = defaultdict(list)
     subreddit_counts: dict[str, Counter] = defaultdict(Counter)
