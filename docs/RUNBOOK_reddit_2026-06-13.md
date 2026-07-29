@@ -1,5 +1,9 @@
 # Running the pipeline on `reddit_2026-06-13.db`
 
+> **Needs branch `feat/db-corpus`** ([#110](https://github.com/Ely-S/PatientPunk/pull/110),
+> stacked on [#109](https://github.com/Ely-S/PatientPunk/pull/109)). Neither has merged,
+> so `main` has neither the converter nor the `subreddits` column. Step 1 checks it out.
+
 A step-by-step for this specific dataset. For the commands in general see
 [`variable_extraction/README.md`](../variable_extraction/README.md); for what the
 output means and what to distrust, [`METHODS.md`](../variable_extraction/METHODS.md).
@@ -99,9 +103,14 @@ looked at the ten-record test.
 
 ```bash
 # ---------------------------------------------------------------- 1 · setup
+# db_to_corpus.py and the subreddits column are not on main yet -- they are
+# PRs #110 and #109. Until those merge, work from this branch.
+git fetch origin && git checkout feat/db-corpus
+
 uv sync                                              # from the repo root
-cp .env.example .env                                 # then edit: add ANTHROPIC_API_KEY
-                                                     # (or OPENROUTER_API_KEY)
+cp .env.example .env                                 # then edit: the template
+                                                     # has OPENROUTER_API_KEY;
+                                                     # ANTHROPIC_API_KEY also works
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 
 # ------------------------------------------------------------- 2 · convert
