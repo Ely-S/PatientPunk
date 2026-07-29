@@ -130,8 +130,8 @@ BASE_FIELD_DESCRIPTIONS = {
     "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
-    "symptom_duration": "How long the patient has been ill overall",
-    "symptom_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
+    "illness_duration": "How long the patient has been ill overall",
+    "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
     "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
@@ -144,6 +144,14 @@ BASE_FIELD_DESCRIPTIONS = {
     "alternative_treatments": "Non-pharmaceutical interventions (pacing, acupuncture, HBOT, cold exposure)",
     "dietary_interventions": "Dietary changes tried (low-histamine, elimination diet, carnivore, gluten-free)",
     "misdiagnosis": "Conditions the patient was incorrectly diagnosed with before the current diagnosis",
+    # Symptom domains. Cross-listing is intended: one symptom may belong in
+    # several of these. Routing rules are in build_system_prompt.
+    "fatigue_pem": "Fatigue, post-exertional malaise, crashes, exercise intolerance",
+    "cognitive_neurological": "Brain fog, memory and concentration problems, neuropathy, tinnitus, dizziness, headaches",
+    "cardiovascular_autonomic": "POTS symptoms, palpitations, orthostatic intolerance, temperature dysregulation",
+    "pain": "Joint, muscle, chest, and nerve pain; headaches",
+    "sleep": "Insomnia, hypersomnia, unrefreshing sleep, sleep-cycle disruption",
+    "other_symptoms": "Symptoms outside the five domains above - respiratory, gastrointestinal, skin, hair loss, vision",
 }
 
 BASE_OPTIONAL_DESCRIPTIONS = {
@@ -307,7 +315,13 @@ EXTRACTION RULES:
 2. If a field cannot be determined from the text, set it to null.
 3. Distinguish between what the AUTHOR says about THEMSELVES vs. what they say about OTHERS. Only extract self-reported information for the structured fields.
 4. Pay attention to NEGATION: "I don't have POTS" means POTS should NOT be in conditions.
-5. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
+5. NAMING A TREATMENT IS NOT TAKING IT. A treatment goes in medications, alternative_treatments, or dietary_interventions only if the patient conveys they actually took or are taking it. Exclude one they were offered and declined, hold but do not take, are asking about, were warned off, or say they intend to try. Examples that must NOT be extracted:
+   "I was given a Z-Pak but I didn't take it"        -> Z-Pak is not a medication of theirs
+   "I have Xanax but I can't take it with my SSRI"   -> Xanax is not a medication of theirs
+   "my doctor suggested LDN, I haven't started yet"  -> LDN is not a medication of theirs
+   "has anyone tried nattokinase?"                    -> nattokinase is not a medication of theirs
+   Stopping counts as having taken it: "I was on gabapentin but quit" DOES belong in medications.
+6. Pay attention to TEMPORAL context: "I had fatigue for 6 months but it resolved" - note the resolution.
 
 VALUE FORMAT RULES:
 - Each value MUST be 1-5 words. Never write sentences. Never include explanations or mechanisms.
@@ -317,15 +331,39 @@ VALUE FORMAT RULES:
 - Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
-- conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Do NOT put symptoms here (brain fog, fatigue, pain, tinnitus, migraines, nausea, insomnia -- those are symptoms, not conditions).
+- conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Symptoms belong in the six symptom-domain fields described below, never here.
 - misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
 - dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
-- functional_status_tier: Use ONLY one of: bedbound, housebound, severe, moderate, mild, mostly_functional. No sentences.
+- functional_status_tier: Use ONLY one of the six values below, judged on what the patient can still do. No sentences. Use null when the text does not say.
+    bedbound          - cannot get out of bed, or only briefly
+    housebound        - can move around home but cannot leave it
+    severe            - leaves home rarely and pays for it; most activity given up
+    moderate          - manages part of normal life; regularly cuts activity to cope
+    mild              - most activity intact with some limits or pacing
+    mostly_functional - back to near-normal function, illness no longer limiting
+  Where a patient states both a worst and a current level, code the CURRENT one.
+- illness_duration: How long the patient has been ill OVERALL, as stated ("3 years", "18 months", "since March 2020"). One value for the whole illness. Never a per-symptom duration.
+- illness_trajectory: The overall course of the illness. Use ONLY one of: improving, worsening, stable, relapsing, recovered. If different symptoms are moving in different directions, use the direction the patient gives for their condition as a whole; if they give none, use null.
 - social_impact: 1-3 word labels only. GOOD: "isolation", "relationship strain", "lost friends". BAD: "difficulty with daily activities like meal planning and preparation".
+
+SYMPTOM DOMAIN RULES:
+Six fields hold symptoms. Record each symptom in the patient's own words (1-5 words), not a clinical synonym.
+- fatigue_pem: fatigue, exhaustion, PEM, post-exertional malaise, crashes, exercise intolerance, "payback" after activity. PEM is symptom worsening AFTER exertion, often delayed a day or more -- record it here even when the patient calls it a crash.
+- cognitive_neurological: brain fog, memory loss, word-finding trouble, poor concentration, neuropathy, numbness, tinnitus, dizziness, vertigo, headaches, migraines.
+- cardiovascular_autonomic: palpitations, tachycardia, orthostatic intolerance, blood-pressure swings, temperature dysregulation, adrenaline dumps. Record the SYMPTOM, never the diagnosis name: a patient with POTS who describes a racing heart on standing gives "tachycardia" and "orthostatic intolerance" here. "POTS" and "dysautonomia" are diagnoses and belong in conditions only -- naming one does not by itself put anything in this field.
+- pain: pain anywhere the patient reports it, whatever the site or cause -- joint, muscle, chest, nerve, head, abdominal, pelvic, throat, ear, back. Body aches, headaches, and migraines all count. Do not send pain to other_symptoms just because the body part is not listed here.
+- sleep: insomnia, hypersomnia, unrefreshing sleep, reversed sleep cycle, sleep apnea.
+- other_symptoms: anything the five domains above do not cover -- shortness of breath, GI problems, nausea, rashes, hair loss, vision changes, sensory sensitivities.
+
+CROSS-LISTING: a symptom that genuinely spans domains goes in EVERY domain it belongs to. This is intended, not an error.
+- "migraines" -> pain AND cognitive_neurological
+- "dizzy when I stand up" -> cardiovascular_autonomic AND cognitive_neurological
+- "sleep never refreshes me, I wake exhausted" -> sleep AND fatigue_pem
+Do not cross-list into a domain the text does not support: plain "I'm tired all the time" is fatigue_pem only.
 
 SCHEMA FIELDS to extract:
 {fields_block}
@@ -827,6 +865,18 @@ def field_confidence(schema_path: Path | None) -> dict[str, str]:
     return {name: fd.confidence for name, fd in schema.all_fields.items()}
 
 
+# Fields the prompt restricts to a fixed value list. normalize_records drops
+# anything outside it.
+ILLNESS_TRAJECTORY_VALUES = frozenset(
+    {"improving", "worsening", "stable", "relapsing", "recovered"})
+FUNCTIONAL_STATUS_VALUES = frozenset(
+    {"bedbound", "housebound", "severe", "moderate", "mild", "mostly_functional"})
+_CLOSED_VOCABULARIES: dict[str, frozenset[str]] = {
+    "illness_trajectory": ILLNESS_TRAJECTORY_VALUES,
+    "functional_status_tier": FUNCTIONAL_STATUS_VALUES,
+}
+
+
 def normalize_records(
     records: list[dict],
     confidence_by_field: dict[str, str] | None = None,
@@ -935,7 +985,7 @@ def normalize_records(
             "part time": "working reduced", "part-time": "working reduced",
             "reduced hours": "working reduced",
         },
-        "symptom_trajectory": {
+        "illness_trajectory": {
             "getting worse": "worsening", "worse": "worsening",
             "deteriorating": "worsening", "declining": "worsening",
             "getting better": "improving", "improved": "improving",
@@ -943,8 +993,45 @@ def normalize_records(
             "back to normal": "recovered", "fully recovered": "recovered",
             "partially recovered": "improving",
             "relapse": "relapsing", "relapsing-remitting": "relapsing",
-            "flare": "relapsing",
-            "bedbound": "severe decline", "housebound": "severe decline",
+            "flare": "relapsing", "fluctuating": "relapsing",
+            "plateau": "stable", "unchanged": "stable", "same": "stable",
+            "severe decline": "worsening",
+        },
+        # Surface forms only: spelling, hyphenation, plurals, abbreviations of
+        # the same term. Nothing here may merge two words a clinician would
+        # distinguish -- these records keep the patient's wording. Concept
+        # merges belong in patientpunk.normalize.
+        "fatigue_pem": {
+            "post-exertional malaise": "pem", "post exertional malaise": "pem",
+            "post-exertional": "pem", "post exertional": "pem", "pese": "pem",
+            "post-exertional symptom exacerbation": "pem",
+        },
+        "cognitive_neurological": {
+            "brainfog": "brain fog", "brain-fog": "brain fog",
+            "migraine": "migraines", "headache": "headaches",
+            "light headed": "lightheaded",
+        },
+        "cardiovascular_autonomic": {
+            "oi": "orthostatic intolerance",
+            "temp dysregulation": "temperature dysregulation",
+            "adrenaline dump": "adrenaline dumps",
+            "heart palpitations": "palpitations",
+        },
+        "pain": {
+            "joint pains": "joint pain",
+            "muscle pains": "muscle pain",
+            "chest pains": "chest pain",
+            "body ache": "body aches",
+            "migraine": "migraines", "headache": "headaches",
+        },
+        "sleep": {
+            "non-restorative sleep": "unrefreshing sleep",
+            "unrefreshed sleep": "unrefreshing sleep",
+        },
+        "other_symptoms": {
+            "sob": "shortness of breath",
+            "gi issues": "gi problems", "gi symptoms": "gi problems",
+            "rash": "rashes",
         },
     }
 
@@ -1013,6 +1100,21 @@ def normalize_records(
                 seen.add(rejoined)
                 canonical.append(rejoined)
         field_data["values"] = canonical
+
+    # Closed-vocabulary fields: the prompt says "use ONLY one of", so anything
+    # else is a miscategorisation, not a discovery. Dropping it keeps the column
+    # analysable; keeping it would put functional-status and free text into a
+    # field downstream code reads as an ordinal.
+    for rec in records:
+        for field_name, allowed in _CLOSED_VOCABULARIES.items():
+            field_data = rec.get("fields", {}).get(field_name)
+            if not field_data or not field_data.get("values"):
+                continue
+            kept = [v for v in field_data["values"]
+                    if isinstance(v, str) and v in allowed]
+            field_data["values"] = kept
+            if not kept:
+                field_data["confidence"] = None
 
     return records
 

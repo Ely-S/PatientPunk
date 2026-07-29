@@ -2052,8 +2052,8 @@ class TestNormalize:
     def test_percent_regex_rule(self):
         from patientpunk.normalize import normalize_value
         assert normalize_value("treatment_outcome", "60% better") == "helped"
-        assert normalize_value("symptom_trajectory", "90% recovered") == "recovered"
-        assert normalize_value("symptom_trajectory", "50% better") == "improving"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+        assert normalize_value("illness_trajectory", "50% better") == "improving"
 
     def test_functional_tier_and_rank(self):
         from patientpunk.normalize import normalize_value, FUNCTIONAL_RANK
@@ -2338,6 +2338,203 @@ class TestUntrustedTextWrapping:
         src = inspect.getsource(discover)
         assert "never invent a unit to supply one" in src
         assert "bare numbers by nature" in src
+
+
+class TestIllnessMarkerRenames:
+    """illness_duration and illness_trajectory describe the whole illness
+    course. No per-symptom timeline is extracted."""
+
+    def test_old_names_are_gone(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "symptom_duration" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in FIELD_VOCAB
+
+    def test_new_names_present_in_both_layers(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "illness_duration" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in FIELD_VOCAB
+
+    def test_prompt_scopes_them_to_the_whole_illness(self, base_prompt):
+        duration = field_rule(base_prompt, "illness_duration")
+        assert "OVERALL" in duration
+        assert "Never a per-symptom duration." in duration
+        assert "for their condition as a whole" in field_rule(
+            base_prompt, "illness_trajectory")
+
+    def test_clustering_vocab_follows_the_rename(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("illness_trajectory", "getting worse") == "declining"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+
+
+class TestIllnessMarkerRenames:
+    """symptom_duration/symptom_trajectory describe the whole illness, not any
+    one symptom. The prefix read as per-symptom."""
+
+    def test_old_names_are_gone(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "symptom_duration" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in BASE_FIELD_DESCRIPTIONS
+        assert "symptom_trajectory" not in FIELD_VOCAB
+
+    def test_new_names_present_in_both_layers(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        from patientpunk.normalize import FIELD_VOCAB
+        assert "illness_duration" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in BASE_FIELD_DESCRIPTIONS
+        assert "illness_trajectory" in FIELD_VOCAB
+
+    def test_prompt_scopes_them_to_the_whole_illness(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        prompt = build_system_prompt(build_field_descriptions(None))
+        assert "OVERALL" in prompt
+        assert "Never a per-symptom duration." in prompt
+        assert "for their condition as a whole" in prompt
+
+    def test_clustering_vocab_follows_the_rename(self):
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("illness_trajectory", "getting worse") == "declining"
+        assert normalize_value("illness_trajectory", "90% recovered") == "recovered"
+
+
+SYMPTOM_DOMAINS = [
+    "fatigue_pem", "cognitive_neurological", "cardiovascular_autonomic",
+    "pain", "sleep", "other_symptoms",
+]
+
+
+class TestSymptomDecomposition:
+    """Symptoms live in six domains rather than one field. A symptom spanning
+    domains appears in each of them, and the archival records keep the
+    patient's wording -- concept merges belong to the clustering vocabulary."""
+
+    def test_domains_are_base_fields(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS
+        for field in SYMPTOM_DOMAINS:
+            assert field in BASE_FIELD_DESCRIPTIONS
+
+    def test_flat_symptoms_field_is_gone(self):
+        from patientpunk.llm_extract import (
+            BASE_FIELD_DESCRIPTIONS, BASE_OPTIONAL_DESCRIPTIONS,
+        )
+        assert "symptoms" not in set(BASE_FIELD_DESCRIPTIONS) | set(BASE_OPTIONAL_DESCRIPTIONS)
+
+    def test_prompt_states_the_cross_listing_rule(self, base_prompt):
+        """The prompt names every domain and states the cross-listing rule."""
+        rules = prompt_section(base_prompt, "SYMPTOM DOMAIN RULES:",
+                               "SCHEMA FIELDS to extract:")
+        assert "goes in EVERY domain it belongs to" in prompt_section(
+            base_prompt, "CROSS-LISTING:", "SCHEMA FIELDS to extract:")
+        for field in SYMPTOM_DOMAINS:
+            assert f"- {field}:" in rules
+
+    def test_conditions_symptom_boundary_is_stated(self, base_prompt):
+        assert "Symptoms belong in the six symptom-domain fields" in field_rule(
+            base_prompt, "conditions")
+
+    def test_extraction_tier_preserves_clinically_distinct_wording(self):
+        """The archival records keep the patient's wording: vertigo is not
+        dizziness and air hunger is not shortness of breath."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {
+            "cognitive_neurological": ["vertigo", "cognitive dysfunction"],
+            "other_symptoms": ["air hunger"], "fatigue_pem": ["exhaustion"],
+            "pain": ["myalgia"],
+        }}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["cognitive_neurological"]["values"] == ["vertigo", "cognitive dysfunction"]
+        assert out["other_symptoms"]["values"] == ["air hunger"]
+        assert out["fatigue_pem"]["values"] == ["exhaustion"]
+        assert out["pain"]["values"] == ["myalgia"]
+
+    def test_extraction_tier_still_fixes_surface_forms(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"fatigue_pem": ["Post-Exertional Malaise"],
+                          "cognitive_neurological": ["brainfog", "migraine"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["fatigue_pem"]["values"] == ["pem"]
+        assert out["cognitive_neurological"]["values"] == ["brain fog", "migraines"]
+
+    def test_clustering_tier_merges_those_concepts(self):
+        """The clustering vocabulary merges what extraction leaves distinct."""
+        from patientpunk.normalize import normalize_value
+        assert normalize_value("cognitive_neurological", "vertigo") == "dizziness"
+        assert normalize_value("other_symptoms", "air hunger") == "shortness_of_breath"
+        assert normalize_value("fatigue_pem", "exhaustion") == "fatigue"
+        assert normalize_value("pain", "myalgia") == "muscle_pain"
+
+    def test_cross_listed_symptom_kept_in_every_domain(self):
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"pain": ["migraine"], "cognitive_neurological": ["migraine"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["pain"]["values"] == ["migraines"]
+        assert out["cognitive_neurological"]["values"] == ["migraines"]
+
+
+class TestClosedVocabularies:
+    """illness_trajectory and functional_status_tier accept only their declared
+    values. Anything else is dropped rather than coerced into one."""
+
+    def test_functional_status_never_leaks_into_trajectory(self):
+        """A functional-status value in the trajectory field is dropped, not
+        mapped onto a trajectory label."""
+        from patientpunk.llm_extract import normalize_records
+        rec = {"fields": {"illness_trajectory": ["bedbound", "housebound"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert out["illness_trajectory"]["values"] == []
+        assert out["illness_trajectory"]["confidence"] is None
+
+    def test_every_trajectory_output_is_in_the_allowed_set(self):
+        from patientpunk.llm_extract import normalize_records, ILLNESS_TRAJECTORY_VALUES
+        probes = [
+            "getting worse", "worse", "deteriorating", "declining", "severe decline",
+            "getting better", "improved", "recovery", "back to normal",
+            "fully recovered", "partially recovered", "relapse",
+            "relapsing-remitting", "flare", "fluctuating", "plateau",
+            "unchanged", "same", *ILLNESS_TRAJECTORY_VALUES,
+            "bedbound", "housebound", "who knows", "60% better", "up and down",
+        ]
+        out = normalize_records([{"fields": {"illness_trajectory": probes}}])[0]
+        assert set(out["fields"]["illness_trajectory"]["values"]) <= ILLNESS_TRAJECTORY_VALUES
+
+    def test_functional_status_tier_is_also_closed(self):
+        from patientpunk.llm_extract import normalize_records, FUNCTIONAL_STATUS_VALUES
+        rec = {"fields": {"functional_status_tier": ["bed bound", "worsening", "very severe"]}}
+        out = normalize_records([rec])[0]["fields"]
+        assert set(out["functional_status_tier"]["values"]) <= FUNCTIONAL_STATUS_VALUES
+        assert "bedbound" in out["functional_status_tier"]["values"]
+
+    def test_tiers_are_operationalised_not_just_listed(self, base_prompt):
+        """Each tier carries a definition, and a patient who gives both a current
+        and a worst level is coded at the current one."""
+        rule = field_rule(base_prompt, "functional_status_tier")
+        from patientpunk.llm_extract import FUNCTIONAL_STATUS_VALUES
+        for tier in FUNCTIONAL_STATUS_VALUES:
+            assert tier in rule
+        assert "cannot get out of bed" in rule
+        assert "cannot leave it" in rule
+        assert "code the CURRENT one" in rule
+
+
+class TestNamedButNotTaken:
+    """Prompt-text assertions: the named-vs-taken rule is present, and so is
+    the exception that keeps a treatment the patient stopped."""
+
+    def test_rule_is_stated_with_worked_examples(self, base_prompt):
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        for excluded in ("didn't take it", "haven't started yet",
+                         "has anyone tried"):
+            assert excluded in rule
+
+    def test_stopping_still_counts_as_taken(self, base_prompt):
+        """Stopping is not the same as never taking."""
+        rule = prompt_section(base_prompt, "5. NAMING A TREATMENT", "\n6. ")
+        assert "quit" in rule and "DOES belong in medications" in rule
 
 
 class TestBatchExtraction:

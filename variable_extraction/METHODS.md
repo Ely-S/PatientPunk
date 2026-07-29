@@ -90,8 +90,8 @@ below records where a field is grounded, it did not decide anything.
 | `alternative_treatments` | 20.0% | — |
 | `dietary_interventions` | 13.8% | — |
 | `misdiagnosis` | 10.4% | — |
-| `symptom_duration` | 18.3% | RECOVER |
-| `symptom_trajectory` | 17.2% | RECOVER |
+| `illness_duration` | 18.3% | RECOVER |
+| `illness_trajectory` | 17.2% | RECOVER |
 
 `location_country` and `dosage` were not measured separately.
 
