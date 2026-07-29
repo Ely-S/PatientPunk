@@ -11,7 +11,7 @@ s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db      2.45 GB
 ```
 
 SQLite, two flat tables (`posts`, `comments`) joined on `comments.link_id`.
-Eleven subreddits, 243,289 posts and 3,602,691 comments in total. r/covidlonghaulers
+Fifteen subreddits, 243,289 posts and 3,602,691 comments in total. r/covidlonghaulers
 runs **2020-07-24 → 2026-06-11** — the subreddit's first day to the scrape date, so
 it is the complete history rather than a window.
 
@@ -28,6 +28,14 @@ it is the complete history rather than a window.
 | cfsrecovery | 669 | 7,652 |
 | CFSScience | 488 | 2,197 |
 | CovidLongHaulersUK | 90 | 246 |
+| longcovid_research | 71 | 275 |
+| MECFS | 28 | 29 |
+| me_cfs | 20 | 5 |
+| cfs_DE | 5 | 7 |
+
+`mecfs` and `MECFS` are separate rows because the names differ only in case. They
+are the same community; anything grouping by subreddit will treat them as two
+unless it lowercases first.
 
 It is **not** in the format the pipeline reads. That is step 2.
 
