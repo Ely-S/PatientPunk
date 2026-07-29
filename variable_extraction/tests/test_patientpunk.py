@@ -1953,9 +1953,6 @@ class TestActiveExtractorTextCollection:
 
 
 class TestSubredditProvenance:
-    """A patient is one person across every community they post in, so the
-    record counts where their text came from rather than picking one."""
-
     def _agg(self, posts):
         from patientpunk.aggregate import aggregate_corpus_by_author
         out, _ = aggregate_corpus_by_author(posts, min_items=1)
