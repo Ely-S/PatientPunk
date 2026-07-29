@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -148,9 +149,14 @@ def main() -> None:
     parser.add_argument("--group-guard", action="store_true", help="Enable the group-attribution guard.")
     parser.add_argument("--prompt-variant", default="", help="Comma-separated names of prompts/<name>.md rule overlays to append.")
     parser.add_argument("--no-cache", action="store_true", help="Bypass the LLM response cache (for measuring run-to-run noise).")
+    parser.add_argument("--workers", type=int, default=50,
+                        help="Concurrent LLM requests (default: 50).")
     parser.add_argument("--verbose", action="store_true", help="Print every field, not just mismatches.")
     parser.add_argument("--label", type=str, default="run", help="Short name for this run, used in the results filename.")
     args = parser.parse_args()
+
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
 
     if args.no_cache:
         set_cache_enabled(False)
@@ -189,10 +195,20 @@ def main() -> None:
 
     parse_failures: list[dict[str, str]] = []
 
-    for i, rec in enumerate(records, 1):
+    def extract_one(i: int, rec: dict) -> tuple[dict, dict[str, str], str]:
         post_id, gold = rec["post_id"], rec["gold"]
         print(f"[{i}/{len(records)}] {post_id}...", flush=True)
         candidate, status = run_one(client, system_prompt, post_id, rec["texts"])
+        return rec, candidate, status
+
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        extractions = list(pool.map(
+            lambda item: extract_one(*item),
+            enumerate(records, 1),
+        ))
+
+    for rec, candidate, status in extractions:
+        post_id, gold = rec["post_id"], rec["gold"]
         if status != "ok":
             print(f"    !! {status} -- scored as empty", flush=True)
             parse_failures.append({"post_id": post_id, "status": status})

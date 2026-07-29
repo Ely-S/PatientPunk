@@ -635,6 +635,37 @@
           "meditation",
           "bed rest",
           "flaxseed meal"
+        ],
+        "conditions": [
+          "long covid",
+          "cervical radiculopathy"
+        ],
+        "medications": [
+          "nicotine gum",
+          "nicotine patch",
+          "butyrate",
+          "omega 3s"
+        ],
+        "dosage": [
+          "2-4 mg",
+          "16 mg/day",
+          "7 mg/24 h",
+          "600 mg twice daily"
+        ],
+        "treatment_outcome": [
+          "nicotine gum: mixed",
+          "nicotine patch: worsened: migraine",
+          "butyrate: helped: gi symptoms",
+          "butyrate: helped: sleep quality",
+          "nicotine patch: helped: sleep"
+        ],
+        "work_disability_status": [
+          "medical leave",
+          "unable to attend graduate program"
+        ],
+        "biomarker_results": [
+          "positive ana 1:80 speckled",
+          "mild neutropenia"
         ]
       },
       "gold_source": {
@@ -642,7 +673,16 @@
         "symptom_trajectory": "agreed",
         "procedures": "agreed",
         "mental_health": "agreed",
-        "alternative_treatments": "agreed"
+        "alternative_treatments": "agreed",
+        "conditions": "adjudicated",
+        "onset_trigger": "adjudicated",
+        "medications": "adjudicated",
+        "dosage": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "social_impact": "adjudicated",
+        "functional_status_tier": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "high"
     },
@@ -701,6 +741,52 @@
         ],
         "functional_status_tier": [
           "mostly_functional"
+        ],
+        "symptom_trajectory": [
+          "full remission"
+        ],
+        "medications": [
+          "abilify",
+          "vitamin d",
+          "iron",
+          "vitamin b12",
+          "vitamin b1",
+          "coenzyme q10",
+          "omega-3",
+          "iodine"
+        ],
+        "dosage": [
+          "0.75 mg daily",
+          "1.0 mg"
+        ],
+        "treatment_outcome": [
+          "golder autoimmune protocol: helped: pem",
+          "golder autoimmune protocol: helped: function",
+          "abilify: helped: function",
+          "abilify: worsened: mood swings",
+          "abilify: worsened: menstrual irregularities",
+          "cold: helped: cfs symptoms",
+          "get: no_effect",
+          "naturopath: no_effect",
+          "supplements: no_effect",
+          "diet improvements: no_effect",
+          "pacing: mixed: crashes"
+        ],
+        "work_disability_status": [
+          "unable to attend school"
+        ],
+        "prior_infections": [
+          "repeat viral infections",
+          "covid",
+          "cold"
+        ],
+        "alternative_treatments": [
+          "golder autoimmune protocol",
+          "pacing",
+          "get",
+          "naturopath",
+          "diet improvements",
+          "whole food plant based diet"
         ]
       },
       "gold_source": {
@@ -713,7 +799,16 @@
         "age_at_onset": "agreed",
         "mental_health": "agreed",
         "infection_count": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "symptom_trajectory": "adjudicated",
+        "medications": "adjudicated",
+        "dosage": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "prior_infections": "adjudicated",
+        "alternative_treatments": "adjudicated",
+        "social_impact": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "high"
     },
@@ -751,6 +846,22 @@
         ],
         "symptom_trajectory": [
           "improving"
+        ],
+        "work_disability_status": [
+          "left college"
+        ],
+        "mental_health": [
+          "depression",
+          "anxiety",
+          "trauma"
+        ],
+        "prior_infections": [
+          "covid"
+        ],
+        "social_impact": [
+          "isolation",
+          "family conflict",
+          "breakup"
         ]
       },
       "gold_source": {
@@ -758,7 +869,13 @@
         "location_country": "agreed",
         "conditions": "agreed",
         "onset_trigger": "agreed",
-        "symptom_trajectory": "agreed"
+        "symptom_trajectory": "agreed",
+        "work_disability_status": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "infection_count": "adjudicated",
+        "functional_status_tier": "adjudicated"
       },
       "stratum": "high"
     },
@@ -801,6 +918,15 @@
         ],
         "biomarker_results": [
           "high antibodies"
+        ],
+        "treatment_outcome": [
+          "hydroxyzine: no_effect: insomnia"
+        ],
+        "procedures": [
+          "antibody test"
+        ],
+        "prior_infections": [
+          "covid"
         ]
       },
       "gold_source": {
@@ -810,7 +936,13 @@
         "medications": "agreed",
         "work_disability_status": "agreed",
         "infection_count": "agreed",
-        "biomarker_results": "agreed"
+        "biomarker_results": "agreed",
+        "conditions": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "procedures": "adjudicated",
+        "prior_infections": "adjudicated",
+        "long_covid_duration_months": "adjudicated",
+        "functional_status_tier": "adjudicated"
       },
       "stratum": "high"
     },
@@ -849,13 +981,47 @@
         "social_impact": [
           "cancelled plans",
           "relationship strain"
+        ],
+        "onset_trigger": [
+          "viral thyroid infection"
+        ],
+        "treatment_outcome": [
+          "levothyroxine: no_effect: fatigue"
+        ],
+        "procedures": [
+          "blood tests"
+        ],
+        "work_disability_status": [
+          "cannot work in trained industry",
+          "retraining",
+          "part-time only"
+        ],
+        "mental_health": [
+          "mental exhaustion",
+          "low self-worth"
+        ],
+        "prior_infections": [
+          "viral thyroid infection"
+        ],
+        "biomarker_results": [
+          "tsh 9.5",
+          "positive thyroid antibodies"
         ]
       },
       "gold_source": {
         "symptom_duration": "agreed",
         "symptom_trajectory": "agreed",
         "medications": "agreed",
-        "social_impact": "agreed"
+        "social_impact": "agreed",
+        "conditions": "adjudicated",
+        "onset_trigger": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "procedures": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated",
+        "functional_status_tier": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "high"
     },
@@ -890,13 +1056,25 @@
         ],
         "long_covid_duration_months": [
           "5"
+        ],
+        "symptom_duration": [
+          "5 months"
+        ],
+        "prior_infections": [
+          "covid"
         ]
       },
       "gold_source": {
         "onset_trigger": "agreed",
         "symptom_trajectory": "agreed",
         "mental_health": "agreed",
-        "long_covid_duration_months": "agreed"
+        "long_covid_duration_months": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "infection_count": "adjudicated",
+        "functional_status_tier": "adjudicated"
       },
       "stratum": "high"
     },
@@ -971,6 +1149,43 @@
         ],
         "functional_status_tier": [
           "moderate"
+        ],
+        "conditions": [
+          "ibs-m"
+        ],
+        "treatment_outcome": [
+          "antivert: no_effect: dizziness",
+          "scopolamine patch: helped: dizziness",
+          "headache medication: helped: headaches",
+          "headache medication: worsened: dizziness",
+          "metoprolol: helped",
+          "modafinil: mixed: fatigue",
+          "antibiotic: no_effect",
+          "steroid: no_effect"
+        ],
+        "procedures": [
+          "blood tests",
+          "mri",
+          "tcd",
+          "eeg",
+          "heart ultrasound",
+          "ekg",
+          "chest x-ray",
+          "hearing test",
+          "vng balance test"
+        ],
+        "prior_infections": [
+          "covid"
+        ],
+        "long_covid_duration_months": [
+          "6"
+        ],
+        "biomarker_results": [
+          "normal blood tests",
+          "normal mri",
+          "normal eeg",
+          "normal tcd",
+          "extra heart beats"
         ]
       },
       "gold_source": {
@@ -984,7 +1199,15 @@
         "work_disability_status": "agreed",
         "mental_health": "agreed",
         "infection_count": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "conditions": "adjudicated",
+        "age_at_onset": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "procedures": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "long_covid_duration_months": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "high"
     },
@@ -1018,13 +1241,37 @@
         ],
         "long_covid_duration_months": [
           "2"
+        ],
+        "symptom_duration": [
+          "2 months"
+        ],
+        "medications": [
+          "turmeric",
+          "vitamin d",
+          "vitamin c",
+          "zinc",
+          "fish oil",
+          "quercetin",
+          "melatonin"
+        ],
+        "work_disability_status": [
+          "student"
         ]
       },
       "gold_source": {
         "age": "agreed",
         "sex_gender": "agreed",
         "conditions": "agreed",
-        "long_covid_duration_months": "agreed"
+        "long_covid_duration_months": "agreed",
+        "onset_trigger": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "age_at_onset": "adjudicated",
+        "medications": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "prior_infections": "adjudicated",
+        "alternative_treatments": "adjudicated",
+        "functional_status_tier": "adjudicated"
       },
       "stratum": "high"
     },
@@ -1046,8 +1293,24 @@
         "symptom_duration": "5 months",
         "treatment_outcome": "unspecified pill: unknown"
       },
-      "gold": {},
-      "gold_source": {},
+      "gold": {
+        "mental_health": [
+          "stress"
+        ]
+      },
+      "gold_source": {
+        "sex_gender": "adjudicated",
+        "conditions": "adjudicated",
+        "onset_trigger": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "medications": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "infection_count": "adjudicated",
+        "long_covid_duration_months": "adjudicated"
+      },
       "stratum": "high"
     },
     {
@@ -1080,13 +1343,36 @@
         ],
         "age_at_onset": [
           "22"
+        ],
+        "conditions": [
+          "me/cfs",
+          "fibromyalgia",
+          "ibs"
+        ],
+        "symptom_duration": [
+          "since age 22"
+        ],
+        "work_disability_status": [
+          "lost job",
+          "disability denied",
+          "working again"
+        ],
+        "social_impact": [
+          "no social life",
+          "family disbelief",
+          "financial hardship"
         ]
       },
       "gold_source": {
         "age": "agreed",
         "sex_gender": "agreed",
         "symptom_trajectory": "agreed",
-        "age_at_onset": "agreed"
+        "age_at_onset": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "social_impact": "adjudicated",
+        "functional_status_tier": "adjudicated"
       },
       "stratum": "high"
     },
@@ -1127,6 +1413,18 @@
         ],
         "functional_status_tier": [
           "moderate"
+        ],
+        "onset_trigger": [
+          "mono and covid"
+        ],
+        "symptom_trajectory": [
+          "relapsing"
+        ],
+        "mental_health": [
+          "low mood"
+        ],
+        "long_covid_duration_months": [
+          "5-6"
         ]
       },
       "gold_source": {
@@ -1135,7 +1433,13 @@
         "procedures": "agreed",
         "prior_infections": "agreed",
         "infection_count": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "onset_trigger": "adjudicated",
+        "symptom_trajectory": "adjudicated",
+        "age_at_onset": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "mental_health": "adjudicated",
+        "long_covid_duration_months": "adjudicated"
       },
       "stratum": "high"
     },
@@ -1168,13 +1472,46 @@
         ],
         "infection_count": [
           "1"
+        ],
+        "conditions": [
+          "gluten intolerance",
+          "anxiety"
+        ],
+        "symptom_duration": [
+          "since january"
+        ],
+        "symptom_trajectory": [
+          "improving"
+        ],
+        "mental_health": [
+          "anxiety",
+          "panic attacks"
+        ],
+        "prior_infections": [
+          "covid"
+        ],
+        "alternative_treatments": [
+          "exercise"
+        ],
+        "biomarker_results": [
+          "normal cardiology evaluation"
         ]
       },
       "gold_source": {
         "age": "agreed",
         "sex_gender": "agreed",
         "onset_trigger": "agreed",
-        "infection_count": "agreed"
+        "infection_count": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "symptom_trajectory": "adjudicated",
+        "age_at_onset": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated",
+        "alternative_treatments": "adjudicated",
+        "long_covid_duration_months": "adjudicated",
+        "functional_status_tier": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "high"
     },
@@ -1203,13 +1540,22 @@
         ],
         "mental_health": [
           "anxiety"
+        ],
+        "treatment_outcome": [
+          "pacing: helped: pem",
+          "pacing: helped: anxiety"
+        ],
+        "alternative_treatments": [
+          "pacing"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
         "symptom_duration": "agreed",
         "symptom_trajectory": "agreed",
-        "mental_health": "agreed"
+        "mental_health": "agreed",
+        "treatment_outcome": "adjudicated",
+        "alternative_treatments": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1240,13 +1586,27 @@
         ],
         "long_covid_duration_months": [
           "12"
+        ],
+        "symptom_trajectory": [
+          "not improving"
+        ],
+        "mental_health": [
+          "anxiety",
+          "intrusive thoughts",
+          "feelings of doom"
+        ],
+        "prior_infections": [
+          "covid"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
         "symptom_duration": "agreed",
         "medications": "agreed",
-        "long_covid_duration_months": "agreed"
+        "long_covid_duration_months": "agreed",
+        "symptom_trajectory": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1276,11 +1636,38 @@
           "nac",
           "quercetin",
           "prednisone"
+        ],
+        "symptom_duration": [
+          "since june 2022"
+        ],
+        "treatment_outcome": [
+          "albuterol: worsened: lung burning",
+          "albuterol: worsened: tachycardia",
+          "levalbuterol: worsened: lung burning",
+          "spiriva: worsened: lung burning",
+          "ipratropium: worsened: lung burning",
+          "nac: worsened: lung burning",
+          "quercetin: worsened: lung burning",
+          "prednisone: worsened: lung burning",
+          "steam: helped: pain"
+        ],
+        "prior_infections": [
+          "covid"
+        ],
+        "alternative_treatments": [
+          "steam"
         ]
       },
       "gold_source": {
         "onset_trigger": "agreed",
-        "medications": "agreed"
+        "medications": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "symptom_trajectory": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "prior_infections": "adjudicated",
+        "alternative_treatments": "adjudicated",
+        "infection_count": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1307,12 +1694,24 @@
         ],
         "infection_count": [
           "1"
+        ],
+        "symptom_duration": [
+          "since last march"
+        ],
+        "symptom_trajectory": [
+          "improving"
+        ],
+        "prior_infections": [
+          "covid"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
         "onset_trigger": "agreed",
-        "infection_count": "agreed"
+        "infection_count": "agreed",
+        "symptom_duration": "adjudicated",
+        "symptom_trajectory": "adjudicated",
+        "prior_infections": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1339,12 +1738,21 @@
         ],
         "functional_status_tier": [
           "severe"
+        ],
+        "symptom_duration": [
+          "2 years"
+        ],
+        "mental_health": [
+          "fear"
         ]
       },
       "gold_source": {
         "symptom_trajectory": "agreed",
         "prior_infections": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "onset_trigger": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "mental_health": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1375,13 +1783,30 @@
         ],
         "functional_status_tier": [
           "housebound"
+        ],
+        "symptom_duration": [
+          "since age 13"
+        ],
+        "mental_health": [
+          "suicidal ideation",
+          "shame",
+          "hopelessness",
+          "childhood abuse trauma"
+        ],
+        "social_impact": [
+          "family estrangement",
+          "isolation",
+          "lack of support"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
         "age_at_onset": "agreed",
         "work_disability_status": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "symptom_duration": "adjudicated",
+        "mental_health": "adjudicated",
+        "social_impact": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1401,10 +1826,22 @@
       "gold": {
         "onset_trigger": [
           "covid"
+        ],
+        "work_disability_status": [
+          "affecting job"
+        ],
+        "prior_infections": [
+          "covid"
         ]
       },
       "gold_source": {
-        "onset_trigger": "agreed"
+        "onset_trigger": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "work_disability_status": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "infection_count": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1440,6 +1877,20 @@
         ],
         "functional_status_tier": [
           "severe"
+        ],
+        "location_country": [
+          "united states"
+        ],
+        "treatment_outcome": [
+          "cymbalta: helped: pain",
+          "exercise: worsened"
+        ],
+        "mental_health": [
+          "emotional distress"
+        ],
+        "alternative_treatments": [
+          "exercise",
+          "rest"
         ]
       },
       "gold_source": {
@@ -1447,7 +1898,11 @@
         "symptom_duration": "agreed",
         "symptom_trajectory": "agreed",
         "medications": "agreed",
-        "functional_status_tier": "agreed"
+        "functional_status_tier": "agreed",
+        "location_country": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "mental_health": "adjudicated",
+        "alternative_treatments": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1476,12 +1931,25 @@
         ],
         "prior_infections": [
           "covid"
+        ],
+        "conditions": [
+          "gerd"
+        ],
+        "symptom_duration": [
+          "just over a month"
+        ],
+        "long_covid_duration_months": [
+          "1"
         ]
       },
       "gold_source": {
         "onset_trigger": "agreed",
         "procedures": "agreed",
-        "prior_infections": "agreed"
+        "prior_infections": "agreed",
+        "conditions": "adjudicated",
+        "symptom_duration": "adjudicated",
+        "infection_count": "adjudicated",
+        "long_covid_duration_months": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1506,11 +1974,41 @@
         ],
         "onset_trigger": [
           "covid"
+        ],
+        "symptom_duration": [
+          "5 months"
+        ],
+        "procedures": [
+          "ecg"
+        ],
+        "mental_health": [
+          "sadness"
+        ],
+        "prior_infections": [
+          "covid"
+        ],
+        "social_impact": [
+          "family disbelief",
+          "lack of support"
+        ],
+        "long_covid_duration_months": [
+          "5"
+        ],
+        "biomarker_results": [
+          "ecg change"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
-        "onset_trigger": "agreed"
+        "onset_trigger": "agreed",
+        "symptom_duration": "adjudicated",
+        "procedures": "adjudicated",
+        "mental_health": "adjudicated",
+        "prior_infections": "adjudicated",
+        "social_impact": "adjudicated",
+        "infection_count": "adjudicated",
+        "long_covid_duration_months": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "medium"
     },
@@ -1523,8 +2021,14 @@
       "baseline_extracted": {
         "mental_health": "loss of hope"
       },
-      "gold": {},
-      "gold_source": {},
+      "gold": {
+        "mental_health": [
+          "loss of hope"
+        ]
+      },
+      "gold_source": {
+        "mental_health": "adjudicated"
+      },
       "stratum": "low"
     },
     {
@@ -1542,10 +2046,33 @@
       "gold": {
         "conditions": [
           "me/cfs"
+        ],
+        "symptom_trajectory": [
+          "relapsing"
+        ],
+        "treatment_outcome": [
+          "keto diet: worsened: swollen lymph nodes",
+          "reintroduced carbs: helped: swelling"
+        ],
+        "procedures": [
+          "physical exam",
+          "blood work",
+          "urine test"
+        ],
+        "alternative_treatments": [
+          "keto diet"
+        ],
+        "biomarker_results": [
+          "high urine ketones"
         ]
       },
       "gold_source": {
-        "conditions": "agreed"
+        "conditions": "agreed",
+        "symptom_trajectory": "adjudicated",
+        "treatment_outcome": "adjudicated",
+        "procedures": "adjudicated",
+        "alternative_treatments": "adjudicated",
+        "biomarker_results": "adjudicated"
       },
       "stratum": "low"
     },
@@ -1570,12 +2097,16 @@
         ],
         "long_covid_duration_months": [
           "10"
+        ],
+        "symptom_trajectory": [
+          "not improving"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
         "symptom_duration": "agreed",
-        "long_covid_duration_months": "agreed"
+        "long_covid_duration_months": "agreed",
+        "symptom_trajectory": "adjudicated"
       },
       "stratum": "low"
     },
@@ -1592,10 +2123,14 @@
       "gold": {
         "mental_health": [
           "depression"
+        ],
+        "social_impact": [
+          "dating difficulty"
         ]
       },
       "gold_source": {
-        "mental_health": "agreed"
+        "mental_health": "agreed",
+        "social_impact": "adjudicated"
       },
       "stratum": "low"
     },
@@ -1615,11 +2150,15 @@
         ],
         "medications": [
           "zyrtec"
+        ],
+        "symptom_trajectory": [
+          "relapsing"
         ]
       },
       "gold_source": {
         "conditions": "agreed",
-        "medications": "agreed"
+        "medications": "agreed",
+        "symptom_trajectory": "adjudicated"
       },
       "stratum": "low"
     },

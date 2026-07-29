@@ -1,0 +1,394 @@
+{
+  "chunk": 2,
+  "posts": [
+    {
+      "post_id": "t3_r5z0ng",
+      "text": "Update on fatigue:\n\njust turned 16 and ever since i had mono and covid(about 5-6 months ago) i haven’t felt the same it got better over the cource of the last 4 months by recently it got bad like during mid october. i struggle to do simple tasks and even doing homeschool which is usually very easy for me is a challenge. it’s almost like my brain doesn’t wanna think. also today i took my permit test for the second time because i failed the first time. and i failed again. my body does not let me focus on anything and now i am starting to get daily headaches and gain weight because of of inactive i am. does anyone have any suggestions i used to be an athletic kid that was happy and now i am in a complete shithole i get back pain when i bend over, waking down the stairs feels like running a mile, and my brain has a hard time focusing on homework and other important school things a regular 16 year old needs to do. i have such bad brain fog nothing feels real i haven’t felt anything in so long someone please give me suggestions it would be much appreciated i got a blood test 2 days ago and waiting for results.",
+      "cells": [
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "onset_trigger",
+          "labeler": "mono and covid infection",
+          "production": "mono and covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "symptom_trajectory",
+          "labeler": "improved then worsened",
+          "production": "relapsing",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "age_at_onset",
+          "labeler": "15",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "work_disability_status",
+          "labeler": "struggling with homeschool",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "mental_health",
+          "labeler": "low mood",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_r5z0ng",
+          "field": "long_covid_duration_months",
+          "labeler": "",
+          "production": "5-6 months",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_ter21n",
+      "text": "Worse symptoms after drinking\n\nHey guys! I got COVID in January. It was worse than I was expecting. I’m a 23y/o female carded boosted and no stellar athlete but healthy weight and good habits. I had flu, then neurological, then chest symptoms over my first three weeks. Ever since then I’ve had waves of fibromyalgia-like symptoms. But I’m happy to work with my body to reduce inflammation and work through it. I’ve been able to ease back into exercise and it feels like my body is slowly recovering. \n\nBut the psychological symptoms are fucking wack. I’ve always had anxiety, but it’s off the fucking chain now. I had a panic attack on a plane for the first time last month. I got so worked up over the prospect of nuclear war when the Ukraine stuff was happening. And when my chest pain started with my acute infection I was convinced I was gonna get a heart attack. I wen ti a cardiologist and was fine, and my other anxieties have subsided. But it’s like I’m just waiting for the new thing to send me into these tailspins. I’ve had the same number of intense anxious episodes in the last two months than I have in my life. My parents divorce, my dads death, and my brother going to jail didn’t even cause my this much acute distress. \n\nThat stress manifested itself into physical symptoms. I got a canker sore and yeast infection. I went out on Friday and got drunk, and todays Tuesday and i still feel like shit. Body aches, fatigue, vague sore throat. I feel sick the way I did when I had Covid. I also ate gluten which I’m intolerant of, so my body is mad at me.\n\nI’m mostly wondering if anyone else has had this experience, where you’re on the mend and drinking alcohol completely fucks you and you feel like you have mono or Covid again? Like if the inflammation triggers an immune response or something? Are our immune systems post Covid more susceptible to other viruses?",
+      "cells": [
+        {
+          "post_id": "t3_ter21n",
+          "field": "conditions",
+          "labeler": "covid-19 | gluten intolerance | anxiety",
+          "production": "anxiety | gluten intolerance",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "symptom_duration",
+          "labeler": "since january",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "symptom_trajectory",
+          "labeler": "slowly improving | waves of symptoms",
+          "production": "improving",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "age_at_onset",
+          "labeler": "23",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "mental_health",
+          "labeler": "anxiety | panic attack",
+          "production": "anxiety | panic attacks",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "alternative_treatments",
+          "labeler": "exercise | gluten-free diet",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "long_covid_duration_months",
+          "labeler": "2",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "mild",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_ter21n",
+          "field": "biomarker_results",
+          "labeler": "normal cardiology evaluation",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_16i22nr",
+      "text": "“Turbo Mode”\n\nI’ve had CFS for 7 years but had something of a break through the last couple weeks. Very much still in progress and most people probably wouldn’t notice a big difference but I do. Over the course of this year I’ve realized that I seem to constantly go I nto a “turbo mode” of sorts (from video game days) where I feel like I’m pressing to do whatever it is I’m trying to do as fast/hard as possible. Obviously, this has resulted in my not doing much of anything for very long without PEM. \n\nHowever, over the last few weeks I’ve finally been able to not only recognize myself doing it, but stop pushing so hard and doing whatever it is I’m trying to do at “a slow pace”. It’s amazing, even though I’m doing things so much slower than “normal” people, I can do things I haven’t done for years.  As a result I’ve also been able to stop my anxiety much quicker than before, which makes me suspect it was a symptom of the underlying physical issues. \n\nAnyway, not a cure by any means but it does seem to allow me to do things I couldn’t before and am sharing to see if anyone else has had a similar experience.",
+      "cells": [
+        {
+          "post_id": "t3_16i22nr",
+          "field": "treatment_outcome",
+          "labeler": "pacing: helped: anxiety | pacing: helped: pem",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16i22nr",
+          "field": "alternative_treatments",
+          "labeler": "pacing",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "text": "so long covid has given me extreme anxiety, ocd like intrusive thought cycles and overall feelings of doom 24/7. i’ve been prescribed zoloft and i’m seriously considering taking it as it’s been 1 year and i’m not getting better.",
+      "cells": [
+        {
+          "post_id": "t3_10aifwh",
+          "field": "symptom_trajectory",
+          "labeler": "not improving",
+          "production": "worsening",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_10aifwh",
+          "field": "mental_health",
+          "labeler": "extreme anxiety | intrusive thought cycles | feelings of doom",
+          "production": "anxiety | ocd | intrusive thoughts | feelings of doom",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_10aifwh",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "covid-19",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "text": "My lungs haven’t stopped burning since I got covid\n\nI got covid in June of 2022 and cannot find anything to help with the constant burning in my lungs. I have tried inhalers like albuterol, levalbuterol, and spiriva and all of them have had made the burning worse or have had other adverse side effects (i.e became tachycardic with albuterol). Other medications/supplements that I have tried that have made the burning worse are ipratropium, NAC, quercetin, and prednisone. Sometimes steam helps alleviates some of the pain but nothing else really helps. The wildfire smoke that came through in 2022 and this year also exacerbated the burning sensation. Any advice would be great!",
+      "cells": [
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "conditions",
+          "labeler": "covid-19",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "symptom_duration",
+          "labeler": "since june 2022",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "symptom_trajectory",
+          "labeler": "persistent",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "treatment_outcome",
+          "labeler": "albuterol: worsened: lung burning | albuterol: worsened: tachycardia | levalbuterol: worsened: lung burning | spiriva: worsened: lung burning | ipratropium: worsened: lung burning | nac: worsened: lung burning | quercetin: worsened: lung burning | prednisone: worsened: lung burning | steam: helped: pain",
+          "production": "albuterol: worsened: burning | albuterol: worsened: tachycardia | levalbuterol: worsened: burning | spiriva: worsened: burning | ipratropium: worsened: burning | nac: worsened: burning | quercetin: worsened: burning | prednisone: worsened: burning | steam: helped: burning",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "prior_infections",
+          "labeler": "covid june 2022",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "alternative_treatments",
+          "labeler": "steam inhalation",
+          "production": "steam",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_16f8lhq",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "text": "strange pain in my veins\n\nI got Covid last March and have been dealing with many issues of Covid Longhaul ever since, including POTS, severe joint and bone pain, and brain fog, among other symptoms. I have been doing better lately, but last night I started to have this deep pain in my lower left arm/wrist that felt like it was in my bones. And then, it felt like it was in my blood/veins. When I turned my wrist over, my veins were bulging like they never have before and were way more saturated in color. \n\nMany of us, including some of the research, has theorized that this is a virus of the blood - especially Longhaul. I was so afraid of a clot of stroke last night. Have other people experienced this and what have you done about it?",
+      "cells": [
+        {
+          "post_id": "t3_lxs7ym",
+          "field": "symptom_duration",
+          "labeler": "since last march",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_lxs7ym",
+          "field": "symptom_trajectory",
+          "labeler": "improving",
+          "production": "relapsing",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_lxs7ym",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "text": "What did you do when you got worse?\n\nI was quite mild in the last 2 ish years but now I am bordering on severe and am very scared. I got bronchitis at Christmas and have been a lot worse ever since. \n\nDo I need to cut right back and rest as much as I can? My absolute maximum is 3,000 steps on a good day.",
+      "cells": [
+        {
+          "post_id": "t3_c41zbw",
+          "field": "onset_trigger",
+          "labeler": "",
+          "production": "bronchitis",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_c41zbw",
+          "field": "symptom_duration",
+          "labeler": "2 years",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_c41zbw",
+          "field": "mental_health",
+          "labeler": "fear",
+          "production": "scared",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "text": "it's not like I'm not deeply disappointed in my abusive family but the fact that they've always perceived my disability as a ...lifestyle choice? makes me want to commit\n\nI'm no contact for years but sometimes I imagine them magically gaining access to superficially look at my life (housebound, unemployed, dirty house) and I just know how many hours of vicious ranting it would spark. like those potato brain vultures will go straight for my jugular. they'd devour the last hope I have for my survival. I'd be worse than dead. \n\nthis is actually the worst way to destroy a human soul that I can imagine: to break a child into disability and then make fun of their quality of life with all possible implications of how the situation is of their own making. \n\nsometimes my mind is decent at comprehending how I can be treated with dignity, like you know, sometimes the layer of dignity. is. there. but then i look through their eyes and I want to stop breathing. this is just too painful. I haven't got enough friends' support to have any solid barrier against it. \n\nok let's get delulu. well not really. I'm so ashamed to even think of it (it feels fucking shameful when such pathetic people haunt you for so long) that I have to discredit myself by calling it paranoid schizophrenia. I honestly don't know how much of it is reasonably protecting myself from hurt and how much is inflicting unnecessary pain as an old habit. the thigh is - my brain is still predicting no matter how hard I try to suppress. so in this post I wanted to try to let it out. here's my best predictions as if I'm preparing a bingo for when they'll abduct and torture me: \n\n◉ [something about how I deconditioned myself.] literally heard that one so many times. I was almost bedbound since 13 y. o. and I got screamed every day for it with zero attempts to get medical help. when I was trying to get some help by myself at 16-18 I had to fight for my life through screaming and accusations to have money for it.\n\n◉ [derogatory comparing me to my father.] and the guy is literally the one who inherited me at least his autism, other things not so sure but he spend all his time sitting and dissociating so chances are.\n\n◉ [haven't tried enough, haven't pushed through it enough.] do I expect them to comprehend that it's a very native thinking? no. would the brutal violent force with which they believe their crap absolutely destroy me? yeah.\n\n◉ [emotional rollercoaster with rage -> fake concern -> more rage again.] i don't know how am i supposed to live knowing that I'm debilitated to the point that one more encounter with a psychopath or narcissist will kill me.\n\n◉ [lazy and ugly and stubborn and stupid.] well yeah. weilding this shit like deadly weapons. no thoughts just immediate verbalising their rage in convenient labels. \n\n◉ [no one have noticed.] that's true. I was failed by all the teachers and healthcare professionals and they would totally use it as proof of their innocence.\n\n◉ [what are you an invalid now?] in my language it's easy to use this word derogatory. and it totally would. this is the ugliest thing known to me.\n\n◉ [something about bedbound life being convenient and a choice.]\n\n◉ [you look normal and have all your limbs intact.] yes we are dealing with insanity here, terminal case of \"if it's invisible it's not happening\" mentality.\n\n◉ [delighting at my struggles and making up reasons why I deserve it.] yes this is demonic. \n\nI don't know. I don't fucking know. how many people around you are like this? are those most common opinions even though bit on the extreme side? sometimes I'm ok with most people being stupid and defending their minds from scary reality of disability but it kinda makes me hopeless. I struggle so much with pain and not being able to move and my heart is either very heavy or unbearably heavy. I can't have humiliation and blame above it. \n\nthere's gotta be some classic tragedy where main character is abused and betrayed all his life and at the end humiliated with his misery portrayed to be of his on making. do you know anything like this?\n\nplease give me hope by telling that you know a person who wouldn't side with my abusers if they say \"my kid lays in bed all the time and refuses to go to school or do chores fucking lazy ungrateful failure\"",
+      "cells": [
+        {
+          "post_id": "t3_14ws4v3",
+          "field": "symptom_duration",
+          "labeler": "since age 13",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_14ws4v3",
+          "field": "mental_health",
+          "labeler": "suicidal ideation | shame | hopelessness | childhood abuse trauma",
+          "production": "suicidal ideation | depression",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_14ws4v3",
+          "field": "social_impact",
+          "labeler": "no contact family | isolation | lack of support",
+          "production": "family estrangement | isolation | shame",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "text": "Not being able to fall asleep\n\nHi all,\n\nI was diagnosed with covid on the 21st of December 10 days after I notice I cannot fall asleep I fell tired but cannot sleep at night at all if im lucky I may get a successful nap but being up at night is starting to affect my job.\n\nDid you guys find it impossible to sleep after having covid if so what did you do to help you sleep?",
+      "cells": [
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "conditions",
+          "labeler": "covid-19",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "symptom_duration",
+          "labeler": "",
+          "production": "10 days",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "work_disability_status",
+          "labeler": "affecting job",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "prior_infections",
+          "labeler": "covid-19",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "social_impact",
+          "labeler": "",
+          "production": "affecting job",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_rxbqqw",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "text": "Looking for a good doctor in Boston or Providence RI area, getting desperate\n\nSo I just saw my rheumatologist who had previously dxd me with fibro, was dxd by another doctor with POTS over a decade ago when this shit began... told him the exercise he prescribed was the worst thing for me. Told him after a 10 minute walk I was bedbound for 3 days and couldn’t brush my own teeth. Told him rest is the only thing that I seem to be able to do. I said look, I have all the criteria for CFS, my orthostatic intolerance is getting worse, my cognitive dysfunction is causing me to put milk away in the bathroom cabinet and causing the whole house to smell for a week until I figure it out, and my PEM is out of control, the only symptom you’ve even vaguely helped with was the pain and that’s because my psychiatrist had the foresight to titrate my cymbalta dose up. I said “Is this what’s wrong with me? Is it CFS?” He said “you can use that label if it makes you more comfortable but keep trying to exercise.” I broke down sobbing in the parking lot after I left. I can’t keep trying to exercise and for fucks sake I’m not comfortable with a dx of CFS, but I at least need to know what’s wrong with me. I need a doctor that isn’t so blasé... I need help. I’m so broken right now.",
+      "cells": [
+        {
+          "post_id": "t3_mcf9pi",
+          "field": "location_country",
+          "labeler": "usa",
+          "production": "united states",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mcf9pi",
+          "field": "treatment_outcome",
+          "labeler": "cymbalta: helped: pain | exercise: worsened",
+          "production": "cymbalta: helped: pain",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mcf9pi",
+          "field": "mental_health",
+          "labeler": "emotional distress",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mcf9pi",
+          "field": "alternative_treatments",
+          "labeler": "prescribed exercise | rest",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    }
+  ]
+}

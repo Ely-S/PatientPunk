@@ -54,7 +54,7 @@ per field in `gold_source`:
 |---|---|
 | `spotcheck` | the original 20 records: a production run's output, corrected where a human+Haiku spot-check found it wrong (7 of 20 records touched) |
 | `agreed` | `claude-opus-5` and the production `deepseek-v4-flash` independently produced the same value set |
-| `adjudicated` | the two disagreed and a human resolved it against the post text |
+| `adjudicated` | the two disagreed and a third pass resolved it against the post text under `review/ADJUDICATION_POLICY.md` |
 
 Two independent models agreeing is weak evidence, but it is *independent* evidence,
 and it concentrates human effort on the cells where they differ. What it cannot

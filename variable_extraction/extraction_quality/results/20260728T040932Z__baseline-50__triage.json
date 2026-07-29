@@ -1,0 +1,1215 @@
+{
+  "results_file": "20260728T040932Z__baseline-50.json",
+  "judge": "anthropic/claude-opus-5",
+  "counts": {
+    "inference": 29,
+    "gold_wrong": 12,
+    "granularity": 14,
+    "vocab_variant": 10,
+    "omission": 51,
+    "unclear": 2,
+    "field_bleed": 6,
+    "hallucination": 2,
+    "over_attribution": 6,
+    "unclassified": 1
+  },
+  "triaged": [
+    {
+      "post_id": "t3_vkkcui",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "exercise: helped: heart palpitations",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text says 40% better overall but never states exercise improved palpitations, which persist."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "age_at_onset",
+      "gold": "",
+      "candidate": "32",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "32 is the stated current age; age at symptom onset is inferred, not explicit."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "conditions",
+      "gold": "postcovid",
+      "candidate": "long covid | post-covid condition | health anxiety",
+      "kind": "DIFF",
+      "code": "gold_wrong",
+      "reason": "Text explicitly states extreme health anxiety plus PostCovid; gold omits the anxiety diagnosis, candidate captures both."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "mental_health",
+      "gold": "health anxiety",
+      "candidate": "health anxiety | anxiety",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate duplicates gold's 'health anxiety' with the coarser term 'anxiety'; same fact, less precision."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "prior_infections",
+      "gold": "covid-19",
+      "candidate": "covid",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "'covid' and 'covid-19' are the same infection expressed differently."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "procedures",
+      "gold": "mri | blood tests",
+      "candidate": "mri",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text states many blood tests were done; candidate omitted this procedure listed in gold."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "social_impact",
+      "gold": "",
+      "candidate": "relationship strain | isolation",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Wife forbidding self-diagnosis and secret posting hints at strain, but relationship strain/isolation are never explicitly stated."
+    },
+    {
+      "post_id": "t3_15kwgjz",
+      "field": "symptom_trajectory",
+      "gold": "relapsing",
+      "candidate": "improving",
+      "kind": "DIFF",
+      "code": "unclear",
+      "reason": "Text shows mixed picture: many symptoms improved but new ones added; neither 'improving' nor 'relapsing' clearly supported."
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "depression",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Depression is only implied by the off-label context; text never states author has depression."
+    },
+    {
+      "post_id": "t3_lmu7ty",
+      "field": "mental_health",
+      "gold": "anhedonia",
+      "candidate": "depression | anhedonia",
+      "kind": "DIFF",
+      "code": "gold_wrong",
+      "reason": "Depression is explicitly mentioned in the text; gold's single-value label is incomplete for a 'mentioned' field."
+    },
+    {
+      "post_id": "t3_11c65ge",
+      "field": "infection_count",
+      "gold": "1",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text implies a single COVID infection; candidate left the count blank while gold captured it."
+    },
+    {
+      "post_id": "t3_11c65ge",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "covid",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text explicitly states covid infection 10 months prior; gold's empty value is incomplete."
+    },
+    {
+      "post_id": "t3_11c65ge",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "10 months",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "\"10 months\" is the interval since covid, not symptom duration; candidate inferred duration from onset timing."
+    },
+    {
+      "post_id": "t3_6ygbyh",
+      "field": "functional_status_tier",
+      "gold": "severe",
+      "candidate": "moderate",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate reports the prior baseline, missing the current severe tier stated in the text."
+    },
+    {
+      "post_id": "t3_6ygbyh",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "migraine",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "Migraine preceded a symptom flare, not illness onset; belongs to flare/exacerbation trigger, not onset_trigger."
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "conditions",
+      "gold": "me/cfs",
+      "candidate": "me/cfs | depression | anxiety",
+      "kind": "DIFF",
+      "code": "gold_wrong",
+      "reason": "Text explicitly mentions depression and anxiety alongside CFS; gold is incomplete."
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "procedures",
+      "gold": "",
+      "candidate": "blood tests",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text explicitly states the doctor did blood tests, a diagnostic procedure gold omitted."
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "social_impact",
+      "gold": "isolation",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "gold_wrong",
+      "reason": "Isolation is never stated; \"rot at home\" only loosely implies it, so empty is defensible."
+    },
+    {
+      "post_id": "t3_sa85zi",
+      "field": "work_disability_status",
+      "gold": "",
+      "candidate": "wants to quit job",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text explicitly says \"I want to quit my job,\" a relevant work status detail gold omitted."
+    },
+    {
+      "post_id": "t3_qd4asl",
+      "field": "mental_health",
+      "gold": "",
+      "candidate": "anxiety",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Author reports being 'worried' about the claim; 'anxiety' is a plausible but unstated diagnostic label."
+    },
+    {
+      "post_id": "t3_qd4asl",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "vaccine",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text explicitly states the flare began after the first vaccine dose; gold's empty value is incomplete."
+    },
+    {
+      "post_id": "t3_156wgqv",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "moderate",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states functional capacity; 'moderate' is inferred from symptom severity, not explicit."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "biomarker_results",
+      "gold": "positive ana 1:80 speckled | mild neutropenia",
+      "candidate": "ana 1:80 speckled | mild neutropenia",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate omits 'positive' qualifier but reports the same ANA titer result at slightly lower precision."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "conditions",
+      "gold": "long covid | cervical radiculopathy",
+      "candidate": "long covid",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text lists cervical radiculopathy and gold includes it; candidate omitted this diagnosis."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "dosage",
+      "gold": "2-4 mg | 16 mg/day | 7 mg/24 h | 600 mg twice daily",
+      "candidate": "2-4 mg nicotine gum | 16 mg/day nicotine | 7 mg/24h nicotine patch | 600 mg butyrate twice daily | 600 mg butyrate 2-4 times daily",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate gives the same dosages with added drug names and a text-supported frequency variant, differing only in precision."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "mild",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states a functional tier; 'mild' is inferred from near-recovery, not explicit."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "medications",
+      "gold": "nicotine gum | nicotine patch | butyrate | omega 3s",
+      "candidate": "nicotine gum | nicotine patch | butyrate | omega-3s (flaxseed meal)",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate's 'omega-3s (flaxseed meal)' is the same item with added source detail."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "infection",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Author never states an infection preceded their onset; it's inferred from their long covid/PAIS framing."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "social_impact",
+      "gold": "",
+      "candidate": "medical leave | unable to return to graduate program",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "Medical leave and graduate program interruption are work/education impacts, belonging in a work_impact field."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "treatment_outcome",
+      "gold": "nicotine gum: mixed | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch: helped: sleep",
+      "candidate": "nicotine gum: helped: overall functioning | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch + butyrate: helped: migraine",
+      "kind": "DIFF",
+      "code": "inference",
+      "reason": "Candidate reinterprets brief short-lived gum benefit and absence of patch-triggered migraines as explicit positive outcomes, not stated."
+    },
+    {
+      "post_id": "t3_yud4bw",
+      "field": "work_disability_status",
+      "gold": "medical leave | unable to attend graduate program",
+      "candidate": "on medical leave",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate captured medical leave but missed the stated inability to return to graduate program."
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "alternative_treatments",
+      "gold": "golder autoimmune protocol | pacing | get | naturopath | diet improvements | whole food plant based diet",
+      "candidate": "goldner autoimmune protocol | pacing | diet improvements",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate missed GET, naturopath, and whole food plant based diet, all stated in text and gold."
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "prior_infections",
+      "gold": "repeat viral infections | covid | cold",
+      "candidate": "repeat viral infections",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text and gold include the cold and covid infections; candidate listed only the initial viral infections."
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "symptom_trajectory",
+      "gold": "full remission",
+      "candidate": "improving",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate captures the improving direction but at coarser precision than the text's explicit full remission."
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "treatment_outcome",
+      "gold": "golder autoimmune protocol: helped: pem | golder autoimmune protocol: helped: function | abilify: helped: function | abilify: worsened: mood swings | abilify: worsened: menstrual irregularities | cold: helped: cfs symptoms | get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: mixed: crashes",
+      "candidate": "get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: helped: pem | autoimmune protocol: helped: pem | autoimmune protocol: helped: function | abilify: helped: fatigue | abilify: worsened: mood",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate omitted the cold's remission effect and Abilify's menstrual irregularities, both explicitly stated."
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "field": "work_disability_status",
+      "gold": "unable to attend school",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states she was unable to go to school; candidate left the field empty."
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "severe",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "\"Couldn't get out of bed\" one day is a plausible but unstated basis for a severe tier."
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text describes one COVID infection but never states an infection count explicitly."
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text says \"I got hit with covid\"; candidate missed the explicitly stated COVID infection."
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "social_impact",
+      "gold": "isolation | family conflict | breakup",
+      "candidate": "isolation | family conflict | relationship strain",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate's 'relationship strain' is a vaguer rendering of the explicitly stated breakup."
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "field": "work_disability_status",
+      "gold": "left college",
+      "candidate": "dropped out of college",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Both convey the same fact—college discontinued after covid—phrased differently."
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "mild",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states functional tier; 'mild' is inferred from 'mild case of covid' and working normally."
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly states a mild case of covid in January; candidate left field empty."
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "procedures",
+      "gold": "antibody test",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text mentions antibody testing in March via blood donation; candidate returned nothing."
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "field": "treatment_outcome",
+      "gold": "hydroxyzine: no_effect: insomnia",
+      "candidate": "hydroxyzine: no_effect",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate dropped the affected symptom (insomnia), which the text explicitly states hydroxyzine failed to treat."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "biomarker_results",
+      "gold": "tsh 9.5 | positive thyroid antibodies",
+      "candidate": "tsh 9.5 | thyroid antibodies positive",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Same two lab findings expressed with reordered wording; semantically identical to gold."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "hypothyroidism",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "High TSH, thyroid antibodies and levothyroxine imply hypothyroidism, but that diagnosis is never explicitly stated."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "severe",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text describes a temporary crash after a 5,000-step walk; 'severe' tier is inferred, never stated."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "mental_health",
+      "gold": "mental exhaustion | low self-worth",
+      "candidate": "mental fatigue | frustration | grief",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate missed the explicit \"not feeling good enough\" low self-worth, adding unstated frustration/grief instead."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "onset_trigger",
+      "gold": "viral thyroid infection",
+      "candidate": "viral infection of thyroid",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Same fact, trivially reworded phrasing of the viral thyroid infection trigger."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "prior_infections",
+      "gold": "viral thyroid infection",
+      "candidate": "viral infection of thyroid",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Same infection phrased differently; both denote the viral thyroid infection mentioned in the text."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "procedures",
+      "gold": "blood tests",
+      "candidate": "blood test",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Same procedure, singular vs plural form only."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "treatment_outcome",
+      "gold": "levothyroxine: no_effect: fatigue",
+      "candidate": "levothyroxine: no_effect",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate gives the same treatment outcome but omits the optional symptom detail, a less precise version."
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "field": "work_disability_status",
+      "gold": "cannot work in trained industry | retraining | part-time only",
+      "candidate": "retraining | part-time only",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text and gold state he cannot work in his trained industry; candidate omitted that element."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "long covid",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text says five months since covid with worsening symptoms; \"long covid\" is inferred, never stated."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "moderate",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states functional capacity level; 'moderate' is inferred from cognitive complaints alone."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text mentions one covid episode but never states an infection count; candidate inferred it."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly says 'five months since covid'; candidate missed the stated prior COVID infection."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "social_impact",
+      "gold": "",
+      "candidate": "academic impairment | reduced leisure",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "University focus and inability to read/watch TV are functional, not social, impacts."
+    },
+    {
+      "post_id": "t3_v7j806",
+      "field": "symptom_duration",
+      "gold": "5 months",
+      "candidate": "a few days",
+      "kind": "DIFF",
+      "code": "unclear",
+      "reason": "Text supports both: five months since covid overall, but this specific restlessness began days ago."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "age_at_onset",
+      "gold": "",
+      "candidate": "22",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text states current age 23; 22 is an unstated back-calculation from the six-month symptom duration."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "biomarker_results",
+      "gold": "normal blood tests | normal mri | normal eeg | normal tcd | extra heart beats",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly reports normal MRI/EEG/TCD, clean blood tests, and extra heart beats; candidate gave nothing."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "conditions",
+      "gold": "ibs-m",
+      "candidate": "ibs-m | long covid",
+      "kind": "DIFF",
+      "code": "inference",
+      "reason": "Long COVID is never stated; author says doctors don't know what's wrong, so it's inferred."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "procedures",
+      "gold": "blood tests | mri | tcd | eeg | heart ultrasound | ekg | chest x-ray | hearing test | vng balance test",
+      "candidate": "blood tests | mri | tcd | eeg | chest x-ray | ekg | hearing test | vng balance test",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate omitted the heart ultrasound explicitly mentioned in the cardiologist visit and listed in gold."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "social_impact",
+      "gold": "",
+      "candidate": "relationship strain | new job stress",
+      "kind": "EXTRA",
+      "code": "hallucination",
+      "reason": "Text never mentions relationship strain; his fiancée is supportive, and job difficulty is work, not social, impact."
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "field": "treatment_outcome",
+      "gold": "antivert: no_effect: dizziness | scopolamine patch: helped: dizziness | headache medication: helped: headaches | headache medication: worsened: dizziness | metoprolol: helped | modafinil: mixed: fatigue | antibiotic: no_effect | steroid: no_effect",
+      "candidate": "metoprolol: helped | modafinil: helped: fatigue | modafinil: no_effect: fatigue | antivert: no_effect | scopolamine patch: helped: dizziness | scopolamine patch: worsened: nausea | scopolamine patch: worsened: dizziness | headache medication: helped: headaches | headache medication: worsened: dizziness | antibiotic: no_effect | steroid: no_effect",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate splits modafinil's 'mixed' outcome into separate helped/no_effect entries, same facts at finer precision."
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "mild",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states a functional tier; 'mild' is inferred from ability to study/work despite brain fog."
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "vaccine",
+      "kind": "EXTRA",
+      "code": "hallucination",
+      "reason": "Text implies COVID infection onset two months prior; vaccine came later and reportedly helped, not triggered illness."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "conditions",
+      "gold": "",
+      "candidate": "long covid | chronic cough",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "The cough and post-COVID condition belong to the author's mother, not the author."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "The single infection belongs to the author's mother, not the author whose fields are being extracted."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "long_covid_duration_months",
+      "gold": "",
+      "candidate": "5",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "The persistent cough duration belongs to the author's mother, not the author himself."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "medications",
+      "gold": "",
+      "candidate": "unspecified pill",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text explicitly says she is \"taking some sort of pill,\" so an unspecified medication is mentioned; gold's empty value is incomplete."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "mental_health",
+      "gold": "stress",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Author explicitly says the cough \"has been stressing me out\"; candidate missed this stated stress."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "covid",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "COVID triggered the mother's cough, not the author's illness; candidate attributes it to the poster."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "prior_infections",
+      "gold": "",
+      "candidate": "covid",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "The COVID infection belongs to the author's mother, not the author himself."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "sex_gender",
+      "gold": "",
+      "candidate": "female",
+      "kind": "EXTRA",
+      "code": "over_attribution",
+      "reason": "Female describes the author's mother; the author's own sex is never stated."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "5 months",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text supports a roughly 5+ month/half-year cough duration since August/September; gold's empty value is incomplete."
+    },
+    {
+      "post_id": "t3_124jme1",
+      "field": "treatment_outcome",
+      "gold": "",
+      "candidate": "unspecified pill: unknown",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text says pill's effect is unknown, so no actual treatment outcome; candidate manufactures an 'unknown' outcome entry."
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "conditions",
+      "gold": "me/cfs | fibromyalgia | ibs",
+      "candidate": "me/cfs | fibromyalgia | migraines | ibs",
+      "kind": "DIFF",
+      "code": "gold_wrong",
+      "reason": "Text explicitly lists migraines as a condition; gold omitted it, candidate correctly included it."
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "severe",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states a functional tier; \"severe\" is inferred from symptom descriptions despite her working full-time."
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "social_impact",
+      "gold": "no social life | family disbelief | financial hardship",
+      "candidate": "lost job | homelessness risk | zero social life | family rejection",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Candidate's items paraphrase gold (zero social life, family rejection, homelessness risk) with equivalent meanings."
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "symptom_duration",
+      "gold": "since age 22",
+      "candidate": "9 years",
+      "kind": "DIFF",
+      "code": "inference",
+      "reason": "9 years is computed from age 31 minus onset at ~22, not stated explicitly."
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "field": "work_disability_status",
+      "gold": "lost job | disability denied | working again",
+      "candidate": "lost job | denied disability | returned to work",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Candidate expresses identical work status facts using synonymous phrasing."
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "long_covid_duration_months",
+      "gold": "5-6",
+      "candidate": "5-6 months",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Same duration, candidate includes unit while gold gives bare number."
+    },
+    {
+      "post_id": "t3_r5z0ng",
+      "field": "mental_health",
+      "gold": "low mood",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Author describes being happy before and now in \"a complete shithole,\" feeling nothing—low mood the candidate missed."
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "alternative_treatments",
+      "gold": "exercise",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Author states easing back into exercise as part of recovery; candidate left field empty."
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "biomarker_results",
+      "gold": "normal cardiology evaluation",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states cardiologist visit was fine; candidate omitted this normal cardiac evaluation result."
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "functional_status_tier",
+      "gold": "",
+      "candidate": "mild",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text never states a functional tier; 'mild' is inferred from easing back into exercise."
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly says author got COVID in January; candidate left the field empty."
+    },
+    {
+      "post_id": "t3_ter21n",
+      "field": "symptom_duration",
+      "gold": "since january",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text says COVID in January with symptoms ever since; candidate left duration blank."
+    },
+    {
+      "post_id": "t3_16i22nr",
+      "field": "alternative_treatments",
+      "gold": "pacing",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Author describes deliberately slowing pace to avoid PEM, i.e., pacing; candidate left field empty."
+    },
+    {
+      "post_id": "t3_16i22nr",
+      "field": "treatment_outcome",
+      "gold": "pacing: helped: pem | pacing: helped: anxiety",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text describes slowing pace reducing PEM and anxiety; candidate provided nothing while gold captured it."
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "mental_health",
+      "gold": "anxiety | intrusive thoughts | feelings of doom",
+      "candidate": "extreme anxiety | ocd-like intrusive thoughts | feelings of doom",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate states the same three impacts with added severity/qualifier detail from the text."
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text mentions long covid, gold lists covid; candidate left field empty."
+    },
+    {
+      "post_id": "t3_10aifwh",
+      "field": "symptom_trajectory",
+      "gold": "not improving",
+      "candidate": "not getting better",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "\"not getting better\" and \"not improving\" express the same trajectory in different wording."
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "gold_wrong",
+      "reason": "Text reports one covid infection (June 2022), so a count of 1 is supported; gold is incomplete."
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly states author got covid in June 2022; candidate left field empty."
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "symptom_duration",
+      "gold": "since june 2022",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states covid in June 2022 with constant burning since; candidate left duration empty."
+    },
+    {
+      "post_id": "t3_16f8lhq",
+      "field": "treatment_outcome",
+      "gold": "albuterol: worsened: lung burning | albuterol: worsened: tachycardia | levalbuterol: worsened: lung burning | spiriva: worsened: lung burning | ipratropium: worsened: lung burning | nac: worsened: lung burning | quercetin: worsened: lung burning | prednisone: worsened: lung burning | steam: helped: pain",
+      "candidate": "albuterol: worsened: burning | albuterol: worsened: tachycardia | levalbuterol: worsened: burning | spiriva: worsened: burning | ipratropium: worsened: burning | nac: worsened: burning | quercetin: worsened: burning | prednisone: worsened: burning | steam: helped: burning",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate says 'burning' where gold says 'lung burning'/'pain' — same symptom at lower precision."
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly says \"I got Covid last March\"; candidate missed the stated infection."
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "symptom_duration",
+      "gold": "since last march",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states symptoms since last March; candidate left duration blank."
+    },
+    {
+      "post_id": "t3_lxs7ym",
+      "field": "symptom_trajectory",
+      "gold": "improving",
+      "candidate": "relapsing",
+      "kind": "DIFF",
+      "code": "unclassified",
+      "reason": "judge returned None"
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "mental_health",
+      "gold": "fear",
+      "candidate": "scared",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "'scared' and 'fear' express the same state in different wording."
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "onset_trigger",
+      "gold": "",
+      "candidate": "bronchitis",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "Bronchitis triggered worsening, not initial illness onset, so it belongs in a deterioration/trigger field."
+    },
+    {
+      "post_id": "t3_c41zbw",
+      "field": "symptom_duration",
+      "gold": "2 years",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states 'mild in the last 2 ish years'; candidate left duration empty."
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "mental_health",
+      "gold": "suicidal ideation | shame | hopelessness | childhood abuse trauma",
+      "candidate": "suicidal ideation | depression",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text and gold explicitly state shame, hopelessness, and childhood abuse trauma, which the candidate omitted."
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "social_impact",
+      "gold": "family estrangement | isolation | lack of support",
+      "candidate": "family estrangement | isolation | shame",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Text states \"haven't got enough friends' support\"; candidate missed lack of support, substituting emotional shame."
+    },
+    {
+      "post_id": "t3_14ws4v3",
+      "field": "symptom_duration",
+      "gold": "since age 13",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states author was almost bedbound since 13 years old; candidate left duration empty."
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Post mentions one COVID diagnosis but never states an infection count; candidate inferred it."
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly states COVID diagnosis on 21 December; candidate left field empty."
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "social_impact",
+      "gold": "",
+      "candidate": "affecting job",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "Job disruption is a work/occupational impact, not a social relationship impact field."
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "symptom_duration",
+      "gold": "",
+      "candidate": "10 days",
+      "kind": "EXTRA",
+      "code": "field_bleed",
+      "reason": "The 10 days marks time to symptom onset after diagnosis, not how long insomnia has lasted."
+    },
+    {
+      "post_id": "t3_rxbqqw",
+      "field": "work_disability_status",
+      "gold": "affecting job",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states insomnia is 'starting to affect my job'; candidate left the field empty."
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "alternative_treatments",
+      "gold": "exercise | rest",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly mentions prescribed exercise and rest as treatments; candidate returned nothing."
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "mental_health",
+      "gold": "emotional distress",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text shows desperation, sobbing, feeling broken; candidate left the field empty despite clear emotional distress."
+    },
+    {
+      "post_id": "t3_mcf9pi",
+      "field": "treatment_outcome",
+      "gold": "cymbalta: helped: pain | exercise: worsened",
+      "candidate": "cymbalta: helped: pain",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate omitted 'exercise: worsened', which the text clearly states as prescribed exercise being harmful."
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "One infection episode is mentioned, but the text never states a total infection count."
+    },
+    {
+      "post_id": "t3_l15sob",
+      "field": "symptom_duration",
+      "gold": "just over a month",
+      "candidate": "1 month",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate rounds 'just over a month' to '1 month' — same fact, less precision."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "biomarker_results",
+      "gold": "ecg change",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states ECG comparison showed noticeable difference; candidate omitted this test result."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "infection_count",
+      "gold": "",
+      "candidate": "1",
+      "kind": "EXTRA",
+      "code": "inference",
+      "reason": "Text mentions one Covid episode but never states an infection count; candidate infers it."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "long_covid_duration_months",
+      "gold": "5",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states 5 months since Covid ER visit; candidate left field empty."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "mental_health",
+      "gold": "sadness",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Author explicitly says they feel 'sad'; candidate omitted this stated mental health impact."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "prior_infections",
+      "gold": "covid",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text explicitly mentions COVID infection in November; candidate left field empty."
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "social_impact",
+      "gold": "family disbelief | lack of support",
+      "candidate": "family disbelief",
+      "kind": "DIFF",
+      "code": "omission",
+      "reason": "Candidate omitted the lack of support conveyed by \"I just need some support.\""
+    },
+    {
+      "post_id": "t3_mdazow",
+      "field": "symptom_duration",
+      "gold": "5 months",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states symptoms since November ER visit, 5 months later; candidate left duration empty."
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "alternative_treatments",
+      "gold": "keto diet",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states author tried keto diet; gold captures it, candidate missed it."
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "biomarker_results",
+      "gold": "high urine ketones",
+      "candidate": "high ketones in urine",
+      "kind": "DIFF",
+      "code": "vocab_variant",
+      "reason": "Same lab finding phrased with different word order; semantically identical."
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "procedures",
+      "gold": "physical exam | blood work | urine test",
+      "candidate": "physical exam | blood work | urine ketone test",
+      "kind": "DIFF",
+      "code": "granularity",
+      "reason": "Candidate specifies urine ketone test where gold says urine test; same procedure, finer precision."
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "symptom_trajectory",
+      "gold": "relapsing",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text describes nodes swelling again with fatigue, a relapsing pattern gold captured; candidate left it empty."
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "field": "treatment_outcome",
+      "gold": "keto diet: worsened: swollen lymph nodes | reintroduced carbs: helped: swelling",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text states keto worsened lymph node swelling and carbs helped; candidate provided nothing."
+    },
+    {
+      "post_id": "t3_l6strv",
+      "field": "symptom_trajectory",
+      "gold": "not improving",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Text says 'have not been getting much better'; candidate left field empty."
+    },
+    {
+      "post_id": "t3_w7kbly",
+      "field": "social_impact",
+      "gold": "dating difficulty",
+      "candidate": "relationship strain",
+      "kind": "DIFF",
+      "code": "inference",
+      "reason": "Text describes pain blocking dating; \"relationship strain\" is a plausible but unstated, vaguer reframing."
+    },
+    {
+      "post_id": "t3_z64xws",
+      "field": "medications",
+      "gold": "zyrtec",
+      "candidate": "",
+      "kind": "MISS",
+      "code": "omission",
+      "reason": "Zyrtec is explicitly named in the post title but candidate returned nothing."
+    }
+  ]
+}

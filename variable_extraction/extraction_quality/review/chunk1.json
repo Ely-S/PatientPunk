@@ -1,0 +1,611 @@
+{
+  "chunk": 1,
+  "posts": [
+    {
+      "post_id": "t3_yud4bw",
+      "text": "Possible Cholinergic Dysfunction and Effective Treatment\n\nI am close to fully recovered after being sick for years. It started with fatigue, then I developed a persistent migraine aura, bladder spasms, sleep issues (insomnia, night sweats, hypnagogic hallucinations), loss of sensation and distorted perception, muscle weakness and myoclonic jerks, constipation, bloating, chills and hot flashes, dream-like state of consciousness while awake, blurred vision and double vision, cervical radiculopathy and worst of all, cognitive impairments/brain fog. The last of these symptoms forced me to go on medical leave at the beginning of this year. I've seen a neurologist, urologist, pulmonologist, rheumatologist, opthalmologist and an infectious disease physician. Multiple blood tests. An brain MRI. A chest xray. Neurological workup. Echocardiogram. The only remarkable findings were a positive ANA (1:80 speckled) and mild neutropenia. With worsening cognitive impairments and unable to return to my graduate program, I found myself on the brink of suicide.\n\nAfter seeing an infectious disease physician, things started to come into focus. This is part of pattern of unexplained chronic illnesses that are triggered by infections (long covid) or chemical exposure (gulf war syndrome) \\[[https://www.nature.com/articles/s41591-022-01810-6](https://www.nature.com/articles/s41591-022-01810-6)\\]. However, no one thus far has been able to provide an explanation of post-infection syndromes that adequately accounts for the totality of symptoms.\n\nI decided to try to figure it out myself. The similarity between gulf war syndrome which is associated with the use of pyridostigmine and post-infection syndromes struck me as very odd. How could two very different things trigger a similar disease? I think the answer has to do with the inhibition of the cholinergic system and more specifically, inhibition of the cholinergic anti-inflammatory reflex \\[[https://www.nature.com/articles/s41598-021-91417-7](https://www.nature.com/articles/s41598-021-91417-7)\\]. Anticholinergics can cause a range of side effects that resemble the symptoms of post-infection syndromes \\[[https://en.wikipedia.org/wiki/Anticholinergic#Side\\_effects](https://en.wikipedia.org/wiki/Anticholinergic#Side_effects)\\]. Inhibition of cholinergic signaling can lead to platelet activation and regulation of the vascular system which accounts for micro-clots and vascular dysfunction observed in long covid patients. Cognitive impairments arise from disrupted sensory pathways (possibly related to changes in blood flow) and can be more concretely thought of as a decrease in the efficiency of cognitive processes. This is speculation, albeit grounded in existing research and personal experience.\n\nThe next step was to devise a treatment plan based on this theory. Early on, in the covid pandemic, epidemiologists noted an inverse relationship between smoking and the severity of disease. This initially appears counterintuitive for a virus which targets the respiratory tract. However, as it turns out nicotine can activate the cholinergic anti-inflammatory reflex and inhibit the production of pro-inflammatory cytokines. Recently, the results of a small study suggested that nicotine patches may be an effective treatment for long covid \\[[https://www.researchsquare.com/article/rs-2063399/v1](https://www.researchsquare.com/article/rs-2063399/v1)\\].\n\nNow, I decided to try this myself. I had never used nicotine before. I started with nicotine gum (2-4 mg; up to 16 mg total/day). This was well tolerated and I had a brief breakthrough after three days (100% normal functioning). This was short-lived, so I tried switching to a nicotine patch (continuous dose, 7 mg/24 h). This triggered a severe migraine after a few hours. Repeated attempts led to the same outcome. The low dose of nicotine administered continuously was intolerable. This was compared to the gum, which provides a bolus of nicotine, at over twice the dose overall.\n\nDevising a new strategy, I put the nicotine patches on hold and started to take butyrate, 600 mg twice daily. Butyrate is a gut metabolite that is essential for proper functioning of the digestive system and modulates gene expression throughout the rest of the body (see HDAC inhibitors). It can enhance cholinergic signaling. After starting butyrate, I noticed a partial resolution of my GI symptoms and improved sleep quality. **One week later**, while still taking butyrate, I tried nicotine patches again. In contrast to my earlier attempt, the patches no longer triggered migraines. I'm finally able to get some good quality sleep after years of being ill. My symptoms have been resolving bit by bit with each day. I feel like I had come undone and now my body is stitching itself back together.\n\n**Here is a summary of what worked for me**:\n\n600 mg butyrate (2-4 times daily), 7 mg nicotine patch (7 mg/24 h), omega 3s (flaxseed meal), daily exercise, meditation, bed rest\n\n**Short Summary:**\n\nI am hesitant to provide a shortened version of this but it is probably necessary given some people's situation. \n\nLong covid fits into a pattern of post-acute infection syndromes (PAIS) and bears remarkable resemblance to symptoms of anticholinergic overdose. So far, no one has been able to provide a satisfactory explanation of PAIS that accounts for the totality of symptoms and persisting nature of the disease. However, recent research suggests that PAIS may arise from inhibition of the cholinergic system. The cholinergic system has many functions: control of muscle tension, vascular tone and regulation of the immune system. Inhibition of cholinergic signaling might account for every symptom that PAIS patients present with and represents a causal explanation that is consistent with existing research. While this is still hypothetical, stimulation of the cholinergic signaling via nicotine may be beneficial and lead to remission at least in some cases.\n\n**Please note** the possibility that this may trigger migraines. If you have never experienced a migraine before, take some time to learn about it. I don't want to cause anyone a panic attack. I would disuade older individuals and anyone who has a history of cardiovascular events from trying this at first. \n\n**New Subreddit:** r/CholinergicHypothesis I created this subreddit with the intention of maintaining thoughtful discourse and keeping the discussion focused. I will continue to crosspost to r/covidlonghaulers.\n\nI am not a doctor. I am just here providing information that represents my own personal experience and research.\n\nPlease provide feedback in the comments if you end up trying this yourself.",
+      "cells": [
+        {
+          "post_id": "t3_yud4bw",
+          "field": "conditions",
+          "labeler": "long covid | cervical radiculopathy | neutropenia",
+          "production": "long covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "onset_trigger",
+          "labeler": "",
+          "production": "infection",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "medications",
+          "labeler": "nicotine gum | nicotine patch | butyrate | omega 3s",
+          "production": "nicotine gum | nicotine patch | butyrate | omega-3s (flaxseed meal)",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "dosage",
+          "labeler": "2-4 mg | 16 mg/day | 7 mg/24 h | 600 mg twice daily",
+          "production": "2-4 mg nicotine gum | 16 mg/day nicotine | 7 mg/24h nicotine patch | 600 mg butyrate twice daily | 600 mg butyrate 2-4 times daily",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "treatment_outcome",
+          "labeler": "nicotine gum: mixed | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch: helped: sleep",
+          "production": "nicotine gum: helped: overall functioning | nicotine patch: worsened: migraine | butyrate: helped: gi symptoms | butyrate: helped: sleep quality | nicotine patch + butyrate: helped: migraine",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "work_disability_status",
+          "labeler": "medical leave | unable to attend graduate program",
+          "production": "on medical leave",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "social_impact",
+          "labeler": "",
+          "production": "medical leave | unable to return to graduate program",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "mild",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yud4bw",
+          "field": "biomarker_results",
+          "labeler": "positive ana 1:80 speckled | mild neutropenia",
+          "production": "ana 1:80 speckled | mild neutropenia",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_yr1fnq",
+      "text": "Full remission after 7 years of ME/CFS\n\nHi all, just wanting to share my story and how I got complete remission through an intense autoimmune protocol, low-dose abilify, and getting a cold. This is by no means a blanket fix. My young age and relatively \"high\" function with this disease definitely helped achieve full remission.\nFull disclosure the doctor whos autoimmune protocol I followed does absolutely make money from books and very expensive consults, but I gained all information through free online resources + facebook groups. I'll try keep this brief. Happy to answer any questions.\n\nI developed ME/CFS when I was 12 after a series of repeat viral infections. This took me from doing 16 hours of competitive gymnastics a week + school to being completely bedridden. I was unable to stand, walk, shower, or go to school. Over 3 years, I slowly improved to a plateu of \"mild\" function. I was at around 50% of normal function, with a 6 hour energy envelope per day.  In November 2021, I decided to try some specific treatments and by March 2022 I reached full remission. I am 100% sure this was not spontaneous remission falsely accredited to something new, other than the cold I caught. I've since had covid and had no relapse.\n\nMy symptoms: Post-exertional malaise (I would experience a crash after every single day at school) complete exercise intolerance, generally feeling awful, cravings for salt, sensitivity to smells, sore throat, nasal congestion, muscle pain, joint pain, headaches, immense brain fog, inability to speak, breathing difficulties, heart palpitations, tachycardia, paralysis in severe crashes, bad reactions to vaccines, inability to get colds/flus. I had no illnesses other than ME/CFS and its associated symptoms. \n\nWhat didn't help: GET (shocker!), a naturopath, supplements  (vitamin d, iron, b-12, b1, co-q10, omega 3)  general diet improvements (less junk, more veg, adding chia pudding + green smoothies to normal diet), pacing (helped me crash less by staying within energy envelope, but did not increase energy envelope at all) \n\nWhat did help:\n-Strictly following the Golder autoimmune protocol for 3 months, from November stopping February. It consists solely of 3L of water, 650g of raw cruciferous veg/leafy greens, 1/2 cup of ground chia or flax seed a day + iodine and b-12 supplement. All raw, absolutely no foods other than raw fruit/veg/chia. This is supposed to be done for 6-8 weeks, but I went longer as symptoms were still improving. \n\nPros: It was the first thing to work in 7 years for me and I saw results within 2 weeks. It took me from around 50% function to 75% function. By the start of January my PEM was gone, I could stay out for 8-9 hours with no crash. \n\nCons: This protocol is incredibly extreme and unfortunately resulted in unhealthy weight loss from BMI 18 to 15 for me. Very hard to stick to and not at all pleasant. I dont think those beyond moderate level would have the energy to digest or prepare this amount of food. Need to ease into  and out of diet.\n\n-Low-dose Abilify from late Jan onwards(I was at 0.75mg daily for ~2 months) \n\nPros: This helped get me from 75% to around 90%. I could do 11-12 hour days with a little struggle, absolutely needing a 1.5 hour lie down in the afternoon to continue. Very easy to take.\n\nCons: I experienced a lot of very negative mood swings and menstrual irregularities, especially at a 1.0mg dose which I had to stop. Off label use did not come under insurance so 30ml bottle cost me $120 AUD. \n\n-Getting my first cold in 7 years. In late March my body was now functioning normally enough to allow me to get sick. I developed a rather nasty cold.  From the 1st day of symptom onset I noticed complete dissipation of my cfs symptoms, despite feeling very flu-ish. Exercise no longer made me feel drugged. I could continue going all day with no need for rest. \n\nI am now 20 and have been in full remission for over 6 months. I did have to get over a lot of deconditioning post-cfs, and deal with problems I believe to be linked to impacts of cfs (skin disorders, hormone imbalances, TMJ issues, possible endometriosis, etc.) In order to keep my health up I eat a low-inflammation, whole food plant based diet with no meat, oil, or processed food other than the occasional treat meal. I live a normal life with no restraints placed by my body. I can exercise again. It is both incredibly surreal and incredibly normal. \n\n\nBest wishes to everyone in battling this disease.\n\nEDIT: The mechanism as to why the diet seems to improve symptoms is the omega 3 and omega 6 pathway as well as producing a high metabolism. There is research on the effects of this omega pathway in the body, and papers on the impact omega 3 acids have on autoimmune diseases. ME may not be autoimmune but does share similarities and an immune component. The diet basically removes most sources of omega 6, which fuels inflammatory responses, and replaces it with extremely high amounts of omega 3, which fuels anti-inflammatory responses. Omega 3 acids also cause other changes to immune responses. Targeting inflammation has been useful in treatments such as LDN, so may be why my symptoms improved. High levels of omega 3s also boost metabolism, though I have looked into this less as an explanation for why the protocol works for me.",
+      "cells": [
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "symptom_trajectory",
+          "labeler": "full remission",
+          "production": "improving",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "medications",
+          "labeler": "low-dose abilify | vitamin d | iron | b-12 | b1 | co-q10 | omega 3 | iodine",
+          "production": "abilify | vitamin d | iron | vitamin b12 | vitamin b1 | coenzyme q10 | omega-3 | iodine",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "dosage",
+          "labeler": "0.75 mg daily | 1.0 mg | 3 l water | 650 g raw cruciferous veg | 1/2 cup chia or flax",
+          "production": "0.75 mg daily | 1.0 mg",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "treatment_outcome",
+          "labeler": "golder autoimmune protocol: helped: pem | low-dose abilify: helped: function | low-dose abilify: worsened: mood swings | low-dose abilify: worsened: menstrual irregularities | cold: helped: cfs symptoms | get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: mixed: crashes",
+          "production": "get: no_effect | naturopath: no_effect | supplements: no_effect | diet improvements: no_effect | pacing: helped: pem | autoimmune protocol: helped: pem | autoimmune protocol: helped: function | abilify: helped: fatigue | abilify: worsened: mood",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "work_disability_status",
+          "labeler": "unable to attend school",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "prior_infections",
+          "labeler": "repeat viral infections | covid | cold",
+          "production": "repeat viral infections",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "alternative_treatments",
+          "labeler": "golder autoimmune protocol | raw plant-based diet | pacing | get | naturopath | whole food plant based diet | green smoothies",
+          "production": "goldner autoimmune protocol | pacing | diet improvements",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "social_impact",
+          "labeler": "missed school",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_yr1fnq",
+          "field": "biomarker_results",
+          "labeler": "bmi 18 to 15",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_nhgpmd",
+      "text": "I'm Done\n\nI can't do this man. I'm tired of being scared of everything scared of the vaccine, heart problems,blood clots, scared to sleep,scared for the future. I'm even scared to go to doctors appointments because they don't help me just say it's anxiety. EVERY SINGLE DAY has been depressing and I truly think I'm traumatized and it's no medicine that can fix it. Not only that but my household is TOXIC I been dealing with long haul on my own since it happened. Family just saying I'm lazy. My birthday was a week ago and it was HORRIBLE I had a fight with my mom and Grandma like actual fist fight they jumped me for no reason. I still cry about that because I don't like fighting them but I have to defend myself. Sometimes I forget I even turned 21 I still catch myself saying I'm 20. (And ik I should have moved out I was trying I was in college and everything but I got hit with covid and had to move back home.) The next day I woke up in so much pain my whole body was hurting and I couldn't get out of bed. I was scared for my heart and still am. Can't see a cardiologist until August because everything is slow in Texas.\n \n My only hope is getting the vaccine next week and if that doesn't help me idk what I'm gonna do I just want to be at peace. I'm tired of crying , tired of being scared tired of conspiracy theorist,tired of nobody helping us. I just told my ex bf that I was scared I wouldn't make it to Christmas. He was keeping me sane in the beginning but he broke up with me because I've become a negative person and I don't blame him, my heart is really broken though.\n\nThe person that gave me covid in the first place came to visit and I was  filled with so much rage all I could do was cry. It's like yeah I've seen tons of progress but that doesn't erase the trauma from all of this. It's only so much stress a person can take. I feel so alone even in a house full of people. I'm gonna delete this I just wanted to get this off my chest it's been bottled up for so long.\n\n\n\nEdit: I want to thank everyone who replied or upvoted on this, it's the first time I feel seen/heard in so long. I didn't expect this much attention. I'm actually gonna leave this post up because alot of the things u guys said can help someone else out. Thank you for being kind to me and listening I really appreciate it. I'm praying for us all and hoping we recover and can get back to life. Stay safe❤️❤️❤️❤️",
+      "cells": [
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "work_disability_status",
+          "labeler": "left college",
+          "production": "dropped out of college",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "mental_health",
+          "labeler": "trauma | depression | anxiety diagnosis dismissal",
+          "production": "depression | anxiety | trauma",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "social_impact",
+          "labeler": "isolation | family conflict | breakup | medical dismissal",
+          "production": "isolation | family conflict | relationship strain",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_nhgpmd",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "severe",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_vmot6y",
+      "text": "Think I may finally be over this.\n\nIn January of this year came down with a mild case of covid as did my whole household all vaccinated didn't qualify for booster at this time and never got booster.\n\nBounced back in 4-5 days and felt ok only slight fatigue at jujitsu class then out of no where within a weeks time horrible insomnia i've never had this ever.\n\nSo over the course of 5 month my sleep went from normal 7-8 hours a night to 2-3 and if i was lucky 4 hours.\n\nOddly enough even at 2-3 hours i was super wired at work with energy, but my body needed sleep and i just couldn't make it happen with hydroxzine nothing.\n\nCurrently I'm almost at day 30 sleeping full nights and feeling rested never had the long covid fatigue just sleep issues.\n\nThis thing has been a damn nightmare hope to be past it.\n\nLast tested for high antibodies in March with blood donation.",
+      "cells": [
+        {
+          "post_id": "t3_vmot6y",
+          "field": "conditions",
+          "labeler": "long covid | covid-19",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_vmot6y",
+          "field": "treatment_outcome",
+          "labeler": "hydroxyzine: no_effect: insomnia",
+          "production": "hydroxyzine: no_effect",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_vmot6y",
+          "field": "procedures",
+          "labeler": "antibody test",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_vmot6y",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_vmot6y",
+          "field": "long_covid_duration_months",
+          "labeler": "6",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_vmot6y",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "mild",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_mqlzc2",
+      "text": "Rant/Vent - tired of nothing working\n\nI'm so tired of nothing working to get myself better. \n\nA couple of years ago, after 6 years of trying every few months to get a doctor to take me seriously and not just suggest that I pace myself or exercise more, I was sent to a consultant. A rheumatologist who turned around and said they don't deal with fatigue, but they'll run every blood test they can think of. I had to wait 6 months for the results and follow up appointment, the only highlight of which was that consultant saying they're surprised I wasn't on anything for my thyroid as I had a viral infection of my thyroid to start things off, and my TSH was slightly high.\n\nThey didn't include that in the letter to my GP, just said everything looked fine. \n\nRecently though I managed to find a GP who listens, he retested my thyroid and I do have thyroid antibodies and my TSH was high, as high as it was 8 years ago when I first got ill. Not high enough to be treated outright, apparently that has to be over 10, mine was 9.5 but should be below 5. It was high enough that it's up to the GP to try to treat it and see what happens. \n\nI flat out told them that it's been 8 years with no treatment. I need to try something. He prescribed levothyroxine. I've been on it for about 3 months, had my follow up blood test on Monday and got a text this morning saying my thyroid is fine so keep taking the meds, they'll check it again in a year.\n\nI'm feeling worse than I have in a long time though. As a result of a 5,000 step walk on Sunday and going for a blood test on Monday I spent yesterday in bed unable to get up. So far this morning I've just been able to sit up but it's taken me nearly 2 hours. \n\nI'm just so mentally tired of not having any energy. Of not feeling good enough because I can't do the things I want to do. I feel awful every time I have to cancel plans with my girlfriend, it's even worse when it's plans including her son too. \n\nThis isn't how I want my life. I still can't accept it all these years later. It's not fair that I'm ill. That my degree that I worked so hard for is useless because I just can not work in the industry I trained to, even if I could my knowledge is 10 years out of date now. So I'm retraining, but I still won't be able to do more than part time, which means I'm not going to progress beyond entry level roles. \n\nUrgh. This just sucks so much and I just need some people to say they understand. \n\nI do hope you're all as well as possible today.",
+      "cells": [
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "conditions",
+          "labeler": "",
+          "production": "hypothyroidism",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "onset_trigger",
+          "labeler": "viral thyroid infection",
+          "production": "viral infection of thyroid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "treatment_outcome",
+          "labeler": "levothyroxine: no_effect: fatigue",
+          "production": "levothyroxine: no_effect",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "procedures",
+          "labeler": "blood tests",
+          "production": "blood test",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "work_disability_status",
+          "labeler": "cannot work in trained industry | retraining | part-time only",
+          "production": "retraining | part-time only",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "mental_health",
+          "labeler": "mental exhaustion | low self-worth",
+          "production": "mental fatigue | frustration | grief",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "prior_infections",
+          "labeler": "viral thyroid infection",
+          "production": "viral infection of thyroid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "functional_status_tier",
+          "labeler": "moderate",
+          "production": "severe",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mqlzc2",
+          "field": "biomarker_results",
+          "labeler": "tsh 9.5 | positive thyroid antibodies | tsh slightly high",
+          "production": "tsh 9.5 | thyroid antibodies positive",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_v7j806",
+      "text": "Poor concentration and focus. Feels like ADHD\n\nIt is five months since covid, and sadly I just keep getting worse for whatever reason.  \n\n\nI am really restless. It is not just my body, but my mind is also restless.\n\nI have to constantly get up and walk to relieve some of the restlessness, but it does not go away. I also feel restless in my head, and I cant focus or concentrate on anything. I can just forget reading or watching TV. This makes me really sad and frustrated because I have never had this issue before with being so restless and unfocused.\n\nThis just came on a few days ago. It feels like som extreme version of ADHD. My brain is not functioning at all. \n\nCan it improve? I need to be able to focus for university.   \nIs it normal for such symptoms to just suddenly show up?",
+      "cells": [
+        {
+          "post_id": "t3_v7j806",
+          "field": "conditions",
+          "labeler": "",
+          "production": "long covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_v7j806",
+          "field": "symptom_duration",
+          "labeler": "5 months",
+          "production": "a few days",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_v7j806",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_v7j806",
+          "field": "social_impact",
+          "labeler": "",
+          "production": "academic impairment | reduced leisure",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_v7j806",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_v7j806",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "moderate",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_qgcvnq",
+      "text": "Desperate for Normalcy\n\n**My story/doctor experience:**\n\nHello everyone, my name is Noah. I just started perusing this subreddit today in hopes to find answers, and direction. This illness has impacted my life in every way imaginable, every normal daily task has become drastically more difficult, and it feels as though I have no quality of life.\n\nI tested positive for COVID in the middle of November and experienced a smorgasbord of symptoms, none bad enough to go into the hospital though. I had dizziness, lightheadedness, head pressure, headaches, no taste/smell, and nausea. This persisted for probably a week or so where the symptoms were very apparent, and then after that week everything was better minus the taste/smell portion. It took probably another month or two for that two fully return.\n\nAfter the having COVID initially and the symptoms going away, I maintained maybe a little bit of fatigue, but nothing super noticeable, I've always been someone who has had a lower level of energy, so I didn't think anything of it. Then about 5-6 months later I started developing symptoms such as heart palpitations, extreme fatigue, brain fog (most prevalent), and head pressure. These maintained for a month or so and then I started to develop severe dizziness/giddiness/lightheadedness, nausea, head aches, and pain in the right side of my throat/neck (this pain occurred periodically and would last from a few seconds, to a few hours at a time).\n\nI'm not someone who typically chooses to go to the doctor, but my girlfriend (now fiancé) twisted my arm and forced me to go in and get checked out. My doctor thought that it could potentially be some sort of vitamin deficiency or thyroid condition. So, he sent me out to get the following blood tests: standard lipid panel, CBC (DIFF/PLT), comprehensive metabolic panel, and TSH w/ reflex to FT4. Based on this results he deduced I didn't have a thyroid condition. (I can provide specific numbers for these results if anyone is curious).\n\nNext, he sent me to a cardiologist for my heart palpitations. They noticed that my heart skipped in an ultrasound they ran. I relayed this to my doctor, and he did not seem to be concerned with this. After this my dizziness/giddiness/lightheadedness/nauseous sensation got drastically worse. I went to an urgent care doctor who prescribed me antivert, and then my primary care doctor prescribed me a transdermal scopolamine patch. The antivert didn't seem to work for me, so I tried the patch, which I think slightly helped with that dizziness sensation. After getting off the patch I had pretty severe side effects such as eye dilation, nausea, and dizziness.\n\nThe day after going to urgent care I move about 2 hours south for a new job (long story short it's been very rough and is still hard trying to adjust to a new job during all of this). At this point my doctor schedules me to see a neurologist. The neurologist schedules me for a MRI, TCD, and EEG. All of these results came back fine, and he suggests it could me a heart condition since I am very light headed and don't experience the sort of dizzy spinning sensation. This neurologist also prescribed me for a medication to help with my headaches/head pressure (which I stopped taking because I thought it made me more dizzy, it did help with headaches though).\n\nUpon the clear bill of health from the neurologist, my primary doctor thought it could potentially be an autoimmune disease and scheduled me for another set of blood tests. These blood tests were: Celiac disease comprehensive panel, SED rate by modified westergren, CBC (Includes DIFF/PLT), Vitamin B12/Folate Serum Panel, Lyme Disease AB W/REFL to Blot (IGG,IGM), and ANA Screen, IFC, W/REFL TITER and PATTERN. These results also come back fine, who would have guessed, ANOTHER set of clean blood tests.\n\nFollowing these tests I had a really bad spike in symptoms where my heart would be pounding hard, and my heart rate would be going up and down, and skipping. This was also joined by extreme dizzy/lightheaded spells, chest pain, and the feeling of coming close to fainting. This went on for a few days, and I hoped it would just go away. However, it didn't so I made a trip to the ER. They did a chest X-ray, EKG, and some blood tests. The only thing they found was that in-fact my heart does put a bunch of extra beats in occasionally (they had a term for this I forget what). Following the ER visit my primary doctor put me on metoporal for my heart, and then modafinil for my fatigue. They both worked quite well, but now the modafinil really doesn't do much for me.\n\nThen last month or two I began having semi-frequent ear pain, which he prescribed me an antibiotic and steroid for, which had no effect on any of my symptoms. I have been increasingly depressed recently, which may be caused by either this or another mediation. Anyways, I am now seeing an ear/noes/throat doctors who has me getting some sort of hearing test, a VNG balance test, and an appointment with an eye specialist because of some involuntary eye movement he noticed.\n\n**My Symptoms:**\n\n*The dizziness/fatigue/head pressure/Inability to Focus/Brain Fog is constant. The other only happen occasionally or are managed by a medication.*\n\n\\- ***Dizziness/Lightheaded:*** This is the symptom which I'd say effects me the most (I have a hard time explaining this). I don't have any sort of visual spinning sensation like with vertigo. It's more of an internal feeling of things being off. I feel like a pressure coming down on my head, and like everything is mixed up and spinning inside. My ear/nose/throat doctor described this as giddiness (unbalanced/lightheaded feeling). Which I think describes it well.\n\n\\- ***Fatigue:*** My level of energy stays consistent from the moment I wake up to when I go to when I go to bed. I'm in a constant state of tiredness, it feels like I've just been awake for the past 6 months straight and haven't slept. Everything I do is just will power of knowing I need to do it, I never have the energy to want to do anything.\n\n\\- ***Head Aches:*** These have actually mellowed out a little bit over the past month, however they still are pretty common. Typically they last the entire day, and are just a constant pain in the front of my head.\n\n\\- ***Head Pressure:*** Warm pressure that I feel in the front of my head, which seems to go up into my eyes.\n\n\\- ***Throat Pain***: Sharp pulsating pain in the side of my neck/throat. The pain seems to come from a similar area to where you would check for your pulse in your neck.\n\n\\- ***Ear Pain***: Sharp achy feeling in my ear which goes radiates underneath my ear and down a bit.\n\n\\- ***Heart Palpitations:*** Deep pounding feeling, with heart racing occasionally, then suddenly skipping and going very slow.\n\n\\- ***Inability to Focus***: I have a very hard time concentrating and thinking, this is especially noticeable when I'm trying to carry out a conversation with someone.\n\n\\- ***Brain Fog***: I can have a very hard time retaining information someone is telling me, and can have a hard time recalling words of common things. I also can have a very hard time thinking. Trying to think of new things to say during a conversation is very hard.\n\n**What Makes It Worse:**\n\n\\- Trying to focus on something up close\n\n\\- Bright lights\n\n\\- Physical Exercise\n\n\\- Having to bend up and down\n\n\\- Atmosphere with a lot of movement\n\n\\- Stress\n\n**Me:**\n\n23 Years Old\n\n180 Pounds\n\nRelatively healthy diet, and prior to symptoms I was very physically active.\n\nDiagnosed prior to this with IBS-M (Didn't include symptoms of this in post)\n\nWork in Web Development/It/Digital Marketing Full-Time\n\nUnvaccinated (Nervous of potential complications with my symptoms)\n\n**Medications/Vitamins I Take Currently:**\n\nMetoprolol(12.5mg)\n\nModafinil (100mg)\n\nGeneral Male Multivitamin\n\nVitamin C (1000mg)\n\nVitamin B12/B Complex (2000mg)\n\n**TLDR:** I've been experiencing symptoms for the past 6 months or so, and doctors don't know what's wrong. Would love to hear some tips/advice of those of you experiencing similar things. Just want to find another avenue to explore. Each day I wake up hoping I will feel normal again, but at this point I don't remember what normal is.",
+      "cells": [
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "conditions",
+          "labeler": "covid-19 | ibs-m",
+          "production": "ibs-m | long covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "age_at_onset",
+          "labeler": "",
+          "production": "22",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "treatment_outcome",
+          "labeler": "antivert: no_effect: dizziness | scopolamine patch: mixed: dizziness | headache medication: mixed: headaches | metoprolol: helped | modafinil: mixed: fatigue | antibiotic: no_effect | steroid: no_effect",
+          "production": "metoprolol: helped | modafinil: helped: fatigue | modafinil: no_effect: fatigue | antivert: no_effect | scopolamine patch: helped: dizziness | scopolamine patch: worsened: nausea | scopolamine patch: worsened: dizziness | headache medication: helped: headaches | headache medication: worsened: dizziness | antibiotic: no_effect | steroid: no_effect",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "procedures",
+          "labeler": "mri | tcd | eeg | heart ultrasound | ekg | chest x-ray | blood tests | hearing test | vng balance test",
+          "production": "blood tests | mri | tcd | eeg | chest x-ray | ekg | hearing test | vng balance test",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "prior_infections",
+          "labeler": "covid-19",
+          "production": "covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "social_impact",
+          "labeler": "conversation difficulty",
+          "production": "relationship strain | new job stress",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "long_covid_duration_months",
+          "labeler": "",
+          "production": "6",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_qgcvnq",
+          "field": "biomarker_results",
+          "labeler": "normal tsh | negative ana | negative lyme | normal mri | normal eeg | normal tcd | extra heart beats",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_l8c9xn",
+      "text": "I’m nursing student about become a nurse long hauler and need help.\n\nI have the most imp exam in my life coming feb 12, called the nclex. I had the moderna vaccine the 5th of January soon to get it the 3rd of February. I’m scared to get it because of recent research although I felt a little better after my vaccine until a headache and fatigue that went away.\n\n\nIt’s been a little over two months.\n\nI get bad brain fog from diary gluten and spinach. Where I can’t study.\n\nI take turmeric, vit d, vit c, zinc, fish oil, and quercetin. Sometimes melatonin.\n\n\nI read from an article that was published 20 hours ago about covid causing autoantibodies to be developed.\n\nPlease help anything helps. I have a job lined up and have to be able to thinking clearly to save lives.\n\nThank you. 22M",
+      "cells": [
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "onset_trigger",
+          "labeler": "covid",
+          "production": "vaccine",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "symptom_duration",
+          "labeler": "a little over two months",
+          "production": "2 months",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "age_at_onset",
+          "labeler": "22",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "medications",
+          "labeler": "turmeric | vitamin d | vitamin c | zinc | fish oil | quercetin | melatonin | moderna vaccine",
+          "production": "turmeric | vitamin d | vitamin c | zinc | fish oil | quercetin | melatonin",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "treatment_outcome",
+          "labeler": "moderna vaccine: mixed: headache, fatigue",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "work_disability_status",
+          "labeler": "nursing student | job lined up",
+          "production": "student",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "alternative_treatments",
+          "labeler": "avoiding dairy, gluten, spinach",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l8c9xn",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "mild",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_124jme1",
+      "text": "Mother got COVID around August/September of last year, chronic cough that won't go away.\n\nHi guys, I've Googled this multiple times but just can't get an answer I've been looking for. Most other things I've seen have talked about a cough that lasts for maybe 1-2 months after they've recovered, but nothing I've seen talks about coughs lasting like half a year\n\nMy mom got COVID last year and ever since, she's had this nagging cough she can't seem to get rid of. Sometimes it's not so bad, but sometimes she can't stop coughing for like 15 minutes at a time. She's taking some sort of pill for it but I don't know how much it's helping.\n\nShe has described it to me as her throat feeling a \"dry\" and \"tickling\" sensation. Honestly I feel like it might be some sort of reflux (maybe \"silent reflux\" or whatever it's called?). I keep telling her to make an appointment for it and she did ONCE - with a specifically \"covid clinic\" which, duh, she hasn't had COVID or gotten sick at all since getting it last year so they couldn't offer her much. \n\nIt's been stressing me out because I feel like I'm the only one in the family taking her cough serious. Not just because it's annoying to listen to, but because I feel like I'm the only one being proactive about trying to figure out what could be causing it. And of course it's my mom so when she's having a tough time with something like this it stresses me out.\n\nHas anyone else developed a cough that just won't go away for like 5+ months after they test negative and recover otherwise? Did you guys find out what the problem was, or did it go away eventually? I'd just like to hear some other experiences from those who have or had a REALLY LONG and persistent cough. I'd like to start giving her some things she can bring up to her doctor to find a solution, or some encouragement. \n\nThank you all.",
+      "cells": [
+        {
+          "post_id": "t3_124jme1",
+          "field": "sex_gender",
+          "labeler": "",
+          "production": "female",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "conditions",
+          "labeler": "",
+          "production": "long covid | chronic cough",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "onset_trigger",
+          "labeler": "",
+          "production": "covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "symptom_duration",
+          "labeler": "",
+          "production": "5 months",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "medications",
+          "labeler": "",
+          "production": "unspecified pill",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "treatment_outcome",
+          "labeler": "",
+          "production": "unspecified pill: unknown",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "mental_health",
+          "labeler": "stress",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "prior_infections",
+          "labeler": "",
+          "production": "covid",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "social_impact",
+          "labeler": "caregiver burden",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_124jme1",
+          "field": "long_covid_duration_months",
+          "labeler": "",
+          "production": "5",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_7k0bfu",
+      "text": "Where do I go from here?\n\nI'm a 31 year old female, and my cfs (and fibro, migraines, ibs etc) started getting bad when i was about 22, and keeps getting worse.  I've always been a very hard worker so when it happened i just kept pushing on, but eventually i was missing more and more work and being less productive even when I was in the office.  You all know it can be hard to get work dove when you're so tired your eyes won't even focus.  Eventually, about 5 years ago i lost my job due to the absences and i tried multiple times to apply for disability only to be denied. \n\nI burned through all of my savings and about a year ago it got to the point where my car got repossessed and i was about to get kicked out of my apartment.  My parents believe i simply turned lazy and that helping me financially or even showing any emotional compassion will just hurt me in the long run. So i went back to work. I'm almost a year back at work and it is miserable. \n\nI vomit every morning from exhaustion just trying to get dressed and out the door, I'm so tired i just want to cry and it is a major struggle to get through the day. I'm in physical pain.  Obviously i have zero social life and spend any time off work just trying to rest and do basic things like laundry and keeping myself fed. \n\nI can't keep doing this but i don't want to end up homeless and hungry. I have no idea what to do and feel like I'm completely out of options. Have any of you been at this point, and how did you over come it?  Thanks.",
+      "cells": [
+        {
+          "post_id": "t3_7k0bfu",
+          "field": "conditions",
+          "labeler": "me/cfs | fibromyalgia | ibs",
+          "production": "me/cfs | fibromyalgia | migraines | ibs",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_7k0bfu",
+          "field": "symptom_duration",
+          "labeler": "since age 22",
+          "production": "9 years",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_7k0bfu",
+          "field": "work_disability_status",
+          "labeler": "lost job | disability denied | working again",
+          "production": "working full-time | denied disability",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_7k0bfu",
+          "field": "social_impact",
+          "labeler": "no social life | family disbelief | financial hardship",
+          "production": "lost job | no social life | family rejection",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_7k0bfu",
+          "field": "functional_status_tier",
+          "labeler": "",
+          "production": "severe",
+          "resolved": null
+        }
+      ]
+    }
+  ]
+}

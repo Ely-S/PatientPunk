@@ -1,0 +1,194 @@
+{
+  "chunk": 3,
+  "posts": [
+    {
+      "post_id": "t3_l15sob",
+      "text": "GERD\n\nI had Covid just over a month ago and have been experiencing reflux symptoms like never before. Anyone else? Please explain what you're going through and how you're helping yourself. I'm at my wits end and don't feel as though my GP is taking me seriously. I'm currently waiting to take a H Pylori test but I'm not sure that's the culprit.",
+      "cells": [
+        {
+          "post_id": "t3_l15sob",
+          "field": "conditions",
+          "labeler": "gerd | covid",
+          "production": "gerd",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l15sob",
+          "field": "symptom_duration",
+          "labeler": "just over a month",
+          "production": "1 month",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l15sob",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_l15sob",
+          "field": "long_covid_duration_months",
+          "labeler": "1 month",
+          "production": "1",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_mdazow",
+      "text": "After a random ER visit 5 months later, doctors are finally acknowledging I have a heart arrhythmia that wasn't present before.\n\nI feel so validated and also sad about how our healthcare system has failed me and many others with long-Covid.\n\nThey compared the ECG from when I went to the ER for Covid in November, compared to now, and saw a noticeable difference.\n\n\nFriends and family didn't believe me either. I just need some support and would love any advice you guys have for dealing with heart issues after Covid.",
+      "cells": [
+        {
+          "post_id": "t3_mdazow",
+          "field": "symptom_duration",
+          "labeler": "5 months",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "procedures",
+          "labeler": "ecg | er visit",
+          "production": "ecg",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "mental_health",
+          "labeler": "sadness",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "prior_infections",
+          "labeler": "covid",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "social_impact",
+          "labeler": "disbelief from family | lack of support",
+          "production": "family disbelief",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "infection_count",
+          "labeler": "",
+          "production": "1",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "long_covid_duration_months",
+          "labeler": "5",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_mdazow",
+          "field": "biomarker_results",
+          "labeler": "ecg change",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_r6bzlh",
+      "text": "Loosimg hope",
+      "cells": [
+        {
+          "post_id": "t3_r6bzlh",
+          "field": "mental_health",
+          "labeler": "",
+          "production": "loss of hope",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_12ofqkh",
+      "text": "Swollen lymph nodes\n\nTLDR:Has anyone had swollen lymph nodes pop up only when you are extremely exhausted? \n\nA little background info: I had been feeling a lot better for a few months. I was able to exercise and go to different events. I thought that maybe I was better. So 3 weeks ago I decided to try keto since I need to lose weight. I went pretty hardcore into it and was having success with weight loss and feeling pretty good. At the end of the second week though, I started noticing a bunch of swollen lymph nodes popping up on my neck, shoulders, arm pits, and groin and was just feeling generally unwell. I’ve never experienced this before, so I went to the doctor. I had a physical exam and blood work. The only abnormality was an extremely high level of ketones in my urine. My doctor told me to stop keto for a few weeks and see if it helps. I have noticed since I added carbs back, I do feel a little better and tgdd we swelling has gone down mostly. But my me/cfs symptoms seem to have come back. And now when I get really tired, I notice the lymph nodes that had gone down will swell again. Has anyone had something similar happen?",
+      "cells": [
+        {
+          "post_id": "t3_12ofqkh",
+          "field": "symptom_trajectory",
+          "labeler": "relapsing",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_12ofqkh",
+          "field": "treatment_outcome",
+          "labeler": "keto diet: worsened: swollen lymph nodes | reintroduced carbs: helped: swelling",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_12ofqkh",
+          "field": "procedures",
+          "labeler": "physical exam | blood work | urine test",
+          "production": "physical exam | blood work | urine ketone test",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_12ofqkh",
+          "field": "alternative_treatments",
+          "labeler": "keto diet | reintroduced carbs",
+          "production": "",
+          "resolved": null
+        },
+        {
+          "post_id": "t3_12ofqkh",
+          "field": "biomarker_results",
+          "labeler": "high urine ketones | otherwise normal blood work",
+          "production": "high ketones in urine",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_l6strv",
+      "text": "Does anyone else’s brain fog and malaise get grossly worse in the evening?\n\nI’m on month ten and unfortunately have not been getting much better. The worst symptom still remaining for me is brain fog and fatigue, and nowadays, it seems to get soooo much WORSE in the evening. Like 20x worse where I literally feel like death starting at about 8 PM. I was wondering if this is typical with other long haulers or if I’m just crazy?",
+      "cells": [
+        {
+          "post_id": "t3_l6strv",
+          "field": "symptom_trajectory",
+          "labeler": "not improving",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_w7kbly",
+      "text": "Woke up very very depressed I been texting this female that I’m really in to my weakness in body and pain is stopping me from doing anything wit this beautiful women it’s like I’m trying to do things with my life that my body doesn’t want and it suck’s anyone else have this problem?",
+      "cells": [
+        {
+          "post_id": "t3_w7kbly",
+          "field": "social_impact",
+          "labeler": "dating difficulty",
+          "production": "relationship difficulty",
+          "resolved": null
+        }
+      ]
+    },
+    {
+      "post_id": "t3_z64xws",
+      "text": "Long Covid Relapse- Zyrtec effectiveness?",
+      "cells": [
+        {
+          "post_id": "t3_z64xws",
+          "field": "symptom_trajectory",
+          "labeler": "relapsing",
+          "production": "",
+          "resolved": null
+        }
+      ]
+    }
+  ]
+}
