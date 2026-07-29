@@ -1952,6 +1952,26 @@ class TestActiveExtractorTextCollection:
         assert texts == ["Post title", "Post body"]
 
 
+class TestMetadataColumnsAgree:
+    """Four modules each keep their own copy of the metadata-column set. A
+    column export_csv writes but a consumer does not know about is read as an
+    extracted field -- clustered on, loaded as a variable, scored, documented."""
+
+    def _consumers(self):
+        from patientpunk.cluster_prep import DEFAULT_META
+        from patientpunk.codebook import META_COLUMNS as codebook_meta
+        from patientpunk.db import VARIABLE_META_COLUMNS
+        from patientpunk.evaluate import _META
+        return {"cluster_prep": DEFAULT_META, "db": VARIABLE_META_COLUMNS,
+                "evaluate": _META, "codebook": codebook_meta}
+
+    def test_every_written_metadata_column_is_known_downstream(self):
+        from patientpunk.export_csv import META_COLUMNS
+        for name, known in self._consumers().items():
+            missing = [c for c in META_COLUMNS if c not in known]
+            assert not missing, f"{name} would treat {missing} as extracted fields"
+
+
 class TestSubredditProvenance:
     def _agg(self, posts):
         from patientpunk.aggregate import aggregate_corpus_by_author

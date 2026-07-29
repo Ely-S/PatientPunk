@@ -51,7 +51,7 @@ DEFAULT_OUTPUT_MD   = _VE_ROOT / "output" / "codebook.md"
 
 # Meta columns written by patientpunk.export_csv -- skip them in the codebook
 META_COLUMNS = {"author_hash", "source", "post_id", "text_count",
-                "schema_id", "extraction_method", "extracted_at"}
+                "subreddits", "schema_id", "extraction_method", "extracted_at"}
 
 
 # ---------------------------------------------------------------------------
