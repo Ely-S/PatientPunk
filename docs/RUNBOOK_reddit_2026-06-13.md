@@ -130,6 +130,32 @@ grep -sE '^(LLM_PROVIDER|LLM_BASE_URL|MODEL_FAST|MODEL_STRONG)=' \
 
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 
+# Start the run log now. Append to it at every step -- see the RUN_NOTES.md
+# section below for what belongs in each heading.
+mkdir -p "$RUN"
+cat >> "$RUN/RUN_NOTES.md" <<NOTES
+# Run notes — $RUN
+
+- Operator:
+- Started: $(date -u +%Y-%m-%dT%H:%MZ)
+- Commit: $(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD)
+- Database: reddit_2026-06-13.db
+- Window:
+- Model that actually answered:
+
+## Commands, in order
+
+## Results per step
+
+## Deviations from the runbook, and why
+
+## Errors and warnings
+
+## Data quality
+
+## Conclusion — learnings, insights, takeaways
+NOTES
+
 # ------------------------------------------------------------- 2 · convert
 # See what is in the database before converting any of it.
 python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
@@ -188,33 +214,39 @@ python main.py run --schema schemas/covidlonghaulers_schema.json \
 Interrupted runs resume with `--resume`, which also leaves `temp/` alone.
 Already-extracted records come from the cache and cost nothing.
 
-## Keep a RUN_NOTES.md
+## `$RUN/RUN_NOTES.md`
 
-Write `$RUN/RUN_NOTES.md` as you go, append-only, so the run can be reproduced
-exactly by someone who was not there. [Issue #112](https://github.com/Ely-S/PatientPunk/issues/112)
-is a worked example.
+Every run keeps its own log, inside its own output directory, written **as you go**
+rather than reconstructed afterwards. The test is whether someone who was not
+there could reproduce the run from the file alone.
+[Issue #112](https://github.com/Ely-S/PatientPunk/issues/112) is the worked example.
 
-Record, step by step:
+**Append-only.** Do not tidy it up or rewrite earlier entries. A command that
+failed and what you did next is the most useful thing in the file — it is the part
+the next person would otherwise repeat. Coming back to a run on another day and
+re-running step 1 appends a second header, with its own timestamp and commit;
+that is the intent, not a duplicate.
 
-- **Every command, verbatim** — including the ones that failed and what you
-  changed. A command you retyped is a command the next person will retype wrong.
-- **Any deviation from this runbook, and why.** Different output directory,
-  different worker count, a flag you added.
-- **The model that actually answered**, from the run banner or
-  `llm_provenance.json` — not the one you expected. See the `.env` note in step 1.
-- **Errors, warnings, and counts**: records extracted vs attempted, failures and
-  their kind, retries, wall time.
-- **The numbers each step printed**, so a re-run can be checked against them.
-- **A conclusion section** at the end: what you learned, what surprised you, what
-  the next person should do differently.
+Step 1 seeds it with the headings below. Fill each as you reach it:
 
-Two things worth checking and writing down every time:
+| Section | What goes in it |
+|---|---|
+| **Header** | Operator, date, branch and commit, database, window, and the model **that actually answered** — read it off the run banner or `llm_provenance.json`, not from what you intended. See the `.env` note in step 1. |
+| **Commands, in order** | Every command verbatim, including the failures. Paste them; do not retype. |
+| **Results per step** | The numbers each step printed — post and comment counts, orphans dropped, patients out, records extracted, wall time. These are what a re-run gets checked against. |
+| **Deviations** | Anything you did differently from this runbook, and why. Output directory, worker count, an added flag, a step skipped. |
+| **Errors and warnings** | Every one, with its count and kind. Failures that were retried, failures that stayed failed, anything printed that you did not expect. |
+| **Data quality** | Fill rates, empty-field rates, anything that looked off. Plus the two checks below. |
+| **Conclusion** | Learnings, insights, takeaways. What surprised you, what you would do differently, what the next person should know before starting. |
 
-- The privacy check above printed 0 for posts **and** comments.
-- `text_count` in `records.csv` reads `1` for every aggregated patient — it counts
-  input documents, and aggregation makes one document per patient. The real
-  volume is `n_items` in the per-patient corpus, which is **not** carried into
-  `records.csv`. Do not report `text_count` as a per-patient text measure.
+Two checks to run and record every time:
+
+- **Privacy.** The check in step 2 printed 0 for posts **and** comments. If either
+  is non-zero, stop — a raw handle is in the corpus.
+- **`text_count` is not a volume measure.** It reads `1` for every aggregated
+  patient, because it counts input documents and aggregation makes one document
+  per patient. The real figure is `n_items` in the per-patient corpus, and it is
+  **not** carried into `records.csv`.
 
 ### Going wider than a month
 
