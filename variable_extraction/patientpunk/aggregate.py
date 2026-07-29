@@ -21,7 +21,7 @@ their combined text in ``body``, so it is picked up as-is.
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 # Mirror extraction modules' _keep_text: drop empty / moderator-removed / user-deleted text.
@@ -44,11 +44,18 @@ def aggregate_corpus_by_author(
     Returns ``(synthetic_posts, stats)``. Each synthetic post::
 
         {author_hash, post_id="agg_<hash12>", title="", body=<joined segments>,
-         comments=[], num_comments=0, n_items=<k>, aggregated=True}
+         comments=[], num_comments=0, n_items=<k>, subreddits="<name:count ...>",
+         aggregated=True}
 
     Authors with fewer than ``min_items`` non-empty segments are dropped.
+
+    ``subreddits`` counts where the patient's segments came from. A patient is
+    one person whether they posted in one community or five, so this is the only
+    thing left that says which -- the synthetic post_id has no corpus to join
+    back to.
     """
     segments: dict[str, list[str]] = defaultdict(list)
+    subs: dict[str, Counter] = defaultdict(Counter)
     n_posts = 0
     n_comments = 0
     for post in posts:
@@ -57,14 +64,20 @@ def aggregate_corpus_by_author(
         title = _keep(post.get("title"))
         body = _keep(post.get("body"))
         block = "\n\n".join(t for t in (title, body) if t)
+        sub = (post.get("subreddit") or "").strip()
         if pa and block:
             segments[pa].append(block)
+            if sub:
+                subs[pa][sub] += 1
         for comment in post.get("comments") or []:
             n_comments += 1
             ca = (comment.get("author_hash") or "").strip()
             cb = _keep(comment.get("body"))
             if ca and cb:
                 segments[ca].append(cb)
+                csub = (comment.get("subreddit") or sub).strip()
+                if csub:
+                    subs[ca][csub] += 1
 
     out: list[dict] = []
     dropped = 0
@@ -80,6 +93,8 @@ def aggregate_corpus_by_author(
             "comments": [],
             "num_comments": 0,
             "n_items": len(segs),
+            "subreddits": " ".join(
+                f"{name}:{n}" for name, n in subs[author].most_common()),
             "aggregated": True,
         })
 

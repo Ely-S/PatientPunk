@@ -51,6 +51,7 @@ META_COLUMNS = [
     "source",
     "post_id",
     "text_count",
+    "subreddits",
     "schema_id",
     "extraction_method",
     "extracted_at",

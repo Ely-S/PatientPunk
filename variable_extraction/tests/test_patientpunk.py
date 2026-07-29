@@ -1952,6 +1952,49 @@ class TestActiveExtractorTextCollection:
         assert texts == ["Post title", "Post body"]
 
 
+class TestSubredditProvenance:
+    """A patient is one person across every community they post in, so the
+    record counts where their text came from rather than picking one."""
+
+    def _agg(self, posts):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        out, _ = aggregate_corpus_by_author(posts, min_items=1)
+        return {p["author_hash"]: p["subreddits"] for p in out}
+
+    def test_counts_each_community_a_patient_posted_in(self):
+        posts = [
+            {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
+            {"author_hash": "a", "title": "t", "body": "b", "subreddit": "cfs"},
+            {"author_hash": "a", "title": "t", "body": "b",
+             "subreddit": "covidlonghaulers"},
+        ]
+        assert self._agg(posts)["a"] == "cfs:2 covidlonghaulers:1"
+
+    def test_a_commenter_is_credited_to_the_community_they_commented_in(self):
+        posts = [{"author_hash": "poster", "title": "t", "body": "b",
+                  "subreddit": "covidlonghaulers",
+                  "comments": [{"author_hash": "commenter", "body": "reply"}]}]
+        got = self._agg(posts)
+        assert got["commenter"] == "covidlonghaulers:1"
+
+    def test_absent_subreddit_is_left_blank_not_guessed(self):
+        posts = [{"author_hash": "a", "title": "t", "body": "b"}]
+        assert self._agg(posts)["a"] == ""
+
+    def test_extraction_record_carries_it(self):
+        from patientpunk.llm_extract import build_llm_record
+        from patientpunk.llm_schema import LLMExtraction
+        rec = build_llm_record(
+            llm_output=LLMExtraction(fields={}), source="subreddit_post",
+            author_hash="a", text_count=1, schema=None, post_id="p1",
+            subreddits="covidlonghaulers:3 cfs:1")
+        assert rec["record_meta"]["subreddits"] == "covidlonghaulers:3 cfs:1"
+
+    def test_it_is_a_metadata_column_not_an_extracted_field(self):
+        from patientpunk.export_csv import META_COLUMNS
+        assert "subreddits" in META_COLUMNS
+
+
 class TestAggregateByAuthor:
     """Per-patient corpus aggregation (patientpunk/aggregate.py)."""
 

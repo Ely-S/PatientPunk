@@ -60,6 +60,13 @@ all go through the same SELF-REFERENCE ONLY guard described above. The generated
 codebook lists each field's source (`base` / `base_optional` / `extension` /
 `llm_discovered`).
 
+The `subreddits` column is metadata, not an extracted field — it records where a
+patient's text came from, as `name:count` pairs. The unit of analysis is the
+patient, and a patient is one person whether they post in one community or five,
+so aggregation deliberately merges them; this column is what lets you tell
+afterwards how mixed a record is. It does not say which *value* came from which
+community — a merged record has no per-value provenance.
+
 ## Base field selection
 
 Fields were kept or cut on measured fill rate. The rates come from 1,177 records

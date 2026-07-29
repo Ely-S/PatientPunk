@@ -440,11 +440,16 @@ def build_llm_record(
     text_count: int,
     schema: dict | None,
     post_id: str | None = None,
+    subreddits: str = "",
 ) -> dict:
     """Assemble a record from an already-validated extraction.
 
     Normalisation lives in llm_schema.parse_extraction, so ``llm_output.fields``
     is guaranteed ``dict[str, list[str] | None]`` by the time it gets here.
+
+    ``subreddits`` names the communities the text came from, as
+    ``name:count`` pairs. An aggregated record covers one patient across
+    several, so it is a distribution rather than a single label.
     """
     schema_id = schema["schema_id"] if schema else "base"
 
@@ -459,6 +464,7 @@ def build_llm_record(
             "source": source,
             "text_count": text_count,
             "post_id": post_id,
+            "subreddits": subreddits,
         },
         "fields": dict(llm_output.fields),
     }
@@ -486,11 +492,13 @@ def _process_one(
         author_hash = user_data.get("author_hash", "unknown")
         source = "user_history"
         post_id = None
+        subreddits = user_data.get("subreddits") or ""
     else:
         texts = collect_texts_from_post(item)
         author_hash = item.get("author_hash", "unknown")
         source = "subreddit_post"
         post_id = item.get("post_id")
+        subreddits = item.get("subreddits") or item.get("subreddit") or ""
 
     if not texts or all(not t.strip() for t in texts):
         return {"_skipped": True, "reason": "no_text", "author_hash": author_hash, "post_id": post_id}
@@ -503,6 +511,7 @@ def _process_one(
         "source": source,
         "author_hash": author_hash,
         "post_id": post_id,
+        "subreddits": subreddits,
         "text_count": len(texts),
         "schema": schema,
     }
@@ -673,6 +682,7 @@ def _process_batch(
                 source=item["source"],
                 author_hash=item["author_hash"],
                 text_count=item["text_count"],
+                subreddits=item.get("subreddits", ""),
                 schema=item["schema"],
                 post_id=item["post_id"],
             )
