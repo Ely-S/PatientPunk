@@ -296,6 +296,29 @@ keeps the full emergent tail.
 
 ## CLI Reference
 
+Every command is `python main.py <command>`. Full list, in the order you would
+reach for them:
+
+| Command | What it does |
+|---|---|
+| [`corpus`](#corpus--corpus-statistics) | Print corpus statistics |
+| [`inspect`](#inspect--schema-introspection) | Inspect a schema file |
+| [`aggregate`](#aggregate--collapse-postscomments-into-one-synthetic-post-per-author) | Collapse a posts+comments corpus into one synthetic post per author |
+| [`run`](#run--full-pipeline) | Run the full extraction pipeline |
+| [`demographics`](#demographics--llm-only-demographics) | LLM-only demographic coding (deductive, inductive, or both) |
+| [`export`](#export--re-run-export-only-phases-3--4) | Re-run export phases only (Phase 3 + 4) |
+| [`promote`](#promote--merge-discovered-fields-into-a-schema) | Merge discovered fields into a curated schema |
+| [`consolidate`](#consolidate--merge-discovered-schemas-from-multiple-runs) | Merge discovered schemas from multiple runs into one deduped schema |
+| [`normalize`](#normalize--collapse-free-text-fields-to-a-controlled-vocabulary) | Collapse free-text backbone fields to a controlled vocabulary |
+| [`validate`](#validate--score-an-extraction-against-a-reference-per-field) | Score an extraction against a reference, per field (or export a gold template) |
+| [`cluster-prep`](#cluster-prep--build-a-per-patient-clustering-ready-feature-matrix) | Build a per-patient, clustering-ready feature matrix from `records.csv` |
+
+**`aggregate` comes before `run`, not after.** Extraction reads each post's title
+and body only, so on a comment-heavy corpus anything a patient said in a comment is
+skipped unless `aggregate` has already collapsed their posts and comments into one
+synthetic post. It is listed among the utilities below, but for those corpora it is
+a prerequisite rather than an option.
+
 ### `run` — full pipeline
 
 ```
