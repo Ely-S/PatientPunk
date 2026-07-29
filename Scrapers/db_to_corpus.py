@@ -100,6 +100,24 @@ def build_post(row: sqlite3.Row, comments: list[dict]) -> dict:
     }
 
 
+def check_writable(out_path: Path, force: bool) -> None:
+    """Refuse to overwrite an existing corpus unless asked.
+
+    A symlink is the dangerous case: writing through one replaces whatever it
+    points at, and corpus directories accumulate links to other corpora. Give
+    each run its own --out-dir instead.
+    """
+    if not out_path.exists() and not out_path.is_symlink():
+        return
+    if force:
+        return
+    what = f"a symlink to {out_path.resolve()}" if out_path.is_symlink() else "a file"
+    raise FileExistsError(
+        f"{out_path} is already {what}. Give this run its own --out-dir, "
+        f"or pass --force to overwrite."
+    )
+
+
 def convert(db: Path, subreddits: list[str] | None, out_path: Path,
             since: int | None, until: int | None) -> dict:
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
@@ -160,6 +178,8 @@ def main() -> int:
     ap.add_argument("--until", help="Only posts/comments before YYYY-MM-DD")
     ap.add_argument("--list", action="store_true",
                     help="List the subreddits in the database and exit")
+    ap.add_argument("--force", action="store_true",
+                    help="Overwrite an existing subreddit_posts.json")
     a = ap.parse_args()
 
     if not a.db.exists():
@@ -170,6 +190,11 @@ def main() -> int:
         return 0
 
     out = a.out_dir / "subreddit_posts.json"
+    try:
+        check_writable(out, a.force)
+    except FileExistsError as exc:
+        print(exc, file=sys.stderr)
+        return 1
     stats = convert(a.db, a.subreddit, out,
                     parse_date(a.since) if a.since else None,
                     parse_date(a.until) if a.until else None)
@@ -186,9 +211,9 @@ def main() -> int:
     print(f"  distinct authors  {stats['authors']:,}")
     print(f"  window            {stats['first']} -> {stats['last']}")
     if stats["orphan_comments"]:
-        print(f"  orphan comments   {stats['orphan_comments']:,} "
-              "(parent post outside this window; they still reach the pipeline "
-              "as their own patients only via aggregate)")
+        print(f"  orphan comments   {stats['orphan_comments']:,} DROPPED "
+              "(their parent post is outside this window, so there is nothing to "
+              "nest them under; widen --since/--until to keep them)")
     return 0
 
 

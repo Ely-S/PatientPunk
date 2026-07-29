@@ -97,9 +97,16 @@ without discarding most of the corpus.
 
 ## Steps 1–5 · Setup to run
 
-Copy the whole block. Everything except the final command is safe to paste and run
-as-is; the real run is left commented out so it does not start before you have
-looked at the ten-record test.
+**Name every run.** Each run gets its own output directory, and the notes for it
+live inside that directory. Never write into `output/` — it is a shared name, it
+may already hold another run's `records.csv`, and on at least one machine
+`output/subreddit_posts.json` was a **symlink to another corpus**, so writing
+there would have destroyed it. `db_to_corpus.py` now refuses to overwrite an
+existing corpus for that reason; pass `--force` only when you mean it.
+
+Copy the whole block. Everything except the final command is safe to paste and
+run as-is; the real run is left commented out so it does not start before you
+have looked at the ten-record test.
 
 ```bash
 # ---------------------------------------------------------------- 1 · setup
@@ -108,9 +115,19 @@ looked at the ten-record test.
 git fetch origin && git checkout feat/db-corpus
 
 uv sync                                              # from the repo root
-cp .env.example .env                                 # then edit: the template
-                                                     # has OPENROUTER_API_KEY;
-                                                     # ANTHROPIC_API_KEY also works
+
+# Name this run. Everything below writes under it, so runs never collide.
+RUN=output_reddit2026
+REPO=$(pwd)
+
+# Which model will actually answer? Two .env files are read and
+# variable_extraction/.env is merged SECOND, so it overrides the repo root --
+# and it is gitignored, so it will not show up in git status. Check both before
+# you spend anything; the run banner and llm_provenance.json also print it.
+cp .env.example .env       # template carries OPENROUTER_API_KEY
+grep -sE '^(LLM_PROVIDER|LLM_BASE_URL|MODEL_FAST|MODEL_STRONG)=' \
+     .env variable_extraction/.env
+
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 
 # ------------------------------------------------------------- 2 · convert
@@ -118,51 +135,86 @@ aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
 
 # Every subreddit, hashing usernames on the way -- raw handles are in the
-# database and must not reach records.csv. Writes output/subreddit_posts.json.
+# database and must not reach records.csv.
 #   --subreddit NAME [NAME ...]   restrict to some, for a single-community run
 #   --since / --until YYYY-MM-DD  filter posts AND comments by their own
-#                                 timestamp, so a narrow window leaves comments
-#                                 whose parent post falls outside it; those are
-#                                 reported as orphans and still become patients
+#                                 timestamp. A comment whose parent post falls
+#                                 outside the window is DROPPED -- there is
+#                                 nothing to nest it under. The tool reports how
+#                                 many; widen the window to keep them.
 # Start with a window. The whole database is 243,289 posts and 3.6M comments,
 # which converts to a 2 GB JSON -- and aggregate (next step) reads the corpus
 # whole into memory, so the full pull needs a machine sized for it. A month is
-# ~40 MB and runs in seconds; scale up once the shape looks right.
-python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --since 2026-05-01 --out-dir output
+# ~24 MB and runs in seconds; scale up once the shape looks right.
+python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db \
+    --since 2026-05-01 --out-dir "$RUN"
 
-# Confirm no raw handles got through -- every author_hash should be 64 hex
-# characters, and this should print 0.
-python -c "import json;d=json.load(open('output/subreddit_posts.json',encoding='utf-8'));print(sum(1 for p in d if p['author_hash'] and len(p['author_hash'])!=64))"
+# Confirm no raw handle got through, in posts AND in comments. Both print 0.
+python - "$RUN/subreddit_posts.json" <<'EOF'
+import json, re, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+bad = lambda h: h is not None and not re.fullmatch(r"[0-9a-f]{64}", h)
+print("unhashed post authors   ", sum(bad(p["author_hash"]) for p in d))
+print("unhashed comment authors", sum(bad(c["author_hash"]) for p in d for c in p["comments"]))
+EOF
 
 # ----------------------------------------------------------- 3 · aggregate
-# One record per patient rather than per post. This is what turns 4,996 posts
-# and 65,046 comments into 4,209 patients, and it is the only way a
-# comment-only patient is captured at all -- extraction reads title+body.
+# One record per patient rather than per post -- the only way a comment-only
+# patient is captured at all, since extraction reads title+body.
 # main.py resolves a relative --input-dir differently depending on the
 # subcommand, so pass absolute paths and the question does not arise.
-REPO=$(pwd)
 cd variable_extraction
-python main.py aggregate --input-dir "$REPO/output" --out-dir "$REPO/output_perpatient" --min-items 3
+python main.py aggregate --input-dir "$REPO/$RUN" \
+    --out-dir "$REPO/${RUN}_perpatient" --min-items 3
 
 # ---------------------------------------------------------------- 4 · test
 # Ten records first. Responses are cached under cache/ at the repo root (on by
 # default), so these ten are not billed again in the real run.
-python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir "$REPO/output_perpatient" --limit 10
+python main.py run --schema schemas/covidlonghaulers_schema.json \
+    --input-dir "$REPO/${RUN}_perpatient" --limit 10
 
-# Now open $REPO/output_perpatient/records.csv and check it looks sane.
+# Now open $REPO/${RUN}_perpatient/records.csv and check it looks sane.
 
 # ------------------------------------------------------------ 5 · real run
-# BATCH_SIZE = 1, so this is one LLM call per patient -- roughly 144,000 for
-# the full corpus at --min-items 3. The README's "~$0.10-0.50" is for a
-# 220-post corpus and does not transfer. Multiply what the ten cost.
+# BATCH_SIZE = 1, so this is one LLM call per patient. Multiply what the ten
+# cost. --workers well above 10 is fine and cuts wall time substantially.
 #
 # Uncomment when the test above looks right:
 #
-# python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir "$REPO/output_perpatient" --workers 10
+# python main.py run --schema schemas/covidlonghaulers_schema.json \
+#     --input-dir "$REPO/${RUN}_perpatient" --workers 250
 ```
 
-Interrupted runs resume with `--resume`. The cache means re-running over
-already-seen records costs nothing.
+Interrupted runs resume with `--resume`, which also leaves `temp/` alone.
+Already-extracted records come from the cache and cost nothing.
+
+## Keep a RUN_NOTES.md
+
+Write `$RUN/RUN_NOTES.md` as you go, append-only, so the run can be reproduced
+exactly by someone who was not there. [Issue #112](https://github.com/Ely-S/PatientPunk/issues/112)
+is a worked example.
+
+Record, step by step:
+
+- **Every command, verbatim** — including the ones that failed and what you
+  changed. A command you retyped is a command the next person will retype wrong.
+- **Any deviation from this runbook, and why.** Different output directory,
+  different worker count, a flag you added.
+- **The model that actually answered**, from the run banner or
+  `llm_provenance.json` — not the one you expected. See the `.env` note in step 1.
+- **Errors, warnings, and counts**: records extracted vs attempted, failures and
+  their kind, retries, wall time.
+- **The numbers each step printed**, so a re-run can be checked against them.
+- **A conclusion section** at the end: what you learned, what surprised you, what
+  the next person should do differently.
+
+Two things worth checking and writing down every time:
+
+- The privacy check above printed 0 for posts **and** comments.
+- `text_count` in `records.csv` reads `1` for every aggregated patient — it counts
+  input documents, and aggregation makes one document per patient. The real
+  volume is `n_items` in the per-patient corpus, which is **not** carried into
+  `records.csv`. Do not report `text_count` as a per-patient text measure.
 
 ### Going wider than a month
 
@@ -172,7 +224,7 @@ before you do:
 | Window | Posts | Corpus JSON |
 |---|---:|---:|
 | 10 days | 1,271 | 9 MB |
-| 1 month | 4,996 | 40 MB |
+| 1 month | 4,996 | 24 MB |
 | Full, 2020-07 → 2026-06 | 243,289 | **2,006 MB** |
 
 `db_to_corpus.py` handles the full database fine — it streams from SQLite and the
