@@ -115,25 +115,32 @@ python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --list
 #                                 timestamp, so a narrow window leaves comments
 #                                 whose parent post falls outside it; those are
 #                                 reported as orphans and still become patients
-python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --out-dir output
+# Start with a window. The whole database is 243,289 posts and 3.6M comments,
+# which converts to a 2 GB JSON -- and aggregate (next step) reads the corpus
+# whole into memory, so the full pull needs a machine sized for it. A month is
+# ~40 MB and runs in seconds; scale up once the shape looks right.
+python Scrapers/db_to_corpus.py --db reddit_2026-06-13.db --since 2026-05-01 --out-dir output
 
 # Confirm no raw handles got through -- every author_hash should be 64 hex
 # characters, and this should print 0.
-python -c "import json;d=json.load(open('output/subreddit_posts.json'));print(sum(1 for p in d if p['author_hash'] and len(p['author_hash'])!=64))"
+python -c "import json;d=json.load(open('output/subreddit_posts.json',encoding='utf-8'));print(sum(1 for p in d if p['author_hash'] and len(p['author_hash'])!=64))"
 
 # ----------------------------------------------------------- 3 · aggregate
 # One record per patient rather than per post. This is what turns 4,996 posts
 # and 65,046 comments into 4,209 patients, and it is the only way a
 # comment-only patient is captured at all -- extraction reads title+body.
+# main.py resolves a relative --input-dir differently depending on the
+# subcommand, so pass absolute paths and the question does not arise.
+REPO=$(pwd)
 cd variable_extraction
-python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
+python main.py aggregate --input-dir "$REPO/output" --out-dir "$REPO/output_perpatient" --min-items 3
 
 # ---------------------------------------------------------------- 4 · test
 # Ten records first. Responses are cached under cache/ at the repo root (on by
 # default), so these ten are not billed again in the real run.
-python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient --limit 10
+python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir "$REPO/output_perpatient" --limit 10
 
-# Now open ../output_perpatient/records.csv and check it looks sane.
+# Now open $REPO/output_perpatient/records.csv and check it looks sane.
 
 # ------------------------------------------------------------ 5 · real run
 # BATCH_SIZE = 1, so this is one LLM call per patient -- roughly 144,000 for
@@ -142,11 +149,31 @@ python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../
 #
 # Uncomment when the test above looks right:
 #
-# python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient --workers 10
+# python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir "$REPO/output_perpatient" --workers 10
 ```
 
 Interrupted runs resume with `--resume`. The cache means re-running over
 already-seen records costs nothing.
+
+### Going wider than a month
+
+Drop `--since` to take everything. Two things scale badly and are worth knowing
+before you do:
+
+| Window | Posts | Corpus JSON |
+|---|---:|---:|
+| 10 days | 1,271 | 9 MB |
+| 1 month | 4,996 | 40 MB |
+| Full, 2020-07 → 2026-06 | 243,289 | **2,006 MB** |
+
+`db_to_corpus.py` handles the full database fine — it streams from SQLite and the
+conversion takes a couple of minutes. **`aggregate` is the constraint:** it reads the
+corpus with a single `json.loads` over the whole file, so a 2 GB corpus becomes many
+gigabytes of Python objects. On a laptop that thrashes rather than finishes.
+
+Until that is fixed, go wide by converting in windows — a year at a time, say — and
+running each separately, or run it somewhere with the memory to hold the whole
+corpus at once.
 
 ## 6 · What you get
 
