@@ -152,8 +152,8 @@ def convert(db: Path, subreddits: list[str] | None, out_path: Path,
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(posts, f, ensure_ascii=False)
 
-    orphans = sum(len(v) for k, v in by_post.items()
-                  if k not in {p["post_id"][3:] for p in posts})
+    kept = {p["post_id"][3:] for p in posts}
+    orphans = sum(len(v) for k, v in by_post.items() if k not in kept)
     per_sub = Counter(p["subreddit"] for p in posts)
     return {
         "per_subreddit": per_sub,
