@@ -160,7 +160,12 @@ def convert(db: Path, subreddits: list[str] | None, out_path: Path,
         "posts": len(posts),
         "comments": n_comments,
         "orphan_comments": orphans,
-        "authors": len({p["author_hash"] for p in posts if p["author_hash"]}),
+        # Comment authors count too: a patient who only ever commented is still
+        # a patient, and aggregate is what turns them into one. Counted off the
+        # emitted posts, not by_post, so dropped orphans are not included.
+        "authors": len({p["author_hash"] for p in posts if p["author_hash"]}
+                       | {c["author_hash"] for p in posts for c in p["comments"]
+                          if c["author_hash"]}),
         "first": posts[0]["created_utc"][:10] if posts else "-",
         "last": posts[-1]["created_utc"][:10] if posts else "-",
     }
@@ -195,9 +200,14 @@ def main() -> int:
     except FileExistsError as exc:
         print(exc, file=sys.stderr)
         return 1
-    stats = convert(a.db, a.subreddit, out,
-                    parse_date(a.since) if a.since else None,
-                    parse_date(a.until) if a.until else None)
+    try:
+        since = parse_date(a.since) if a.since else None
+        until = parse_date(a.until) if a.until else None
+    except ValueError:
+        print("--since / --until take YYYY-MM-DD", file=sys.stderr)
+        return 1
+
+    stats = convert(a.db, a.subreddit, out, since, until)
     if not stats["posts"]:
         which = ", ".join(a.subreddit) if a.subreddit else "any subreddit"
         print(f"No posts for {which}. Try --list.", file=sys.stderr)
