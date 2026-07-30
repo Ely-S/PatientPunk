@@ -5,8 +5,8 @@
 > out. The `subreddits` column came in with #109 and is already on `main`.
 
 A step-by-step for this specific dataset. For the commands in general see
-[`variable_extraction/README.md`](../variable_extraction/README.md); for what the
-output means and what to distrust, [`METHODS.md`](../variable_extraction/METHODS.md).
+[`variable_extraction/README.md`](../../variable_extraction/README.md); for what the
+output means and what to distrust, [`METHODS.md`](../../variable_extraction/METHODS.md).
 
 ## What the dataset is
 
