@@ -50,7 +50,10 @@ def author_hash(author) -> str | None:
 
 def utc_iso(ts) -> str:
     if isinstance(ts, str):
-        return ts
+        # A column with INTEGER affinity cannot hold an epoch as text, but this
+        # tool is pointed at databases we did not build.
+        return (datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+                if ts.isdigit() else ts)
     if isinstance(ts, (int, float)):
         return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
     return ""
