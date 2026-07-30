@@ -1,9 +1,5 @@
 # Running the pipeline on `reddit_2026-06-13.db`
 
-> **Needs branch `feat/db-corpus`** until [#110](https://github.com/Ely-S/PatientPunk/pull/110)
-> merges — it carries `db_to_corpus.py`, which `main` does not have yet. Step 1 checks it
-> out. The `subreddits` column came in with #109 and is already on `main`.
-
 A step-by-step for this specific dataset. For the commands in general see
 [`variable_extraction/README.md`](../../variable_extraction/README.md); for what the
 output means and what to distrust, [`METHODS.md`](../../variable_extraction/METHODS.md).
@@ -156,10 +152,6 @@ have looked at the ten-record test.
 
 ```bash
 # ---------------------------------------------------------------- 1 · setup
-# db_to_corpus.py is not on main yet -- it is PR #110. Until that merges, work
-# from this branch. (The subreddits column landed with #109 and is on main.)
-git fetch origin && git checkout feat/db-corpus
-
 uv sync                                              # from the repo root
 
 # Name this run. Everything below writes under it, so runs never collide.
