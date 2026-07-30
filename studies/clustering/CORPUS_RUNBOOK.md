@@ -14,12 +14,11 @@ sha256  0c2da41b3f0ccde2134ae436c815ee0d6129a63a0ae3d20dcf31a2a05929bfea
 > **Want this data?** It is not publicly archived — **contact the PatientPunk
 > team** and we can arrange access. Check what you receive against the sha256
 > above; that hash, not the filename, is the identity of this corpus.
-> Team members: it is in our S3 bucket, path in step 1.
 
 SQLite, two flat tables (`posts`, `comments`) joined on `comments.link_id`.
 Fifteen subreddits, 243,289 posts and 3,602,691 comments in total. r/covidlonghaulers
 runs **2020-07-24 → 2026-06-11** — the subreddit's first day to the scrape date, so
-it is the complete history rather than a window.
+it is almost a complete history.
 
 | Subreddit | Posts | Comments |
 |---|---:|---:|
@@ -39,35 +38,10 @@ it is the complete history rather than a window.
 | me_cfs | 20 | 5 |
 | cfs_DE | 5 | 7 |
 
-`mecfs` and `MECFS` are separate rows because the names differ only in case. They
-are the same community; anything grouping by subreddit will treat them as two
-unless it lowercases first.
-
-### Provenance — what we know, and what we do not
-
-Stated plainly, because a reproducibility document that overclaims its own
-provenance is worse than one that admits the gap.
-
-**Known.** The file was scraped incrementally, per subreddit, and run to
-completion: its `cursors` table holds 28 rows — one per (subreddit, kind) — all
-marked `done=1`, with checkpoints ending **2026-06-11**. Field names
-(`selftext`, `link_id`, `parent_id`, `created_utc`, `num_comments`) are the
-standard Reddit/Pushshift shape. Both tables carry FTS5 indexes.
-
-**Not known.** The database records no tool, version, query, or source
-endpoint. `user_version` and `application_id` are both 0 and there is no
-metadata table. The `pushshift/` prefix in the S3 path is a **label we applied**,
-not something the file asserts — we have not verified which API or dump it came
-from. It does **not** match this repository's own `Scrapers/scrape_corpus.py`,
-which pulls from Arctic Shift and writes JSON, not SQLite.
-
-So: treat the S3 path and the checksum above as the identity of this artifact,
-and the counts in this document as its contents. Do not cite it as a Pushshift
-extract without confirming that first.
 
 ### Reproducing this outside the team
 
-Step 1 pulls the database from our S3 bucket, which is private — that command
+Step 1 pulls the database from our S3 bucket, which is private: that command
 will not work for you, and the contact route above is how to get the file itself.
 
 Failing that, you can build an *equivalent but not identical* corpus from public
@@ -81,11 +55,10 @@ sources with the tooling in this repository:
   shape `db_to_corpus.py` produces, so everything from step 3 onward is unchanged.
 
 That route gives you a corpus of the same communities over a window you choose.
-It will not reproduce these record counts — different source, different fetch
-date, deleted content differs — so treat any numbers you get as a replication
-attempt rather than a check of ours.
 
-It is **not** in the format the pipeline reads. That is step 2.
+
+Note that the arctic shift data is in a different format and will have some parts of this guide skipped,
+again,  contact our team if you have any problems.
 
 > **The database holds raw Reddit usernames** — `posts.author` and `comments.author`
 > are plain handles, 133,675 distinct ones, attached to posts about people's medical
