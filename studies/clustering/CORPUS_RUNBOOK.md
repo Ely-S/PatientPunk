@@ -7,9 +7,14 @@ output means and what to distrust, [`METHODS.md`](../../variable_extraction/METH
 ## What the dataset is
 
 ```
-s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db      2.45 GB
+reddit_2026-06-13.db      2.45 GB
 sha256  0c2da41b3f0ccde2134ae436c815ee0d6129a63a0ae3d20dcf31a2a05929bfea
 ```
+
+> **Want this data?** It is not publicly archived — **contact the PatientPunk
+> team** and we can arrange access. Check what you receive against the sha256
+> above; that hash, not the filename, is the identity of this corpus.
+> Team members: it is in our S3 bucket, path in step 1.
 
 SQLite, two flat tables (`posts`, `comments`) joined on `comments.link_id`.
 Fifteen subreddits, 243,289 posts and 3,602,691 comments in total. r/covidlonghaulers
@@ -62,11 +67,8 @@ extract without confirming that first.
 
 ### Reproducing this outside the team
 
-`s3://patientpunk/` is private, so step 1's `aws s3 cp` will not work for you.
-
-> **Need the database?** It is not publicly archived. **Contact the PatientPunk
-> team** and we can arrange access. Verify what you receive against the sha256
-> above — that hash, not the filename, is the identity of this corpus.
+Step 1 pulls the database from our S3 bucket, which is private — that command
+will not work for you, and the contact route above is how to get the file itself.
 
 Failing that, you can build an *equivalent but not identical* corpus from public
 sources with the tooling in this repository:
@@ -166,6 +168,8 @@ cp .env.example .env       # template carries OPENROUTER_API_KEY
 grep -sE '^(LLM_PROVIDER|LLM_BASE_URL|MODEL_FAST|MODEL_STRONG)=' \
      .env variable_extraction/.env
 
+# Team members only -- the bucket is private. Everyone else: see "Reproducing
+# this outside the team" above for how to request the file.
 aws s3 cp s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db .
 
 # Start the run log now. Append to it at every step -- see the RUN_NOTES.md

@@ -12,11 +12,17 @@ fifteen long-COVID and ME/CFS communities, extracted one record per patient.
 |---|---|
 | [`CORPUS_RUNBOOK.md`](./CORPUS_RUNBOOK.md) | How to build the corpus and run extraction on it, end to end, including what to distrust in the output |
 
-## Where the data lives
+## The corpus
 
 ```
-s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db      2.45 GB
+reddit_2026-06-13.db      2.45 GB
+sha256  0c2da41b3f0ccde2134ae436c815ee0d6129a63a0ae3d20dcf31a2a05929bfea
 ```
+
+> **Want this data?** It is not publicly archived — **contact the PatientPunk
+> team** and we can arrange access. Check what you receive against the sha256;
+> that hash, not the filename, identifies this corpus. Team members: it is in
+> our S3 bucket, path in [`CORPUS_RUNBOOK.md`](./CORPUS_RUNBOOK.md).
 
 SQLite, 243,289 posts and 3,602,691 comments across fifteen subreddits.
 r/covidlonghaulers runs 2020-07-24 → 2026-06-11 — the subreddit's first day to
