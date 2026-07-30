@@ -12,6 +12,7 @@ output means and what to distrust, [`METHODS.md`](../../variable_extraction/METH
 
 ```
 s3://patientpunk/raw_data/pushshift/reddit_2026-06-13.db      2.45 GB
+sha256  0c2da41b3f0ccde2134ae436c815ee0d6129a63a0ae3d20dcf31a2a05929bfea
 ```
 
 SQLite, two flat tables (`posts`, `comments`) joined on `comments.link_id`.
@@ -40,6 +41,51 @@ it is the complete history rather than a window.
 `mecfs` and `MECFS` are separate rows because the names differ only in case. They
 are the same community; anything grouping by subreddit will treat them as two
 unless it lowercases first.
+
+### Provenance — what we know, and what we do not
+
+Stated plainly, because a reproducibility document that overclaims its own
+provenance is worse than one that admits the gap.
+
+**Known.** The file was scraped incrementally, per subreddit, and run to
+completion: its `cursors` table holds 28 rows — one per (subreddit, kind) — all
+marked `done=1`, with checkpoints ending **2026-06-11**. Field names
+(`selftext`, `link_id`, `parent_id`, `created_utc`, `num_comments`) are the
+standard Reddit/Pushshift shape. Both tables carry FTS5 indexes.
+
+**Not known.** The database records no tool, version, query, or source
+endpoint. `user_version` and `application_id` are both 0 and there is no
+metadata table. The `pushshift/` prefix in the S3 path is a **label we applied**,
+not something the file asserts — we have not verified which API or dump it came
+from. It does **not** match this repository's own `Scrapers/scrape_corpus.py`,
+which pulls from Arctic Shift and writes JSON, not SQLite.
+
+So: treat the S3 path and the checksum above as the identity of this artifact,
+and the counts in this document as its contents. Do not cite it as a Pushshift
+extract without confirming that first.
+
+### Reproducing this outside the team
+
+`s3://patientpunk/` is private, so step 1's `aws s3 cp` will not work for you.
+
+> **Need the database?** It is not publicly archived. **Contact the PatientPunk
+> team** and we can arrange access. Verify what you receive against the sha256
+> above — that hash, not the filename, is the identity of this corpus.
+
+Failing that, you can build an *equivalent but not identical* corpus from public
+sources with the tooling in this repository:
+
+- [`Scrapers/scrape_corpus.py`](../../Scrapers/scrape_corpus.py) pulls from the
+  Arctic Shift public API — no Reddit key needed. See
+  [`SCRAPER_HELP.md`](../../Scrapers/SCRAPER_HELP.md).
+- [`Scrapers/transform_arctic_shift.py`](../../Scrapers/transform_arctic_shift.py)
+  converts an Arctic Shift bulk download into the same `subreddit_posts.json`
+  shape `db_to_corpus.py` produces, so everything from step 3 onward is unchanged.
+
+That route gives you a corpus of the same communities over a window you choose.
+It will not reproduce these record counts — different source, different fetch
+date, deleted content differs — so treat any numbers you get as a replication
+attempt rather than a check of ours.
 
 It is **not** in the format the pipeline reads. That is step 2.
 
