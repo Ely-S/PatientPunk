@@ -42,9 +42,9 @@ avoid that.
 Measured, and worth knowing before designing an analysis on top:
 
 - **Cohorts cannot be separated on `conditions`.** In a long-COVID community
-  nobody writes "I have long COVID", so the field is empty for a large share of
-  records — 55% on a 300-post sample, 35% on a 4,193-record run. Not
-  extraction failure; there is nothing in the text to extract.
+  nobody writes "I have long COVID", so the field is empty on roughly half of
+  records — 46–56% across thirteen 300-post runs of this corpus. Not extraction
+  failure; there is nothing in the text to extract.
 - **Symptom-domain placement is only partly deterministic.** A three-rule table
   routes symptoms that are multi-domain by definition, covering 4.7% of mentions;
   the rest is model judgement at unmeasured consistency. `routing_*.json` records
