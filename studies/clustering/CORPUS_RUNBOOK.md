@@ -257,7 +257,13 @@ Already-extracted records come from the cache and cost nothing.
 Every run keeps its own log, inside its own output directory, written **as you go**
 rather than reconstructed afterwards. The test is whether someone who was not
 there could reproduce the run from the file alone.
-[Issue #112](https://github.com/Ely-S/PatientPunk/issues/112) is the worked example.
+
+Write down what you would otherwise have to rediscover — not just the command, but
+why you ran it the way you did. "Used a fresh output directory because
+`output/subreddit_posts.json` turned out to be a symlink to another corpus" is the
+kind of line that saves the next person an afternoon; the command alone is not.
+
+[Issue #112](https://github.com/Ely-S/PatientPunk/issues/112) is a filled-in example.
 
 **Append-only.** Do not tidy it up or rewrite earlier entries. A command that
 failed and what you did next is the most useful thing in the file — it is the part
