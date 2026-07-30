@@ -21,7 +21,7 @@ their combined text in ``body``, so it is picked up as-is.
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 # Mirror extraction modules' _keep_text: drop empty / moderator-removed / user-deleted text.
@@ -44,11 +44,17 @@ def aggregate_corpus_by_author(
     Returns ``(synthetic_posts, stats)``. Each synthetic post::
 
         {author_hash, post_id="agg_<hash12>", title="", body=<joined segments>,
-         comments=[], num_comments=0, n_items=<k>, aggregated=True}
+         comments=[], num_comments=0, n_items=<k>, subreddits="<name:count ...>",
+         aggregated=True}
 
     Authors with fewer than ``min_items`` non-empty segments are dropped.
+
+    ``subreddits`` counts which communities the patient's segments came from. We
+    want to keep this information for analysis later as the redditors' posts are
+    aggregated into one document.
     """
     segments: dict[str, list[str]] = defaultdict(list)
+    subreddit_counts: dict[str, Counter] = defaultdict(Counter)
     n_posts = 0
     n_comments = 0
     for post in posts:
@@ -57,14 +63,21 @@ def aggregate_corpus_by_author(
         title = _keep(post.get("title"))
         body = _keep(post.get("body"))
         block = "\n\n".join(t for t in (title, body) if t)
+        post_subreddit = (post.get("subreddit") or "").strip()
         if pa and block:
             segments[pa].append(block)
+            if post_subreddit:
+                subreddit_counts[pa][post_subreddit] += 1
         for comment in post.get("comments") or []:
             n_comments += 1
             ca = (comment.get("author_hash") or "").strip()
             cb = _keep(comment.get("body"))
             if ca and cb:
                 segments[ca].append(cb)
+                comment_subreddit = (
+                    comment.get("subreddit") or post_subreddit).strip()
+                if comment_subreddit:
+                    subreddit_counts[ca][comment_subreddit] += 1
 
     out: list[dict] = []
     dropped = 0
@@ -80,6 +93,9 @@ def aggregate_corpus_by_author(
             "comments": [],
             "num_comments": 0,
             "n_items": len(segs),
+            "subreddits": " ".join(
+                f"{name}:{count}"
+                for name, count in subreddit_counts[author].most_common()),
             "aggregated": True,
         })
 

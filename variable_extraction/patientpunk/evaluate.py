@@ -37,7 +37,7 @@ DEFAULT_KEY = ("author_hash", "post_id")
 # Columns that are metadata, not extracted variables (mirrors records_to_csv).
 _META = {
     "author_hash", "source", "source_type", "post_id", "text_count",
-    "schema_id", "extraction_method", "extracted_at",
+    "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
 
