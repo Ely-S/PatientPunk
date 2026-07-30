@@ -1,8 +1,8 @@
 # Running the pipeline on `reddit_2026-06-13.db`
 
-> **Needs branch `feat/db-corpus`** ([#110](https://github.com/Ely-S/PatientPunk/pull/110),
-> stacked on [#109](https://github.com/Ely-S/PatientPunk/pull/109)). Neither has merged,
-> so `main` has neither the converter nor the `subreddits` column. Step 1 checks it out.
+> **Needs branch `feat/db-corpus`** until [#110](https://github.com/Ely-S/PatientPunk/pull/110)
+> merges — it carries `db_to_corpus.py`, which `main` does not have yet. Step 1 checks it
+> out. The `subreddits` column came in with #109 and is already on `main`.
 
 A step-by-step for this specific dataset. For the commands in general see
 [`variable_extraction/README.md`](../variable_extraction/README.md); for what the
@@ -110,8 +110,8 @@ have looked at the ten-record test.
 
 ```bash
 # ---------------------------------------------------------------- 1 · setup
-# db_to_corpus.py and the subreddits column are not on main yet -- they are
-# PRs #110 and #109. Until those merge, work from this branch.
+# db_to_corpus.py is not on main yet -- it is PR #110. Until that merges, work
+# from this branch. (The subreddits column landed with #109 and is on main.)
 git fetch origin && git checkout feat/db-corpus
 
 uv sync                                              # from the repo root
