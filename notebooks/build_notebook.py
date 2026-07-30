@@ -1,0 +1,225 @@
+"""
+Notebook builder and executor for PatientPunk research notebooks.
+
+Usage:
+    from build_notebook import build_notebook, execute_and_export
+
+    nb = build_notebook(
+        cells=[
+            ("md", "# My Analysis\\n\\nAbstract here..."),
+            ("code", "df = pd.read_sql('SELECT * FROM treatment', conn)\\ndisplay(df.head(10))"),
+            ("md", "**What this means:** ..."),
+        ],
+        db_path="polina_onemonth.db",
+        title="My Analysis",
+    )
+
+    execute_and_export(nb, "notebooks/v2/1_my_analysis")
+"""
+
+import nbformat
+from nbformat.v4 import new_notebook, new_code_cell, new_markdown_cell
+from pathlib import Path
+
+
+# ── Default DB-resolution blocks ────────────────────────────────────────────
+# Callers can override this by passing `db_path_block=` to build_notebook().
+DEFAULT_DB_PATH_BLOCK = '''DB_PATH = {db_path_literal}
+# sqlite3.connect() silently CREATES an empty file on a bad path, so every
+# query would then return nothing. Fail loudly on a missing DB instead.
+if DB_PATH != ":memory:" and not os.path.exists(DB_PATH):
+    raise FileNotFoundError(f"Database not found: {{DB_PATH}}")
+conn = sqlite3.connect(DB_PATH)'''
+
+URI_DB_PATH_BLOCK = '''DB_PATH = {db_path_literal}
+conn = sqlite3.connect(DB_PATH, uri=True)'''
+
+
+# ── Standard setup code injected into every notebook ────────────────────────
+SETUP_CODE = '''import warnings
+warnings.filterwarnings("ignore")
+
+import os
+import sqlite3
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats as sp_stats
+from scipy.stats import binomtest, mannwhitneyu, fisher_exact, kruskal
+from IPython.display import display, HTML, Markdown
+
+# ── Database connection ──
+{db_path_block}
+
+# ── Sentiment mapping ──
+SENTIMENT_SCORE = {{"positive": 1.0, "mixed": 0.5, "neutral": 0.0, "negative": -1.0}}
+
+def to_numeric(s):
+    """Convert sentiment string to numeric score.
+
+    Unrecognized/missing labels return NaN (excluded from means) rather than
+    0.0, to avoid silently biasing averages toward neutral.
+    """
+    return SENTIMENT_SCORE.get(s, np.nan)
+
+def classify_outcome(avg_score):
+    """Classify user-level average into outcome category."""
+    if avg_score is None or pd.isna(avg_score):
+        return None
+    if avg_score > 0.7:
+        return "positive"
+    elif avg_score < -0.3:
+        return "negative"
+    return "mixed/neutral"
+
+def wilson_ci(k, n, z=1.96):
+    """Wilson score confidence interval for a proportion."""
+    if pd.isna(k) or pd.isna(n) or n <= 0 or k < 0 or k > n:
+        return np.nan, np.nan
+    p = k / n
+    denom = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    margin = z * np.sqrt((p * (1 - p) + z**2 / (4 * n)) / n) / denom
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+def nnt(treatment_rate, baseline_rate):
+    """Number needed to treat. Returns None if rates are equal, inverted, or invalid."""
+    if pd.isna(treatment_rate) or pd.isna(baseline_rate):
+        return None
+    diff = treatment_rate - baseline_rate
+    if diff <= 0:
+        return None
+    return round(1 / diff, 1)
+
+# ── Chart defaults ──
+sns.set_style("whitegrid")
+plt.rcParams["figure.figsize"] = (12, 6)
+plt.rcParams["font.size"] = 11
+
+# ── Filtering sets ──
+GENERIC_TERMS = {{
+    "supplements", "medication", "treatment", "therapy", "drug", "drugs",
+    "vitamin", "prescription", "pill", "pills", "dosage", "dose",
+}}
+
+# Colors — include both aggregated ("mixed/neutral") and raw DB labels
+# ("mixed", "neutral") so charts can key off either without a KeyError.
+COLORS = {{
+    "positive": "#2ecc71",
+    "mixed/neutral": "#95a5a6",
+    "mixed": "#95a5a6",
+    "neutral": "#95a5a6",
+    "negative": "#e74c3c",
+}}
+'''
+
+
+def build_notebook(cells, db_path="patientpunk.db", db_path_block=None, title=None):
+    """Build a valid Jupyter notebook from a list of (type, source) tuples.
+
+    Args:
+        cells: list of ("md", source_string) or ("code", source_string) tuples
+        db_path: path to SQLite database (injected into setup cell as a string
+                 literal). Ignored if db_path_block is provided.
+        db_path_block: raw Python source that defines `DB_PATH` and `conn`.
+                       Use this when callers need richer resolution than a
+                       hard-coded literal, for example a custom resolver that
+                       anchors the database path to the notebook location.
+        title: optional — not used in the notebook, just for reference
+
+    Returns:
+        nbformat.NotebookNode ready for execution
+    """
+    nb = new_notebook()
+    nb.metadata.kernelspec = {
+        "display_name": "Python 3",
+        "language": "python",
+        "name": "python3",
+    }
+
+    if db_path_block is None:
+        db_path_text = str(db_path)
+        if db_path_text == ":memory:":
+            db_path_block = DEFAULT_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_text)
+            )
+        elif db_path_text.startswith("file:"):
+            db_path_block = URI_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_text)
+            )
+        else:
+            db_path_resolved = Path(db_path).resolve().as_posix()
+            db_path_block = DEFAULT_DB_PATH_BLOCK.format(
+                db_path_literal=repr(db_path_resolved)
+            )
+
+    # Inject setup cell (produces zero output)
+    setup = SETUP_CODE.format(db_path_block=db_path_block)
+    nb.cells.append(new_code_cell(source=setup))
+
+    # Add user cells
+    for cell_type, source in cells:
+        if cell_type == "md":
+            nb.cells.append(new_markdown_cell(source=source))
+        elif cell_type == "code":
+            nb.cells.append(new_code_cell(source=source))
+        else:
+            raise ValueError(f"Unknown cell type: {cell_type!r}. Use 'md' or 'code'.")
+
+    return nb
+
+
+def execute_and_export(nb, output_stem, timeout=600, kernel_name="python3"):
+    """Execute a notebook and export to HTML.
+
+    Args:
+        nb: nbformat.NotebookNode (from build_notebook)
+        output_stem: path without extension, e.g., "notebooks/v2/1_overview"
+                     Produces: {stem}.ipynb, {stem}_executed.ipynb, {stem}.html
+        timeout: max seconds per cell
+        kernel_name: Jupyter kernel to execute in (default "python3"; pass a
+                     project-specific kernel like "patientpunk-main" if registered)
+
+    Returns:
+        Path to HTML file
+    """
+    from nbconvert.preprocessors import ExecutePreprocessor
+    from nbconvert import HTMLExporter
+
+    stem = Path(output_stem)
+    stem.parent.mkdir(parents=True, exist_ok=True)
+
+    # Save source notebook. Write UTF-8 explicitly: the setup cell contains
+    # box-drawing chars, which crash on Windows' default cp1252 encoding.
+    source_path = stem.with_suffix(".ipynb")
+    with open(source_path, "w", encoding="utf-8") as f:
+        nbformat.write(nb, f)
+
+    # Execute. On cell failure, persist the partially-executed notebook (it
+    # carries the error traceback in the failing cell's output) for debugging,
+    # then re-raise.
+    ep = ExecutePreprocessor(timeout=timeout, kernel_name=kernel_name)
+    try:
+        ep.preprocess(nb, {"metadata": {"path": str(stem.parent)}})
+    except Exception as e:
+        failed_path = stem.parent / f"{stem.stem}_failed.ipynb"
+        with open(failed_path, "w", encoding="utf-8") as f:
+            nbformat.write(nb, f)
+        raise RuntimeError(
+            f"Notebook execution failed; partial output saved to {failed_path}"
+        ) from e
+
+    # Save executed notebook
+    executed_path = stem.parent / f"{stem.stem}_executed.ipynb"
+    with open(executed_path, "w", encoding="utf-8") as f:
+        nbformat.write(nb, f)
+
+    # Export to HTML (no code cells)
+    exporter = HTMLExporter()
+    exporter.exclude_input = True
+    body, _ = exporter.from_notebook_node(nb)
+    html_path = stem.with_suffix(".html")
+    html_path.write_text(body, encoding="utf-8")
+
+    return html_path

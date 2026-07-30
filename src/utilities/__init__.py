@@ -37,7 +37,7 @@ class PipelineConfig:
     max_upstream_depth: int | None = 2     # Pinned to 2 (decision D4 / prereq P3): the depth the IRR
                                            # reference data was built at (sample_for_coding.py AI_UPSTREAM_DEPTH=2).
                                            # None = unlimited; set explicitly for a depth-sensitivity sweep.
-    workers: int = 3                       # ThreadPoolExecutor workers; 1 = sequential
+    workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
 
@@ -192,18 +192,6 @@ class LLMParseError(ValueError):
     """LLM response could not be parsed as JSON."""
 
 
-def _message_text(msg) -> str:
-    """Concatenate the text of all text blocks in an Anthropic message.
-
-    Reasoning models (and many general models when routed with reasoning on) return a
-    `ThinkingBlock` as the FIRST content block, so the old `content[0].text` raised
-    `AttributeError: 'ThinkingBlock' object has no attribute 'text'` and silently killed
-    those models across the whole pipeline. Skip non-text blocks and join the rest.
-    """
-    parts = [getattr(b, "text", "") for b in msg.content if getattr(b, "type", None) == "text"]
-    return "".join(parts)
-
-
 import re
 
 _TRAILING_COMMA = re.compile(r",\s*([}\]])")
@@ -280,24 +268,44 @@ def llm_call(
     max_tokens: int = 100,
     temperature: float | None = LLM_TEMPERATURE,
 ) -> str:
-    kwargs = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    if temperature is not None:
-        kwargs["temperature"] = temperature
-    if system:
-        kwargs["system"] = system
-    try:
-        with client.messages.stream(**kwargs) as stream:
-            return _message_text(stream.get_final_message())
-    except anthropic.BadRequestError as e:
-        # Some models (e.g. claude-opus-4-8 and the reasoning models) deprecate the
-        # temperature parameter and 400 if it is sent. Pinning temperature is a no-op
-        # for a model that ignores it, so drop it and retry once.
-        if "temperature" in kwargs and "temperature" in str(e).lower():
-            kwargs.pop("temperature")
+    from patientpunk.llm_cache import cached_completion
+    from patientpunk._utils import check_response, response_text
+
+    def _call() -> str:
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        if system:
+            kwargs["system"] = system
+        try:
             with client.messages.stream(**kwargs) as stream:
-                return _message_text(stream.get_final_message())
-        raise
+                return response_text(check_response(stream.get_final_message(), model=model))
+        except anthropic.BadRequestError as e:
+            # Some models (e.g. claude-opus-4-8 and the reasoning models) deprecate the
+            # temperature parameter and 400 if it is sent. Pinning temperature is a no-op
+            # for a model that ignores it, so drop it and retry once.
+            if "temperature" in kwargs and "temperature" in str(e).lower():
+                kwargs.pop("temperature")
+                with client.messages.stream(**kwargs) as stream:
+                    return response_text(check_response(stream.get_final_message(), model=model))
+            raise
+
+    # temperature=None asks the provider for its default (sampled), so a cache entry
+    # would freeze one draw and hand it back for every later call. make_key also does
+    # float(temperature) and would raise on None.
+    if temperature is None:
+        return _call()
+
+    return cached_completion(
+        provider=LLM_PROVIDER,
+        model=model,
+        system=system,
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        call_fn=_call,
+    )

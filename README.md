@@ -14,6 +14,19 @@ And get back:
 
 ---
 
+## Published analyses
+
+Finished, self-contained data analyses built on this pipeline. Each folder reads on its
+own (executed notebooks, figures, and methods); large source databases live on S3 and are
+referenced, not committed.
+
+| Analysis | Folder | Summary |
+|---|---|---|
+| **Pilot paper** — predictive validity of community sentiment | [`docs/RCT_historical_validation/`](docs/RCT_historical_validation/) | Pre-publication Reddit treatment sentiment vs. the outcomes of 6 published Long COVID RCTs; community sentiment correctly classified all 6 directional outcomes (Wilson-CI forest plot, full reproducibility package). |
+| **FDA letter analysis** — LDN & Mestinon real-world evidence | [`studies/fda_letter/`](studies/fda_letter/) | RWE behind the FDA repurposing comment: use, dosing (~95% ≤ 4.5 mg), sentiment, and side-effect profiles for LDN (naltrexone) and Mestinon (pyridostigmine) across Reddit and the Phoenix Rising forum. |
+
+---
+
 ## Architecture Overview
 
 **[View pipeline diagram](docs/pipeline_diagram.pdf)**
@@ -223,6 +236,54 @@ To add or remove synonyms for a target, edit `outputs/aliases_<target>.json` dir
 
 Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).
 
+### Step 3c — Variable extraction *(structured clinical fields)*
+
+A separate, more thorough LLM-based extraction pipeline that pulls 20+
+structured fields per patient (conditions, medications, functional status,
+demographics, etc.) — see [variable_extraction/README.md](variable_extraction/README.md)
+for the full CLI. Minimal run:
+
+```bash
+cd variable_extraction
+uv run python main.py run --schema schemas/covidlonghaulers_schema.json
+uv run python main.py demographics --input-dir ../output   # optional, LLM-only demographics
+```
+
+Writes `output/records.csv` (+ `output/demographics_deductive.csv` if you ran
+`demographics`), independent of `data/posts.db`.
+
+### Step 4 — Build the unified analysis database
+
+Merges `data/posts.db` (corpus + drug sentiment) with the variable-extraction
+CSVs from Step 3c into a single SQLite database, keyed on `author_hash`:
+
+```bash
+uv run python load_db.py
+# or explicitly:
+uv run python load_db.py --posts-db data/posts.db --records output/records.csv \
+    --demographics output/demographics_deductive.csv --db patientpunk.db
+```
+
+| Flag | Description |
+|------|-------------|
+| `--posts-db` | SQLite DB with corpus + drug sentiment (default: `data/posts.db`) |
+| `--records` | variable-extraction `records.csv` (default: `output/records.csv`) |
+| `--demographics` | deductive demographics CSV, optional (default: `output/demographics_deductive.csv`) |
+| `--db` | output unified database (default: `patientpunk.db`) |
+| `--schema-sql` | schema DDL to apply (default: `schema.sql`) |
+
+`patientpunk.db` (a full copy of `posts.db` plus new tables) holds:
+
+- `user_profiles` / `conditions` — demographics and conditions merged in from the
+  variable-extraction CSVs (demographics values win over records.csv on conflict)
+- `variables` — the canonical EAV table: one row per `author_hash × field × run`,
+  including inductively-discovered fields; the source of truth for extracted data
+- `unified` — a derived, wide clustering-ready table (one row per record, one
+  column per field, plus per-author drug-sentiment rollups); regenerated from
+  `variables` + related tables on every `load_db.py` run, not itself a source of truth
+
+Requires `data/posts.db` (Step 2) and `output/records.csv` (Step 3c) to already exist.
+
 ---
 
 ## Drug Sentiment Pipeline — Internals
@@ -274,7 +335,7 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 ## Run traceability
 
-Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, and `conditions` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
+Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
 
 Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 

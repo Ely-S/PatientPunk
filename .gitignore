@@ -10,11 +10,56 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
 .env
 
-# Output / data
+# Runtime data — do not commit data files. Store them externally
+# (PatientPunk_data/ + S3) and provide download instructions in the README.
+data/*
+!data/.gitkeep
 output/
-reddit_sample_data/outputs/
-data/
 *.zip
+
+# Sample / scraped corpus data (user histories, subreddit posts, extraction outputs)
+reddit_sample_data/
+reddit_posts_only/
+Scrapers/users/
+Scrapers/output/
+**/subreddit_posts.json
+
+# Dev scratch
+**/_manual_check_tmp/
+
+# LLM API response cache (content-addressable)
+cache/
+
+# Pipeline intermediate / temp files
+**/temp/
+**/patientpunk_records_*.json
+**/merged_records_*.json
+**/llm_records_*.json
+**/discovered_records_*.json
+**/discovered_field_report_*.json
+**/extraction_metadata_*.json
+**/phase1_candidates.json
+
+# Database files
 *.db
+
+# Local-only agent config + session notes (not code, not versioned in this repo)
+.cursorrules
+CONTINUITY.md
+AGENTS.md
+CLAUDE.md
+
+# Run/scratch output dirs (data + intermediates — keep in PatientPunk_data/ + S3, never commit)
+output_*/
+compare/
+compare_par/
+outputs/
+
+# IRR pilot sample packs — verbatim patient text + analyst-only answer keys.
+# Kept in gitignored data/ + S3 and distributed to coders privately; never tracked.
+studies/rct_validation/irr_pilot/ai_labels.csv
+studies/rct_validation/irr_pilot/coding_input.csv

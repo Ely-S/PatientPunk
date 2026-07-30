@@ -3,7 +3,7 @@
 Currently: cycle detection on the post.parent_id forest. Used by
 ``src/pipeline/extract.py`` (which raises on the first cycle, for the
 upstream-drugs recursion's fail-fast guard) and conceptually duplicated
-in ``docs/RCT_historical_validation/verify.py`` (which returns all
+in ``studies/rct_validation/verify.py`` (which returns all
 cycles, for audit-report purposes; that copy is kept inline to preserve
 the reproducibility package's self-containment).
 """

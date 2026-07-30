@@ -90,8 +90,8 @@ def main():
     drug_group.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
     drug_group.add_argument("--drug-file", type=str, default=None, help="Text file of drug + aliases, one per line, first line canonical. Skips the LLM alias lookup.")
     parser.add_argument(
-        "--workers", type=int, default=3,
-        help="Parallel workers for extract/classify (default: 3, use 1 for sequential). "
+        "--workers", type=int, default=20,
+        help="Parallel workers for extract/classify (default: 20, use 1 for sequential). "
              "Higher values may hit provider rate limits; "
              "drop to 3-4 if you see 30s+ stalls between log lines.",
     )

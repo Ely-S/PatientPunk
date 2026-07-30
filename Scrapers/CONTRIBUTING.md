@@ -89,10 +89,9 @@ Writes are **incremental** — each user file is flushed to disk as soon as it i
 Reads the corpus and runs regex pattern matching across all text fields. Key design decisions:
 
 - **Two-layer schema**: a fixed universal *base* (23 fields always extracted) plus optional researcher-defined *extension* fields loaded from a JSON schema file (`--schema`).
-- **No model inference required** — pure Python regex, runs anywhere.
 - **Structured output** — every record is a fully-normalised v2.0 PatientPunk record; missing fields are `null`, not absent.
-- **ICD-10 mapping** — condition values in the `conditions` field are automatically mapped to ICD-10 codes where known.
-- **Provenance tracking** — every field carries `"self_reported"` (user history) or `"mentioned_by_other"` (subreddit post) provenance.
+- **ICD-10 mapping** — ICD-10 codes for known condition values are carried in the schema files and the generated codebook.
+- **Source tracking** — `record_meta.source` marks each record as `user_history` or `subreddit_post`.
 
 ---
 
@@ -103,7 +102,9 @@ Every record written to `patientpunk_records_*.json` has this structure:
 ```json
 {
   "_patientpunk_version": "2.0",
-  "_schema_id": "covidlonghaulers_v1",
+  "_extraction_method": "llm",
+  "_model": "claude-haiku-4-5",
+  "_schema_id": "covidlonghaulers_v2",
   "_extracted_at": "2026-04-05T12:00:00+00:00",
 
   "record_meta": {
@@ -113,47 +114,30 @@ Every record written to `patientpunk_records_*.json` has this structure:
     "post_id": null
   },
 
-  "base": {
-    "conditions": {
-      "values": ["long covid", "pots"],
-      "icd10_candidates": {"long covid": "U09.9", "pots": "G90.3"},
-      "provenance": "self_reported",
-      "confidence": "high"
-    },
-    "age": {
-      "values": ["34"],
-      "provenance": "self_reported",
-      "confidence": "medium"
-    },
-    "time_to_diagnosis": {
-      "values": null,
-      "provenance": null,
-      "confidence": null
-    }
-    ...
-  },
-
-  "extension": {
-    "vaccination_status": {
-      "values": ["fully vaccinated"],
-      "provenance": "self_reported",
-      "confidence": "medium"
-    }
-    ...
+  "fields": {
+    "conditions": { "values": ["long covid", "pots"], "confidence": "high" },
+    "age": { "values": ["34"], "confidence": "medium" },
+    "functional_status_tier": { "values": ["housebound"], "confidence": "high" },
+    "onset_trigger": { "values": null, "confidence": null }
   }
 }
 ```
 
+Base and extension fields share one flat `fields` namespace — the record does not say which layer a field came from. Use the schema files, or the `source` column in the generated codebook, to tell them apart.
+
 ### Field object schema
 
-Every extracted field (in both `base` and `extension`) is an object with four keys:
+Every extracted field is an object with two keys:
 
 | Key | Type | Notes |
 |---|---|---|
-| `values` | `list[str]` or `null` | Deduplicated match list; `null` if nothing found |
-| `icd10_candidates` | `dict` or `null` | `{value: code}` map; only present on `conditions` |
-| `provenance` | `"self_reported"` \| `"mentioned_by_other"` \| `null` | `null` when `values` is `null` |
-| `confidence` | `"high"` \| `"medium"` \| `"low"` \| `null` | From `BASE_FIELD_CONFIDENCE` or schema; `null` when `values` is `null` |
+| `values` | `list[str]` or `null` | Deduplicated value list; `null` or `[]` if nothing found |
+| `confidence` | `"high"` \| `"medium"` \| `"low"` \| `null` | The field's schema-declared tier; `null` when there are no values |
+
+`provenance` and `icd10_candidates` were removed with the regex extraction path — every
+value now comes from the LLM, so there is nothing for a per-value provenance key to
+distinguish. ICD-10 hints live in the schema files and the generated codebook instead of
+being stamped onto each record.
 
 ### `source` values
 
@@ -172,24 +156,26 @@ Every extracted field (in both `base` and `extension`) is an object with four ke
 
 ### Layer 1 — Base fields (always extracted)
 
-23 fields defined in `BASE_FIELDS` (a `frozenset` in `extract_biomedical.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
+25 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
 
 | Category | Fields |
 |---|---|
 | Demographics | `age`, `sex_gender`, `location_country` |
-| Healthcare access | `healthcare_system`, `diagnosis_source`, `time_to_diagnosis`, `misdiagnosis` |
-| Conditions | `conditions`, `onset_trigger` |
-| Symptoms | `symptom_duration`, `symptom_trajectory`, `age_at_onset` |
-| Treatments | `medications`, `treatment_outcome`, `procedures` |
-| Functional status | `activity_level`, `work_disability_status`, `mental_health` |
-| Experience | `doctor_dismissal`, `diagnostic_odyssey` |
-| History | `prior_infections`, `hormonal_events`, `family_history` |
+| Conditions | `conditions`, `onset_trigger`, `misdiagnosis`, `prior_infections` |
+| Illness course | `illness_duration`, `illness_trajectory` |
+| Symptom domains | `fatigue_pem`, `cognitive_neurological`, `cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms` |
+| Treatments | `medications`, `dosage`, `treatment_outcome`, `procedures`, `alternative_treatments`, `dietary_interventions` |
+| Function and impact | `functional_status_tier`, `work_disability_status`, `mental_health`, `social_impact` |
+
+**Symptom domains carry the same symptom more than once on purpose.** A migraine is recorded in both `pain` and `cognitive_neurological`; dizziness on standing lands in both `cardiovascular_autonomic` and `cognitive_neurological`. Reddit patients do not write clinical intake forms, and forcing one symptom into one bucket loses more than the duplication costs. The routing rules given to the extraction model are in `llm_extract.build_system_prompt`.
+
+The field set is chosen on measured fill rates, cross-referenced against EQ-5D, SF-36, PROMIS, RECOVER, PC-COS, and the ME/CFS Canadian Consensus Criteria. Per-field rates, the framework mapping and the cut list are in `variable_extraction/METHODS.md`.
 
 ### Layer 2 — Base-optional fields
 
-12 additional fields exist in `PATTERNS` but are **not extracted by default**. They are available for extension schemas to activate via `include_base_fields`. These tend to be noisier or more study-specific:
+5 further fields are defined but **not extracted by default**. Extension schemas activate them via `include_base_fields`. These tend to be noisier or more study-specific:
 
-`location_us_state`, `ethnicity`, `occupation`, `bmi_weight`, `dosage`, `dietary_interventions`, `alternative_treatments`, `genetic_testing`, `social_impact`, `trauma_history`, `toxic_exposures`, `healthcare_costs`
+`occupation`, `bmi_weight`, `genetic_testing`, `trauma_history`, `toxic_exposures`
 
 ### Extension fields
 
@@ -227,9 +213,8 @@ Create a `.json` file in `demographic_extraction/schemas/`. It will be validated
   "_description": "optional — human-readable description, ignored at runtime",
 
   "include_base_fields": [
-    "dosage",
-    "location_us_state",
-    "healthcare_costs"
+    "occupation",
+    "bmi_weight"
   ],
 
   "override_base_patterns": {
@@ -417,12 +402,12 @@ python demographic_extraction/extract_biomedical.py \
     --text "I got omicron in 2022, fully vaccinated, 18 months of long covid, bedbound"
 ```
 
-Expected extension output should include `covid_wave`, `vaccination_status`, `functional_status_tier`.
+Expected output should include `long_covid_duration_months` (extension) and `functional_status_tier` (base).
 
 ### 3. Full corpus run
 
 After scraping with `scrape_corpus.py`, run the extractor on the real corpus and check:
-- `patientpunk_records_base.json` — every record has all 23 base fields (null where not found)
+- `records_base.json` — every record has all 25 base fields (null where not found)
 - `extraction_metadata_base.json` — `field_hit_counts` shows reasonable hit rates
 - No Python exceptions
 

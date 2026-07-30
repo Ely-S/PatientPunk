@@ -38,7 +38,7 @@ from utilities.db import load_synonyms, open_db, post_text
 if TYPE_CHECKING:
     from utilities.db import ReportWriter
 
-BATCH_SIZE = 5
+BATCH_SIZE = 10
 PREFILTER_BATCH_SIZE = 20
 
 

@@ -1,0 +1,29 @@
+{
+  "schema_id": "covidlonghaulers_v2",
+  "_description": "Extension schema for r/covidlonghaulers. Adds 3 COVID-specific extension fields on top of the universal base set.",
+  "_version": "2.0",
+  "_target_subreddit": "r/covidlonghaulers",
+  "include_base_fields": [],
+  "extension_fields": {
+    "infection_count": {
+      "description": "Number of separate COVID infections, as a bare integer ('1', '2', '3'). EXACT COUNTS ONLY - the patient must state how many, and the count must be recoverable from their words alone. 'my second infection' -> '2'; 'infected three times' -> '3'; 'only had covid once', 'I've had it one time' -> '1'. Everything else is null, including: wording that gives only a lower bound ('reinfected', 'got it again', 'multiple infections', 'several times', and 'my first infection' - calling an infection the first one implies later ones), and - importantly - a patient simply describing an infection without saying how many they have had. DESCRIBING ONE INFECTION IS NOT STATING A COUNT OF ONE: 'I got covid in March 2020 and never recovered' -> null, not '1'. Nearly everyone in this community had COVID at least once, so inferring '1' from the absence of other mentions makes the field record subreddit membership rather than reinfection burden.",
+      "confidence": "medium",
+      "_bleed_rate_last_run": null,
+      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
+    },
+    "long_covid_duration_months": {
+      "description": "How long the patient has had Long COVID specifically, as a bare integer NUMBER OF MONTHS. Convert stated durations: '3 years' -> '36', '18 months' -> '18', 'a year and a half' -> '18'. Converting an explicitly stated duration is required and is not inference; inventing a duration the patient never gave is. A date with no stated duration ('sick since March 2020') gives no value - use null.",
+      "confidence": "low",
+      "icd10": "U09.9",
+      "_bleed_rate_last_run": null,
+      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
+    },
+    "biomarker_results": {
+      "description": "Named test or biomarker with its stated result, formatted 'test: result' - for example 'ANA: positive', 'ferritin: 12 ng/mL', 'D-dimer: elevated', 'MCAS panel: normal', 'vitamin D: low'. Keep any stated number and unit in the result. A test named with no result ('had bloodwork done') and a result with no test ('my levels were low') are both unusable - use null. Do not restate diagnoses here; those belong in conditions.",
+      "confidence": "medium",
+      "_bleed_rate_last_run": null,
+      "_last_health_check": "2026-04-06T08:14:42.289813+00:00"
+    }
+  },
+  "_changes_from_v1": "alternative_treatments and social_impact were promoted to base fields, so include_base_fields is now empty. functional_status_tier was promoted to base as well and is no longer redefined here."
+}

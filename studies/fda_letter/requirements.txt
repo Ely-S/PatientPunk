@@ -1,0 +1,14 @@
+# Runtime dependencies for the FDA-letter build scripts (studies/fda_letter/scripts/).
+# The notebook builders also import build_notebook from the RCT-validation package
+# (../rct_validation/), whose requirements.txt is a superset of these.
+numpy
+pandas
+matplotlib
+scipy
+statsmodels
+
+# Notebook execution (execute_and_export -> nbconvert):
+nbformat
+nbconvert
+ipykernel
+ipython
