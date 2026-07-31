@@ -2363,6 +2363,25 @@ class TestUntrustedTextWrapping:
         assert msg.count("</patient_text>") == 1
         assert "[TRUNCATED]" in msg
 
+    def test_the_cap_is_the_one_that_is_configured(self, monkeypatch):
+        """An aggregated patient can run to 50k chars, so the cap decides how much
+        of them is read at all -- it has to be settable without a code edit."""
+        import patientpunk.llm_extract as m
+        monkeypatch.setattr(m, "MAX_TEXT_CHARS", 100)
+        assert "[TRUNCATED]" in m.build_user_message(["x" * 150])
+        monkeypatch.setattr(m, "MAX_TEXT_CHARS", 500)
+        assert "[TRUNCATED]" not in m.build_user_message(["x" * 150])
+
+    def test_the_cap_reads_its_env_var(self, monkeypatch):
+        import importlib
+        import patientpunk.llm_extract as m
+        monkeypatch.setenv("LLM_MAX_TEXT_CHARS", "1234")
+        try:
+            assert importlib.reload(m).MAX_TEXT_CHARS == 1234
+        finally:
+            monkeypatch.delenv("LLM_MAX_TEXT_CHARS")
+            importlib.reload(m)   # module is shared; restore the default
+
     def test_discovery_prompts_carry_the_same_guard(self):
         from patientpunk.discover import build_discovery_prompt
         p = build_discovery_prompt(["age", "conditions"])
