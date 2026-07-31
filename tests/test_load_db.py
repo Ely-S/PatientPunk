@@ -148,3 +148,48 @@ def test_bucketize_age_handles_missing_and_qualitative_decades():
     assert _bucketize_age(None) is None
     assert _bucketize_age("mid-30s") == "30s"
     assert _bucketize_age("early 40s") == "40s"
+
+
+class TestSubredditStamping:
+    """A multi-community corpus needs each patient stamped with their own
+    community. The loader used to write "covidlonghaulers" for everyone."""
+
+    def _load(self, tmp_path, header, rows, *extra_args):
+        posts_db = tmp_path / "posts.db"
+        _make_posts_db(posts_db)
+        records = tmp_path / "records.csv"
+        _write_csv(records, header, rows)
+        out_db = tmp_path / "out.db"
+        assert load_db.main([
+            "--posts-db", str(posts_db), "--records", str(records),
+            "--db", str(out_db), "--schema-sql", str(SCHEMA_SQL), *extra_args,
+        ]) == 0
+        conn = sqlite3.connect(out_db)
+        return conn.execute(
+            "SELECT source_subreddit FROM users WHERE user_id='u3'").fetchone()[0]
+
+    def test_provenance_column_wins(self, tmp_path):
+        got = self._load(
+            tmp_path,
+            ["author_hash", "source", "post_id", "subreddits", "conditions"],
+            [["u3", "subreddit_post", "", "cfs:24 covidlonghaulers:11", "pots"]],
+        )
+        assert got == "cfs"          # the count-ordered leader, not the last seen
+
+    def test_flag_fills_in_when_the_column_is_absent(self, tmp_path):
+        got = self._load(
+            tmp_path,
+            ["author_hash", "source", "post_id", "conditions"],
+            [["u3", "subreddit_post", "", "pmdd"]],
+            "--subreddit", "PMDD",
+        )
+        assert got == "PMDD"
+
+    def test_unknown_rather_than_a_guess(self, tmp_path):
+        """No provenance and no flag must not silently claim a community."""
+        got = self._load(
+            tmp_path,
+            ["author_hash", "source", "post_id", "conditions"],
+            [["u3", "subreddit_post", "", "pots"]],
+        )
+        assert got == "unknown"

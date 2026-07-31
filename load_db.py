@@ -139,6 +139,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="Output unified database (default: patientpunk.db).")
     parser.add_argument("--schema-sql", type=Path, default=HERE / "schema.sql",
                         help="Schema DDL (default: schema.sql).")
+    parser.add_argument("--subreddit", default="unknown",
+                        help="source_subreddit for records whose 'subreddits' column is "
+                             "empty. Records carrying provenance use their own most-"
+                             "frequent community and ignore this (default: unknown).")
     args = parser.parse_args(argv)
 
     if not args.posts_db.exists():
@@ -172,11 +176,11 @@ def main(argv: list[str] | None = None) -> int:
     # 4. Demographics first (clean age/sex/loc), then records (conditions).
     #    load_extractions merges fill-NULL, so demographics values win.
     if demographics:
-        load_extractions(conn, demographics, run_id=run_id)
-    load_extractions(conn, args.records, run_id=run_id)
+        load_extractions(conn, demographics, run_id=run_id, subreddit=args.subreddit)
+    load_extractions(conn, args.records, run_id=run_id, subreddit=args.subreddit)
 
     # 5. Full variable matrix -> EAV table (includes discovered variables).
-    n_vars = load_variables(conn, args.records, run_id)
+    n_vars = load_variables(conn, args.records, run_id, subreddit=args.subreddit)
 
     # 6. Wide, clustering-ready table.
     n_unified = build_unified(conn, args.records, demographics)

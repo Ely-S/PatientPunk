@@ -1981,6 +1981,14 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
+    def test_it_reaches_the_database(self):
+        """The last hop: the CSV column decides the patient's source_subreddit."""
+        from patientpunk.db import _primary_subreddit
+        assert _primary_subreddit({"subreddits": "cfs:24 covidlonghaulers:11"}, "x") == "cfs"
+        assert _primary_subreddit({"subreddits": "pmdd:3"}, "x") == "pmdd"
+        assert _primary_subreddit({"subreddits": ""}, "x") == "x"   # falls back
+        assert _primary_subreddit({}, "x") == "x"                   # pre-#109 record
+
 
 class TestAggregateByAuthor:
     """Per-patient corpus aggregation (patientpunk/aggregate.py)."""

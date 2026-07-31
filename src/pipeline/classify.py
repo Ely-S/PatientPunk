@@ -129,6 +129,32 @@ def _classify_one(
         return ClassificationResult(sentiment="neutral", signal="n/a", parse_failed=True)
 
 
+def _infer_subreddit(db_path) -> str:
+    """Name the community the classification prompt should claim the text came from.
+
+    Returns the one the most patients wrote in. A corpus spanning several
+    communities has no single right answer here, so it warns and names the
+    largest -- pass --subreddit to say which one you mean. Rows with a NULL or
+    blank value are excluded rather than winning as a bare None, which would
+    render the prompt as "from r/None".
+    """
+    with open_db(db_path) as conn:
+        rows = conn.execute(
+            "SELECT source_subreddit, COUNT(*) AS n FROM users "
+            "WHERE source_subreddit IS NOT NULL AND TRIM(source_subreddit) != '' "
+            "GROUP BY source_subreddit ORDER BY n DESC, source_subreddit"
+        ).fetchall()
+    if not rows:
+        return "Long COVID"
+    if len(rows) > 1:
+        named = ", ".join(f"{r[0]} ({r[1]})" for r in rows[:5])
+        log.warning(
+            f"Corpus spans {len(rows)} communities ({named}); prompting all of them as "
+            f"r/{rows[0][0]}. Pass --subreddit to choose."
+        )
+    return rows[0][0]
+
+
 def run_classification(
     config: PipelineConfig,
     *,
@@ -160,12 +186,10 @@ def run_classification(
     # Load synonyms and subreddit from DB (empty defaults if no DB)
     if writer is not None:
         synonyms_for = load_synonyms(config.db_path)
-        with open_db(config.db_path) as conn:
-            row = conn.execute("SELECT DISTINCT source_subreddit FROM users LIMIT 1").fetchone()
-        subreddit = row[0] if row else "Long COVID"
+        subreddit = config.subreddit or _infer_subreddit(config.db_path)
     else:
         synonyms_for = {}
-        subreddit = "Long COVID"
+        subreddit = config.subreddit or "Long COVID"
 
     target_aliases: set[str] | None = None
     if config.drug:

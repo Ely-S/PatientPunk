@@ -207,6 +207,9 @@ def build_post(p: dict, comments: list[dict] | None = None) -> dict:
         "comments_fetched": len(comments),
         "url": f"https://reddit.com{p.get('permalink', '')}",
         "flair": p.get("link_flair_text"),
+        # Read downstream by aggregate, which counts each patient's communities
+        # into the record's `subreddits` column. Comments inherit it from their post.
+        "subreddit": p.get("subreddit", ""),
         "comments": comments,
     }
 
