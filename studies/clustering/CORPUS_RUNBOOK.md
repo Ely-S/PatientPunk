@@ -137,9 +137,18 @@ REPO=$(pwd)
 # variable_extraction/.env is merged SECOND, so it overrides the repo root --
 # and it is gitignored, so it will not show up in git status. Check both before
 # you spend anything; the run banner and llm_provenance.json also print it.
+#
+# Do NOT cat/open either .env, and do not paste one into a chat or an issue --
+# they hold live keys for several services. The grep below is anchored to the
+# model variables and never prints a key; keep it that way.
 cp .env.example .env       # template carries OPENROUTER_API_KEY
 grep -sE '^(LLM_PROVIDER|LLM_BASE_URL|MODEL_FAST|MODEL_STRONG)=' \
      .env variable_extraction/.env
+
+# Is a key present and which account is it? Prints provider and the last six
+# characters only -- enough to tell two keys apart, useless if leaked.
+python -c "from patientpunk._utils import resolve_llm_config as r; c=r(); \
+    print(c['provider'], '...' + (c['api_key'] or '')[-6:])"
 
 # Team members only -- the bucket is private. Everyone else: see "Reproducing
 # this outside the team" above for how to request the file.
