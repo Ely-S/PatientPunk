@@ -43,19 +43,37 @@ def to_epoch(ts: str | int | None) -> int | None:
 
 
 def strip_reddit_prefix(reddit_id: str | None) -> str | None:
-    """Strip Reddit's `t1_` (comment) or `t3_` (submission) kind prefix.
-
-    Reddit's API serializes comment.parent_id as `t1_<id>` (parent is a comment)
-    or `t3_<id>` (parent is a submission), but post_id / comment_id themselves
-    are stored bare. Without stripping, the `parent_id NOT IN (SELECT post_id)`
-    cleanup below treats every prefixed parent_id as dangling and nulls it,
-    silently destroying thread structure on import.
-    """
+    """Strip Reddit's `t1_` (comment) or `t3_` (submission) kind prefix."""
     if reddit_id is None:
         return None
     if reddit_id.startswith(("t1_", "t3_")):
         return reddit_id[3:]
     return reddit_id
+
+
+def align_parent_id(parent_id: str | None, ids_prefixed: bool) -> str | None:
+    """Put a comment's parent_id in the same form as the corpus's own ids.
+
+    Reddit serializes comment.parent_id as `t1_<id>` or `t3_<id>`. Whether
+    post_id / comment_id carry the same prefix depends on who built the corpus:
+    db_to_corpus.py and both Arctic Shift scrapers emit `t3_<id>` / `t1_<id>`,
+    while older hand-built corpora stored them bare. Stripping unconditionally --
+    which is what this did -- leaves a bare parent that can never match a
+    prefixed post_id, so the `parent_id NOT IN (SELECT post_id)` cleanup below
+    nulls every one and silently flattens the whole thread structure. That is
+    invisible downstream: upstream drug context and the "Replying to:" block just
+    come back empty, and --max-upstream-depth has nothing to walk.
+
+    Measured on 200 posts / 1,449 comments from db_to_corpus output: 0% of
+    parents survived before this, 87.9% after.
+    """
+    if parent_id is None:
+        return None
+    has_prefix = parent_id.startswith(("t1_", "t3_"))
+    if ids_prefixed:
+        # A bare parent cannot be repaired -- t1_ vs t3_ is unrecoverable.
+        return parent_id if has_prefix else None
+    return strip_reddit_prefix(parent_id)
 
 
 def extract_subreddit(url: str | None) -> str:
@@ -72,6 +90,10 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     users: list[UserRow] = []
     posts: list[PostRow] = []
     seen_users: set[str] = set()
+
+    # Read the id convention off the corpus rather than assuming one; see
+    # align_parent_id. Producers disagree, and guessing wrong nulls every parent.
+    ids_prefixed = any(str(p.get("post_id", "")).startswith(("t1_", "t3_")) for p in data)
 
     def add_user(author: str, sub: str) -> None:
         if author not in seen_users:
@@ -94,7 +116,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=strip_reddit_prefix(comment.get("parent_id")),
+                parent_id=align_parent_id(comment.get("parent_id"), ids_prefixed),
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
