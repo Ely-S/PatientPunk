@@ -136,6 +136,89 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+# ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
+# OpenRouter exposes two surfaces. Its Anthropic Skin (/api, spoken by the
+# Anthropic SDK) silently DROPS the `reasoning` parameter -- the request 200s and
+# the field is ignored. Its OpenAI surface (/api/v1) honours it.
+#
+# That matters because deepseek/deepseek-v4-flash is a reasoning model: it spends
+# output tokens thinking before it answers, and those tokens count against
+# max_tokens. Measured over 6 calls on one trivial 20-item prompt:
+#
+#     endpoint            reasoning chars                 suppressed
+#     OpenAI  effort=none [0, 0, 0, 0, 0, 0]              6/6
+#     Anthropic (same)    [705, 268, 0, 239, 523, 494]    1/6   (= baseline)
+#
+# Unsuppressed, reasoning ran 239-862 chars and blew every per-stage max_tokens
+# heuristic in src/ (10/item at prefilter, 15/name at canonicalize, 250/text at
+# extract), which check_response then turned into a hard failure. Suppressing it
+# also cut output tokens ~3.5x on that prompt, so this is a cost fix as well.
+#
+# Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
+_REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+
+
+class _ORStream:
+    """Anthropic-SDK-shaped streaming context manager over OpenAI chat completions.
+
+    Streaming is not optional here: a full-corpus canonicalization batch has been
+    observed taking 710s, and a non-streaming call would hit the client timeout
+    long before that.
+    """
+
+    def __init__(self, client, **kwargs) -> None:
+        self._client, self._kwargs = client, kwargs
+
+    def __enter__(self):
+        self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+    def get_final_message(self):
+        parts: list[str] = []
+        finish = None
+        for chunk in self._stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if getattr(delta, "content", None):
+                parts.append(delta.content)
+            if chunk.choices[0].finish_reason:
+                finish = chunk.choices[0].finish_reason
+        # OpenAI spells truncation "length"; normalize so check_response, which
+        # keys off the Anthropic name, behaves identically on both surfaces.
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="".join(parts))],
+            stop_reason="max_tokens" if finish == "length" else "end_turn",
+        )
+
+
+class _ORMessages:
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def stream(self, *, model, messages, max_tokens=1024, system=None,
+               temperature=0.0, extra_body=None, **_ignored):
+        oai = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": m["role"], "content": m["content"]} for m in messages]
+        body = dict(extra_body or {})
+        if _REASONING_OFF:
+            body.setdefault("reasoning", {"effort": "none"})
+        return _ORStream(self._client, model=model, messages=oai,
+                         max_tokens=max_tokens, temperature=temperature,
+                         extra_body=body)
+
+
+class _ORClient:
+    """Anthropic-SDK-shaped wrapper so callers need not know which surface is in use."""
+
+    def __init__(self, client) -> None:
+        self.messages = _ORMessages(client)
+
+
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
     """Return a configured Anthropic client (direct or via OpenRouter).
@@ -158,7 +241,19 @@ def get_client() -> anthropic.Anthropic:
             f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
         )
 
-    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}"
+             + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
+
+    if LLM_PROVIDER == "openrouter":
+        # Deliberately the OpenAI surface, not the Anthropic Skin: it is the only
+        # one that honours `reasoning`. See _ORStream above for the measurements.
+        import openai
+        return _ORClient(openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            max_retries=4,
+            timeout=600.0,   # a canonicalization batch has run 710s; streaming keeps it alive
+        ))
 
     kwargs: dict = {
         "api_key": api_key,
