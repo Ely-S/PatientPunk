@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from utilities import PipelineConfig
 
+from patientpunk._utils import LLMResponseError
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_STRONG, LLMParseError,
     resolve_aliases, llm_call, parse_json_object, log,
@@ -22,15 +23,34 @@ from utilities.db import upsert_treatments
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
 BATCH_SIZE = 3500
+# 3500 -> 1750 -> 875 -> 437. Four halvings is enough headroom for any realistic
+# merge rate; past that the reply is not the problem.
+MAX_SPLIT_DEPTH = 4
 
 
-def canonicalize_batch(client, names: list[str], model=MODEL_STRONG) -> dict[str, str]:
-    """Ask the strong model to group synonyms among a list of drug names."""
+def canonicalize_batch(client, names: list[str], model=MODEL_STRONG,
+                       _depth: int = 0) -> dict[str, str]:
+    """Ask the strong model to group synonyms among a list of drug names.
+
+    A truncated reply splits the batch and retries rather than failing. Halving
+    the names halves the merges the reply has to carry, which is the thing that
+    overran the budget. Before this, a truncation raised LLMResponseError out of
+    llm_call, the caller's `except LLMParseError` did not catch it, and the run
+    ended -- on a 3,380-name batch that was the first call it made.
+    """
     msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
     # Output is merges-only (~20 tokens per merge); budget ~15 tokens/name
     # to safely accommodate batches with high merge rates without truncating.
     max_toks = max(2000, len(names) * 15)
-    raw = llm_call(client, msg, model=model, max_tokens=max_toks)
+    try:
+        raw = llm_call(client, msg, model=model, max_tokens=max_toks)
+    except LLMResponseError as e:
+        if len(names) > 1 and _depth < MAX_SPLIT_DEPTH:
+            mid = len(names) // 2
+            log.warning(f"{e} — splitting {len(names)} names into 2 and retrying...")
+            return (canonicalize_batch(client, names[:mid], model, _depth + 1)
+                    | canonicalize_batch(client, names[mid:], model, _depth + 1))
+        raise
     return {n: n for n in names} | parse_json_object(raw)
 
 
@@ -70,6 +90,7 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     # Single pass: one LLM call per batch, no rotation/multi-pass. Trusting
     # the strong model to find synonyms within a single large batch.
     canon_map: dict[str, str] = {}
+    unmerged = 0
     batches = [all_drugs[i:i + BATCH_SIZE] for i in range(0, len(all_drugs), BATCH_SIZE)]
     for i, batch in enumerate(batches, 1):
         log.info(f"batch {i}/{len(batches)} ({len(batch)} names): calling LLM...")
@@ -80,11 +101,24 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
             log.info(f"batch {i}/{len(batches)} done: "
                      f"{merges} merges in {time.monotonic() - t0:.1f}s")
             canon_map.update(batch_result)
-        except LLMParseError as e:
+        except (LLMParseError, LLMResponseError) as e:
+            # LLMResponseError only lands here once splitting has bottomed out.
+            unmerged += len(batch)
             log.error(f"batch {i}/{len(batches)} failed after "
                       f"{time.monotonic() - t0:.1f}s: {e}. Keeping raw names.")
             for n in batch:
                 canon_map[n] = n
+
+    if unmerged:
+        # Say this once, loudly, at the end. A per-batch log.error scrolls past in
+        # a long run, and the consequence is invisible downstream: "ldn" and "low
+        # dose naltrexone" stay separate treatments and every count built on them
+        # is wrong, with nothing in the output saying so.
+        log.error(
+            f"CANONICALIZATION INCOMPLETE: {unmerged} of {len(all_drugs)} names "
+            f"({unmerged / len(all_drugs) * 100:.1f}%) kept raw because their batch "
+            f"failed. Synonyms among them are NOT merged -- treat per-drug counts "
+            f"as unreliable until this is re-run.")
 
     # Group synonyms for logging and alias table
     aliases_for: dict[str, list[str]] = {}
