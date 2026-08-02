@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
+import httpx  # anthropic's transport; TransportError covers the mid-stream drops
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -251,6 +253,35 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+RETRY_DELAYS = [2, 5, 15, 30]
+
+
+def is_transient_failure(exc: BaseException) -> bool:
+    """True for failures where the same request may well succeed on a retry.
+
+    Deliberately narrow. A bad request, an auth failure, or an exhausted balance
+    is not transient, and retrying it four times just delays the error while
+    burning the backoff. Truncation (LLMResponseError) is excluded for the same
+    reason -- the reply did not fit the budget and will not fit on a retry; the
+    caller has to shrink the batch instead.
+
+    httpx.TransportError is the parent of ConnectError, ReadError, TimeoutException
+    AND RemoteProtocolError. That last one -- "peer closed connection without
+    sending complete message body" -- is raised mid-stream, so the SDK's own
+    max_retries (which covers the initial request) never sees it, and it killed a
+    19k-item run at 99.9% completion. Matching on class-name substrings the way
+    variable_extraction does would miss it too: the name contains neither
+    "Connection" nor "Timeout".
+    """
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
+                        anthropic.RateLimitError, anthropic.InternalServerError)):
+        return True
+    if isinstance(exc, httpx.TransportError):
+        return True
+    status = getattr(exc, "status_code", None)
+    return status == 429 or (isinstance(status, int) and 500 <= status < 600)
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
@@ -261,7 +292,7 @@ def llm_call(
     from patientpunk.llm_cache import cached_completion
     from patientpunk._utils import check_response, response_text
 
-    def _call() -> str:
+    def _once() -> str:
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
@@ -272,6 +303,20 @@ def llm_call(
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
             return response_text(check_response(stream.get_final_message(), model=model))
+
+    def _call() -> str:
+        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+            if delay:
+                time.sleep(delay)
+            try:
+                return _once()
+            except Exception as e:
+                if not is_transient_failure(e) or attempt == len(RETRY_DELAYS):
+                    raise
+                log.warning(
+                    f"{type(e).__name__} on {model} "
+                    f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
+        raise AssertionError("unreachable")  # pragma: no cover
 
     return cached_completion(
         provider=LLM_PROVIDER,
