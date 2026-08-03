@@ -24,10 +24,20 @@ def _wire(label: str) -> str:
     return f"{'t3' if label == POST else 't1'}_{label}"
 
 
-@pytest.fixture(params=[True, False], ids=["prefixed-ids", "bare-ids"])
+# A producer can prefix post_ids and comment_ids independently, so all four
+# combinations are corpora the importer has to align correctly.
+CONVENTIONS = {
+    "prefixed-ids": _wire,
+    "bare-ids": lambda label: label,
+    "bare-posts": lambda label: label if label == POST else _wire(label),
+    "bare-comments": lambda label: _wire(label) if label == POST else label,
+}
+
+
+@pytest.fixture(params=list(CONVENTIONS), ids=list(CONVENTIONS))
 def imported_tree(request, tmp_path):
     """Import TREE and read the edges back, in the corpus's own labels."""
-    ident = _wire if request.param else (lambda label: label)
+    ident = CONVENTIONS[request.param]
     src = tmp_path / "subreddit_posts.json"
     src.write_text(json.dumps([{
         "author_hash": "a" * 64, "post_id": ident(POST), "title": "t", "body": "b",
@@ -59,10 +69,21 @@ def test_the_comment_tree_survives_import(imported_tree):
     assert imported_tree == TREE
 
 
-def test_a_bare_parent_against_prefixed_ids_is_dropped_not_mangled():
-    """A malformed corpus, not a tree that failed to survive: t1_ vs t3_ cannot be
-    reconstructed from a bare id, so a null beats a wrong join."""
-    assert align_parent_id("aaa", ids_prefixed=True) is None
-    assert align_parent_id("t3_aaa", ids_prefixed=True) == "t3_aaa"
-    assert align_parent_id("t3_aaa", ids_prefixed=False) == "aaa"
-    assert align_parent_id(None, ids_prefixed=True) is None
+def test_each_kind_is_aligned_independently():
+    """A t3_ parent follows the post convention, a t1_ parent the comment one. One
+    global flag cannot express that, and breaks one edge or the other."""
+    bare_posts = {"t3": False, "t1": True}
+    assert align_parent_id("t3_aaa", bare_posts) == "aaa"
+    assert align_parent_id("t1_c1", bare_posts) == "t1_c1"
+
+
+def test_a_bare_parent_is_dropped_not_mangled():
+    """A bare parent names no kind, so against any prefixed ids it is unrepairable --
+    a null beats an id that silently joins to the wrong row."""
+    all_bare = {"t3": False, "t1": False}
+    all_prefixed = {"t3": True, "t1": True}
+    assert align_parent_id("aaa", all_prefixed) is None
+    assert align_parent_id("aaa", all_bare) == "aaa"
+    assert align_parent_id("t3_aaa", all_prefixed) == "t3_aaa"
+    assert align_parent_id("t3_aaa", all_bare) == "aaa"
+    assert align_parent_id(None, all_prefixed) is None

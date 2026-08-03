@@ -51,17 +51,18 @@ def strip_reddit_prefix(reddit_id: str | None) -> str | None:
     return reddit_id
 
 
-def align_parent_id(parent_id: str | None, ids_prefixed: bool) -> str | None:
+def align_parent_id(parent_id: str | None, prefixed: dict[str, bool]) -> str | None:
     """Put a comment's parent_id in the same form as the corpus's own ids.
 
+    `prefixed` maps "t3"/"t1" to whether ids of that kind carry their prefix.
+    A producer can differ between the two, and parent_id names which it points at.
     """
     if parent_id is None:
         return None
-    has_prefix = parent_id.startswith(("t1_", "t3_"))
-    if ids_prefixed:
-        # A bare parent cannot be repaired -- t1_ vs t3_ is unrecoverable.
-        return parent_id if has_prefix else None
-    return strip_reddit_prefix(parent_id)
+    if not parent_id.startswith(("t1_", "t3_")):
+        # A bare parent names no kind, so it can only match an all-bare corpus.
+        return None if any(prefixed.values()) else parent_id
+    return parent_id if prefixed[parent_id[:2]] else strip_reddit_prefix(parent_id)
 
 
 def extract_subreddit(url: str | None) -> str:
@@ -79,8 +80,13 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     posts: list[PostRow] = []
     seen_users: set[str] = set()
 
-    # Read the id convention off the corpus
-    ids_prefixed = any(str(p.get("post_id", "")).startswith(("t1_", "t3_")) for p in data)
+    # Read the id convention off the corpus, per kind. A single flag off post_id
+    # alone mis-aligns comment parents in a corpus that prefixes only one of them.
+    prefixed = {
+        "t3": any(str(p.get("post_id", "")).startswith(("t1_", "t3_")) for p in data),
+        "t1": any(str(c.get("comment_id", "")).startswith(("t1_", "t3_"))
+                  for p in data for c in p.get("comments", [])),
+    }
 
     def add_user(author: str, sub: str) -> None:
         if author not in seen_users:
@@ -103,7 +109,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
-                parent_id=align_parent_id(comment.get("parent_id"), ids_prefixed),
+                parent_id=align_parent_id(comment.get("parent_id"), prefixed),
                 user_id=c_author,
                 body_text=comment.get("body", ""), flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
