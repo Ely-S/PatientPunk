@@ -1981,13 +1981,12 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
-    def test_the_helper_picks_the_busiest_community(self):
-        """subreddits is ordered by count, so the first name is where they wrote most."""
+    def test_a_record_with_no_subreddits_column_falls_back(self):
+        """A pre-#109 records.csv has no such column, so the row has no key at all --
+        distinct from a key holding "". The round-trip below cannot express this:
+        DictWriter always emits the column. Every other case it does cover."""
         from patientpunk.db import _primary_subreddit
-        assert _primary_subreddit({"subreddits": "cfs:24 covidlonghaulers:11"}, "x") == "cfs"
-        assert _primary_subreddit({"subreddits": "pmdd:3"}, "x") == "pmdd"
-        assert _primary_subreddit({"subreddits": ""}, "x") == "x"   # falls back
-        assert _primary_subreddit({}, "x") == "x"                   # pre-#109 record
+        assert _primary_subreddit({}, "fallback") == "fallback"
 
     # Both loaders write users.source_subreddit through the same helper, so they
     # run the same corpus. load_variables needs a run_id; load_extractions does not.
