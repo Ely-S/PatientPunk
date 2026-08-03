@@ -54,18 +54,6 @@ def strip_reddit_prefix(reddit_id: str | None) -> str | None:
 def align_parent_id(parent_id: str | None, ids_prefixed: bool) -> str | None:
     """Put a comment's parent_id in the same form as the corpus's own ids.
 
-    Reddit serializes comment.parent_id as `t1_<id>` or `t3_<id>`. Whether
-    post_id / comment_id carry the same prefix depends on who built the corpus:
-    db_to_corpus.py and both Arctic Shift scrapers emit `t3_<id>` / `t1_<id>`,
-    while older hand-built corpora stored them bare. Stripping unconditionally --
-    which is what this did -- leaves a bare parent that can never match a
-    prefixed post_id, so the `parent_id NOT IN (SELECT post_id)` cleanup below
-    nulls every one and silently flattens the whole thread structure. That is
-    invisible downstream: upstream drug context and the "Replying to:" block just
-    come back empty, and --max-upstream-depth has nothing to walk.
-
-    Measured on 200 posts / 1,449 comments from db_to_corpus output: 0% of
-    parents survived before this, 87.9% after.
     """
     if parent_id is None:
         return None
