@@ -2005,13 +2005,11 @@ class TestSubredditProvenance:
         existing user alone -- so a load cannot correct one already stored wrong."""
         from patientpunk import db
         path = tmp_path / "records.csv"
-        with open(path, "w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["author_hash", "subreddits"])
-            writer.writeheader()
-            writer.writerows([
-                {"author_hash": "busiest", "subreddits": "cfs:24 covidlonghaulers:11"},
-                {"author_hash": "no_column", "subreddits": ""},
-                {"author_hash": "already_there", "subreddits": "pmdd:3"}])
+        path.write_text(
+            "author_hash,subreddits\n"
+            "busiest,cfs:24 covidlonghaulers:11\n"
+            "no_column,\n"
+            "already_there,pmdd:3\n", encoding="utf-8")
 
         conn = db.init_db(tmp_path / "t.db")
         conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at)"
