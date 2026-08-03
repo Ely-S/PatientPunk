@@ -126,13 +126,28 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             posts,
         )
         # Clean dangling parent_ids in SQL
-        conn.execute(
+        dropped = conn.execute(
             "UPDATE posts SET parent_id = NULL "
             "WHERE parent_id IS NOT NULL AND parent_id NOT IN (SELECT post_id FROM posts)"
-        )
+        ).rowcount
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
+
+    # Foreign keys are off on this connection, so a parent naming no known row is
+    # nulled above rather than raised. A comment whose parent post falls outside the
+    # slice is indistinguishable from one misaligned by a bug -- only the rate tells
+    # them apart. Counted off `posts` so comments align_parent_id already nulled are
+    # in the denominator: they did not resolve either.
+    comments = sum(len(p.get("comments") or ()) for p in data)
+    if comments:
+        kept = sum(1 for p in posts if p.parent_id is not None) - dropped
+        log.info(f"Parent resolved for {kept}/{comments} comments "
+                 f"({kept / comments * 100:.1f}%).")
+        if not kept:
+            log.error("NO comment kept its parent. Thread structure is absent, "
+                      "upstream drug context will be empty, and --max-upstream-depth "
+                      "has nothing to walk. Check the corpus id convention.")
 
 
 def main():

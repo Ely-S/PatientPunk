@@ -185,7 +185,15 @@ class TestPopulateDbEndToEnd:
         }
 
     def test_2_foreign_keys_enforced(self, db: DB):
-        """Schema PRAGMA aside, verify FKs actually fire on this connection."""
+        """Schema PRAGMA aside, verify FKs actually fire on this connection.
+
+        Only this connection: the fixture sets the pragma, and it does not persist.
+        `open_db` -- what import_posts and the sentiment pipeline use -- leaves it
+        OFF, so nothing here says the import path enforces these constraints. It
+        cannot: a comment whose parent post is outside the corpus slice is legal
+        input, and with FKs on it raises at INSERT instead of being nulled by the
+        dangling-parent cleanup.
+        """
         with pytest.raises(sqlite3.IntegrityError):
             db.conn.execute(
                 "INSERT INTO posts (post_id, user_id, body_text, scraped_at) "
