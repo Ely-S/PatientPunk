@@ -1981,13 +1981,55 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
-    def test_it_reaches_the_database(self):
-        """The last hop: the CSV column decides the patient's source_subreddit."""
+    def test_the_helper_picks_the_busiest_community(self):
+        """subreddits is ordered by count, so the first name is where they wrote most."""
         from patientpunk.db import _primary_subreddit
         assert _primary_subreddit({"subreddits": "cfs:24 covidlonghaulers:11"}, "x") == "cfs"
         assert _primary_subreddit({"subreddits": "pmdd:3"}, "x") == "pmdd"
         assert _primary_subreddit({"subreddits": ""}, "x") == "x"   # falls back
         assert _primary_subreddit({}, "x") == "x"                   # pre-#109 record
+
+    # The last hop, and the only one that touches the database. Both loaders
+    # write users.source_subreddit, so both are checked against the same corpus.
+    ROWS = [{"author_hash": "a" * 64, "subreddits": "cfs:24 covidlonghaulers:11"},
+            {"author_hash": "b" * 64, "subreddits": ""}]
+    STORED = {"a" * 64: "cfs", "b" * 64: "fallback"}
+
+    @staticmethod
+    def _csv(tmp_path):
+        path = tmp_path / "records.csv"
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["author_hash", "subreddits"])
+            writer.writeheader()
+            writer.writerows(TestSubredditProvenance.ROWS)
+        return path
+
+    @staticmethod
+    def _users(conn):
+        return dict(conn.execute("SELECT user_id, source_subreddit FROM users"))
+
+    def test_load_extractions_reaches_the_database(self, tmp_path):
+        from patientpunk.db import init_db, load_extractions
+        conn = init_db(tmp_path / "t.db")
+        load_extractions(conn, self._csv(tmp_path), subreddit="fallback")
+        assert self._users(conn) == self.STORED
+
+    def test_load_variables_reaches_it_too(self, tmp_path):
+        from patientpunk.db import init_db, load_variables, register_run
+        conn = init_db(tmp_path / "t.db")
+        run_id = register_run(conn, "test", {})
+        load_variables(conn, self._csv(tmp_path), run_id, subreddit="fallback")
+        assert self._users(conn) == self.STORED
+
+    def test_an_existing_user_keeps_the_community_it_was_created_with(self, tmp_path):
+        """INSERT OR IGNORE, so whichever loader runs first decides. Re-running a
+        load does not correct a user already stored under the wrong community."""
+        from patientpunk.db import init_db, load_extractions
+        conn = init_db(tmp_path / "t.db")
+        conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at)"
+                     " VALUES (?, 'stale', 0)", ("a" * 64,))
+        load_extractions(conn, self._csv(tmp_path), subreddit="fallback")
+        assert self._users(conn)["a" * 64] == "stale"
 
 
 class TestAggregateByAuthor:
