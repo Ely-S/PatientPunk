@@ -30,14 +30,7 @@ MAX_SPLIT_DEPTH = 4
 
 def canonicalize_batch(client, names: list[str], model=MODEL_STRONG,
                        _depth: int = 0) -> dict[str, str]:
-    """Ask the strong model to group synonyms among a list of drug names.
-
-    A truncated reply splits the batch and retries rather than failing. Halving
-    the names halves the merges the reply has to carry, which is the thing that
-    overran the budget. Before this, a truncation raised LLMResponseError out of
-    llm_call, the caller's `except LLMParseError` did not catch it, and the run
-    ended -- on a 3,380-name batch that was the first call it made.
-    """
+    """Ask the strong model to group synonyms among a list of drug names. """
     msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
     # Output is merges-only (~20 tokens per merge); budget ~15 tokens/name
     # to safely accommodate batches with high merge rates without truncating.
