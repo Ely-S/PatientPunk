@@ -49,11 +49,7 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
         raw = llm_call(client, msg, model=MODEL_FAST,
                        max_tokens=len(texts) * MAX_TOKENS_PER_TEXT)
     except LLMResponseError as e:
-        # A truncated or empty reply means this batch could not be answered as
-        # posed. Halving it halves what the reply has to carry -- the same
-        # recovery the count-mismatch path below uses. Without this the error
-        # escapes llm_call before parse_json_array is ever reached, so the
-        # existing split never runs and one bad batch ends the whole run.
+       # Retry as smaller batches if there is an error.
         if len(texts) > 1 and _depth < 2:
             log.warning(f"{e} — retrying as smaller batches...")
             mid = len(texts) // 2
