@@ -1,10 +1,6 @@
 """Thread structure has to survive import. No API calls.
 
-Comment.parent_id arrives as `t1_<id>` / `t3_<id>`. Whether the corpus's own
-post_id / comment_id carry that prefix depends on the producer, and stripping
-unconditionally leaves a bare parent that never matches a prefixed post_id --
-so the dangling-parent cleanup nulls all of them. Nothing downstream errors; the
-upstream drug context and the "Replying to:" block simply come back empty.
+This tests to see if the comments pointer to the parent post survives import.  
 """
 
 import json
