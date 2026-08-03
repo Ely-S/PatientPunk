@@ -94,12 +94,6 @@ def _record_dropped_fields(names: list[str]) -> None:
 MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
 # single record's reply overran 8192 output tokens and got truncated mid-JSON.
-# The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
-# comfortable margin.
-#
-# Raise it only together with LLM_MAX_TOKENS -- the ceiling that bit at 30_000 was
-# the reply's, not the model's context. check_response now raises on a truncated
-# reply rather than storing half a record, so overreaching fails loudly.
 MAX_TEXT_CHARS = int(os.environ.get("LLM_MAX_TEXT_CHARS", "8000") or "8000")
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
