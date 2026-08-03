@@ -38,13 +38,7 @@ def is_only_questions(text: str) -> bool:
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
     return bool(sentences) and all(s.endswith('?') for s in sentences)
 
-
-# Output cap per text in a batch. This is a ceiling, not a charge -- only tokens
-# actually generated are billed -- so it is set well above a realistic reply. At
-# the previous 80 a drug-dense batch of 10 overran the budget on DeepSeek v4
-# Flash and check_response raised, killing the run outright.
 MAX_TOKENS_PER_TEXT = 250
-
 
 def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
     """Ask fast model to extract drug mentions from a batch of texts."""
