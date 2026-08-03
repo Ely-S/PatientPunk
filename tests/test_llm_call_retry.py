@@ -1,9 +1,7 @@
-"""Transient failures must retry; deterministic ones must not. No API calls.
+"""Transient failures must retry; deterministic ones must not. 
 
 src/ had no application-level retry at all -- it relied on the SDK's max_retries,
-which covers the initial request but not a failure part-way through a stream. An
-httpx.RemoteProtocolError ("peer closed connection without sending complete
-message body") killed a 19,275-item extraction run at 99.9% completion.
+which covers the initial request but not a failure part-way through a stream.
 """
 
 import os
@@ -31,11 +29,11 @@ def _with_status(status: int):
     return exc
 
 
-def test_the_mid_stream_drop_that_killed_the_run():
+def test_the_remoteprotocolerror():
     """RemoteProtocolError is the specific failure this exists for. It is a
     TransportError but its class name contains neither 'Connection' nor
-    'Timeout', so substring matching -- what variable_extraction does -- misses
-    it. Asserted here so a refactor back to name matching fails loudly."""
+    'Timeout', so substring matching misses it. This is to test something
+    that actually killed a run"""
     exc = httpx.RemoteProtocolError("peer closed connection")
     assert is_transient_failure(exc)
     assert "Connection" not in type(exc).__name__
