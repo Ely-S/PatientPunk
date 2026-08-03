@@ -2000,9 +2000,7 @@ class TestSubredditProvenance:
 
     @pytest.mark.parametrize("loader", list(LOADERS), ids=list(LOADERS))
     def test_it_reaches_the_database(self, tmp_path, loader):
-        """The last hop. Three outcomes in one corpus: the busiest community wins,
-        an empty column takes the caller's fallback, and INSERT OR IGNORE leaves an
-        existing user alone -- so a load cannot correct one already stored wrong."""
+        """Make sure that the database is populated correctly."""
         from patientpunk import db
         path = tmp_path / "records.csv"
         path.write_text(
