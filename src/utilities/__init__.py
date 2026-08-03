@@ -259,8 +259,7 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        # 0 because llm_call retries: leaving the SDK's own retries on nests 5
-        # attempts inside each of ours, 25 requests against a dead endpoint.
+        # leaving the SDK's own retries on nests 5 attempts inside each of ours.
         "max_retries": 0,
         "timeout": 60.0,
     }
@@ -355,20 +354,6 @@ RETRY_DELAYS = [2, 5, 15, 30]
 
 def is_transient_failure(exc: BaseException) -> bool:
     """True for failures where the same request may well succeed on a retry.
-
-    Deliberately narrow. A bad request, an auth failure, or an exhausted balance
-    is not transient, and retrying it four times just delays the error while
-    burning the backoff. Truncation (LLMResponseError) is excluded for the same
-    reason -- the reply did not fit the budget and will not fit on a retry; the
-    caller has to shrink the batch instead.
-
-    httpx.TransportError is the parent of ConnectError, ReadError, TimeoutException
-    AND RemoteProtocolError. That last one -- "peer closed connection without
-    sending complete message body" -- is raised mid-stream, so the SDK's own
-    max_retries (which covers the initial request) never sees it, and it killed a
-    19k-item run at 99.9% completion. Matching on class-name substrings the way
-    variable_extraction does would miss it too: the name contains neither
-    "Connection" nor "Timeout".
     """
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
                         anthropic.RateLimitError, anthropic.InternalServerError)):
