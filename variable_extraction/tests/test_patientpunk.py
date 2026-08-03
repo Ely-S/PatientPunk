@@ -1981,13 +1981,16 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
-    def test_an_old_csv_without_the_column_still_loads(self):
-        """Any records.csv written before #109 has no `subreddits` column at all.
-        Loading one has to fall back to the caller's subreddit, not die on
-        `KeyError: 'subreddits'`.
+    def test_a_row_from_an_old_csv_falls_back_instead_of_raising(self):
+        """Any records.csv written before #109 has no `subreddits` column, so its
+        rows arrive with no such key. Falling back is what stops load_extractions
+        dying on `KeyError: 'subreddits'` against an archived file.
 
-        The round-trip test below cannot catch this: csv.DictWriter always writes
-        every column, so it can produce an empty value but never a missing one."""
+        Checks the helper, not a real load. The round-trip test below cannot cover
+        this at all -- csv.DictWriter always writes every column, so it can produce
+        an empty value but never a missing one. Writing a CSV with the column left
+        out and pushing it through load_extractions would exercise the real path.
+        """
         from patientpunk.db import _primary_subreddit
         assert _primary_subreddit({}, "fallback") == "fallback"
 
