@@ -14,31 +14,27 @@ A per-action yes means *this* action, *now*. Approval to open a PR is not approv
 close it. Approval to close is not approval to delete its branch. Do not widen a
 request into the adjacent action that seems implied.
 
-**Read remote state before writing to it** — `gh pr view` before any `gh pr` write.
-But note the ordering: checking state does not license the action. If you would take
-the action on finding it open, you needed permission before you looked.
+NEVER MERGE TO MAIN WITHOUT EXPLICIT PERMISSION. 
 
-Local work is unrestricted: fetch, checkout, branch, cherry-pick, commit, rebase,
-worktrees, running tests. Do all of it, then name the exact remote actions required and
-wait.
+# When creating Pull Requests
+1. Use detailed commit messages
+2. Every PR Needs a Description that has the following sections
+- ## Why - Explaining the problem being solved, and why it is important
+- ## Approach taken - Explaining the solution fully and the design
+- ## User-facing changes  - Explain how this affects users
+- ## Detailed test plan - A Test plan that an agent can follow, including end-to-end verification
 
-**Why this is written down:** a draft PR was created, the maintainer closed it, and the
-agent then fired its own close at the already-closed PR and deleted the remote branch —
-which nobody had asked for. The close was redundant; the branch deletion was not.
+The test plan must include exact commands to run and detailed steps to verify the output of the run
+
+**Read remote state of a repo before writing to it** 
 
 # Secrets
 
 **Never read, print, or paste the contents of a `.env` file.** `.env` and
-`variable_extraction/.env` hold live keys for OpenRouter, Anthropic, Brave and
-Dispersed. Opening one puts every key in the transcript, and a transcript is not
-a place a key can be un-shared from — it costs a rotation of all of them.
+`variable_extraction/.env` hold live keys.
 
-This applies to `cat`, `Read`, `head`, `type`, and to quoting a line back in
-chat. It applies even when the question sounds harmless: "is the .env in the
-right place", "did the key change", "which model is set". None of those need the
-file's contents.
+This applies to `cat`, `Read`, `head`, `type`.
 
-Answer them without opening it:
 
 | Question | Command |
 |---|---|
@@ -50,15 +46,6 @@ Answer them without opening it:
 A six-character suffix distinguishes two keys and is useless to anyone who
 finds it. That is the most that should ever reach a chat, a commit, or a log.
 
-If a key does get exposed, say so plainly and immediately and recommend
-rotating every key in the file — not only the one that was being asked about.
+If a key does get exposed, say so plainly and immediately.
 
-# When creating Pull Requests
-1. Use detailed commit messages
-2. Every PR Needs a Description that has the following sections
-- ## Why - Explaining the problem being solved, and why it is important
-- ## Approach taken - Explaining the solution fully and the design
-- ## User-facing changes  - Explain how this affects users
-- ## Detailed test plan - A Test plan that an agent can follow, including end-to-end verification
 
-The test plan must include exact commands to run and detailed steps to verify the output of the run
