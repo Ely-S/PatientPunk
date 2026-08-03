@@ -32,11 +32,11 @@ def canonicalize_batch(client, names: list[str], model=MODEL_STRONG,
                        _depth: int = 0) -> dict[str, str]:
     """Ask the strong model to group synonyms among a list of drug names. """
     msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
-    # Output is merges-only. Measured on 2,518 real names: 46.7% of them merged
-    # and the reply ran 3.63 tokens/name, so 6 leaves ~65% headroom even at that
-    # merge rate. At 15 a 3,380-name batch asks for 50,700 output tokens, above
-    # what most models accept -- which is what made the first call fail.
-    max_toks = max(2000, len(names) * 6)
+    # Output is merges-only, but how much of it the model emits varies a lot
+    # between draws on identical input: one measured run on 2,518 names used
+    # 9,130 tokens (3.63/name), and the next truncated at 15,108. 15 is the only
+    # value observed to complete; do not lower it without measuring repeatedly.
+    max_toks = max(2000, len(names) * 15)
     try:
         raw = llm_call(client, msg, model=model, max_tokens=max_toks)
     except LLMResponseError as e:
