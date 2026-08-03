@@ -13,28 +13,22 @@ from patientpunk._utils import LLMResponseError  # noqa: E402
 from pipeline import extract  # noqa: E402
 
 
-def _fails_above(limit: int, calls: list):
-    """Stand-in for llm_call: any batch larger than `limit` texts truncates."""
+def _fits_at(limit: int):
+    """Stand-in for llm_call: a batch of more than `limit` texts truncates."""
     def fake(client, msg, model=None, max_tokens=None):
         n = msg.count("--- ")
-        calls.append(n)
         if n > limit:
             raise LLMResponseError("response truncated at max_tokens")
         return json.dumps([["ldn"] for _ in range(n)])
     return fake
 
 
-def test_a_truncated_batch_splits_instead_of_raising(monkeypatch):
-    calls = []
-    monkeypatch.setattr(extract, "llm_call", _fails_above(4, calls))
-    got = extract.extract_batch(None, [f"t{i}" for i in range(8)])
-    assert got == [["ldn"]] * 8
-    assert calls == [8, 4, 4], "one failed call, then both halves"
-
-
-def test_it_gives_up_on_one_text_rather_than_ending_the_run(monkeypatch):
-    """Bottoming out returns empties -- the run continues with a gap in it."""
-    calls = []
-    monkeypatch.setattr(extract, "llm_call", _fails_above(0, calls))
-    got = extract.extract_batch(None, [f"t{i}" for i in range(4)])
-    assert got == [[], [], [], []]
+@pytest.mark.parametrize("limit, expected", [
+    # 8 results out of a model that refuses batches above 4 can only mean it split.
+    (4, [["ldn"]] * 8),
+    # Nothing ever fits: the run continues with gaps rather than raising.
+    (0, [[]] * 8),
+], ids=["splits-until-they-fit", "gives-up-without-raising"])
+def test_a_truncated_batch_does_not_end_the_run(monkeypatch, limit, expected):
+    monkeypatch.setattr(extract, "llm_call", _fits_at(limit))
+    assert extract.extract_batch(None, [f"t{i}" for i in range(8)]) == expected

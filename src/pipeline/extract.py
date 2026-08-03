@@ -49,7 +49,7 @@ def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
         raw = llm_call(client, msg, model=MODEL_FAST,
                        max_tokens=len(texts) * MAX_TOKENS_PER_TEXT)
     except LLMResponseError as e:
-       # Retry as smaller batches if there is an error.
+        # Retry as smaller batches if there is an error.
         if len(texts) > 1 and _depth < 2:
             log.warning(f"{e} — retrying as smaller batches...")
             mid = len(texts) // 2
