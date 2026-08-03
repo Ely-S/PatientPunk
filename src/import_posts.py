@@ -79,8 +79,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     posts: list[PostRow] = []
     seen_users: set[str] = set()
 
-    # Read the id convention off the corpus rather than assuming one; see
-    # align_parent_id. Producers disagree, and guessing wrong nulls every parent.
+    # Read the id convention off the corpus
     ids_prefixed = any(str(p.get("post_id", "")).startswith(("t1_", "t3_")) for p in data)
 
     def add_user(author: str, sub: str) -> None:
