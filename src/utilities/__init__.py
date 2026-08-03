@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,6 +161,43 @@ def get_git_commit() -> str:
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
 
 
+class _CacheStats:
+    """Running total of how much prompt input OpenRouter served from cache.
+
+    DeepSeek caches implicitly -- there is nothing to switch on -- so the only
+    open question is whether it is actually firing on a given run, and that is
+    invisible without asking. It is worth knowing because the answer depends on
+    the workload's shape, not the setting: classify sends a per-drug system
+    prompt, and a drug with a single batch can never hit its own cache. Measured
+    on a 19,275-item probe, 1,581 of 1,755 drugs made exactly one call.
+
+    Thread-safe: the pipeline runs 50-250 workers.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.calls = self.prompt_tokens = self.cached_tokens = 0
+
+    def record(self, usage) -> None:
+        detail = getattr(usage, "prompt_tokens_details", None)
+        with self._lock:
+            self.calls += 1
+            self.prompt_tokens += getattr(usage, "prompt_tokens", 0) or 0
+            self.cached_tokens += getattr(detail, "cached_tokens", 0) or 0
+
+    def summary(self) -> str:
+        if not self.calls:
+            return "no LLM calls"
+        pct = self.cached_tokens / self.prompt_tokens * 100 if self.prompt_tokens else 0
+        # Cached input bills at 0.1x, so the saved fraction is 90% of the hit rate.
+        return (f"{self.calls:,} calls, {self.prompt_tokens:,} prompt tokens, "
+                f"{self.cached_tokens:,} served from cache ({pct:.1f}%) "
+                f"-> ~{pct * 0.9:.1f}% off input cost")
+
+
+CACHE_STATS = _CacheStats()
+
+
 class _ORStream:
     """Anthropic-SDK-shaped streaming context manager over OpenAI chat completions.
 
@@ -172,7 +210,10 @@ class _ORStream:
         self._client, self._kwargs = client, kwargs
 
     def __enter__(self):
-        self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
+        # include_usage adds a final choices-less chunk carrying token counts,
+        # which is the only way to see whether the implicit cache fired.
+        self._stream = self._client.chat.completions.create(
+            stream=True, stream_options={"include_usage": True}, **self._kwargs)
         return self
 
     def __exit__(self, *exc) -> bool:
@@ -182,6 +223,9 @@ class _ORStream:
         parts: list[str] = []
         finish = None
         for chunk in self._stream:
+            # The usage chunk carries no choices, so read it before skipping.
+            if getattr(chunk, "usage", None):
+                CACHE_STATS.record(chunk.usage)
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta

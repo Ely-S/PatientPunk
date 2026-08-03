@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
+from utilities import CACHE_STATS, PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
@@ -68,6 +68,7 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
 
     log.info(f"\n{'═' * 60}")
     log.info("  PIPELINE COMPLETE")
+    log.info(f"  prompt cache: {CACHE_STATS.summary()}")
     log.info(f"{'═' * 60}\n")
 
 
