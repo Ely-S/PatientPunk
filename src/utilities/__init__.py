@@ -259,7 +259,9 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
+        # 0 because llm_call retries: leaving the SDK's own retries on nests 5
+        # attempts inside each of ours, 25 requests against a dead endpoint.
+        "max_retries": 0,
         "timeout": 60.0,
     }
     if _API_BASE:
