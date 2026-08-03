@@ -1981,10 +1981,13 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
-    def test_a_record_with_no_subreddits_column_falls_back(self):
-        """A pre-#109 records.csv has no such column, so the row has no key at all --
-        distinct from a key holding "". The round-trip below cannot express this:
-        DictWriter always emits the column. Every other case it does cover."""
+    def test_an_old_csv_without_the_column_still_loads(self):
+        """Any records.csv written before #109 has no `subreddits` column at all.
+        Loading one has to fall back to the caller's subreddit, not die on
+        `KeyError: 'subreddits'`.
+
+        The round-trip test below cannot catch this: csv.DictWriter always writes
+        every column, so it can produce an empty value but never a missing one."""
         from patientpunk.db import _primary_subreddit
         assert _primary_subreddit({}, "fallback") == "fallback"
 
