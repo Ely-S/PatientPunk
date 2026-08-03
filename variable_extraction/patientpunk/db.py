@@ -118,11 +118,6 @@ def register_run(
 
 def _primary_subreddit(row: dict, fallback: str) -> str:
     """Pick the patient's main community out of a record's ``subreddits`` column.
-
-    The column holds name:count pairs ordered by count ("cfs:24 covidlonghaulers:11"),
-    so the first name is the community the patient wrote in most. A record predating
-    the provenance column, or one built by a scraper that does not emit per-post
-    subreddits, has nothing here and takes ``fallback``.
     """
     raw = (row.get("subreddits") or "").strip()
     if raw:
