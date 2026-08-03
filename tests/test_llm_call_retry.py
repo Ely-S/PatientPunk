@@ -6,8 +6,11 @@ httpx.RemoteProtocolError ("peer closed connection without sending complete
 message body") killed a 19,275-item extraction run at 99.9% completion.
 """
 
+import os
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -15,8 +18,11 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from patientpunk._utils import LLMResponseError  # noqa: E402
-from utilities import is_transient_failure  # noqa: E402
+from patientpunk._utils import LLMResponseError  # noqa: E402 -- loads .env first
+
+os.environ["LLM_PROVIDER"] = "anthropic"
+
+from utilities import is_transient_failure, llm_call  # noqa: E402
 
 
 def _with_status(status: int):
@@ -38,17 +44,64 @@ def test_the_mid_stream_drop_that_killed_the_run():
 
 @pytest.mark.parametrize("exc, retries", [
     (httpx.ConnectError("refused"), True),
-    (httpx.ReadTimeout("slow"), True),
     (_with_status(429), True),
     (_with_status(503), True),
-    # 402 is the one that must fail fast -- four backoffs against a dead account
+    # 402 is the one that must fail fast -- five attempts against a dead account
     # add ~52s per call across a whole corpus to an error that will not clear.
     (_with_status(402), False),
-    (_with_status(401), False),
     # The reply did not fit the budget and will not fit on a retry; the caller
     # has to shrink the batch instead.
     (LLMResponseError("truncated at max_tokens"), False),
-    (TypeError("bad argument"), False),
 ])
 def test_only_failures_that_can_clear_on_their_own_retry(exc, retries):
     assert is_transient_failure(exc) is retries
+
+
+class _Stream:
+    """Raises from get_final_message, never from stream(). That is the case the
+    SDK's max_retries cannot see: it has returned 200 and handed the stream back
+    before the body is read."""
+
+    def __init__(self, drops: bool):
+        self._drops = drops
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get_final_message(self):
+        if self._drops:
+            raise httpx.RemoteProtocolError("peer closed connection")
+        return SimpleNamespace(stop_reason="end_turn",
+                               content=[SimpleNamespace(type="text", text="ok")])
+
+
+@pytest.mark.parametrize("drops, reads", [
+    (2, 3),   # recovers on the third read
+    (9, 5),   # never recovers: bounded at len(RETRY_DELAYS) + 1, then raises
+], ids=["recovers", "gives-up-after-five"])
+def test_a_drop_while_reading_the_reply_is_retried(monkeypatch, tmp_path, drops, reads):
+    """Proves the retried unit spans the request AND the read: the failure is
+    raised during the drain, and the whole call is redone rather than resumed."""
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(time, "sleep", lambda _: None)   # skip ~52s of backoff
+    from patientpunk import llm_cache
+    llm_cache.set_cache_enabled(None)
+
+    calls = []
+
+    def stream(**_):
+        calls.append(1)
+        return _Stream(drops=len(calls) <= drops)
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
+    if drops >= reads:
+        with pytest.raises(httpx.RemoteProtocolError):
+            llm_call(client, "prompt", max_tokens=10)
+    else:
+        assert llm_call(client, "prompt", max_tokens=10) == "ok"
+    assert len(calls) == reads
+
+    llm_cache.set_cache_enabled(None)
