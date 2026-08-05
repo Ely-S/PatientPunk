@@ -22,9 +22,11 @@ deliberately left out.
 
 The community treats these three substances as one family. A naive read of this corpus
 says psilocybin is reported as helping 81% of the time against a 67% corpus-wide
-average — but the people who write about psychedelics are not the corpus average. They
-are sicker, they have far heavier mood and cognitive symptom loads, and they name a
-median of 7 treatments each. The comparison measures *who reports*, not *what the drug did*.
+average — but the people who write about psychedelics are not the corpus average. Section
+2.3 measures the gap: they are no more physically disabled, but their records carry twice
+the rate of depression and two and a half times the rate of suicidal ideation, and they name
+a median of 7 treatments against everyone else's 3. The comparison measures *who reports*,
+not *what the drug did*.
 
 So the comparator here is **the patient themselves**: every psychedelic outcome is
 compared against the same patient's outcomes for their own other treatments, with patient
@@ -294,7 +296,186 @@ plt.tight_layout(); plt.show()
 """)
 
 md(r"""
-## 2.2 What the community treats each drug *for*
+## 2.2 The full outcome vocabulary
+
+The binary endpoint hides three of the five outcome words. Here is the whole vocabulary, as
+each arm's share of its own mentions.
+
+`worsened` is not a small category and it splits the arms further apart than `helped` does.
+Psilocybin's share is 8.6%, roughly half the corpus-wide 16.1%. Ketamine's is 12.6%. LSD's is
+19.6% — above the corpus, on 18 mentions, which is too few to lean on. Section 4.5 reads
+those mentions individually rather than as a rate.
+""")
+
+co(r"""
+mix = (100 * full.div(full.sum(axis=1), axis=0)).loc[list(P.DRUGS), list(P.OUTCOMES)]
+ax = mix.plot(kind="barh", stacked=True, figsize=(7, 2.3), width=0.7,
+              color=["#2b6cb0", "#c53030", "#a0aec0", "#dd6b20", "#e2e8f0"])
+for i, d in enumerate(mix.index):
+    ax.annotate(f"{mix.loc[d, 'helped']:.0f}% helped", (2, i), va="center",
+                fontsize=8, color="white")
+ax.set_xlabel(f"% of that arm's outcome mentions  "
+              f"(n = {', '.join(f'{d} {int(full.loc[d].sum())}' for d in P.DRUGS)})")
+ax.set_ylabel("")
+ax.set_title("Outcome mix by arm, all five words", fontsize=9)
+ax.legend(fontsize=7, bbox_to_anchor=(1.01, 1), loc="upper left")
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+## 2.3 Who names a psychedelic
+
+Both groups below are patients with at least one scored outcome triple, so they differ in
+nothing structural except whether a psychedelic appears in their record.
+
+The result is not the one the introduction assumed. On physical severity the two groups are
+the same: the functional-status tiers sit within a couple of points of each other, and so do
+the illness trajectories. Psychedelic-naming patients are not more disabled.
+
+They are, however, carrying a much heavier psychiatric load. Depression appears in their
+records twice as often, suicidal ideation two and a half times as often, anhedonia four times
+as often. That single difference explains most of what follows: the indication map in 2.7,
+the symptom-class interaction in 4.3, and why the raw rates in 2.1 cannot be read as drug
+effects.
+""")
+
+co(r"""
+def wilson_err(pct, n):
+    est, lo, hi = P.wilson(int(round(pct / 100 * n)), n)
+    return 100 * (est - lo), 100 * (hi - est)
+
+
+def profile_bars(ax, tab, denoms, xlabel):
+    y = np.arange(len(tab))[::-1]
+    for j, g in enumerate(tab.columns):
+        err = np.array([wilson_err(v, denoms[g]) for v in tab[g]]).T
+        ax.barh(y + (0.5 - j) * 0.38, tab[g], height=0.36, xerr=err,
+                error_kw={"lw": 0.8}, color=["#2b6cb0", "#a0aec0"][j],
+                label=f"{g} (n={denoms[g]:,})")
+    ax.set_yticks(y, tab.index)
+    ax.set_xlabel(xlabel)
+    ax.legend(fontsize=7.5)
+
+
+tier, tier_n = P.field_profile(records, df, "functional_status_tier", P.FUNCTIONAL_TIERS)
+traj, traj_n = P.field_profile(records, df, "illness_trajectory", P.TRAJECTORIES)
+
+fig, axes = plt.subplots(1, 2, figsize=(9.5, 2.9))
+profile_bars(axes[0], tier, tier_n, "% of patients stating a functional status")
+profile_bars(axes[1], traj, traj_n, "% of patients stating a trajectory")
+axes[0].set_title("Functional status — no meaningful difference", fontsize=9)
+axes[1].set_title("Illness trajectory — no meaningful difference", fontsize=9)
+plt.tight_layout(); plt.show()
+""")
+
+co(r"""
+mh, mh_n = P.field_profile(records, df, "mental_health", conditional=False)
+mh = mh.head(8).iloc[::-1]
+
+fig, ax = plt.subplots(figsize=(6.6, 3.1))
+profile_bars(ax, mh, mh_n, "% of that group's patients whose record names it")
+ax.set_title("Psychiatric load is where the two groups actually differ", fontsize=9)
+plt.tight_layout(); plt.show()
+
+print("Denominators are all patients in each group, not just those discussing mental")
+print("health. A record silent on depression is a record that did not mention it, which")
+print("is not the same as a patient who does not have it.")
+""")
+
+md(r"""
+## 2.4 The stack these substances sit in
+
+Nobody in this cohort tries a psychedelic first. Patients who name one report a median of 7
+distinct treatments; everyone else reports 3. A quarter of them name 13 or more.
+
+The company these substances keep is mostly the community's standard repertoire — LDN,
+cannabis, gabapentin, antihistamines, magnesium. Psychedelics are late entries in a long
+sequence of attempts, which is worth holding onto: a treatment tried after six failures is
+being judged against six failures.
+""")
+
+co(r"""
+ss = P.stack_sizes(df)
+print(ss.groupby("group").n_treatments.describe()[["count", "25%", "50%", "75%", "max"]])
+
+fig, ax = plt.subplots(figsize=(6.4, 2.8))
+ks = np.arange(1, 26)
+for g, color in [("names a psychedelic", "#2b6cb0"), ("everyone else", "#a0aec0")]:
+    v = ss.loc[ss.group == g, "n_treatments"]
+    ax.plot(ks, [100 * (v >= k).mean() for k in ks], color=color, lw=1.8,
+            label=f"{g} (n={len(v):,})")
+ax.set_xlabel("distinct treatments named in the record (k)")
+ax.set_ylabel("% of patients naming ≥ k")
+ax.set_title("Psychedelic-naming patients write down far longer treatment histories",
+             fontsize=9)
+ax.legend(fontsize=8)
+plt.tight_layout(); plt.show()
+""")
+
+co(r"""
+co_tx = P.co_treatments(df, 15).iloc[::-1]
+
+fig, ax = plt.subplots(figsize=(6.6, 3.4))
+ax.barh(np.arange(len(co_tx)), co_tx.pct_of_psychedelic_patients, color="#2b6cb0",
+        height=0.7)
+for i, (n, h) in enumerate(zip(co_tx.patients, co_tx.helped)):
+    ax.annotate(f"{n} pts · {h:.0%} helped", (co_tx.pct_of_psychedelic_patients.iloc[i], i),
+                xytext=(5, 0), textcoords="offset points", va="center", fontsize=7.5)
+ax.set_yticks(np.arange(len(co_tx)), co_tx.index)
+ax.set_xlim(0, 34)
+ax.set_xlabel("% of the 848 psychedelic-naming patients who also name it")
+ax.set_title("What else is in the stack", fontsize=9)
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+## 2.5 The community's own names for these drugs
+
+Nothing upstream is canonicalized, so the drug slot preserves the words patients typed. Most
+of it is the clinical name. The rest is a small vernacular — `shrooms`, `magic mushrooms`,
+`acid` — plus an explicit microdosing vocabulary that exists for psilocybin and LSD and has
+no ketamine equivalent.
+""")
+
+co(r"""
+fig, axes = plt.subplots(1, 3, figsize=(10.5, 2.6))
+for ax, d in zip(axes, P.DRUGS):
+    v = P.naming_vocabulary(df, d, 6).iloc[::-1]
+    n_strings = drugs_df.loc[drugs_df.drug_class == d, "drug_string"].nunique()
+    ax.barh(np.arange(len(v)), v.pct_of_arm_patients, color="#2b6cb0", height=0.7)
+    ax.set_yticks(np.arange(len(v)), v.index, fontsize=7.5)
+    ax.set_xlabel("% of that arm's patients")
+    ax.set_title(f"{d} — top 6 of {n_strings} distinct strings", fontsize=8.5)
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+## 2.6 One substance, or several?
+
+The three are usually written about as one family. In the records they are largely three
+separate populations: most patients report on exactly one of them, and six patients in the
+whole corpus report on all three.
+""")
+
+co(r"""
+ov = P.arm_overlap(df)
+display(ov)
+
+fig, ax = plt.subplots(figsize=(6.2, 2.4))
+o = ov.iloc[::-1]
+ax.barh(np.arange(len(o)), o.patients,
+        color=["#2b6cb0" if n == 1 else "#dd6b20" for n in o.n_substances], height=0.7)
+for i, n in enumerate(o.patients):
+    ax.annotate(str(n), (n, i), xytext=(4, 0), textcoords="offset points",
+                va="center", fontsize=8)
+ax.set_yticks(np.arange(len(o)), o.index, fontsize=8)
+ax.set_xlabel("patients with a scored outcome for that combination")
+ax.set_title("Overlap between the three arms is small", fontsize=9)
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+## 2.7 What the community treats each drug *for*
 
 The symptom slot is the community's indication map — its folk materia medica. The three
 substances are not aimed at the same targets.
@@ -317,6 +498,32 @@ ax = share.loc[list(P.DRUGS)].plot(kind="barh", stacked=True, figsize=(7, 2.4),
 ax.set_xlabel("% of that arm's outcome mentions")
 ax.set_title("Indication mix differs by arm", fontsize=9)
 ax.legend(fontsize=7, bbox_to_anchor=(1.01, 1), loc="upper left")
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+The same map at the level of named symptoms. Each column is one arm's share of its own
+symptom-naming mentions, so the three are comparable despite very different sizes.
+
+Read down the columns and the substances separate cleanly. Psilocybin is aimed at brain fog
+and mood. Ketamine is aimed at depression and pain — closest to how it is actually
+prescribed. LSD is the only one of the three whose largest single target is fatigue.
+""")
+
+co(r"""
+hm = P.symptom_matrix(df, 12)
+
+fig, ax = plt.subplots(figsize=(5.4, 4.2))
+im = ax.imshow(hm.values, cmap="Blues", aspect="auto", vmin=0, vmax=hm.values.max())
+ax.set_xticks(range(hm.shape[1]), hm.columns)
+ax.set_yticks(range(hm.shape[0]), hm.index, fontsize=8)
+for i in range(hm.shape[0]):
+    for j in range(hm.shape[1]):
+        v = hm.values[i, j]
+        ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=7.5,
+                color="white" if v > 0.6 * hm.values.max() else "#1a202c")
+ax.set_title("% of each arm's symptom-named mentions", fontsize=9)
+ax.grid(False)
 plt.tight_layout(); plt.show()
 """)
 
@@ -746,7 +953,7 @@ md(r"""
   helping mood and cognition and markedly less so — often worse — for exertion-related
   symptoms. Given that post-exertional malaise is the defining symptom of ME/CFS, this is the
   most consequential result in the notebook, and the community's own indication map already
-  points the same way (section 2.2).
+  points the same way (section 2.7).
 
 ## 7.2 Not supported, and not to be claimed
 
@@ -766,6 +973,199 @@ md(r"""
 - **The ketamine-vs-others comparison is confounded by route.** Ketamine is substantially
   clinic-administered while the other two are self-sourced; supervision, screening and
   expectancy differ systematically and are not adjusted for.
+""")
+
+md(r"""
+---
+# 8. Appendix — what patients actually wrote
+
+Everything above stops at the extracted records, where an outcome is one of five words and
+carries no magnitude. `helped` covers both "took the edge off" and "gave me my life back".
+This section reads the raw scrape instead, because a claim's **strength** exists only in the
+text the patient typed.
+
+It sits after the conclusion on purpose. It is descriptive, it carries no p-values, and it
+tests nothing. It is here to show what the outcome labels are made of.
+
+**Method.** Regex over sentences in `reddit_2026-06-13.db` (2.5 GB, FTS5-indexed, local). A
+sentence counts as a claim only if it names the treatment, is written in the first person,
+does not attribute the outcome to someone else, and does not name a different tracked
+treatment. Negation and irrealis in the 60 characters before the marker cancel the match, so
+"I hope it is life-changing" and "it was not a miracle" are both discarded. Counts are
+**distinct authors**, never sentences — one person posting their recovery story thirty times
+would otherwise carry a whole arm.
+
+The denominator is authors who mentioned the treatment in the first person at all, so the
+rate is strong claims among people describing their own use, not among everyone who typed
+the word.
+""")
+
+co(r"""
+con = P.open_reddit()
+print("scanning 22 treatments, roughly 40 seconds")
+tt = P.testimony_table(con)
+display(tt.style.format({"strong_pos_rate": "{:.3f}", "rate_lo": "{:.3f}",
+                         "rate_hi": "{:.3f}"}))
+""")
+
+md(r"""
+## 8.1 How strong are the claims, and how do they rank?
+
+Each treatment's strong-claim rate, against 19 comparators drawn from what this community
+talks about most. The comparators were picked for prominence, not for their results.
+
+Psilocybin ranks second of 22. Its interval overlaps most of the list, so the ranking itself
+is not a finding — a treatment placing 2nd and one placing 8th are not distinguishable here.
+The structure of the chart is the finding: prescriptions and procedures cluster at the top,
+supplements at the bottom, and psilocybin sits with the prescriptions rather than with the
+supplements. LSD is at the bottom on 260 speakers and is uninformative, exactly as in the
+main analysis.
+""")
+
+co(r"""
+cat_color = {"psychedelic": "#2b6cb0", "prescription": "#dd6b20",
+             "supplement": "#a0aec0", "other": "#68a691"}
+t = tt.iloc[::-1].reset_index(drop=True)
+
+fig, ax = plt.subplots(figsize=(7.2, 5.2))
+for i, r in t.iterrows():
+    ax.plot([100 * r.rate_lo, 100 * r.rate_hi], [i, i], color="#666", lw=1.2, zorder=2)
+    ax.plot(100 * r.strong_pos_rate, i, "o", ms=6.5, zorder=3,
+            color=cat_color[r.category])
+    ax.annotate(f"{int(r.strong_pos)}/{int(r.speakers):,}", (100 * r.rate_hi, i),
+                xytext=(6, 0), textcoords="offset points", va="center", fontsize=7)
+ax.set_yticks(range(len(t)), t.treatment, fontsize=8)
+for lab in ax.get_yticklabels():
+    if lab.get_text() in P.PSYCHEDELIC_LABELS:
+        lab.set_fontweight("bold")
+ax.set_xlim(0, 10.5)
+ax.set_xlabel("% of first-person speakers making a strong positive claim (Wilson 95% CI)")
+ax.set_title("Strong-claim rate, psychedelics against 19 comparators", fontsize=9)
+ax.legend(handles=[plt.Line2D([], [], marker="o", ls="", color=v, label=k)
+                   for k, v in cat_color.items()], fontsize=7.5, loc="lower right")
+plt.tight_layout(); plt.show()
+""")
+
+md(r"""
+## 8.2 The shape of the claims, and what the detector gets wrong
+
+Strong claims are the minority everywhere. In all three arms the moderate register is the
+larger one — bounded, temporary, wore-off language — and for ketamine it is nearly twice the
+size of the strong-positive group.
+
+The examples below are printed to expose the detector, not to support it. Three error modes
+are visible in them and none is fixable by regex:
+
+- **Untracked stacks.** "cannabis, alcohol, shrooms, nicotine all made me worse" is attributed
+  to psilocybin. The guard only drops sentences that name another *tracked* treatment.
+- **Reversals inside one sentence.** "for two days afterwards I felt like I had been cured but
+  then it all came back" is scored strong-positive. The marker is genuine; the clause that
+  retracts it sits past the point the detector reads.
+- **Phrases that mean something else.** Two were caught by eye and removed by hand: "back to
+  baseline", which in this community reports an effect wearing off rather than a recovery, and
+  a bare "95% of", which was matching insurance coverage. Others certainly remain.
+
+Treat every number in this section as approximate to within a few points, and as a
+description of the language rather than a measurement of the drugs.
+""")
+
+co(r"""
+psy = tt.set_index("treatment").loc[list(P.PSYCHEDELIC_LABELS)]
+kinds = ["strong_pos", "moderate", "strong_neg"]
+
+fig, ax = plt.subplots(figsize=(6.6, 2.4))
+left = np.zeros(len(psy))
+for k, col in zip(kinds, ["#2b6cb0", "#a0aec0", "#c53030"]):
+    ax.barh(np.arange(len(psy)), psy[k], left=left, height=0.65, color=col, label=k)
+    for i, v in enumerate(psy[k]):
+        if v:
+            ax.annotate(str(int(v)), (left[i] + v / 2, i), ha="center", va="center",
+                        fontsize=7.5, color="white")
+    left += psy[k].values
+ax.set_yticks(np.arange(len(psy)),
+              [f"{d}\n{int(n):,} speakers" for d, n in zip(psy.index, psy.speakers)],
+              fontsize=8)
+ax.set_xlabel("distinct authors making a claim of that strength")
+ax.set_title("Claim mix — the moderate register is the largest one", fontsize=9)
+ax.legend(fontsize=7.5, bbox_to_anchor=(1.01, 1), loc="upper left")
+plt.tight_layout(); plt.show()
+""")
+
+co(r"""
+for lab in P.PSYCHEDELIC_LABELS[:2]:
+    for kind in ("strong_pos", "strong_neg"):
+        print(f"\n=== {lab} / {kind} — one sentence per author, verbatim ===")
+        for s in P.testimony_examples(con, lab, kind, 3).sentence:
+            print(" •", s)
+""")
+
+md(r"""
+## 8.3 Is an arm a few people repeating themselves?
+
+Partly, yes — and this is the check that justifies counting authors rather than sentences.
+
+Psilocybin is broad: its most prolific author writes 5 of the arm's 53 strong-claim
+sentences, under 10%, and no one else writes more than 2. Ketamine is not: a single author
+writes 32 of 84, 38% of the arm. LSD is worse still, with one author writing 6 of 11.
+
+Counted by sentence, the ketamine arm would be substantially one person. Counted by distinct
+author, which is what 8.1 does, that person is worth exactly one. The ranking there is
+unaffected; a sentence-level version of the same chart would not be.
+""")
+
+co(r"""
+for lab in P.PSYCHEDELIC_LABELS:
+    print(f"\n=== {lab} ===")
+    display(P.top_speakers(con, lab).T)
+""")
+
+md(r"""
+## 8.4 The conversation over time
+
+The extracted records have no time axis. The raw scrape does, and how often a community
+talks about something is a legitimate thing to measure even when its outcomes are not.
+
+Normalised per 10,000 segments, because the subreddits grew roughly two hundred-fold across
+this window and raw counts would only show that growth. 2026 is a partial year, which the
+denominator absorbs.
+
+Ketamine rises steadily from 2021 and roughly doubles its share of the conversation by 2025.
+Psilocybin peaks in 2023 and drifts down. LSD is flat and thin throughout. This is a chart of
+talk, not of use, and not of outcomes.
+""")
+
+co(r"""
+mv = P.mention_volume_by_year(con)
+mv = mv[mv.year.astype(int) >= 2020]
+
+fig, ax = plt.subplots(figsize=(6.6, 3.0))
+for lab, col in zip(P.PSYCHEDELIC_LABELS, ["#2b6cb0", "#dd6b20", "#68a691"]):
+    s = mv[mv.treatment == lab]
+    ax.plot(s.year.astype(int), s.per_10k, "o-", ms=4, lw=1.6, color=col, label=lab)
+ax.set_xlabel("year")
+ax.set_ylabel("segments naming it per 10,000")
+ax.set_title("Share of the conversation, 2020–2026", fontsize=9)
+ax.legend(fontsize=8)
+plt.tight_layout(); plt.show()
+
+display(mv.pivot_table(index="year", columns="treatment", values="segments",
+                       aggfunc="sum").astype("Int64"))
+""")
+
+md(r"""
+## 8.5 What this appendix does and does not add
+
+**Adds.** The outcome labels have a texture underneath them. Where patients describe
+psilocybin in their own words, the strong-claim rate is at the top of a 22-treatment field
+and the strong-negative count is small — 45 authors against 5. That is consistent with the
+within-patient result in section 4, arrived at from different text by a different method, and
+consistency across two dependent measurements is worth something even though it is not
+independent confirmation.
+
+**Does not add.** No test, no correction, no denominator for the people who tried a
+psychedelic and never posted. The comparators are not matched on anything. A regex cannot
+read, and section 8.2 lists three ways it fails. Nothing here changes a single conclusion in
+section 7.
 """)
 
 nb["cells"] = c

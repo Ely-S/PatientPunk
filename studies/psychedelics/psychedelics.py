@@ -9,9 +9,11 @@ Import-only: nothing here reads the disk or plots until a function is called.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +28,11 @@ from statsmodels.stats.proportion import (
 
 RECORDS_RELPATH = Path("data/full_corpus_2026-07-31/records_covidlonghaulers_v2.json")
 ENV_VAR = "PP_RECORDS"
+
+# The raw scrape the extraction ran on. Only the testimonial layer (section 8) reads
+# it; every section before that uses the extracted records alone.
+REDDIT_DB_RELPATH = Path("reddit_2026-06-13.db")
+DB_ENV_VAR = "PP_REDDIT_DB"
 
 # Corpus-wide reference line (all 204,417 treatment_outcome mentions), from the run
 # README. Descriptive only -- it is not a control for anything.
@@ -618,3 +625,550 @@ def mde(baseline: float, n_per_arm: int, power: float = 0.80) -> float:
     za = stats.norm.ppf(0.975)
     zb = stats.norm.ppf(power)
     return float((za + zb) * np.sqrt(2 * baseline * (1 - baseline) / n_per_arm))
+
+
+# ── Descriptive helpers ────────────────────────────────────────────────────
+# Support for the narrative sections. All of these are counts and shares; none of
+# them feeds an inferential fit.
+
+def naming_vocabulary(df: pd.DataFrame, drug: str, n: int = 12) -> pd.DataFrame:
+    """The exact strings patients used for one arm, by number of patients using them.
+
+    Nothing is canonicalized upstream, so this is the community's own nomenclature
+    rather than a drug dictionary's.
+    """
+    sub = df[df["drug_class"] == drug]
+    out = (
+        sub.groupby("drug_string")
+        .agg(patients=("patient", "nunique"), mentions=("helped", "size"))
+        .sort_values("patients", ascending=False)
+        .head(n)
+    )
+    out["pct_of_arm_patients"] = 100 * out["patients"] / sub["patient"].nunique()
+    return out
+
+
+def stack_sizes(df: pd.DataFrame) -> pd.DataFrame:
+    """Treatments named per patient, split by whether they named a study drug.
+
+    One row per patient. `n_treatments` counts distinct drug strings in their record,
+    so it measures how much of their treatment history they wrote down.
+    """
+    flag = df.groupby("patient")["drug_class"].apply(
+        lambda s: "names a psychedelic" if s.isin(DRUGS).any() else "everyone else"
+    )
+    size = df.groupby("patient")["drug_string"].nunique()
+    return pd.DataFrame({"n_treatments": size, "group": flag}).reset_index()
+
+
+def co_treatments(df: pd.DataFrame, n: int = 20) -> pd.DataFrame:
+    """What else is in the stack of patients who name a psychedelic.
+
+    Restricted to their non-psychedelic treatments, so it describes the company these
+    substances keep rather than the substances themselves.
+    """
+    pts = df.loc[df["drug_class"].isin(DRUGS), "patient"].unique()
+    sub = df[df["patient"].isin(pts) & (df["drug_class"] == REFERENCE_CLASS)]
+    out = (
+        sub.groupby("drug_string")
+        .agg(patients=("patient", "nunique"), helped=("helped", "mean"))
+        .sort_values("patients", ascending=False)
+        .head(n)
+    )
+    out["pct_of_psychedelic_patients"] = 100 * out["patients"] / len(pts)
+    return out
+
+
+def arm_overlap(df: pd.DataFrame) -> pd.DataFrame:
+    """How many of the three substances a single patient reports on."""
+    per = df[df["drug_class"].isin(DRUGS)].groupby("patient")["drug_class"].apply(
+        lambda s: tuple(sorted(set(s)))
+    )
+    out = per.value_counts().rename("patients").to_frame()
+    out.index = ["+".join(k) for k in out.index]
+    out["n_substances"] = [k.count("+") + 1 for k in out.index]
+    return out.sort_values(["n_substances", "patients"], ascending=[True, False])
+
+
+def symptom_matrix(df: pd.DataFrame, n: int = 14) -> pd.DataFrame:
+    """Top named symptoms by arm, as each arm's share of its own symptom-named rows.
+
+    Column-normalized so the arms are comparable despite very different sizes -- this
+    is the community's indication map, not a volume chart.
+    """
+    sub = df[df["drug_class"].isin(DRUGS) & df["symptom"].notna()]
+    top = sub["symptom"].value_counts().head(n).index
+    tab = (
+        sub[sub["symptom"].isin(top)]
+        .groupby(["symptom", "drug_class"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(index=top, columns=list(DRUGS), fill_value=0)
+    )
+    return 100 * tab / tab.sum(axis=0)
+
+
+def own_stack_rank(df: pd.DataFrame, drug: str) -> pd.DataFrame:
+    """Per patient: their helped-rate for `drug` against their own stack's rate.
+
+    The legible form of the within-patient contrast -- one point per patient, with the
+    stack size attached so heavy and light experimenters can be told apart.
+    """
+    piv = paired_differences(df, drug)
+    stack = df.groupby("patient")["drug_string"].nunique().rename("n_treatments")
+    return piv.join(stack, how="left")
+
+
+# Ordered so a bar chart reads worst-to-best rather than alphabetically.
+FUNCTIONAL_TIERS = ("mostly_functional", "mild", "moderate", "severe",
+                    "housebound", "bedbound")
+TRAJECTORIES = ("recovered", "improving", "stable", "relapsing", "worsening")
+
+
+def field_profile(
+    records: list[dict],
+    df: pd.DataFrame,
+    field: str,
+    values: tuple[str, ...] | None = None,
+    conditional: bool = True,
+) -> tuple[pd.DataFrame, dict]:
+    """Who names a psychedelic, on one extracted field, against everyone else.
+
+    The universe is the outcome-triple cohort only, so both groups are patients who
+    reported at least one treatment outcome and differ in nothing else structural.
+
+    `conditional=True` restricts the denominator to patients whose record populates
+    the field at all -- right for a single-valued closed vocabulary like
+    `functional_status_tier`, where a missing value means "never stated". For an
+    open multi-valued field like `mental_health`, pass False and read the result as
+    "share whose record names this", never as prevalence: silence is not absence.
+    """
+    psy = set(df.loc[df["drug_class"].isin(DRUGS), "patient"])
+    universe = set(df["patient"])
+    groups = {"names a psychedelic": [], "everyone else": []}
+    for rec in records:
+        pid = rec.get("record_meta", {}).get("author_hash")
+        if pid not in universe:
+            continue
+        vals = {v.strip().lower() for v in _values(rec.get("fields", {}), field)}
+        if conditional and not vals:
+            continue
+        groups["names a psychedelic" if pid in psy else "everyone else"].append(vals)
+
+    keys = values or tuple(
+        pd.Series([v for g in groups.values() for vals in g for v in vals])
+        .value_counts().head(12).index
+    )
+    out = pd.DataFrame(
+        {g: [100 * sum(k in vals for vals in rows) / len(rows) for k in keys]
+         for g, rows in groups.items()},
+        index=list(keys),
+    )
+    return out, {g: len(rows) for g, rows in groups.items()}
+
+
+# ── The testimonial layer: raw post and comment text ───────────────────────
+# Sections 1-7 never leave the extracted records, where an outcome is one of five
+# words and carries no magnitude. Section 8 reads the underlying scrape, because a
+# claim's STRENGTH exists only in the text the patient actually wrote.
+#
+# Everything here is regex over sentences. No LLM is involved, so it is deterministic
+# and re-runnable at zero cost -- and correspondingly blunt. `detector_audit()` exists
+# so the bluntness is measurable rather than assumed.
+
+def reddit_db_path(start: Path | None = None) -> Path:
+    """Absolute path to the raw scrape. `PP_REDDIT_DB` overrides discovery."""
+    env = os.environ.get(DB_ENV_VAR)
+    if env:
+        p = Path(env).expanduser().resolve()
+        if not p.is_file():
+            raise FileNotFoundError(f"{DB_ENV_VAR}={env!r} does not point to a file ({p})")
+        return p
+
+    here = Path(start).resolve() if start else Path.cwd().resolve()
+    for d in [here, *here.parents]:
+        candidate = d / REDDIT_DB_RELPATH
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        f"Could not find {REDDIT_DB_RELPATH} walking up from {here}.\n"
+        f"Set {DB_ENV_VAR} to an absolute path, or skip section 8."
+    )
+
+
+def open_reddit(path: Path | None = None) -> sqlite3.Connection:
+    """Read-only connection to the scrape. FTS5 indexes are already built."""
+    p = path or reddit_db_path()
+    return sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+
+
+def author_hash(name: str) -> str:
+    """The record_meta.author_hash for a Reddit username.
+
+    Verified against the extracted records: the aggregation step hashed the username
+    verbatim, so raw text joins back to a patient record on this key.
+    """
+    return hashlib.sha256(name.encode()).hexdigest()
+
+
+# Sentence-level gates. A claim counts only if the patient is describing themselves.
+FIRST_PERSON_RE = re.compile(r"\b(i|i'?ve|i'?m|i'?d|i'?ll|my|me|myself)\b", re.I)
+
+# Someone else's outcome is not this patient's testimony. Second person is here too:
+# "you'd be amazed" and "if you've read that it cured people" are both advice, not report.
+THIRD_PARTY_RE = re.compile(
+    r"\b(my (friend|wife|husband|partner|mum|mom|dad|father|mother|sister|brother|son|"
+    r"daughter|doctor|therapist|neighbou?r|coworker|colleague)|"
+    r"a friend|someone|somebody|some (guy|people|person|folks)|"
+    r"other people|a lot of people|many people|lots of people|"
+    r"i('ve| have)? (heard|read|seen)|you('ve| have|d| would|r)?\s|your |"
+    r"people (say|report|claim|cured|recover\w*|heal\w*)|"
+    r"this (guy|woman|man|person)|he |she |they (cured|report|say|claim)|"
+    r"the creator|on tiktok|on youtube|a study|studies|research (shows|suggests)|trial)\b",
+    re.I,
+)
+
+# Negation and irrealis. "it was not a miracle" and "I hope it is life-changing" both
+# contain a strong marker and neither is a strong claim.
+NEGATION_RE = re.compile(
+    r"\b(not|n'?t|no|never|hardly|barely|nothing|didn'?t|doesn'?t|wasn'?t|isn'?t|"
+    r"haven'?t|hasn'?t|won'?t|wouldn'?t|hope|hoping|wish|if|would|could|might|maybe|"
+    r"planning|considering|thinking about|want to|going to|curious|plan to)\b",
+    re.I,
+)
+
+STRONG_POS_RE = re.compile(
+    r"life[- ]?chang\w+|chang\w+ my life|gave me my life back|sav\w+ my life|"
+    r"complete(ly)? (gone|resolved|cured|better|lifted)|cured|remission|"
+    r"night and day|miracle|miraculous|game[- ]?chang\w+|transform\w+|profound\w*|"
+    # "of my symptoms", never bare "of" -- that matched "insurance covers 95% of it".
+    r"\b(7[5-9]|8[0-9]|9[0-9]|100)\s?%\s?(better|improvement|improved|recovered|gone|of my)|"
+    r"the only thing that (has )?(ever )?(help|work)\w*|"
+    # "back to baseline" is deliberately NOT here. In this community baseline is the
+    # illness, so the phrase reports an effect wearing off -- MODERATE_RE catches it.
+    r"back to (normal|myself|my old self)|"
+    r"dramatic\w* (improv|better|help)\w*|massive\w* (improv|help)\w*|"
+    r"huge (difference|improvement|change)|"
+    r"out of bed for the first time|best thing i'?ve ever (done|tried)|"
+    r"single (biggest|best) thing",
+    re.I,
+)
+
+# Deliberately built to roughly the same breadth as STRONG_POS_RE. An asymmetric pair
+# of pattern lists would manufacture the finding that strong claims are mostly
+# positive; detector_audit() reports the imbalance that remains.
+STRONG_NEG_RE = re.compile(
+    r"worst (thing|mistake|decision|experience)|set me back (months|years|weeks|\d)|"
+    r"never again|permanent(ly)? (worse|damage|disab\w+)|ruined me|ruined my life|"
+    r"crash\w* for (weeks|months)|made (me|it|everything|things) (so much |way |much )?worse|"
+    r"land\w+ me in (the )?(hospital|er)|regret \w*ing (it|that)|biggest regret|"
+    r"sent me into a (crash|flare|relapse|spiral)|wrecked me|destroyed me|"
+    r"trauma(tis|tiz)\w+ me|triggered (a|my) (crash|flare|relapse|pem)|"
+    r"worse than ever|severe(ly)? (crash|worse|setback)|"
+    r"took me (months|weeks) to recover|bedbound (for|since|after)",
+    re.I,
+)
+
+# The middle of the scale: a real but bounded or temporary effect. Its size is the
+# check on whether the detector is simply finding enthusiasm everywhere.
+MODERATE_RE = re.compile(
+    r"\b(slightly|a little|a bit|somewhat|marginal\w*|mild(ly)?|temporar\w+|"
+    r"short[- ]?lived|wore off|back to baseline|not a (miracle|cure)|"
+    r"some (improvement|benefit|help)|helped a bit|"
+    r"for a (few|couple of|couple) (days|hours|weeks))\b",
+    re.I,
+)
+
+# Link roundups and table posts by aggregator bots are not testimony.
+BOTLIKE_RE = re.compile(r"\\?#\d+:\s*\[|^\s*\|.*\|.*\|", re.I | re.M)
+BOT_AUTHORS = frozenset({
+    "AutoModerator", "[deleted]", "sneakpeekbot", "RemindMeBot", "B0tRank",
+    "WikiTextBot", "SubredditLinkBot", "totesmessenger", "None",
+})
+
+SENTENCE_RE = re.compile(r"(?<=[.!?\n])\s+")
+
+CLAIM_KINDS = ("strong_pos", "strong_neg", "moderate")
+
+# label -> (FTS5 query, regex over the sentence, category)
+# The FTS query is a recall net; the regex is what actually decides a match, so the
+# query can be loose. Comparators were picked as the treatments this community talks
+# about most, across both pharmaceuticals and supplements, not for their results.
+TESTIMONY_TARGETS: dict[str, tuple[str, re.Pattern, str]] = {
+    "psilocybin": ("psilocybin OR psilocin OR shrooms OR shroom OR mushrooms OR truffles",
+                   re.compile(r"psilocyb|psilocin|magic mushroom|\bshrooms?\b"
+                              r"|psychedelic mushroom|magic truffle", re.I), "psychedelic"),
+    "ketamine": ("ketamine OR esketamine OR spravato",
+                 re.compile(r"\bketamine\b|\besketamine\b|\bspravato\b", re.I), "psychedelic"),
+    "LSD": ("lsd OR lysergic",
+            re.compile(r"\blsd\b|lysergic|\b1c?p-?lsd\b|\bald-?52\b|\bacid tabs?\b"
+                       r"|\bacid trips?\b", re.I), "psychedelic"),
+    "LDN": ('ldn OR naltrexone', re.compile(r"\bldn\b|naltrexone", re.I), "prescription"),
+    "mestinon": ("mestinon OR pyridostigmine",
+                 re.compile(r"mestinon|pyridostigmine", re.I), "prescription"),
+    "beta blocker": ("propranolol OR metoprolol OR bisoprolol OR ivabradine",
+                     re.compile(r"propranolol|metoprolol|bisoprolol|ivabradine", re.I),
+                     "prescription"),
+    "SSRI / SNRI": ("sertraline OR fluoxetine OR escitalopram OR duloxetine OR lexapro "
+                    "OR zoloft OR prozac OR cymbalta",
+                    re.compile(r"sertraline|fluoxetine|escitalopram|duloxetine|lexapro"
+                               r"|zoloft|prozac|cymbalta", re.I), "prescription"),
+    "antihistamine": ("famotidine OR cetirizine OR loratadine OR fexofenadine OR zyrtec "
+                      "OR pepcid OR claritin",
+                      re.compile(r"famotidine|cetirizine|loratadine|fexofenadine|zyrtec"
+                                 r"|pepcid|claritin", re.I), "prescription"),
+    "valacyclovir": ("valtrex OR valacyclovir",
+                     re.compile(r"valtrex|valacyclovir", re.I), "prescription"),
+    "Paxlovid": ("paxlovid OR nirmatrelvir",
+                 re.compile(r"paxlovid|nirmatrelvir", re.I), "prescription"),
+    "metformin": ("metformin", re.compile(r"\bmetformin\b", re.I), "prescription"),
+    "rapamycin": ("rapamycin OR sirolimus",
+                  re.compile(r"rapamycin|sirolimus", re.I), "prescription"),
+    "modafinil": ("modafinil OR armodafinil OR provigil",
+                  re.compile(r"modafinil|provigil", re.I), "prescription"),
+    "nicotine patch": ('nicotine', re.compile(r"nicotine (patch|patches)", re.I), "other"),
+    "HBOT": ("hbot OR hyperbaric",
+             re.compile(r"\bhbot\b|hyperbaric", re.I), "other"),
+    "stellate ganglion block": ("sgb OR stellate",
+                                re.compile(r"\bsgb\b|stellate ganglion", re.I), "other"),
+    "nattokinase": ("nattokinase OR natto",
+                    re.compile(r"nattokinase", re.I), "supplement"),
+    "vitamin D": ('"vitamin d"', re.compile(r"vitamin ?d\b", re.I), "supplement"),
+    "B12": ('b12 OR methylcobalamin OR "vitamin b12"',
+            re.compile(r"\bb-?12\b|methylcobalamin", re.I), "supplement"),
+    "magnesium": ("magnesium", re.compile(r"magnesium", re.I), "supplement"),
+    "NAC": ('nac OR acetylcysteine',
+            re.compile(r"\bnac\b|acetylcysteine", re.I), "supplement"),
+    "CoQ10": ('coq10 OR ubiquinol OR "coenzyme q10"',
+              re.compile(r"\bcoq-?10\b|ubiquinol|coenzyme q10", re.I), "supplement"),
+}
+
+PSYCHEDELIC_LABELS = ("psilocybin", "ketamine", "LSD")
+
+
+def _iter_segments(con: sqlite3.Connection, fts_query: str):
+    """(text, author, subreddit, created_utc) for every post and comment matching."""
+    for body, author, sub, ts in con.execute(
+        "SELECT c.body, c.author, c.subreddit, c.created_utc FROM comments_fts f "
+        "JOIN comments c ON c.rowid = f.rowid WHERE f.comments_fts MATCH ?", (fts_query,)
+    ):
+        yield body or "", author, sub, ts
+    for title, self_, author, sub, ts in con.execute(
+        "SELECT p.title, p.selftext, p.author, p.subreddit, p.created_utc FROM posts_fts f "
+        "JOIN posts p ON p.rowid = f.rowid WHERE f.posts_fts MATCH ?", (fts_query,)
+    ):
+        yield f"{title or ''}\n{self_ or ''}", author, sub, ts
+
+
+def classify_claim(sentence: str) -> str | None:
+    """Claim strength for one sentence, or None if it makes no graded claim.
+
+    Positive is tested first: a sentence carrying both a strong-positive and a
+    moderate marker ("a huge difference, though it wore off") is a strong claim with a
+    caveat, not a moderate one.
+    """
+    for kind, pat in (("strong_pos", STRONG_POS_RE), ("strong_neg", STRONG_NEG_RE),
+                      ("moderate", MODERATE_RE)):
+        m = pat.search(sentence)
+        # Negation or irrealis in the 60 characters before the marker cancels it.
+        if m and not NEGATION_RE.search(sentence[max(0, m.start() - 60):m.start()]):
+            return kind
+    return None
+
+
+# Anaphora, for carrying a claim across a sentence break: "I took psilocybin. It
+# changed everything." Without this the second sentence is invisible; with it
+# unrestricted, an unrelated neighbouring sentence gets attributed to the drug.
+ANAPHOR_RE = re.compile(r"^\W*(it|this|that|they|the (trip|dose|effect|experience))\b", re.I)
+
+
+def _other_targets(term: re.Pattern) -> list[re.Pattern]:
+    return [t for _f, t, _c in TESTIMONY_TARGETS.values() if t is not term]
+
+
+def iter_claims(text: str, term: re.Pattern):
+    """Yield (kind, sentence) for first-person claims about `term` in one segment.
+
+    A sentence qualifies if it names the treatment, or if it opens with an anaphor
+    pointing back at a sentence that does. Either way it is discarded when it names a
+    DIFFERENT tracked treatment, because this community stacks heavily and
+    "LDN and ketamine ... it wrecked me" attributes to whichever one you ask for.
+
+    That guard cannot catch a stack of untracked treatments, which is the detector's
+    main residual error and is reported as such in 8.2.
+    """
+    if BOTLIKE_RE.search(text):
+        return
+    others = _other_targets(term)
+    sents = SENTENCE_RE.split(text)
+    for i, s in enumerate(sents):
+        named = term.search(s)
+        if not named and not (i and ANAPHOR_RE.match(s) and term.search(sents[i - 1])):
+            continue
+        if not FIRST_PERSON_RE.search(s) or THIRD_PARTY_RE.search(s):
+            continue
+        if any(o.search(s) for o in others):
+            continue
+        kind = classify_claim(s)
+        if kind:
+            yield kind, s.strip()
+
+
+def scan_target(con: sqlite3.Connection, label: str) -> dict:
+    """Count DISTINCT AUTHORS at each claim strength for one treatment.
+
+    Authors, not sentences: one person who posted the same recovery story thirty times
+    would otherwise carry a whole arm. That is not hypothetical here -- see 8.4.
+    """
+    fts, term, category = TESTIMONY_TARGETS[label]
+    speakers: set[str] = set()
+    by_kind: dict[str, set[str]] = {k: set() for k in CLAIM_KINDS}
+    sentences = 0
+    for text, author, _sub, _ts in _iter_segments(con, fts):
+        if not author or author in BOT_AUTHORS:
+            continue
+        hit = False
+        for kind, _s in iter_claims(text, term):
+            by_kind[kind].add(author)
+            sentences += 1
+            hit = True
+        if hit or _first_person_mention(text, term):
+            speakers.add(author)
+    out = {"treatment": label, "category": category,
+           "speakers": len(speakers), "claim_sentences": sentences}
+    for k in CLAIM_KINDS:
+        out[k] = len(by_kind[k])
+    out["strong_pos_rate"] = out["strong_pos"] / len(speakers) if speakers else np.nan
+    return out
+
+
+def _first_person_mention(text: str, term: re.Pattern) -> bool:
+    """Did the writer mention this treatment in the first person, at any strength?
+
+    The denominator for a strong-claim rate. Without it the rate would be strong
+    claims over *everyone who typed the word*, including people asking whether to try it.
+    """
+    if BOTLIKE_RE.search(text):
+        return False
+    for s in SENTENCE_RE.split(text):
+        if term.search(s) and FIRST_PERSON_RE.search(s) and not THIRD_PARTY_RE.search(s):
+            return True
+    return False
+
+
+def testimony_table(con: sqlite3.Connection, labels=None) -> pd.DataFrame:
+    """scan_target over every treatment, with a Wilson CI on each strong-claim rate."""
+    rows = [scan_target(con, l) for l in (labels or TESTIMONY_TARGETS)]
+    out = pd.DataFrame(rows)
+    ci = [wilson(int(r.strong_pos), int(r.speakers))[1:] for _, r in out.iterrows()]
+    out[["rate_lo", "rate_hi"]] = ci
+    return out.sort_values("strong_pos_rate", ascending=False).reset_index(drop=True)
+
+
+def testimony_examples(
+    con: sqlite3.Connection, label: str, kind: str = "strong_pos", n: int = 8
+) -> pd.DataFrame:
+    """Up to `n` example sentences, at most ONE per author.
+
+    Verbatim text with no username attached. These illustrate what the detector is
+    matching on; they are not evidence, and no individual's story is built from them.
+    """
+    _fts, term, _cat = TESTIMONY_TARGETS[label]
+    seen: set[str] = set()
+    rows = []
+    for text, author, sub, _ts in _iter_segments(con, TESTIMONY_TARGETS[label][0]):
+        if not author or author in BOT_AUTHORS or author in seen:
+            continue
+        for k, s in iter_claims(text, term):
+            if k == kind:
+                seen.add(author)
+                rows.append({"subreddit": sub, "sentence": " ".join(s.split())[:300]})
+                break
+        if len(rows) >= n:
+            break
+    return pd.DataFrame(rows)
+
+
+def claim_authors(con: sqlite3.Connection, label: str, kind: str = "strong_pos") -> set[str]:
+    """author_hash for every patient making a claim of this strength about `label`.
+
+    The join key back to the extracted records, which is what makes the placebo checks
+    in 8.5 possible: the same people can be looked up in the outcome table.
+    """
+    _fts, term, _cat = TESTIMONY_TARGETS[label]
+    out = set()
+    for text, author, _sub, _ts in _iter_segments(con, TESTIMONY_TARGETS[label][0]):
+        if not author or author in BOT_AUTHORS:
+            continue
+        if any(k == kind for k, _ in iter_claims(text, term)):
+            out.add(author_hash(author))
+    return out
+
+
+def top_speakers(con: sqlite3.Connection, label: str, kind: str = "strong_pos",
+                 n: int = 5) -> pd.DataFrame:
+    """Claim sentences per author, most prolific first -- the concentration check.
+
+    If a handful of authors produce most of an arm's strong claims, the arm is a few
+    people repeating themselves and must be described that way.
+    """
+    _fts, term, _cat = TESTIMONY_TARGETS[label]
+    tally: dict[str, int] = {}
+    for text, author, _sub, _ts in _iter_segments(con, TESTIMONY_TARGETS[label][0]):
+        if not author or author in BOT_AUTHORS:
+            continue
+        c = sum(1 for k, _ in iter_claims(text, term) if k == kind)
+        if c:
+            tally[author] = tally.get(author, 0) + c
+    s = pd.Series(tally, name="claim_sentences").sort_values(ascending=False)
+    total = int(s.sum())
+    out = s.head(n).to_frame()
+    out["pct_of_arm"] = 100 * out["claim_sentences"] / total if total else np.nan
+    out.index = [f"author #{i + 1}" for i in range(len(out))]
+    return out
+
+
+def detector_audit() -> pd.DataFrame:
+    """Alternation count per pattern -- how much surface area each detector covers.
+
+    A strong-positive list twice the length of the strong-negative list would produce
+    "strong claims here are overwhelmingly positive" as a pure artifact. This makes the
+    remaining imbalance visible instead of leaving it implicit.
+    """
+    pats = {"strong_pos": STRONG_POS_RE, "strong_neg": STRONG_NEG_RE,
+            "moderate": MODERATE_RE}
+    return pd.DataFrame(
+        [{"detector": k, "alternations": v.pattern.count("|") + 1,
+          "pattern_chars": len(v.pattern)} for k, v in pats.items()]
+    ).set_index("detector")
+
+
+def mention_volume_by_year(con: sqlite3.Connection, labels=None) -> pd.DataFrame:
+    """Segments naming each treatment per year, and the whole corpus per year.
+
+    This is a chart of the CONVERSATION, not of outcomes. The extracted records have no
+    time axis; the raw scrape does, and how often a community talks about something is
+    a legitimate thing to measure over time even when its outcomes are not.
+    """
+    totals = dict(con.execute(
+        "SELECT strftime('%Y', created_utc, 'unixepoch'), COUNT(*) FROM comments GROUP BY 1"
+    ))
+    for y, n in con.execute(
+        "SELECT strftime('%Y', created_utc, 'unixepoch'), COUNT(*) FROM posts GROUP BY 1"
+    ):
+        totals[y] = totals.get(y, 0) + n
+
+    rows = []
+    for label in (labels or PSYCHEDELIC_LABELS):
+        fts, term, _cat = TESTIMONY_TARGETS[label]
+        per_year: dict[str, int] = {}
+        for text, _a, _s, ts in _iter_segments(con, fts):
+            if term.search(text):
+                y = pd.to_datetime(ts, unit="s").strftime("%Y")
+                per_year[y] = per_year.get(y, 0) + 1
+        for y, n in per_year.items():
+            rows.append({"year": y, "treatment": label, "segments": n,
+                         "corpus_segments": totals.get(y, 0)})
+    out = pd.DataFrame(rows)
+    out["per_10k"] = 1e4 * out["segments"] / out["corpus_segments"]
+    return out.sort_values(["treatment", "year"]).reset_index(drop=True)
