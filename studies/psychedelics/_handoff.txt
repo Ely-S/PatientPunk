@@ -121,6 +121,7 @@ Analyses (all in the notebook, all executing clean)
   §4.3 pre-registered symptom-class interaction
   §4.4 preparation/route read off the drug slot (descriptive only)
   §4.5 harm profile — raw counts against stated denominators, never rates
+  §4.6 ketamine by route — EXPLORATORY, added 2026-08-05, not in the Holm family
   §5  five sensitivity re-fits
   §6  Holm correction over the 7 pre-registered tests
   §7  conclusion, split into "supported" and "not supported, do not claim"
@@ -255,6 +256,10 @@ Quick smoke test without executing the notebook:
       broadened LSD pattern plus the ambiguity buckets leaving 'other')
   [x] ConditionalLogit converges; finite CIs on all three coefficients
   [x] notebook executes top-to-bottom from a clean kernel, 0 errors, 4 figures
+      (56 cells / 29 code, all with outputs, as of the 2026-08-05 §4.6 re-execution)
+  [x] route_coverage() accounts for all 677 ketamine mentions — no string falls
+      through the route taxonomy uncategorised
+  [x] adding the route regressors leaves psilocybin and LSD unchanged to 3 dp
 
 --------------------------------------------------------------------------------
 10. ENVIRONMENT
@@ -298,11 +303,31 @@ If asked to extend it, the highest-value directions:
      Would need a targeted LLM extraction pass (est. a few dollars). Ask first —
      the user turned it down once already.
 
-  B. THE ROUTE CONFOUND, PROPERLY. Ketamine is substantially clinic-administered
-     (Spravato / IV / infusion) while psilocybin and LSD are self-sourced. §4.4
-     stratifies descriptively but the strata are too small to test. This is the
-     sharpest structural difference among the three arms and currently sits as an
-     acknowledged limitation rather than an analysis.
+  B. THE ROUTE CONFOUND — ATTEMPTED 2026-08-05, RETURNED NO USABLE ANSWER.
+     Now §4.6. Do not re-run it expecting a different result; re-run it only if the
+     ketamine arm grows or the raw-text layer (A) lands.
+
+     ketamine_route() splits the arm into iv_infusion / intranasal / sublingual /
+     topical / unspecified, written against the COMPLETE set of 17 distinct ketamine
+     strings (route_coverage() is the audit fixture — it accounts for all 677
+     mentions). route_within_patient() fits one route as its own regressor while
+     carrying all OTHER ketamine as a separate nuisance term; without that the
+     reference class silently absorbs the rest of the arm.
+
+       iv_infusion   OR 0.79 [0.29, 2.15]  28 rows / 23 pts / 17 informative strata
+       intranasal    OR 1.00 [0.47, 2.11]  47 rows / 34 pts / 25 informative strata
+
+     MDE at n=28 is 34.5 pp. That is larger than any effect anyone would claim, so
+     the null here is UNINFORMATIVE, not evidence of no effect. State it that way.
+     575 of 677 mentions are bare "ketamine" with no route stated — the ceiling is
+     the drug slot's vocabulary, not the estimator.
+
+     Sanity check that held: psilocybin and LSD are unmoved by the split (1.84 /
+     0.66, matching §4.2 to three decimals).
+
+     Intranasal's lower descriptive rate (54.2% helped, CI [41.7, 66.3], n=59) is
+     confounded by indication — Spravato is prescribed for treatment-resistant
+     depression. Do not read it as a route effect.
 
   C. DURABILITY. Everything here is a static verdict. Whether an effect persists is
      not answerable from this dataset at all — the corpus collapses years of

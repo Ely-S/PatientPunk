@@ -505,6 +505,86 @@ for d in P.DRUGS:
     display(w.head(15).T)
 """)
 
+md(r"""
+## 4.6 Ketamine by route — the route confound, tested
+
+Section 4.4's single `clinical_route` bucket lumps three different exposures together: IV
+infusion, intranasal esketamine/Spravato, and at-home sublingual troches. They differ in
+supervision, screening, cost and bioavailability, so they are not one thing. This section
+splits them and asks the question section 4.2 could not: **is the ketamine null hiding a real
+IV effect diluted by other routes?**
+
+Route is read off the drug slot, as everywhere else. The ketamine arm has only 17 distinct
+drug strings, so the taxonomy is written against the complete observed set and printed below
+in full — route assignment is verifiable by eye rather than taken on trust.
+
+**This is an exploratory subgroup analysis.** It is not in the pre-registered family of 7 and
+is not Holm-corrected. Read the power line before reading the estimate.
+""")
+
+co(r"""
+coverage = P.route_coverage(df)
+print(f"every ketamine mention accounted for: {coverage.mentions.sum()} of "
+      f"{int((df.drug_class == 'ketamine').sum())}")
+display(coverage)
+""")
+
+co(r"""
+kr = P.add_ketamine_route(df)
+kr = kr[kr.drug_class == "ketamine"]
+rows = []
+for r, g in kr.groupby("route"):
+    est, lo, hi = P.wilson(int(g.helped.sum()), len(g))
+    rows.append({"route": r, "k": int(g.helped.sum()), "n": len(g),
+                 "patients": g.patient.nunique(), "helped": est, "ci_lo": lo, "ci_hi": hi})
+route_rates = pd.DataFrame(rows).sort_values("n", ascending=False).reset_index(drop=True)
+display(route_rates.style.format({"helped": "{:.3f}", "ci_lo": "{:.3f}", "ci_hi": "{:.3f}"}))
+""")
+
+md(r"""
+Within-patient fit, one route at a time. The target route is its own regressor and **all other
+ketamine is carried as a separate nuisance term** — otherwise the reference class would
+silently absorb the rest of the ketamine arm and the contrast would stop being
+route-vs-other-treatments.
+""")
+
+co(r"""
+base_rate = kr.helped.mean()
+for r in ("iv_infusion", "intranasal"):
+    res, diag = P.route_within_patient(wp, r)
+    print(f"\n=== ketamine / {r} ===")
+    print(f"{diag['rows']} rows | {diag['patients']} patients | "
+          f"{diag['informative_strata']} informative strata | {diag['helped']} helped")
+    print(f"minimum detectable difference at this n: "
+          f"{100 * P.mde(base_rate, diag['rows']):.1f} pp")
+    display(P.or_table(res))
+""")
+
+md(r"""
+**Route does not rescue ketamine, and cannot at this sample size.**
+
+- **IV infusion**: OR 0.79, 95% CI [0.29, 2.15]. The interval spans a seven-fold range and sits
+  squarely across 1. On 28 rows from 23 patients and **17 informative strata**, the minimum
+  detectable difference is roughly **34 percentage points** — larger than any effect anyone
+  would plausibly claim. This is not evidence that IV ketamine does not work. It is a
+  measurement too coarse to detect whether it does.
+- **Intranasal** (Spravato / esketamine): OR 1.00, CI [0.47, 2.11]. Uninformative for the same
+  reason. Its lower descriptive rate (54.2% helped, CI [41.7%, 66.3%], n=59) is the only route
+  signal that even gestures at a difference, and it is not separable from the fact that
+  Spravato is prescribed for treatment-resistant depression — a different indication and a
+  sicker starting point, not a different drug.
+- **Route-unspecified ketamine** — 575 of 677 mentions — carries essentially the whole arm, and
+  its within-patient OR (~1.25) reproduces the overall ketamine null. The arm is dominated by
+  patients who wrote `ketamine` and nothing more.
+- Psilocybin and LSD are unmoved by the split (OR 1.84 and 0.66, matching section 4.2 to three
+  decimals), confirming the added regressors are not disturbing the rest of the model.
+
+The honest reading: **the route confound named in the limitations is real and remains
+unresolved.** Splitting by route was the right test to run and it returns no usable answer.
+Resolving it needs either a much larger ketamine arm or the raw-text layer, where route is
+stated far more often than it is in the extracted drug slot.
+""")
+
 # ── sensitivity ──
 md(r"""
 ---

@@ -311,6 +311,107 @@ def add_prep(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# ── Ketamine route ─────────────────────────────────────────────────────────
+# Finer than prep_label's single `clinical_route` bucket, which lumps IV infusion
+# in with intranasal esketamine and at-home sublingual troches. Those differ in
+# supervision, screening, cost and bioavailability, so the lump is not one exposure.
+# The ketamine arm has only 17 distinct drug strings, so these patterns were written
+# against the complete observed set rather than guessed -- see route_coverage().
+
+IV_RE = re.compile(r"\biv\b|\bi\.v\.|\binfusion|intravenous", re.I)
+INTRANASAL_RE = re.compile(r"spravato|esketamine|nasal|spray", re.I)
+SUBLINGUAL_RE = re.compile(r"troche|lozenge|sublingual", re.I)
+TOPICAL_RE = re.compile(r"topical|lotion|cream", re.I)
+
+
+def ketamine_route(drug_string: str) -> str:
+    """Route of administration as stated in the drug slot, else `unspecified`.
+
+    IV first: `iv ketamine` and `ketamine infusion therapy` are the same exposure.
+    Intranasal before sublingual so `spravato` is never read as an at-home form.
+    """
+    s = drug_string
+    if IV_RE.search(s):
+        return "iv_infusion"
+    if INTRANASAL_RE.search(s):
+        return "intranasal"
+    if SUBLINGUAL_RE.search(s):
+        return "sublingual"
+    if TOPICAL_RE.search(s):
+        return "topical"
+    return "unspecified"
+
+
+def add_ketamine_route(df: pd.DataFrame) -> pd.DataFrame:
+    """Add a `route` column: the ketamine taxonomy, `n/a` for every other arm."""
+    out = df.copy()
+    out["route"] = [
+        ketamine_route(s) if c == "ketamine" else "n/a"
+        for s, c in zip(out["drug_string"], out["drug_class"])
+    ]
+    return out
+
+
+def route_coverage(df: pd.DataFrame) -> pd.DataFrame:
+    """Every distinct ketamine string and the route it was assigned.
+
+    The audit fixture for the taxonomy. The arm is small enough to read in full,
+    so route assignment is verifiable by eye rather than taken on trust.
+    """
+    k = df[df["drug_class"] == "ketamine"]
+    out = (
+        k.groupby("drug_string")
+        .agg(mentions=("helped", "size"), patients=("patient", "nunique"))
+        .reset_index()
+    )
+    out.insert(0, "route", out["drug_string"].map(ketamine_route))
+    return out.sort_values(["route", "mentions"], ascending=[True, False]).reset_index(
+        drop=True
+    )
+
+
+def route_within_patient(
+    df_wp: pd.DataFrame, route: str = "iv_infusion", outcome_col: str = "helped"
+):
+    """Within-patient fit for ONE ketamine route against the patient's own others.
+
+    Splits the ketamine arm so the target route is its own regressor and all other
+    ketamine is a separate nuisance term -- otherwise the reference class would
+    silently absorb the rest of the ketamine arm and the contrast would no longer
+    be route-vs-other-treatments.
+
+    Returns (result, diagnostics). ALWAYS read the diagnostics: at this arm's size
+    the estimate can be extremely underpowered, and a wide CI here is the finding.
+    """
+    d = add_ketamine_route(df_wp)
+    target = (d["drug_class"] == "ketamine") & (d["route"] == route)
+    other_k = (d["drug_class"] == "ketamine") & (d["route"] != route)
+
+    exog = pd.DataFrame(
+        {
+            f"is_{route}": target.astype(float),
+            "is_ketamine_other": other_k.astype(float),
+            "is_psilocybin": (d["drug_class"] == "psilocybin").astype(float),
+            "is_lsd": (d["drug_class"] == "lsd").astype(float),
+        },
+        index=d.index,
+    )
+    res = ConditionalLogit(
+        d[outcome_col].astype(float), exog, groups=d["patient"]
+    ).fit(disp=False)
+
+    pts = set(d.loc[target, "patient"])
+    contrib = d[d["patient"].isin(pts)]
+    diag = {
+        "route": route,
+        "rows": int(target.sum()),
+        "patients": len(pts),
+        "informative_strata": informative_strata(contrib, outcome_col),
+        "helped": int(d.loc[target, outcome_col].sum()),
+    }
+    return res, diag
+
+
 def worsened_triples(df: pd.DataFrame, drug: str) -> pd.DataFrame:
     """Every `worsened` mention for one drug, by symptom.
 
