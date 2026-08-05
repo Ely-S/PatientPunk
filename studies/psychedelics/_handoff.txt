@@ -1,0 +1,341 @@
+================================================================================
+HANDOFF — studies/psychedelics/
+LSD, Psilocybin & Ketamine in the Long COVID / ME-CFS cohort
+Written 2026-08-05. Status: COMPLETE and executing clean. No known blockers.
+================================================================================
+
+--------------------------------------------------------------------------------
+1. WHAT THIS IS
+--------------------------------------------------------------------------------
+
+A statistical study of self-reported outcomes for three substances in the
+PatientPunk full-corpus extraction run. The user asked for a research plan taking
+"the approach of a folk pharmacologist" — treating the patient community as a body
+of practitioners with an oral pharmacology (what each substance is FOR, in what
+preparation, at what dose intent) and asking whether that folk knowledge survives
+statistical control.
+
+The approved plan lives at:
+  /Users/eli/.claude/plans/there-is-a-full-melodic-plum.md
+
+Read it before changing anything. It records the design rationale and the
+pre-registered test family, and the notebook is built to match it.
+
+--------------------------------------------------------------------------------
+2. THE CENTRAL DESIGN DECISION (do not undo this without understanding it)
+--------------------------------------------------------------------------------
+
+Prior work in this repo (../../psilocybin_long_covid_article_outline.md and
+../../data/full_corpus_2026-07-31/analysis/psilocybin_analysis.py) reported
+"psilocybin 81% helped vs 67% corpus-wide." That comparison is confounded. The
+people who write about psychedelics are not the corpus average — they are sicker,
+carry far heavier mood/cognitive symptom loads, and name a median of 7 treatments
+each. The number measures WHO REPORTS, not what the drug did. The prior work tried
+to patch this with a homeopathy placebo floor (n=62), which is too small to carry
+the claim.
+
+This study replaces that with a WITHIN-PATIENT design, at the user's direction:
+every psychedelic outcome is compared to the SAME PATIENT's outcomes for their own
+other treatments, via conditional (fixed-effects) logistic regression.
+
+Why this specifically works on this dataset: the run README documents two biases —
+the extractor over-calls positive, and stacked treatments can inherit a collective
+outcome. Both apply to BOTH arms inside the same record, so they largely cancel in
+a within-patient contrast instead of inflating one arm. Patient optimism, illness
+severity, subreddit membership and writing style are absorbed by the fixed effect.
+
+The user explicitly chose this over a placebo-floor comparator. Their words:
+"Compare the Drugs to One Another, and to other drugs these same patients have tried."
+
+--------------------------------------------------------------------------------
+3. FILES
+--------------------------------------------------------------------------------
+
+studies/psychedelics/
+  psychedelics.py               519 lines. All logic: path resolution, cohort
+                                definition, triple parsing, stats helpers. Import
+                                has no side effects; nothing touches disk until a
+                                function is called. No plotting here.
+  psychedelics_analysis.ipynb   50 cells (26 code). Methods / Results / Conclusion.
+                                Stored EXECUTED with outputs and 4 figures.
+  build_nb.py                   The notebook GENERATOR (see section 8).
+  _handoff.txt                  this file.
+
+The user originally asked for exactly two deliverable files (notebook + one
+supporting .py), then later asked for this handoff. On 2026-08-05 they lifted that
+constraint to admit build_nb.py. Still do not add further files without asking.
+
+--------------------------------------------------------------------------------
+4. DATA
+--------------------------------------------------------------------------------
+
+Input (read-only, never modified):
+  data/full_corpus_2026-07-31/records_covidlonghaulers_v2.json    ~275 MB
+
+69,161 patient records, 15 long-COVID / ME-CFS subreddits, extracted by
+deepseek-v4-flash at temperature 0. One record = one PATIENT (all their posts and
+comments concatenated into one synthetic document), NOT one post.
+
+Path resolution: psychedelics.records_path() walks up from cwd looking for
+data/full_corpus_2026-07-31/records_covidlonghaulers_v2.json. Override with the
+PP_RECORDS environment variable (absolute path).
+
+We deliberately use the JSON, not records.csv — the CSV is documented as lossy.
+
+Read data/full_corpus_2026-07-31/README.md before quoting any number from this
+study. It documents the reproducibility limits that constrain every claim.
+
+--------------------------------------------------------------------------------
+5. WHAT WAS DONE
+--------------------------------------------------------------------------------
+
+Cohort construction
+  - Arms assigned by regex over the DRUG SLOT of each `drug: outcome: symptom`
+    triple only — never over the whole record. Nothing in this dataset is
+    canonicalized (18,101 distinct treatment strings; ldn / low dose naltrexone /
+    low-dose naltrexone are three separate strings).
+  - Psilocybin patterns copied VERBATIM from the prior run's psilocybin_analysis.py
+    so the arm reproduces exactly. Confirmed: mention_cohort() returns 538, the
+    prior run's published number.
+  - Functional mushrooms (lion's mane, reishi, chaga, cordyceps, turkey tail,
+    maitake, shiitake) are excluded before any mushroom test.
+  - Ketamine needs BOTH \bketamine\b AND \besketamine\b — the word boundary in the
+    first does not match "esketamine".
+  - Bare `acid` MUST NEVER match LSD. alpha lipoic acid, ascorbic acid, folic acid,
+    amino acids, acid reflux are all common here and would swamp a 92-mention arm.
+    There is an assertion fixture for this in Methods §1.2. Do not weaken it.
+  - Two ambiguity buckets (bare "mushroom", bare "acid") are counted, reported,
+    then excluded from all inferential fits, and folded back in as a sensitivity.
+
+Two denominators exist and must not be conflated:
+  - "names the drug anywhere" (treatment_outcome / medications /
+    alternative_treatments): psilocybin 538, ketamine 525, LSD 94
+  - "has a scored outcome triple" — the analysis cohort: psilocybin 427/717,
+    ketamine 422/677, LSD 67/92
+  Reconciliation table is Methods §1.3.
+
+Analyses (all in the notebook, all executing clean)
+  §2  descriptive rates with Wilson CIs + the community's indication map
+  §3  head-to-head between arms (Fisher when cells < 5)
+  §4  PRIMARY within-patient conditional logit + unmodelled paired companion
+  §4.3 pre-registered symptom-class interaction
+  §4.4 preparation/route read off the drug slot (descriptive only)
+  §4.5 harm profile — raw counts against stated denominators, never rates
+  §5  five sensitivity re-fits
+  §6  Holm correction over the 7 pre-registered tests
+  §7  conclusion, split into "supported" and "not supported, do not claim"
+
+--------------------------------------------------------------------------------
+6. RESULTS (as of the committed execution)
+--------------------------------------------------------------------------------
+
+COHORT
+  corpus                      69,161 patients / 204,417 outcome triples parsed
+                              (matches the run README exactly; 0 unparseable)
+  within-patient analysis set 745 patients / 10,579 rows / 577 informative strata
+
+PRIMARY — within-patient, reference = the same patient's other treatments
+  psilocybin   OR 1.84  [1.44, 2.34]   p = 8.9e-07   <- survives Holm
+  ketamine     OR 1.22  [0.98, 1.53]   p = 7.9e-02   <- null
+  LSD          OR 0.66  [0.37, 1.17]   p = 1.5e-01   <- underpowered, MDE ~19pp
+
+INTERACTION — psychedelic x energy/PEM vs mood/cognitive
+  OR 0.22   LR chi2(1) = 22.4   p = 2.2e-06          <- survives Holm
+
+RAW (uncontrolled, for contrast with the above)
+  psilocybin 81.0% helped | ketamine 69.4% | LSD 69.6% | corpus-wide 67.1%
+
+THE THREE HEADLINE FINDINGS
+  1. Psilocybin survives its own control. Stable in direction and significance
+     across all five sensitivity re-fits (OR range 1.60–2.77). Both estimators
+     (conditional logit and the unmodelled paired test) agree in sign. Because
+     extraction noise is non-differential it biases toward the null, so this is a
+     LOWER bound.
+  2. Ketamine's advantage vanishes under its own control. Raw 69.4% helped, but
+     within-patient OR is indistinguishable from 1 in the primary fit and all five
+     re-fits. This is the design catching exactly the failure mode it was built for.
+     State it as a null, not as evidence of no effect — the CI admits modest benefit.
+  3. The effect flips by symptom class, strongly. Within the same patient these
+     substances are reported as helping mood and cognition, and markedly less so
+     (often worse) for exertion-related symptoms. Since post-exertional malaise is
+     the defining symptom of ME/CFS, this is the most consequential result here.
+     The community's own indication map (§2.2) already points the same way.
+
+--------------------------------------------------------------------------------
+7. TWO PLANNED SENSITIVITY CHECKS THAT THIS DATASET CANNOT SUPPORT
+--------------------------------------------------------------------------------
+
+Both were in the approved plan. Both turned out to be impossible. This is
+documented IN the notebook (§5) rather than quietly dropped, because in each case
+the field looks usable until you inspect it. Do not re-add them.
+
+  a) CONFIDENCE FILTERING IS VACUOUS FOR THIS ENDPOINT.
+     The run README reports 43.2% high / 50.9% medium / 5.8% low, and that is true
+     ACROSS FIELDS. But `treatment_outcome` carries the constant value "medium" on
+     all 35,505 records that populate it — it is the field's schema-declared tier,
+     not a per-record judgement. There is nothing to filter on.
+     (This also means the original justification for reading the JSON over the CSV
+     was wrong. The JSON is still correct to use — it is the authoritative dataset
+     and the CSV is documented as lossy — but the stated reason was fixed.)
+
+  b) BOT EXCLUSION BY TEXT VOLUME IS IMPOSSIBLE.
+     record_meta.text_count is 1 for all 69,161 records. The aggregation step wrote
+     one synthetic document per patient and stored the count of documents, not of
+     underlying posts/comments. No text-volume signal survives into this file.
+     Mitigation: a bot like AutoModerator enters a patient-fixed-effects model as
+     one stratum out of 745, so its leverage is negligible anyway. Substituted a
+     drop-extreme-treatment-count fit as the closest available proxy.
+
+Replacement sensitivity set (five re-fits, all in §5): ambiguous strings included;
+patients naming <=3 treatments; drop >140 treatments/patient; symptom-specified
+triples only; excluding r/covidlonghaulers posters.
+
+Honest wrinkles in the sensitivity table, already written into §7:
+  - ketamine flips direction (OR 0.73) in the light-stacker fit, but is never
+    significant in any fit.
+  - LSD reaches nominal significance below 1 in ONE fit (symptom-specified only,
+    OR 0.47, p=0.025) and is contradicted by the others (range 0.27–1.13). That is
+    one exploratory uncorrected fit among five. Do not promote it to a finding.
+
+--------------------------------------------------------------------------------
+8. HOW TO REGENERATE THE NOTEBOOK  >>> READ THIS FIRST <<<
+--------------------------------------------------------------------------------
+
+THE NOTEBOOK WAS MACHINE-GENERATED by build_nb.py. That generator was originally
+left in the session scratchpad and was nearly lost; it was recovered on 2026-08-05
+and now lives beside the notebook, in version control. This matters:
+
+  - To change a CELL'S CONTENT, edit build_nb.py and re-run it, then re-execute the
+    notebook. Editing the .ipynb directly works but the next generator run will
+    silently overwrite you.
+  - To change ANALYSIS LOGIC, edit psychedelics.py and re-execute the notebook.
+    That is the normal path and it is unaffected.
+
+Regenerate:
+    /Users/eli/Desktop/PatientPunk/.venv/bin/python \
+        /Users/eli/Desktop/PatientPunk/studies/psychedelics/build_nb.py
+
+  >>> DESTRUCTIVE. It writes psychedelics_analysis.ipynb via a HARDCODED ABSOLUTE
+  >>> PATH (cwd is irrelevant) and silently CLOBBERS the executed notebook with an
+  >>> unexecuted one — all outputs and all 4 figures gone. ALWAYS re-execute
+  >>> immediately afterwards, and never run it with uncommitted notebook state you
+  >>> care about. If the repo ever moves off /Users/eli/Desktop/PatientPunk, that
+  >>> path at the bottom of build_nb.py must be updated or it will write into the
+  >>> old location.
+
+Re-execute:
+    cd studies/psychedelics
+    ../../.venv/bin/python -m jupyter nbconvert --to notebook --execute --inplace \
+        psychedelics_analysis.ipynb
+
+Takes roughly 2 minutes; most of it is loading the 275 MB JSON. `timeout` is not
+available on this machine (macOS, zsh) — do not prefix the command with it.
+
+Quick smoke test without executing the notebook:
+    cd /Users/eli/Desktop/PatientPunk
+    .venv/bin/python -c "
+    import sys; sys.path.insert(0,'studies/psychedelics')
+    import psychedelics as P
+    df = P.build_outcome_table(P.load_records())
+    wp = P.within_patient_frame(df)
+    print(P.or_table(P.conditional_logit(wp)))
+    "
+
+--------------------------------------------------------------------------------
+9. ACCEPTANCE CHECKS (all currently passing)
+--------------------------------------------------------------------------------
+
+  [x] 204,417 triples parsed, 0 unparseable (asserted in build_outcome_table —
+      it RAISES rather than silently dropping, which would shrink an arm)
+  [x] mention_cohort() reproduces the prior run's psilocybin figure of 538 exactly
+  [x] no regex matches bare acid — 9 false-positive guards + 12 positive
+      assignments asserted in Methods §1.2
+  [x] within-patient stratum: 745 patients / 10,579 rows / 577 informative
+      (plan predicted 745-746 / ~10.6k / 577-578; the small delta is the slightly
+      broadened LSD pattern plus the ambiguity buckets leaving 'other')
+  [x] ConditionalLogit converges; finite CIs on all three coefficients
+  [x] notebook executes top-to-bottom from a clean kernel, 0 errors, 4 figures
+
+--------------------------------------------------------------------------------
+10. ENVIRONMENT
+--------------------------------------------------------------------------------
+
+Use the repo venv: /Users/eli/Desktop/PatientPunk/.venv
+Everything needed is already installed — pandas 3.0.3, numpy 2.4.6, scipy 1.17.1,
+statsmodels 0.14.6, matplotlib 3.11.0, nbformat, nbconvert. No new dependencies
+were added and none are needed.
+
+Repo convention (user's CLAUDE.md): use `uv`, never `pip`.
+
+Invoking as ../../.venv/bin/python emits a harmless sys.prefix RuntimeWarning.
+Ignore it, or call the interpreter by its absolute path.
+
+--------------------------------------------------------------------------------
+11. WHAT'S NEXT — nothing is required; these are options, in priority order
+--------------------------------------------------------------------------------
+
+The study is complete as scoped. The user said: "Leave further Prose to me."
+DO NOT write the article. That is theirs.
+
+If asked to extend it, the highest-value directions:
+
+  A. THE RAW-TEXT / FOLK-PHARMACOLOGY LAYER — the biggest gap by far.
+     The current study can say WHETHER these substances are reported as helping,
+     but almost nothing about the actual pharmacology: dose, route, schedule,
+     stacking, sourcing, harm reduction. That lives only in raw post text.
+     The user declined this for THIS pass ("Stay in the extracted records"), but
+     the groundwork is verified and ready:
+       source: /Users/eli/Desktop/PatientPunk/reddit_2026-06-13.db (2.5 GB, LOCAL,
+               FTS5 indexes already built on posts_fts and comments_fts)
+       volume: ~7,250 matching segments — psilocybin 257 posts + 2,608 comments,
+               ketamine 353 + 3,094, LSD 70 + 875
+       quality: spot-checked and rich. Real examples found in the corpus include
+               volumetric microdosing in micrograms, ALD-52 as a legal LSD analog,
+               the Fadiman 1-day-on / 2-days-off schedule, rollsafe.org harm
+               reduction, ketamine clinic pricing, NMDA-antagonist rotation, and
+               durability reports ("cleared my brain fog for a few days, then back
+               to baseline").
+     Would need a targeted LLM extraction pass (est. a few dollars). Ask first —
+     the user turned it down once already.
+
+  B. THE ROUTE CONFOUND, PROPERLY. Ketamine is substantially clinic-administered
+     (Spravato / IV / infusion) while psilocybin and LSD are self-sourced. §4.4
+     stratifies descriptively but the strata are too small to test. This is the
+     sharpest structural difference among the three arms and currently sits as an
+     acknowledged limitation rather than an analysis.
+
+  C. DURABILITY. Everything here is a static verdict. Whether an effect persists is
+     not answerable from this dataset at all — the corpus collapses years of
+     posting per patient with no ordering. Would need a posts-only extraction run
+     with timestamps preserved. That is a pipeline job, not an analysis job.
+
+  D. Nothing needs fixing. There is no outstanding bug or TODO.
+
+--------------------------------------------------------------------------------
+12. HARD CONSTRAINTS — carry these into any follow-up
+--------------------------------------------------------------------------------
+
+From data/full_corpus_2026-07-31/README.md. These are not stylistic preferences.
+
+  - COHORT-LEVEL CLAIMS ONLY. Two identical extraction passes agreed on the field
+    set for 36.5% of records and on values 58.8% of the time. Aggregates are stable
+    to 0.8pp; a single record is one draw. No case studies. No per-patient
+    narratives. No quoting an individual's extracted values as their story.
+  - NO TIME AXIS. No before/after, no dose-response over time, no trend claims.
+  - NO DENOMINATOR FOR SILENT FAILURE. People post about treatments that did
+    something; a drug tried once and quietly abandoned never appears. The
+    within-patient design removes REPORTER bias. It does not remove SELECTION INTO
+    REPORTING, and nothing in this dataset can.
+  - NO EFFICACY CLAIM. Self-report, no blinding, no randomisation, no control over
+    what else the patient was doing. A within-patient contrast is not a trial.
+  - NO DOSING CLAIM. The `dosage` field is populated per patient but never linked
+    to a specific drug — a stated "0.25 g" cannot be attributed to the mushrooms
+    rather than to something else in the stack. §4.4 is stratification, not dosing.
+  - THIS IS NOT THE DRUG-SENTIMENT PIPELINE. treatment_outcome comes from variable
+    extraction. src/run_sentiment_pipeline.py has NEVER been run on this corpus.
+    These rates are not comparable to `sentiment` numbers from other PatientPunk
+    runs — different measurement, different units, different failure modes.
+  - EVERY PROPORTION GETS A WILSON CI AND ITS DENOMINATOR. No bare percentages.
+    Harm counts are reported as counts, never as rates.
+
+================================================================================
