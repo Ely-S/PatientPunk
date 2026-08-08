@@ -234,6 +234,39 @@ def build_outcome_table(records: list[dict]) -> pd.DataFrame:
 MENTION_FIELDS = ("treatment_outcome", "medications", "alternative_treatments")
 
 
+def mention_pairs(records: list[dict], *, require_author_hash: bool = False) -> pd.DataFrame:
+    """Distinct ``(author_hash, drug_class)`` pairs naming a study drug.
+
+    ``require_author_hash`` is used by raw-text joins, where a synthetic fallback ID
+    cannot be linked to a Reddit author.  The historical summary keeps its fallback
+    behavior so existing notebook counts remain unchanged.
+    """
+    pairs: set[tuple[str, str]] = set()
+    missing: list[int] = []
+    for i, rec in enumerate(records):
+        fields = rec.get("fields", {})
+        pid = rec.get("record_meta", {}).get("author_hash")
+        blob = [s for f in MENTION_FIELDS for s in _values(fields, f)]
+        classes = {classify_drug(s) for s in blob}
+        study_classes = classes.intersection(DRUGS)
+        if not study_classes:
+            continue
+        if not pid:
+            if require_author_hash:
+                missing.append(i)
+                continue
+            pid = f"_norow_{i}"
+        pairs.update((pid, drug_class) for drug_class in study_classes)
+    if missing:
+        raise ValueError(
+            f"{len(missing)} psychedelic-mentioning records lack author_hash; "
+            f"first record indexes: {missing[:5]}"
+        )
+    return pd.DataFrame(
+        sorted(pairs), columns=["author_hash", "drug_class"]
+    )
+
+
 def mention_cohort(records: list[dict]) -> pd.DataFrame:
     """Patients naming each drug ANYWHERE, not just in a scored outcome triple.
 
@@ -243,17 +276,17 @@ def mention_cohort(records: list[dict]) -> pd.DataFrame:
     not the same as reporting how it went, so every analysis below uses the
     smaller triple-level cohort; this function exists to show the gap explicitly.
     """
-    counts = {k: set() for k in DRUGS}
-    for i, rec in enumerate(records):
-        fields = rec.get("fields", {})
-        pid = rec.get("record_meta", {}).get("author_hash") or f"_norow_{i}"
-        blob = [s for f in MENTION_FIELDS for s in _values(fields, f)]
-        for s in blob:
-            c = classify_drug(s)
-            if c in counts:
-                counts[c].add(pid)
+    pairs = mention_pairs(records)
     return pd.DataFrame(
-        [{"drug_class": k, "patients_mentioning": len(v)} for k, v in counts.items()]
+        [
+            {
+                "drug_class": drug_class,
+                "patients_mentioning": int(
+                    pairs.loc[pairs["drug_class"] == drug_class, "author_hash"].nunique()
+                ),
+            }
+            for drug_class in DRUGS
+        ]
     ).sort_values("patients_mentioning", ascending=False).reset_index(drop=True)
 
 

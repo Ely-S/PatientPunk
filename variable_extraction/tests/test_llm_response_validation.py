@@ -24,8 +24,10 @@ def _cache_root(tmp_path, monkeypatch):
     cache.set_cache_enabled(None)
 
 
-def _client(choices):
-    create = lambda **_: SimpleNamespace(choices=choices)
+def _client(choices, *, usage=None, response_id=None):
+    create = lambda **_: SimpleNamespace(
+        choices=choices, usage=usage, id=response_id
+    )
     return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
 
 
@@ -58,6 +60,15 @@ def test_adapter_propagates_truncation_as_max_tokens():
     # end_turn here is what made truncation invisible.
     assert _create(_choice("{partial", "length")).stop_reason == "max_tokens"
     assert _create(_choice("{}", "stop")).stop_reason == "end_turn"
+
+
+def test_adapter_preserves_usage_metadata():
+    usage = SimpleNamespace(prompt_tokens=12, completion_tokens=7, cost=0.001)
+    response = _OpenAIMessages(
+        _client(_choice("{}"), usage=usage, response_id="generation-1")
+    ).create(model="m", messages=[{"role": "user", "content": "p"}])
+    assert response.usage is usage
+    assert response.id == "generation-1"
 
 
 def test_check_response_raises_on_truncated_and_empty():
