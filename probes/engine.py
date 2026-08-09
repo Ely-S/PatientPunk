@@ -680,10 +680,10 @@ def run_probe(
                 attempt_no = store.next_attempt_number(run.run_id, unit.unit_key)
                 # Read the cache once. A stored body that fails validation fails
                 # the same way on reread, and would consume the whole budget.
-                cached = store.cached_attempt(cache_key) if variant == 0 else None
+                cached = store.cached_response(cache_key) if variant == 0 else None
                 response = None
                 if cached is not None:
-                    raw = cached.response_body or ""
+                    raw = cached
                     cache_hits += 1
                     attempt = Attempt(
                         unit_key=unit.unit_key,

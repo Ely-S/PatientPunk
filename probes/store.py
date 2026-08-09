@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Iterator
@@ -25,7 +26,6 @@ from .models import (
     RunConfig,
     Unit,
     UnitStatus,
-    Usage,
 )
 
 
@@ -85,6 +85,9 @@ CREATE TABLE IF NOT EXISTS attempt (
     billing_uncertain   INTEGER NOT NULL DEFAULT 0,
     error               TEXT,
     recorded_at         TEXT NOT NULL,
+    -- ISO-8601 text does not sort by time across offsets, so cache lookup
+    -- orders on this normalized UTC value instead.
+    recorded_at_epoch   REAL NOT NULL,
     PRIMARY KEY (run_id, unit_key, attempt_no),
     FOREIGN KEY (run_id, unit_key)
         REFERENCES unit(run_id, unit_key)
@@ -103,12 +106,9 @@ CREATE TABLE IF NOT EXISTS claim (
         REFERENCES source_window(run_id, unit_key, source_window_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cohort_member_run
-    ON cohort_member(run_id, ordinal);
+-- cohort_member and source_window are already covered by their primary keys.
 CREATE INDEX IF NOT EXISTS idx_unit_run_status
     ON unit(run_id, status);
-CREATE INDEX IF NOT EXISTS idx_source_window_unit
-    ON source_window(run_id, unit_key, source_window_id);
 CREATE INDEX IF NOT EXISTS idx_attempt_cache_status
     ON attempt(cache_key, status);
 CREATE INDEX IF NOT EXISTS idx_claim_lookup
@@ -128,6 +128,14 @@ def text_sha256(text: str) -> str:
     return sha256(text.encode("utf-8")).hexdigest()
 
 
+def _epoch(moment: datetime) -> float:
+    """Return a comparable UTC timestamp, reading naive values as UTC."""
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.timestamp()
+
+
 class ProbeStore:
     """Transactional store for one probe's private runs.
 
@@ -139,7 +147,10 @@ class ProbeStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path)
+        # The engine dispatches provider calls concurrently, so the connection
+        # is shared across threads and serialized by `_lock` instead.
+        self.connection = sqlite3.connect(self.path, check_same_thread=False)
+        self._lock = threading.RLock()
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA journal_mode = WAL")
@@ -148,22 +159,29 @@ class ProbeStore:
 
     @classmethod
     def default_path(cls, probe: str, root: Path | None = None) -> Path:
-        """Return the gitignored default path for a probe database."""
+        """Return the gitignored default path for a probe database.
 
-        base = root or Path.cwd()
+        The default is anchored to the repository root, not the working
+        directory: a probe run from a subdirectory would otherwise write its
+        WAL sidecars outside the ignored `data/` tree, where quote-bearing
+        uncommitted pages could be staged by `git add -A`.
+        """
+
+        base = root or Path(__file__).resolve().parent.parent
         return base / "data" / "probes" / f"{probe}.db"
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
         """Commit a group of writes atomically, rolling back on failure."""
 
-        try:
-            yield self.connection
-        except Exception:
-            self.connection.rollback()
-            raise
-        else:
-            self.connection.commit()
+        with self._lock:
+            try:
+                yield self.connection
+            except Exception:
+                self.connection.rollback()
+                raise
+            else:
+                self.connection.commit()
 
     def close(self) -> None:
         """Close the connection and release SQLite resources."""
@@ -179,45 +197,47 @@ class ProbeStore:
     def save_probe_run(self, run: ProbeRun) -> None:
         """Insert an immutable run identity; reject accidental replacement."""
 
-        self.connection.execute(
-            """
-            INSERT INTO probe_run (
-                run_id, probe, spec_hash, cohort_hash, source_fingerprint,
-                unit_set_hash, config_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run.run_id,
-                run.probe,
-                run.spec_hash,
-                run.cohort_hash,
-                run.source_fingerprint,
-                run.unit_set_hash,
-                canonical_json(run.config.model_dump(mode="json")),
-                run.created_at.isoformat(),
-            ),
-        )
-        self.connection.commit()
+        with self.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO probe_run (
+                    run_id, probe, spec_hash, cohort_hash, source_fingerprint,
+                    unit_set_hash, config_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run.run_id,
+                    run.probe,
+                    run.spec_hash,
+                    run.cohort_hash,
+                    run.source_fingerprint,
+                    run.unit_set_hash,
+                    canonical_json(run.config.model_dump(mode="json")),
+                    run.created_at.isoformat(),
+                ),
+            )
 
     def has_probe_run(self, run_id: str) -> bool:
         """Return whether this exact immutable run has already been planned."""
 
-        row = self.connection.execute(
-            "SELECT 1 FROM probe_run WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                "SELECT 1 FROM probe_run WHERE run_id = ?", (run_id,)
+            ).fetchone()
         return row is not None
 
     def load_probe_run(self, run_id: str) -> ProbeRun | None:
         """Reload a persisted run so resuming needs no cohort or source access."""
 
-        row = self.connection.execute(
-            """
-            SELECT run_id, probe, spec_hash, cohort_hash, source_fingerprint,
-                   unit_set_hash, config_json, created_at
-            FROM probe_run WHERE run_id = ?
-            """,
-            (run_id,),
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT run_id, probe, spec_hash, cohort_hash, source_fingerprint,
+                       unit_set_hash, config_json, created_at
+                FROM probe_run WHERE run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()
         if row is None:
             return None
         return ProbeRun(
@@ -234,26 +254,28 @@ class ProbeStore:
     def load_units(self, run_id: str) -> list[Unit]:
         """Reload planned units, including their private source windows."""
 
-        unit_rows = self.connection.execute(
-            """
-            SELECT unit_key, author_hash, target, character_count, status
-            FROM unit
-            WHERE run_id = ?
-            ORDER BY unit_key
-            """,
-            (run_id,),
-        ).fetchall()
+        with self._lock:
+            unit_rows = self.connection.execute(
+                """
+                SELECT unit_key, author_hash, target, character_count, status
+                FROM unit
+                WHERE run_id = ?
+                ORDER BY unit_key
+                """,
+                (run_id,),
+            ).fetchall()
         units: list[Unit] = []
         for row in unit_rows:
-            window_rows = self.connection.execute(
-                """
-                SELECT source_window_id, source_type, source_id, text
-                FROM source_window
-                WHERE run_id = ? AND unit_key = ?
-                ORDER BY source_window_id
-                """,
-                (run_id, row["unit_key"]),
-            ).fetchall()
+            with self._lock:
+                window_rows = self.connection.execute(
+                    """
+                    SELECT source_window_id, source_type, source_id, text
+                    FROM source_window
+                    WHERE run_id = ? AND unit_key = ?
+                    ORDER BY source_window_id
+                    """,
+                    (run_id, row["unit_key"]),
+                ).fetchall()
             units.append(
                 Unit(
                     unit_key=row["unit_key"],
@@ -339,13 +361,18 @@ class ProbeStore:
         """Update one unit lifecycle state without rewriting its inputs."""
 
         with self.transaction() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE unit SET status = ?
                 WHERE run_id = ? AND unit_key = ?
                 """,
                 (status.value, run_id, unit_key),
             )
+            # A silent no-op would leave the unit `running` forever, and resume
+            # is a query over unit status: the engine would re-dispatch it on
+            # every resume and pay for it again.
+            if cursor.rowcount != 1:
+                raise KeyError(f"no unit {unit_key!r} in run {run_id!r}")
 
     def record_attempt(self, run_id: str, attempt: Attempt) -> None:
         """Write a response or transport failure before validating it."""
@@ -361,8 +388,8 @@ class ProbeStore:
                 INSERT INTO attempt (
                     run_id, unit_key, attempt_no, status, response_body,
                     response_sha256, cache_key, usage_json, cache_hit,
-                    billing_uncertain, error, recorded_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    billing_uncertain, error, recorded_at, recorded_at_epoch
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -377,6 +404,7 @@ class ProbeStore:
                     int(attempt.billing_uncertain),
                     attempt.error,
                     attempt.recorded_at.isoformat(),
+                    _epoch(attempt.recorded_at),
                 ),
             )
 
@@ -392,58 +420,53 @@ class ProbeStore:
         """Advance a received attempt after validation succeeds or fails."""
 
         with self.transaction() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE attempt SET status = ?, error = COALESCE(?, error)
                 WHERE run_id = ? AND unit_key = ? AND attempt_no = ?
                 """,
                 (status.value, error, run_id, unit_key, attempt_no),
             )
+            if cursor.rowcount != 1:
+                raise KeyError(
+                    f"no attempt {attempt_no} for unit {unit_key!r} in run {run_id!r}"
+                )
 
     def next_attempt_number(self, run_id: str, unit_key: str) -> int:
         """Return the next append-only attempt number for a unit."""
 
-        row = self.connection.execute(
-            """
-            SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next_attempt
-            FROM attempt
-            WHERE run_id = ? AND unit_key = ?
-            """,
-            (run_id, unit_key),
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next_attempt
+                FROM attempt
+                WHERE run_id = ? AND unit_key = ?
+                """,
+                (run_id, unit_key),
+            ).fetchone()
         return int(row["next_attempt"])
 
-    def cached_attempt(self, cache_key: str) -> Attempt | None:
-        """Return the latest accepted response for a request cache key."""
+    def cached_response(self, cache_key: str) -> str | None:
+        """Return the latest accepted response body for a request cache key.
 
-        row = self.connection.execute(
-            """
-            SELECT unit_key, attempt_no, status, response_body,
-                   response_sha256, cache_key, usage_json, cache_hit,
-                   billing_uncertain, error, recorded_at
-            FROM attempt
-            WHERE cache_key = ? AND status = ?
-            ORDER BY recorded_at DESC
-            LIMIT 1
-            """,
-            (cache_key, AttemptStatus.ACCEPTED.value),
-        ).fetchone()
-        if row is None:
-            return None
-        usage = Usage.model_validate(json.loads(row["usage_json"])) if row["usage_json"] else None
-        return Attempt(
-            unit_key=row["unit_key"],
-            attempt_no=row["attempt_no"],
-            status=AttemptStatus(row["status"]),
-            response_body=row["response_body"],
-            response_sha256=row["response_sha256"],
-            cache_key=row["cache_key"],
-            usage=usage,
-            cache_hit=bool(row["cache_hit"]),
-            billing_uncertain=bool(row["billing_uncertain"]),
-            error=row["error"],
-            recorded_at=datetime.fromisoformat(row["recorded_at"]),
-        )
+        Only the body is returned. A whole ``Attempt`` would carry the original
+        row's ``unit_key``, ``attempt_no`` and ``cache_hit=False``, and a caller
+        that recorded it unchanged would either collide on the attempt primary
+        key or book a cached response as a fresh billed call.
+        """
+
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT response_body
+                FROM attempt
+                WHERE cache_key = ? AND status = ?
+                ORDER BY recorded_at_epoch DESC, rowid DESC
+                LIMIT 1
+                """,
+                (cache_key, AttemptStatus.ACCEPTED.value),
+            ).fetchone()
+        return row["response_body"] if row is not None else None
 
     def save_claim(self, run_id: str, claim: Claim) -> None:
         """Persist one normalized claim after engine and probe validation."""
