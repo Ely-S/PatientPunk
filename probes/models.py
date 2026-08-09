@@ -20,6 +20,17 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class RawModel(BaseModel):
+    """Strict, but never rewrites strings.
+
+    Models carrying private payloads must store exactly the bytes they were
+    given: a stripped body no longer matches its checksum, and stripped source
+    text no longer matches the corpus it was selected from.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class UnitStatus(StrEnum):
     """Lifecycle state of one bounded provider input."""
 
@@ -48,7 +59,7 @@ class CohortMember(StrictModel):
     target: str | None = None
 
 
-class SourceWindow(StrictModel):
+class SourceWindow(RawModel):
     """Private source text supplied to a provider for one unit.
 
     ``source_window_id`` is stable for the same source identity and normalized
@@ -124,7 +135,7 @@ class Usage(StrictModel):
     provider_cost: float | None = Field(default=None, ge=0)
 
 
-class Attempt(StrictModel):
+class Attempt(RawModel):
     """Auditable provider result recorded before claim validation.
 
     ``response_body`` is private raw provider output, including malformed JSON.
