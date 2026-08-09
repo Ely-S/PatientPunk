@@ -26,7 +26,6 @@ from .models import (
     RunConfig,
     Unit,
     UnitStatus,
-    Usage,
 )
 
 
@@ -221,22 +220,24 @@ class ProbeStore:
     def has_probe_run(self, run_id: str) -> bool:
         """Return whether this exact immutable run has already been planned."""
 
-        row = self.connection.execute(
-            "SELECT 1 FROM probe_run WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                "SELECT 1 FROM probe_run WHERE run_id = ?", (run_id,)
+            ).fetchone()
         return row is not None
 
     def load_probe_run(self, run_id: str) -> ProbeRun | None:
         """Reload a persisted run so resuming needs no cohort or source access."""
 
-        row = self.connection.execute(
-            """
-            SELECT run_id, probe, spec_hash, cohort_hash, source_fingerprint,
-                   unit_set_hash, config_json, created_at
-            FROM probe_run WHERE run_id = ?
-            """,
-            (run_id,),
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT run_id, probe, spec_hash, cohort_hash, source_fingerprint,
+                       unit_set_hash, config_json, created_at
+                FROM probe_run WHERE run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()
         if row is None:
             return None
         return ProbeRun(
@@ -253,26 +254,28 @@ class ProbeStore:
     def load_units(self, run_id: str) -> list[Unit]:
         """Reload planned units, including their private source windows."""
 
-        unit_rows = self.connection.execute(
-            """
-            SELECT unit_key, author_hash, target, character_count, status
-            FROM unit
-            WHERE run_id = ?
-            ORDER BY unit_key
-            """,
-            (run_id,),
-        ).fetchall()
+        with self._lock:
+            unit_rows = self.connection.execute(
+                """
+                SELECT unit_key, author_hash, target, character_count, status
+                FROM unit
+                WHERE run_id = ?
+                ORDER BY unit_key
+                """,
+                (run_id,),
+            ).fetchall()
         units: list[Unit] = []
         for row in unit_rows:
-            window_rows = self.connection.execute(
-                """
-                SELECT source_window_id, source_type, source_id, text
-                FROM source_window
-                WHERE run_id = ? AND unit_key = ?
-                ORDER BY source_window_id
-                """,
-                (run_id, row["unit_key"]),
-            ).fetchall()
+            with self._lock:
+                window_rows = self.connection.execute(
+                    """
+                    SELECT source_window_id, source_type, source_id, text
+                    FROM source_window
+                    WHERE run_id = ? AND unit_key = ?
+                    ORDER BY source_window_id
+                    """,
+                    (run_id, row["unit_key"]),
+                ).fetchall()
             units.append(
                 Unit(
                     unit_key=row["unit_key"],
@@ -432,25 +435,30 @@ class ProbeStore:
     def next_attempt_number(self, run_id: str, unit_key: str) -> int:
         """Return the next append-only attempt number for a unit."""
 
-        row = self.connection.execute(
-            """
-            SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next_attempt
-            FROM attempt
-            WHERE run_id = ? AND unit_key = ?
-            """,
-            (run_id, unit_key),
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next_attempt
+                FROM attempt
+                WHERE run_id = ? AND unit_key = ?
+                """,
+                (run_id, unit_key),
+            ).fetchone()
         return int(row["next_attempt"])
 
-    def cached_attempt(self, cache_key: str) -> Attempt | None:
-        """Return the latest accepted response for a request cache key."""
+    def cached_response(self, cache_key: str) -> str | None:
+        """Return the latest accepted response body for a request cache key.
+
+        Only the body is returned. A whole ``Attempt`` would carry the original
+        row's ``unit_key``, ``attempt_no`` and ``cache_hit=False``, and a caller
+        that recorded it unchanged would either collide on the attempt primary
+        key or book a cached response as a fresh billed call.
+        """
 
         with self._lock:
             row = self.connection.execute(
                 """
-                SELECT unit_key, attempt_no, status, response_body,
-                       response_sha256, cache_key, usage_json, cache_hit,
-                       billing_uncertain, error, recorded_at
+                SELECT response_body
                 FROM attempt
                 WHERE cache_key = ? AND status = ?
                 ORDER BY recorded_at_epoch DESC, rowid DESC
@@ -458,22 +466,7 @@ class ProbeStore:
                 """,
                 (cache_key, AttemptStatus.ACCEPTED.value),
             ).fetchone()
-        if row is None:
-            return None
-        usage = Usage.model_validate(json.loads(row["usage_json"])) if row["usage_json"] else None
-        return Attempt(
-            unit_key=row["unit_key"],
-            attempt_no=row["attempt_no"],
-            status=AttemptStatus(row["status"]),
-            response_body=row["response_body"],
-            response_sha256=row["response_sha256"],
-            cache_key=row["cache_key"],
-            usage=usage,
-            cache_hit=bool(row["cache_hit"]),
-            billing_uncertain=bool(row["billing_uncertain"]),
-            error=row["error"],
-            recorded_at=datetime.fromisoformat(row["recorded_at"]),
-        )
+        return row["response_body"] if row is not None else None
 
     def save_claim(self, run_id: str, claim: Claim) -> None:
         """Persist one normalized claim after engine and probe validation."""
