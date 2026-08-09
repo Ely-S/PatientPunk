@@ -202,6 +202,11 @@ class LLMResponseError(RuntimeError):
     returns -- never persists it.
     """
 
+    def __init__(self, message: str, *, usage=None, response_id: str | None = None):
+        super().__init__(message)
+        self.usage = usage
+        self.response_id = response_id
+
 
 def response_text(response) -> str:
     """Concatenate text content blocks; skip thinking/tool blocks without ``.text``.
@@ -241,9 +246,20 @@ def check_response(response, model: str = ""):
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
+    def __init__(
+        self,
+        text: str,
+        stop_reason: str = "end_turn",
+        *,
+        usage=None,
+        response_id: str | None = None,
+    ) -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
+        # Preserve accounting metadata from OpenAI-compatible providers.  Study
+        # pipelines can inspect it without changing the common response-text API.
+        self.usage = usage
+        self.id = response_id
 
 
 class _OpenAIMessages:
@@ -251,7 +267,9 @@ class _OpenAIMessages:
         self._client = client
 
     def create(self, *, model, messages, max_tokens=1024, system=None,
-               temperature=0.0, service_tier: str | None = None, **_ignored):
+               temperature=0.0, service_tier: str | None = None,
+               reasoning_effort: str | None = None,
+               provider_routing: dict | None = None, **_ignored):
         oai_messages = []
         if system:
             if isinstance(system, str):
@@ -264,21 +282,44 @@ class _OpenAIMessages:
         for m in messages:
             oai_messages.append({"role": m["role"], "content": m["content"]})
         tier = {"service_tier": service_tier} if service_tier else {}
+        # OpenRouter's canonical spellings are `reasoning` and `provider` body
+        # objects; sending them through extra_body keeps this working on openai SDK
+        # versions that do not expose the kwargs.  Reasoning tokens bill as output
+        # tokens, so callers must budget max_tokens for them.
+        body: dict = {}
+        if reasoning_effort:
+            body["reasoning"] = {"effort": reasoning_effort}
+        if provider_routing:
+            body["provider"] = provider_routing
+        extra = {"extra_body": body} if body else {}
         resp = self._client.chat.completions.create(
             model=model, messages=oai_messages,
-            max_tokens=max_tokens, temperature=temperature, **tier,
+            max_tokens=max_tokens, temperature=temperature, **tier, **extra,
         )
         # A degenerate reply is a failure, not an empty answer: raise so callers
         # retry and the response cache never stores it.
         if not resp.choices:
-            raise LLMResponseError(f"{model}: provider returned no choices")
+            raise LLMResponseError(
+                f"{model}: provider returned no choices",
+                usage=getattr(resp, "usage", None),
+                response_id=getattr(resp, "id", None),
+            )
         choice = resp.choices[0]
         if choice.message.content is None:
-            raise LLMResponseError(f"{model}: provider returned null content")
+            raise LLMResponseError(
+                f"{model}: provider returned null content",
+                usage=getattr(resp, "usage", None),
+                response_id=getattr(resp, "id", None),
+            )
         # OpenAI spells truncation "length"; normalize to the Anthropic name so
         # check_response() works the same on both backends.
         stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
-        return _AnthropicShapedResponse(choice.message.content, stop_reason)
+        return _AnthropicShapedResponse(
+            choice.message.content,
+            stop_reason,
+            usage=getattr(resp, "usage", None),
+            response_id=getattr(resp, "id", None),
+        )
 
 
 class _OpenAIAdapter:
