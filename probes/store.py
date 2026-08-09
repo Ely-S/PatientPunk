@@ -198,6 +198,57 @@ class ProbeStore:
         )
         self.connection.commit()
 
+    def has_probe_run(self, run_id: str) -> bool:
+        """Return whether this exact immutable run has already been planned."""
+
+        row = self.connection.execute(
+            "SELECT 1 FROM probe_run WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        return row is not None
+
+    def load_units(self, run_id: str) -> list[Unit]:
+        """Reload planned units, including their private source windows."""
+
+        unit_rows = self.connection.execute(
+            """
+            SELECT unit_key, author_hash, target, character_count, status
+            FROM unit
+            WHERE run_id = ?
+            ORDER BY unit_key
+            """,
+            (run_id,),
+        ).fetchall()
+        units: list[Unit] = []
+        for row in unit_rows:
+            window_rows = self.connection.execute(
+                """
+                SELECT source_window_id, source_type, source_id, text
+                FROM source_window
+                WHERE run_id = ? AND unit_key = ?
+                ORDER BY source_window_id
+                """,
+                (run_id, row["unit_key"]),
+            ).fetchall()
+            units.append(
+                Unit(
+                    unit_key=row["unit_key"],
+                    author_hash=row["author_hash"],
+                    target=row["target"],
+                    windows=[
+                        {
+                            "source_window_id": window["source_window_id"],
+                            "source_type": window["source_type"],
+                            "source_id": window["source_id"],
+                            "text": window["text"],
+                        }
+                        for window in window_rows
+                    ],
+                    character_count=row["character_count"],
+                    status=UnitStatus(row["status"]),
+                )
+            )
+        return units
+
     def save_cohort_members(
         self, run_id: str, members: list[CohortMember]
     ) -> None:
@@ -323,6 +374,19 @@ class ProbeStore:
                 """,
                 (status.value, error, run_id, unit_key, attempt_no),
             )
+
+    def next_attempt_number(self, run_id: str, unit_key: str) -> int:
+        """Return the next append-only attempt number for a unit."""
+
+        row = self.connection.execute(
+            """
+            SELECT COALESCE(MAX(attempt_no), 0) + 1 AS next_attempt
+            FROM attempt
+            WHERE run_id = ? AND unit_key = ?
+            """,
+            (run_id, unit_key),
+        ).fetchone()
+        return int(row["next_attempt"])
 
     def cached_attempt(self, cache_key: str) -> Attempt | None:
         """Return the latest accepted response for a request cache key."""

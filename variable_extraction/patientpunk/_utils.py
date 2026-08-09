@@ -269,7 +269,7 @@ class _OpenAIMessages:
     def create(self, *, model, messages, max_tokens=1024, system=None,
                temperature=0.0, service_tier: str | None = None,
                reasoning_effort: str | None = None,
-               provider_routing: dict | None = None, **_ignored):
+               provider_routing: dict | None = None):
         oai_messages = []
         if system:
             if isinstance(system, str):
