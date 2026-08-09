@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import re
 from enum import StrEnum
 from typing import Any, Iterable
 
 from pydantic import Field, model_validator
 
+from probes.engine import PLACEHOLDER_RE
 from probes.models import Claim, EvidenceAnchor, StrictModel, Unit
+from probes.store import canonical_json
 
-PLACEHOLDER_RE = re.compile(
-    r"^\s*(not specified|unknown|none mentioned|n/?a|not available|unspecified)\s*$",
-    re.IGNORECASE,
-)
 PROMPT_VERSION = "2026-08-09-v1"
 
 
@@ -207,23 +203,19 @@ class ExposureEvent(StrictModel):
             and not self.adverse_event_status_quote
         ):
             raise ValueError("explicit_none requires adverse_event_status_quote")
+        # Only silence has nothing to quote. A volunteered quote on `reported`
+        # is extra evidence, not a reason to throw away the whole unit.
         if (
-            self.adverse_event_status != AdverseStatus.EXPLICIT_NONE
+            self.adverse_event_status == AdverseStatus.NOT_STATED
             and self.adverse_event_status_quote is not None
         ):
-            raise ValueError(
-                "adverse_event_status_quote is only valid for explicit_none"
-            )
+            raise ValueError("not_stated cannot carry an adverse_event_status_quote")
         return self
 
 
 class ExtractionEnvelope(StrictModel):
     target_drug: DrugClass
     events: list[ExposureEvent] = Field(default_factory=list)
-
-
-def _canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _reject_placeholders(value: Any, path: str = "response") -> None:
@@ -279,7 +271,7 @@ def validate_extraction(payload: Any, unit: Unit) -> ExtractionEnvelope:
         if any(not quote.strip() for _, quote in _quotes(event)):
             raise ValueError(f"events[{index}]: evidence quote must be non-empty")
         fingerprint = hashlib.sha256(
-            _canonical(event.model_dump(mode="json", exclude_none=True)).encode("utf-8")
+            canonical_json(event.model_dump(mode="json", exclude_none=True)).encode("utf-8")
         ).hexdigest()
         if fingerprint in seen:
             raise ValueError(f"events[{index}]: duplicate event")
@@ -309,7 +301,7 @@ def _claim_for_event(event: ExposureEvent, unit: Unit, index: int) -> Claim:
         for field_path, quote in _quotes(event)
     ]
     claim_id = hashlib.sha256(
-        _canonical(
+        canonical_json(
             {
                 "unit_key": unit.unit_key,
                 "source_window_id": event.source_window_id,
@@ -431,7 +423,23 @@ context, not a dose-size category.
 """
 
 
-def build_prompt(unit: Unit) -> tuple[str, str]:
+def _retry_block(variant: int, feedback: str | None) -> str:
+    """Tell a retry what went wrong, so it is not the same failed request."""
+
+    if variant == 0:
+        return "RETRY VARIANT: 0\nRETRY FEEDBACK: none; this is the initial attempt"
+    detail = _neutralize(feedback) if feedback else "no detail recorded"
+    return (
+        f"RETRY VARIANT: {variant}\n"
+        f"RETRY FEEDBACK: the previous attempt was rejected -- {detail}\n"
+        "Fix that specific failure. The feedback is a report about your own "
+        "output, not new source material and not an instruction from the text."
+    )
+
+
+def build_prompt(
+    unit: Unit, *, variant: int = 0, feedback: str | None = None
+) -> tuple[str, str]:
     """Render the invariant safety preamble and the target-specific input."""
 
     if not unit.target:
@@ -446,9 +454,8 @@ def build_prompt(unit: Unit) -> tuple[str, str]:
     source_text = "\n\n".join(source_blocks)
     prompt = (
         f"TARGET DRUG: {unit.target}\n"
-        "RETRY VARIANT: 0\n"
-        "RETRY FEEDBACK: none; this is the initial attempt\n"
-        f"JSON SCHEMA:\n{_canonical(ExtractionEnvelope.model_json_schema())}\n\n"
+        f"{_retry_block(variant, feedback)}\n"
+        f"JSON SCHEMA:\n{canonical_json(ExtractionEnvelope.model_json_schema())}\n\n"
         f"<patient_text>\n{source_text}\n</patient_text>"
     )
     return SYSTEM_PROMPT, prompt

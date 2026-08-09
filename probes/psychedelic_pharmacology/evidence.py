@@ -12,12 +12,12 @@ import sqlite3
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote as url_quote
 
+from probes.engine import read_only_connection
 from probes.models import CohortMember, SourceWindow
+from probes.store import text_sha256
 
 
-MODE = "anchored"
 PARAGRAPH_RE = re.compile(r"(?:\r?\n){2,}")
 BOTLIKE_RE = re.compile(r"\?#\d+:\s*\[|^\s*\|.*\|.*\|", re.IGNORECASE | re.MULTILINE)
 BOT_AUTHORS = frozenset(
@@ -59,15 +59,19 @@ TARGETS: dict[str, tuple[str, re.Pattern[str]]] = {
 
 
 def _author_hash(username: str) -> str:
+    """Hash a Reddit username the way the corpus did.
+
+    The aggregation step that produced ``treatment_reports.user_id`` hashed the
+    username verbatim -- no case folding, no salt -- so raw source text joins
+    back to a cohort row on exactly this value. Changing it silently empties
+    every cohort.
+    """
+
     return hashlib.sha256(username.encode("utf-8")).hexdigest()
 
 
-def _text_sha256(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def _window_id(source_type: str, source_id: str, text: str) -> str:
-    payload = f"{source_type}\0{source_id}\0{_text_sha256(text)}"
+    payload = f"{source_type}\0{source_id}\0{text_sha256(text)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -131,10 +135,7 @@ def collect_windows(
     del config  # The retrieval contract is intentionally deterministic in V1.
     wanted = {(member.author_hash, member.target) for member in members}
     windows: dict[tuple[str, str | None], list[SourceWindow]] = defaultdict(list)
-    connection = sqlite3.connect(
-        f"file:{url_quote(str(source_db.resolve()), safe='/')}?mode=ro", uri=True
-    )
-    connection.execute("PRAGMA query_only = ON")
+    connection = read_only_connection(source_db)
     try:
         for target, (fts_query, term) in TARGETS.items():
             for source_type in ("comment", "post"):
@@ -165,7 +166,7 @@ def collect_windows(
 
     for key, values in windows.items():
         unique = {
-            (window.source_type, window.source_id, _text_sha256(window.text)): window
+            (window.source_type, window.source_id, text_sha256(window.text)): window
             for window in values
         }
         windows[key] = sorted(
