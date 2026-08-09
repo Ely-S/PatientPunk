@@ -4,7 +4,10 @@ Probe packages provide only three things:
 
 * ``cohort.sql`` — a read-only query returning ``author_hash`` and ``target``;
 * ``evidence.collect_windows`` — source retrieval and deterministic windows;
-* ``claim.build_prompt`` and ``claim.parse_claims`` — domain prompt and schema.
+* ``claim.build_prompt(unit, *, variant, feedback)`` and ``claim.parse_claims``
+  — domain prompt and schema. ``variant`` is the zero-based attempt index and
+  ``feedback`` the previous validation error, so a retry can differ from the
+  attempt that failed.
 
 Everything else here is shared: identity, bounded units, private response
 storage, mechanical validation, cache reuse, and resumable execution.
@@ -16,7 +19,6 @@ import argparse
 import hashlib
 import importlib
 import json
-import os
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -45,7 +47,18 @@ PLACEHOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 PROBE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+PARAGRAPH_RE = re.compile(r"\n{2,}")
 MAX_PROVIDER_ATTEMPTS = 3
+
+# Which request settings each provider can actually carry. ``get_llm_client``
+# routes "anthropic" and "openrouter" through the Anthropic SDK, which has no
+# parameter to put any of these in; only the OpenAI-compatible adapter does.
+# A setting that changes the answer must never be dropped on the way out.
+PROVIDER_EXTRAS: dict[str, frozenset[str]] = {
+    "openai": frozenset({"service_tier", "reasoning_effort", "provider_routing"}),
+    "anthropic": frozenset(),
+    "openrouter": frozenset(),
+}
 
 
 @dataclass(frozen=True)
@@ -123,8 +136,12 @@ def load_probe(name: str) -> LoadedProbe:
     )
 
 
-def _read_only_connection(path: Path) -> sqlite3.Connection:
-    """Open SQLite read-only and reject write operations at the authorizer."""
+def read_only_connection(path: Path) -> sqlite3.Connection:
+    """Open SQLite read-only and reject write operations at the authorizer.
+
+    Shared with probe evidence adapters: every database a probe reads is an
+    input, so no probe should be able to write one even by accident.
+    """
 
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -180,7 +197,7 @@ def resolve_cohort(path: Path, sql: str) -> list[CohortMember]:
     """Execute and normalize a read-only cohort query."""
 
     statement = _validate_cohort_sql(sql)
-    connection = _read_only_connection(path)
+    connection = read_only_connection(path)
     try:
         cursor = connection.execute(statement)
         columns = [description[0].lower() for description in cursor.description or ()]
@@ -232,6 +249,62 @@ def _collect_windows(
     return windows
 
 
+def _split_text(text: str, max_chars: int) -> list[str]:
+    """Cut text into <= max_chars pieces, preferring paragraph boundaries."""
+
+    pieces: list[str] = []
+    current = ""
+    for paragraph in PARAGRAPH_RE.split(text):
+        if not paragraph:
+            continue
+        candidate = f"{current}\n\n{paragraph}" if current else paragraph
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            pieces.append(current)
+            current = ""
+        if len(paragraph) <= max_chars:
+            current = paragraph
+            continue
+        # A single paragraph over budget has no boundary to respect.
+        for start in range(0, len(paragraph), max_chars):
+            current = paragraph[start : start + max_chars]
+            if len(current) == max_chars:
+                pieces.append(current)
+                current = ""
+    if current:
+        pieces.append(current)
+    return pieces
+
+
+def _split_window(window: SourceWindow, max_chars: int) -> list[SourceWindow]:
+    """Divide an oversized window rather than abandoning the whole plan.
+
+    One long post must not cost a run every other unit. Parts are content
+    addressed like any other window, so replanning reproduces the same ids.
+    """
+
+    if len(window.text) <= max_chars:
+        return [window]
+    pieces = _split_text(window.text, max_chars)
+    return [
+        SourceWindow(
+            source_window_id=_sha256(
+                {
+                    "parent": window.source_window_id,
+                    "part": index,
+                    "text_sha256": text_sha256(piece),
+                }
+            ),
+            source_type=window.source_type,
+            source_id=window.source_id,
+            text=piece,
+        )
+        for index, piece in enumerate(pieces)
+    ]
+
+
 def _build_units(
     probe: LoadedProbe,
     members: list[CohortMember],
@@ -240,8 +313,14 @@ def _build_units(
     config: RunConfig,
     max_chars: int,
 ) -> list[Unit]:
-    """Pack each member's evidence windows without crossing member boundaries."""
+    """Pack each member's evidence windows without crossing member boundaries.
 
+    ``max_chars`` bounds the source text a unit carries, not the rendered
+    prompt: the schema and preamble a probe adds are its own budget.
+    """
+
+    if max_chars < 1:
+        raise ValueError("max_chars must be positive")
     build_prompt = getattr(probe.claim, "build_prompt", None)
     if build_prompt is None:
         raise AttributeError(f"probe {probe.name!r} must define claim.build_prompt")
@@ -252,17 +331,14 @@ def _build_units(
         batch: list[SourceWindow] = []
         batch_chars = 0
         for window in windows:
-            size = len(window.text)
-            if size > max_chars:
-                raise ValueError(
-                    f"source window {window.source_window_id!r} exceeds max_chars={max_chars}"
-                )
-            if batch and batch_chars + 2 + size > max_chars:
-                batches.append(batch)
-                batch = []
-                batch_chars = 0
-            batch.append(window)
-            batch_chars += size + (2 if len(batch) > 1 else 0)
+            for part in _split_window(window, max_chars):
+                size = len(part.text)
+                if batch and batch_chars + size > max_chars:
+                    batches.append(batch)
+                    batch = []
+                    batch_chars = 0
+                batch.append(part)
+                batch_chars += size
         if batch:
             batches.append(batch)
 
@@ -274,7 +350,9 @@ def _build_units(
                 windows=batch_windows,
                 character_count=sum(len(window.text) for window in batch_windows),
             )
-            system, prompt = build_prompt(provisional)
+            # Identity is always the first-attempt prompt: a retry asks the same
+            # question, so retry wording must not change what the unit is.
+            system, prompt = build_prompt(provisional, variant=0, feedback=None)
             identity = {
                 "author_hash": member.author_hash,
                 "target": member.target,
@@ -346,6 +424,7 @@ def plan_probe(
 ) -> PlanResult:
     """Resolve a cohort and persist a no-provider execution plan."""
 
+    validate_config(config)
     probe = load_probe(probe_name)
     members = resolve_cohort(cohort_db, probe.cohort_sql)
     evidence_config = dict(config.evidence_config)
@@ -357,9 +436,10 @@ def plan_probe(
         config=config,
         max_chars=max_chars,
     )
+    # Content, not location: moving the source database must not mint a new run
+    # identity and orphan the work already done against it.
     source_fingerprint = _sha256(
         {
-            "source_db": str(source_db.resolve()),
             "source_sha256": _sha256_file(source_db),
             "windows": {
                 f"{author}:{target}": [
@@ -388,10 +468,10 @@ def plan_probe(
 
 
 def _reject_placeholders(value: Any, path: str = "values") -> None:
-    """Reject placeholder values in domain payloads, but not evidence quotes."""
+    """Reject placeholder strings anywhere in a claim's domain payload."""
 
     if isinstance(value, str):
-        if not path.endswith(".quote") and PLACEHOLDER_RE.fullmatch(value):
+        if PLACEHOLDER_RE.fullmatch(value):
             raise ValueError(f"{path}: placeholder value is forbidden")
     elif isinstance(value, dict):
         for key, child in value.items():
@@ -477,21 +557,50 @@ def _request_key(
     )
 
 
-def _provider_kwargs(config: RunConfig, system: str, prompt: str) -> dict[str, Any]:
-    """Build the common Anthropic-shaped request without silent kwargs."""
+def _requested_extras(config: RunConfig) -> dict[str, Any]:
+    """Return only the optional request settings this config actually sets."""
 
-    kwargs: dict[str, Any] = {
+    candidates = {
+        "service_tier": config.service_tier,
+        "reasoning_effort": config.reasoning_effort,
+        "provider_routing": config.provider_routing or None,
+    }
+    return {name: value for name, value in candidates.items() if value}
+
+
+def validate_config(config: RunConfig) -> RunConfig:
+    """Refuse a config whose settings cannot reach the chosen provider.
+
+    These values are hashed into the run identity and the cache key. Accepting
+    one the transport will drop would record a run that never happened.
+    """
+
+    supported = PROVIDER_EXTRAS.get(config.provider)
+    if supported is None:
+        raise ValueError(
+            f"unknown provider {config.provider!r}; expected one of "
+            f"{sorted(PROVIDER_EXTRAS)}"
+        )
+    unsupported = sorted(set(_requested_extras(config)) - supported)
+    if unsupported:
+        raise ValueError(
+            f"provider {config.provider!r} cannot send {unsupported}; these "
+            "change the answer and must not be dropped silently"
+        )
+    return config
+
+
+def _provider_kwargs(config: RunConfig, system: str, prompt: str) -> dict[str, Any]:
+    """Build the Anthropic-shaped request, carrying every setting it declares."""
+
+    return {
         "model": config.model,
         "max_tokens": config.max_tokens,
         "temperature": config.temperature,
         "system": system,
         "messages": [{"role": "user", "content": prompt}],
+        **_requested_extras(validate_config(config)),
     }
-    if config.provider == "openai":
-        kwargs["service_tier"] = config.service_tier
-        kwargs["reasoning_effort"] = config.reasoning_effort
-        kwargs["provider_routing"] = config.provider_routing
-    return kwargs
 
 
 def _is_transient(error: BaseException) -> bool:
@@ -502,51 +611,77 @@ def _is_transient(error: BaseException) -> bool:
 def run_probe(
     probe_name: str,
     *,
-    cohort_db: Path,
-    source_db: Path,
+    cohort_db: Path | None = None,
+    source_db: Path | None = None,
     output_db: Path | None = None,
-    config: RunConfig,
+    config: RunConfig | None = None,
     max_chars: int = 6_000,
     confirm_paid_run: bool = False,
     limit: int | None = None,
+    run_id: str | None = None,
 ) -> RunResult:
-    """Execute a planned run, resuming incomplete units transactionally."""
+    """Execute a planned run, resuming incomplete units transactionally.
+
+    ``run_id`` resumes a persisted run directly. The cohort query, the evidence
+    sweep, and the source checksum only rediscover an identity already on disk,
+    and on a raw corpus that rediscovery is the expensive part of a resume.
+    """
 
     if not confirm_paid_run:
         raise PermissionError("run requires --confirm-paid-run")
-    plan = plan_probe(
-        probe_name,
-        cohort_db=cohort_db,
-        source_db=source_db,
-        output_db=output_db,
-        config=config,
-        max_chars=max_chars,
-    )
+    db_path = output_db or ProbeStore.default_path(probe_name)
+    if run_id is not None:
+        with ProbeStore(db_path) as store:
+            run = store.load_probe_run(run_id)
+            if run is None:
+                raise LookupError(f"no run {run_id!r} in {db_path}")
+            units = store.load_units(run_id)
+        # The stored config decides prompts and cache keys. A flag must not
+        # re-aim a run that is already partly paid for.
+        config = run.config
+    else:
+        if cohort_db is None or source_db is None:
+            raise ValueError("run needs --cohort-db and --source-db, or --run-id")
+        if config is None:
+            raise ValueError("run needs a config")
+        plan = plan_probe(
+            probe_name,
+            cohort_db=cohort_db,
+            source_db=source_db,
+            output_db=output_db,
+            config=config,
+            max_chars=max_chars,
+        )
+        run, units = plan.run, plan.units
+    validate_config(config)
     probe = load_probe(probe_name)
     parser = getattr(probe.claim, "parse_claims", None)
     if parser is None:
         raise AttributeError(f"probe {probe_name!r} must define claim.parse_claims")
-    db_path = output_db or ProbeStore.default_path(probe_name)
     attempted = completed = failed = cache_hits = 0
     client = None
     with ProbeStore(db_path) as store:
-        pending = [
-            unit for unit in plan.units
-            if unit.status != UnitStatus.COMPLETE
-        ]
+        pending = [unit for unit in units if unit.status != UnitStatus.COMPLETE]
         if limit is not None:
             pending = pending[:limit]
         for unit in pending:
             attempted += 1
-            store.set_unit_status(plan.run.run_id, unit.unit_key, UnitStatus.RUNNING)
-            system, prompt = probe.claim.build_prompt(unit)
-            cache_key = _request_key(config, system, prompt)
+            store.set_unit_status(run.run_id, unit.unit_key, UnitStatus.RUNNING)
             success = False
-            for _ in range(MAX_PROVIDER_ATTEMPTS):
-                attempt_no = store.next_attempt_number(plan.run.run_id, unit.unit_key)
-                cached = store.cached_attempt(cache_key)
+            feedback: str | None = None
+            # This budget is per invocation. ``attempt_no`` is the append-only
+            # storage ordinal, so a resumed unit gets a whole retry ladder
+            # instead of inheriting an earlier run's exhaustion.
+            for variant in range(MAX_PROVIDER_ATTEMPTS):
+                system, prompt = probe.claim.build_prompt(
+                    unit, variant=variant, feedback=feedback
+                )
+                cache_key = _request_key(config, system, prompt)
+                attempt_no = store.next_attempt_number(run.run_id, unit.unit_key)
+                # Read the cache once. A stored body that fails validation fails
+                # the same way on reread, and would consume the whole budget.
+                cached = store.cached_attempt(cache_key) if variant == 0 else None
                 response = None
-                usage = None
                 if cached is not None:
                     raw = cached.response_body or ""
                     cache_hits += 1
@@ -572,7 +707,6 @@ def run_probe(
                         from patientpunk._utils import response_text
 
                         raw = response_text(response)
-                        usage = _usage(response)
                         attempt = Attempt(
                             unit_key=unit.unit_key,
                             attempt_no=attempt_no,
@@ -580,29 +714,31 @@ def run_probe(
                             response_body=raw,
                             response_sha256=text_sha256(raw),
                             cache_key=cache_key,
-                            usage=usage,
+                            usage=_usage(response),
                             recorded_at=datetime.now(timezone.utc),
                         )
                     except Exception as error:
                         error_usage = _usage(error)
-                        attempt = Attempt(
-                            unit_key=unit.unit_key,
-                            attempt_no=attempt_no,
-                            status=AttemptStatus.TRANSPORT_FAILED,
-                            cache_key=cache_key,
-                            usage=error_usage,
-                            billing_uncertain=error_usage is None,
-                            error=f"{type(error).__name__}: {error}",
-                            recorded_at=datetime.now(timezone.utc),
+                        store.record_attempt(
+                            run.run_id,
+                            Attempt(
+                                unit_key=unit.unit_key,
+                                attempt_no=attempt_no,
+                                status=AttemptStatus.TRANSPORT_FAILED,
+                                cache_key=cache_key,
+                                usage=error_usage,
+                                billing_uncertain=error_usage is None,
+                                error=f"{type(error).__name__}: {error}",
+                                recorded_at=datetime.now(timezone.utc),
+                            ),
                         )
-                        store.record_attempt(plan.run.run_id, attempt)
-                        if not _is_transient(error) or attempt_no >= MAX_PROVIDER_ATTEMPTS:
+                        if not _is_transient(error):
                             break
                         continue
 
                 # Persist the raw response before check_response, JSON parsing,
                 # or probe-specific validation can reject it.
-                store.record_attempt(plan.run.run_id, attempt)
+                store.record_attempt(run.run_id, attempt)
                 try:
                     if response is not None:
                         from patientpunk._utils import check_response, response_text
@@ -616,33 +752,34 @@ def run_probe(
                         raise ValueError("provider response did not contain valid JSON")
                     claims = validate_claims(parser(payload, unit), unit)
                     for claim in claims:
-                        store.save_claim(plan.run.run_id, claim)
+                        store.save_claim(run.run_id, claim)
                     store.update_attempt_status(
-                        plan.run.run_id,
+                        run.run_id,
                         unit.unit_key,
                         attempt_no,
                         AttemptStatus.ACCEPTED,
                     )
                     store.set_unit_status(
-                        plan.run.run_id, unit.unit_key, UnitStatus.COMPLETE
+                        run.run_id, unit.unit_key, UnitStatus.COMPLETE
                     )
                     completed += 1
                     success = True
                     break
                 except Exception as error:
+                    # Hand the failure to the next attempt so the retry differs
+                    # from the request that just failed.
+                    feedback = f"{type(error).__name__}: {error}"
                     store.update_attempt_status(
-                        plan.run.run_id,
+                        run.run_id,
                         unit.unit_key,
                         attempt_no,
                         AttemptStatus.VALIDATION_FAILED,
-                        error=f"{type(error).__name__}: {error}",
+                        error=feedback,
                     )
-                    if attempt_no >= MAX_PROVIDER_ATTEMPTS:
-                        break
             if not success:
-                store.set_unit_status(plan.run.run_id, unit.unit_key, UnitStatus.FAILED)
+                store.set_unit_status(run.run_id, unit.unit_key, UnitStatus.FAILED)
                 failed += 1
-    return RunResult(plan.run.run_id, attempted, completed, failed, cache_hits)
+    return RunResult(run.run_id, attempted, completed, failed, cache_hits)
 
 
 def _run_config(args: argparse.Namespace) -> RunConfig:
@@ -668,10 +805,12 @@ def _run_config(args: argparse.Namespace) -> RunConfig:
     )
 
 
-def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_common_arguments(
+    parser: argparse.ArgumentParser, *, require_dbs: bool = True
+) -> None:
     parser.add_argument("probe")
-    parser.add_argument("--cohort-db", type=Path, required=True)
-    parser.add_argument("--source-db", type=Path, required=True)
+    parser.add_argument("--cohort-db", type=Path, required=require_dbs)
+    parser.add_argument("--source-db", type=Path, required=require_dbs)
     parser.add_argument("--output-db", type=Path)
     parser.add_argument("--max-chars", type=int, default=6_000)
     parser.add_argument("--provider")
@@ -693,9 +832,12 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser = commands.add_parser("plan", help="resolve cohort and units without an LLM")
     _add_common_arguments(plan_parser)
     run_parser = commands.add_parser("run", help="execute a confirmed paid run")
-    _add_common_arguments(run_parser)
+    _add_common_arguments(run_parser, require_dbs=False)
     run_parser.add_argument("--confirm-paid-run", action="store_true")
     run_parser.add_argument("--limit", type=int)
+    run_parser.add_argument(
+        "--run-id", help="resume a persisted run without replanning it"
+    )
     return parser
 
 
@@ -703,7 +845,9 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point for ``python -m probes``."""
 
     args = build_parser().parse_args(argv)
-    config = _run_config(args)
+    # A resumed run reads its config from the store, so building one from flags
+    # would only invite a mismatch.
+    config = None if getattr(args, "run_id", None) else _run_config(args)
     if args.command == "plan":
         result = plan_probe(
             args.probe,
@@ -727,6 +871,7 @@ def main(argv: list[str] | None = None) -> int:
         max_chars=args.max_chars,
         confirm_paid_run=args.confirm_paid_run,
         limit=args.limit,
+        run_id=args.run_id,
     )
     print(
         f"run={result.run_id} attempted={result.attempted_units} "

@@ -22,6 +22,7 @@ from .models import (
     Claim,
     CohortMember,
     ProbeRun,
+    RunConfig,
     Unit,
     UnitStatus,
     Usage,
@@ -206,6 +207,30 @@ class ProbeStore:
         ).fetchone()
         return row is not None
 
+    def load_probe_run(self, run_id: str) -> ProbeRun | None:
+        """Reload a persisted run so resuming needs no cohort or source access."""
+
+        row = self.connection.execute(
+            """
+            SELECT run_id, probe, spec_hash, cohort_hash, source_fingerprint,
+                   unit_set_hash, config_json, created_at
+            FROM probe_run WHERE run_id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return ProbeRun(
+            run_id=row["run_id"],
+            probe=row["probe"],
+            spec_hash=row["spec_hash"],
+            cohort_hash=row["cohort_hash"],
+            source_fingerprint=row["source_fingerprint"],
+            unit_set_hash=row["unit_set_hash"],
+            config=RunConfig.model_validate(json.loads(row["config_json"])),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
     def load_units(self, run_id: str) -> list[Unit]:
         """Reload planned units, including their private source windows."""
 
@@ -252,7 +277,7 @@ class ProbeStore:
     def save_cohort_members(
         self, run_id: str, members: list[CohortMember]
     ) -> None:
-        """Persist the resolved SQL result in deterministic query order."""
+        """Persist the resolved SQL result in the order the caller supplies."""
 
         with self.transaction() as connection:
             connection.executemany(
@@ -443,15 +468,3 @@ class ProbeStore:
                     ),
                 ),
             )
-
-    def unfinished_unit_keys(self, run_id: str) -> set[str]:
-        """Return units that can be resumed by the generic engine."""
-
-        rows = self.connection.execute(
-            """
-            SELECT unit_key FROM unit
-            WHERE run_id = ? AND status != ?
-            """,
-            (run_id, UnitStatus.COMPLETE.value),
-        ).fetchall()
-        return {row["unit_key"] for row in rows}
