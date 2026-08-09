@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from enum import StrEnum
 from typing import Any, Iterable
 
@@ -13,6 +14,16 @@ from probes.models import Claim, EvidenceAnchor, StrictModel, Unit
 from probes.store import canonical_json
 
 PROMPT_VERSION = "2026-08-09-v1"
+
+# A quote may paraphrase its source, so exact containment is not required. This
+# is only a floor against fabrication: a quote invented for a source that never
+# said it shares almost no vocabulary with that source, while a genuine
+# paraphrase keeps most of it. The human quote-grounding review remains the
+# real gate; this runs before the money is spent, and its rejection reaches the
+# model as retry feedback.
+QUOTE_GROUNDING_MIN_OVERLAP = 0.5
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 class DrugClass(StrEnum):
@@ -231,6 +242,16 @@ def _reject_placeholders(value: Any, path: str = "response") -> None:
             _reject_placeholders(child, f"{path}[{index}]")
 
 
+def _grounding(quote: str, window_text: str) -> float:
+    """Return the share of a quote's words that occur in its source window."""
+
+    quote_tokens = _TOKEN_RE.findall(quote.lower())
+    if not quote_tokens:
+        return 0.0
+    source_tokens = set(_TOKEN_RE.findall(window_text.lower()))
+    return sum(token in source_tokens for token in quote_tokens) / len(quote_tokens)
+
+
 def _quotes(event: ExposureEvent) -> Iterable[tuple[str, str]]:
     yield "exposure", event.exposure_quote
     yield "subject", event.subject_quote
@@ -268,8 +289,14 @@ def validate_extraction(payload: Any, unit: Unit) -> ExtractionEnvelope:
             raise ValueError(f"events[{index}]: source does not belong to unit")
         if source.source_type != event.source_type or source.source_id != event.source_id:
             raise ValueError(f"events[{index}]: source ID/type does not match window")
-        if any(not quote.strip() for _, quote in _quotes(event)):
-            raise ValueError(f"events[{index}]: evidence quote must be non-empty")
+        for field_path, quote in _quotes(event):
+            if not quote.strip():
+                raise ValueError(f"events[{index}]: evidence quote must be non-empty")
+            if _grounding(quote, source.text) < QUOTE_GROUNDING_MIN_OVERLAP:
+                raise ValueError(
+                    f"events[{index}].{field_path}_quote: quote is not grounded in "
+                    "the cited source window; quote the author's own words"
+                )
         fingerprint = hashlib.sha256(
             canonical_json(event.model_dump(mode="json", exclude_none=True)).encode("utf-8")
         ).hexdigest()
