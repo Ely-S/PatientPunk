@@ -1,13 +1,68 @@
 ================================================================================
 HANDOFF — studies/psychedelics/
 Raw-text psychedelic pharmacology extraction
-Updated 2026-08-07 (third session). Status: PRE-PILOT WORK COMPLETE; STILL NO
-PAID API CALLS MADE.
+Updated 2026-08-08 (fourth session). Status: A PILOT RUN HAS EXECUTED (38
+units, 271 events, $0.17 spent) AND PASSED AN AUTOMATED QUALITY SPOT-CHECK.
+THE REQUIRED ANALYST-CODING PASS AND validation-report GATES (§5/§9) ARE
+STILL NOT DONE. NO FULL-RUN APPROVAL HAS BEEN GIVEN.
 ================================================================================
 
 --------------------------------------------------------------------------------
 0. WHAT CHANGED, MOST RECENT FIRST (READ FIRST)
 --------------------------------------------------------------------------------
+
+FOURTH SESSION — a pilot run executed; automated spot-check done, human
+coding still outstanding
+...............................................................................
+
+A pilot run (25-pair sample, per `select_pilot()`) actually executed, at:
+
+  data/psychedelics_pharmacology_pilot_coreweave_fp8_provider_workers10_evidence_quotes_20260807/
+
+This directory name does not match the canonical `data/psychedelics_pharmacology/`
+path referenced in §6; confirm which output directory is authoritative before
+doing anything else with pilot artifacts. Contents: 271 event records across
+38 processed units (quota split roughly as expected: psilocybin 151, LSD 64,
+ketamine 56 events). Cost: $0.170, averaging 12,279 reasoning tokens/unit.
+
+A subagent ran an automated quality spot-check (cross-referencing sampled
+extracted quotes against source text, scanning attempt_ledger.jsonl and
+run_ledger.jsonl). THIS IS NOT THE ANALYST-CODING PASS REQUIRED BY §5/§9 --
+it is a supplementary automated check. `pilot_review.csv` coding and the
+`validation-report` gate scoring (§9 steps 1-2, gates in step 6) are still
+outstanding and are the actual next action.
+
+Findings from the spot-check:
+
+  - Quote faithfulness: sampled quotes (~16 records across 8 units) were
+    accurate, faithful substrings/light paraphrases of source text. No
+    fabricated doses, symptoms, or units found in the sample.
+  - One borderline self-attribution case worth analyst attention: unit
+    `5bb5caef` / source `jae1cxp`. The quote ("psilocybin for neurogenesis
+    ... seems to be helping quite a few of us") credits a community ("us"),
+    not unambiguously the author's own outcome in that window, yet is
+    labeled subject=self/exposure_status=actual_use/direction=helped. It is
+    defensible from an earlier window by the same author establishing
+    personal use, but it is exactly the ambiguity class the analyst-coding
+    pass exists to catch. Spot-check other subject=self labels on
+    group-referencing language ("we", "us", "a lot of us") before trusting
+    the aggregate.
+  - No malformed or empty required fields found. Apparent "duplicate"
+    records (e.g. source `njyivwq` appearing under two different units) are
+    not bugs: the same source window legitimately gets re-extracted once
+    per target drug it names.
+  - attempt_ledger.jsonl: 3/38 units (7.9%) needed a validation retry before
+    acceptance -- one invalid enum value (model emitted "reddit_comment"
+    instead of "comment"), two where the model cited a source_window_id not
+    belonging to the unit. All three self-corrected on retry. Separately,
+    4/45 provider calls (~9%) returned "provider returned null content" and
+    were retried transparently; no unit was left incomplete.
+  - Cost/token realization matters for §6: realized reasoning-token usage
+    (12,279/unit) is well above the "moderate" 5,700/unit estimate in the
+    existing table. Extrapolated to the full 1,207-unit corpus, this is
+    ~$5.40 -- near the pessimistic end of the existing $1.18-$11.26 range,
+    not the $2.40 headline figure. Re-present this revised figure, not the
+    old headline, when asking for full-run approval.
 
 THIRD SESSION — the run is now pinned to reasoning effort "max"
 ...............................................................................
@@ -240,7 +295,9 @@ exposure_status=actual_use.
   - JSON/schema validity, unknown keys, enum/range errors, duplicate events;
   - target_drug matches the requested drug;
   - source_window_id belongs to the unit, and source type/ID agree with it;
-  - EVERY quote is an exact substring of its own source window;
+  - EVERY evidence quote is non-empty and tied to its own source window; quotes
+    may be normalized or paraphrased, so analyst review checks faithfulness rather
+    than exact substring identity;
   - placeholder strings ("not specified", "unknown", ...) outside quotes;
   - structural consistency of the model's own labels: a non-included event may
     not carry doses, effects, or adverse events, and must be not_stated;
@@ -376,6 +433,12 @@ knowable before a live call. The pilot's measured reasoning_tokens per unit is
 the number that turns this range into an estimate; re-project before the full
 run rather than trusting the table above.
 
+REALIZED, from the pilot run described in §0 (fourth session): 12,279
+reasoning tokens/unit measured across 38 live units, $0.170 total pilot
+spend. Projected full run (1,207 units) at this realized rate: ~$5.40. This
+number supersedes the "moderate" row above and the $2.40 headline figure --
+use $5.40 as the estimate to present for full-run approval, not the table.
+
 Uses existing PatientPunk utilities: get_llm_client, check_response,
 response_text, parse_json_response, llm_cache.cached_completion. The shared cache
 is content-addressed; the script precomputes its key and identifies cache hits
@@ -471,11 +534,21 @@ Modified in the THIRD session (reasoning effort):
       changed to the OpenRouter endpoints API; reasoning_effort threaded through
       build_units unit identity, prepare's run_configuration, configure_paid_llm,
       run_units, and extract_unit (request + cache key); _usage_values breaks out
-      `reasoning_tokens` from completion_tokens_details.
+      `reasoning_tokens` from completion_tokens_details; evidence quotes no longer
+      need to be exact source substrings. A quote must still share at least
+      QUOTE_GROUNDING_MIN_OVERLAP (0.5) of its words with the source window it
+      cites -- a floor against fabricated evidence, not a paraphrase rule --
+      and that threshold is part of validator_sha. Every *_quote field is
+      exempt from placeholder rejection, not just quote/exposure_quote.
+      VALIDATOR_VERSION is now 2026-08-09-v6-quote-grounding-floor.
+      finalize refuses a run whose persisted prompt/validator/schema identity
+      differs from the module's, instead of stamping the manifest with rules
+      the events were never validated under.
 
   tests/test_psychedelics_pharmacology.py
-      Two build_units call sites updated for the new required argument. Still 43
-      tests; NO test covers the reasoning passthrough itself (see §9).
+      Two build_units call sites updated for the new required argument; tests now
+      cover paraphrased evidence quotes. Still 43 tests; NO test covers the
+      reasoning passthrough itself (see §9).
 
 Modified in the SECOND session:
 
@@ -529,7 +602,26 @@ Verified after the final edits:
 
 The code checklist is closed. What remains is judgment, money, and manual work.
 
-FIRST, do not run anything paid. All of (a)-(c) below were presented to the user
+UPDATE (fourth session): the `pilot` command below has already been run once.
+Output is at
+data/psychedelics_pharmacology_pilot_coreweave_fp8_provider_workers10_evidence_quotes_20260807/
+(38 units, 271 events, $0.17 -- see §0). Do not re-run `pilot` before checking
+whether this output is still valid for the current run identity. The
+immediate next action is steps 1-2 below (analyst-code `pilot_review.csv` in
+that output directory, then run `validation-report`), not the pilot
+invocation itself.
+
+UPDATE (fifth session): those 271 events were accepted under the acceptance
+rules in force on 2026-08-07, and the validator has changed twice since (quote
+grounding floor; see §8). `finalize` now refuses that directory rather than
+labelling its events with rules they were never validated under. Analyst
+coding and `validation-report` on it are still worth doing -- they measure the
+model, not the validator -- but the pilot must be re-extracted under the
+current rules before anything downstream depends on its manifest. Re-running
+`pilot` costs about $0.17.
+
+FIRST, do not run anything paid beyond the pilot already executed. All of
+(a)-(c) below were presented to the user
 in the third session; the cost checkpoint has been DELIVERED but NOT yet
 answered. No approval for paid work has been given.
 
@@ -576,7 +668,11 @@ Immediately after the pilot:
      the same time that reasoning_tokens is non-zero -- a zero would mean the
      effort parameter is not reaching the provider despite the config, which is
      exactly the failure mode the adapter fix addressed.
-  4. Check exact-quote/source validation failures, malformed responses,
+     ALREADY MEASURED (fourth session, §0/§6): 12,279 reasoning tokens/unit,
+     projecting to ~$5.40 for the full run. Use this as the starting figure
+     and confirm it against `pilot_cost_summary.json` in the pilot output
+     directory rather than re-deriving from scratch.
+  4. Check evidence-grounding review failures, malformed responses,
      truncations, valid-empty rate, cache hits, and the subject/exposure_status
      distribution in the excluded-events file -- if almost nothing lands in
      `planned_or_considered` or `other`, the model is probably not really
@@ -584,7 +680,7 @@ Immediately after the pilot:
   5. Repeat a stratified subset under a new retry variant/cache key to assess
      model instability (the corpus README documents severe instability).
   6. Gates, enforced by the report command:
-       100% exact quote/source integrity
+      100% analyst-confirmed evidence grounding
        >=95% drug attribution and self-report accuracy
        >=95% subject and exposure_status precision AND recall
        >=90% precision for dose, duration, and adverse events

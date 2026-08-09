@@ -11,6 +11,17 @@ from studies.psychedelics import extract_pharmacology as ep
 from studies.psychedelics import psychedelics as study
 
 
+def _current_acceptance() -> dict:
+    """The acceptance-rule identity `prepare` writes and `finalize` checks."""
+    return {
+        "prompt_version": ep.PROMPT_VERSION,
+        "prompt_sha": ep.prompt_sha(),
+        "validator_version": ep.VALIDATOR_VERSION,
+        "validator_sha": ep.validator_sha(),
+        "schema_version": ep.SCHEMA_VERSION,
+    }
+
+
 def _record(author_hash: str, field: str, values: list[str]) -> dict:
     return {
         "record_meta": {"author_hash": author_hash},
@@ -47,7 +58,7 @@ def test_mention_windows_keep_complete_neighboring_paragraphs():
     ]
 
 
-def test_validate_extraction_requires_exact_quotes_and_consistent_ae_status():
+def test_validate_extraction_allows_paraphrased_evidence_quotes_and_consistent_ae_status():
     source = "I took 10 mg ketamine. It helped moderately for two days. No side effects."
     payload = {
         "target_drug": "ketamine",
@@ -101,13 +112,85 @@ def test_validate_extraction_requires_exact_quotes_and_consistent_ae_status():
     assert result.events[0].doses[0].amount_lower == 10
 
     payload["events"][0]["effects"][0]["quote"] = "moderately helped"
-    with pytest.raises(ValueError, match="exact source substring"):
-        ep.validate_extraction(
-            payload,
-            target_drug="ketamine",
-            source_windows={
-                "w1": {"source_type": "comment", "source_id": "c1", "text": source}
+    result = ep.validate_extraction(
+        payload,
+        target_drug="ketamine",
+        source_windows={
+            "w1": {"source_type": "comment", "source_id": "c1", "text": source}
+        },
+    )
+    assert result.events[0].effects[0].quote == "moderately helped"
+
+
+def test_validate_extraction_rejects_a_quote_the_source_never_supports():
+    # The source never denies adverse effects. A fabricated denial would flip
+    # adverse_event_status to explicit_none and bias the AE denominator, so it
+    # must not survive on the strength of being non-empty.
+    source = "I took 10 mg ketamine. It helped moderately for two days."
+    payload = {
+        "target_drug": "ketamine",
+        "events": [
+            {
+                "source_window_id": "w1",
+                "source_id": "c1",
+                "source_type": "comment",
+                "exposure_quote": "I took 10 mg ketamine.",
+                "subject": "self",
+                "subject_quote": "I took 10 mg ketamine.",
+                "exposure_status": "actual_use",
+                "exposure_status_quote": "I took 10 mg ketamine.",
+                "doses": [],
+                "effects": [],
+                "adverse_event_status": "explicit_none",
+                "adverse_event_status_quote": "the author reports no side effects at all",
+                "adverse_events": [],
+            }
+        ],
+    }
+    windows = {"w1": {"source_type": "comment", "source_id": "c1", "text": source}}
+    with pytest.raises(ValueError, match="not grounded"):
+        ep.validate_extraction(payload, target_drug="ketamine", source_windows=windows)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["subject_quote", "exposure_status_quote", "adverse_event_status_quote"],
+)
+def test_placeholder_rejection_exempts_every_quote_field(field):
+    # Paraphrase is allowed, so a model labelling subject=unclear may normalize
+    # its quote to "unknown". That must not burn the unit's retry budget.
+    ep._reject_placeholders({field: "unknown"})
+    with pytest.raises(ValueError, match="placeholder"):
+        ep._reject_placeholders({"subject": "unknown"})
+
+
+def test_finalize_refuses_a_run_extracted_under_different_acceptance_rules(tmp_path):
+    # The manifest is stamped from the current module, so finalizing an older
+    # run would label its events with rules they were never validated under.
+    ep.atomic_write_json(tmp_path / "cohort_status.json", [])
+    ep.atomic_write_json(tmp_path / "source_units.json", [])
+    ep.atomic_write_json(
+        tmp_path / "input_identity.json",
+        {
+            "run_configuration": {
+                "model": "m",
+                "temperature": 0,
+                "max_tokens": 10,
+                "input_price_per_m": 0.1,
+                "output_price_per_m": 0.2,
             },
+            **_current_acceptance(),
+            "validator_version": "2026-08-07-v4-empty-result-warning",
+        },
+    )
+    with pytest.raises(ValueError, match="acceptance rules differ"):
+        ep.finalize(
+            tmp_path,
+            model="m",
+            temperature=0,
+            max_tokens=10,
+            input_price_per_m=0.1,
+            output_price_per_m=0.2,
         )
 
 
@@ -285,7 +368,7 @@ def test_build_user_prompt_neutralizes_injected_delimiters():
     retry_prompt = ep.build_user_prompt(
         unit,
         retry_variant=1,
-        retry_feedback="events[0].exposure_quote: quote is not an exact source substring",
+        retry_feedback="events[0].exposure_quote: evidence quote must be non-empty",
     )
     assert "RETRY FEEDBACK: events[0].exposure_quote" in retry_prompt
 
@@ -390,7 +473,7 @@ def test_third_party_use_is_recorded_not_discarded():
     assert result.events[0].is_included_exposure is False
 
 
-def test_explicit_none_requires_a_quote_that_exists_in_the_source():
+def test_explicit_none_accepts_a_paraphrased_evidence_quote():
     source = "I took ketamine. I had no side effects at all."
     case = _event(
         source,
@@ -398,11 +481,14 @@ def test_explicit_none_requires_a_quote_that_exists_in_the_source():
         adverse_event_status="explicit_none",
         adverse_event_status_quote="I had no side effects whatsoever.",
     )
-    with pytest.raises(ValueError, match="exact source substring"):
+    assert _validate(case).events[0].adverse_event_status == "explicit_none"
+
+    case["payload"]["events"][0]["adverse_event_status_quote"] = ""
+    with pytest.raises(ValueError, match="explicit_none requires"):
         _validate(case)
 
     case["payload"]["events"][0]["adverse_event_status_quote"] = (
-        "I had no side effects at all."
+        "I experienced no adverse effects."
     )
     assert _validate(case).events[0].adverse_event_status == "explicit_none"
 
@@ -474,7 +560,10 @@ def test_finalize_drops_events_from_a_stale_response_sha(tmp_path):
                 "max_tokens": 10,
                 "input_price_per_m": 0.1,
                 "output_price_per_m": 0.2,
-            }
+            },
+            # finalize refuses a run extracted under different acceptance
+            # rules, so a fixture must claim the rules it is running under.
+            **_current_acceptance(),
         },
     )
     # A crashed first attempt left events behind, then a retry succeeded with a
@@ -677,7 +766,10 @@ def test_finalize_requires_terminal_status_for_every_source_unit(tmp_path):
                 "max_tokens": 10,
                 "input_price_per_m": 0.1,
                 "output_price_per_m": 0.2,
-            }
+            },
+            # finalize refuses a run extracted under different acceptance
+            # rules, so a fixture must claim the rules it is running under.
+            **_current_acceptance(),
         },
     )
     with pytest.raises(ValueError, match="unfinished units"):
