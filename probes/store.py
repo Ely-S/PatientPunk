@@ -252,7 +252,7 @@ class ProbeStore:
     def save_cohort_members(
         self, run_id: str, members: list[CohortMember]
     ) -> None:
-        """Persist the resolved SQL result in deterministic query order."""
+        """Persist the resolved SQL result in the order the caller supplies."""
 
         with self.transaction() as connection:
             connection.executemany(
@@ -443,15 +443,3 @@ class ProbeStore:
                     ),
                 ),
             )
-
-    def unfinished_unit_keys(self, run_id: str) -> set[str]:
-        """Return units that can be resumed by the generic engine."""
-
-        rows = self.connection.execute(
-            """
-            SELECT unit_key FROM unit
-            WHERE run_id = ? AND status != ?
-            """,
-            (run_id, UnitStatus.COMPLETE.value),
-        ).fetchall()
-        return {row["unit_key"] for row in rows}
