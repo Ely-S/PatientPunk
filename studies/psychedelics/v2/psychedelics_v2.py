@@ -20,11 +20,14 @@ Import-only: nothing here touches the disk until a function is called.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sqlite3
+import zlib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -257,6 +260,49 @@ def load_frames(path: Path | None = None, run_id: str | None = None) -> Frames:
     )
 
 
+# ── The actual-use population ──────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class ActualUse:
+    """The self-reported actual-use claims and the records attached to them."""
+
+    claims: pd.DataFrame
+    claim_ids: set
+    effects: pd.DataFrame
+    adverse: pd.DataFrame
+    doses: pd.DataFrame
+    pairs: pd.DataFrame         # reporter-drug pairs with an included claim
+    cohort_pairs: pd.DataFrame  # every asserted cohort reporter-drug pair
+
+
+def actual_use(f: Frames) -> ActualUse:
+    """Restrict to self-reported actual use.
+
+    The extraction schema admits a claim only when `subject=self` and
+    `exposure_status=actual_use`, so `included` already *is* that population.
+    The assertion states the identity rather than re-filtering and implying a
+    narrowing that does not occur; it fails loudly if the contract ever changes.
+    """
+    claims = f.claims[f.claims["included"]].copy()
+    assert (claims["subject"].eq("self")
+            & claims["exposure_status"].eq("actual_use")).all(), \
+        "included claims are no longer identical to self-reported actual use"
+    ids = set(claims["claim_id"])
+
+    def attached(frame):
+        return frame[frame["claim_id"].isin(ids)].copy()
+
+    return ActualUse(
+        claims=claims,
+        claim_ids=ids,
+        effects=attached(f.effects),
+        adverse=attached(f.adverse),
+        doses=attached(f.doses),
+        pairs=claims[["patient", "drug"]].drop_duplicates(),
+        cohort_pairs=f.members[["patient", "drug"]].drop_duplicates(),
+    )
+
+
 # ── Canonicalization of the free-text dose fields ──────────────────────────
 # `unit`, `route` and `author_stated_intent` are model-copied free text. Each is
 # mapped into a closed vocabulary so nothing patient-authored is ever displayed;
@@ -348,6 +394,11 @@ SYMPTOM_CLASSES = tuple(name for name, _ in SYMPTOM_PATTERNS) + ("other", "unspe
 
 #: The four classes the v1 `energy_pem` composite collapsed into one.
 ENERGY_FAMILY = ("pem_explicit", "exertion_intolerance", "fatigue_general", "low_energy")
+
+#: Reading order for tables and plots: the energy family first, so the classes v1
+#: merged stay adjacent and visibly distinct.
+SYMPTOM_ORDER = ENERGY_FAMILY + ("mood_cognitive", "pain", "other", "unspecified")
+assert set(SYMPTOM_ORDER) == set(SYMPTOM_CLASSES), "display order is missing a symptom class"
 
 
 def symptom_labels(target: str | None) -> tuple[str, ...]:
@@ -650,7 +701,195 @@ def dose_coverage(f: Frames) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("drug")
 
 
+# ── Reporter-clustered inference ───────────────────────────────────────────
+# No p-value, chi-squared test, Fisher test or FDR adjustment appears anywhere in
+# this study. Rows are clustered inside reporter accounts and, in the
+# cross-symptom comparisons, the same account sits on both sides of a contrast --
+# conditions the usual independence-assuming tests do not meet. Comparisons are
+# reported as rate differences with intervals from resampling whole accounts,
+# alongside Cohen's h as a scale-free effect size.
+
+#: Python's hash() is salted per process, so hash()-derived seeds are not stable
+#: across runs. crc32 is, so every interval in this study reproduces exactly.
+BASE_SEED = 20260809
+N_BOOT = 2000
+
+#: Evidence gate. A cell below these thresholds is reported as insufficient
+#: rather than interpreted; a rate over a handful of rows is not a headline.
+MIN_ROWS = 20
+MIN_PATIENTS = 10
+
+
+def seed_for(*parts) -> int:
+    """Deterministic bootstrap seed, stable across processes."""
+    return (BASE_SEED + zlib.crc32("|".join(map(str, parts)).encode())) % 2**32
+
+
+def meets_gate(n_rows: int, n_patients: int) -> bool:
+    return bool(n_rows >= MIN_ROWS and n_patients >= MIN_PATIENTS)
+
+
+def cohens_h(p1: float, p2: float) -> float:
+    """Scale-free difference between two proportions (arcsine transform)."""
+    if pd.isna(p1) or pd.isna(p2):
+        return np.nan
+    return (2 * np.arcsin(np.sqrt(np.clip(p1, 0, 1)))
+            - 2 * np.arcsin(np.sqrt(np.clip(p2, 0, 1))))
+
+
+def _patient_totals(frame, indicator, patients):
+    """Per-patient (sum, count) of a boolean indicator, aligned on `patients`."""
+    grouped = (frame.groupby("patient")[indicator].agg(["sum", "count"])
+               .reindex(patients).fillna(0))
+    return grouped["sum"].to_numpy(float), grouped["count"].to_numpy(float)
+
+
+def _ratio(sums, counts, index):
+    numerator = sums[index].sum(axis=1)
+    denominator = counts[index].sum(axis=1)
+    return np.divide(numerator, denominator,
+                     out=np.full(len(numerator), np.nan), where=denominator > 0)
+
+
+def clustered_rate(frame, indicator, seed=BASE_SEED, n_boot=N_BOOT):
+    """Rate over rows, with a 95% interval from resampling whole patients."""
+    sub = frame[["patient", indicator]].dropna()
+    if sub.empty:
+        return np.nan, np.nan, np.nan
+    patients = np.array(sorted(sub["patient"].unique()))
+    sums, counts = _patient_totals(sub, indicator, patients)
+    point = sums.sum() / counts.sum()
+    if len(patients) < 2:
+        return point, np.nan, np.nan
+    index = np.random.default_rng(seed).integers(0, len(patients), (n_boot, len(patients)))
+    boot = _ratio(sums, counts, index)
+    return point, float(np.nanquantile(boot, 0.025)), float(np.nanquantile(boot, 0.975))
+
+
+def clustered_difference(frame, indicator, mask, seed=BASE_SEED, n_boot=N_BOOT) -> dict:
+    """Rate difference (focal vs reference) with a reporter-clustered interval.
+
+    The reference arm is whatever `frame` contains outside `mask`, so the caller
+    chooses the comparison by choosing the frame. Both arms are recomputed from a
+    single resample of whole accounts, so an account with rows on both sides is
+    never split -- the dependence between the arms is carried into the interval
+    instead of being assumed away.
+    """
+    sub = frame.loc[frame[indicator].notna(), ["patient", indicator]]
+    inside, outside = sub[mask.loc[sub.index]], sub[~mask.loc[sub.index]]
+    if inside.empty or outside.empty:
+        return {}
+    patients = np.array(sorted(sub["patient"].unique()))
+    sums_in, counts_in = _patient_totals(inside, indicator, patients)
+    sums_out, counts_out = _patient_totals(outside, indicator, patients)
+    rate_in = inside[indicator].mean()
+    rate_out = outside[indicator].mean()
+    index = np.random.default_rng(seed).integers(0, len(patients), (n_boot, len(patients)))
+    boot = _ratio(sums_in, counts_in, index) - _ratio(sums_out, counts_out, index)
+    return {
+        "rate (focal)": rate_in,
+        "rate (reference)": rate_out,
+        "difference (pp)": 100 * (rate_in - rate_out),
+        "diff low": 100 * float(np.nanquantile(boot, 0.025)),
+        "diff high": 100 * float(np.nanquantile(boot, 0.975)),
+        "Cohen h": cohens_h(rate_in, rate_out),
+        "focal rows": len(inside),
+        "focal patients": inside["patient"].nunique(),
+        "reference rows": len(outside),
+        "reference patients": outside["patient"].nunique(),
+    }
+
+
+def interval_note(low: float, high: float) -> str:
+    """Where a difference interval sits relative to no difference."""
+    if pd.isna(low) or pd.isna(high):
+        return "no interval"
+    if low > 0:
+        return "interval above 0"
+    if high < 0:
+        return "interval below 0"
+    return "interval spans 0"
+
+
+def direction_profile(row) -> str:
+    """The mutually exclusive direction profile of one reporter-drug pair."""
+    helped, worsened = row["helped"], row["worsened"]
+    none, mixed = row["no_effect"], row["mixed"]
+    if helped and not (worsened or none or mixed):
+        return "helped only"
+    if worsened and not (helped or none or mixed):
+        return "worsened only"
+    if none and not (helped or worsened or mixed):
+        return "no effect only"
+    return "mixed / conflicting"
+
+
+# ── Provenance ─────────────────────────────────────────────────────────────
+
+#: The snapshot the planner pulled evidence windows from. The date is the one in
+#: the snapshot's *name*: post timestamps are not loaded, so the period the
+#: content was written in is unknown and must never be inferred from it.
+SOURCE_SNAPSHOT = "reddit_2026-06-13.db (source snapshot documented by the v2 run)"
+
+
+def provenance_table(path: Path, f: Frames) -> pd.DataFrame:
+    """Everything needed to identify the exact data behind an export."""
+    path = Path(path)
+    cfg = f.run["config"]
+    return pd.DataFrame([
+        {"item": "database", "value": path.name},
+        {"item": "database SHA-256", "value": hashlib.sha256(path.read_bytes()).hexdigest()},
+        {"item": "run ID (pinned)", "value": f.run["run_id"]},
+        {"item": "run created", "value": f.run["created_at"]},
+        {"item": "model", "value": cfg.get("model")},
+        {"item": "provider / base URL", "value": f"{cfg.get('provider')} / {cfg.get('base_url')}"},
+        {"item": "sampling", "value": f"temperature {cfg.get('temperature')}, "
+                                      f"max_tokens {cfg.get('max_tokens'):,}, "
+                                      f"reasoning_effort {cfg.get('reasoning_effort')}"},
+        {"item": "source snapshot", "value": SOURCE_SNAPSHOT},
+        {"item": "source snapshot date", "value": "2026-06-13 (the date in the snapshot name)"},
+        {"item": "content date range", "value": "unavailable — post timestamps are not loaded"},
+        {"item": "execution date (UTC)",
+         "value": datetime.now(timezone.utc).date().isoformat()},
+        {"item": "loader", "value": "studies/psychedelics/v2/psychedelics_v2.py"},
+        {"item": "inference", "value": "no p-values; reporter-clustered bootstrap intervals only"},
+        {"item": "bootstrap",
+         "value": f"{N_BOOT:,} resamples of whole reporter accounts, base seed {BASE_SEED}"},
+        {"item": "evidence gate",
+         "value": f"≥{MIN_ROWS} rows and ≥{MIN_PATIENTS} reporter accounts"},
+        {"item": "skill version", "value": "research-assistant v2"},
+    ])
+
+
+def row_counts(f: Frames, u: ActualUse) -> pd.DataFrame:
+    """Row count of every frame the notebooks read."""
+    return pd.DataFrame([
+        {"table/frame": "cohort pairs (members)", "rows": len(f.members)},
+        {"table/frame": "planned units", "rows": len(f.units)},
+        {"table/frame": "attempts", "rows": len(f.attempts)},
+        {"table/frame": "claims", "rows": len(f.claims)},
+        {"table/frame": "included = actual-use claims", "rows": len(u.claims)},
+        {"table/frame": "effects", "rows": len(f.effects)},
+        {"table/frame": "adverse events", "rows": len(f.adverse)},
+        {"table/frame": "doses", "rows": len(f.doses)},
+    ])
+
+
 # ── Plot helpers ───────────────────────────────────────────────────────────
+
+DRUG_COLORS = {"psilocybin": "#2b6cb0", "ketamine": "#dd6b20", "lsd": "#805ad5"}
+
+#: The seven extracted duration bins, collapsed to the four classes reported.
+DURATION_LABELS = {
+    "acute_session": "acute / short-lived",
+    "under_24_hours": "acute / short-lived",
+    "one_to_six_days": "intermediate",
+    "one_to_four_weeks": "intermediate",
+    "one_to_six_months": "long-lasting",
+    "over_six_months": "long-lasting",
+    "ongoing_at_report": "ongoing at report",
+}
+
 
 def apply_style(plt) -> None:
     plt.rcParams.update({
