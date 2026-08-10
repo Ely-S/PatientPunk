@@ -1,0 +1,786 @@
+PSYCHEDELICS V2 STUDY ISSUE TRACKER
+===================================
+
+Created: 2026-08-10
+Scope:
+  - psychedelics_v2.py
+  - psychedelics_v2_analysis.ipynb
+  - psychedelics_v2_analysis.html
+  - psychedelics_v2_patient_experience.ipynb
+  - psychedelics_v2_patient_experience_executed.ipynb
+  - psychedelics_v2_patient_experience.html
+
+Important scope note:
+  The separate top-level issue that the outcome extraction has not received the
+  protocol's required item-level human validation is intentionally omitted from
+  this tracker. Some issues below still prescribe sensitivity analyses involving
+  confidence or symptom coding because those are independent defects in the
+  current analyses.
+
+Suggested priority definitions:
+  CRITICAL - A displayed analysis does not measure the relationship it claims to
+             measure and should not be interpreted until corrected.
+  HIGH     - Could materially change a headline result or conclusion.
+  MEDIUM   - Limits reproducibility, terminology, or interpretation but does not
+             alone invalidate every headline result.
+
+
+PX-01: Dose records are not linked to the outcomes from the same episode
+-----------------------------------------------------------------------
+Severity: CRITICAL
+Status: FIXED
+Fixed 2026-08-10 — dose/outcome linkage is now claim-level (P.dose_outcome_rows).
+  Claims straddling >1 bin and claims without effects are excluded and counted in a
+  displayed audit. Ketamine/mg falls below the evidence gate and is now reported as
+  INSUFFICIENT DATA; psilocybin/g retains 3 bins, and all four contrasts span zero.
+  Tests: tests/test_psychedelics_v2_loader.py.
+Primary artifact:
+  psychedelics_v2_patient_experience.ipynb, cell e3b5521e
+Also affects:
+  Cells 16f4d54f and 5680ff74; executed notebook and HTML equivalents.
+
+Problem:
+  The notebook first creates one row per patient, drug, dose group, and dose bin.
+  It then joins those rows to "helped", "worsened", and "profile" values from
+  effect_pair using only patient and drug:
+
+    dose_bin_pairs.merge(
+        effect_pair[["patient", "drug", "helped", "worsened", "profile"]],
+        on=["patient", "drug"], how="left"
+    )
+
+  The outcome is therefore a summary of every extracted effect for that
+  patient-drug pair, not an outcome attached to the dose record. If one reporter
+  discussed 1 g and 5 g psilocybin in different episodes, a helped report from
+  either episode is attached to both bins. The same outcome can consequently be
+  counted as evidence for several incompatible dose levels.
+
+Impact:
+  The dose-bin rates and contrasts are not dose-specific associations. Clustering
+  by reporter does not repair the incorrect linkage because the exposure-outcome
+  relationship was lost before resampling. Labels such as "reporting
+  associations only" appropriately reject causality but do not solve this
+  measurement problem.
+
+Required action:
+  Link each dose to effects from the same claim, source passage, and identifiable
+  treatment episode. Define deterministic rules for claims containing multiple
+  doses or multiple episodes. If that linkage cannot be recovered, remove all
+  dose/outcome rates and contrasts and retain dose distributions only.
+
+Acceptance criteria:
+  - Every analyzed dose/outcome row has an auditable shared claim or episode key.
+  - Ambiguous multi-dose claims are excluded or adjudicated under a documented rule.
+  - No patient-drug aggregate outcome is copied onto multiple dose bins.
+  - Tests cover a reporter with multiple doses and discordant episode outcomes.
+  - The report states the retained and excluded record counts.
+
+
+PX-02: The energy_pem category does not specifically identify PEM
+----------------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — the composite is retired, not renamed. Four classes: pem_explicit
+  (target must state post-exertional worsening), exertion_intolerance, fatigue_general,
+  low_energy. Composition table shows records + unique reporters per class: the old composite
+  held 244 records, only 41 (19 reporters) explicit PEM. Every pem_explicit cell now falls
+  BELOW the evidence gate for every drug, so the notebook reports NO PEM result; the headline
+  moved to ketamine/fatigue_general and the abstract, verdict and conclusion say so.
+  NOT done: category precision is unestimated (targets are quote-bearing text that may not be
+  displayed, and no human adjudication exists) — recorded as a limitation.
+Primary artifact:
+  psychedelics_v2.py, ENERGY_PEM and classify_symptom(), approximately lines 287-304
+Also affects:
+  Patient-experience abstract, symptom tables, screening analysis, and conclusion.
+
+Problem:
+  ENERGY_PEM matches explicit PEM and exertion language, but also generic terms
+  such as "fatigue", "energy", "tired", and "exhaust". Generic fatigue or low
+  energy does not establish post-exertional symptom exacerbation. The notebook
+  repeatedly calls the resulting class "energy/PEM" and eventually describes an
+  "energy/post-exertional-malaise class" or a PEM deficit.
+
+Impact:
+  Readers can reasonably understand the headline result as evidence specifically
+  about PEM even though the underlying class may mostly contain nonspecific
+  fatigue. The composition of the class is not reported, so it is unknown whether
+  explicit PEM records drive the result.
+
+Required action:
+  Split the category into at least:
+  - explicit PEM or post-exertional worsening,
+  - exercise intolerance or exertion-related fatigue,
+  - general fatigue or exhaustion,
+  - low energy.
+  Report counts and unique reporters for each category. Manually inspect a
+  privacy-safe, stratified sample or adjudication summary to estimate category
+  precision.
+
+Acceptance criteria:
+  - No result is called PEM unless the target explicitly supports post-exertional worsening.
+  - The headline contrast is rerun for explicit PEM and general fatigue separately.
+  - Category definitions and precedence rules are documented.
+  - The conclusion follows the result from the narrower category rather than the old composite.
+
+
+PX-03: Symptom classification is single-label and order-dependent
+----------------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — symptom_labels() returns every matching class; effects carry sx_<class>
+  indicators and n_symptom_labels. classify_symptom() keeps one display label as the most
+  specific match under a precedence documented in the loader and fixed independently of any
+  outcome. 75 effect records match >1 class and this is displayed. §3.3 reruns the headline
+  contrast under multilabel assignment (-38.1 pp vs -46.4 pp; same sign, same cell).
+  Tests cover two- and three-class targets and precedence order.
+Primary artifact:
+  psychedelics_v2.py, classify_symptom(), approximately lines 294-304
+
+Problem:
+  classify_symptom() checks MOOD_COGNITIVE first, ENERGY_PEM second, and PAIN
+  third, returning after the first match. A target mentioning both brain fog and
+  fatigue is assigned only to mood_cognitive. A target mentioning mood and pain
+  similarly loses its pain membership. The ordering, rather than the text alone,
+  determines the analytical category.
+
+Impact:
+  Multi-symptom long-COVID descriptions are likely common. The current rule can
+  systematically move fatigue-containing targets out of energy_pem, alter cell
+  denominators, and change the highlighted drug-symptom contrasts.
+
+Required action:
+  Use multilabel symptom indicators, or define and justify a mutually exclusive
+  adjudication hierarchy before viewing outcomes. If a single category is
+  required for display, preserve multilabel indicators for sensitivity analyses.
+
+Acceptance criteria:
+  - Unit tests cover targets matching two and three symptom classes.
+  - The report quantifies how many records match multiple classes.
+  - Headline contrasts are rerun with multilabel and exclusive classifications.
+  - Any material change is reflected in the conclusion.
+
+
+PX-04: The "rest of corpus" comparator does not isolate symptom heterogeneity
+----------------------------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — the omnibus "rest of corpus" contrast is gone. Every headline contrast now
+  moves one factor: within drug (symptom class vs the same drug's other classes) and within
+  symptom (drug vs the other drugs in the class). Both are displayed with reference rows and
+  reporters. A reporter-clustered GEE with drug x symptom interaction is reported alongside:
+  the general-fatigue main effect is -1.50 log-odds (-2.53 to -0.46) while the
+  ketamine-by-fatigue interaction is -1.07 (-2.38 to +0.24), so the conclusion attributes the
+  result to the symptom class and calls ketamine the sharpest case, not a separate finding.
+Primary artifact:
+  psychedelics_v2_patient_experience.ipynb, symptom comparison beginning near
+  cell 3d9bbbf7
+
+Problem:
+  A focal drug-symptom cell, such as ketamine/energy_pem, is compared with every
+  other drug-symptom row. The reference therefore changes drug, symptom,
+  indication, route, setting, access pattern, and reporter composition at the
+  same time.
+
+Impact:
+  The displayed -28.1 percentage-point difference cannot be attributed to the
+  energy/PEM symptom class. It may reflect ketamine context, the mix of other
+  symptoms, or the way outcomes are reported in supervised treatment.
+
+Required action:
+  Replace the omnibus "rest" contrast with interpretable estimands:
+  - within-ketamine energy/fatigue versus other symptoms,
+  - within-energy/fatigue ketamine versus other drugs,
+  - a reporter-clustered model with drug, symptom, and drug-by-symptom interaction.
+  Define the primary estimand before rerunning the analysis.
+
+Acceptance criteria:
+  - Every headline contrast changes one primary factor at a time or is model-adjusted.
+  - Reference-group composition and counts are shown.
+  - Drug-by-symptom interaction uncertainty is reported.
+  - The conclusion no longer attributes an omnibus difference solely to symptom class.
+
+
+PX-05: Multi-contrast interval screening is functioning as hypothesis testing
+-----------------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Note 2026-08-10: still open, and now larger. The one-factor rework (PX-04) replaced 22 gated
+  contrasts with 44, and the screen reports "8 of 44 gated contrasts have a difference interval
+  clear of zero" with no multiplicity adjustment. The count of attempted contrasts is at least
+  printed alongside the selected ones.
+Primary artifacts:
+  Patient-experience cells 0b9cf0c6, 8aa4635d, and cfe9ea3a
+
+Problem:
+  The notebook evaluates 22 gated contrasts, selects those whose 95% intervals
+  exclude zero, ranks them, and calls selected patterns "clear" or worth
+  investigation. Operationally, this is inferential screening even though the
+  text says no hypothesis tests are performed.
+
+Impact:
+  With many inspected contrasts, at least one apparently clear interval can
+  arise by chance. Selecting the strongest result after examining all cells also
+  makes its unadjusted interval too optimistic for the selection process.
+
+Required action:
+  Label the screen explicitly as exploratory. Prefer a small prespecified set of
+  primary contrasts. For a broad screen, use simultaneous bootstrap intervals,
+  family-wise correction, or false-discovery-rate control as appropriate.
+
+Acceptance criteria:
+  - The number of attempted contrasts is reported wherever selected results appear.
+  - Primary and exploratory contrasts are clearly separated.
+  - Multiplicity-adjusted uncertainty is supplied for broad screening.
+  - "Clear" is not used solely because an unadjusted interval excludes zero.
+
+
+PX-06: Evidence tiers ignore uncertainty in the comparator
+----------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — tiers are built from the within-drug contrast's own bootstrap
+  distribution, so each resample recomputes focal and reference arms together and an account
+  with rows on both sides stays in one cluster. Tier labels renamed to name the reference
+  ("Above/Below/Consistent with the drug's other symptom classes") and are defined in §10
+  independently of the observed results.
+Primary artifact:
+  Patient-experience cell cfe9ea3a
+
+Problem:
+  The tiering logic compares a focal rate interval with a fixed baseline rate.
+  That treats the baseline as known without error and does not account for
+  covariance between the focal group and the reference data.
+
+Impact:
+  Cells can be assigned stronger evidence tiers than warranted. This is
+  especially problematic when a focal cell is part of the baseline or when the
+  same reporters contribute to both sides.
+
+Required action:
+  Construct tiers from the bootstrap distribution of the actual contrast. Each
+  resample must recompute both focal and comparator rates while preserving the
+  reporter cluster.
+
+Acceptance criteria:
+  - Tier assignment uses a contrast interval, not a marginal interval.
+  - Both sides are recomputed inside each clustered resample.
+  - Overlapping reporters are kept in the same bootstrap cluster.
+  - Tier definitions are documented independently of observed results.
+
+
+PX-07: Robustness checks do not rerun the headline symptom contrasts
+-------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Primary artifacts:
+  Patient-experience cells 9ef1dac3 through d7044acf
+
+Problem:
+  The sensitivity sections recalculate drug-level any-helped and any-worsened
+  rates. They do not rerun the ketamine/energy_pem and psilocybin/energy_pem
+  contrasts emphasized in the abstract and conclusion.
+
+Impact:
+  The report's robustness framing does not establish robustness of its principal
+  substantive finding. A stable overall drug rate can coexist with an unstable
+  subgroup contrast.
+
+Required action:
+  Rerun the exact headline contrasts under high-confidence-only records,
+  prolific-reporter exclusion, single-target-drug reporters, alternative symptom
+  definitions, and source/claim deduplication.
+
+Acceptance criteria:
+  - A sensitivity table has one row per headline contrast and one column per scenario.
+  - Each scenario reports estimate, interval, rows, and unique reporters.
+  - The abstract and conclusion describe any sign changes or major attenuation.
+  - Sensitivity checks use the same estimand as the primary analysis.
+
+
+PX-08: Headline denominators condition on having an extractable effect
+---------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Primary artifact:
+  psychedelics_v2.py, patient_drug_effects(), approximately lines 389-405
+Also affects:
+  Both notebooks' any-helped, any-worsened, and profile results.
+
+Problem:
+  patient_drug_effects() starts from the effects table. Patient-drug pairs with no
+  effect record are absent. In the reviewed output, only 341/538 psilocybin,
+  352/525 ketamine, and 54/94 LSD cohort pairs contribute to headline rates.
+
+Impact:
+  Roughly one-third to two-fifths of pairs are excluded after exposure selection.
+  Missingness can depend on report detail, outcome salience, amount of text, or
+  extraction behavior. Rates therefore describe effect-bearing pairs, not all
+  actual-use pairs.
+
+Required action:
+  Make cohort-to-effect attrition a primary result by drug. Keep "unknown/not
+  extracted" as an explicit state and provide missing-outcome bounds or
+  prespecified assumptions rather than silently dropping those pairs.
+
+Acceptance criteria:
+  - Every headline table shows total actual-use pairs and effect-bearing pairs.
+  - Titles and conclusions use "effect-bearing pairs" where that is the denominator.
+  - Best-case, worst-case, and at least one plausible missingness sensitivity are shown.
+  - No missing effect is automatically classified as helped, harmed, or no effect.
+
+
+PX-09: "Any helped" is sensitive to the number of extracted opportunities
+---------------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Primary artifact:
+  psychedelics_v2.py, patient_drug_effects(), approximately lines 397-405
+
+Problem:
+  A pair is marked any_helped if at least one of its effect records is helped.
+  More records create more opportunities to satisfy that condition. Record counts
+  vary substantially across reporters and drugs, with extreme prolific cases.
+
+Impact:
+  Higher any-helped rates can partly reflect more text or more extracted targets
+  rather than a difference in experience. The same opportunity effect applies to
+  any-worsened, though base rates differ.
+
+Required action:
+  Report outcome rates stratified by effect-record count. Add a sensitivity
+  analysis using one prespecified effect per pair, standardized record counts, or
+  a clustered event-level model. Treat prolific outliers explicitly.
+
+Acceptance criteria:
+  - Distribution of n_effects per pair is reported by drug.
+  - Headline rates are shown for one-record pairs and capped-record scenarios.
+  - Results are not interpreted as comparable across drugs without addressing opportunity count.
+  - The handling of prolific reporters is prespecified.
+
+
+PX-10: Overlapping confidence intervals are interpreted as equivalence
+---------------------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — equivalence wording removed from both notebooks; overlap is now
+  described as precision, with an explicit note that no equivalence margin or test exists.
+Primary artifacts:
+  Analysis notebook cell 7bcbc75a
+  Patient-experience conclusion cell 600596ae
+
+Problem:
+  The notebooks state that the drugs are "indistinguishable" or "not
+  distinguishable" on any-helped because intervals overlap. Overlap does not
+  establish equality, and failure to reject a difference does not establish that
+  clinically meaningful differences are absent.
+
+Impact:
+  Readers may conclude that comparative equivalence was demonstrated. No
+  equivalence margin or equivalence test is defined.
+
+Required action:
+  Replace the language with descriptive estimates and uncertainty. If
+  equivalence is scientifically important, define a clinically meaningful margin
+  before analysis and perform a reporter-clustered equivalence analysis.
+
+Acceptance criteria:
+  - "Indistinguishable" and equivalent wording are removed unless equivalence is tested.
+  - Pairwise differences and intervals are shown descriptively.
+  - Any equivalence claim includes a prespecified margin and method.
+  - Multiple drug comparisons are handled consistently.
+
+
+PX-11: Cross-drug comparisons may treat repeated reporters as independent
+-----------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Primary artifacts:
+  Drug-level comparisons in both notebooks.
+
+Problem:
+  A single hashed author can contribute to more than one drug arm. Marginal
+  drug-level intervals and informal comparisons do not consistently account for
+  this cross-arm dependence.
+
+Impact:
+  Standard errors can be incorrect, and the comparison can mix paired and
+  unpaired observations without making that structure visible.
+
+Required action:
+  Quantify reporter overlap among all drug pairs. Use reporter-clustered models,
+  cluster bootstrap resampling, or explicitly paired analyses for overlapping
+  reporters.
+
+Acceptance criteria:
+  - A drug-overlap matrix reports shared reporters.
+  - Every cross-drug interval preserves reporter-level dependence.
+  - Paired and unpaired contributions are described.
+  - Sensitivity results for single-drug reporters are included.
+
+
+PX-12: Model confidence fields are loaded but ignored in principal estimates
+----------------------------------------------------------------------------
+Severity: HIGH
+Status: Open
+Primary artifact:
+  psychedelics_v2.py, effects/adverse loading near lines 181-200
+
+Problem:
+  Effects and adverse events retain confidence labels, but all records receive
+  equal weight in headline analyses. In the reviewed run, approximately 21% of
+  effects and 20% of adverse events were medium- or low-confidence.
+
+Impact:
+  Results may depend materially on uncertain records, and readers cannot see
+  whether the highlighted contrasts survive removal of those records. Model
+  confidence is not necessarily calibrated, so probabilistic weighting would
+  also require justification.
+
+Required action:
+  Report confidence distributions by drug and outcome type. Rerun every headline
+  estimate using high-confidence records only. Use weighted analyses only if
+  confidence is calibrated against an external reference.
+
+Acceptance criteria:
+  - Confidence distributions and unique reporter counts are shown.
+  - High-confidence-only estimates accompany principal estimates.
+  - The headline symptom contrasts are included, not only overall drug rates.
+  - Confidence labels are not described as probabilities unless calibrated.
+
+
+PX-13: Route is used as an unsupported proxy for administration setting
+----------------------------------------------------------------------
+Severity: HIGH
+Status: FIXED
+Fixed 2026-08-10 — route groups renamed "IV/IM stated route" / "other stated routes".
+  Setting is stated as unmeasured; no result is explained by supervision.
+Primary artifact:
+  Patient-experience cell 01dd916e and nearby ketamine route analysis
+
+Problem:
+  IV/IM records are labeled "clinic-administered"; all other stated routes,
+  including "other", are labeled "self- or take-home administered". Route does
+  not prove setting. Intranasal ketamine or esketamine may be clinic-administered,
+  and even an injection label alone does not document supervision.
+
+Impact:
+  The reported 72% clinic-administered share and explanations of adverse-event
+  differences use a setting variable that was not actually measured.
+
+Required action:
+  Rename the displayed groups to "IV/IM stated route" and "other stated routes".
+  Derive setting only from a separate, structured, validated context field.
+
+Acceptance criteria:
+  - No route category is called clinic, supervised, self-administered, or take-home.
+  - Explanations based on setting are removed or supported by an actual setting field.
+  - Unknown route and unknown setting remain explicit.
+  - Route and setting coverage are reported separately.
+
+
+PX-14: "Patient" identifiers represent Reddit accounts, not verified people
+----------------------------------------------------------------------------
+Severity: MEDIUM
+Status: FIXED
+Fixed 2026-08-10 (reader-facing text only, per decision) — "reporter"/"reporter account"
+  throughout prose, tables, figures and printed strings; analysis-unit definition and an
+  identity limitation added. Internal DataFrame column stays `patient` by design.
+Primary artifact:
+  psychedelics_v2.py, dense author ID creation near lines 141-150
+
+Problem:
+  The loader maps author_hash values to dense integer IDs named patient. This
+  verifies neither identity nor one-account-per-person. Shared accounts, multiple
+  accounts, and incorrectly attributed self-reports remain possible.
+
+Impact:
+  Statements such as "1,041 patients" imply a level of identity verification not
+  present in the source. This matters for both scientific interpretation and
+  cluster counts.
+
+Required action:
+  Use "reporter", "author account", or "account" throughout methods, tables,
+  figures, and conclusions. Explain that subject=self is a claim-level inclusion
+  condition, not external identity verification.
+
+Acceptance criteria:
+  - Reader-facing artifacts no longer call account-derived IDs verified patients.
+  - The analysis-unit definition is explicit.
+  - Limitations mention possible account/person mismatch.
+  - Internal variable renaming is considered to reduce future misuse.
+
+
+PX-15: Dose distributions weight repeated records rather than reporters
+----------------------------------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifacts:
+  Numeric dose summaries and histograms in both notebooks.
+
+Problem:
+  Medians, histograms, and bin counts operate on dose records. A prolific reporter
+  can contribute many records and therefore shift the displayed distribution.
+  Repeated mentions may also describe the same regimen rather than independent
+  exposures.
+
+Impact:
+  Apparent dose clusters can be driven by a small number of reporters or repeated
+  descriptions. Record-level plots conflict with the notebooks' general warning
+  against pseudoreplication.
+
+Required action:
+  Add reporter-level summaries using a prespecified aggregation rule. Deduplicate
+  identical claim-level doses where justified and display unique reporter counts
+  behind every bin.
+
+Acceptance criteria:
+  - Every dose plot distinguishes records from unique reporters.
+  - A reporter-weighted sensitivity plot is provided.
+  - Deduplication rules are documented and tested.
+  - No record-level distribution is generalized to people without qualification.
+
+
+PX-16: Wilson intervals have a narrower interpretation than the prose suggests
+----------------------------------------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifact:
+  psychedelics_v2.py, wilson(), approximately lines 381-386
+
+Problem:
+  Wilson intervals quantify conditional binomial variation under assumptions
+  that do not cover convenience sampling, missing outcomes, cross-drug reporter
+  dependence, extraction variation, or contrast selection.
+
+Impact:
+  The narrow intervals can visually imply much greater certainty than the study
+  supports. They are not population-representative uncertainty intervals for
+  people with long COVID or even all Reddit users.
+
+Required action:
+  Label Wilson intervals as conditional descriptive intervals. Use clustered
+  bootstrap intervals for reporter-dependent contrasts and accompany them with
+  missingness and classification sensitivity analyses.
+
+Acceptance criteria:
+  - Every interval type and its uncertainty scope are stated.
+  - Population inference is explicitly disclaimed.
+  - Cross-drug and subgroup contrasts use reporter-aware uncertainty.
+  - Sensitivity uncertainty is not visually conflated with sampling uncertainty.
+
+
+PX-17: Database run selection is not deterministic
+--------------------------------------------------
+Severity: MEDIUM
+Status: FIXED
+Fixed 2026-08-10 — P.select_run() requires a unique run; both notebooks pin RUN_ID.
+  Raises on zero, unknown, or multiple runs. Tests cover all three.
+Primary artifact:
+  psychedelics_v2.py, load_frames(), approximately lines 91-99
+
+Problem:
+  load_frames() runs:
+
+    SELECT run_id, config_json, created_at FROM probe_run
+
+  and consumes fetchone() without a WHERE clause, ordering, or assertion that the
+  database contains exactly one run. If additional runs are present, the selected
+  row is not explicitly controlled.
+
+Impact:
+  Re-executing the same notebook against a changed database can silently analyze
+  a different run. A displayed database hash can reveal that the file changed,
+  but it does not force intentional run selection.
+
+Required action:
+  Require a full run_id argument or environment setting. Query that exact run and
+  fail if it is missing or non-unique. Print the full run ID in provenance.
+
+Acceptance criteria:
+  - load_frames() never chooses among multiple runs implicitly.
+  - Tests cover zero, one, and multiple probe_run rows.
+  - The notebook records and asserts the expected full run ID.
+  - Reproduction instructions include the database hash and run ID.
+
+
+PX-18: Reproduction metadata is incomplete
+------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifacts:
+  Provenance and reproduction sections in both notebooks.
+
+Problem:
+  The reports include useful run and database information but do not fully pin
+  the source snapshot, repository revision, loader revision, Python runtime, and
+  dependency versions.
+
+Impact:
+  A future re-execution may produce different results even when the database
+  appears correct. It may be difficult to distinguish data drift from code or
+  environment drift.
+
+Required action:
+  Record the full run ID, probe database SHA-256, source snapshot SHA-256,
+  repository commit, dirty-tree status, Python version, key package versions,
+  notebook hash, and loader hash.
+
+Acceptance criteria:
+  - Provenance is emitted in a machine-readable table.
+  - The source snapshot and probe database are independently hashed.
+  - Code revision and dirty state are visible.
+  - Environment versions can be recreated from a lock or environment file.
+
+
+PX-19: Snapshot date is presented like a source-content date range
+-----------------------------------------------------------------
+Severity: MEDIUM
+Status: FIXED
+Fixed 2026-08-10 — provenance splits "source snapshot date" from "content date range"
+  (unavailable; post timestamps are not loaded).
+Primary artifact:
+  Patient-experience provenance cell fed0733c
+
+Problem:
+  The displayed 2026-06-13 to 2026-06-13 range is derived from a source snapshot
+  name, while the loader does not retrieve underlying post dates.
+
+Impact:
+  Readers can interpret the date as the period during which reports were posted,
+  which would materially affect temporal generalizability.
+
+Required action:
+  Rename the field "snapshot date". Report the actual post-date range only if
+  timestamps are deliberately loaded and privacy-reviewed; otherwise state that
+  content dates are unavailable.
+
+Acceptance criteria:
+  - Snapshot and content dates are distinct fields.
+  - No one-day content range is implied without post timestamps.
+  - Methods explain what the snapshot date means.
+  - Any future timestamp use follows the privacy contract.
+
+
+PX-20: Cohort reconciliation is circular rather than independent
+---------------------------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifact:
+  Analysis notebook section 9.2
+
+Problem:
+  The v2 cohort matches the legacy cohort because it was imported from the
+  legacy run's JSON. This confirms import fidelity but does not satisfy the
+  protocol's planned comparison between independently derived SQL and legacy
+  cohorts.
+
+Impact:
+  Membership or drug-attribution errors shared with the legacy artifact remain
+  undetectable. The exact matching counts should not be presented as independent
+  cohort validation.
+
+Required action:
+  Reconstruct the cohort independently from source data and compare member sets,
+  drug assignments, and exclusions against the imported cohort.
+
+Acceptance criteria:
+  - Independent derivation code does not consume the legacy cohort artifact.
+  - Set differences are reported by inclusion and drug assignment.
+  - Discrepancies are adjudicated under documented rules.
+  - The report distinguishes import fidelity from cohort reconciliation.
+
+
+PX-21: Planned extraction units do not fully reconcile with the legacy run
+------------------------------------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifact:
+  Analysis notebook section 9.3
+
+Problem:
+  The source-window count and character total match the legacy reference, but the
+  reviewed run planned 1,206 units rather than approximately 1,207 and reports a
+  different maximum unit size. The packing difference is unexplained.
+
+Impact:
+  Unit-level comparisons across versions are unsafe. Different grouping can
+  change model context, extraction behavior, retry behavior, and cost even when
+  total source text is unchanged.
+
+Required action:
+  Compare deterministic unit manifests and identify the exact packing-rule,
+  ordering, or boundary difference. Version the packing algorithm and save its
+  parameters.
+
+Acceptance criteria:
+  - A manifest comparison identifies every changed unit.
+  - Source-window ordering and boundary rules are deterministic.
+  - Packing version and parameters are recorded in provenance.
+  - Cross-run unit comparisons are withheld until reconciliation is complete.
+
+
+PX-22: Reader-facing HTML retains implementation code and setup output
+---------------------------------------------------------------------
+Severity: MEDIUM
+Status: Open
+Primary artifact:
+  psychedelics_v2_patient_experience.html
+
+Problem:
+  The HTML export includes all code cells and some setup/debug output. No direct
+  verbatim quotes or author hashes were found in the reviewed export, but it is
+  not a clean reader-facing report and future debug output could accidentally
+  expand the exposed surface.
+
+Impact:
+  The report is harder to review as a study artifact and may reveal unnecessary
+  implementation details. Retaining executable inputs also increases the chance
+  that a future export exposes paths, configuration, or unsafe intermediate data.
+
+Required action:
+  Publish two artifacts: a complete reproducible notebook and a reader-facing
+  HTML export with code inputs and setup output hidden. Add an automated privacy
+  scan to the export workflow.
+
+Acceptance criteria:
+  - Reader HTML hides code inputs and setup/debug output.
+  - The full notebook remains available for reproducibility.
+  - Export checks reject author hashes, raw text, evidence quotes, and local paths.
+  - Executed notebook and reader HTML are generated from the same source revision.
+
+
+STATUS SUMMARY (2026-08-10)
+===========================
+  FIXED: PX-01, PX-02, PX-03, PX-04, PX-06, PX-10, PX-13, PX-14, PX-17, PX-19
+  OPEN:  PX-05, PX-07, PX-08, PX-09, PX-11, PX-12, PX-15, PX-16, PX-18, PX-20, PX-21, PX-22
+
+  PX-05 is now larger, not smaller: the one-factor rework replaced 22 screened contrasts with
+  44, still unadjusted.
+
+  The -28.1pp ketamine/energy_pem headline is retired. It was never a PEM result: that class
+  was 17% explicit PEM by record, and the estimand changed drug, symptom, route and reporter
+  mix at once. What replaces it is ketamine/fatigue_general, -46.4 pp against the same drug's
+  other symptom classes (-60.4 to -30.1) and -34.7 pp against the other drugs in the same
+  class (-57.6 to -11.5), with the interaction model putting more weight on the symptom class
+  than on ketamine specifically.
+
+  Also fixed in passing (2026-08-10): a surviving PX-13 violation in the §5 adverse-event
+  comparison, which still explained a difference by ketamine exposure being "largely
+  supervised and clinical". It now states the route and that setting is unmeasured.
+
+  Note on PX-07: the sensitivity sections still do not rerun the headline symptom contrasts.
+  The headline is now ketamine/fatigue_general rather than ketamine/energy_pem, so PX-07's
+  required scenarios apply to that contrast.
+
+
+RECOMMENDED IMPLEMENTATION ORDER
+================================
+
+1. PX-01: remove or correctly relink the dose/outcome analysis.
+2. PX-02, PX-03, PX-04: repair symptom definitions and estimands.
+3. PX-05, PX-06, PX-07: repair screening, tiering, and sensitivity analyses.
+4. PX-08, PX-09, PX-10, PX-11: correct denominators and comparative claims.
+5. PX-12, PX-13, PX-14, PX-15, PX-16: improve sensitivity, terminology, and
+   interpretation.
+6. PX-17 through PX-22: harden provenance, reconciliation, and publication.
+

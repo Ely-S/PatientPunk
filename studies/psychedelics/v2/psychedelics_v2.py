@@ -33,6 +33,7 @@ from statsmodels.stats.proportion import proportion_confint
 
 DB_RELPATH = Path("data/probes/psychedelic_pharmacology.db")
 ENV_VAR = "PP_PROBE_DB"
+RUN_ENV_VAR = "PP_PROBE_RUN_ID"
 
 DRUGS = ("psilocybin", "ketamine", "lsd")
 DIRECTIONS = ("helped", "no_effect", "worsened", "mixed")
@@ -88,13 +89,42 @@ class Frames:
     doses: pd.DataFrame
 
 
-def load_frames(path: Path | None = None) -> Frames:
-    """Load the whole run into tidy frames, stripping every unsafe field."""
+def select_run(con: sqlite3.Connection, run_id: str | None = None) -> tuple[str, str, str]:
+    """Resolve exactly one probe run, or raise.
+
+    A database can accumulate runs, so the run is never chosen implicitly: pass a
+    full `run_id` (or set `PP_PROBE_RUN_ID`) to pin one, otherwise the database
+    must hold exactly one run.
+    """
+    wanted = run_id or os.environ.get(RUN_ENV_VAR) or None
+    rows = con.execute(
+        "SELECT run_id, config_json, created_at FROM probe_run ORDER BY run_id"
+    ).fetchall()
+    if wanted:
+        matches = [r for r in rows if r[0] == wanted]
+        if not matches:
+            raise ValueError(
+                f"run_id {wanted!r} is not in this database. "
+                f"It holds {len(rows)} run(s): {[r[0] for r in rows]}"
+            )
+        if len(matches) > 1:
+            raise ValueError(f"run_id {wanted!r} is not unique in this database")
+        return matches[0]
+    if not rows:
+        raise ValueError("This database contains no probe_run rows.")
+    if len(rows) > 1:
+        raise ValueError(
+            f"This database contains {len(rows)} runs: {[r[0] for r in rows]}. "
+            f"Pass run_id= or set {RUN_ENV_VAR} to choose one explicitly."
+        )
+    return rows[0]
+
+
+def load_frames(path: Path | None = None, run_id: str | None = None) -> Frames:
+    """Load one run into tidy frames, stripping every unsafe field."""
     con = open_db(path)
     try:
-        run_id, config_json, created_at = con.execute(
-            "SELECT run_id, config_json, created_at FROM probe_run"
-        ).fetchone()
+        run_id, config_json, created_at = select_run(con, run_id)
         run = {"run_id": run_id, "created_at": created_at,
                "config": json.loads(config_json)}
 
@@ -179,6 +209,7 @@ def load_frames(path: Path | None = None) -> Frames:
             }
         )
         for e in v["effects"]:
+            labels = symptom_labels(e.get("target"))
             effects.append(
                 base | {
                     "direction": e["direction"],
@@ -186,8 +217,10 @@ def load_frames(path: Path | None = None) -> Frames:
                     "magnitude": e.get("magnitude_0_10"),
                     "magnitude_basis": e.get("magnitude_basis"),
                     "symptom_class": classify_symptom(e.get("target")),
+                    "n_symptom_labels": len(labels),
                     "duration_bin": (e.get("duration") or {}).get("normalized"),
                 }
+                | {f"sx_{name}": name in labels for name, _ in SYMPTOM_PATTERNS}
             )
         for a in v["adverse_events"]:
             adverse.append(
@@ -276,32 +309,65 @@ def canon_intent(value: str | None) -> str | None:
     return _canon(value, _INTENT_RULES)
 
 
-# Symptom classes carried over from v1, so the effect targets are reported as
-# classes rather than as the free-text labels the model wrote.
-MOOD_COGNITIVE = re.compile(
-    r"depress|anxiet|anxious|mood|anhedon|brain ?fog|cognit|memory|focus|"
-    r"concentrat|motivat|mental health|ptsd|suicid|ocd|panic|clarity|apath|"
-    r"depersonal|dereal|trauma|wellbeing|well-being|well being",
-    re.I,
+# Effect targets are free text, so they are reported as classes rather than as
+# the labels the model wrote. Two rules shape the vocabulary:
+#
+# * Post-exertional malaise is a specific construct. Only language that states
+#   post-exertional worsening earns `pem_explicit`; exertion-related complaints,
+#   nonspecific fatigue and low energy are separate classes and must not be
+#   described as PEM. (The v1 composite `energy_pem` matched all four at once.)
+# * A target can name several symptoms, so membership is multilabel. The single
+#   display label is the first match in `SYMPTOM_PATTERNS`, which is ordered by
+#   how specific the matched construct is -- explicit post-exertional worsening,
+#   then exertion, then two named symptom domains, then nonspecific tiredness,
+#   then bare low energy. The order is fixed here, independently of any outcome.
+#
+# `me/cfs` is a diagnosis label rather than a statement of post-exertional
+# worsening, so it counts as general fatigue, not as explicit PEM.
+SYMPTOM_PATTERNS = (
+    ("pem_explicit", re.compile(
+        r"\bpem\b|post[-\s]?exertion(?:al)?|\bpayback\b|"
+        r"crash\w*\s+(?:after|from|following)", re.I)),
+    ("exertion_intolerance", re.compile(
+        r"exert\w*|exercis\w*|physical activity|activity tolerance|overdo\w*|"
+        r"stamina|endurance|deconditio\w*", re.I)),
+    ("pain", re.compile(
+        r"\bpain\b|\bache|migraine|headache|neuralgia|fibromyalgia", re.I)),
+    ("mood_cognitive", re.compile(
+        r"depress|anxiet|anxious|mood|anhedon|brain ?fog|cognit|memory|focus|"
+        r"concentrat|motivat|mental health|ptsd|suicid|ocd|panic|clarity|apath|"
+        r"depersonal|dereal|trauma|wellbeing|well-being|well being", re.I)),
+    ("fatigue_general", re.compile(
+        r"fatigue|exhaust\w*|\btired\w*|lethargy|lethargic|malaise|"
+        r"\bcfs\b|\bme[/\s-]?cfs\b", re.I)),
+    ("low_energy", re.compile(r"\benerg\w*|sluggish|listless", re.I)),
 )
-ENERGY_PEM = re.compile(
-    r"\bpem\b|fatigue|energy|crash|exertion|stamina|exhaust|cfs|me/cfs|tired",
-    re.I,
-)
-PAIN = re.compile(r"\bpain\b|\bache|migraine|headache|neuralgia|fibromyalgia", re.I)
+
+#: Display vocabulary: the matchable classes, then the two fallbacks.
+SYMPTOM_CLASSES = tuple(name for name, _ in SYMPTOM_PATTERNS) + ("other", "unspecified")
+
+#: The four classes the v1 `energy_pem` composite collapsed into one.
+ENERGY_FAMILY = ("pem_explicit", "exertion_intolerance", "fatigue_general", "low_energy")
+
+
+def symptom_labels(target: str | None) -> tuple[str, ...]:
+    """Every symptom class the target matches, in precedence order."""
+    if not target or not target.strip():
+        return ()
+    return tuple(name for name, pattern in SYMPTOM_PATTERNS if pattern.search(target))
 
 
 def classify_symptom(target: str | None) -> str:
-    """Coarse class for an effect's stated target, or `unspecified` when absent."""
+    """Single display class: the most specific match.
+
+    `unspecified` when no target was stated, `other` when one was but it matches
+    no class. Multilabel membership is kept alongside this in the effects frame,
+    so nothing is lost to the precedence rule.
+    """
     if not target or not target.strip():
         return "unspecified"
-    if MOOD_COGNITIVE.search(target):
-        return "mood_cognitive"
-    if ENERGY_PEM.search(target):
-        return "energy_pem"
-    if PAIN.search(target):
-        return "pain"
-    return "other"
+    labels = symptom_labels(target)
+    return labels[0] if labels else "other"
 
 
 # ── Extraction reliability ─────────────────────────────────────────────────
@@ -414,6 +480,68 @@ def patient_drug_effects(f: Frames) -> pd.DataFrame:
     return out
 
 
+def dose_outcome_rows(f: Frames, bins: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Link each binned dose to the effects extracted from the *same claim*.
+
+    A claim is one extracted exposure event, and it is the finest shared key the
+    probe stores, so it is the only level at which a dose and an outcome are known
+    to describe the same episode. Joining on (patient, drug) instead would copy a
+    pair's whole outcome summary onto every dose bin that pair ever mentioned,
+    counting one reported benefit as evidence for incompatible dose levels.
+
+    Two documented exclusions, applied before any outcome is read:
+
+    * a claim whose dose records straddle more than one bin is ambiguous -- there
+      is no rule that assigns its outcome to one bin -- and is dropped whole;
+    * a claim carrying no effect record has no outcome to link and is dropped.
+
+    `bins` maps (drug, unit_canon) -> (group_label, [(upper_inclusive, bin_name), ...]).
+    Returns the analyzable rows and an audit frame of retained/excluded counts.
+    """
+    d = f.doses[f.doses.amount_lower.notna() & f.doses.unit_canon.notna()].copy()
+    d["amount"] = d.amount_lower.astype(float)
+
+    def assign(drug, unit, amount):
+        spec = bins.get((drug, unit))
+        if spec is None:
+            return None, None
+        group, edges = spec
+        return group, next(name for upper, name in edges if amount <= upper)
+
+    d["dose group"], d["dose bin"] = zip(*[
+        assign(r.drug, r.unit_canon, r.amount) for r in d.itertuples()
+    ]) if len(d) else ((), ())
+    binnable = d[d["dose group"].notna()]
+
+    spans = binnable.groupby("claim_id")["dose bin"].nunique()
+    ambiguous = set(spans[spans > 1].index)
+    unambiguous = binnable[~binnable.claim_id.isin(ambiguous)]
+
+    claim_outcome = f.effects.groupby("claim_id")["direction"].agg(
+        helped=lambda s: (s == "helped").any(),
+        worsened=lambda s: (s == "worsened").any(),
+    )
+    keys = unambiguous[
+        ["claim_id", "patient", "drug", "dose group", "dose bin"]
+    ].drop_duplicates()
+    rows = keys.merge(claim_outcome, left_on="claim_id", right_index=True, how="inner")
+
+    audit = pd.DataFrame([
+        {"step": "dose records with amount + canonical unit", "records": len(d),
+         "claims": d.claim_id.nunique()},
+        {"step": "in a binned drug/unit subset", "records": len(binnable),
+         "claims": binnable.claim_id.nunique()},
+        {"step": "excluded: claim straddles >1 dose bin",
+         "records": len(binnable) - len(unambiguous), "claims": len(ambiguous)},
+        {"step": "excluded: claim carries no effect record",
+         "records": len(unambiguous) - len(rows),
+         "claims": unambiguous.claim_id.nunique() - rows.claim_id.nunique()},
+        {"step": "retained for dose/outcome analysis", "records": len(rows),
+         "claims": rows.claim_id.nunique()},
+    ])
+    return rows.reset_index(drop=True), audit
+
+
 def rate_table(df: pd.DataFrame, col: str, by: str = "drug",
                order: tuple[str, ...] = DRUGS) -> pd.DataFrame:
     """Per-group share of `col` with a Wilson CI and its denominator attached."""
@@ -465,6 +593,39 @@ def adverse_denominators(f: Frames) -> pd.DataFrame:
     )
     tab["included_claims"] = tab.sum(axis=1)
     return tab
+
+
+def symptom_composition(e: pd.DataFrame) -> pd.DataFrame:
+    """What each symptom class actually contains, per class.
+
+    Multilabel columns count a record under every class it matches, so they sum
+    to more than the record total; exclusive columns use the display label only.
+    The gap between the two is what the precedence rule reassigns.
+    """
+    rows = []
+    for name in SYMPTOM_CLASSES:
+        multi = e[e[f"sx_{name}"]] if f"sx_{name}" in e else e[e.symptom_class == name]
+        excl = e[e.symptom_class == name]
+        rows.append({
+            "symptom class": name,
+            "records (multilabel)": len(multi),
+            "reporters (multilabel)": multi.patient.nunique(),
+            "records (exclusive)": len(excl),
+            "reporters (exclusive)": excl.patient.nunique(),
+        })
+    return pd.DataFrame(rows).set_index("symptom class")
+
+
+def symptom_overlap(e: pd.DataFrame) -> pd.DataFrame:
+    """How many effect records match 0, 1, 2, ... symptom classes at once.
+
+    Every record above one class is a record whose analytical category the old
+    single-label rule decided by pattern order rather than by the text.
+    """
+    counts = e.n_symptom_labels.value_counts().sort_index()
+    out = counts.rename("records").rename_axis("classes matched").reset_index()
+    out["share"] = out["records"] / len(e)
+    return out
 
 
 def dose_coverage(f: Frames) -> pd.DataFrame:
