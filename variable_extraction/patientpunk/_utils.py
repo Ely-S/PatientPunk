@@ -175,7 +175,7 @@ def resolve_llm_config(env: dict | None = None) -> dict:
 
 
 # Sets the Timeout on LLM API Calls
-TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=60)
+TIMEOUT = httpx.Timeout(connect=10, read=90, write=90, pool=60)
 
 _CFG = resolve_llm_config()
 LLM_PROVIDER = _CFG["provider"]

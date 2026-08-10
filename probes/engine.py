@@ -21,6 +21,8 @@ import importlib
 import json
 import re
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -608,6 +610,129 @@ def _is_transient(error: BaseException) -> bool:
     return any(token in text for token in ("timeout", "connection", "429", "temporarily"))
 
 
+def _process_unit(
+    store: ProbeStore,
+    run_id: str,
+    unit: Unit,
+    probe: LoadedProbe,
+    parser: Any,
+    config: RunConfig,
+    get_client: Any,
+) -> tuple[bool, int]:
+    """Run one unit's attempt ladder. Returns ``(success, cache_hits)``.
+
+    Self-contained per unit, so units can be dispatched concurrently: every
+    store write below is serialized by ProbeStore's lock, and no attempt state
+    is shared between units.
+    """
+
+    store.set_unit_status(run_id, unit.unit_key, UnitStatus.RUNNING)
+    cache_hits = 0
+    success = False
+    feedback: str | None = None
+    # This budget is per invocation. ``attempt_no`` is the append-only
+    # storage ordinal, so a resumed unit gets a whole retry ladder
+    # instead of inheriting an earlier run's exhaustion.
+    for variant in range(MAX_PROVIDER_ATTEMPTS):
+        system, prompt = probe.claim.build_prompt(
+            unit, variant=variant, feedback=feedback
+        )
+        cache_key = _request_key(config, system, prompt)
+        attempt_no = store.next_attempt_number(run_id, unit.unit_key)
+        # Read the cache once. A stored body that fails validation fails
+        # the same way on reread, and would consume the whole budget.
+        cached = store.cached_response(cache_key) if variant == 0 else None
+        response = None
+        if cached is not None:
+            raw = cached
+            cache_hits += 1
+            attempt = Attempt(
+                unit_key=unit.unit_key,
+                attempt_no=attempt_no,
+                status=AttemptStatus.RECEIVED,
+                response_body=raw,
+                response_sha256=text_sha256(raw),
+                cache_key=cache_key,
+                cache_hit=True,
+                recorded_at=datetime.now(timezone.utc),
+            )
+        else:
+            client = get_client()
+            try:
+                response = client.messages.create(
+                    **_provider_kwargs(config, system, prompt)
+                )
+                from patientpunk._utils import response_text
+
+                raw = response_text(response)
+                attempt = Attempt(
+                    unit_key=unit.unit_key,
+                    attempt_no=attempt_no,
+                    status=AttemptStatus.RECEIVED,
+                    response_body=raw,
+                    response_sha256=text_sha256(raw),
+                    cache_key=cache_key,
+                    usage=_usage(response),
+                    recorded_at=datetime.now(timezone.utc),
+                )
+            except Exception as error:
+                error_usage = _usage(error)
+                store.record_attempt(
+                    run_id,
+                    Attempt(
+                        unit_key=unit.unit_key,
+                        attempt_no=attempt_no,
+                        status=AttemptStatus.TRANSPORT_FAILED,
+                        cache_key=cache_key,
+                        usage=error_usage,
+                        billing_uncertain=error_usage is None,
+                        error=f"{type(error).__name__}: {error}",
+                        recorded_at=datetime.now(timezone.utc),
+                    ),
+                )
+                if not _is_transient(error):
+                    break
+                continue
+
+        # Persist the raw response before check_response, JSON parsing,
+        # or probe-specific validation can reject it.
+        store.record_attempt(run_id, attempt)
+        try:
+            if response is not None:
+                from patientpunk._utils import check_response, response_text
+
+                check_response(response, config.model)
+                raw = response_text(response)
+            from patientpunk._utils import parse_json_response
+
+            payload = parse_json_response(raw)
+            if payload is None:
+                raise ValueError("provider response did not contain valid JSON")
+            claims = validate_claims(parser(payload, unit), unit)
+            for claim in claims:
+                store.save_claim(run_id, claim)
+            store.update_attempt_status(
+                run_id, unit.unit_key, attempt_no, AttemptStatus.ACCEPTED
+            )
+            store.set_unit_status(run_id, unit.unit_key, UnitStatus.COMPLETE)
+            success = True
+            break
+        except Exception as error:
+            # Hand the failure to the next attempt so the retry differs
+            # from the request that just failed.
+            feedback = f"{type(error).__name__}: {error}"
+            store.update_attempt_status(
+                run_id,
+                unit.unit_key,
+                attempt_no,
+                AttemptStatus.VALIDATION_FAILED,
+                error=feedback,
+            )
+    if not success:
+        store.set_unit_status(run_id, unit.unit_key, UnitStatus.FAILED)
+    return success, cache_hits
+
+
 def run_probe(
     probe_name: str,
     *,
@@ -619,6 +744,7 @@ def run_probe(
     confirm_paid_run: bool = False,
     limit: int | None = None,
     run_id: str | None = None,
+    workers: int = 1,
 ) -> RunResult:
     """Execute a planned run, resuming incomplete units transactionally.
 
@@ -658,128 +784,44 @@ def run_probe(
     parser = getattr(probe.claim, "parse_claims", None)
     if parser is None:
         raise AttributeError(f"probe {probe_name!r} must define claim.parse_claims")
-    attempted = completed = failed = cache_hits = 0
-    client = None
+    if workers < 1:
+        raise ValueError(f"workers must be at least 1, got {workers}")
+
+    # Built once and shared: constructing a client per worker would multiply
+    # connection pools. Deferred so a fully cached invocation still builds none.
+    client_slot: list[Any] = [None]
+    client_lock = threading.Lock()
+
+    def get_client() -> Any:
+        with client_lock:
+            if client_slot[0] is None:
+                from patientpunk._utils import get_llm_client
+
+                client_slot[0] = get_llm_client()
+            return client_slot[0]
+
+    completed = failed = cache_hits = 0
     with ProbeStore(db_path) as store:
         pending = [unit for unit in units if unit.status != UnitStatus.COMPLETE]
         if limit is not None:
             pending = pending[:limit]
-        for unit in pending:
-            attempted += 1
-            store.set_unit_status(run.run_id, unit.unit_key, UnitStatus.RUNNING)
-            success = False
-            feedback: str | None = None
-            # This budget is per invocation. ``attempt_no`` is the append-only
-            # storage ordinal, so a resumed unit gets a whole retry ladder
-            # instead of inheriting an earlier run's exhaustion.
-            for variant in range(MAX_PROVIDER_ATTEMPTS):
-                system, prompt = probe.claim.build_prompt(
-                    unit, variant=variant, feedback=feedback
-                )
-                cache_key = _request_key(config, system, prompt)
-                attempt_no = store.next_attempt_number(run.run_id, unit.unit_key)
-                # Read the cache once. A stored body that fails validation fails
-                # the same way on reread, and would consume the whole budget.
-                cached = store.cached_response(cache_key) if variant == 0 else None
-                response = None
-                if cached is not None:
-                    raw = cached
-                    cache_hits += 1
-                    attempt = Attempt(
-                        unit_key=unit.unit_key,
-                        attempt_no=attempt_no,
-                        status=AttemptStatus.RECEIVED,
-                        response_body=raw,
-                        response_sha256=text_sha256(raw),
-                        cache_key=cache_key,
-                        cache_hit=True,
-                        recorded_at=datetime.now(timezone.utc),
-                    )
-                else:
-                    if client is None:
-                        from patientpunk._utils import get_llm_client
 
-                        client = get_llm_client()
-                    try:
-                        response = client.messages.create(
-                            **_provider_kwargs(config, system, prompt)
-                        )
-                        from patientpunk._utils import response_text
+        def work(unit: Unit) -> tuple[bool, int]:
+            return _process_unit(
+                store, run.run_id, unit, probe, parser, config, get_client
+            )
 
-                        raw = response_text(response)
-                        attempt = Attempt(
-                            unit_key=unit.unit_key,
-                            attempt_no=attempt_no,
-                            status=AttemptStatus.RECEIVED,
-                            response_body=raw,
-                            response_sha256=text_sha256(raw),
-                            cache_key=cache_key,
-                            usage=_usage(response),
-                            recorded_at=datetime.now(timezone.utc),
-                        )
-                    except Exception as error:
-                        error_usage = _usage(error)
-                        store.record_attempt(
-                            run.run_id,
-                            Attempt(
-                                unit_key=unit.unit_key,
-                                attempt_no=attempt_no,
-                                status=AttemptStatus.TRANSPORT_FAILED,
-                                cache_key=cache_key,
-                                usage=error_usage,
-                                billing_uncertain=error_usage is None,
-                                error=f"{type(error).__name__}: {error}",
-                                recorded_at=datetime.now(timezone.utc),
-                            ),
-                        )
-                        if not _is_transient(error):
-                            break
-                        continue
+        if workers > 1 and len(pending) > 1:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                results = list(pool.map(work, pending))
+        else:
+            results = [work(unit) for unit in pending]
 
-                # Persist the raw response before check_response, JSON parsing,
-                # or probe-specific validation can reject it.
-                store.record_attempt(run.run_id, attempt)
-                try:
-                    if response is not None:
-                        from patientpunk._utils import check_response, response_text
-
-                        check_response(response, config.model)
-                        raw = response_text(response)
-                    from patientpunk._utils import parse_json_response
-
-                    payload = parse_json_response(raw)
-                    if payload is None:
-                        raise ValueError("provider response did not contain valid JSON")
-                    claims = validate_claims(parser(payload, unit), unit)
-                    for claim in claims:
-                        store.save_claim(run.run_id, claim)
-                    store.update_attempt_status(
-                        run.run_id,
-                        unit.unit_key,
-                        attempt_no,
-                        AttemptStatus.ACCEPTED,
-                    )
-                    store.set_unit_status(
-                        run.run_id, unit.unit_key, UnitStatus.COMPLETE
-                    )
-                    completed += 1
-                    success = True
-                    break
-                except Exception as error:
-                    # Hand the failure to the next attempt so the retry differs
-                    # from the request that just failed.
-                    feedback = f"{type(error).__name__}: {error}"
-                    store.update_attempt_status(
-                        run.run_id,
-                        unit.unit_key,
-                        attempt_no,
-                        AttemptStatus.VALIDATION_FAILED,
-                        error=feedback,
-                    )
-            if not success:
-                store.set_unit_status(run.run_id, unit.unit_key, UnitStatus.FAILED)
-                failed += 1
-    return RunResult(run.run_id, attempted, completed, failed, cache_hits)
+    for success, hits in results:
+        completed += success
+        failed += not success
+        cache_hits += hits
+    return RunResult(run.run_id, len(pending), completed, failed, cache_hits)
 
 
 def _run_config(args: argparse.Namespace) -> RunConfig:
@@ -835,6 +877,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_arguments(run_parser, require_dbs=False)
     run_parser.add_argument("--confirm-paid-run", action="store_true")
     run_parser.add_argument("--limit", type=int)
+    # Dispatch width only. Deliberately absent from RunConfig: it changes how
+    # fast units are sent, never what is sent, so it must not move run_id.
+    run_parser.add_argument("--workers", type=int, default=1)
     run_parser.add_argument(
         "--run-id", help="resume a persisted run without replanning it"
     )
@@ -872,6 +917,7 @@ def main(argv: list[str] | None = None) -> int:
         confirm_paid_run=args.confirm_paid_run,
         limit=args.limit,
         run_id=args.run_id,
+        workers=args.workers,
     )
     print(
         f"run={result.run_id} attempted={result.attempted_units} "
