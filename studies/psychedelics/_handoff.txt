@@ -1,15 +1,118 @@
 ================================================================================
 HANDOFF — studies/psychedelics/
 Raw-text psychedelic pharmacology extraction
-Updated 2026-08-07 (third session). Status: PRE-PILOT WORK COMPLETE; STILL NO
-PAID API CALLS MADE.
+Updated 2026-08-09 (fourth session). Status: FULL PAID RUN EXECUTED AND COMPLETE
+via the `probes` engine. Realized cost $2.07 + 65 billing-uncertain attempts.
+GATE 4 (human quote grounding) WAS BYPASSED AND IS STILL OUTSTANDING — no
+number from this run is item-validated. See §0.
 ================================================================================
 
 --------------------------------------------------------------------------------
 0. WHAT CHANGED, MOST RECENT FIRST (READ FIRST)
 --------------------------------------------------------------------------------
 
+FOURTH SESSION — the paid run was executed, on the OTHER pipeline
+...............................................................................
+
+READ THIS BEFORE §9. Most of §9 describes a pilot/finalize sequence for
+`extract_pharmacology.py` that was NOT the path taken and did not happen. The
+run was executed with the newer `probes` engine, governed by
+`docs/psychedelic_probe_runbook.md`. §9 is superseded; see the note there.
+
+What the user decided at the gates:
+  - GATE 2: reasoning effort "high", NOT the "max" the third session pinned.
+    Sent via the OpenAI-compatible surface (`--provider openai --base-url
+    https://openrouter.ai/api`), because the engine refuses --reasoning-effort
+    on --provider openrouter rather than dropping it silently.
+  - GATE 3: approved the full run.
+  - Stage 4 pilot AND GATE 4 (human quote grounding): SKIPPED by user choice,
+    going straight to the full run. GATE 4 is bypassed, NOT satisfied.
+
+Cohort — imported, and this matters for how you read any agreement:
+  `cohort.sql` reads `treatment_reports JOIN treatment`, the drug-sentiment
+  pipeline's output. That pipeline was never run on the full corpus, so every
+  database on disk yields ~0 psychedelic pairs. The authoritative cohort existed
+  only as JSON in the legacy run's `cohort_status.json`. The user chose to
+  import it: `scripts/build_legacy_cohort_db.py` copies its 1,157 pairs into a
+  standalone `cohort_legacy.db` holding only the two columns `cohort.sql` reads.
+  It is standalone on purpose — `treatment_reports` requires post_id/run_id/
+  sentiment, and writing these pairs into `patientpunk.db` would have meant
+  inventing sentiment values inside the real analysis database.
+
+  CONSEQUENCE: GATE 1 returns exactly 1,157 / 1,041 patients / psilocybin 538,
+  ketamine 525, lsd 94 — the expected table — BY CONSTRUCTION. This confirms
+  nothing. The runbook's "do the two derivations agree" check remains
+  UNANSWERED. Say so in any report.
+
+Run identity and result:
+  run_id 710567555e22b68c025d8ceb1c3373564d7f9b01dcc5fe94b02b7c3209ecbc05
+  1,157 cohort pairs | 1,206 units planned | 4,180 windows | 2,182,844 chars
+  1,192 units complete (98.8%) | 14 failed
+  attempts: 1,192 accepted, 179 validation_failed, 68 transport_failed
+  claims 3,982 -> 2,921 included, 1,061 excluded (denominator data, kept)
+  cost: use `usage_json.provider_cost`, the REALIZED provider figure. Do not
+  recompute from list price, and do not count accepted attempts only — failed
+  attempts were billed too. Realized total over the 1,374 attempts carrying
+  usage: $2.0710
+      accepted           n=1,192   $1.6273
+      validation_failed  n=  179   $0.4246   (retries are ~20% of all spend)
+      transport_failed   n=    3   $0.0191
+  tokens 4.54M in / 6.55M out; reasoning = 79.3% of output tokens, which is
+  where effort=high actually went.
+  65 billing_uncertain attempts have NO readable usage and are NOT in that
+  total; they may also have been billed.
+  (An earlier draft of this file said $1.97. That was list price over accepted
+  attempts only — wrong on both counts. $2.07 supersedes it.)
+  cache hits 0 (resumes skip complete units at unit level, so nothing re-billed)
+
+  Windows and total characters match the legacy reference EXACTLY; units are
+  1,206 vs legacy ~1,207 and largest unit 5,998 vs 5,990. That delta is
+  unexplained and is a finding, not a rounding artifact.
+
+THE 60-SECOND TIMEOUT — the most important operational finding
+  `variable_extraction/patientpunk/_utils.py` TIMEOUT had read=60. Under
+  effort=high with max_tokens 32,768 (completed units average ~3,673 output
+  tokens) long-reasoning requests cannot return inside 60s, so they were killed
+  client-side. This is not merely a throughput bug: it preferentially discarded
+  the units the model thought hardest about, biasing the surviving set toward
+  easy units. Throughput had collapsed to 2.2 units/min and 14 units had
+  "permanently" failed.
+  Fix (user's call): read/write 60 -> 90s, and workers 10 -> 30. Throughput went
+  to 27.7 units/min and ALL 14 previously-failed units recovered on resume,
+  confirming they were timeouts and not bad data.
+  Residual: 90s still implies sustaining ~41 tok/s, so the longest tail can
+  still time out — 3 further transport failures occurred after the change.
+  CONSEQUENCE: the early attempt ledger is NOT a clean sample. Nearly all 65
+  billing_uncertain attempts come from the 60s phase.
+
+Extraction quality — the substantive finding for prompt work.
+Of 179 validation_failed attempts:
+    25% (45)  dose/effect/AE attached to events the model ITSELF labelled
+              not-self or not-actual-use
+    22% (39)  cited a source window outside its unit, or source ID/type mismatch
+    12% (22)  quote not grounded in the cited window
+    12% (21)  evidence quote empty
+  The grounding guard is HEALTHY — 22 rejections across 1,206 units is the floor
+  working, not the prompt and guard disagreeing. Do NOT lower the threshold. The
+  top two categories are real prompt/schema disagreements worth fixing.
+  The 14 terminal failures: 8 source-window mismatch, 3 provider null content,
+  2 unparseable JSON, 2 grounding, 2 transport (categories overlap per attempt).
+
+Adverse events, as shares of extractable INCLUDED claims — never incidence:
+    ketamine    n=1,588  reported 181 (11%)  explicit_none 19 (1%)  not_stated 1,388 (87%)
+    psilocybin  n=1,172  reported 127 (11%)  explicit_none 25 (2%)  not_stated 1,020 (87%)
+    lsd         n=  161  reported  29 (18%)  explicit_none  1 (1%)  not_stated   131 (81%)
+  The ~87% not_stated is SILENCE, not absence. Only explicit_none is a denial.
+
+CLUSTERING — a trap for whoever analyses this next:
+  2,921 included claims come from only ~1,041 distinct patients. Claims are NOT
+  independent. A per-claim proportion is pseudo-replication and yields falsely
+  narrow CIs. Compute headline figures per patient; label any event-level figure
+  as clustered. The v1 notebook never faced this because it was patient-level.
+
 THIRD SESSION — the run is now pinned to reasoning effort "max"
+(SUPERSEDED at GATE 2: the executed run used "high". The adapter fix, the
+max_tokens 32,768 change, and the corrected $0.14/$0.28 pricing all still stand.)
 ...............................................................................
 
 The user asked for effort max on the same DeepSeek model through OpenRouter.
@@ -453,6 +556,52 @@ whole exercise was discarded; only the lesson is kept.
 8. CURRENT FILE STATE
 --------------------------------------------------------------------------------
 
+Modified in the FOURTH session (the executed run):
+
+  studies/psychedelics/  RESTRUCTURED INTO v1/ AND v2/
+      v1/ holds the frozen legacy study, moved verbatim and unmodified:
+      build_nb.py, extract_pharmacology.py, psychedelics.py,
+      psychedelics_analysis.{ipynb,html,pdf}. Tracked files were moved with
+      `git mv`, so history follows them. Every legacy path elsewhere in this
+      handoff must gain a `v1/` component.
+      v2/ is a rewrite of the study on the probe dataset (doses, effect
+      direction/magnitude/duration, adverse events) rather than the legacy
+      community-scored outcomes. v2 is NOT a like-for-like port: the probe
+      schema has no outcome scoring, so the analyses differ by necessity.
+      _handoff.txt (this file) deliberately stays at the study ROOT, because
+      `docs/psychedelic_probe_runbook.md:9` references it at that path and it
+      governs both versions.
+
+  probes/engine.py
+      Concurrency added: `_process_unit(...)` extracts the per-unit attempt
+      ladder verbatim from the old inline loop; `run_probe(..., workers=1)`
+      dispatches through ThreadPoolExecutor and falls back to the serial path at
+      workers==1; a lock-guarded lazy client is shared across workers so a fully
+      cached invocation still constructs none; `--workers` CLI flag added.
+      `--workers` is DELIBERATELY NOT IN RunConfig — it changes how fast units
+      are sent, never what is sent, so it must not move run_id. DO NOT add it to
+      run identity. This is what made mid-run worker changes safe.
+      ProbeStore needed no changes; it was already thread-safe.
+
+  variable_extraction/patientpunk/_utils.py
+      TIMEOUT read/write 60 -> 90s (connect/pool unchanged). See §0. This
+      constant is shared with the legacy pipeline.
+
+  tests/test_probes_workers.py  (NEW)
+      7 tests: all units complete under concurrency, dispatch genuinely
+      overlaps, serial never overlaps, concurrent result matches serial with
+      run_id unchanged, one failing unit does not poison neighbours, workers<1
+      rejected, client built once. Full suite 59 passed, stable over 8 runs.
+      The user asked that test work stop here; do not expand these.
+
+  scripts/build_legacy_cohort_db.py  (NEW)
+      Imports the legacy JSON cohort's 1,157 pairs into cohort_legacy.db. See §0.
+
+  .gitignore
+      `.env.*` plus `!.env.example` added. `variable_extraction/.env.local_backup`
+      was untracked AND unignored and contains a key line; the pre-existing
+      `.env` pattern does not match `.env.*` suffixes.
+
 Modified in the THIRD session (reasoning effort):
 
   variable_extraction/patientpunk/_utils.py
@@ -465,7 +614,7 @@ Modified in the THIRD session (reasoning effort):
       into the key payload only when non-empty so keys minted before it existed
       remain valid.
 
-  studies/psychedelics/extract_pharmacology.py
+  studies/psychedelics/v1/extract_pharmacology.py
       DEFAULT_REASONING_EFFORT ("max") and --reasoning-effort added; max_tokens
       default 4,096 -> 32,768; prices corrected to $0.14/$0.28 with the source
       changed to the OpenRouter endpoints API; reasoning_effort threaded through
@@ -479,7 +628,7 @@ Modified in the THIRD session (reasoning effort):
 
 Modified in the SECOND session:
 
-  studies/psychedelics/extract_pharmacology.py
+  studies/psychedelics/v1/extract_pharmacology.py
       Regex identity guards deleted; ExposureSubject/ExposureStatus enums and the
       four new ExposureEvent fields added; system prompt rewritten to demand the
       classification; collect_sources first-person gate removed and stage
@@ -496,7 +645,7 @@ Modified in the SECOND session:
 
 Modified in the FIRST session, unchanged since:
 
-  studies/psychedelics/psychedelics.py
+  studies/psychedelics/v1/psychedelics.py
       `mention_pairs(records, require_author_hash=False)`; `mention_cohort()`
       refactored onto it. NOTE: `study._first_person_mention` is now UNUSED by
       the extraction path but is still used by the original notebook study. Do
@@ -519,7 +668,7 @@ Verified after the final edits:
     variable_extraction/tests/test_llm_response_validation.py -q
   => 43 passed
 
-  .venv/bin/python studies/psychedelics/extract_pharmacology.py \
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
     --output-dir <scratch> dry-run
   => the §3 numbers
 
@@ -527,7 +676,38 @@ Verified after the final edits:
 9. WHAT THE NEXT AGENT MUST DO
 --------------------------------------------------------------------------------
 
-The code checklist is closed. What remains is judgment, money, and manual work.
+*** SUPERSEDED — READ §0 FIRST. ***
+
+Everything from "FIRST, do not run anything paid" down to the `finalize`
+command below describes a pilot/validate/run/finalize sequence for
+`extract_pharmacology.py` (now at `v1/extract_pharmacology.py`). THAT PATH WAS
+NOT TAKEN. The run was executed with the `probes` engine per
+`docs/psychedelic_probe_runbook.md`, the cost checkpoint WAS answered, and the
+paid run is COMPLETE. The commands below would re-spend money on a second,
+parallel extraction. Do not run them. The text is kept only as the record of
+what the third session planned.
+
+WHAT ACTUALLY REMAINS TO BE DONE:
+
+  1. GATE 4 — human quote grounding. STILL OUTSTANDING; it was bypassed, not
+     satisfied. Before any number from this run is used for anything, a human
+     must read a sample of claims against their source windows and confirm each
+     quote actually supports its field. This requires reading private
+     quote-bearing data: do it in a LOCAL, UNCOMMITTED scratch file, never in
+     the repo, a PR, or a report. Report only sample size and pass rate.
+  2. The two configuration questions from §0 third session are now partly
+     answered by events rather than by decision: provider routing was never
+     pinned, so realized cost varied across the run; the 65,536-token
+     escalation ceiling never fired. Both remain unpinned for any future run.
+  3. Prompt work on the two dominant validation-failure categories in §0
+     (data attached to not-self/not-actual-use events; source windows cited
+     outside the unit). Do NOT lower the grounding threshold.
+  4. Nothing has been committed. `probes/engine.py`, `_utils.py`, `.gitignore`,
+     the v1/ moves, and the new scripts/tests are all working-tree changes.
+     `cohort_legacy.db` and `patientpunk.db` are gitignored via `*.db`; never
+     `git add -f` anything under `data/`.
+
+--- historical, superseded, do not execute -------------------------------------
 
 FIRST, do not run anything paid. All of (a)-(c) below were presented to the user
 in the third session; the cost checkpoint has been DELIVERED but NOT yet
@@ -550,7 +730,7 @@ turn a truncation retry into a hard error.
 
 Then, ONLY with explicit approval for BOTH the paid run and the hash mismatch:
 
-  .venv/bin/python studies/psychedelics/extract_pharmacology.py \
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
     pilot --sample-size 25 --seed 20260807 \
     --confirm-paid-run --allow-db-hash-mismatch
 
@@ -595,12 +775,12 @@ Immediately after the pilot:
 
 Only after that second approval:
 
-  .venv/bin/python studies/psychedelics/extract_pharmacology.py \
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
     run --confirm-paid-run --allow-db-hash-mismatch
 
 When all source-backed units are terminal:
 
-  .venv/bin/python studies/psychedelics/extract_pharmacology.py finalize
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py finalize
 
 Finalization refuses incomplete unit coverage. Confirm the manifest reconciles
 all 1,157 cohort pairs, source-stage exclusions, unit statuses, terminal pair
@@ -623,7 +803,7 @@ treatment-outcome triples. The raw-text pharmacology work is supplemental and ha
 different units and failure modes. Do not compare its rates directly to other
 PatientPunk sentiment pipelines or present it as causal confirmation.
 
-The existing notebook is generated by `studies/psychedelics/build_nb.py`. Running
+The existing notebook is generated by `studies/psychedelics/v1/build_nb.py`. Running
 that generator overwrites the executed notebook; it is out of scope here.
 
 --------------------------------------------------------------------------------
