@@ -36,13 +36,14 @@ uv sync
 # 2. Add your Anthropic API key to the project root .env
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
-# 3. Scrape a corpus. Not a main.py subcommand -- run it from the repo root.
+# 3. Scrape a corpus. Run it from the repo root.
 #    Writes ../output/subreddit_posts.json, which every step below reads.
 uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 
-# 4. Comment-heavy corpus? Fold each author's posts and comments into one
+# 4. This folds each author's posts and comments into one
 #    synthetic post FIRST. Extraction reads title + body only, so a patient who
-#    only ever commented is skipped otherwise. Writes a NEW directory.
+#    only ever commented is skipped otherwise. It also makes it simpler to make sure that
+#    patients who comment a lot only have their opinion counted once. Writes a NEW directory.
 python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
 
 # 5. Full pipeline run (LLM extraction + CSV + codebook).
@@ -56,8 +57,9 @@ python main.py demographics --input-dir ../output
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
 ```
 
-Steps 1–3 are the minimum to get from nothing to a corpus on disk; step 5 is the
-one that produces `records.csv`. Everything else is optional. Full scraper flags
+Steps 1–3 are the minimum to get from nothing to a corpus on disk; step 5 produces `records.csv`, 
+which is the flatfile containing the full corpus run in case you don't want to work with the database. 
+Everything else is optional. Full scraper flags
 are in [`../Scrapers/SCRAPER_HELP.md`](../Scrapers/SCRAPER_HELP.md).
 
 ---
