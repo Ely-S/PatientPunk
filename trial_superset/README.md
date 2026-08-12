@@ -1,5 +1,12 @@
 # trial_superset
 
+> # ⚠️ RETIRED — this work has moved
+>
+> Everything here now lives in **[Airwhale/naturalv2 @ shaun/patientpunk-integration](https://github.com/Airwhale/naturalv2/tree/shaun/patientpunk-integration)**, so one
+> checkout both runs the pipeline and documents it. See [RETIRED.md](RETIRED.md) for where
+> each piece went. **Do not edit this directory** — changes here reach no one.
+
+
 Builds the **Long-COVID benchmark + target set** for Nikita's NATURAL-v2 model, in her exact format.
 We **depend on `naturalv2` (pinned); we do not reproduce or edit it**: her `check_trial` /
 `Experiment` / `Study` are called unchanged. Only the data we feed them, and a few additive layers, are ours.
@@ -9,7 +16,8 @@ We **depend on `naturalv2` (pinned); we do not reproduce or edit it**: her `chec
 > trials. So this is a **benchmark + target list, not training data.** Two separate datasets:
 > **`master_pulled_data.csv` = Long COVID (primary)** and **`cluster_benchmark.csv` = adjacent
 > conditions (separate)** — kept apart because each is its own benchmark (no pooling). Headline:
-> **50 LC trials with ground truth, of which 9 fit NATURAL's premise** (~2× NATURAL v1's ~4-per-condition).
+> **50 LC trials with ground truth, of which 9 fit NATURAL's premise**
+> (8 from the 21 CT.gov-structured trials, plus 1 paper-rescued trial; ~2× NATURAL v1's ~4-per-condition).
 
 ## What this is for
 
@@ -45,7 +53,9 @@ Everything here is one of three sources. Be precise about which:
 | Labels | endpoint classification + match-to-test, relaxed test universe | **[NEW]** |
 
 **The 5-condition cluster itself** (which conditions to include) is **[TS]** — from `build_candidates.py`,
-not from Nikita. Her shared study is **Long COVID only**.
+not from Nikita. Her shared study is **Long COVID only**. In this repo, the local source of truth for
+those copied condition choices is `seed_terms.py`; the original `build_candidates.py` lives in the
+adjacent TrialScout project, not under `trial_superset/`.
 
 ## The pipeline
 
@@ -97,6 +107,12 @@ Both are kept so we can hand Nikita the exact delta.
 | `mine_registries.py` | **additional-source explorer #1** — mine ISRCTN/EudraCT (non-CT.gov) LC RCTs → `data/mined_registries.csv` |
 | `mine_reviews.py` | **additional-source explorer #2** — mine LC systematic-review evidence tables → `data/mined_reviews.csv` |
 | `adapt_registries.py` | adapt ISRCTN LC RCTs → CT.gov-shaped JSON (template-clone + paper outcome); 6 ingested into long_covid |
+| `pull_ctgov_long_covid_structured_learnable.py` | shareable CT.gov pull for completed, structured-results Long-COVID trials that pass the local LC and NATURAL-premise screens |
+| `pull_non_ctgov_long_covid_structured_learnable.py` | apply the same local LC and NATURAL-premise screen to non-CT.gov registry candidates from `mined_registries.csv` |
+| `count_covidlonghaulers_treatment_signals.py` | count raw treatment-alias mention volume in `r/covidlonghaulers` for the structured Long-COVID benchmark treatments |
+| `count_covidlonghaulers_additional_candidate_signals.py` | count raw treatment-alias mention volume for rework candidates like Paxlovid, Ashwagandha, STIMULATE-ICP drugs, and remdesivir |
+| `benchmark_treatment_aliases.py` | shared treatment alias list for corpus-signal counts, including sensitivity-only broad aliases |
+| `review_non_premise_usability.py` | classify failed CT.gov and non-CT.gov candidates into reuse buckets for rework triage |
 | `extract_validate.py` | extraction accuracy vs CT.gov ground truth |
 | `binary_compare.py` | binary-vs-notbinary trial-count comparison (justifies notbinary+sidecar) |
 | `sanity_check.py` | data QA (disjointness, baseline, label ranges) |
@@ -122,8 +138,7 @@ $PY trial_superset/build_master_csv.py                            # master CSV (
 ```
 
 LLM steps use the Anthropic API (OpenAI-compatible endpoint) via `ANTHROPIC_API_KEY` in the repo
-`.env`; model via `M3_MODEL` (default `claude-sonnet-4-6`). (OpenRouter is supported but was out of
-credits.)
+`.env`; model via `M3_MODEL` (default `claude-sonnet-4-6`).
 
 ## Data
 
@@ -149,7 +164,8 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - **M0–M3 + validation + endpoint-match done & committed** (`shaun/trial-superset`, unpushed, no PR).
 - **Primary dataset — Long COVID** (`master_pulled_data.csv`): 50 train+val benchmark trials = 21 CT.gov
   + 23 paper-rescued + 6 non-CT.gov ISRCTN (adapted). **Of these, 9 fit NATURAL's premise** (the real
-  benchmark). 3 prospective targets (LIFT, Tirzepatide, IVIG); only Tirzepatide cleanly fits.
+  benchmark: 8 CT.gov-structured + 1 paper-rescued). 3 prospective targets (LIFT, Tirzepatide, IVIG);
+  only Tirzepatide cleanly fits.
 - **Separate dataset — adjacent conditions** (`cluster_benchmark.csv`): ME/CFS, fibromyalgia,
   dysautonomia, chronic Lyme — same schema, for cross-cluster evaluation; kept apart, not mixed into LC.
 - See docs/method_and_scope.md, docs/long_covid_focus.md, docs/additional_sources.md.
@@ -207,6 +223,7 @@ Key artifacts in `s3://patientpunk/trial_superset/`:
 - Master export: `data/master_pulled_data.csv` (also gitignored; generator `build_master_csv.py` gitignored too).
 
 **Documentation index (`docs/`)**
+- [source_review_guide.md](docs/source_review_guide.md) - source-code reading order, pipeline diagrams, and a per-file appendix.
 - [method_and_scope.md](docs/method_and_scope.md) — **READ FIRST: how NATURAL actually works (per-trial, zero-shot), why this is a benchmark not training data, why Long-COVID-only.**
 - [bugs.md](docs/bugs.md) — **consolidated bug registry (start here for Nikita).**
 - [condition_filter_audit.md](docs/condition_filter_audit.md) — her condition matcher's over/under-matching.
