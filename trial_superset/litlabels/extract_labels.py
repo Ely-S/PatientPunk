@@ -2,16 +2,16 @@
 
 For a completed trial that never posted CT.gov structured results, pull its OA full text,
 and extract the PRIMARY endpoint value per arm in the shape her Experiment needs
-(value + denom per non-placebo arm). LLM via OpenRouter (model configurable; DeepSeek
-default, swap to Claude if the validation gate shows fidelity issues).
+(value + denom per non-placebo arm). LLM calls use Anthropic's OpenAI-compatible
+endpoint; set `M3_MODEL` to override the default `claude-sonnet-4-6` model.
 
 Output schema per trial:
   {extractable, primary_outcome_title, unit('count'|'percentage'), result_public_date,
    confidence, arms:[{title, is_placebo, n, value}], note}
 
-Cached by (nct, pmcid, model). Run as a module for the validation gate:
+Cached by (nct, pmcid, model). Run from the repo root:
+  $env:PYTHONPATH = "trial_superset"
   trial_superset/.venv/Scripts/python.exe -m litlabels.extract_labels --n 15
-(run from the trial_superset/ dir, or adjust sys.path).
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def link_paper(nct: str, trial_json_path: str) -> dict | None:
 
 
 def candidate_papers(nct: str, trial_json_path: str, k: int = 5) -> list[tuple[str, str]]:
-    """Ordered list of (pmcid, via) candidate OA papers — CT.gov RESULT refs first, then
+    """Ordered list of (pmcid, via) candidate OA papers - CT.gov RESULT refs first, then
     NCT-search hits excluding reviews. Lets us retry extraction across papers when the first
     linked paper is the wrong one (a review / protocol / secondary analysis)."""
     trial = json.load(open(trial_json_path, encoding="utf-8"))

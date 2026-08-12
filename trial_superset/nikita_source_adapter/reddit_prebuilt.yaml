@@ -1,0 +1,13 @@
+# @package _global_
+# Source config for a PRE-BUILT contextualize-input parquet corpus (skips .zst download+parse).
+# condition_filter + treatment_synonyms are intentionally omitted: our corpus is already scoped to
+# the 3 Long-COVID subreddits (no subreddit discovery needed -> no Reddit OAuth), and synonyms need
+# OpenAI web-search. That leaves: adapter (contextualize) -> curate (rule-based treatment match).
+stages:
+  process_archive_dump:
+    _target_: naturalv2.sources.reddit.stages.prebuilt_parquet.RedditPrebuiltParquet
+    parquet_dir: /mnt/c/Users/scgee/OneDrive/Documents/Projects/PatientPunk_data/natural_corpus_parquet
+  curate:
+    _target_: naturalv2.sources.reddit.RedditCurateStage
+    num_workers: null
+    batch_size: 16_384

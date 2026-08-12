@@ -57,8 +57,9 @@ Two string layers; only one was the lever, and it wasn't the one assumed first.
 ## Current net outcome (2026-06-28)
 **Long-COVID train+val: 31 -> 50** (21 CT.gov-structured + 23 paper-rescued +
 6 registry-adapted); whole-superset augmented **236 -> 255**. Corpus-learnable Long-COVID
-training trials: **9** (small - the new trials skew behavioral/device, a handful of accessible
-drugs). Eval set: **88 trials / 153 prediction-target arms** (LIFT included).
+benchmark trials: **9** overall (**8** CT.gov-structured + **1** paper-rescued, `NCT04795557`).
+The new trials skew behavioral/device, with only a handful of accessible drugs. Eval set:
+**88 trials / 153 prediction-target arms** (LIFT included).
 
 ## Recruiting-inclusive test universe (so LIFT is predictable)
 Her `status:act` excludes recruiting trials, so LIFT (RECRUITING) was absent from the test set.

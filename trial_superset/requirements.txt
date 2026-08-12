@@ -1,2 +1,6 @@
-naturalv2 @ git+https://github.com/nikitadhawan/naturalv2.git@16ca17819e7b6310f9d9799238f4ff8b11b4c6f5
+naturalv2 @ git+https://github.com/nikitadhawan/naturalv2.git@7a2e006992407794b9faabb1606a19bd5ba33bf5
 httpx>=0.27
+pydantic>=2
+requests>=2.31
+rich>=13
+typer>=0.12

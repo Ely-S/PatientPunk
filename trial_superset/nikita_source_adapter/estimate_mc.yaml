@@ -1,0 +1,60 @@
+# NATURAL-MC variant of estimate_ate, for CONTINUOUS outcomes.
+#
+# conditional_extraction enumerates multiple-choice options over the outcome, so it needs a DISCRETE
+# outcome. Our endpoints are continuous means (Fatigue/Brain Fog Severity Scale), so
+# experiment.options[<outcome>] is [] -> empty option set -> ZeroDivisionError in that stage.
+# NATURAL-MC instead SAMPLES (T, Y) via sample_ty, which is what a continuous endpoint needs.
+# Swap: sample_ty in, conditional_extraction out; estimator natural_ipw -> natural_mc_oi.
+defaults:
+  - common
+  - model@cheap_model: gemini
+  - model@sample_model: gemini
+  - model@imputations_model: gemini
+  - model@probs_model: vllm_offline
+  - estimator: natural_mc_oi
+  - _self_
+
+nct_id: null
+split: train
+use_imputed_nones: True
+use_inclusion_weights: True
+bootstrap_size: 10
+alpha: 0.05
+probs_model:
+  endpoint: text_completion
+  max_tokens: 1
+  prompt_logprobs: 0
+  temperature: 1.0
+  # detokenize omitted: against a hosted vLLM server (rather than the in-process VLLMModel this flag
+  # was written for) it is not needed, and the server detokenizes logprob ids itself.
+
+filter_by_date: True
+default_max_concurrent_workers: 8
+
+pipeline:
+  stages:
+    relevance_filter:
+      _target_: naturalv2.pipeline.sample_extraction.RelevanceFilterStage
+      model_cfg: ${cheap_model}
+      max_concurrent_workers: ${coalesce:cheap_model.max_parallel_requests, cheap_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}
+    treatment_outcome_filter:
+      _target_: naturalv2.pipeline.sample_extraction.TreatmentOutcomeFilterStage
+      model_cfg: ${cheap_model}
+      max_concurrent_workers: ${coalesce:cheap_model.max_parallel_requests, cheap_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}
+    knowns:
+      _target_: naturalv2.pipeline.sample_extraction.KnownsStage
+      model_cfg: ${sample_model}
+      max_concurrent_workers: ${coalesce:sample_model.max_parallel_requests, sample_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}
+    imputations:
+      _target_: naturalv2.pipeline.sample_extraction.ImputationsStage
+      model_cfg: ${imputations_model}
+      max_concurrent_workers: ${coalesce:imputations_model.max_parallel_requests, imputations_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}
+    sample_ty:
+      _target_: naturalv2.pipeline.sample_extraction.SampleTYStage
+      model_cfg: ${sample_model}
+      max_concurrent_workers: ${coalesce:sample_model.max_parallel_requests, sample_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}
+    inclusion_prob:
+      _target_: naturalv2.pipeline.conditional_extraction.InclusionProbStage
+      model_cfg: ${probs_model}
+      length_norm: False
+      max_concurrent_workers: ${coalesce:probs_model.max_parallel_requests, probs_model.client_kwargs.default_max_parallel_requests, default_max_concurrent_workers}

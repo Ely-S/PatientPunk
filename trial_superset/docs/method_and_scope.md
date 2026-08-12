@@ -34,7 +34,8 @@ Because there is **no pooled model**, the non-LC trials (ME/CFS, fibromyalgia, d
 Lyme) **neither help nor hurt** LC prediction — they are a *different* benchmark, not part of the LC one.
 So they are kept but **split into their own dataset**, not mixed into the headline LC set:
 
-- **`master_pulled_data.csv`** — **Long COVID** benchmark (primary): 50 trials, 9 corpus-learnable.
+- **`master_pulled_data.csv`** — **Long COVID** benchmark (primary): 50 trials, 9 corpus-learnable
+  overall. The 21 CT.gov-structured subset contains 8 of those; the ninth is paper-rescued.
 - **`cluster_benchmark.csv`** — **adjacent conditions** benchmark (separate): ME/CFS, fibromyalgia,
   dysautonomia, chronic Lyme. Same schema; for anyone who wants to evaluate NATURAL across the
   post-viral/chronic-fatigue cluster rather than LC alone.
@@ -48,13 +49,14 @@ not mix the two benchmarks, which the split achieves.) Both are produced by the 
 | | count | what it is |
 |---|---|---|
 | LC train+val trials | **50** | completed LC trials with ground-truth outcomes (the benchmark pool) |
-| …of which corpus-learnable | **9** | LC trials whose premise actually holds (single-agent, blinded, accessible drug, self-report signal) — **the real benchmark** |
+| …of which corpus-learnable | **9** | LC trials whose premise actually holds (single-agent, blinded, accessible drug, self-report signal). This is 8 CT.gov-structured trials plus 1 paper-rescued trial. |
 | …off-premise | 41 | behavioral/device/clinic-administered — NATURAL can't estimate these from community text |
 | prospective targets | **3** | LIFT, Tirzepatide, IVIG |
 | …cleanly fitting the premise | **1** | **Tirzepatide** only. LIFT is a factorial (its LDN-alone arm is learnable after the relabel); IVIG is off-premise (clinic-administered, ~0 signal). |
 
 **9 corpus-learnable LC trials exceeds NATURAL v1's own benchmark (~4 ground-truth RCTs per condition)** —
-so Long COVID alone is a sufficient benchmark. The headline is **9**, not 50.
+so Long COVID alone is a sufficient benchmark. The headline is **9**, not 50. If discussing only the
+21 CT.gov-structured trials, the corpus-learnable count is **8**.
 
 ## What the growth work actually bought (re-stated honestly)
 The scope fix, papers-as-labels, and ISRCTN adapter grew the LC **benchmark pool** (more LC trials with

@@ -6,6 +6,11 @@ arms are RELABELED so isolated main effects survive her placebo-filter:
   "Placebo/LDN" -> "Low-Dose Naltrexone",  "Pyridostigmine/Placebo" -> "Pyridostigmine".
 Each target is annotated with the per-condition Reddit corpus signal for its drug.
 
+NOTE (naturalv2 main 7a2e006): her pipeline now classifies arms by CT.gov ArmGroupType (check_arm),
+not the title, so this relabel + check_nonplacebo path is legacy. It agrees with her on factorial
+main-effect arms (the case we care about) but can diverge on control arms whose title omits "placebo";
+switch to ArmGroupType if exact parity with her Experiment's arm set is needed.
+
 Run: PYTHONPATH=trial_superset trial_superset/.venv/Scripts/python.exe -m long_covid_eval
 Output: data/long_covid_eval_set.csv
 Prereq: data/relaxed_test/nct_reports_test (run relaxed_test_universe.py first).

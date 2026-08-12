@@ -1,5 +1,12 @@
 """Build the model-ready label sidecar (keeps every trial; fixes the notbinary scale issue).
 
+STATUS (re-pin to naturalv2 main 7a2e006): SUPERSEDED for the core-5. Her Experiment now normalizes
+continuous outcomes natively (commit 6390055: _normalize_outcome_value returns the raw mean for
+MEAN/MEDIAN/LEAST_SQUARES_MEAN), so this sidecar reproduces values she already emits. Retained as
+(a) the record of the original bug and (b) the check for the one residual she did NOT fix: NUMBER and
+COUNT_OF_UNITS are still divided by N upstream, whereas _COUNT_PARAMS below treats only
+COUNT_OF_PARTICIPANTS as a rate. Run it only to audit the broader 19-trial set for those param types.
+
 Her notbinary pipeline computes avg_potential_outcome = value/N for EVERY endpoint, which is a
 response rate for binary endpoints but garbage (mean/N) for continuous ones. This sidecar leaves
 her native field untouched and adds, per (trial, outcome, arm):
@@ -28,12 +35,36 @@ logging.disable(logging.INFO)
 
 # #5: continuous labels mix absolute scores and change-from-baseline (different quantities).
 # Flag it from the outcome title (data we already have). Heuristic but consistent across sources.
-_CHANGE_RE = re.compile(r"\bchange\b|from baseline|\bΔ\b|reduction in|improvement (in|from)|"
-                        r"\b(decrease|increase) (in|from)\b|difference from baseline", re.I)
+# \bchanges?\b, not \bchange\b: LIFT states "Changes in % of predicted ..." and the singular form
+# silently missed 3 of its 4 primaries. "between baseline and" is the other common phrasing.
+_CHANGE_RE = re.compile(r"\bchanges?\b|from baseline|between baseline|\bΔ\b|reduction in|"
+                        r"improvement (in|from)|\b(decrease|increase) (in|from)\b|"
+                        r"difference from baseline", re.I)
 
 
-def is_change(title: str) -> bool:
-    return bool(_CHANGE_RE.search(title or ""))
+# "Score range 1-49", "range: 0 to 100" -- the scale the description claims the value lives on.
+_RANGE_RE = re.compile(r"rang\w*\s*:?\s*(-?\d+(?:\.\d+)?)\s*(?:to|through|–|—|-)\s*(-?\d+(?:\.\d+)?)", re.I)
+
+
+def is_change(title: str, timeframe: str = "", desc: str = "", value: float | None = None) -> bool:
+    """True when the reported value is a change from baseline rather than an absolute score.
+
+    Title wording alone is not enough: NCT05618587 is titled plainly "Fatigue Severity Scale" and
+    described as an absolute 1-49 scale, yet reports -11.3 -- the change is stated only in
+    `timeFrame` ("Change from baseline to day 21"). Two structured signals catch that:
+      - change wording anywhere in title/timeFrame/description
+      - a value outside the range the description itself states (no absolute 1-49 score is negative)
+    The range check is the reliable one; wording can be omitted, an out-of-range value cannot.
+    """
+    if _CHANGE_RE.search(" ".join(filter(None, (title, timeframe, desc)))):
+        return True
+    if value is None:
+        return False
+    m = _RANGE_RE.search(desc or "")
+    if not m:
+        return False
+    lo, hi = sorted((float(m.group(1)), float(m.group(2))))
+    return not (lo <= value <= hi)
 
 MANIFEST = "trial_superset/data/training_set_manifest_augmented.csv"
 JSONL = "trial_superset/data/m3_extractions.jsonl"
@@ -133,7 +164,8 @@ def rows_from_structured(trial_path, check_nonplacebo):
                 clean = (val / n) if n else None
             else:
                 clean = val
-            out.append((title, gtitle, etype, val, n, clean, None))
+            chg = is_change(title, om.get("timeFrame", ""), om.get("description", ""), val)
+            out.append((title, gtitle, etype, val, n, clean, None, chg))
     return out
 
 
@@ -157,11 +189,12 @@ def main() -> None:
             rows = rows_from_paper(paper[nct], check_nonplacebo)
         else:
             rows = rows_from_structured(os.path.join(LABELED, slug, "nct_reports", f"{nct}.json"), check_nonplacebo)
-        for (otitle, arm, etype, val, n, clean, sp) in rows:
+        for (otitle, arm, etype, val, n, clean, sp, *chg) in rows:
             et_counter[etype] = et_counter.get(etype, 0) + 1
             out_rows.append({"nct": nct, "condition": slug, "split": r["split"], "label_source": src,
                              "outcome": otitle[:120], "arm": arm[:80], "endpoint_type": etype,
-                             "is_change_from_baseline": is_change(otitle),  # all types: % can be a (signed) change too
+                             # paper rows carry no timeFrame/description; fall back to the title
+                             "is_change_from_baseline": chg[0] if chg else is_change(otitle),
                              "raw_value": val, "n": n,
                              "clean_outcome": round(clean, 4) if clean is not None else "",
                              "scale_proportion": sp if sp is not None else ""})

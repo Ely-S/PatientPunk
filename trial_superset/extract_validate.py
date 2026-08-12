@@ -6,8 +6,9 @@ results - extract() only reads protocolSection), then compares the extracted per
 value to the trial's actual CT.gov result. High agreement => the 77 paper-only labels are
 trustworthy; low agreement => the extractor grabs wrong outcomes/arms/timepoints.
 
-Run: trial_superset/.venv/Scripts/python.exe -m _ ... ; actually:
-  PYTHONPATH=trial_superset trial_superset/.venv/Scripts/python.exe trial_superset/extract_validate.py --n 30
+Run from the repo root:
+  $env:PYTHONPATH = "trial_superset"
+  trial_superset/.venv/Scripts/python.exe trial_superset/extract_validate.py --n 30
 """
 
 from __future__ import annotations

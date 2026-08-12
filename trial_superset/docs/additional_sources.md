@@ -73,8 +73,18 @@ resolving each to its trial record and confirming.
 
 ---
 
+## Strict registry screen
+
+`pull_non_ctgov_long_covid_structured_learnable.py` re-reads `data/mined_registries.csv`,
+re-fetches ISRCTN XML, and applies the same project screen used for the CT.gov structured pull:
+local Long COVID terms, completed randomized interventional patient trials, single-agent blinded
+drug/supplement intervention, and patient-signal-relevant primary endpoint text. It writes
+`data/non_ctgov_structured_learnable/long_covid_non_ctgov_structured_audit.csv` and
+`data/non_ctgov_structured_learnable/long_covid_non_ctgov_structured_learnable.csv`. EudraCT rows
+are kept as audit-only rows until a structured fetch path is added.
+
 ## Honest framing
 Both levers grow the **raw** Long-COVID trial count, but the additions skew **behavioral/rehab** — so
 the **corpus-learnable drug** subset (what matters for predicting from Reddit signal) grows only
 modestly. The structural scarcity of self-experimentable-drug LC RCTs stands; these sources widen the
-training base and surface the occasional high-value drug trial (e.g. STIMULATE-ICP famotidine).
+benchmark base and surface the occasional high-value drug trial (e.g. STIMULATE-ICP famotidine).
