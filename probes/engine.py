@@ -21,7 +21,10 @@ import importlib
 import json
 import re
 import sqlite3
+import sys
 import threading
+import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -51,11 +54,14 @@ PLACEHOLDER_RE = re.compile(
 PROBE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 PARAGRAPH_RE = re.compile(r"\n{2,}")
 MAX_PROVIDER_ATTEMPTS = 3
+ERROR_LOG_LIMIT = 360
+UNIT_KEY_LOG_CHARS = 12
 
 # Which request settings each provider can actually carry. ``get_llm_client``
 # routes "anthropic" and "openrouter" through the Anthropic SDK, which has no
 # parameter to put any of these in; only the OpenAI-compatible adapter does.
-# A setting that changes the answer must never be dropped on the way out.
+# ``run_probe`` therefore builds the client from RunConfig.provider, not env
+# LLM_PROVIDER. A setting that changes the answer must never be dropped.
 PROVIDER_EXTRAS: dict[str, frozenset[str]] = {
     "openai": frozenset({"service_tier", "reasoning_effort", "provider_routing"}),
     "anthropic": frozenset(),
@@ -605,6 +611,148 @@ def _provider_kwargs(config: RunConfig, system: str, prompt: str) -> dict[str, A
     }
 
 
+def _duration(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+class _Progress:
+    """Thread-safe stderr: durable failure lines plus an optional in-place bar.
+
+    Writes to stderr so a run's stdout summary stays pipeable. The bar redraws
+    in place only on a terminal; redirected to a file it prints one line per
+    unit instead of a single line smeared with carriage returns. Failure lines
+    always survive: on a TTY they replace the bar, then the bar is redrawn
+    underneath, so a Ctrl-C still leaves the reasons on screen.
+    """
+
+    def __init__(self, total: int, *, bar: bool = True, width: int = 30) -> None:
+        self._total = total
+        self._bar = bar
+        self._width = width
+        self._done = 0
+        self._failed = 0
+        self._lock = threading.Lock()
+        self._started = time.monotonic()
+        self._tty = sys.stderr.isatty()
+        self._line = ""
+
+    def tick(self, success: bool) -> None:
+        if not self._bar:
+            return
+        with self._lock:
+            self._done += 1
+            self._failed += not success
+            elapsed = time.monotonic() - self._started
+            rate = self._done / elapsed if elapsed else 0.0
+            remaining = (self._total - self._done) / rate if rate else 0.0
+            filled = self._width * self._done // self._total
+            bar = "#" * filled + "." * (self._width - filled)
+            self._line = (
+                f"[{bar}] {self._done}/{self._total} "
+                f"({self._done / self._total:.0%}) "
+                f"failed={self._failed} "
+                f"{rate * 60:.0f}/min "
+                f"elapsed {_duration(elapsed)} eta {_duration(remaining)}"
+            )
+            finished = self._done >= self._total
+            if self._tty:
+                print(
+                    f"\r{self._line}",
+                    end="\n" if finished else "",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                print(self._line, file=sys.stderr, flush=True)
+
+    def note(self, message: str) -> None:
+        """Print a durable line without letting the in-place bar eat it."""
+
+        with self._lock:
+            if self._bar and self._tty:
+                print(f"\r\033[K{message}", file=sys.stderr, flush=True)
+                if self._line:
+                    print(f"\r{self._line}", end="", file=sys.stderr, flush=True)
+            else:
+                print(message, file=sys.stderr, flush=True)
+
+    def close(self) -> None:
+        """Finish an in-place bar so a later summary starts on its own line."""
+
+        with self._lock:
+            if self._bar and self._tty and self._line and self._done < self._total:
+                print(file=sys.stderr, flush=True)
+
+
+def _error_loc(parts: tuple[Any, ...]) -> str:
+    path = ""
+    for part in parts:
+        if isinstance(part, int):
+            path += f"[{part}]"
+        else:
+            path += f".{part}" if path else str(part)
+    return path
+
+
+def _format_error(error: BaseException, *, limit: int = ERROR_LOG_LIMIT) -> str:
+    """One readable line: type plus the useful detail, not a schema dump."""
+
+    try:
+        from pydantic import ValidationError
+    except ImportError:
+        ValidationError = ()  # type: ignore[misc, assignment]
+
+    if ValidationError and isinstance(error, ValidationError):
+        try:
+            details = error.errors(
+                include_url=False, include_input=False, include_context=False
+            )
+        except TypeError:
+            details = error.errors()
+        parts = []
+        for item in details[:3]:
+            loc = _error_loc(tuple(item.get("loc", ())))
+            msg = str(item.get("msg", "")).strip()
+            parts.append(f"{loc}: {msg}" if loc else msg)
+        extra = f" (+{len(details) - 3} more)" if len(details) > 3 else ""
+        text = f"ValidationError ({len(details)}): {'; '.join(parts)}{extra}"
+    else:
+        text = f"{type(error).__name__}: {error}"
+    text = " ".join(text.split())
+    if len(text) > limit:
+        return text[: limit - 3] + "..."
+    return text
+
+
+def _attempt_fail_line(
+    unit_key: str,
+    *,
+    variant: int,
+    kind: str,
+    error: BaseException,
+    retrying: bool,
+    cached: bool = False,
+) -> str:
+    action = "retry" if retrying else "FAIL"
+    cache_mark = " cached" if cached else ""
+    return (
+        f"{action} unit={unit_key[:UNIT_KEY_LOG_CHARS]} "
+        f"attempt={variant + 1}/{MAX_PROVIDER_ATTEMPTS}{cache_mark} "
+        f"{kind} {_format_error(error)}"
+    )
+
+
+def _print_failure_summary(failures: list[str]) -> None:
+    if not failures:
+        return
+    ranked = Counter(failures).most_common()
+    print(f"failure summary: {len(failures)} units", file=sys.stderr)
+    for message, count in ranked:
+        print(f"  {count}  {message}", file=sys.stderr, flush=True)
+
+
 def _is_transient(error: BaseException) -> bool:
     text = f"{type(error).__name__}: {error}".lower()
     return any(token in text for token in ("timeout", "connection", "429", "temporarily"))
@@ -618,8 +766,9 @@ def _process_unit(
     parser: Any,
     config: RunConfig,
     get_client: Any,
-) -> tuple[bool, int]:
-    """Run one unit's attempt ladder. Returns ``(success, cache_hits)``.
+    log: _Progress | None = None,
+) -> tuple[bool, int, str | None]:
+    """Run one unit's attempt ladder. Returns ``(success, cache_hits, last_error)``.
 
     Self-contained per unit, so units can be dispatched concurrently: every
     store write below is serialized by ProbeStore's lock, and no attempt state
@@ -629,7 +778,32 @@ def _process_unit(
     store.set_unit_status(run_id, unit.unit_key, UnitStatus.RUNNING)
     cache_hits = 0
     success = False
+    last_error: str | None = None
     feedback: str | None = None
+
+    def emit_fail(
+        error: BaseException,
+        *,
+        variant: int,
+        kind: str,
+        retrying: bool,
+        cached: bool = False,
+    ) -> str:
+        formatted = _format_error(error)
+        message = _attempt_fail_line(
+            unit.unit_key,
+            variant=variant,
+            kind=kind,
+            error=error,
+            retrying=retrying,
+            cached=cached,
+        )
+        if log is None:
+            print(message, file=sys.stderr, flush=True)
+        else:
+            log.note(message)
+        return formatted
+
     # This budget is per invocation. ``attempt_no`` is the append-only
     # storage ordinal, so a resumed unit gets a whole retry ladder
     # instead of inheriting an earlier run's exhaustion.
@@ -690,6 +864,10 @@ def _process_unit(
                         recorded_at=datetime.now(timezone.utc),
                     ),
                 )
+                retrying = _is_transient(error) and variant < MAX_PROVIDER_ATTEMPTS - 1
+                last_error = emit_fail(
+                    error, variant=variant, kind="transport", retrying=retrying
+                )
                 if not _is_transient(error):
                     break
                 continue
@@ -716,6 +894,7 @@ def _process_unit(
             )
             store.set_unit_status(run_id, unit.unit_key, UnitStatus.COMPLETE)
             success = True
+            last_error = None
             break
         except Exception as error:
             # Hand the failure to the next attempt so the retry differs
@@ -728,9 +907,17 @@ def _process_unit(
                 AttemptStatus.VALIDATION_FAILED,
                 error=feedback,
             )
+            retrying = variant < MAX_PROVIDER_ATTEMPTS - 1
+            last_error = emit_fail(
+                error,
+                variant=variant,
+                kind="validation",
+                retrying=retrying,
+                cached=cached is not None,
+            )
     if not success:
         store.set_unit_status(run_id, unit.unit_key, UnitStatus.FAILED)
-    return success, cache_hits
+    return success, cache_hits, last_error
 
 
 def run_probe(
@@ -745,6 +932,7 @@ def run_probe(
     limit: int | None = None,
     run_id: str | None = None,
     workers: int = 1,
+    progress: bool = False,
 ) -> RunResult:
     """Execute a planned run, resuming incomplete units transactionally.
 
@@ -789,6 +977,9 @@ def run_probe(
 
     # Built once and shared: constructing a client per worker would multiply
     # connection pools. Deferred so a fully cached invocation still builds none.
+    # Transport follows RunConfig, not env LLM_PROVIDER: extras such as
+    # reasoning_effort are validated against config.provider, and a mismatched
+    # SDK would reject them (or drop them) after the run identity was recorded.
     client_slot: list[Any] = [None]
     client_lock = threading.Lock()
 
@@ -797,7 +988,10 @@ def run_probe(
             if client_slot[0] is None:
                 from patientpunk._utils import get_llm_client
 
-                client_slot[0] = get_llm_client()
+                client_slot[0] = get_llm_client(
+                    provider=config.provider,
+                    base_url=config.base_url,
+                )
             return client_slot[0]
 
     completed = failed = cache_hits = 0
@@ -806,16 +1000,34 @@ def run_probe(
         if limit is not None:
             pending = pending[:limit]
 
-        def work(unit: Unit) -> tuple[bool, int]:
-            return _process_unit(
-                store, run.run_id, unit, probe, parser, config, get_client
-            )
+        failures: list[str] = []
+        fail_lock = threading.Lock()
+        log = _Progress(len(pending), bar=progress) if pending else None
 
-        if workers > 1 and len(pending) > 1:
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                results = list(pool.map(work, pending))
-        else:
-            results = [work(unit) for unit in pending]
+        def work(unit: Unit) -> tuple[bool, int]:
+            outcome = _process_unit(
+                store, run.run_id, unit, probe, parser, config, get_client, log
+            )
+            success, hits, last_error = outcome
+            if not success and last_error:
+                with fail_lock:
+                    failures.append(last_error)
+            if log is not None:
+                log.tick(success)
+            return success, hits
+
+        try:
+            if workers > 1 and len(pending) > 1:
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    results = list(pool.map(work, pending))
+            else:
+                results = [work(unit) for unit in pending]
+        except BaseException:
+            if log is not None:
+                log.close()
+            _print_failure_summary(failures)
+            raise
+        _print_failure_summary(failures)
 
     for success, hits in results:
         completed += success
@@ -881,6 +1093,11 @@ def build_parser() -> argparse.ArgumentParser:
     # fast units are sent, never what is sent, so it must not move run_id.
     run_parser.add_argument("--workers", type=int, default=1)
     run_parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="draw a unit progress bar on stderr; failed attempts always log",
+    )
+    run_parser.add_argument(
         "--run-id", help="resume a persisted run without replanning it"
     )
     return parser
@@ -918,6 +1135,7 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         run_id=args.run_id,
         workers=args.workers,
+        progress=args.progress,
     )
     print(
         f"run={result.run_id} attempted={result.attempted_units} "

@@ -124,7 +124,7 @@ def patched(monkeypatch, tmp_path):
 
     client = FakeClient()
     utils = types.ModuleType("patientpunk._utils")
-    utils.get_llm_client = lambda: client
+    utils.get_llm_client = lambda **kwargs: client
     utils.response_text = lambda r: r.content[0].text
     utils.check_response = lambda r, model: None
     utils.parse_json_response = lambda raw: __import__("json").loads(raw)
@@ -230,8 +230,8 @@ def test_client_is_built_once_for_all_workers(tmp_path, cohort_db, source_db, mo
     builds = []
     utils = types.ModuleType("patientpunk._utils")
 
-    def get_llm_client():
-        builds.append(1)
+    def get_llm_client(**kwargs):
+        builds.append(kwargs)
         return client
 
     utils.get_llm_client = get_llm_client
@@ -241,4 +241,75 @@ def test_client_is_built_once_for_all_workers(tmp_path, cohort_db, source_db, mo
     monkeypatch.setitem(__import__("sys").modules, "patientpunk._utils", utils)
 
     run(tmp_path, cohort_db, source_db, workers=8)
-    assert len(builds) == 1
+    assert builds == [
+        {"provider": "openai", "base_url": "https://example.invalid/api"}
+    ]
+
+
+def test_format_error_compacts_pydantic_dump():
+    from pydantic import BaseModel, ValidationError
+
+    class Envelope(BaseModel):
+        events: list[dict]
+
+    with pytest.raises(ValidationError) as raised:
+        Envelope.model_validate({"events": "not-a-list"})
+    text = engine._format_error(raised.value)
+    assert text.startswith("ValidationError (")
+    assert "events:" in text
+    assert "For further information visit" not in text
+    assert "\n" not in text
+
+
+def test_format_error_collapses_and_truncates():
+    text = engine._format_error(ValueError("line1\nline2 " + "x" * 1000), limit=80)
+    assert "\n" not in text
+    assert text.endswith("...")
+    assert len(text) == 80
+
+
+def test_failed_attempts_log_reason_and_summary(
+    tmp_path, cohort_db, source_db, patched, capsys
+):
+    doomed = {"author00"}
+    original = patched.messages.create
+
+    def create(**kwargs):
+        if any(a in kwargs.get("messages", [{}])[0].get("content", "") for a in doomed):
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(text="not json at all")],
+                usage=types.SimpleNamespace(input_tokens=1, output_tokens=1),
+            )
+        return original(**kwargs)
+
+    patched.messages.create = create
+    result = run(tmp_path, cohort_db, source_db, workers=4)
+    assert result.failed_units == 1
+    err = capsys.readouterr().err
+    assert err.count("retry unit=") == engine.MAX_PROVIDER_ATTEMPTS - 1
+    assert err.count("FAIL unit=") == 1
+    assert "attempt=1/3 validation JSONDecodeError:" in err
+    assert "attempt=3/3 validation JSONDecodeError:" in err
+    assert "failure summary: 1 units" in err
+    assert "JSONDecodeError: Expecting value" in err
+
+
+def test_non_transient_transport_failure_logs_without_retry(
+    tmp_path, cohort_db, source_db, patched, capsys
+):
+    doomed = {"author00"}
+    original = patched.messages.create
+
+    def create(**kwargs):
+        if any(a in kwargs.get("messages", [{}])[0].get("content", "") for a in doomed):
+            raise RuntimeError("provider rejected the request")
+        return original(**kwargs)
+
+    patched.messages.create = create
+    result = run(tmp_path, cohort_db, source_db, workers=2)
+    assert result.failed_units == 1
+    err = capsys.readouterr().err
+    assert "retry unit=" not in err
+    assert "FAIL unit=" in err
+    assert "transport RuntimeError: provider rejected the request" in err
+    assert "failure summary: 1 units" in err

@@ -13,7 +13,15 @@ from types import SimpleNamespace
 import pytest
 
 from patientpunk import llm_cache as cache
-from patientpunk._utils import LLMResponseError, _OpenAIMessages, check_response, response_text
+from patientpunk._utils import (
+    LLMResponseError,
+    _OpenAIAdapter,
+    _OpenAIMessages,
+    _openai_compat_base_url,
+    check_response,
+    get_llm_client,
+    response_text,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -147,3 +155,64 @@ def test_split_retry_batch_gives_none_when_single_item_still_truncated():
         raise LLMResponseError("truncated")
 
     assert split_retry_batch(call_fn, [{"a": 1}]) == [None]
+
+
+@pytest.mark.parametrize(
+    "given, expected",
+    [
+        (None, "http://localhost:8000/v1"),
+        ("https://openrouter.ai/api", "https://openrouter.ai/api/v1"),
+        ("https://openrouter.ai/api/", "https://openrouter.ai/api/v1"),
+        ("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1"),
+        ("http://localhost:8000/v1", "http://localhost:8000/v1"),
+    ],
+)
+def test_openai_compat_base_url(given, expected):
+    assert _openai_compat_base_url(given) == expected
+
+
+def test_openai_override_sends_reasoning_effort_when_env_is_openrouter(monkeypatch):
+    """Garlic Stage 4: env LLM_PROVIDER=openrouter must not select Anthropic SDK."""
+
+    captured: dict = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["create"] = kwargs
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="{}"),
+                        finish_reason="stop",
+                    )
+                ],
+                usage=None,
+                id="gen-1",
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured["client"] = kwargs
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    import openai
+
+    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-realkey-abcdef")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+
+    client = get_llm_client(
+        provider="openai", base_url="https://openrouter.ai/api"
+    )
+    assert isinstance(client, _OpenAIAdapter)
+    assert captured["client"]["base_url"] == "https://openrouter.ai/api/v1"
+    assert captured["client"]["api_key"] == "sk-or-v1-realkey-abcdef"
+
+    client.messages.create(
+        model="deepseek/deepseek-v4-flash",
+        messages=[{"role": "user", "content": "p"}],
+        reasoning_effort="medium",
+    )
+    assert captured["create"]["extra_body"] == {"reasoning": {"effort": "medium"}}

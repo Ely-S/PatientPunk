@@ -17,6 +17,7 @@ under `s3://patientpunk/scientific_validation/`).
 | FDA letter analysis (LDN / Mestinon RWE) | `fda_letter/` | PR #52 |
 | &nbsp;&nbsp;└ Phoenix Rising corpus | `fda_letter/phoenix_rising/` | PR #41 |
 | NATURAL exploration — TrialScout (U of Toronto) | `natural_exploration/` | **not ready to merge** |
+| Garlic beliefs and use (folk pharmacology probe) | `garlic/` | **implemented, Stage 6 report written** — start at [`HANDOFF.md`](garlic/HANDOFF.md); report [`docs/garlic_probe_run_report.md`](../docs/garlic_probe_run_report.md) |
 
 ## Why these are nested
 

@@ -47,6 +47,7 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import httpx
 
@@ -329,7 +330,23 @@ class _OpenAIAdapter:
         self.messages = _OpenAIMessages(client)
 
 
-def get_llm_client():
+def _openai_compat_base_url(base_url: str | None) -> str:
+    """Prefix the OpenAI SDK actually POSTs to.
+
+    That SDK does not append ``/v1``. Probe runbooks store OpenRouter's
+    Anthropic-shaped root (``https://openrouter.ai/api``); using it unchanged
+    would POST ``/api/chat/completions`` instead of ``/api/v1/chat/completions``.
+    """
+    url = (base_url or "http://localhost:8000/v1").rstrip("/")
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        if parsed.path.rstrip("/") == "/api":
+            return f"{parsed.scheme}://{parsed.netloc}/api/v1"
+    return url
+
+
+def get_llm_client(*, provider: str | None = None, base_url: str | None = None):
     """Return an LLM client whose ``.messages.create(...)`` matches the Anthropic
     SDK, regardless of backend.
 
@@ -338,8 +355,20 @@ def get_llm_client():
     Anthropic SDK is used (Anthropic, OpenRouter, or any Anthropic-compatible
     endpoint via ``LLM_BASE_URL``).  Key precedence is provider-specific
     (see ``resolve_llm_config``); ``LLM_API_KEY`` always wins when set.
+
+    ``provider`` / ``base_url`` override the process environment. Probe runs
+    must pass ``RunConfig`` here: env ``LLM_PROVIDER=openrouter`` would otherwise
+    build the Anthropic SDK, which rejects ``reasoning_effort``.
     """
-    cfg = resolve_llm_config()
+    if provider is not None or base_url is not None:
+        env = dict(os.environ)
+        if provider is not None:
+            env["LLM_PROVIDER"] = provider
+        if base_url is not None:
+            env["LLM_BASE_URL"] = base_url
+        cfg = resolve_llm_config(env)
+    else:
+        cfg = resolve_llm_config()
 
     if cfg["provider"] == "openai":
         try:
@@ -350,7 +379,7 @@ def get_llm_client():
             ) from None
         # Self-hosted servers (vLLM/Ollama) often need no real key -> send a dummy.
         client = OpenAI(api_key=cfg["api_key"] or "EMPTY",
-                        base_url=cfg["base_url"] or "http://localhost:8000/v1",
+                        base_url=_openai_compat_base_url(cfg["base_url"]),
                         timeout=TIMEOUT, max_retries=0)
         return _OpenAIAdapter(client)
 
