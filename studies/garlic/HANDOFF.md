@@ -2,7 +2,7 @@
 
 Paste this into a fresh session in `/Users/eli/Desktop/PatientPunk`, branch `ps-study`.
 
-**Date left off:** 2026-08-13. **Nothing is committed.** Quote contract is short paraphrases (`PROMPT_VERSION` `2026-08-12-v3`). **Stage 5, 5b, and 6 are done** on live `run_id` `c05891b6…`. Stage 5: 1,990 complete / 6 failed. Stage 5b: 38 complete / 11 failed / 1 left `running` (user directed stop; do not resume). Stage 6: [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_report.md). Next is DESIGN §8 (loader / notebooks) — out of scope until asked. Do not resume `0ec115ec…`, `7c68eba2…`, or `3a368b7d…`. Do not mix a new `spec_hash` into this run. Same-flags retry of failed units is additional paid work — ask first.
+**Date left off:** 2026-08-13. **Nothing is committed.** Quote contract is short paraphrases (`PROMPT_VERSION` `2026-08-12-v3`). **Stage 5, 5b, and 6 are done** on live `run_id` `c05891b6…`. Stage 5: 1,990 complete / 6 failed. Stage 5b: 38 complete / 11 failed / 1 left `running` (user directed stop; do not resume). Stage 6: [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_report.md). **DESIGN §8 (loader + analysis notebook) is also done** 2026-08-13 — [`garlic.py`](garlic.py) + [`garlic_analysis.ipynb`](garlic_analysis.ipynb), user-requested, quote constraint relaxed to paraphrases. **Read "Analysis phase" below before committing the notebook: its §8 excerpts are frequently verbatim source text.** Do not resume `0ec115ec…`, `7c68eba2…`, or `3a368b7d…`. Do not mix a new `spec_hash` into this run. Same-flags retry of failed units is additional paid work — ask first.
 
 You are continuing [`DESIGN.md`](DESIGN.md) on the generic second-pass engine (`probes/engine.py`). The governing runbook is [`docs/garlic_probe_runbook.md`](../../docs/garlic_probe_runbook.md). Read that and DESIGN.md §2 (plus [`studies/psychedelics/_handoff.txt`](../psychedelics/_handoff.txt) §2) before interpreting any output or spending money.
 
@@ -424,6 +424,38 @@ Written to [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_repor
 
 ---
 
+## Analysis phase — DESIGN §8 (done 2026-08-13, user-requested)
+
+| Path | Role | Git |
+|---|---|---|
+| `studies/garlic/garlic.py` | Read-only loader + aggregation helpers | untracked |
+| `studies/garlic/garlic_analysis.ipynb` | Executed high-level analysis, 49 cells / 9 figures | untracked — **see privacy note** |
+
+Run pinned by full `run_id` in `garlic.RUN_ID`; the DB holds four runs and the loader raises rather than guessing. `author_hash` → dense `reporter` id at load; `source_window.text` never enters a frame. Every count in the ops report reproduces from the notebook.
+
+**Denominators (fixed by schema, stated on every cut):** speech acts 1,927 accounts with a complete unit · belief payload 950 · use payload 640 · effect records 301. Bins below reporter n = 30 are collapsed, not plotted.
+
+**Findings not already in the ops report:**
+
+1. **Mechanism sorts almost cleanly by polarity.** Pro-use: `antimicrobial` 195/214 accounts, `immune` 77/87, `gut_or_biofilm` 73/88, `cardiovascular_or_bleeding` 126/149. Anti-use: `allium_intolerance` 67/72, `histamine_or_mcas_trigger` 31/38. The two camps assert different mechanisms rather than arguing over one.
+2. **Cardiovascular talk is bigger than the prior and runs the wrong way.** DESIGN §4.5 expected ~70 accounts of anticoagulant *caution*; the extraction finds 149 accounts, 126 of them pro-use (blood pressure, circulation, microclots). Never checked by hand — top validation target after the food_list/avoidance boundary.
+3. **The histamine/MCAS anti-use engine is much smaller than the 198-account co-mention prior** — 38 accounts assert it as a mechanism. Same co-mention-vs-assertion error that produced the discredited 302 avoidance figure.
+4. **`unspecified_form` is 330/640 (52%) of use reporters.** Over half say they take garlic without saying in what form. Caps the preparation cut.
+5. **Belief is overwhelmingly uncited** — 156/950 (16.4%) cite any garlic-specific authority; `named_protocol` is 7 accounts.
+6. **Mechanism talk ≫ experience.** 149 accounts discuss blood-thinning; 3 report a bleeding adverse event.
+7. **Adverse events:** 106/640 (16.6%) report ≥1, 18 (2.8%) explicitly deny, ~81% silent. Not a side-effect rate.
+
+**Verbatimness (new measurements, `garlic.quote_character()` and `garlic.freetext_character()`):** DESIGN §7.5 assumed short paraphrases.
+
+- **Evidence anchors** (0.5 floor applies): 12,691 strings, **41.9% exact contiguous spans**, 62% full bag-of-words overlap. Grounding quotes 34–40%; payload quotes `duration` 85%, `doses` 82%, `adverse_events` 81%, `effects` 71%.
+- **Free-text payload fields** (**no floor at all**): 835 strings, **74.7% contiguous**. `duration.raw_text` 95%, **`doses.raw_text` 91%** — the most literal field in the whole extraction — `adverse_events.raw_event` 65%, `effects.target` 55%.
+
+**A "model-written summary field" is not the safe alternative to a quote; it is the less governed one.** DESIGN §7.3 asks `Dose.raw_text` to preserve the author's amount string, and nothing constrains `raw_event` or `target`. An earlier draft of the notebook printed these under "model-written summary fields (not quotes)" as if safer — corrected. The 0.5 floor is a fabrication guard covering evidence anchors only, and GATE 4 (a)'s 91.8% was never evidence of paraphrasing.
+
+**Privacy — decide before committing the notebook.** Its §8 prints ~32 short unlinked excerpts, frequently verbatim Reddit text. That does not satisfy DESIGN §10 ("tracked if it contains no private fields") as written. Options: strip §8 outputs before committing · keep the executed copy gitignored and commit a cleared one · amend DESIGN §2 to permit short unlinked excerpts. **Not decided.** Nothing else in the notebook carries source text, hashes, or window text; `effects.target` is used in §5.3 only through closed symptom classes.
+
+---
+
 ## What was implemented (uncommitted)
 
 | Path | Role |
@@ -434,6 +466,8 @@ Written to [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_repor
 | `docs/garlic_probe_runbook.md` | Stages 0–6 |
 | `docs/garlic_probe_run_report.md` | Stage 6 quote-free ops/methods report |
 | `studies/garlic/DESIGN.md` | Spec; status line: Stage 6 done, report at `docs/garlic_probe_run_report.md` |
+| `studies/garlic/garlic.py` | §8 read-only loader + aggregation helpers |
+| `studies/garlic/garlic_analysis.ipynb` | §8 executed analysis notebook (privacy note above) |
 | `studies/README.md` | Index row **implemented** |
 | `probes/engine.py` | `run_probe` builds the client from `RunConfig`, not env `LLM_PROVIDER` |
 | `variable_extraction/patientpunk/_utils.py` | `get_llm_client(provider=, base_url=)`; OpenRouter `/api` → `/api/v1` for OpenAI SDK |

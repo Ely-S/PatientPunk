@@ -369,7 +369,14 @@ _FAILURE_RULES = (
     ("wrong_source_reference",
      r"source does not belong to unit|source ID/type does not match|"
      r"source_type must be post or comment"),
-    ("use_payload_on_ineligible_event", r"require speech_act=actual_use|use_payload"),
+    # Two opposite defects that both mention the use-payload gate, kept apart.
+    # `requires` vs `require` is load-bearing: matching the shorter form against
+    # the preparation message silently buckets it as the other error.
+    ("use_payload_on_ineligible_event",
+     r"doses/effects/adverse_events require speech_act=actual_use|"
+     r"preparation requires speech_act=actual_use|"
+     r"adverse_event_status must be not_stated unless use_payload_allowed"),
+    ("use_payload_missing_preparation", r"use_payload_allowed events require preparation"),
     ("schema_extra_inputs", r"Extra inputs are not permitted"),
     ("adverse_status_inconsistent", r"adverse[_ ]event"),
     ("duplicate_event", r"duplicate event"),
@@ -434,46 +441,94 @@ def quote_character(path: Path | None = None, run_id: str = RUN_ID) -> pd.DataFr
     bag-of-words floor, which a verbatim span also passes. This reads the window
     text to count, and returns counts only -- no text leaves this function.
     """
+    return _verbatim_table(_string_fields(path, run_id, source="quote"))
+
+
+def freetext_character(path: Path | None = None,
+                       run_id: str = RUN_ID) -> pd.DataFrame:
+    """The same measurement for the model-written free-text payload fields.
+
+    `Dose.raw_text`, `AdverseEvent.raw_event`, `Effect.target` and
+    `Duration.raw_text` are NOT evidence anchors: they carry no grounding floor
+    at all, so nothing in the pipeline ever constrained how literal they are.
+    Measuring them matters because they are strictly less governed than the
+    quotes -- treating them as "model-written summaries" and therefore safer is
+    the opposite of what the numbers say (DESIGN §7.3 in fact asks `raw_text` to
+    preserve the author's amount string). Counts only; no text leaves here.
+    """
+    return _verbatim_table(_string_fields(path, run_id, source="freetext"))
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _norm(text: str) -> str:
+    return " ".join(_TOKEN_RE.findall(text.lower()))
+
+
+def _string_fields(path: Path | None, run_id: str, source: str) -> list[dict]:
+    """Every model-written string of one kind, scored against its own window."""
     con = open_db(path)
     try:
         windows = dict(con.execute(
             "SELECT source_window_id, text FROM source_window WHERE run_id = ?",
             (run_id,)).fetchall())
         rows = con.execute(
-            "SELECT source_window_id, evidence_json FROM claim WHERE run_id = ?",
-            (run_id,)).fetchall()
+            "SELECT source_window_id, evidence_json, values_json FROM claim "
+            "WHERE run_id = ?", (run_id,)).fetchall()
     finally:
         con.close()
 
-    token = re.compile(r"[a-z0-9]+")
-    norm = lambda s: " ".join(token.findall(s.lower()))
     out: list[dict] = []
-    for window_id, evidence_json in rows:
+    for window_id, evidence_json, values_json in rows:
         window = windows.get(window_id)
         if window is None:
             continue
-        normalized = norm(window)
+        normalized = _norm(window)
         vocabulary = set(normalized.split())
-        for anchor in json.loads(evidence_json):
-            quote = norm(anchor["quote"])
-            if not quote:
+
+        if source == "quote":
+            pairs = [(_field_label(a["field_path"]), a["quote"])
+                     for a in json.loads(evidence_json)]
+        else:
+            v = json.loads(values_json)
+            pairs = [("doses.raw_text", d.get("raw_text")) for d in v["doses"]]
+            pairs += [("adverse_events.raw_event", a.get("raw_event"))
+                      for a in v["adverse_events"]]
+            for e in v["effects"]:
+                pairs.append(("effects.target", e.get("target")))
+                pairs.append(("duration.raw_text",
+                              (e.get("duration") or {}).get("raw_text")))
+
+        for label, text in pairs:
+            if not text:
                 continue
-            tokens = quote.split()
+            value = _norm(text)
+            if not value:
+                continue
+            tokens = value.split()
             out.append({
-                "field_path": anchor["field_path"].split("[")[0].split(".")[-1]
-                              if "." in anchor["field_path"]
-                              else anchor["field_path"].split("[")[0],
+                "field_path": label,
                 "words": len(tokens),
-                "contiguous": quote in normalized,
+                "contiguous": value in normalized,
                 "overlap": sum(t in vocabulary for t in tokens) / len(tokens),
             })
-    q = pd.DataFrame(out)
-    return (q.groupby("field_path")
-            .agg(quotes=("words", "size"), median_words=("words", "median"),
+    return out
+
+
+def _field_label(field_path: str) -> str:
+    """Collapse `effects[1].duration` and `effects[0]` onto one label."""
+    head = field_path.split("[")[0]
+    return field_path.split(".")[-1] if "." in field_path else head
+
+
+def _verbatim_table(rows: list[dict]) -> pd.DataFrame:
+    return (pd.DataFrame(rows).groupby("field_path")
+            .agg(strings=("words", "size"), median_words=("words", "median"),
                  contiguous_verbatim=("contiguous", "mean"),
                  mean_overlap=("overlap", "mean"),
                  full_overlap=("overlap", lambda s: (s >= 0.999).mean()))
-            .sort_values("quotes", ascending=False))
+            .sort_values("strings", ascending=False))
 
 
 def sample_quotes(field: str, n: int = 8, seed: int = 0,

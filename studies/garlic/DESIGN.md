@@ -1,6 +1,6 @@
 # Garlic beliefs and use in the long-COVID / ME-CFS Reddit corpus
 
-**Status:** implemented. Quotes are short paraphrases, not verbatim spans. Per-author window-text dedup. GATE 4 marked complete by user 2026-08-12. Stage 5 done 2026-08-13 on `c05891b6…` (1,990 complete / 6 failed). Stage 5b done 2026-08-13 (38 complete / 11 failed / 1 left running; stopped by user). Stage 6 done 2026-08-13: [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_report.md). Analysis notebooks / loader remain out of scope (DESIGN §8 / §11).
+**Status:** implemented. Quotes are short paraphrases, not verbatim spans. Per-author window-text dedup. GATE 4 marked complete by user 2026-08-12. Stage 5 done 2026-08-13 on `c05891b6…` (1,990 complete / 6 failed). Stage 5b done 2026-08-13 (38 complete / 11 failed / 1 left running; stopped by user). Stage 6 done 2026-08-13: run report [`docs/garlic_probe_run_report.md`](../../docs/garlic_probe_run_report.md), plus the §8 analysis in [`garlic_analysis.ipynb`](garlic_analysis.ipynb) on the loader [`garlic.py`](garlic.py) (2026-08-13). The §8 quote-free constraint was relaxed to paraphrases by the user; see §11.
 **Date:** 2026-08-13.
 **Engine contract:** PR 133 / [`probes/psychedelic_pharmacology/`](../../probes/psychedelic_pharmacology/) on the generic second-pass engine in [`probes/engine.py`](../../probes/engine.py).
 
@@ -400,6 +400,24 @@ Do not `git add -f` anything under `data/`.
 
 ## 11. Out of scope until a validated run exists
 
-- Analysis notebooks and the quote-free loader (DESIGN §8)
+- ~~Analysis notebooks and the quote-free loader (DESIGN §8)~~ — **done 2026-08-13**, a validated run exists. `garlic.py` + `garlic_analysis.ipynb`.
 - Any paid provider call before GATE 3 / GATE 4
 - Widening FTS recall to the garlic emoji or bare `allium`
+
+**Quote constraint relaxed (user, 2026-08-13).** The §8 loader was to be quote-free; the user relaxed that for the analysis notebook on the grounds that the extracted quotes are paraphrases. The notebook measures this rather than assuming it (§2.1 there), across **two** populations of model-written strings:
+
+| Population | Grounding floor | Strings | Contiguous verbatim |
+|---|---|---|---|
+| `*_quote` evidence anchors | 0.5 bag-of-words | 12,691 | **41.9%** |
+| Free-text payload fields | **none** | 835 | **74.7%** |
+
+Per field: the three mandatory grounding quotes are 34–40% verbatim; payload quotes are `duration` 85%, `doses` 82%, `adverse_events` 81%, `effects` 71%. The ungoverned free-text fields are worse — `duration.raw_text` 95%, **`doses.raw_text` 91%** (the most literal field in the extraction), `adverse_events.raw_event` 65%, `effects.target` 55%.
+
+**The paraphrase contract is not a privacy control, and a "model-written summary field" is not safer than a quote — it is less governed.** §7.3 in fact asks `Dose.raw_text` to preserve the author's amount string, and nothing anywhere constrains `raw_event` or `target`. Do not reason about these fields as though the 0.5 floor covered them; it applies only to evidence anchors.
+
+Consequences carried in the implementation:
+
+- The loader keeps every one of these strings out of the aggregates. `author_hash` becomes a dense reporter id at load and `source_window.text` never enters a frame.
+- `effects.target` is the one free-text field the analysis computes on. It is never displayed: it is mapped to closed symptom classes in the loader and only class counts are shown.
+- Excerpts reach the notebook only through explicit calls in its §8, deduplicated and unlinked to any reporter.
+- **Because those excerpts are frequently verbatim, the executed notebook carries source text.** §10's "tracked if it contains no private fields" is not satisfied by default. Either strip the §8 outputs before committing, keep the executed copy gitignored, or amend §2 to permit short unlinked excerpts. That call has not been made.
