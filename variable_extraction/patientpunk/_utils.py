@@ -47,6 +47,7 @@ import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import httpx
 
@@ -175,7 +176,7 @@ def resolve_llm_config(env: dict | None = None) -> dict:
 
 
 # Sets the Timeout on LLM API Calls
-TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=60)
+TIMEOUT = httpx.Timeout(connect=10, read=90, write=90, pool=60)
 
 _CFG = resolve_llm_config()
 LLM_PROVIDER = _CFG["provider"]
@@ -201,6 +202,11 @@ class LLMResponseError(RuntimeError):
     split_retry_batch) and the response cache -- which only stores successful
     returns -- never persists it.
     """
+
+    def __init__(self, message: str, *, usage=None, response_id: str | None = None):
+        super().__init__(message)
+        self.usage = usage
+        self.response_id = response_id
 
 
 def response_text(response) -> str:
@@ -241,9 +247,20 @@ def check_response(response, model: str = ""):
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
+    def __init__(
+        self,
+        text: str,
+        stop_reason: str = "end_turn",
+        *,
+        usage=None,
+        response_id: str | None = None,
+    ) -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
+        # Preserve accounting metadata from OpenAI-compatible providers.  Study
+        # pipelines can inspect it without changing the common response-text API.
+        self.usage = usage
+        self.id = response_id
 
 
 class _OpenAIMessages:
@@ -251,7 +268,9 @@ class _OpenAIMessages:
         self._client = client
 
     def create(self, *, model, messages, max_tokens=1024, system=None,
-               temperature=0.0, service_tier: str | None = None, **_ignored):
+               temperature=0.0, service_tier: str | None = None,
+               reasoning_effort: str | None = None,
+               provider_routing: dict | None = None):
         oai_messages = []
         if system:
             if isinstance(system, str):
@@ -264,21 +283,44 @@ class _OpenAIMessages:
         for m in messages:
             oai_messages.append({"role": m["role"], "content": m["content"]})
         tier = {"service_tier": service_tier} if service_tier else {}
+        # OpenRouter's canonical spellings are `reasoning` and `provider` body
+        # objects; sending them through extra_body keeps this working on openai SDK
+        # versions that do not expose the kwargs.  Reasoning tokens bill as output
+        # tokens, so callers must budget max_tokens for them.
+        body: dict = {}
+        if reasoning_effort:
+            body["reasoning"] = {"effort": reasoning_effort}
+        if provider_routing:
+            body["provider"] = provider_routing
+        extra = {"extra_body": body} if body else {}
         resp = self._client.chat.completions.create(
             model=model, messages=oai_messages,
-            max_tokens=max_tokens, temperature=temperature, **tier,
+            max_tokens=max_tokens, temperature=temperature, **tier, **extra,
         )
         # A degenerate reply is a failure, not an empty answer: raise so callers
         # retry and the response cache never stores it.
         if not resp.choices:
-            raise LLMResponseError(f"{model}: provider returned no choices")
+            raise LLMResponseError(
+                f"{model}: provider returned no choices",
+                usage=getattr(resp, "usage", None),
+                response_id=getattr(resp, "id", None),
+            )
         choice = resp.choices[0]
         if choice.message.content is None:
-            raise LLMResponseError(f"{model}: provider returned null content")
+            raise LLMResponseError(
+                f"{model}: provider returned null content",
+                usage=getattr(resp, "usage", None),
+                response_id=getattr(resp, "id", None),
+            )
         # OpenAI spells truncation "length"; normalize to the Anthropic name so
         # check_response() works the same on both backends.
         stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
-        return _AnthropicShapedResponse(choice.message.content, stop_reason)
+        return _AnthropicShapedResponse(
+            choice.message.content,
+            stop_reason,
+            usage=getattr(resp, "usage", None),
+            response_id=getattr(resp, "id", None),
+        )
 
 
 class _OpenAIAdapter:
@@ -288,7 +330,23 @@ class _OpenAIAdapter:
         self.messages = _OpenAIMessages(client)
 
 
-def get_llm_client():
+def _openai_compat_base_url(base_url: str | None) -> str:
+    """Prefix the OpenAI SDK actually POSTs to.
+
+    That SDK does not append ``/v1``. Probe runbooks store OpenRouter's
+    Anthropic-shaped root (``https://openrouter.ai/api``); using it unchanged
+    would POST ``/api/chat/completions`` instead of ``/api/v1/chat/completions``.
+    """
+    url = (base_url or "http://localhost:8000/v1").rstrip("/")
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        if parsed.path.rstrip("/") == "/api":
+            return f"{parsed.scheme}://{parsed.netloc}/api/v1"
+    return url
+
+
+def get_llm_client(*, provider: str | None = None, base_url: str | None = None):
     """Return an LLM client whose ``.messages.create(...)`` matches the Anthropic
     SDK, regardless of backend.
 
@@ -297,8 +355,20 @@ def get_llm_client():
     Anthropic SDK is used (Anthropic, OpenRouter, or any Anthropic-compatible
     endpoint via ``LLM_BASE_URL``).  Key precedence is provider-specific
     (see ``resolve_llm_config``); ``LLM_API_KEY`` always wins when set.
+
+    ``provider`` / ``base_url`` override the process environment. Probe runs
+    must pass ``RunConfig`` here: env ``LLM_PROVIDER=openrouter`` would otherwise
+    build the Anthropic SDK, which rejects ``reasoning_effort``.
     """
-    cfg = resolve_llm_config()
+    if provider is not None or base_url is not None:
+        env = dict(os.environ)
+        if provider is not None:
+            env["LLM_PROVIDER"] = provider
+        if base_url is not None:
+            env["LLM_BASE_URL"] = base_url
+        cfg = resolve_llm_config(env)
+    else:
+        cfg = resolve_llm_config()
 
     if cfg["provider"] == "openai":
         try:
@@ -309,7 +379,7 @@ def get_llm_client():
             ) from None
         # Self-hosted servers (vLLM/Ollama) often need no real key -> send a dummy.
         client = OpenAI(api_key=cfg["api_key"] or "EMPTY",
-                        base_url=cfg["base_url"] or "http://localhost:8000/v1",
+                        base_url=_openai_compat_base_url(cfg["base_url"]),
                         timeout=TIMEOUT, max_retries=0)
         return _OpenAIAdapter(client)
 
