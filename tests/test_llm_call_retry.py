@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
 import httpx
 import pytest
 
@@ -38,6 +39,33 @@ def test_the_remoteprotocolerror():
     assert is_transient_failure(exc)
     assert "Connection" not in type(exc).__name__
     assert "Timeout" not in type(exc).__name__
+
+
+def _in_band(status: int, body: str):
+    """An APIStatusError as the SDK raises it for an error inside a live stream:
+    built against the stream's own response, so it carries that response's status
+    rather than one describing the failure."""
+    exc = anthropic.APIStatusError.__new__(anthropic.APIStatusError)
+    Exception.__init__(exc, body)
+    exc.status_code = status
+    return exc
+
+
+def test_an_error_injected_into_an_already_200_stream_is_retried():
+    """OpenRouter signals a dead upstream in the SSE body, after the 200 is sent.
+    It reaches us as a bare APIStatusError carrying 200, so neither the exception
+    type nor the status says 'transient'. This aborted a classify run part-way
+    through a corpus."""
+    exc = _in_band(200, "{'type': 'error', 'error': "
+                        "{'message': 'JSON error injected into SSE stream', "
+                        "'error_type': 'provider_unavailable'}}")
+    assert is_transient_failure(exc)
+
+
+def test_a_4xx_is_not_rescued_by_what_its_body_happens_to_say():
+    """The body match must not reach client errors: a 400 is wrong about the
+    request, and retrying sends the same bad request four more times."""
+    assert not is_transient_failure(_in_band(400, "provider_unavailable"))
 
 
 @pytest.mark.parametrize("exc, retries", [
