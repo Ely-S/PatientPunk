@@ -1,0 +1,14 @@
+{
+  "schema_id": "nootropics_v1",
+  "_description": "r/Nootropics extraction. Base clinical fields only — the r/covidlonghaulers extensions (infection_count, long_covid_duration_months) do not apply to a healthy-user nootropics population.",
+  "_version": 1,
+  "_target_subreddit": "r/Nootropics",
+  "include_base_fields": ["age", "sex_gender", "location_country", "conditions",
+    "onset_trigger", "medications", "dosage", "treatment_outcome", "procedures",
+    "work_disability_status", "mental_health", "prior_infections",
+    "functional_status_tier", "social_impact", "alternative_treatments",
+    "dietary_interventions", "misdiagnosis", "illness_duration",
+    "illness_trajectory", "fatigue_pem", "cognitive_neurological",
+    "cardiovascular_autonomic", "pain", "sleep", "other_symptoms"],
+  "extension_fields": {}
+}
