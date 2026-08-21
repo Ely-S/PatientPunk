@@ -1,10 +1,5 @@
 # GitHub
 
-**Draft PRs are the only state change you may make on your own.** Create them, push
-the branch they need, and stop.
-
-Everything else on a shared repo is the maintainers' decision, not yours:
-
 | | |
 |---|---|
 | allowed unprompted | `gh pr create --draft`, pushing that branch |
@@ -16,6 +11,10 @@ request into the adjacent action that seems implied.
 
 NEVER MERGE TO MAIN WITHOUT EXPLICIT PERMISSION. 
 
+Raw or processed data should never be put on the Github:  this is stored on the S3.
+
+**Read remote state of a repo before writing to it** 
+
 # When creating Pull Requests
 1. Use detailed commit messages
 2. Every PR Needs a Description that has the following sections
@@ -23,10 +22,11 @@ NEVER MERGE TO MAIN WITHOUT EXPLICIT PERMISSION.
 - ## Approach taken - Explaining the solution fully and the design
 - ## User-facing changes  - Explain how this affects users
 - ## Detailed test plan - A Test plan that an agent can follow, including end-to-end verification
+- ## Always start PR's as Drafts:  let the user mark them as ready to merge
 
 The test plan must include exact commands to run and detailed steps to verify the output of the run
 
-**Read remote state of a repo before writing to it** 
+
 
 # Secrets
 
@@ -35,7 +35,7 @@ The test plan must include exact commands to run and detailed steps to verify th
 
 This applies to `cat`, `Read`, `head`, `type`.
 
-
+Examples on how to check for keys and explore Secrets.
 | Question | Command |
 |---|---|
 | Does the file exist? | `test -f .env && echo present` |
@@ -46,6 +46,5 @@ This applies to `cat`, `Read`, `head`, `type`.
 A six-character suffix distinguishes two keys and is useless to anyone who
 finds it. That is the most that should ever reach a chat, a commit, or a log.
 
-If a key does get exposed, say so plainly and immediately.
-
+If a key does get exposed, say so plainly.
 
