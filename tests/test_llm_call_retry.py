@@ -1,8 +1,4 @@
-"""Transient failures must retry; deterministic ones must not. 
-
-src/ had no application-level retry at all -- it relied on the SDK's max_retries,
-which covers the initial request but not a failure part-way through a stream.
-"""
+"""Retry transient LLM stream failures and fail fast on deterministic errors."""
 
 import os
 import sys
@@ -17,7 +13,7 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from patientpunk._utils import LLMResponseError  # noqa: E402 -- loads .env first
+from patientpunk._utils import LLMResponseError  # noqa: E402
 
 os.environ["LLM_PROVIDER"] = "anthropic"
 
@@ -31,10 +27,7 @@ def _with_status(status: int):
 
 
 def test_the_remoteprotocolerror():
-    """RemoteProtocolError is the specific failure this exists for. It is a
-    TransportError but its class name contains neither 'Connection' nor
-    'Timeout', so substring matching misses it. This is to test something
-    that actually killed a run"""
+    """The original failure lacks the class-name substrings used by old logic."""
     exc = httpx.RemoteProtocolError("peer closed connection")
     assert is_transient_failure(exc)
     assert "Connection" not in type(exc).__name__
@@ -42,9 +35,7 @@ def test_the_remoteprotocolerror():
 
 
 def _in_band(status: int, body: str):
-    """An APIStatusError as the SDK raises it for an error inside a live stream:
-    built against the stream's own response, so it carries that response's status
-    rather than one describing the failure."""
+    """Build the APIStatusError raised for an error inside a live stream."""
     exc = anthropic.APIStatusError.__new__(anthropic.APIStatusError)
     Exception.__init__(exc, body)
     exc.status_code = status
@@ -52,10 +43,7 @@ def _in_band(status: int, body: str):
 
 
 def test_an_error_injected_into_an_already_200_stream_is_retried():
-    """OpenRouter signals a dead upstream in the SSE body, after the 200 is sent.
-    It reaches us as a bare APIStatusError carrying 200, so neither the exception
-    type nor the status says 'transient'. This aborted a classify run part-way
-    through a corpus."""
+    """A gateway may report an unavailable provider after returning HTTP 200."""
     exc = _in_band(200, "{'type': 'error', 'error': "
                         "{'message': 'JSON error injected into SSE stream', "
                         "'error_type': 'provider_unavailable'}}")
@@ -63,8 +51,7 @@ def test_an_error_injected_into_an_already_200_stream_is_retried():
 
 
 def test_a_4xx_is_not_rescued_by_what_its_body_happens_to_say():
-    """The body match must not reach client errors: a 400 is wrong about the
-    request, and retrying sends the same bad request four more times."""
+    """An in-band error marker must not make a client error retryable."""
     assert not is_transient_failure(_in_band(400, "provider_unavailable"))
 
 
@@ -72,21 +59,15 @@ def test_a_4xx_is_not_rescued_by_what_its_body_happens_to_say():
     (httpx.ConnectError("refused"), True),
     (_with_status(429), True),
     (_with_status(503), True),
-    # 402 is the one that must fail fast -- five attempts against a dead account
-    # add ~52s per call across a whole corpus to an error that will not clear.
-    (_with_status(402), False),
-    # The reply did not fit the budget and will not fit on a retry; the caller
-    # has to shrink the batch instead.
-    (LLMResponseError("truncated at max_tokens"), False),
+    (_with_status(402), False),  # an exhausted balance cannot clear on retry
+    (LLMResponseError("truncated at max_tokens"), False),  # shrink the batch instead
 ])
 def test_only_failures_that_can_clear_on_their_own_retry(exc, retries):
     assert is_transient_failure(exc) is retries
 
 
 class _Stream:
-    """Raises from get_final_message, never from stream(). That is the case the
-    SDK's max_retries cannot see: it has returned 200 and handed the stream back
-    before the body is read."""
+    """Simulate a failure while draining an established stream."""
 
     def __init__(self, drops: bool):
         self._drops = drops
@@ -105,14 +86,13 @@ class _Stream:
 
 
 @pytest.mark.parametrize("drops, reads", [
-    (2, 3),   # recovers on the third read
-    (9, 5),   # never recovers: bounded at len(RETRY_DELAYS) + 1, then raises
+    (2, 3),  # third attempt succeeds
+    (9, 5),  # retries remain bounded
 ], ids=["recovers", "gives-up-after-five"])
 def test_a_drop_while_reading_the_reply_is_retried(monkeypatch, tmp_path, drops, reads):
-    """Proves the retried unit spans the request AND the read: the failure is
-    raised during the drain, and the whole call is redone rather than resumed."""
+    """Retry the whole request when draining its stream fails."""
     monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))
-    monkeypatch.setattr(time, "sleep", lambda _: None)   # skip ~52s of backoff
+    monkeypatch.setattr(time, "sleep", lambda _: None)  # skip backoff in tests
     from patientpunk import llm_cache
     llm_cache.set_cache_enabled(None)
 
