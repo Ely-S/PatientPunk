@@ -4,6 +4,8 @@ import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 REPO_ROOT = Path(__file__).parent.parent
 sys.path[:0] = [
@@ -101,3 +103,38 @@ def test_split_depth_is_bounded(monkeypatch):
     assert result.mapping == {name: name for name in names}
     assert result.failed_names == len(names)
     assert result.split_names == len(names)
+
+
+def test_run_reports_aggregated_split_and_failure_counts(monkeypatch, tmp_path):
+    tagged = [{"drugs_direct": ["drug0", "drug1"], "drugs_context": []}]
+    (tmp_path / canon.TAGGED_MENTIONS).write_text(
+        json.dumps(tagged),
+        encoding="utf-8",
+    )
+    result = canon.CanonicalizationBatchResult(
+        mapping={"drug0": "canonical_drug0", "drug1": "drug1"},
+        failed_names=1,
+        split_names=2,
+    )
+    config = SimpleNamespace(
+        drug=None,
+        client=object(),
+        db_path=tmp_path / "test.db",
+        path=lambda name: tmp_path / name,
+    )
+    log = Mock()
+    monkeypatch.setattr(canon, "canonicalize_batch", Mock(return_value=result))
+    monkeypatch.setattr(canon, "upsert_treatments", lambda *_: 2)
+    monkeypatch.setattr(canon, "log", log)
+
+    assert canon.run_canonicalization(config) == result.mapping
+
+    log.warning.assert_called_once()
+    warning = log.warning.call_args.args
+    assert "SPLIT BATCHES" in warning[0]
+    assert warning[1:] == (2, 2)
+
+    log.error.assert_called_once()
+    error = log.error.call_args.args
+    assert "INCOMPLETE" in error[0]
+    assert error[1:] == (1, 2, 50.0)
