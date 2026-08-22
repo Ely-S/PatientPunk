@@ -42,7 +42,7 @@ def canonicalize_batch(
     names: list[str],
     model=MODEL_STRONG,
 ) -> CanonicalizationBatchResult:
-    """Canonicalize names, splitting unusable batches up to a fixed depth."""
+    """Canonicalize names, splitting unusable batches."""
 
     if not names:
         return CanonicalizationBatchResult(mapping={})
