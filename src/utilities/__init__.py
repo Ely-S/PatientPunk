@@ -231,8 +231,7 @@ def get_client() -> anthropic.Anthropic:
              + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
 
     if LLM_PROVIDER == "openrouter":
-        # Deliberately the OpenAI surface, not the Anthropic Skin: it is the only
-        # one that honours `reasoning`. See _ORStream above for the measurements.
+        # Deliberately the OpenAI surface by defult so we have access to reasoning settings
         import openai
         return _ORClient(openai.OpenAI(
             api_key=api_key,
