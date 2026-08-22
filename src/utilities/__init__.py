@@ -19,7 +19,7 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
-import httpx  # anthropic's transport; TransportError covers the mid-stream drops
+import httpx
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -259,7 +259,7 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        # leaving the SDK's own retries on nests 5 attempts inside each of ours.
+        # The application loop below owns retries; do not nest SDK retries.
         "max_retries": 0,
         "timeout": 60.0,
     }
@@ -351,9 +351,7 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
 RETRY_DELAYS = [2, 5, 15, 30]
 
-# Substrings a gateway uses to say "the upstream is unavailable, try again" in a
-# body it has already sent 200 for. Kept narrow: whatever matches here is retried
-# five times, so a permanent fault landing in this list costs ~52s per call.
+# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
 IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
                      "no instances available", "temporarily unavailable")
 
@@ -364,8 +362,7 @@ BUDGET_GROWTH = [1, 2, 4, 8]
 
 
 def is_transient_failure(exc: BaseException) -> bool:
-    """True for failures where the same request may well succeed on a retry.
-    """
+    """Return whether retrying the same request may succeed."""
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
                         anthropic.RateLimitError, anthropic.InternalServerError)):
         return True
@@ -374,12 +371,8 @@ def is_transient_failure(exc: BaseException) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):
         return True
-    # A gateway that multiplexes upstreams (OpenRouter) reports a dead backend by
-    # injecting an error object into a stream it has already sent 200 for. The SDK
-    # raises that via _make_status_error against the stream's own response, so it
-    # arrives as a bare APIStatusError carrying 200 and matches nothing above.
-    # Read the body instead -- but never for a 4xx, where the request is at fault
-    # and a retry sends the same bad request again.
+    # The SDK raises in-band provider failures as APIStatusError. Match their body,
+    # but never retry a 4xx request.
     if isinstance(exc, anthropic.APIStatusError) and not (
             isinstance(status, int) and 400 <= status < 500):
         return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
