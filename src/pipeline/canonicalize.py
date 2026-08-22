@@ -8,6 +8,7 @@ tagged_mentions.json is left untouched.
 """
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,30 +24,62 @@ from utilities.db import upsert_treatments
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
 BATCH_SIZE = 3500
-# 3500 -> 1750 -> 875 -> 437. Four halvings is enough headroom for any realistic
-# merge rate; past that the reply is not the problem.
+TOKENS_PER_NAME = 15
+MIN_OUTPUT_TOKENS = 2000
+# Four splits reduce a full batch to about 219 names.
 MAX_SPLIT_DEPTH = 4
 
 
-def canonicalize_batch(client, names: list[str], model=MODEL_STRONG,
-                       _depth: int = 0) -> dict[str, str]:
-    """Ask the strong model to group synonyms among a list of drug names. """
-    msg = CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(names)}"
-    # Output is merges-only, but how much of it the model emits varies a lot
-    # between draws on identical input: one measured run on 2,518 names used
-    # 9,130 tokens (3.63/name), and the next truncated at 15,108. 15 is the only
-    # value observed to complete; do not lower it without measuring repeatedly.
-    max_toks = max(2000, len(names) * 15)
-    try:
-        raw = llm_call(client, msg, model=model, max_tokens=max_toks)
-    except LLMResponseError as e:
-        if len(names) > 1 and _depth < MAX_SPLIT_DEPTH:
-            mid = len(names) // 2
-            log.warning(f"{e} — splitting {len(names)} names into 2 and retrying...")
-            return (canonicalize_batch(client, names[:mid], model, _depth + 1)
-                    | canonicalize_batch(client, names[mid:], model, _depth + 1))
-        raise
-    return {n: n for n in names} | parse_json_object(raw)
+@dataclass(frozen=True, slots=True)
+class CanonicalizationBatchResult:
+    mapping: dict[str, str]
+    failed_names: int = 0
+    split_names: int = 0
+
+
+def canonicalize_batch(
+    client,
+    names: list[str],
+    model=MODEL_STRONG,
+) -> CanonicalizationBatchResult:
+    """Canonicalize names, splitting unusable batches up to a fixed depth."""
+
+    if not names:
+        return CanonicalizationBatchResult(mapping={})
+
+    def _canonicalize(batch: list[str], depth: int) -> CanonicalizationBatchResult:
+        prompt = (
+            CANONICALIZE_COMPOUND_PROMPT
+            + f"\n\nDrug names to canonicalize:\n{json.dumps(batch)}"
+        )
+        max_tokens = max(MIN_OUTPUT_TOKENS, len(batch) * TOKENS_PER_NAME)
+
+        try:
+            raw = llm_call(client, prompt, model=model, max_tokens=max_tokens)
+            mapping = {name: name for name in batch} | parse_json_object(raw)
+            return CanonicalizationBatchResult(mapping=mapping)
+        except (LLMParseError, LLMResponseError) as exc:
+            if len(batch) == 1 or depth >= MAX_SPLIT_DEPTH:
+                return CanonicalizationBatchResult(
+                    mapping={name: name for name in batch},
+                    failed_names=len(batch),
+                )
+
+            midpoint = len(batch) // 2
+            log.warning(
+                "%s; splitting %d names and retrying both halves.",
+                exc,
+                len(batch),
+            )
+            left = _canonicalize(batch[:midpoint], depth + 1)
+            right = _canonicalize(batch[midpoint:], depth + 1)
+            return CanonicalizationBatchResult(
+                mapping=left.mapping | right.mapping,
+                failed_names=left.failed_names + right.failed_names,
+                split_names=len(batch),
+            )
+
+    return _canonicalize(names, depth=0)
 
 
 def _canonicalize_entries(tagged: list[dict], canon_map: dict[str, str]) -> None:
@@ -85,35 +118,40 @@ def run_canonicalization(config: "PipelineConfig") -> dict[str, str]:
     # Single pass: one LLM call per batch, no rotation/multi-pass. Trusting
     # the strong model to find synonyms within a single large batch.
     canon_map: dict[str, str] = {}
-    unmerged = 0
+    failed_names = 0
+    split_names = 0
     batches = [all_drugs[i:i + BATCH_SIZE] for i in range(0, len(all_drugs), BATCH_SIZE)]
     for i, batch in enumerate(batches, 1):
         log.info(f"batch {i}/{len(batches)} ({len(batch)} names): calling LLM...")
         t0 = time.monotonic()
-        try:
-            batch_result = canonicalize_batch(client, batch)
-            merges = sum(1 for k, v in batch_result.items() if k != v)
-            log.info(f"batch {i}/{len(batches)} done: "
-                     f"{merges} merges in {time.monotonic() - t0:.1f}s")
-            canon_map.update(batch_result)
-        except (LLMParseError, LLMResponseError) as e:
-            # LLMResponseError only lands here once splitting has bottomed out.
-            unmerged += len(batch)
-            log.error(f"batch {i}/{len(batches)} failed after "
-                      f"{time.monotonic() - t0:.1f}s: {e}. Keeping raw names.")
-            for n in batch:
-                canon_map[n] = n
+        result = canonicalize_batch(client, batch)
+        merges = sum(raw != canonical for raw, canonical in result.mapping.items())
+        log.info(
+            f"batch {i}/{len(batches)} done: {merges} merges in "
+            f"{time.monotonic() - t0:.1f}s"
+        )
+        canon_map.update(result.mapping)
+        failed_names += result.failed_names
+        split_names += result.split_names
 
-    if unmerged:
-        # Say this once, loudly, at the end. A per-batch log.error scrolls past in
-        # a long run, and the consequence is invisible downstream: "ldn" and "low
-        # dose naltrexone" stay separate treatments and every count built on them
-        # is wrong, with nothing in the output saying so.
+    if split_names:
+        log.warning(
+            "CANONICALIZATION USED SPLIT BATCHES: %d of %d names were processed "
+            "in smaller groups. Synonyms across split boundaries may remain "
+            "unmerged.",
+            split_names,
+            len(all_drugs),
+        )
+
+    if failed_names:
         log.error(
-            f"CANONICALIZATION INCOMPLETE: {unmerged} of {len(all_drugs)} names "
-            f"({unmerged / len(all_drugs) * 100:.1f}%) kept raw because their batch "
-            f"failed. Synonyms among them are NOT merged -- treat per-drug counts "
-            f"as unreliable until this is re-run.")
+            "CANONICALIZATION INCOMPLETE: %d of %d names (%.1f%%) were kept raw "
+            "after their sub-batches failed. Per-drug counts may be incomplete "
+            "until this is re-run.",
+            failed_names,
+            len(all_drugs),
+            failed_names / len(all_drugs) * 100,
+        )
 
     # Group synonyms for logging and alias table
     aliases_for: dict[str, list[str]] = {}
