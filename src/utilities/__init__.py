@@ -137,22 +137,8 @@ def get_git_commit() -> str:
 
 
 # ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
-# OpenRouter exposes two surfaces. Its Anthropic Skin (/api, spoken by the
-# Anthropic SDK) silently DROPS the `reasoning` parameter -- the request 200s and
-# the field is ignored. Its OpenAI surface (/api/v1) honours it.
-#
-# That matters because deepseek/deepseek-v4-flash is a reasoning model: it spends
-# output tokens thinking before it answers, and those tokens count against
-# max_tokens. Measured over 6 calls on one trivial 20-item prompt:
-#
-#     endpoint            reasoning chars                 suppressed
-#     OpenAI  effort=none [0, 0, 0, 0, 0, 0]              6/6
-#     Anthropic (same)    [705, 268, 0, 239, 523, 494]    1/6   (= baseline)
-#
-# Unsuppressed, reasoning ran 239-862 chars and blew every per-stage max_tokens
-# heuristic in src/ (10/item at prefilter, 15/name at canonicalize, 250/text at
-# extract), which check_response then turned into a hard failure. Suppressing it
-# also cut output tokens ~3.5x on that prompt, so this is a cost fix as well.
+# OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
+# paramater only seems to be accessable on the OpenAI surface
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
