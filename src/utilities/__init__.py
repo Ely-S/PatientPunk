@@ -145,12 +145,6 @@ _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1"
 
 
 class _ORStream:
-    """Anthropic-SDK-shaped streaming context manager over OpenAI chat completions.
-
-    Streaming is not optional here: a full-corpus canonicalization batch has been
-    observed taking 710s, and a non-streaming call would hit the client timeout
-    long before that.
-    """
 
     def __init__(self, client, **kwargs) -> None:
         self._client, self._kwargs = client, kwargs
@@ -173,8 +167,6 @@ class _ORStream:
                 parts.append(delta.content)
             if chunk.choices[0].finish_reason:
                 finish = chunk.choices[0].finish_reason
-        # OpenAI spells truncation "length"; normalize so check_response, which
-        # keys off the Anthropic name, behaves identically on both surfaces.
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
