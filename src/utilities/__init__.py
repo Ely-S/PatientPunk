@@ -355,10 +355,8 @@ RETRY_DELAYS = [2, 5, 15, 30]
 IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
                      "no instances available", "temporarily unavailable")
 
-# Multipliers applied to a caller's max_tokens when the reply truncates. Four
-# doublings covers every heuristic in src/ (10/item at prefilter through 250/text
-# at extract) without letting a genuinely runaway reply spend forever.
-BUDGET_GROWTH = [1, 2, 4, 8]
+# Retry truncated replies with progressively larger output ceilings.
+BUDGET_MULTIPLIERS = (1, 2, 4, 8)
 
 
 def is_transient_failure(exc: BaseException) -> bool:
@@ -386,10 +384,11 @@ def llm_call(
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
+    """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import LLMResponseError, check_response, response_text
+    from patientpunk._utils import LLMTruncationError, check_response, response_text
 
-    def _once(budget: int) -> str:
+    def _request_once(budget: int) -> str:
         kwargs = {
             "model": model,
             "max_tokens": budget,
@@ -399,50 +398,46 @@ def llm_call(
         if system:
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
-            return response_text(check_response(stream.get_final_message(), model=model))
+            message = check_response(stream.get_final_message(), model=model)
+            return response_text(message)
 
-    def _with_transport_retry(budget: int) -> str:
+    def _request_with_transport_retries(budget: int) -> str:
         for attempt, delay in enumerate([0] + RETRY_DELAYS):
             if delay:
                 time.sleep(delay)
             try:
-                return _once(budget)
-            except Exception as e:
-                if not is_transient_failure(e) or attempt == len(RETRY_DELAYS):
+                return _request_once(budget)
+            except Exception as exc:
+                if not is_transient_failure(exc) or attempt == len(RETRY_DELAYS):
                     raise
                 log.warning(
-                    f"{type(e).__name__} on {model} "
+                    f"{type(exc).__name__} on {model} "
                     f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
         raise AssertionError("unreachable")  # pragma: no cover
 
-    # Every caller sizes max_tokens with its own hand-tuned heuristic -- 10 per
-    # item here, 80 per item there, 15 per name in canonicalize. Each was fitted
-    # to a different model and each truncates on a reply that runs long, which
-    # check_response turns into a hard failure. Rather than re-tune six constants
-    # per model, grow the budget and retry: max_tokens is a ceiling, not a
-    # charge, so a larger one costs nothing unless the model actually uses it.
-    #
-    # The budget is part of the cache key, so each attempt is cached under its
-    # own key and a later run with the same caller-supplied size still hits.
-    # Exceptions are never cached, so a truncated attempt leaves nothing behind.
-    last = None
-    for factor in BUDGET_GROWTH:
-        budget = max_tokens * factor
+    def _cached_request(budget: int) -> str:
+        return cached_completion(
+            provider=LLM_PROVIDER,
+            model=model,
+            system=system,
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=budget,
+            call_fn=lambda: _request_with_transport_retries(budget),
+        )
+
+    budgets = tuple(max_tokens * factor for factor in BUDGET_MULTIPLIERS)
+    for index, budget in enumerate(budgets):
         try:
-            return cached_completion(
-                provider=LLM_PROVIDER,
-                model=model,
-                system=system,
-                prompt=prompt,
-                temperature=0.0,
-                max_tokens=budget,
-                call_fn=lambda b=budget: _with_transport_retry(b),
+            return _cached_request(budget)
+        except LLMTruncationError:
+            if index == len(budgets) - 1:
+                raise
+            next_budget = budgets[index + 1]
+            log.warning(
+                "Reply reached max_tokens=%d on %s; retrying with max_tokens=%d.",
+                budget,
+                model,
+                next_budget,
             )
-        except LLMResponseError as e:
-            if "truncated" not in str(e):
-                raise           # an empty reply will not be fixed by more room
-            last = e
-            if factor != BUDGET_GROWTH[-1]:
-                log.warning(f"reply hit {budget} tokens on {model}; "
-                            f"retrying with {max_tokens * factor * 2}...")
-    raise last
+    raise AssertionError("unreachable")  # pragma: no cover
