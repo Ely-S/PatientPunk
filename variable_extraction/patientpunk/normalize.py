@@ -24,12 +24,7 @@ from __future__ import annotations
 
 import re
 
-from .treatment_fields import (
-    DOSAGE_FIELD,
-    DOSAGE_TREATMENT_FIELD,
-    DOSAGE_VALUE_FIELD,
-    decompose_treatment_pairs,
-)
+from .treatment_fields import DOSAGE_FIELD, TreatmentValuePair
 
 # --- cleaning ---------------------------------------------------------------
 
@@ -277,6 +272,9 @@ TREATMENT_OUTCOME_SYMPTOM = "treatment_outcome_symptom"
 TREATMENT_OUTCOME_DERIVED = [
     TREATMENT_OUTCOME_LABEL, TREATMENT_OUTCOME_DRUG, TREATMENT_OUTCOME_SYMPTOM,
 ]
+DOSAGE_TREATMENT = "dosage_treatment"
+DOSAGE_VALUE = "dosage_value"
+DOSAGE_DERIVED = [DOSAGE_TREATMENT, DOSAGE_VALUE]
 _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
 
@@ -324,6 +322,26 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
     }
 
 
+def decompose_dosage(cell: str, sep: str = " | ") -> dict[str, str]:
+    """Split dosage pairs into aligned treatment and dose columns.
+
+    A bare legacy dose stays in the dose column with a blank treatment.
+    """
+    treatments: list[str] = []
+    doses: list[str] = []
+    for entry in (cell or "").split(sep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        pair = TreatmentValuePair.from_text(entry)
+        treatments.append(pair.treatment if pair else "")
+        doses.append(pair.value if pair else entry)
+    return {
+        DOSAGE_TREATMENT: sep.join(treatments),
+        DOSAGE_VALUE: sep.join(doses),
+    }
+
+
 def normalize_records(rows: list[dict], *, sep: str = " | ",
                       drop_fields: set[str] | None = None) -> list[dict]:
     """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked.
@@ -339,12 +357,7 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
         if TREATMENT_OUTCOME_RAW in nr:
             nr.update(decompose_treatment_outcome(nr.get(TREATMENT_OUTCOME_RAW, ""), sep))
         if DOSAGE_FIELD in nr:
-            nr.update(decompose_treatment_pairs(
-                nr.get(DOSAGE_FIELD, ""),
-                treatment_field=DOSAGE_TREATMENT_FIELD,
-                value_field=DOSAGE_VALUE_FIELD,
-                sep=sep,
-            ))
+            nr.update(decompose_dosage(nr.get(DOSAGE_FIELD, ""), sep))
         for f in FIELD_VOCAB:
             if f == TREATMENT_OUTCOME_RAW:
                 continue  # keep raw triples; bucket lives in treatment_outcome_label
