@@ -2347,8 +2347,10 @@ class TestLLMExtractNormalizeRecords:
 
         prompt = build_system_prompt(build_field_descriptions(None))
 
-        assert 'ALWAYS use "treatment: route"' in prompt
-        assert "Do not infer oral" in prompt
+        assert 'Return each explicit link as "treatment: route"' in prompt
+        assert "Never infer a route from a treatment's usual form" in prompt
+        assert '"I inject B12" -> "B12: injection"' in prompt
+        assert '"I take naltrexone" -> omit administration_route' in prompt
         for route in ("injection", "sublingual", "oral", "suppository"):
             assert route in prompt
 
