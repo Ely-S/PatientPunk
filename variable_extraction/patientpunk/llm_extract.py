@@ -943,9 +943,6 @@ def normalize_records(
                     deduped.append(v)
             field_data["values"] = deduped
 
-    # A dosage is usable only when the model attributes it to a specific
-    # treatment. Reject bare values rather than matching separate lists by
-    # position, which silently corrupts multi-treatment posts.
     for rec in records:
         dosage_data = rec.get("fields", {}).get(DOSAGE_FIELD, {})
         if dosage_data.get("values"):
