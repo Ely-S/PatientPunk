@@ -2260,8 +2260,12 @@ class TestLLMExtractNormalizeRecords:
 
         prompt = build_system_prompt(build_field_descriptions(None))
 
-        assert 'ALWAYS use "treatment: dose"' in prompt
-        assert "never assign a dose to a nearby treatment by position" in prompt
+        assert 'Return each explicit link as "treatment: dose"' in prompt
+        assert "they actually took or received" in prompt
+        assert "Never pair values by proximity, order, or guesswork" in prompt
+        assert '"I was prescribed 5 mg naltrexone but never started it" -> null' in prompt
+        assert '"Naltrexone commonly comes in 50 mg tablets" -> null' in prompt
+        assert '"My wife takes 5 mg naltrexone" -> null' in prompt
 
     def test_canonicalization_still_applied(self):
         from patientpunk.llm_extract import normalize_records
