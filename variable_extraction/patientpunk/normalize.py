@@ -334,10 +334,7 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
 
 
 def decompose_dosage(cell: str, sep: str = " | ") -> dict[str, str]:
-    """Split dosage pairs into aligned treatment and dose columns.
-
-    A bare legacy dose stays in the dose column with a blank treatment.
-    """
+    """Split dosage pairs into aligned treatment and dose columns."""
     treatments: list[str] = []
     doses: list[str] = []
     for entry in (cell or "").split(sep):
