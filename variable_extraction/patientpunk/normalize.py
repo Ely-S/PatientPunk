@@ -26,12 +26,8 @@ import re
 
 from .treatment_fields import (
     ADMINISTRATION_ROUTE_FIELD,
-    ADMINISTRATION_ROUTE_TREATMENT_FIELD,
-    ADMINISTRATION_ROUTE_VALUE_FIELD,
     DOSAGE_FIELD,
-    DOSAGE_TREATMENT_FIELD,
-    DOSAGE_VALUE_FIELD,
-    decompose_treatment_pairs,
+    TreatmentValuePair,
     normalize_administration_route,
 )
 
@@ -281,6 +277,15 @@ TREATMENT_OUTCOME_SYMPTOM = "treatment_outcome_symptom"
 TREATMENT_OUTCOME_DERIVED = [
     TREATMENT_OUTCOME_LABEL, TREATMENT_OUTCOME_DRUG, TREATMENT_OUTCOME_SYMPTOM,
 ]
+DOSAGE_TREATMENT = "dosage_treatment"
+DOSAGE_VALUE = "dosage_value"
+DOSAGE_DERIVED = [DOSAGE_TREATMENT, DOSAGE_VALUE]
+ADMINISTRATION_ROUTE_TREATMENT = "administration_route_treatment"
+ADMINISTRATION_ROUTE_VALUE = "administration_route_value"
+ADMINISTRATION_ROUTE_DERIVED = [
+    ADMINISTRATION_ROUTE_TREATMENT,
+    ADMINISTRATION_ROUTE_VALUE,
+]
 _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
 
@@ -328,6 +333,44 @@ def decompose_treatment_outcome(cell: str, sep: str = " | ") -> dict[str, str]:
     }
 
 
+def decompose_dosage(cell: str, sep: str = " | ") -> dict[str, str]:
+    """Split dosage pairs into aligned treatment and dose columns.
+
+    A bare legacy dose stays in the dose column with a blank treatment.
+    """
+    treatments: list[str] = []
+    doses: list[str] = []
+    for entry in (cell or "").split(sep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        pair = TreatmentValuePair.from_text(entry)
+        treatments.append(pair.treatment if pair else "")
+        doses.append(pair.value if pair else entry)
+    return {
+        DOSAGE_TREATMENT: sep.join(treatments),
+        DOSAGE_VALUE: sep.join(doses),
+    }
+
+
+def decompose_administration_route(cell: str, sep: str = " | ") -> dict[str, str]:
+    """Split route pairs into aligned treatment and normalized route columns."""
+    treatments: list[str] = []
+    routes: list[str] = []
+    for entry in (cell or "").split(sep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        pair = TreatmentValuePair.from_text(entry)
+        treatments.append(pair.treatment if pair else "")
+        route = pair.value if pair else entry
+        routes.append(normalize_administration_route(route).value)
+    return {
+        ADMINISTRATION_ROUTE_TREATMENT: sep.join(treatments),
+        ADMINISTRATION_ROUTE_VALUE: sep.join(routes),
+    }
+
+
 def normalize_records(rows: list[dict], *, sep: str = " | ",
                       drop_fields: set[str] | None = None) -> list[dict]:
     """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked.
@@ -343,19 +386,10 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
         if TREATMENT_OUTCOME_RAW in nr:
             nr.update(decompose_treatment_outcome(nr.get(TREATMENT_OUTCOME_RAW, ""), sep))
         if DOSAGE_FIELD in nr:
-            nr.update(decompose_treatment_pairs(
-                nr.get(DOSAGE_FIELD, ""),
-                treatment_field=DOSAGE_TREATMENT_FIELD,
-                value_field=DOSAGE_VALUE_FIELD,
-                sep=sep,
-            ))
+            nr.update(decompose_dosage(nr.get(DOSAGE_FIELD, ""), sep))
         if ADMINISTRATION_ROUTE_FIELD in nr:
-            nr.update(decompose_treatment_pairs(
-                nr.get(ADMINISTRATION_ROUTE_FIELD, ""),
-                treatment_field=ADMINISTRATION_ROUTE_TREATMENT_FIELD,
-                value_field=ADMINISTRATION_ROUTE_VALUE_FIELD,
-                sep=sep,
-                normalize_value=lambda value: normalize_administration_route(value).value,
+            nr.update(decompose_administration_route(
+                nr.get(ADMINISTRATION_ROUTE_FIELD, ""), sep
             ))
         for f in FIELD_VOCAB:
             if f == TREATMENT_OUTCOME_RAW:
