@@ -30,7 +30,7 @@
       "confidence": "high"
     },
     "dosage": {
-      "description": "Medication or supplement doses explicitly stated by the patient as 'treatment: dose' pairs",
+      "description": "Medication or supplement doses the author explicitly reports taking or receiving, as 'treatment: dose' pairs",
       "confidence": "medium",
       "notes": "Each dose remains linked to its treatment. Decomposed downstream into dosage_treatment and dosage_value columns."
     },
