@@ -140,8 +140,8 @@ BASE_FIELD_DESCRIPTIONS = {
     "illness_duration": "How long the patient has been ill overall",
     "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
-    "dosage": "Treatment-linked medication or supplement doses as 'treatment: dose' pairs (for example, 'LDN: 4.5 mg' or 'B12: 250 mcg')",
-    "administration_route": "How a treatment is administered as a 'treatment: route' pair using the controlled route vocabulary",
+    "dosage": "Doses the author explicitly reports taking or receiving, linked as 'treatment: dose' pairs (for example, 'LDN: 4.5 mg' or 'B12: 250 mcg')",
+    "administration_route": "How the author explicitly reports a treatment was administered to them, as a 'treatment: route' pair using the controlled route vocabulary",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
@@ -343,16 +343,25 @@ FIELD-SPECIFIC RULES:
 - misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
-- dosage: Extract only explicitly stated medication or supplement doses. ALWAYS use "treatment: dose" so every dose remains attached to its treatment. Examples: "LDN: 4.5 mg", "B12: 250 mcg". If several treatments and doses appear, make one pair for each attribution stated in the text; never assign a dose to a nearby treatment by position or guesswork. Keep each number and unit together and preserve decimals and ranges (for example, "ketotifen: 0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. For qualitative wording such as "low dose" with no number, retain "treatment: low dose". Omit a dose that cannot be linked to a specific treatment.
+- dosage:
+  1. Extract a dose only when the author explicitly states the dose of a specific medication or supplement they actually took or received.
+  2. Return each explicit link as "treatment: dose". When several treatments or doses are mentioned, create a pair only when the text attributes that dose to that treatment. Never pair values by proximity, order, or guesswork.
+  3. Keep each number and unit together and preserve decimals and ranges, for example "ketotifen: 0.25-0.5 mg".
+  4. If the text gives a numeric dose without a unit, retain the number and never invent a unit.
+  5. For qualitative wording such as "low dose" with no number, return "treatment: low dose".
+  6. Do not extract a prescribed, offered, planned, declined, or third-party dose that the author did not take or receive. Do not extract general information about a treatment's usual dose. If the dose or its treatment is unclear, return null.
+  Positive examples: "I take 4.5 mg LDN" -> "LDN: 4.5 mg"; "I use 250 mcg of B12" -> "B12: 250 mcg".
+  Negative examples: "I was prescribed 5 mg naltrexone but never started it" -> null; "Naltrexone commonly comes in 50 mg tablets" -> null; "My wife takes 5 mg naltrexone" -> null.
 - administration_route:
-  1. Extract a route only when the text explicitly states how a specific treatment was administered.
-  2. Return each explicit link as "treatment: route". When several treatments are mentioned, create a pair only for each treatment whose route is stated.
-  3. Use ONLY one of these route values: {", ".join(ADMINISTRATION_ROUTE_VALUES)}.
-  4. Prefer the most specific stated route. For example, use intravenous, intramuscular, or subcutaneous instead of injection when that detail is stated. Use a broader value such as injection or suppository only when the text gives no more specific route.
-  5. Use other only when the text explicitly states a route outside the allowed values.
-  6. Never infer a route from a treatment's usual form or method of use. Omit a route that is unclear or cannot be linked to a specific treatment.
+  1. Extract a route only when the author explicitly states how a specific treatment was or is administered to them.
+  2. Return each explicit link as "treatment: route". Create one pair for each explicit treatment-route link.
+  3. Use ONLY one of these exact route values: {", ".join(ADMINISTRATION_ROUTE_VALUES)}.
+  4. Use the most specific route stated. For example, prefer intramuscular over injection.
+  5. If only a broad method is stated, use the broad value, such as injection or suppository.
+  6. Use other only when an explicit route does not fit the allowed values.
+  7. Do not infer a route from a treatment's usual form or method of use. If the route or its treatment is unclear, return null.
   Positive examples: "I inject B12" -> "B12: injection"; "My B12 shots are IM" -> "B12: intramuscular"; "I take LDN under my tongue" -> "LDN: sublingual".
-  Negative examples: "I take naltrexone" -> omit administration_route; "Naltrexone usually comes as a pill" -> omit administration_route.
+  Negative examples: "I take naltrexone" -> null; "Naltrexone usually comes as a pill" -> null; "My doctor wants me to inject B12 next month" -> null; "My husband injects B12" -> null.
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of the six values below, judged on what the patient can still do. No sentences. Use null when the text does not say.

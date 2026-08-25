@@ -36,6 +36,21 @@ class AdministrationRoute(StrEnum):
 
 ADMINISTRATION_ROUTE_VALUES = tuple(route.value for route in AdministrationRoute)
 
+_SPECIFIC_ROUTES_BY_BROAD_ROUTE: dict[
+    AdministrationRoute, frozenset[AdministrationRoute]
+] = {
+    AdministrationRoute.INJECTION: frozenset({
+        AdministrationRoute.INTRAVENOUS,
+        AdministrationRoute.INTRAMUSCULAR,
+        AdministrationRoute.SUBCUTANEOUS,
+        AdministrationRoute.INTRADERMAL,
+    }),
+    AdministrationRoute.SUPPOSITORY: frozenset({
+        AdministrationRoute.RECTAL,
+        AdministrationRoute.VAGINAL,
+    }),
+}
+
 
 class TreatmentValuePair(BaseModel):
     """Validated boundary object for a ``treatment: value`` LLM entry."""
@@ -83,15 +98,15 @@ _ROUTE_ALIASES: dict[str, AdministrationRoute] = {
 }
 
 
-def normalize_administration_route(value: str) -> AdministrationRoute:
-    """Map a model-produced route to the controlled vocabulary."""
+def normalize_administration_route(value: str) -> AdministrationRoute | None:
+    """Map a recognized model-produced route to the controlled vocabulary."""
     cleaned = _ROUTE_CLEANUP.sub(" ", value.strip().lower())
     if cleaned in _ROUTE_ALIASES:
         return _ROUTE_ALIASES[cleaned]
     try:
         return AdministrationRoute(cleaned)
     except ValueError:
-        return AdministrationRoute.OTHER
+        return None
 
 
 def normalize_dosage_pairs(values: list[str]) -> list[str]:
@@ -113,16 +128,29 @@ def normalize_dosage_pairs(values: list[str]) -> list[str]:
 
 
 def normalize_administration_route_pairs(values: list[str]) -> list[str]:
-    """Keep linked route entries and normalize their route values."""
-    normalized: list[str] = []
-    seen: set[str] = set()
+    """Keep linked routes, rejecting invalid and dominated broad values."""
+    pairs: list[tuple[str, AdministrationRoute]] = []
+    routes_by_treatment: dict[str, set[AdministrationRoute]] = {}
     for raw in values:
         pair = TreatmentValuePair.from_text(raw)
         if pair is None:
             continue
+        treatment = pair.treatment.lower()
+        route = normalize_administration_route(pair.value)
+        if route is None:
+            continue
+        pairs.append((treatment, route))
+        routes_by_treatment.setdefault(treatment, set()).add(route)
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for treatment, route in pairs:
+        specific_routes = _SPECIFIC_ROUTES_BY_BROAD_ROUTE.get(route, frozenset())
+        if routes_by_treatment[treatment].intersection(specific_routes):
+            continue
         rendered = TreatmentValuePair(
-            treatment=pair.treatment.lower(),
-            value=normalize_administration_route(pair.value).value,
+            treatment=treatment,
+            value=route.value,
         ).render()
         if rendered not in seen:
             seen.add(rendered)

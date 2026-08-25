@@ -362,9 +362,13 @@ def decompose_administration_route(cell: str, sep: str = " | ") -> dict[str, str
         if not entry:
             continue
         pair = TreatmentValuePair.from_text(entry)
-        treatments.append(pair.treatment if pair else "")
-        route = pair.value if pair else entry
-        routes.append(normalize_administration_route(route).value)
+        if pair is None:
+            continue
+        route = normalize_administration_route(pair.value)
+        if route is None:
+            continue
+        treatments.append(pair.treatment)
+        routes.append(route.value)
     return {
         ADMINISTRATION_ROUTE_TREATMENT: sep.join(treatments),
         ADMINISTRATION_ROUTE_VALUE: sep.join(routes),

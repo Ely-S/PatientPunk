@@ -2189,6 +2189,19 @@ class TestNormalize:
         assert out["administration_route_treatment"] == "LDN | B12"
         assert out["administration_route_value"] == "sublingual | injection"
 
+    def test_route_decomposition_excludes_unlinked_and_invalid_values(self):
+        from patientpunk.normalize import normalize_records
+
+        row = {
+            "administration_route": (
+                "LDN: sublingual | B12: not-a-route | oral"
+            ),
+        }
+        out = normalize_records([row])[0]
+
+        assert out["administration_route_treatment"] == "LDN"
+        assert out["administration_route_value"] == "sublingual"
+
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META
         header = ["author_hash", "treatment_outcome", "treatment_outcome_label",
@@ -2306,7 +2319,8 @@ class TestLLMExtractNormalizeRecords:
             "B12: shot",
             "LDN: sublingal",
             "saline: IV infusion",
-            "compound: intrathecal",
+            "compound: other",
+            "LDN: not-a-route",
             "oral",
         ]}}
         out = normalize_records([rec])[0]
@@ -2316,6 +2330,24 @@ class TestLLMExtractNormalizeRecords:
             "ldn: sublingual",
             "saline: intravenous",
             "compound: other",
+        ]
+
+    def test_routes_prefer_specific_values_for_the_same_treatment(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {"administration_route": [
+            "B12: injection",
+            "B12: intramuscular",
+            "progesterone: suppository",
+            "progesterone: vaginal",
+            "saline: injection",
+        ]}}
+        out = normalize_records([rec])[0]
+
+        assert out["fields"]["administration_route"]["values"] == [
+            "b12: intramuscular",
+            "progesterone: vaginal",
+            "saline: injection",
         ]
 
     def test_unlinked_dosages_clear_confidence(self):
@@ -2334,25 +2366,42 @@ class TestLLMExtractNormalizeRecords:
 
         assert out["administration_route"] == {"values": [], "confidence": None}
 
+    def test_invalid_routes_clear_confidence_instead_of_becoming_other(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {"administration_route": ["LDN: not-a-route"]}}
+        out = normalize_records([rec])[0]["fields"]
+
+        assert out["administration_route"] == {"values": [], "confidence": None}
+
     def test_prompt_requires_explicit_treatment_dose_linkage(self):
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
 
         prompt = build_system_prompt(build_field_descriptions(None))
 
-        assert 'ALWAYS use "treatment: dose"' in prompt
-        assert "never assign a dose to a nearby treatment by position" in prompt
+        assert 'Return each explicit link as "treatment: dose"' in prompt
+        assert "they actually took or received" in prompt
+        assert "Never pair values by proximity, order, or guesswork" in prompt
+        assert '"I was prescribed 5 mg naltrexone but never started it" -> null' in prompt
+        assert '"Naltrexone commonly comes in 50 mg tablets" -> null' in prompt
+        assert '"My wife takes 5 mg naltrexone" -> null' in prompt
 
     def test_prompt_requires_treatment_linkage_and_explicit_routes(self):
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+        from patientpunk.treatment_fields import ADMINISTRATION_ROUTE_VALUES
 
         prompt = build_system_prompt(build_field_descriptions(None))
 
         assert 'Return each explicit link as "treatment: route"' in prompt
-        assert "Never infer a route from a treatment's usual form" in prompt
+        assert "administered to them" in prompt
+        assert "Use the most specific route stated" in prompt
+        assert "Do not infer a route from a treatment's usual form" in prompt
         assert '"I inject B12" -> "B12: injection"' in prompt
-        assert '"I take naltrexone" -> omit administration_route' in prompt
-        for route in ("injection", "sublingual", "oral", "suppository"):
-            assert route in prompt
+        assert '"I take naltrexone" -> null' in prompt
+        assert '"Naltrexone usually comes as a pill" -> null' in prompt
+        assert '"My doctor wants me to inject B12 next month" -> null' in prompt
+        assert '"My husband injects B12" -> null' in prompt
+        assert ", ".join(ADMINISTRATION_ROUTE_VALUES) in prompt
 
     def test_canonicalization_still_applied(self):
         from patientpunk.llm_extract import normalize_records
