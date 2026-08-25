@@ -351,7 +351,7 @@ def decompose_dosage(cell: str, sep: str = " | ") -> dict[str, str]:
 
 
 def decompose_administration_route(cell: str, sep: str = " | ") -> dict[str, str]:
-    """Split route pairs into aligned treatment and normalized route columns."""
+    """Split linked, recognized route pairs into aligned derived columns."""
     treatments: list[str] = []
     routes: list[str] = []
     for entry in (cell or "").split(sep):
