@@ -2155,35 +2155,73 @@ class TestNormalize:
         assert d["treatment_outcome_drug"] == "LDN |  | metoprolol"
         assert d["treatment_outcome_symptom"] == "brain fog |  | "
 
+    def test_dosage_and_route_decomposition_keeps_treatment_alignment(self):
+        from patientpunk.normalize import normalize_records
+
+        row = {
+            "author_hash": "a",
+            "dosage": "LDN: 4.5 mg | B12: 250 mcg",
+            "administration_route": "LDN: sublingual | B12: injection",
+        }
+        out = normalize_records([row])[0]
+
+        assert out["dosage"] == row["dosage"]
+        assert out["dosage_treatment"] == "LDN | B12"
+        assert out["dosage_value"] == "4.5 mg | 250 mcg"
+        assert out["administration_route"] == row["administration_route"]
+        assert out["administration_route_treatment"] == "LDN | B12"
+        assert out["administration_route_value"] == "sublingual | injection"
+
+    def test_pair_decomposition_preserves_bare_legacy_dose_without_attribution(self):
+        from patientpunk.normalize import normalize_records
+
+        out = normalize_records([{"dosage": "5 mg | B12: 250 mcg"}])[0]
+
+        assert out["dosage_treatment"] == " | B12"
+        assert out["dosage_value"] == "5 mg | 250 mcg"
+
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META
         header = ["author_hash", "treatment_outcome", "treatment_outcome_label",
-                  "treatment_outcome_drug", "treatment_outcome_symptom", "conditions"]
+                  "treatment_outcome_drug", "treatment_outcome_symptom",
+                  "dosage", "dosage_treatment", "dosage_value",
+                  "administration_route", "administration_route_treatment",
+                  "administration_route_value", "conditions"]
         fields = _data_fields(header, DEFAULT_META)
         assert "treatment_outcome_label" in fields      # the bucket is the cluster feature
         assert "treatment_outcome" not in fields         # raw triple excluded from clustering
         assert "treatment_outcome_drug" not in fields
         assert "treatment_outcome_symptom" not in fields
+        assert "dosage" not in fields
+        assert "dosage_treatment" not in fields
+        assert "dosage_value" not in fields
+        assert "administration_route" not in fields
+        assert "administration_route_treatment" not in fields
+        assert "administration_route_value" in fields
         assert "conditions" in fields
 
 
 class TestLLMExtractNormalizeRecords:
-    """Regression coverage for llm_extract.normalize_records (issue #86): with
-    regex parsing removed, dosage strings pass through untouched by the LLM
-    extraction and must survive wrapping/canonicalization unchanged."""
+    """Treatment-linked dosage and administration-route extraction coverage."""
 
-    def test_dosage_is_always_requested_and_reaches_csv(self, tmp_path, monkeypatch):
-        """A model-produced dosage must survive validation through CSV export."""
+    def test_linked_treatment_fields_are_requested_and_reach_csv(
+        self, tmp_path, monkeypatch
+    ):
         import patientpunk.llm_extract as m
 
         schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
         assert "dosage" in m.build_field_descriptions(None)
         assert "dosage" in m.build_field_descriptions(schema)
+        assert "administration_route" in m.build_field_descriptions(None)
+        assert "administration_route" in m.build_field_descriptions(schema)
 
         monkeypatch.setattr(
             m,
             "_call_batch_raw",
-            lambda *_args: [{"fields": {"dosage": ["4.5 mg", "250 mcg"]}}],
+            lambda *_args: [{"fields": {
+                "dosage": ["LDN: 4.5 mg", "B12: 250 mcg"],
+                "administration_route": ["LDN: sublingual", "B12: injection"],
+            }}],
         )
         records = m._process_batch(
             [("post", {
@@ -2203,14 +2241,69 @@ class TestLLMExtractNormalizeRecords:
         run_export_csv(input_files=[src], output_path=output)
 
         row = next(iter(csv.DictReader(output.open(encoding="utf-8"))))
-        assert row["dosage"] == "4.5 mg | 250 mcg"
+        assert row["dosage"] == "ldn: 4.5 mg | b12: 250 mcg"
+        assert row["administration_route"] == "ldn: sublingual | b12: injection"
 
-    def test_dosage_strings_survive_intact(self):
+    def test_treatment_dose_pairs_stay_matched_and_bare_doses_are_dropped(self):
         from patientpunk.llm_extract import normalize_records
-        dosages = ["5 mg", "250 mcg", "0.5 ml", "1 g", "5000 iu", "2 units", "5"]
+
+        dosages = [
+            "LDN: 5 mg",
+            "B12: 250 mcg",
+            "ketotifen: 0.25-0.5 mg",
+            "unlinked 10 mg",
+        ]
         rec = {"fields": {"dosage": dosages}}
         out = normalize_records([rec])[0]
-        assert out["fields"]["dosage"]["values"] == dosages
+
+        assert out["fields"]["dosage"]["values"] == [
+            "ldn: 5 mg",
+            "b12: 250 mcg",
+            "ketotifen: 0.25-0.5 mg",
+        ]
+
+    def test_routes_are_linked_normalized_and_unlinked_values_are_dropped(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {"administration_route": [
+            "B12: shot",
+            "LDN: sublingal",
+            "saline: IV infusion",
+            "compound: intrathecal",
+            "oral",
+        ]}}
+        out = normalize_records([rec])[0]
+
+        assert out["fields"]["administration_route"]["values"] == [
+            "b12: injection",
+            "ldn: sublingual",
+            "saline: intravenous",
+            "compound: other",
+        ]
+
+    def test_unlinked_values_clear_confidence(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {
+            "dosage": ["5 mg"],
+            "administration_route": ["oral"],
+        }}
+        out = normalize_records([rec])[0]["fields"]
+
+        assert out["dosage"] == {"values": [], "confidence": None}
+        assert out["administration_route"] == {"values": [], "confidence": None}
+
+    def test_prompt_requires_treatment_linkage_and_explicit_routes(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+
+        prompt = build_system_prompt(build_field_descriptions(None))
+
+        assert 'ALWAYS use "treatment: dose"' in prompt
+        assert "never assign a dose to a nearby treatment by position" in prompt
+        assert 'ALWAYS use "treatment: route"' in prompt
+        assert "Do not infer oral" in prompt
+        for route in ("injection", "sublingual", "oral", "suppository"):
+            assert route in prompt
 
     def test_canonicalization_still_applied(self):
         from patientpunk.llm_extract import normalize_records
@@ -2222,7 +2315,7 @@ class TestLLMExtractNormalizeRecords:
 
     def test_field_entries_carry_schema_declared_confidence(self):
         from patientpunk.llm_extract import normalize_records
-        rec = {"fields": {"dosage": ["5 mg"], "conditions": ["me/cfs"]}}
+        rec = {"fields": {"dosage": ["LDN: 5 mg"], "conditions": ["me/cfs"]}}
         out = normalize_records([rec], confidence_by_field={"dosage": "low"})[0]
         assert out["fields"]["dosage"]["confidence"] == "low"
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default

@@ -89,6 +89,7 @@ below records where a field is grounded, it did not decide anything.
 | `onset_trigger` | 35.3% | RECOVER |
 | `medications` | 44.4% | clinical standard |
 | `dosage` | — | clinical standard |
+| `administration_route` | — | clinical standard |
 | `treatment_outcome` | 38.7% | PC-COS |
 | `procedures` | 12.2% | clinical standard |
 | `work_disability_status` | 16.5% | SF-36 |
@@ -102,7 +103,11 @@ below records where a field is grounded, it did not decide anything.
 | `illness_duration` | 18.3% | RECOVER |
 | `illness_trajectory` | 17.2% | RECOVER |
 
-`location_country` and `dosage` were not measured separately.
+`location_country`, `dosage`, and `administration_route` were not measured separately.
+
+Dosage and administration route are stored as `treatment: value` pairs so a
+multi-treatment post cannot detach either value from the intervention it
+describes. The normalized CSV also provides aligned treatment and value columns.
 
 **Cut:** `activity_level`, `age_at_onset`, `diagnosis_source`, `diagnostic_odyssey`,
 `doctor_dismissal`, `ethnicity`, `family_history`, `healthcare_costs`,

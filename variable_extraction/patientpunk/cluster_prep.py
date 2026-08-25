@@ -41,6 +41,8 @@ def read_records(path: Path) -> list[dict]:
 # treatment_outcome_label) and the decomposed drug / symptom names.
 _ANALYSIS_CARRY = {
     "treatment_outcome", "treatment_outcome_drug", "treatment_outcome_symptom",
+    "dosage", "dosage_treatment", "dosage_value",
+    "administration_route", "administration_route_treatment",
 }
 
 
