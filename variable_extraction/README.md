@@ -217,7 +217,7 @@ flowchart TD
 | Conditions | Named conditions |
 | Symptom history | Age at onset, trigger, duration, trajectory |
 | Genetics | Genetic testing |
-| Treatments | Medications, dosages, outcomes, procedures, alternative interventions |
+| Treatments | Medications, treatment-linked dosages, outcomes, procedures, alternative interventions |
 | Functional status | Work/disability status, mental health, social impact |
 | Exposures | Toxic/environmental, trauma, prior infections |
 
@@ -226,6 +226,8 @@ Handles cases a fixed pattern set never could:
 - **Paraphrased mentions** — "my heart races when I stand" → POTS
 - **Negation** — "I don't have POTS" correctly excluded
 - **Treatment-outcome pairs** — "LDN helped my brain fog but worsened sleep"
+- **Treatment-dose pairs** — "4.5 mg LDN and 250 mcg B12" stays linked as
+  `LDN: 4.5 mg` and `B12: 250 mcg`
 - **Temporal context** — "I had fatigue but it resolved" → past symptom, not current
 
 ### How Phase 2 discovery works

@@ -104,6 +104,10 @@ below records where a field is grounded, it did not decide anything.
 
 `location_country` and `dosage` were not measured separately.
 
+Dosage is stored as `treatment: dose` pairs so a multi-treatment post cannot
+detach a dose from the intervention it describes. The normalized CSV also
+provides aligned dosage treatment and value columns.
+
 **Cut:** `activity_level`, `age_at_onset`, `diagnosis_source`, `diagnostic_odyssey`,
 `doctor_dismissal`, `ethnicity`, `family_history`, `healthcare_costs`,
 `healthcare_system`, `hormonal_events`, `location_us_state`, `time_to_diagnosis`.

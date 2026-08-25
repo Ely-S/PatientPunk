@@ -30,8 +30,9 @@
       "confidence": "high"
     },
     "dosage": {
-      "description": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit when stated",
-      "confidence": "medium"
+      "description": "Medication or supplement doses explicitly stated by the patient as 'treatment: dose' pairs",
+      "confidence": "medium",
+      "notes": "Each dose remains linked to its treatment. Decomposed downstream into dosage_treatment and dosage_value columns."
     },
     "treatment_outcome": {
       "description": "Response to treatments as 'drug: outcome: symptom' triples",

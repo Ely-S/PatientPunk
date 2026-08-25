@@ -24,6 +24,13 @@ from __future__ import annotations
 
 import re
 
+from .treatment_fields import (
+    DOSAGE_FIELD,
+    DOSAGE_TREATMENT_FIELD,
+    DOSAGE_VALUE_FIELD,
+    decompose_treatment_pairs,
+)
+
 # --- cleaning ---------------------------------------------------------------
 
 _PUNCT = re.compile(r"[^\w%/+\- ]+")
@@ -321,10 +328,9 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
                       drop_fields: set[str] | None = None) -> list[dict]:
     """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked.
 
-    ``treatment_outcome`` is special-cased: its raw "drug: outcome: symptom"
-    triples are preserved and decomposed into ``treatment_outcome_label`` /
-    ``_drug`` / ``_symptom`` (bucket for clustering travels alongside the full
-    pair for analysis) instead of being collapsed in place.
+    Structured treatment fields are preserved and decomposed into parallel
+    columns. ``treatment_outcome`` produces label / drug / symptom columns;
+    ``dosage`` produces treatment / value columns.
     """
     drop = DROP_FIELDS if drop_fields is None else drop_fields
     out = []
@@ -332,6 +338,13 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
         nr = dict(r)
         if TREATMENT_OUTCOME_RAW in nr:
             nr.update(decompose_treatment_outcome(nr.get(TREATMENT_OUTCOME_RAW, ""), sep))
+        if DOSAGE_FIELD in nr:
+            nr.update(decompose_treatment_pairs(
+                nr.get(DOSAGE_FIELD, ""),
+                treatment_field=DOSAGE_TREATMENT_FIELD,
+                value_field=DOSAGE_VALUE_FIELD,
+                sep=sep,
+            ))
         for f in FIELD_VOCAB:
             if f == TREATMENT_OUTCOME_RAW:
                 continue  # keep raw triples; bucket lives in treatment_outcome_label

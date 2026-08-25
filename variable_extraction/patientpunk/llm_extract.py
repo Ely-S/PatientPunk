@@ -67,6 +67,7 @@ from ._utils import (
 )
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
+from .treatment_fields import DOSAGE_FIELD, normalize_dosage_pairs
 MODEL = MODEL_FAST
 
 # Field names the model invented that aren't in the schema. Dropped from the
@@ -133,7 +134,7 @@ BASE_FIELD_DESCRIPTIONS = {
     "illness_duration": "How long the patient has been ill overall",
     "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
-    "dosage": "Medication or supplement dosages explicitly stated by the patient; retain the number and unit (for example, '4.5 mg' or '250 mcg')",
+    "dosage": "Treatment-linked medication or supplement doses as 'treatment: dose' pairs (for example, 'LDN: 4.5 mg' or 'B12: 250 mcg')",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
@@ -335,7 +336,7 @@ FIELD-SPECIFIC RULES:
 - misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
 - medications: Prescription drugs and daily supplements (LDN, Paxlovid, gabapentin, magnesium, probiotics).
-- dosage: Extract only explicitly stated medication or supplement doses. Keep each stated number and unit together; preserve decimals and ranges (for example, "4.5 mg", "0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. Record each distinct stated dose separately. For qualitative wording such as "low dose" with no number, return "low dose"; never invent a numeric dose.
+- dosage: Extract only explicitly stated medication or supplement doses. ALWAYS use "treatment: dose" so every dose remains attached to its treatment. Examples: "LDN: 4.5 mg", "B12: 250 mcg". If several treatments and doses appear, make one pair for each attribution stated in the text; never assign a dose to a nearby treatment by position or guesswork. Keep each number and unit together and preserve decimals and ranges (for example, "ketotifen: 0.25-0.5 mg"). If the text gives a numeric dose without a unit, retain that number; never invent a missing unit. For qualitative wording such as "low dose" with no number, retain "treatment: low dose". Omit a dose that cannot be linked to a specific treatment.
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of the six values below, judged on what the patient can still do. No sentences. Use null when the text does not say.
@@ -933,6 +934,16 @@ def normalize_records(
                     seen.add(key)
                     deduped.append(v)
             field_data["values"] = deduped
+
+    # A dosage is usable only when the model attributes it to a specific
+    # treatment. Reject bare values rather than matching separate lists by
+    # position, which silently corrupts multi-treatment posts.
+    for rec in records:
+        dosage_data = rec.get("fields", {}).get(DOSAGE_FIELD, {})
+        if dosage_data.get("values"):
+            dosage_data["values"] = normalize_dosage_pairs(dosage_data["values"])
+            if not dosage_data["values"]:
+                dosage_data["confidence"] = None
 
     # Multi-field canonicalization: map LLM vocabulary drift to controlled labels.
     # Each field has a dict of {variant: canonical_form}. Values not in the dict
