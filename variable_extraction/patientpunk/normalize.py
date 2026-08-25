@@ -32,6 +32,7 @@ from .treatment_fields import (
     DOSAGE_TREATMENT_FIELD,
     DOSAGE_VALUE_FIELD,
     decompose_treatment_pairs,
+    normalize_administration_route,
 )
 
 # --- cleaning ---------------------------------------------------------------
@@ -354,7 +355,7 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
                 treatment_field=ADMINISTRATION_ROUTE_TREATMENT_FIELD,
                 value_field=ADMINISTRATION_ROUTE_VALUE_FIELD,
                 sep=sep,
-                normalize_routes=True,
+                normalize_value=lambda value: normalize_administration_route(value).value,
             ))
         for f in FIELD_VOCAB:
             if f == TREATMENT_OUTCOME_RAW:

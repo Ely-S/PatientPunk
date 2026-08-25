@@ -105,9 +105,12 @@ below records where a field is grounded, it did not decide anything.
 
 `location_country`, `dosage`, and `administration_route` were not measured separately.
 
-Dosage and administration route are stored as `treatment: value` pairs so a
-multi-treatment post cannot detach either value from the intervention it
-describes. The normalized CSV also provides aligned treatment and value columns.
+Dosage is stored as `treatment: dose` pairs so a multi-treatment post cannot
+detach a dose from the intervention it describes. The normalized CSV also
+provides aligned dosage treatment and value columns.
+
+Administration route follows the same treatment-linked structure and adds
+aligned route treatment and value columns.
 
 **Cut:** `activity_level`, `age_at_onset`, `diagnosis_source`, `diagnostic_odyssey`,
 `doctor_dismissal`, `ethnicity`, `family_history`, `healthcare_costs`,

@@ -2155,22 +2155,18 @@ class TestNormalize:
         assert d["treatment_outcome_drug"] == "LDN |  | metoprolol"
         assert d["treatment_outcome_symptom"] == "brain fog |  | "
 
-    def test_dosage_and_route_decomposition_keeps_treatment_alignment(self):
+    def test_dosage_decomposition_keeps_treatment_alignment(self):
         from patientpunk.normalize import normalize_records
 
         row = {
             "author_hash": "a",
             "dosage": "LDN: 4.5 mg | B12: 250 mcg",
-            "administration_route": "LDN: sublingual | B12: injection",
         }
         out = normalize_records([row])[0]
 
         assert out["dosage"] == row["dosage"]
         assert out["dosage_treatment"] == "LDN | B12"
         assert out["dosage_value"] == "4.5 mg | 250 mcg"
-        assert out["administration_route"] == row["administration_route"]
-        assert out["administration_route_treatment"] == "LDN | B12"
-        assert out["administration_route_value"] == "sublingual | injection"
 
     def test_pair_decomposition_preserves_bare_legacy_dose_without_attribution(self):
         from patientpunk.normalize import normalize_records
@@ -2179,6 +2175,19 @@ class TestNormalize:
 
         assert out["dosage_treatment"] == " | B12"
         assert out["dosage_value"] == "5 mg | 250 mcg"
+
+    def test_route_decomposition_keeps_treatment_alignment(self):
+        from patientpunk.normalize import normalize_records
+
+        row = {
+            "author_hash": "a",
+            "administration_route": "LDN: sublingual | B12: injection",
+        }
+        out = normalize_records([row])[0]
+
+        assert out["administration_route"] == row["administration_route"]
+        assert out["administration_route_treatment"] == "LDN | B12"
+        assert out["administration_route_value"] == "sublingual | injection"
 
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META
@@ -2204,23 +2213,18 @@ class TestNormalize:
 class TestLLMExtractNormalizeRecords:
     """Treatment-linked dosage and administration-route extraction coverage."""
 
-    def test_linked_treatment_fields_are_requested_and_reach_csv(
-        self, tmp_path, monkeypatch
-    ):
+    def test_linked_dosages_are_requested_and_reach_csv(self, tmp_path, monkeypatch):
         import patientpunk.llm_extract as m
 
         schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
         assert "dosage" in m.build_field_descriptions(None)
         assert "dosage" in m.build_field_descriptions(schema)
-        assert "administration_route" in m.build_field_descriptions(None)
-        assert "administration_route" in m.build_field_descriptions(schema)
 
         monkeypatch.setattr(
             m,
             "_call_batch_raw",
             lambda *_args: [{"fields": {
                 "dosage": ["LDN: 4.5 mg", "B12: 250 mcg"],
-                "administration_route": ["LDN: sublingual", "B12: injection"],
             }}],
         )
         records = m._process_batch(
@@ -2242,6 +2246,39 @@ class TestLLMExtractNormalizeRecords:
 
         row = next(iter(csv.DictReader(output.open(encoding="utf-8"))))
         assert row["dosage"] == "ldn: 4.5 mg | b12: 250 mcg"
+
+    def test_linked_routes_are_requested_and_reach_csv(self, tmp_path, monkeypatch):
+        import patientpunk.llm_extract as m
+
+        schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
+        assert "administration_route" in m.build_field_descriptions(None)
+        assert "administration_route" in m.build_field_descriptions(schema)
+
+        monkeypatch.setattr(
+            m,
+            "_call_batch_raw",
+            lambda *_args: [{"fields": {
+                "administration_route": ["LDN: sublingual", "B12: injection"],
+            }}],
+        )
+        records = m._process_batch(
+            [("post", {
+                "author_hash": "author",
+                "post_id": "post",
+                "title": "How I take treatments",
+                "body": "I take LDN sublingually and inject B12.",
+            })],
+            None,
+            "system",
+            schema,
+        )
+        normalized = m.normalize_records(records)
+        src = tmp_path / "records.json"
+        src.write_text(json.dumps(normalized), encoding="utf-8")
+        output = tmp_path / "records.csv"
+        run_export_csv(input_files=[src], output_path=output)
+
+        row = next(iter(csv.DictReader(output.open(encoding="utf-8"))))
         assert row["administration_route"] == "ldn: sublingual | b12: injection"
 
     def test_treatment_dose_pairs_stay_matched_and_bare_doses_are_dropped(self):
@@ -2281,25 +2318,35 @@ class TestLLMExtractNormalizeRecords:
             "compound: other",
         ]
 
-    def test_unlinked_values_clear_confidence(self):
+    def test_unlinked_dosages_clear_confidence(self):
         from patientpunk.llm_extract import normalize_records
 
-        rec = {"fields": {
-            "dosage": ["5 mg"],
-            "administration_route": ["oral"],
-        }}
+        rec = {"fields": {"dosage": ["5 mg"]}}
         out = normalize_records([rec])[0]["fields"]
 
         assert out["dosage"] == {"values": [], "confidence": None}
+
+    def test_unlinked_routes_clear_confidence(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {"administration_route": ["oral"]}}
+        out = normalize_records([rec])[0]["fields"]
+
         assert out["administration_route"] == {"values": [], "confidence": None}
 
-    def test_prompt_requires_treatment_linkage_and_explicit_routes(self):
+    def test_prompt_requires_explicit_treatment_dose_linkage(self):
         from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
 
         prompt = build_system_prompt(build_field_descriptions(None))
 
         assert 'ALWAYS use "treatment: dose"' in prompt
         assert "never assign a dose to a nearby treatment by position" in prompt
+
+    def test_prompt_requires_treatment_linkage_and_explicit_routes(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+
+        prompt = build_system_prompt(build_field_descriptions(None))
+
         assert 'ALWAYS use "treatment: route"' in prompt
         assert "Do not infer oral" in prompt
         for route in ("injection", "sublingual", "oral", "suppository"):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
@@ -134,7 +135,7 @@ def normalize_administration_route(value: str) -> AdministrationRoute:
 def _normalize_pairs(
     values: list[str],
     *,
-    route_values: bool,
+    normalize_value: Callable[[str], str],
 ) -> list[str]:
     """Normalize and deduplicate treatment-linked values from a new extraction."""
     normalized: list[str] = []
@@ -143,12 +144,9 @@ def _normalize_pairs(
         pair = TreatmentValuePair.from_text(raw)
         if pair is None:
             continue
-        value = (
-            normalize_administration_route(pair.value).value if route_values else pair.value.lower()
-        )
         rendered = TreatmentValuePair(
             treatment=pair.treatment.lower(),
-            value=value,
+            value=normalize_value(pair.value),
         ).render()
         if rendered not in seen:
             seen.add(rendered)
@@ -158,12 +156,15 @@ def _normalize_pairs(
 
 def normalize_dosage_pairs(values: list[str]) -> list[str]:
     """Keep only dosage entries that identify both treatment and dose."""
-    return _normalize_pairs(values, route_values=False)
+    return _normalize_pairs(values, normalize_value=str.lower)
 
 
 def normalize_administration_route_pairs(values: list[str]) -> list[str]:
     """Keep linked route entries and normalize their route values."""
-    return _normalize_pairs(values, route_values=True)
+    return _normalize_pairs(
+        values,
+        normalize_value=lambda value: normalize_administration_route(value).value,
+    )
 
 
 def decompose_treatment_pairs(
@@ -172,7 +173,7 @@ def decompose_treatment_pairs(
     treatment_field: str,
     value_field: str,
     sep: str = " | ",
-    normalize_routes: bool = False,
+    normalize_value: Callable[[str], str] | None = None,
 ) -> dict[str, str]:
     """Split a multi-value pair cell into aligned treatment and value columns.
 
@@ -192,8 +193,8 @@ def decompose_treatment_pairs(
         else:
             treatment = pair.treatment
             value = pair.value
-        if normalize_routes:
-            value = normalize_administration_route(value).value
+        if normalize_value is not None:
+            value = normalize_value(value)
         treatments.append(treatment)
         values.append(value)
     return {

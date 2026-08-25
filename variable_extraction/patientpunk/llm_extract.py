@@ -943,18 +943,20 @@ def normalize_records(
                     deduped.append(v)
             field_data["values"] = deduped
 
-    # Dosages and routes are usable only when the model attributes each value
-    # to a specific treatment. Reject bare values rather than matching separate
-    # lists by position, which silently corrupts multi-treatment posts.
+    # A dosage is usable only when the model attributes it to a specific
+    # treatment. Reject bare values rather than matching separate lists by
+    # position, which silently corrupts multi-treatment posts.
     for rec in records:
-        fields = rec.get("fields", {})
-        dosage_data = fields.get(DOSAGE_FIELD, {})
+        dosage_data = rec.get("fields", {}).get(DOSAGE_FIELD, {})
         if dosage_data.get("values"):
             dosage_data["values"] = normalize_dosage_pairs(dosage_data["values"])
             if not dosage_data["values"]:
                 dosage_data["confidence"] = None
 
-        route_data = fields.get(ADMINISTRATION_ROUTE_FIELD, {})
+    # Route values follow the same attribution rule and are normalized to the
+    # controlled vocabulary before they reach JSON or CSV artifacts.
+    for rec in records:
+        route_data = rec.get("fields", {}).get(ADMINISTRATION_ROUTE_FIELD, {})
         if route_data.get("values"):
             route_data["values"] = normalize_administration_route_pairs(
                 route_data["values"]
