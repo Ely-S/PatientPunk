@@ -67,7 +67,13 @@ from ._utils import (
 )
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
-from .treatment_fields import DOSAGE_FIELD, normalize_dosage_pairs
+from .treatment_fields import (
+    ADMINISTRATION_ROUTE_FIELD,
+    ADMINISTRATION_ROUTE_VALUES,
+    DOSAGE_FIELD,
+    normalize_administration_route_pairs,
+    normalize_dosage_pairs,
+)
 MODEL = MODEL_FAST
 
 # Field names the model invented that aren't in the schema. Dropped from the
@@ -135,6 +141,7 @@ BASE_FIELD_DESCRIPTIONS = {
     "illness_trajectory": "Whether the illness overall is improving, worsening, stable, relapsing-remitting, or recovered",
     "medications": "Current or past medications mentioned",
     "dosage": "Doses the author explicitly reports taking or receiving, linked as 'treatment: dose' pairs (for example, 'LDN: 4.5 mg' or 'B12: 250 mcg')",
+    "administration_route": "How the author explicitly reports a treatment was administered to them, as a 'treatment: route' pair using the controlled route vocabulary",
     "treatment_outcome": "Response to specific treatments as 'drug: outcome: symptom' - the treatment, its outcome label, and the symptom it affected (e.g., 'LDN: helped: brain fog', 'metoprolol: worsened: fatigue'). Symptom is optional when not stated.",
     "procedures": "Medical procedures undergone (tilt table test, colonoscopy, MRI, etc.)",
     "work_disability_status": "Work situation (working full-time, part-time, on disability, had to quit, etc.)",
@@ -345,6 +352,16 @@ FIELD-SPECIFIC RULES:
   6. Do not extract a prescribed, offered, planned, declined, or third-party dose that the author did not take or receive. Do not extract general information about a treatment's usual dose. If the dose or its treatment is unclear, return null.
   Positive examples: "I take 4.5 mg LDN" -> "LDN: 4.5 mg"; "I use 250 mcg of B12" -> "B12: 250 mcg".
   Negative examples: "I was prescribed 5 mg naltrexone but never started it" -> null; "Naltrexone commonly comes in 50 mg tablets" -> null; "My wife takes 5 mg naltrexone" -> null.
+- administration_route:
+  1. Extract a route only when the author explicitly states how a specific treatment was or is administered to them.
+  2. Return each explicit link as "treatment: route". Create one pair for each explicit treatment-route link.
+  3. Use ONLY one of these exact route values: {", ".join(ADMINISTRATION_ROUTE_VALUES)}.
+  4. Use the most specific route stated. For example, prefer intramuscular over injection.
+  5. If only a broad method is stated, use the broad value, such as injection or suppository.
+  6. Use other only when an explicit route does not fit the allowed values.
+  7. Do not infer a route from a treatment's usual form or method of use. If the route or its treatment is unclear, return null.
+  Positive examples: "I inject B12" -> "B12: injection"; "My B12 shots are IM" -> "B12: intramuscular"; "I take LDN under my tongue" -> "LDN: sublingual".
+  Negative examples: "I take naltrexone" -> null; "Naltrexone usually comes as a pill" -> null; "My doctor wants me to inject B12 next month" -> null; "My husband injects B12" -> null.
 - alternative_treatments: Non-pharmaceutical, non-dietary interventions only (pacing, acupuncture, HBOT, cold exposure, massage). Diet goes in dietary_interventions; supplements go in medications.
 - treatment_outcome: Use the format "drug: outcome: symptom" where outcome is one of: helped, no_effect, worsened, mixed, unknown, and symptom is the specific symptom affected (1-3 words). Omit the symptom if not stated -> "drug: outcome". Examples: "LDN: helped: brain fog", "metoprolol: worsened: fatigue", "Paxlovid: no_effect". Never include dosage, mechanism, or timeline.{guard_block}
 - functional_status_tier: Use ONLY one of the six values below, judged on what the patient can still do. No sentences. Use null when the text does not say.
@@ -949,6 +966,17 @@ def normalize_records(
             dosage_data["values"] = normalize_dosage_pairs(dosage_data["values"])
             if not dosage_data["values"]:
                 dosage_data["confidence"] = None
+
+    # Route values follow the same attribution rule and are normalized to the
+    # controlled vocabulary before they reach JSON or CSV artifacts.
+    for rec in records:
+        route_data = rec.get("fields", {}).get(ADMINISTRATION_ROUTE_FIELD, {})
+        if route_data.get("values"):
+            route_data["values"] = normalize_administration_route_pairs(
+                route_data["values"]
+            )
+            if not route_data["values"]:
+                route_data["confidence"] = None
 
     # Multi-field canonicalization: map LLM vocabulary drift to controlled labels.
     # Each field has a dict of {variant: canonical_form}. Values not in the dict

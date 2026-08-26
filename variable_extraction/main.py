@@ -86,6 +86,7 @@ from patientpunk.cluster_prep import (
 )
 from patientpunk.aggregate import aggregate_corpus_by_author, read_posts, write_corpus
 from patientpunk.normalize import (
+    ADMINISTRATION_ROUTE_DERIVED,
     DOSAGE_DERIVED,
     DROP_FIELDS,
     TREATMENT_OUTCOME_DERIVED,
@@ -1009,7 +1010,9 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     # Decomposition adds derived treatment columns, so extend the header. Rows
     # have heterogeneous keys, so union all keys in one pass.
     present_cols = set().union(*(r.keys() for r in norm)) if norm else set()
-    derived_fields = TREATMENT_OUTCOME_DERIVED + DOSAGE_DERIVED
+    derived_fields = (
+        TREATMENT_OUTCOME_DERIVED + DOSAGE_DERIVED + ADMINISTRATION_ROUTE_DERIVED
+    )
     out_fields = list(fields) + [c for c in derived_fields
                                  if c not in fields and c in present_cols]
     out = args.out or src.parent / f"{src.stem}_normalized.csv"
