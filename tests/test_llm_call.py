@@ -75,6 +75,13 @@ def test_empty_reply_is_not_cached(tmp_path):
     assert llm_call(client2, "same prompt") == "hello"
 
 
+def test_truncated_reply_raises_instead_of_returning_partial_text():
+    text = SimpleNamespace(type="text", text="[\"aspirin\", \"ibupr")
+    client = _client(_msg(text, stop_reason="max_tokens"))
+    with pytest.raises(LLMResponseError, match="max_tokens"):
+        llm_call(client, "prompt")
+
+
 def test_good_reply_passes_through():
     text = SimpleNamespace(type="text", text="hello")
     client = _client(_msg(text))
