@@ -1,16 +1,11 @@
 """A batch the model cannot answer must not end the run. No API calls."""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
-
-from patientpunk._utils import LLMResponseError  # noqa: E402
-from pipeline import extract  # noqa: E402
+from patientpunk._utils import LLMResponseError
+from pipeline import extract
 
 
 def _fits_at(limit: int):
