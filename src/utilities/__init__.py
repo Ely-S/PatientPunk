@@ -136,6 +136,67 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+# ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
+# OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
+# paramater only seems to be accessable on the OpenAI surface
+#
+# Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
+_REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+
+
+class _ORStream:
+
+    def __init__(self, client, **kwargs) -> None:
+        self._client, self._kwargs = client, kwargs
+
+    def __enter__(self):
+        self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+    def get_final_message(self):
+        parts: list[str] = []
+        finish = None
+        for chunk in self._stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if getattr(delta, "content", None):
+                parts.append(delta.content)
+            if chunk.choices[0].finish_reason:
+                finish = chunk.choices[0].finish_reason
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="".join(parts))],
+            stop_reason="max_tokens" if finish == "length" else "end_turn",
+        )
+
+
+class _ORMessages:
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def stream(self, *, model, messages, max_tokens=1024, system=None,
+               temperature=0.0, extra_body=None, **_ignored):
+        oai = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": m["role"], "content": m["content"]} for m in messages]
+        body = dict(extra_body or {})
+        if _REASONING_OFF:
+            body.setdefault("reasoning", {"effort": "none"})
+        return _ORStream(self._client, model=model, messages=oai,
+                         max_tokens=max_tokens, temperature=temperature,
+                         extra_body=body)
+
+
+class _ORClient:
+    """Anthropic-SDK-shaped wrapper so callers need not know which surface is in use."""
+
+    def __init__(self, client) -> None:
+        self.messages = _ORMessages(client)
+
+
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
     """Return a configured Anthropic client (direct or via OpenRouter).
@@ -158,7 +219,18 @@ def get_client() -> anthropic.Anthropic:
             f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
         )
 
-    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}"
+             + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
+
+    if LLM_PROVIDER == "openrouter":
+        # Deliberately the OpenAI surface by defult so we have access to reasoning settings
+        import openai
+        return _ORClient(openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            max_retries=4,
+            timeout=600.0,   # a canonicalization batch has run 710s; streaming keeps it alive
+        ))
 
     kwargs: dict = {
         "api_key": api_key,
