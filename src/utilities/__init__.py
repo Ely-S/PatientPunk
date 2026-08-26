@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
+import httpx
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -234,7 +236,8 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
+        # The application loop below owns retries; do not nest SDK retries.
+        "max_retries": 0,
         "timeout": 60.0,
     }
     if _API_BASE:
@@ -323,6 +326,34 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+RETRY_DELAYS = [2, 5, 15, 30]
+
+# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
+IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
+                     "no instances available", "temporarily unavailable")
+
+# Retry truncated replies with progressively larger output ceilings.
+BUDGET_MULTIPLIERS = (1, 2, 4, 8)
+
+
+def is_transient_failure(exc: BaseException) -> bool:
+    """Return whether retrying the same request may succeed."""
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
+                        anthropic.RateLimitError, anthropic.InternalServerError)):
+        return True
+    if isinstance(exc, httpx.TransportError):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status == 429 or (isinstance(status, int) and 500 <= status < 600):
+        return True
+    # The SDK raises in-band provider failures as APIStatusError. Match their body,
+    # but never retry a 4xx request.
+    if isinstance(exc, anthropic.APIStatusError) and not (
+            isinstance(status, int) and 400 <= status < 500):
+        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
+    return False
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
@@ -330,27 +361,60 @@ def llm_call(
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
+    """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import check_response, response_text
+    from patientpunk._utils import LLMTruncationError, check_response, response_text
 
-    def _call() -> str:
+    def _request_once(budget: int) -> str:
         kwargs = {
             "model": model,
-            "max_tokens": max_tokens,
+            "max_tokens": budget,
             "temperature": 0.0,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
-            return response_text(check_response(stream.get_final_message(), model=model))
+            message = check_response(stream.get_final_message(), model=model)
+            return response_text(message)
 
-    return cached_completion(
-        provider=LLM_PROVIDER,
-        model=model,
-        system=system,
-        prompt=prompt,
-        temperature=0.0,
-        max_tokens=max_tokens,
-        call_fn=_call,
-    )
+    def _request_with_transport_retries(budget: int) -> str:
+        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+            if delay:
+                time.sleep(delay)
+            try:
+                return _request_once(budget)
+            except Exception as exc:
+                if not is_transient_failure(exc) or attempt == len(RETRY_DELAYS):
+                    raise
+                log.warning(
+                    f"{type(exc).__name__} on {model} "
+                    f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _cached_request(budget: int) -> str:
+        return cached_completion(
+            provider=LLM_PROVIDER,
+            model=model,
+            system=system,
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=budget,
+            call_fn=lambda: _request_with_transport_retries(budget),
+        )
+
+    budgets = tuple(max_tokens * factor for factor in BUDGET_MULTIPLIERS)
+    for index, budget in enumerate(budgets):
+        try:
+            return _cached_request(budget)
+        except LLMTruncationError:
+            if index == len(budgets) - 1:
+                raise
+            next_budget = budgets[index + 1]
+            log.warning(
+                "Reply reached max_tokens=%d on %s; retrying with max_tokens=%d.",
+                budget,
+                model,
+                next_budget,
+            )
+    raise AssertionError("unreachable")  # pragma: no cover
