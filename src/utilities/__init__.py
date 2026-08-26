@@ -139,34 +139,14 @@ def get_git_commit() -> str:
 
 
 # ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
-# OpenRouter exposes two surfaces. Its Anthropic Skin (/api, spoken by the
-# Anthropic SDK) silently DROPS the `reasoning` parameter -- the request 200s and
-# the field is ignored. Its OpenAI surface (/api/v1) honours it.
-#
-# That matters because deepseek/deepseek-v4-flash is a reasoning model: it spends
-# output tokens thinking before it answers, and those tokens count against
-# max_tokens. Measured over 6 calls on one trivial 20-item prompt:
-#
-#     endpoint            reasoning chars                 suppressed
-#     OpenAI  effort=none [0, 0, 0, 0, 0, 0]              6/6
-#     Anthropic (same)    [705, 268, 0, 239, 523, 494]    1/6   (= baseline)
-#
-# Unsuppressed, reasoning ran 239-862 chars and blew every per-stage max_tokens
-# heuristic in src/ (10/item at prefilter, 15/name at canonicalize, 250/text at
-# extract), which check_response then turned into a hard failure. Suppressing it
-# also cut output tokens ~3.5x on that prompt, so this is a cost fix as well.
+# OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
+# paramater only seems to be accessable on the OpenAI surface
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
 
 
 class _ORStream:
-    """Anthropic-SDK-shaped streaming context manager over OpenAI chat completions.
-
-    Streaming is not optional here: a full-corpus canonicalization batch has been
-    observed taking 710s, and a non-streaming call would hit the client timeout
-    long before that.
-    """
 
     def __init__(self, client, **kwargs) -> None:
         self._client, self._kwargs = client, kwargs
@@ -189,8 +169,6 @@ class _ORStream:
                 parts.append(delta.content)
             if chunk.choices[0].finish_reason:
                 finish = chunk.choices[0].finish_reason
-        # OpenAI spells truncation "length"; normalize so check_response, which
-        # keys off the Anthropic name, behaves identically on both surfaces.
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
@@ -247,8 +225,7 @@ def get_client() -> anthropic.Anthropic:
              + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
 
     if LLM_PROVIDER == "openrouter":
-        # Deliberately the OpenAI surface, not the Anthropic Skin: it is the only
-        # one that honours `reasoning`. See _ORStream above for the measurements.
+        # Deliberately the OpenAI surface by defult so we have access to reasoning settings
         import openai
         return _ORClient(openai.OpenAI(
             api_key=api_key,
