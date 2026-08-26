@@ -19,7 +19,7 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
-import httpx  # anthropic's transport; TransportError covers the mid-stream drops
+import httpx
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -139,34 +139,14 @@ def get_git_commit() -> str:
 
 
 # ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
-# OpenRouter exposes two surfaces. Its Anthropic Skin (/api, spoken by the
-# Anthropic SDK) silently DROPS the `reasoning` parameter -- the request 200s and
-# the field is ignored. Its OpenAI surface (/api/v1) honours it.
-#
-# That matters because deepseek/deepseek-v4-flash is a reasoning model: it spends
-# output tokens thinking before it answers, and those tokens count against
-# max_tokens. Measured over 6 calls on one trivial 20-item prompt:
-#
-#     endpoint            reasoning chars                 suppressed
-#     OpenAI  effort=none [0, 0, 0, 0, 0, 0]              6/6
-#     Anthropic (same)    [705, 268, 0, 239, 523, 494]    1/6   (= baseline)
-#
-# Unsuppressed, reasoning ran 239-862 chars and blew every per-stage max_tokens
-# heuristic in src/ (10/item at prefilter, 15/name at canonicalize, 250/text at
-# extract), which check_response then turned into a hard failure. Suppressing it
-# also cut output tokens ~3.5x on that prompt, so this is a cost fix as well.
+# OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
+# paramater only seems to be accessable on the OpenAI surface
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
 
 
 class _ORStream:
-    """Anthropic-SDK-shaped streaming context manager over OpenAI chat completions.
-
-    Streaming is not optional here: a full-corpus canonicalization batch has been
-    observed taking 710s, and a non-streaming call would hit the client timeout
-    long before that.
-    """
 
     def __init__(self, client, **kwargs) -> None:
         self._client, self._kwargs = client, kwargs
@@ -189,8 +169,6 @@ class _ORStream:
                 parts.append(delta.content)
             if chunk.choices[0].finish_reason:
                 finish = chunk.choices[0].finish_reason
-        # OpenAI spells truncation "length"; normalize so check_response, which
-        # keys off the Anthropic name, behaves identically on both surfaces.
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
@@ -247,8 +225,7 @@ def get_client() -> anthropic.Anthropic:
              + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
 
     if LLM_PROVIDER == "openrouter":
-        # Deliberately the OpenAI surface, not the Anthropic Skin: it is the only
-        # one that honours `reasoning`. See _ORStream above for the measurements.
+        # Deliberately the OpenAI surface by defult so we have access to reasoning settings
         import openai
         return _ORClient(openai.OpenAI(
             api_key=api_key,
@@ -259,7 +236,7 @@ def get_client() -> anthropic.Anthropic:
 
     kwargs: dict = {
         "api_key": api_key,
-        # leaving the SDK's own retries on nests 5 attempts inside each of ours.
+        # The application loop below owns retries; do not nest SDK retries.
         "max_retries": 0,
         "timeout": 60.0,
     }
@@ -351,21 +328,16 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
 RETRY_DELAYS = [2, 5, 15, 30]
 
-# Substrings a gateway uses to say "the upstream is unavailable, try again" in a
-# body it has already sent 200 for. Kept narrow: whatever matches here is retried
-# five times, so a permanent fault landing in this list costs ~52s per call.
+# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
 IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
                      "no instances available", "temporarily unavailable")
 
-# Multipliers applied to a caller's max_tokens when the reply truncates. Four
-# doublings covers every heuristic in src/ (10/item at prefilter through 250/text
-# at extract) without letting a genuinely runaway reply spend forever.
-BUDGET_GROWTH = [1, 2, 4, 8]
+# Retry truncated replies with progressively larger output ceilings.
+BUDGET_MULTIPLIERS = (1, 2, 4, 8)
 
 
 def is_transient_failure(exc: BaseException) -> bool:
-    """True for failures where the same request may well succeed on a retry.
-    """
+    """Return whether retrying the same request may succeed."""
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
                         anthropic.RateLimitError, anthropic.InternalServerError)):
         return True
@@ -374,12 +346,8 @@ def is_transient_failure(exc: BaseException) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):
         return True
-    # A gateway that multiplexes upstreams (OpenRouter) reports a dead backend by
-    # injecting an error object into a stream it has already sent 200 for. The SDK
-    # raises that via _make_status_error against the stream's own response, so it
-    # arrives as a bare APIStatusError carrying 200 and matches nothing above.
-    # Read the body instead -- but never for a 4xx, where the request is at fault
-    # and a retry sends the same bad request again.
+    # The SDK raises in-band provider failures as APIStatusError. Match their body,
+    # but never retry a 4xx request.
     if isinstance(exc, anthropic.APIStatusError) and not (
             isinstance(status, int) and 400 <= status < 500):
         return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
@@ -393,10 +361,11 @@ def llm_call(
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
+    """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import LLMResponseError, check_response, response_text
+    from patientpunk._utils import LLMTruncationError, check_response, response_text
 
-    def _once(budget: int) -> str:
+    def _request_once(budget: int) -> str:
         kwargs = {
             "model": model,
             "max_tokens": budget,
@@ -406,50 +375,46 @@ def llm_call(
         if system:
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
-            return response_text(check_response(stream.get_final_message(), model=model))
+            message = check_response(stream.get_final_message(), model=model)
+            return response_text(message)
 
-    def _with_transport_retry(budget: int) -> str:
+    def _request_with_transport_retries(budget: int) -> str:
         for attempt, delay in enumerate([0] + RETRY_DELAYS):
             if delay:
                 time.sleep(delay)
             try:
-                return _once(budget)
-            except Exception as e:
-                if not is_transient_failure(e) or attempt == len(RETRY_DELAYS):
+                return _request_once(budget)
+            except Exception as exc:
+                if not is_transient_failure(exc) or attempt == len(RETRY_DELAYS):
                     raise
                 log.warning(
-                    f"{type(e).__name__} on {model} "
+                    f"{type(exc).__name__} on {model} "
                     f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
         raise AssertionError("unreachable")  # pragma: no cover
 
-    # Every caller sizes max_tokens with its own hand-tuned heuristic -- 10 per
-    # item here, 80 per item there, 15 per name in canonicalize. Each was fitted
-    # to a different model and each truncates on a reply that runs long, which
-    # check_response turns into a hard failure. Rather than re-tune six constants
-    # per model, grow the budget and retry: max_tokens is a ceiling, not a
-    # charge, so a larger one costs nothing unless the model actually uses it.
-    #
-    # The budget is part of the cache key, so each attempt is cached under its
-    # own key and a later run with the same caller-supplied size still hits.
-    # Exceptions are never cached, so a truncated attempt leaves nothing behind.
-    last = None
-    for factor in BUDGET_GROWTH:
-        budget = max_tokens * factor
+    def _cached_request(budget: int) -> str:
+        return cached_completion(
+            provider=LLM_PROVIDER,
+            model=model,
+            system=system,
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=budget,
+            call_fn=lambda: _request_with_transport_retries(budget),
+        )
+
+    budgets = tuple(max_tokens * factor for factor in BUDGET_MULTIPLIERS)
+    for index, budget in enumerate(budgets):
         try:
-            return cached_completion(
-                provider=LLM_PROVIDER,
-                model=model,
-                system=system,
-                prompt=prompt,
-                temperature=0.0,
-                max_tokens=budget,
-                call_fn=lambda b=budget: _with_transport_retry(b),
+            return _cached_request(budget)
+        except LLMTruncationError:
+            if index == len(budgets) - 1:
+                raise
+            next_budget = budgets[index + 1]
+            log.warning(
+                "Reply reached max_tokens=%d on %s; retrying with max_tokens=%d.",
+                budget,
+                model,
+                next_budget,
             )
-        except LLMResponseError as e:
-            if "truncated" not in str(e):
-                raise           # an empty reply will not be fixed by more room
-            last = e
-            if factor != BUDGET_GROWTH[-1]:
-                log.warning(f"reply hit {budget} tokens on {model}; "
-                            f"retrying with {max_tokens * factor * 2}...")
-    raise last
+    raise AssertionError("unreachable")  # pragma: no cover
