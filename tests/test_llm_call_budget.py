@@ -1,22 +1,14 @@
 """Grow the output budget only when an LLM reply is truncated."""
 
 import os
-import sys
 from contextlib import nullcontext
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-REPO_ROOT = Path(__file__).parent.parent
-sys.path[:0] = [
-    str(REPO_ROOT / "src"),
-    str(REPO_ROOT / "variable_extraction"),
-]
-
-from patientpunk import llm_cache  # noqa: E402
-from patientpunk._utils import LLMResponseError, LLMTruncationError  # noqa: E402
+from patientpunk import llm_cache
+from patientpunk._utils import LLMResponseError, LLMTruncationError
 
 os.environ["LLM_PROVIDER"] = "anthropic"
 
@@ -75,6 +67,27 @@ def test_budget_growth_is_bounded():
         llm_call(client, "prompt", max_tokens=100)
 
     assert budgets == [100, 200, 400, 800]
+
+
+def test_only_the_fitting_budget_is_cached():
+    """The budget is part of the cache key: the winning reply must land under
+    the grown budget's key, and the truncated attempts must leave nothing."""
+    from utilities import LLM_PROVIDER, MODEL_FAST
+
+    budgets: list[int] = []
+    client = _client(350, budgets)
+    assert llm_call(client, "prompt", max_tokens=100) == "complete answer"
+
+    def path_for(budget):
+        key = llm_cache.make_key(
+            provider=LLM_PROVIDER, model=MODEL_FAST, system=None,
+            prompt="prompt", temperature=0.0, max_tokens=budget,
+        )
+        return llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
+
+    assert path_for(400).exists()
+    assert not path_for(100).exists()
+    assert not path_for(200).exists()
 
 
 def test_empty_reply_is_not_retried():
