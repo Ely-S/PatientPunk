@@ -1,10 +1,8 @@
 """Retry transient LLM stream failures and fail fast on deterministic errors."""
 
 import os
-import sys
 import time
 from contextlib import nullcontext
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -12,14 +10,8 @@ import anthropic
 import httpx
 import pytest
 
-REPO_ROOT = Path(__file__).parent.parent
-sys.path[:0] = [
-    str(REPO_ROOT / "src"),
-    str(REPO_ROOT / "variable_extraction"),
-]
-
-from patientpunk import llm_cache  # noqa: E402
-from patientpunk._utils import LLMResponseError  # noqa: E402
+from patientpunk import llm_cache
+from patientpunk._utils import LLMResponseError
 
 os.environ["LLM_PROVIDER"] = "anthropic"
 
@@ -33,6 +25,8 @@ def _status(status: int) -> Exception:
 
 
 def _in_band(status: int) -> anthropic.APIStatusError:
+    # __new__ skips APIStatusError.__init__, which demands real httpx
+    # request/response objects; only the message and status_code matter here.
     exc = anthropic.APIStatusError.__new__(anthropic.APIStatusError)
     Exception.__init__(exc, "provider_unavailable")
     exc.status_code = status
@@ -64,14 +58,17 @@ def _disable_cache():
 
 
 @pytest.mark.parametrize(
-    ("drops", "raises", "attempts"),
-    [(2, False, 3), (5, True, 5)],
-    ids=["recovers", "bounded"],
+    ("failure", "drops", "raises", "attempts"),
+    [
+        (httpx.RemoteProtocolError("peer closed connection"), 2, False, 3),
+        (httpx.RemoteProtocolError("peer closed connection"), 5, True, 5),
+        (_status(402), 1, True, 1),
+    ],
+    ids=["recovers", "bounded", "fails-fast"],
 )
 def test_midstream_failure_retries_the_whole_request(
-    monkeypatch, drops, raises, attempts,
+    monkeypatch, failure, drops, raises, attempts,
 ):
-    failure = httpx.RemoteProtocolError("peer closed connection")
     message = SimpleNamespace(
         stop_reason="end_turn",
         content=[SimpleNamespace(type="text", text="ok")],
@@ -81,12 +78,14 @@ def test_midstream_failure_retries_the_whole_request(
         SimpleNamespace(get_final_message=read),
     ))
     client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
-    monkeypatch.setattr(time, "sleep", Mock())
+    sleep = Mock()
+    monkeypatch.setattr(time, "sleep", sleep)
 
     if raises:
-        with pytest.raises(httpx.RemoteProtocolError):
+        with pytest.raises(type(failure)):
             llm_call(client, "prompt", max_tokens=10)
     else:
         assert llm_call(client, "prompt", max_tokens=10) == "ok"
 
     assert stream.call_count == attempts
+    assert sleep.call_count == attempts - 1
