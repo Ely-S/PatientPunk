@@ -1,20 +1,12 @@
 """Recover useful canonicalization results from oversized or malformed batches."""
 
 import json
-import sys
 from collections.abc import Callable
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-REPO_ROOT = Path(__file__).parent.parent
-sys.path[:0] = [
-    str(REPO_ROOT / "src"),
-    str(REPO_ROOT / "variable_extraction"),
-]
-
-from patientpunk._utils import LLMResponseError  # noqa: E402
-import pipeline.canonicalize as canon  # noqa: E402
+from patientpunk._utils import LLMResponseError
+import pipeline.canonicalize as canon
 
 NAMES = [f"drug{i}" for i in range(8)]
 
