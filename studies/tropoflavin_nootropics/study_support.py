@@ -100,7 +100,9 @@ def _split_cell(value: str) -> list[str]:
     return [part.strip() for part in value.split(" | ") if part.strip()]
 
 
-def linked_values(record: PipelineBRecord, field: Literal["dosage", "administration_route"]) -> list[LinkedValue]:
+def linked_values(
+    record: PipelineBRecord, field: Literal["dosage", "administration_route"]
+) -> list[LinkedValue]:
     """Return aligned treatment-value pairs, rejecting partial or shifted rows."""
     treatments = _split_cell(getattr(record, f"{field}_treatment"))
     values = _split_cell(getattr(record, f"{field}_value"))
@@ -189,11 +191,233 @@ class MassDosage:
         return f"{low} mg" if self.low_mg == self.high_mg else f"{low}-{high} mg"
 
 
+@dataclass(frozen=True)
+class DoseBand:
+    order: int
+    label: str
+
+
+_DOSE_BANDS = (
+    (5.0, DoseBand(order=1, label="<5 mg")),
+    (10.0, DoseBand(order=2, label="5 to <10 mg")),
+    (25.0, DoseBand(order=3, label="10 to <25 mg")),
+    (50.0, DoseBand(order=4, label="25 to <50 mg")),
+    (100.0, DoseBand(order=5, label="50 to <100 mg")),
+    (float("inf"), DoseBand(order=6, label=">=100 mg")),
+)
+
+
+def dose_band(midpoint_mg: float) -> DoseBand:
+    """Map a mass-dose midpoint to stable, cross-compound milligram bands."""
+    if midpoint_mg < 0:
+        raise ValueError("Dose midpoint cannot be negative")
+    return next(band for upper_bound, band in _DOSE_BANDS if midpoint_mg < upper_bound)
+
+
+_ROUTE_BUCKETS = {
+    "oral": "swallowed oral",
+    "sublingual": "oral mucosal",
+    "buccal": "oral mucosal",
+    "intranasal": "nasal mucosal",
+    "topical": "dermal",
+    "transdermal": "dermal",
+    "inhaled": "pulmonary",
+    "intravenous": "parenteral",
+    "intramuscular": "parenteral",
+    "subcutaneous": "parenteral",
+    "injection": "parenteral",
+    "rectal": "rectal or vaginal",
+    "vaginal": "rectal or vaginal",
+    "suppository": "rectal or vaginal",
+    "other": "other explicit route",
+}
+
+
+def route_bucket(route: str) -> str:
+    """Group the controlled route vocabulary by pharmacologically useful family."""
+    return _ROUTE_BUCKETS.get(route.strip().lower(), "other explicit route")
+
+
+_DESIRED_RESULT_PATTERNS = (
+    (
+        "mood or depression",
+        re.compile(
+            r"mood|depress|anhedon|emotion|happ|well.?being|dysphor|confidence", re.I
+        ),
+    ),
+    (
+        "anxiety or stress",
+        re.compile(
+            r"anxi|stress|panic|calm|fight or flight|obsess|restless|overthink", re.I
+        ),
+    ),
+    (
+        "focus or attention",
+        re.compile(r"focus|attention|concentrat|executive|adhd|productiv", re.I),
+    ),
+    ("memory or learning", re.compile(r"memory|learning|recall", re.I)),
+    (
+        "energy or motivation",
+        re.compile(
+            r"energy|motivat|fatigue|tired|letharg|drive|stamina|endurance", re.I
+        ),
+    ),
+    ("sleep or wakefulness", re.compile(r"sleep|insomnia|wakeful|vivid dream", re.I)),
+    (
+        "cognition or brain fog",
+        re.compile(
+            r"cognit|brain fog|clear.?head|clearer thinking|mental (clarity|sharp|effort)|"
+            r"decision|creative thinking|speech|articulation|insight|behavior change",
+            re.I,
+        ),
+    ),
+    (
+        "neuroprotection or recovery",
+        re.compile(r"neurogen|bdnf|brain repair|neuroprotect|recover|heal", re.I),
+    ),
+    (
+        "pain or neurologic symptoms",
+        re.compile(
+            r"pain|neuropath|neuralgia|headache|migraine|brain zap|numb|paresthesia|"
+            r"balance|tactile|vision alteration|dereal|dissociat",
+            re.I,
+        ),
+    ),
+    (
+        "stimulant recovery or reduction",
+        re.compile(r"stimulant|dopamine depletion|dosage reduction", re.I),
+    ),
+    (
+        "cardiovascular or autonomic",
+        re.compile(r"chest tight|palpitation|heart racing|blood pressure", re.I),
+    ),
+    ("hair or skin", re.compile(r"hair|skin|hives", re.I)),
+    ("gastrointestinal", re.compile(r"reflux|nausea|stomach|digest|diarrh|gut", re.I)),
+    ("social functioning", re.compile(r"social", re.I)),
+    ("sexual function", re.compile(r"libido|sexual|erect", re.I)),
+)
+
+
+def desired_result_bucket(symptom: str) -> str:
+    """Bucket an explicitly extracted treatment target without adding context."""
+    value = symptom.strip()
+    if not value:
+        return "unspecified"
+    for label, pattern in _DESIRED_RESULT_PATTERNS:
+        if pattern.search(value):
+            return label
+    return "other specified result"
+
+
+_SIDE_EFFECT_PATTERNS = (
+    (
+        "insomnia or sleep disruption",
+        "sleep",
+        re.compile(
+            r"insomnia|sleep|fall asleep|keeps me (up|awake)|awake all day|nightmare|"
+            r"vivid dream|reduced nrem|wake up",
+            re.I,
+        ),
+    ),
+    (
+        "hair loss or thinning",
+        "hair or skin",
+        re.compile(r"hair loss|hair thinning|hair shed|weak hair|bald", re.I),
+    ),
+    ("headache or migraine", "neurologic", re.compile(r"headache|migraine", re.I)),
+    (
+        "activation or irritability",
+        "activation or anxiety",
+        re.compile(
+            r"irritab|restless|agitat|over.?stimulat|jitter|gitter|wired|edg|impulsiv|"
+            r"too much mental energy|too intense|too strong|teeth grinding|mind all over",
+            re.I,
+        ),
+    ),
+    ("anxiety or panic", "activation or anxiety", re.compile(r"anxi|panic", re.I)),
+    (
+        "appetite change",
+        "appetite or weight",
+        re.compile(r"appetite|hunger|weight loss", re.I),
+    ),
+    (
+        "gastrointestinal",
+        "gastrointestinal",
+        re.compile(r"nausea|stomach|\bgi\b|diarrh|gut|digest|vomit|reflux", re.I),
+    ),
+    (
+        "fatigue or sedation",
+        "fatigue or sedation",
+        re.compile(r"fatigue|tired|letharg|sedat|drows|sleepy|somnol|yawn", re.I),
+    ),
+    (
+        "dizziness or vertigo",
+        "neurologic",
+        re.compile(r"dizz|vertigo|light.?headed", re.I),
+    ),
+    (
+        "depressed or flattened mood",
+        "mood",
+        re.compile(
+            r"depress|low mood|anhedon|emotionally flat|flatten|apathy|dysphor|"
+            r"down in the dumps|labile|moody|pissed off",
+            re.I,
+        ),
+    ),
+    ("crash or rebound", "activation or anxiety", re.compile(r"crash|rebound", re.I)),
+    (
+        "cardiovascular or autonomic",
+        "cardiovascular or autonomic",
+        re.compile(
+            r"palpitation|tachy|heart rate|heart racing|blood pressure|hypertension|"
+            r"hypotension|chest tight|flush|overheat|dry mouth",
+            re.I,
+        ),
+    ),
+    ("sexual", "sexual", re.compile(r"libido|sexual|erect", re.I)),
+    (
+        "cognitive or perceptual disturbance",
+        "neurologic",
+        re.compile(
+            r"brain fog|foggy|cognit|memory problem|articulation|typo|spac|loopy|"
+            r"delirium|depersonali|dereal|dpdr|hallucin|hearing things|visual|"
+            r"pupil|dilated eyes|light sensitivity|thought doubling|conspiratorial|"
+            r"social skills|fried my brain|analysis paralysis|feeling in head|seizure|"
+            r"inner-ear|numb|tingly",
+            re.I,
+        ),
+    ),
+    (
+        "local irritation or odor",
+        "local irritation",
+        re.compile(r"nasal irritation|sinus|strong smell|weird odor", re.I),
+    ),
+    ("muscle cramps", "musculoskeletal", re.compile(r"cramp", re.I)),
+    (
+        "tolerance or short duration",
+        "tolerance or duration",
+        re.compile(r"tolerance|downregulation|short duration", re.I),
+    ),
+)
+
+
+def canonical_side_effect(value: str) -> tuple[str, str]:
+    """Return a reproducible canonical term and safety-domain bucket."""
+    cleaned = " ".join(value.strip().lower().split())
+    for canonical, bucket, pattern in _SIDE_EFFECT_PATTERNS:
+        if pattern.search(cleaned):
+            return canonical, bucket
+    return cleaned or "unspecified", "other"
+
+
 def parse_mass_dosage(value: str) -> MassDosage | None:
     """Parse the first explicit mass amount or range and normalize it to mg."""
     repeated = _REPEATED_UNIT_RANGE.search(value)
     if repeated:
-        low = float(repeated.group(1).lstrip("~")) * _MASS_TO_MG[repeated.group(2).lower()]
+        low = (
+            float(repeated.group(1).lstrip("~"))
+            * _MASS_TO_MG[repeated.group(2).lower()]
+        )
         high = float(repeated.group(3)) * _MASS_TO_MG[repeated.group(4).lower()]
         return MassDosage(low_mg=min(low, high), high_mg=max(low, high))
 
@@ -209,7 +433,9 @@ def parse_mass_dosage(value: str) -> MassDosage | None:
 
     single = _SINGLE_MASS.search(value)
     if single:
-        amount = float(single.group(1).lstrip("~")) * _MASS_TO_MG[single.group(2).lower()]
+        amount = (
+            float(single.group(1).lstrip("~")) * _MASS_TO_MG[single.group(2).lower()]
+        )
         return MassDosage(low_mg=amount, high_mg=amount)
     return None
 
@@ -242,7 +468,9 @@ def summarize_target_dosages(records: list[PipelineBRecord]) -> TargetDosageSumm
             counts[compound][parsed.label] += 1
             authors[compound].add(record.author_hash)
             midpoints[compound].append(parsed.midpoint_mg)
-            author_midpoints[compound].setdefault(record.author_hash, []).append(parsed.midpoint_mg)
+            author_midpoints[compound].setdefault(record.author_hash, []).append(
+                parsed.midpoint_mg
+            )
     return TargetDosageSummary(
         counts=counts,
         authors=authors,
@@ -313,14 +541,83 @@ STRICT_ALIAS = re.compile(
     r"7[ .,'-]{0,2}8[ .,'-]{0,2}dihydroxyflavone|dihydroxyflavone)"
 )
 STRICT_FILLER = {
-    "a", "about", "am", "an", "and", "approx", "approximately", "around", "at",
-    "av", "average", "been", "caps", "capsule", "capsules", "currently", "daily",
-    "day", "days", "dose", "dosed", "doses", "dosing", "each", "evening", "every",
-    "for", "from", "g", "have", "i", "in", "is", "it", "its", "just", "maybe",
-    "mg", "morning", "my", "night", "now", "of", "on", "once", "one", "only", "or",
-    "per", "pill", "pills", "pm", "powder", "roughly", "start", "started", "sublingual",
-    "sublingually", "take", "taken", "taking", "tablet", "the", "this", "to", "total",
-    "twice", "typically", "up", "use", "used", "using", "usually", "was", "were", "with", "x",
+    "a",
+    "about",
+    "am",
+    "an",
+    "and",
+    "approx",
+    "approximately",
+    "around",
+    "at",
+    "av",
+    "average",
+    "been",
+    "caps",
+    "capsule",
+    "capsules",
+    "currently",
+    "daily",
+    "day",
+    "days",
+    "dose",
+    "dosed",
+    "doses",
+    "dosing",
+    "each",
+    "evening",
+    "every",
+    "for",
+    "from",
+    "g",
+    "have",
+    "i",
+    "in",
+    "is",
+    "it",
+    "its",
+    "just",
+    "maybe",
+    "mg",
+    "morning",
+    "my",
+    "night",
+    "now",
+    "of",
+    "on",
+    "once",
+    "one",
+    "only",
+    "or",
+    "per",
+    "pill",
+    "pills",
+    "pm",
+    "powder",
+    "roughly",
+    "start",
+    "started",
+    "sublingual",
+    "sublingually",
+    "take",
+    "taken",
+    "taking",
+    "tablet",
+    "the",
+    "this",
+    "to",
+    "total",
+    "twice",
+    "typically",
+    "up",
+    "use",
+    "used",
+    "using",
+    "usually",
+    "was",
+    "were",
+    "with",
+    "x",
 }
 WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 
@@ -331,7 +628,11 @@ def bind_strict_doses(text: str) -> list[float]:
     spans = [(match.start(), match.end()) for match in STRICT_ALIAS.finditer(text)]
     for match in DOSE.finditer(text):
         for start, end in spans:
-            gap = text[end : match.start()] if match.start() >= end else text[match.end() : start]
+            gap = (
+                text[end : match.start()]
+                if match.start() >= end
+                else text[match.end() : start]
+            )
             if len(gap) > 60:
                 continue
             if any(word.lower() not in STRICT_FILLER for word in WORD.findall(gap)):

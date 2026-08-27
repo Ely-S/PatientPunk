@@ -289,41 +289,91 @@ effect, so it is not purely outcome-naming.
 
 ### side effects
 
-137/661 records (20.7%) carry them — 216 mentions, 135 distinct terms.
+Pipeline A contains 661 reports from 301 users. Side effects were explicit in 137
+reports from 93 users (30.9% of Pipeline A users), producing 216 mentions. That is
+a reporting proportion, not adverse-event incidence.
 
-| term | n | related |
-|---|---|---|
-| insomnia | 14 | sleep issues 3, sleep disruption 3 |
-| headache(s) | 10 | |
-| **hair loss** | 7 | hair thinning 3 → **10** |
-| irritability | 7 | restlessness 3, overstimulated 3 |
-| anxiety | 7 | |
-| appetite suppression | 6 | lowered appetite 2 → 8 |
+Canonical safety domains, deduplicated by user:
 
-**Overstimulation cluster** (insomnia, irritability, restlessness, anxiety, appetite suppression)
-is coherent and matches both the "similar to modafinil" framing here and the r/cfs report of
-stimulation persisting into the evening.
+| domain | users | mentions |
+|---|---:|---:|
+| activation or anxiety | 30 | 48 |
+| neurologic or cognitive/perceptual | 30 | 52 |
+| sleep | 28 | 37 |
+| mood | 8 | 13 |
+| cardiovascular or autonomic | 6 | 9 |
+| fatigue or sedation | 6 | 12 |
+| appetite or weight | 5 | 10 |
+| hair or skin | 5 | 12 |
 
-**Hair loss is the unexpected signal** — third most common, not an obvious consequence of TrkB
-agonism, and specific enough that people would not report it casually. Whether it attributes to
-7,8-DHF or to a co-stacked substance is exactly what group attribution makes hard. Checkable.
+The leading canonical terms are insomnia or sleep disruption (28 users),
+cognitive or perceptual disturbance (20), activation or irritability (17),
+anxiety or panic (14), and headache or migraine (10). Hair loss or thinning is
+reported by five users across 12 mentions. Pipeline A can blend the parent and
+derivative and includes context-inherited mentions, so these signals are not
+compound-specific and cannot be joined causally to a reported dose or route.
 
-**135 terms for 216 mentions = heavy fragmentation.** Every count above understates: run the
-side-effect vocabulary through canonicalisation before quoting any of it.
+### Combined database and proposed-study analysis
+
+`build_combined_db.py` copies the completed Pipeline A database through SQLite's
+backup API and imports the complete Pipeline B run. The source database remains
+unchanged. The versioned artifact contains 661 Pipeline A reports, 752 Pipeline B
+records, 643 linked dosage pairs, 231 linked route pairs, 1,482 treatment-outcome
+entries, 202 target author-compound exposures, and 216 canonicalized side-effect
+mentions.
+
+The key study-design table is `pipeline_b_compound_exposures`, one row per author
+and compound. It keeps dose bands, route families, conservative outcome, and
+explicit desired-result buckets together. It does not claim that separately
+reported dose and route observations describe the same administration event.
+Only 13 parent and seven derivative rows have one dose and one route observation;
+11 additional rows have both but ambiguous pairing.
+
+Observed quantitative doses use common cross-compound bands:
+
+| compound | <5 mg | 5 to <10 | 10 to <25 | 25 to <50 | 50 to <100 | >=100 |
+|---|---:|---:|---:|---:|---:|---:|
+| 7,8-DHF entries | 3 | 1 | 11 | 27 | 13 | 6 |
+| 4'-DMA entries | 3 | 7 | 14 | 2 | 1 | 0 |
+
+The parent distribution centers on 25 to <50 mg, while the derivative centers on
+10 to <25 mg. This is descriptive only. Sparse outcome-linked cells do not show a
+credible monotonic dose-response.
+
+Route families preserve the distinction relevant to exposure. Sublingual is
+stored as oral mucosal, not pooled with swallowed oral. Parent reports include 32
+oral-mucosal, seven nasal-mucosal, five swallowed-oral, and two dermal entries.
+The derivative has 16 oral-mucosal and five swallowed-oral entries. Outcome-linked
+route cells are small and selected; they are useful for choosing measurements,
+not for asserting route efficacy.
+
+Explicit desired-result domains most often support mood/depression,
+focus/attention, energy/motivation, cognition, and sleep measurement. Sleep is
+bidirectional: it is an outcome target but also the leading canonical safety
+signal, particularly for 4'-DMA reports. The generated
+`study_design_analysis.md` contains exact author-level counts and Wilson intervals.
+
+No human interventional study was identified in ClinicalTrials.gov or PubMed in
+the 2026-08-27 search. Directly relevant evidence remains preclinical or in vitro,
+including poor Caco-2 transport (PMID 31384856), in-vitro CYP inhibition (PMID
+31731555), and mouse work on both compounds (PMID 23446639). The community data
+can inform endpoint selection and safety surveillance, but not a human starting
+dose.
 
 ## 6. Open work
 
-**Sentiment by use-case — the next analysis.** §3 gives the purpose split, §4 gives per-user
-sentiment; joining them answers the question worth asking: *does it fare better for mood than for
-cognition?* Join on `post_id` → `treatment_reports.post_id`, tag each record with its purpose
-categories from `analyze_purpose.py`, then compare positive rates. Expect small cells for the
-tail categories — pool or drop anything under ~30 users rather than reporting it.
+**Validate the new analysis buckets against a blinded sample.** The dose boundaries
+are deterministic, but the desired-result and side-effect domains are regex-based.
+Before protocol use, manually review a stratified sample and report precision by
+domain.
 
-**Re-run sentiment-by-use-case as category vs category.** The baseline comparison in §5 is
-confounded; see the note there for why and which pairing to use.
+**Add an administration-event identifier in a future extraction schema.** The
+current author-compound exposure table can say that dose and route were both
+reported, but it cannot prove they belong to the same administration event.
 
-**Canonicalise the side-effect vocabulary** before quoting counts, and test whether hair loss
-attributes to 7,8-DHF or to co-stacked substances.
+**Make side effects compound-specific in a future Pipeline B schema.** Pipeline A
+blends the parent and derivative and can inherit context, so it is suitable for
+safety-signal generation but not comparative adverse-event rates.
 
 **Treatment-linked dose and route extraction is now complete.** For plain
 7,8-DHF, 61 quantitative mass-dose entries from 46 authors have an author-level

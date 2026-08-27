@@ -140,7 +140,65 @@ The `audit_*.py` scripts exist to check the analyses, and each one found a real 
 
 Run them before quoting anything from the dose or side-effect-by-indication tables.
 
-## 5. What you should get
+## 5. Build the combined Pipeline A and B database
+
+Copy Pipeline A through SQLite's backup API, then add the normalized Pipeline B
+records and analysis tables. The source `noots.db` is opened read-only and is not
+modified.
+
+```powershell
+$outputDir = "$runDir/outputs/pr140-linked-dose-route"
+$combinedDb = "$outputDir/nootropics_pipeline_a_b.db"
+$studyReport = "$outputDir/study_design_analysis.md"
+
+uv run python -m studies.tropoflavin_nootropics.build_combined_db `
+  --source-db "studies/tropoflavin_nootropics/noots.db" `
+  --pipeline-b-records "$runDir/corpus/records_normalized.csv" `
+  --output "$combinedDb" `
+  --expected-records 752 `
+  --run-name "2026-08-27-linked-dose-route"
+
+uv run python -m studies.tropoflavin_nootropics.analyze_study_design `
+  --database "$combinedDb" `
+  --output "$studyReport"
+```
+
+The combined database retains every Pipeline A table and adds:
+
+- `pipeline_b_records`: the exact 752-row, 41-column normalized export
+- `pipeline_b_dosages`: one linked dose per row, with raw value, normalized mass,
+  and stable milligram band
+- `pipeline_b_administration_routes`: one linked route per row, with exact route
+  and pharmacologic route family
+- `pipeline_b_treatment_outcomes`: treatment-specific outcome, symptom, and
+  desired-result domain
+- `pipeline_b_compound_exposures`: one row per author and target compound with
+  dose, route, efficacy, and explicit dose-route ambiguity in the same table
+- `pipeline_a_side_effects`: canonical side-effect terms and safety-domain buckets
+- `combined_pipeline_manifest`: completion status and source provenance
+
+The completed run should contain 661 Pipeline A reports, 752 Pipeline B records,
+643 linked dosage pairs, 231 linked route pairs, 1,482 outcome entries, 202 target
+author-compound exposure rows, and 216 side-effect mentions. Validate the artifact:
+
+```powershell
+@'
+import sqlite3
+from pathlib import Path
+
+path = Path(r"REPLACE_WITH_COMBINED_DB_PATH")
+connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+print(connection.execute("PRAGMA integrity_check").fetchone()[0])
+print(connection.execute("PRAGMA foreign_key_check").fetchall())
+print(connection.execute("SELECT pipeline, status, record_count FROM combined_pipeline_manifest").fetchall())
+connection.close()
+'@ | uv run python -
+```
+
+Require `ok`, an empty foreign-key result, and complete manifest rows for both
+pipelines before analysis.
+
+## 6. What you should get
 
 | | |
 |---|---|
@@ -151,7 +209,7 @@ Read that with NOTES.md's caveats attached — positives are over-called 10–20
 pipeline, the alias blends 7,8-DHF with its 4'-DMA derivative (quote pipeline B for
 per-compound claims), and r/Nootropics is a healthy-user population.
 
-## 6. Reproducing the original numbers exactly
+## 7. Reproducing the original numbers exactly
 
 The historical figures above were produced with **reasoning enabled** on
 `deepseek-v4-flash`. This stack suppresses reasoning by default (#121), which makes
