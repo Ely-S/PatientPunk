@@ -13,6 +13,7 @@ dependencies = [
     "nbconvert>=7.16",
     "nbformat>=5.10",
     "numpy>=2.0",
+    "openpyxl>=3.1",
     "pandas>=2.2",
     "pydantic>=2.5",
     "python-dotenv>=1.0",

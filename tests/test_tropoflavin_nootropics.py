@@ -12,7 +12,9 @@ from studies.tropoflavin_nootropics.study_support import (
     compound_for_treatment,
     linked_values,
     load_pipeline_b_records,
+    parse_mass_dosage,
     readonly_sqlite_uri,
+    summarize_target_dosages,
     summarize_target_values,
 )
 
@@ -89,6 +91,37 @@ def test_target_summaries_use_only_explicit_linked_pairs() -> None:
     assert doses.authors == {"7,8-DHF": {"a"}, "4'-DMA": {"b"}}
     assert routes.counts["7,8-DHF"] == {"sublingual": 1}
     assert routes.counts["4'-DMA"] == {"oral": 1}
+
+
+def test_mass_dosages_are_canonicalized_and_non_mass_values_are_audited() -> None:
+    assert parse_mass_dosage("50mg daily").label == "50 mg"
+    assert parse_mass_dosage("100 mg - 200 mg").label == "100-200 mg"
+    assert parse_mass_dosage("250-500 mcg").label == "0.25-0.5 mg"
+    assert parse_mass_dosage("1 month per year") is None
+
+    records = [
+        _record(
+            author_hash="a",
+            dosage_treatment="7,8-DHF | 7,8-DHF",
+            dosage_value="50mg daily | unspecified",
+        ),
+        _record(
+            author_hash="b",
+            dosage_treatment="4'-DMA-7,8-DHF | 4'-DMA-7,8-DHF",
+            dosage_value="10 mg | 2 capsules",
+        ),
+    ]
+    summary = summarize_target_dosages(records)
+
+    assert summary.counts["7,8-DHF"] == {"50 mg": 1}
+    assert summary.counts["4'-DMA"] == {"10 mg": 1}
+    assert summary.excluded["7,8-DHF"] == {"unspecified": 1}
+    assert summary.excluded["4'-DMA"] == {"2 capsules": 1}
+    assert summary.midpoints_mg == {"7,8-DHF": [50.0], "4'-DMA": [10.0]}
+    assert summary.author_midpoints_mg == {
+        "7,8-DHF": {"a": [50.0]},
+        "4'-DMA": {"b": [10.0]},
+    }
 
 
 def test_strict_binder_rejects_single_letter_intervening_compound() -> None:

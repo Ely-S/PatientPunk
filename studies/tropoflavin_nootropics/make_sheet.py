@@ -4,12 +4,21 @@ Every number is recomputed from noots.db / records.csv / subreddit_posts.json,
 so the workbook cannot drift from the pipelines. Formatting is carried as .xlsx
 because Drive converts it on upload; CSV cannot hold tabs, bold or number formats.
 """
+
 from __future__ import annotations
-import collections, json, math, re, sqlite3, sys
+
+import collections
+import csv
+import itertools
+import json
+import math
+import re
+import sqlite3
+import sys
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from scipy.stats import fisher_exact
+from scipy.stats import binomtest, fisher_exact
 from statsmodels.stats.multitest import multipletests
 from study_support import (
     COMPOUNDS,
@@ -17,6 +26,7 @@ from study_support import (
     compound_for_treatment,
     load_pipeline_b_records,
     readonly_sqlite_uri,
+    summarize_target_dosages,
     summarize_target_values,
 )
 
@@ -47,7 +57,9 @@ def wilson(k, n, z=1.96):
 
 
 # ══ gather ══════════════════════════════════════════════════════════════════
-PAT = re.compile(r"(?i)(tropoflavin|hydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b)")
+PAT = re.compile(
+    r"(?i)(tropoflavin|hydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b)"
+)
 SIG = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
 DM = "4'-DMA"
 
@@ -81,18 +93,28 @@ PURPOSE = {
     "autism / Rett": r"\bautis|\brett\b|\bfragile x\b",
     "TBI / concussion": r"\btbi\b|concussion|\bhead injury\b|traumatic brain",
 }
-purpose_n = {k: sum(1 for t in items if re.search(p, t, re.I)) for k, p in PURPOSE.items()}
+purpose_n = {
+    k: sum(1 for t in items if re.search(p, t, re.I)) for k, p in PURPOSE.items()
+}
 
 CO = {
     "4'-DMA-7,8-DHF (eutropoflavin)": r"4[ '’]?-?\s?dma|eutropoflavin",
-    "noopept": r"\bnoopept\b", "semax": r"\bsemax\b",
+    "noopept": r"\bnoopept\b",
+    "semax": r"\bsemax\b",
     "racetams (pir/ani/oxi/phenyl)": r"\bpiracetam\b|\baniracetam\b|\boxiracetam\b|\bphenylpiracetam\b|\bpramiracetam\b",
-    "NSI-189": r"\bnsi[- ]?189\b", "lion's mane": r"lion'?s? mane|hericium",
-    "dihexa": r"\bdihexa\b", "bromantane": r"\bbromantane\b", "selank": r"\bselank\b",
-    "magnesium": r"\bmagnesium\b", "cerebrolysin": r"\bcerebrolysin\b",
-    "agmatine": r"\bagmatine\b", "uridine": r"\buridine\b",
-    "psilocybin / LSD": r"\bpsilocybin\b|\blsd\b|microdos", "ketamine": r"\bketamine\b",
-    "creatine": r"\bcreatine\b", "curcumin / turmeric": r"\bcurcumin\b|turmeric",
+    "NSI-189": r"\bnsi[- ]?189\b",
+    "lion's mane": r"lion'?s? mane|hericium",
+    "dihexa": r"\bdihexa\b",
+    "bromantane": r"\bbromantane\b",
+    "selank": r"\bselank\b",
+    "magnesium": r"\bmagnesium\b",
+    "cerebrolysin": r"\bcerebrolysin\b",
+    "agmatine": r"\bagmatine\b",
+    "uridine": r"\buridine\b",
+    "psilocybin / LSD": r"\bpsilocybin\b|\blsd\b|microdos",
+    "ketamine": r"\bketamine\b",
+    "creatine": r"\bcreatine\b",
+    "curcumin / turmeric": r"\bcurcumin\b|turmeric",
     "9-MBC": r"\b9[- ]?mbc\b",
 }
 co_n = {k: sum(1 for t in items if re.search(p, t, re.I)) for k, p in CO.items()}
@@ -105,14 +127,23 @@ A = db.execute("""SELECT r.sentiment, r.signal_strength sig, r.user_id, r.side_e
 A_raw = collections.Counter(r["sentiment"] for r in A)
 A_sig = collections.Counter((r["sentiment"], r["sig"] or "n/a") for r in A)
 best = {}
-for r in sorted(A, key=lambda r: (r["post_date"] or 0, SIG.get(r["sig"], 0)), reverse=True):
+for r in sorted(
+    A, key=lambda r: (r["post_date"] or 0, SIG.get(r["sig"], 0)), reverse=True
+):
     best.setdefault(r["user_id"], r["sentiment"])
 A_vote = collections.Counter(best.values())
 A_N = len(best)
 
 B_records = load_pipeline_b_records(PATHS.records)
 B_rows = [record.model_dump() for record in B_records]
-META = {"author_hash", "source", "text_count", "schema_id", "extraction_method", "extracted_at"}
+META = {
+    "author_hash",
+    "source",
+    "text_count",
+    "schema_id",
+    "extraction_method",
+    "extracted_at",
+}
 B_fields = [k for k in B_rows[0] if k not in META]
 fill = collections.Counter()
 for r in B_rows:
@@ -141,7 +172,53 @@ for r in B_rows:
             author_out[which][r["author_hash"]] = outcome
 auth_out = {k: collections.Counter(v.values()) for k, v in author_out.items()}
 
-dose_summary = summarize_target_values(B_records, "dosage")
+parent_outcomes = author_out["7,8-DHF"]
+derivative_outcomes = author_out[DM]
+outcome_overlap = set(parent_outcomes).intersection(derivative_outcomes)
+parent_exclusive = set(parent_outcomes).difference(outcome_overlap)
+derivative_exclusive = set(derivative_outcomes).difference(outcome_overlap)
+matched_parent_no_effect = sum(
+    parent_outcomes[author] == "no_effect" for author in outcome_overlap
+)
+matched_derivative_no_effect = sum(
+    derivative_outcomes[author] == "no_effect" for author in outcome_overlap
+)
+matched_parent_only_no_effect = sum(
+    parent_outcomes[author] == "no_effect"
+    and derivative_outcomes[author] != "no_effect"
+    for author in outcome_overlap
+)
+matched_derivative_only_no_effect = sum(
+    parent_outcomes[author] != "no_effect"
+    and derivative_outcomes[author] == "no_effect"
+    for author in outcome_overlap
+)
+matched_discordant = matched_parent_only_no_effect + matched_derivative_only_no_effect
+matched_no_effect_p = (
+    binomtest(matched_parent_only_no_effect, matched_discordant, 0.5).pvalue
+    if matched_discordant
+    else 1.0
+)
+parent_exclusive_no_effect = sum(
+    parent_outcomes[author] == "no_effect" for author in parent_exclusive
+)
+derivative_exclusive_no_effect = sum(
+    derivative_outcomes[author] == "no_effect" for author in derivative_exclusive
+)
+exclusive_no_effect_odds, exclusive_no_effect_p = fisher_exact(
+    [
+        [
+            parent_exclusive_no_effect,
+            len(parent_exclusive) - parent_exclusive_no_effect,
+        ],
+        [
+            derivative_exclusive_no_effect,
+            len(derivative_exclusive) - derivative_exclusive_no_effect,
+        ],
+    ]
+)
+
+dose_summary = summarize_target_dosages(B_records)
 route_summary = summarize_target_values(B_records, "administration_route")
 doses = collections.Counter(
     {
@@ -176,23 +253,28 @@ for r in A:
 
 
 # ── side-effect structure + OMF condition mapping ───────────────────────────
-import itertools
 SE_CANON = [
- (r"insomnia|sleep (issue|disrupt|disturb|problem)|can'?t sleep|trouble sleeping|poor sleep", "insomnia / sleep disruption"),
- (r"headache|migraine", "headache / migraine"),
- (r"hair (loss|thinning|shed)|weak hair|balding", "hair loss / thinning"),
- (r"irritab|restless|agitat|overstimulat|jitter|wired|anxious|anxiety|panic", "overstimulation / anxiety"),
- (r"appetite|hunger", "appetite change"),
- (r"nausea|stomach|gi\b|diarrh|gut|digest", "GI"),
- (r"fatigue|tired|lethargy|sedat|drowsy|sleepy", "fatigue / sedation"),
- (r"depress|anhedoni|blunt|apath|emotional", "mood flattening / depression"),
- (r"brain fog|cognitive|memory|concentrat|verbal|articulat", "cognitive dulling"),
- (r"dizz|lightheaded|vertigo", "dizziness"),
- (r"crash|tolerance|withdraw|dependen|rebound", "crash / tolerance / withdrawal"),
- (r"blood pressure|\bbp\b|heart|palpit|tachy", "cardiovascular"),
- (r"vision|visual|aura|eye", "visual"),
- (r"rash|itch|allerg|hives", "allergic / skin"),
- (r"libido|sexual|erectile", "sexual"),
+    (
+        r"insomnia|sleep (issue|disrupt|disturb|problem)|can'?t sleep|trouble sleeping|poor sleep",
+        "insomnia / sleep disruption",
+    ),
+    (r"headache|migraine", "headache / migraine"),
+    (r"hair (loss|thinning|shed)|weak hair|balding", "hair loss / thinning"),
+    (
+        r"irritab|restless|agitat|overstimulat|jitter|wired|anxious|anxiety|panic",
+        "overstimulation / anxiety",
+    ),
+    (r"appetite|hunger", "appetite change"),
+    (r"nausea|stomach|gi\b|diarrh|gut|digest", "GI"),
+    (r"fatigue|tired|lethargy|sedat|drowsy|sleepy", "fatigue / sedation"),
+    (r"depress|anhedoni|blunt|apath|emotional", "mood flattening / depression"),
+    (r"brain fog|cognitive|memory|concentrat|verbal|articulat", "cognitive dulling"),
+    (r"dizz|lightheaded|vertigo", "dizziness"),
+    (r"crash|tolerance|withdraw|dependen|rebound", "crash / tolerance / withdrawal"),
+    (r"blood pressure|\bbp\b|heart|palpit|tachy", "cardiovascular"),
+    (r"vision|visual|aura|eye", "visual"),
+    (r"rash|itch|allerg|hives", "allergic / skin"),
+    (r"libido|sexual|erectile", "sexual"),
 ]
 SE_CANON = [(re.compile(pp, re.I), lab) for pp, lab in SE_CANON]
 
@@ -205,36 +287,47 @@ def _canon(t):
 
 
 SE_COND = {
- "depression / mood":   r"\bdepress|\bantidepress|\bmood\b|anhedoni",
- "anxiety":             r"\banxiet|\banxious\b|\bpanic\b",
- "focus / cognition":   r"\bfocus\b|\bconcentrat|\bcognit|\bbrain fog\b|\bclarity\b|\bproductiv",
- "memory / learning":   r"\bmemory\b|\brecall\b|\blearning\b",
- "sleep":               r"\bsleep\b|\binsomnia\b",
- "energy / fatigue":    r"\benergy\b|\bfatigue\b|\btired\b|\bstamina\b",
- "neurogenesis / BDNF": r"\bbdnf\b|\btrkb\b|neurogenes|neuroplastic|\brewir",
+    "depression / mood": r"\bdepress|\bantidepress|\bmood\b|anhedoni",
+    "anxiety": r"\banxiet|\banxious\b|\bpanic\b",
+    "focus / cognition": r"\bfocus\b|\bconcentrat|\bcognit|\bbrain fog\b|\bclarity\b|\bproductiv",
+    "memory / learning": r"\bmemory\b|\brecall\b|\blearning\b",
+    "sleep": r"\bsleep\b|\binsomnia\b",
+    "energy / fatigue": r"\benergy\b|\bfatigue\b|\btired\b|\bstamina\b",
+    "neurogenesis / BDNF": r"\bbdnf\b|\btrkb\b|neurogenes|neuroplastic|\brewir",
 }
 SE_CRX = {k: re.compile(v, re.I) for k, v in SE_COND.items()}
 # ASCEND-ME (Xiao group) - the domains the proposed ME/CFS trial targets
-OMF = {"energy / fatigue": "PEM / fatigue - PRIMARY endpoint",
-       "focus / cognition": "cognitive dysfunction",
-       "memory / learning": "cognitive dysfunction",
-       "sleep": "sleep (unrefreshing)",
-       "depression / mood": "mood (secondary)",
-       "anxiety": "mood (secondary)",
-       "neurogenesis / BDNF": "BDNF / TrkB - the mechanism"}
+OMF = {
+    "energy / fatigue": "PEM / fatigue - PRIMARY endpoint",
+    "focus / cognition": "cognitive dysfunction",
+    "memory / learning": "cognitive dysfunction",
+    "sleep": "sleep (unrefreshing)",
+    "depression / mood": "mood (secondary)",
+    "anxiety": "mood (secondary)",
+    "neurogenesis / BDNF": "BDNF / TrkB - the mechanism",
+}
 
 serecs = []
 for _r in A:
     _ses = []
     if _r["side_effects"] and _r["side_effects"] != "[]":
         try:
-            _ses = [x for x in (_canon(str(v)) for v in json.loads(_r["side_effects"])) if x]
+            _ses = [
+                x for x in (_canon(str(v)) for v in json.loads(_r["side_effects"])) if x
+            ]
         except Exception:
             pass
     _t = (_r["title"] or "") + " " + (_r["body_text"] or "")
-    serecs.append(dict(sent=_r["sentiment"], ses=sorted(set(_ses)), user=_r["user_id"],
-                       date=_r["post_date"] or 0, rank=SIG.get(_r["sig"], 0),
-                       conds=[k for k, rx in SE_CRX.items() if rx.search(_t)]))
+    serecs.append(
+        dict(
+            sent=_r["sentiment"],
+            ses=sorted(set(_ses)),
+            user=_r["user_id"],
+            date=_r["post_date"] or 0,
+            rank=SIG.get(_r["sig"], 0),
+            conds=[k for k, rx in SE_CRX.items() if rx.search(_t)],
+        )
+    )
 SE_N = len(serecs)
 SE_WITH = [x for x in serecs if x["ses"]]
 SE_NONE = [x for x in serecs if not x["ses"]]
@@ -249,14 +342,18 @@ for x in sorted(serecs, key=lambda y: (y["date"], y["rank"]), reverse=True):
     for c in x["conds"]:
         _vote[c].setdefault(x["user"], x["sent"])
 COND_BASE = {c: len(v) for c, v in _vote.items()}
-COND_POS = {c: sum(1 for s_ in v.values() if s_ == "positive") for c, v in _vote.items()}
+COND_POS = {
+    c: sum(1 for s_ in v.values() if s_ == "positive") for c, v in _vote.items()
+}
 
 # use-case sentiment
 uc = []
 for cat, pat in PURPOSE.items():
     rx = re.compile(pat, re.I)
     b = {}
-    for r in sorted(A, key=lambda r: (r["post_date"] or 0, SIG.get(r["sig"], 0)), reverse=True):
+    for r in sorted(
+        A, key=lambda r: (r["post_date"] or 0, SIG.get(r["sig"], 0)), reverse=True
+    ):
         if rx.search((r["title"] or "") + " " + (r["body_text"] or "")):
             b.setdefault(r["user_id"], r["sentiment"])
     n = len(b)
@@ -266,22 +363,14 @@ for cat, pat in PURPOSE.items():
     neg = sum(1 for v in b.values() if v == "negative")
     lo, hi = wilson(pos, n)
     base_pos = A_vote["positive"]
-    _, p = fisher_exact([[pos, n - pos], [base_pos - pos, (A_N - n) - (base_pos - pos)]])
+    _, p = fisher_exact(
+        [[pos, n - pos], [base_pos - pos, (A_N - n) - (base_pos - pos)]]
+    )
     uc.append([cat, n, pos, neg, 100 * pos / n, 100 * lo, 100 * hi, p])
 q = multipletests([r[7] for r in uc], method="fdr_bh")[1]
 for r, qq in zip(uc, q):
     r.append(qq)
 uc.sort(key=lambda r: -r[1])
-
-fisher_rows = []
-for key in ("no_effect", "helped", "worsened"):
-    a, n1 = auth_out["7,8-DHF"][key], sum(auth_out["7,8-DHF"].values())
-    c, n2 = auth_out["4'-DMA"][key], sum(auth_out["4'-DMA"].values())
-    odds, p = fisher_exact([[a, n1 - a], [c, n2 - c]])
-    lo1, hi1 = wilson(a, n1)
-    lo2, hi2 = wilson(c, n2)
-    fisher_rows.append([key, a, n1, 100 * a / n1, 100 * lo1, 100 * hi1,
-                        c, n2, 100 * c / n2, 100 * lo2, 100 * hi2, odds, p])
 
 # ══ build ═══════════════════════════════════════════════════════════════════
 wb = Workbook()
@@ -340,46 +429,102 @@ def kv(ws, r, k, v, note=""):
 ws = sheet("Summary", [34, 26, 74])
 ws["A1"] = "7,8-DHF (tropoflavin) — r/Nootropics run"
 ws["A1"].font = Font(bold=True, size=15, color=INK)
-ws["A2"] = "All processed results. Mention/sentiment data from a healthy-user nootropics population — not patient outcomes."
+ws["A2"] = (
+    "All processed results. Mention/sentiment data from a healthy-user nootropics population — not patient outcomes."
+)
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = 4
 r = banner(ws, r, "CORPUS", 3)
 r = kv(ws, r, "Subreddit", "r/Nootropics", "posts + comments combined")
 r = kv(ws, r, "Comments source", "1,827,221 lines", "2009-09-25 → 2026-08-18")
 r = kv(ws, r, "Posts source", "184,321 lines", "→ 2026-08-17")
-r = kv(ws, r, "Mentions found", N_ITEMS, "1,448 in comments + 345 in posts (1 item matched both fields)")
-r = kv(ws, r, "Threads pulled whole", 1048, "every thread containing ≥1 mention, full reply tree")
+r = kv(
+    ws,
+    r,
+    "Mentions found",
+    N_ITEMS,
+    "1,448 in comments + 345 in posts (1 item matched both fields)",
+)
+r = kv(
+    ws,
+    r,
+    "Threads pulled whole",
+    1048,
+    "every thread containing ≥1 mention, full reply tree",
+)
 r = kv(ws, r, "Corpus items", 45667, "1,047 posts + 44,620 comments")
 r = kv(ws, r, "Thread structure retained", "99.9%", "parent_id survival after import")
 r = kv(ws, r, "Distinct authors in corpus", 13568, "everyone in those threads")
 r = kv(ws, r, "Authors who named it", 752, "pipeline B population")
 r += 1
 r = banner(ws, r, "PIPELINE A — drug sentiment (--drug-file)", 3)
-r = kv(ws, r, "Entry × drug pairs", 4603, "1,653 direct alias matches + 2,950 context-inherited")
-r = kv(ws, r, "Survived prefilter", 988, "fast model drops non-personal-experience pairs")
+r = kv(
+    ws,
+    r,
+    "Entry × drug pairs",
+    4603,
+    "1,653 direct alias matches + 2,950 context-inherited",
+)
+r = kv(
+    ws, r, "Survived prefilter", 988, "fast model drops non-personal-experience pairs"
+)
 r = kv(ws, r, "Sentiment records", len(A), "")
 r = kv(ws, r, "Distinct users", A_N, "the unit that bounds power")
 lo, hi = wilson(A_vote["positive"], A_N)
-r = kv(ws, r, "Positive (one vote/user)", f"{100*A_vote['positive']/A_N:.1f}%",
-       f"{A_vote['positive']}/{A_N}, 95% Wilson [{100*lo:.1f}, {100*hi:.1f}] — blends both compounds")
-r = kv(ws, r, "Negative (one vote/user)", f"{100*A_vote['negative']/A_N:.1f}%",
-       "more trustworthy than the positive rate (~10–20% positive over-call)")
+r = kv(
+    ws,
+    r,
+    "Positive (one vote/user)",
+    f"{100 * A_vote['positive'] / A_N:.1f}%",
+    f"{A_vote['positive']}/{A_N}, 95% Wilson [{100 * lo:.1f}, {100 * hi:.1f}] — blends both compounds",
+)
+r = kv(
+    ws,
+    r,
+    "Negative (one vote/user)",
+    f"{100 * A_vote['negative'] / A_N:.1f}%",
+    "more trustworthy than the positive rate (~10–20% positive over-call)",
+)
 r += 1
-r = banner(ws, r, "PIPELINE B — variable extraction (no --drug; pre-filtered corpus)", 3)
+r = banner(
+    ws, r, "PIPELINE B — variable extraction (no --drug; pre-filtered corpus)", 3
+)
 r = kv(ws, r, "Records", len(B_rows), "one per author who named the compound")
 r = kv(ws, r, "Clinical fields", len(B_fields), "nootropics_v1 schema, 25 base fields")
-r = kv(ws, r, "Field fills", sum(fill.values()), f"{sum(fill.values())/len(B_rows):.2f} per record")
-r = kv(ws, r, "Runtime", "16m 56s", "752 records, 12 workers, deepseek-v4-flash")
-r = kv(ws, r, "7,8-DHF outcomes", f"{sum(auth_out['7,8-DHF'].values())} authors",
-       f"{sum(entry_out['7,8-DHF'].values())} entries")
-r = kv(ws, r, "4'-DMA outcomes", f"{sum(auth_out[DM].values())} authors",
-       f"{sum(entry_out[DM].values())} entries")
+r = kv(
+    ws,
+    r,
+    "Field fills",
+    sum(fill.values()),
+    f"{sum(fill.values()) / len(B_rows):.2f} per record",
+)
+r = kv(
+    ws,
+    r,
+    "Runtime",
+    "see versioned run logs",
+    "752 records, 12 workers, deepseek-v4-flash",
+)
+r = kv(
+    ws,
+    r,
+    "7,8-DHF outcomes",
+    f"{sum(auth_out['7,8-DHF'].values())} authors",
+    f"{sum(entry_out['7,8-DHF'].values())} entries",
+)
+r = kv(
+    ws,
+    r,
+    "4'-DMA outcomes",
+    f"{sum(auth_out[DM].values())} authors",
+    f"{sum(entry_out[DM].values())} entries",
+)
 r += 1
 r = banner(ws, r, "HEADLINE", 3)
 for txt in [
     "B separates 7,8-DHF from 4'-DMA-7,8-DHF; A cannot — its alias for '7,8-dhf' matches inside \"4'-DMA-7,8-DHF\".",
     "A's 71.1% blended rate sits on the derivative's rate, not the parent's — over-capture is measurable at ~9 points.",
-    "Only the no_effect gap separates the compounds (p=0.048); helped and worsened do not.",
+    "The no_effect gap is present among exclusive authors but not among the 20 authors who reported both compounds.",
     "Sentiment-by-use-case looks strong but is an artifact — see the Statistics tab.",
     "Side effects cluster on overstimulation; hair loss is an unexpected third-ranked signal.",
 ]:
@@ -395,7 +540,9 @@ ws.freeze_panes = "A4"
 ws = sheet("Use cases", [34, 12, 12, 60])
 ws["A1"] = "What people use it for"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-ws["A2"] = f"Keyword context across all {N_ITEMS:,} mentioning items. An item can match several rows, so shares exceed 100%."
+ws["A2"] = (
+    f"Keyword context across all {N_ITEMS:,} mentioning items. An item can match several rows, so shares exceed 100%."
+)
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = header(ws, 4, ["Stated context", "items", "share", ""])
 for k, v in sorted(purpose_n.items(), key=lambda x: -x[1]):
@@ -411,62 +558,120 @@ ws.freeze_panes = "A5"
 ws = sheet("Sentiment (A)", [26, 12, 12, 14, 14, 60])
 ws["A1"] = "Pipeline A — drug sentiment"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-ws["A2"] = "Targeted --drug-file run. Covers BOTH compounds together; see Extraction (B) for the split."
+ws["A2"] = (
+    "Targeted --drug-file run. Covers BOTH compounds together; see Extraction (B) for the split."
+)
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = banner(ws, 4, "RAW RECORDS (not independent — one user may contribute several)", 6)
 r = header(ws, r, ["Sentiment", "records", "share", "", "", ""])
 for k in ("positive", "negative", "mixed", "neutral"):
-    r = row(ws, r, [k, A_raw[k], A_raw[k] / len(A), "", "", ""], [None, "#,##0", "0.0%"])
+    r = row(
+        ws, r, [k, A_raw[k], A_raw[k] / len(A), "", "", ""], [None, "#,##0", "0.0%"]
+    )
 r = row(ws, r, ["TOTAL", len(A), 1.0, "", "", ""], [None, "#,##0", "0.0%"], bold_col=1)
 r += 1
-r = banner(ws, r, "ONE VOTE PER USER — most recent record, ties broken by signal strength", 6)
+r = banner(
+    ws, r, "ONE VOTE PER USER — most recent record, ties broken by signal strength", 6
+)
 r = header(ws, r, ["Sentiment", "users", "share", "95% CI low", "95% CI high", ""])
 for k in ("positive", "negative", "mixed", "neutral"):
     lo, hi = wilson(A_vote[k], A_N)
-    r = row(ws, r, [k, A_vote[k], A_vote[k] / A_N, lo, hi, ""],
-            [None, "#,##0", "0.0%", "0.0%", "0.0%"])
+    r = row(
+        ws,
+        r,
+        [k, A_vote[k], A_vote[k] / A_N, lo, hi, ""],
+        [None, "#,##0", "0.0%", "0.0%", "0.0%"],
+    )
 r = row(ws, r, ["TOTAL", A_N, 1.0, "", "", ""], [None, "#,##0", "0.0%"], bold_col=1)
 r += 1
 r = banner(ws, r, "BY SIGNAL STRENGTH (raw records)", 6)
 r = header(ws, r, ["Sentiment", "strong", "moderate", "weak", "n/a", ""])
 for s in ("positive", "negative", "mixed", "neutral"):
-    r = row(ws, r, [s, A_sig[(s, "strong")], A_sig[(s, "moderate")],
-                    A_sig[(s, "weak")], A_sig[(s, "n/a")], ""],
-            [None, "#,##0", "#,##0", "#,##0", "#,##0"])
+    r = row(
+        ws,
+        r,
+        [
+            s,
+            A_sig[(s, "strong")],
+            A_sig[(s, "moderate")],
+            A_sig[(s, "weak")],
+            A_sig[(s, "n/a")],
+            "",
+        ],
+        [None, "#,##0", "#,##0", "#,##0", "#,##0"],
+    )
 ws.freeze_panes = "A5"
 
 # ── 4. Extraction B ─────────────────────────────────────────────────────────
 ws = sheet("Extraction (B)", [30, 12, 12, 14, 14, 46])
 ws["A1"] = "Pipeline B — variable extraction"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-ws["A2"] = "752 per-author records. B has no --drug flag; targeting = a pre-filtered corpus of authors who named the compound."
+ws["A2"] = (
+    "752 per-author records. B has no --drug flag; targeting = a pre-filtered corpus of authors who named the compound."
+)
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = banner(ws, 4, "FIELD FILL RATES", 6)
 r = header(ws, r, ["Field", "filled", "rate", "", "", ""])
 for k, v in fill.most_common():
     r = row(ws, r, [k, v, v / len(B_rows), "", "", ""], [None, "#,##0", "0.0%"])
 r += 1
-r = banner(ws, r, "OUTCOMES BY COMPOUND — author level (one vote per author per compound)", 6)
+r = banner(
+    ws, r, "OUTCOMES BY COMPOUND — author level (one vote per author per compound)", 6
+)
 r = header(ws, r, ["Outcome", "7,8-DHF n", "7,8-DHF %", "4'-DMA n", "4'-DMA %", ""])
 n1, n2 = sum(auth_out["7,8-DHF"].values()), sum(auth_out[DM].values())
 for k in ("helped", "worsened", "no_effect", "mixed", "unknown"):
-    rr = row(ws, r, [k, auth_out["7,8-DHF"][k], auth_out["7,8-DHF"][k] / n1,
-                     auth_out[DM][k], auth_out[DM][k] / n2, ""],
-             [None, "#,##0", "0.0%", "#,##0", "0.0%"])
+    rr = row(
+        ws,
+        r,
+        [
+            k,
+            auth_out["7,8-DHF"][k],
+            auth_out["7,8-DHF"][k] / n1,
+            auth_out[DM][k],
+            auth_out[DM][k] / n2,
+            "",
+        ],
+        [None, "#,##0", "0.0%", "#,##0", "0.0%"],
+    )
     if k == "no_effect":
         for j in (2, 3, 4, 5):
             ws.cell(r, j).fill = WARN
     r = rr
-r = row(ws, r, ["TOTAL authors", n1, 1.0, n2, 1.0, ""], [None, "#,##0", "0.0%", "#,##0", "0.0%"], bold_col=1)
+r = row(
+    ws,
+    r,
+    ["TOTAL authors", n1, 1.0, n2, 1.0, ""],
+    [None, "#,##0", "0.0%", "#,##0", "0.0%"],
+    bold_col=1,
+)
 r += 1
-r = banner(ws, r, "OUTCOMES BY COMPOUND — entry level (each outcome statement counted)", 6)
+r = banner(
+    ws, r, "OUTCOMES BY COMPOUND — entry level (each outcome statement counted)", 6
+)
 r = header(ws, r, ["Outcome", "7,8-DHF n", "7,8-DHF %", "4'-DMA n", "4'-DMA %", ""])
 e1, e2 = sum(entry_out["7,8-DHF"].values()), sum(entry_out[DM].values())
 for k in ("helped", "worsened", "no_effect", "mixed", "unknown"):
-    r = row(ws, r, [k, entry_out["7,8-DHF"][k], entry_out["7,8-DHF"][k] / e1,
-                    entry_out[DM][k], entry_out[DM][k] / e2, ""],
-            [None, "#,##0", "0.0%", "#,##0", "0.0%"])
-r = row(ws, r, ["TOTAL entries", e1, 1.0, e2, 1.0, ""], [None, "#,##0", "0.0%", "#,##0", "0.0%"], bold_col=1)
+    r = row(
+        ws,
+        r,
+        [
+            k,
+            entry_out["7,8-DHF"][k],
+            entry_out["7,8-DHF"][k] / e1,
+            entry_out[DM][k],
+            entry_out[DM][k] / e2,
+            "",
+        ],
+        [None, "#,##0", "0.0%", "#,##0", "0.0%"],
+    )
+r = row(
+    ws,
+    r,
+    ["TOTAL entries", e1, 1.0, e2, 1.0, ""],
+    [None, "#,##0", "0.0%", "#,##0", "0.0%"],
+    bold_col=1,
+)
 r += 1
 r = banner(ws, r, "WHAT IT REPORTEDLY AFFECTED (free-text targets, top 12 each)", 6)
 r = header(ws, r, ["7,8-DHF target", "n", "4'-DMA target", "n", "", ""])
@@ -482,49 +687,132 @@ ws.freeze_panes = "A5"
 ws = sheet("Statistics", [30, 10, 10, 11, 11, 11, 11, 11, 11, 62])
 ws["A1"] = "Statistical tests"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-r = banner(ws, 3, "COMPOUND COMPARISON — Fisher's exact, author level", 10)
-r = header(ws, r, ["Test", "7,8-DHF n", "of", "7,8-DHF %", "4'-DMA n", "of", "4'-DMA %",
-                   "odds ratio", "Fisher p", "verdict"], wrap=True)
-for key, a, na, pa, la, ha, c, nb, pb, lb, hb, odds, p in fisher_rows:
-    verdict = ("SIGNIFICANT at 0.05 — but does NOT survive Bonferroni across these 3 tests (needs p<0.017); CIs overlap"
-               if p < 0.05 else "not significant")
-    rr = row(ws, r, [key + " vs rest", a, na, pa / 100, c, nb, pb / 100, odds, p, verdict],
-             [None, "#,##0", "#,##0", "0.0%", "#,##0", "#,##0", "0.0%", "0.00", "0.0000"])
-    ws.cell(r, 10).alignment = Alignment(wrap_text=True, vertical="top")
-    ws.row_dimensions[r].height = 28
-    if p < 0.05:
-        for j in range(1, 10):
-            ws.cell(r, j).fill = WARN
-    r = rr
+r = banner(ws, 3, "NO-EFFECT COMPARISON — dependency-aware sensitivity analyses", 10)
+r = header(
+    ws,
+    r,
+    [
+        "Design",
+        "7,8-DHF n",
+        "of",
+        "7,8-DHF %",
+        "4'-DMA n",
+        "of",
+        "4'-DMA %",
+        "effect",
+        "exact p",
+        "interpretation",
+    ],
+    wrap=True,
+)
+r = row(
+    ws,
+    r,
+    [
+        "matched authors",
+        matched_parent_no_effect,
+        len(outcome_overlap),
+        matched_parent_no_effect / len(outcome_overlap),
+        matched_derivative_no_effect,
+        len(outcome_overlap),
+        matched_derivative_no_effect / len(outcome_overlap),
+        (
+            "McNemar discordants "
+            f"{matched_parent_only_no_effect}:{matched_derivative_only_no_effect}"
+        ),
+        matched_no_effect_p,
+        "No difference in the 20 authors who reported both compounds.",
+    ],
+    [None, "#,##0", "#,##0", "0.0%", "#,##0", "#,##0", "0.0%", None, "0.0000"],
+)
+r = row(
+    ws,
+    r,
+    [
+        "mutually exclusive authors",
+        parent_exclusive_no_effect,
+        len(parent_exclusive),
+        parent_exclusive_no_effect / len(parent_exclusive),
+        derivative_exclusive_no_effect,
+        len(derivative_exclusive),
+        derivative_exclusive_no_effect / len(derivative_exclusive),
+        exclusive_no_effect_odds,
+        exclusive_no_effect_p,
+        "Strong difference, but between different self-selected populations.",
+    ],
+    [None, "#,##0", "#,##0", "0.0%", "#,##0", "#,##0", "0.0%", "0.00", "0.0000"],
+)
 r += 1
-c = ws.cell(r, 1, "Author-level collapse rule: an author contributing several outcome statements for one compound "
-                  "keeps the most informative, ranked worsened > no_effect > mixed > helped. This is deliberately "
-                  "conservative and moves 'helped' far more than 'no_effect' (entry-level helped was 61.9% / 70.7%).")
+c = ws.cell(
+    r,
+    1,
+    "Authors contributing several statements for one compound keep the most informative outcome, ranked "
+    "worsened > no_effect > mixed > helped. A full-sample Fisher test is not shown because 20 authors "
+    "appear in both compound groups and violate its independence assumption.",
+)
 c.font = Font(size=9, italic=True, color=MUTED)
 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=10)
 c.alignment = Alignment(wrap_text=True, vertical="top")
 ws.row_dimensions[r].height = 30
 r += 2
 r = banner(ws, r, "SENTIMENT BY USE-CASE — ARTIFACT, DO NOT REPORT AS A FINDING", 10)
-r = header(ws, r, ["Use-case", "users", "pos", "neg", "pos %", "CI low", "CI high",
-                   "Fisher p", "BH q", "vs 71.1% baseline"], wrap=True)
+r = header(
+    ws,
+    r,
+    [
+        "Use-case",
+        "users",
+        "pos",
+        "neg",
+        "pos %",
+        "CI low",
+        "CI high",
+        "Fisher p",
+        "BH q",
+        "vs 71.1% baseline",
+    ],
+    wrap=True,
+)
 for cat, n, pos, neg, pct, lo, hi, p, qq in uc:
-    note = ("clears FDR — but see the warning below" if qq < 0.05 else "")
-    rr = row(ws, r, [cat, n, pos, neg, pct / 100, lo / 100, hi / 100, p, qq, note],
-             [None, "#,##0", "#,##0", "#,##0", "0.0%", "0.0%", "0.0%", "0.000", "0.000"])
+    note = "clears FDR — but see the warning below" if qq < 0.05 else ""
+    rr = row(
+        ws,
+        r,
+        [cat, n, pos, neg, pct / 100, lo / 100, hi / 100, p, qq, note],
+        [None, "#,##0", "#,##0", "#,##0", "0.0%", "0.0%", "0.0%", "0.000", "0.000"],
+    )
     if n < 30:
         ws.cell(r, 2).fill = BAD
     r = rr
-r = row(ws, r, ["BASELINE (all users)", A_N, A_vote["positive"], A_vote["negative"],
-                A_vote["positive"] / A_N, "", "", "", "", ""],
-        [None, "#,##0", "#,##0", "#,##0", "0.0%"], bold_col=1)
+r = row(
+    ws,
+    r,
+    [
+        "BASELINE (all users)",
+        A_N,
+        A_vote["positive"],
+        A_vote["negative"],
+        A_vote["positive"] / A_N,
+        "",
+        "",
+        "",
+        "",
+        "",
+    ],
+    [None, "#,##0", "#,##0", "#,##0", "0.0%"],
+    bold_col=1,
+)
 r += 1
-c = ws.cell(r, 1, "WHY THIS IS AN ARTIFACT: every category sits at or above the 71.1% baseline and none below — neutral "
-                  "slices would straddle it. Categories are keyword-derived from the same text the classifier scored, and "
-                  "positive reports name what improved (\"helped my depression\" fires both) while nulls say \"did nothing\" "
-                  "and name no domain. The categorisation therefore excludes nulls by construction and every domain floats "
-                  "upward. The uncontaminated comparison is category vs category — depression/mood 88.5% vs sleep 71.0% — "
-                  "with sleep as a partial control, since insomnia is simultaneously the top side effect.")
+c = ws.cell(
+    r,
+    1,
+    "WHY THIS IS AN ARTIFACT: every category sits at or above the 71.1% baseline and none below — neutral "
+    "slices would straddle it. Categories are keyword-derived from the same text the classifier scored, and "
+    'positive reports name what improved ("helped my depression" fires both) while nulls say "did nothing" '
+    "and name no domain. The categorisation therefore excludes nulls by construction and every domain floats "
+    "upward. The uncontaminated comparison is category vs category — depression/mood 88.5% vs sleep 71.0% — "
+    "with sleep as a partial control, since insomnia is simultaneously the top side effect.",
+)
 c.font = Font(size=9, color="A32F2F")
 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=10)
 c.alignment = Alignment(wrap_text=True, vertical="top")
@@ -535,11 +823,15 @@ ws.freeze_panes = "A4"
 ws = sheet("Side effects & doses", [34, 10, 4, 30, 10, 30, 10])
 ws["A1"] = "Side effects, treatment-linked dosages, and routes"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-ws["A2"] = (f"{n_se:,} of {len(A):,} pipeline-A records carry side effects ({100*n_se/len(A):.1f}%) — "
-            f"{sum(se.values()):,} mentions across {len(se):,} distinct terms.")
+ws["A2"] = (
+    f"{n_se:,} of {len(A):,} pipeline-A records carry side effects ({100 * n_se / len(A):.1f}%) — "
+    f"{sum(se.values()):,} mentions across {len(se):,} distinct terms."
+)
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = banner(ws, 4, "SIDE EFFECTS (pipeline A, uncanonicalised — counts understate)", 7)
-r = header(ws, r, ["Term", "n", "", "Dosage (pipeline B)", "n", "Route (pipeline B)", "n"])
+r = header(
+    ws, r, ["Term", "n", "", "Dosage (pipeline B)", "n", "Route (pipeline B)", "n"]
+)
 sl = se.most_common(30)
 dl = doses.most_common(30)
 rl = routes.most_common(30)
@@ -562,9 +854,10 @@ for txt in [
     "of stimulation persisting into the evening.",
     "HAIR LOSS is the unexpected signal — 7 + 3 'hair thinning' = 10, third most common. Not an obvious "
     "consequence of TrkB agonism. Whether it attributes to 7,8-DHF or a co-stacked substance is unresolved.",
-    "DOSE AND ROUTE SCOPE: pipeline B now includes only explicitly stated treatment-value pairs. The tables "
-    "do not infer a route from a product's usual form and omit values that the author did not link to a "
-    "specific treatment. Counts therefore favor precision over recall.",
+    f"DOSE AND ROUTE SCOPE: pipeline B includes only explicitly stated treatment-value pairs. The dose table "
+    f"shows comparable mass amounts and excludes {sum(c.total() for c in dose_summary.excluded.values())} "
+    "non-mass or invalid values. Routes are never inferred from a product's usual form. Counts favor "
+    "precision over recall.",
 ]:
     c = ws.cell(r, 1, txt)
     c.font = Font(size=9, color=MUTED)
@@ -580,35 +873,98 @@ ws["A1"] = "Method, provenance and caveats"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
 r = 3
 SECTIONS = [
-    ("DATA", [
-        ("Comments", "PatientPunk_data/r_nootropics_comments.jsonl - 1,827,221 lines, 2009-09-25 to 2026-08-18"),
-        ("Posts", "OneDrive/Documents/r_nootropics_posts.jsonl - 184,321 lines, to 2026-08-17"),
-        ("S3", "s3://patientpunk/raw_data/arctic_shift_ndjson/r_nootropics_{comments,posts}.jsonl"),
-        ("Truncation warning", "An earlier download stopped at 2019-05-02 while looking healthy. Check max timestamp, not file size."),
-    ]),
-    ("MATCHING", [
-        ("Regex", "tropoflavin | hydroxyflavone | 7[sep]8[sep]dhf | dhf  (word-boundaried, case-insensitive) - see NOTES.md"),
-        ("Prefilter", "bytes test for dhf / flavon / tropoflav before json.loads"),
-        ("Traps", "Body text only (base36 ids contain i78dhf6). The bare dhf token misses 7,8DHF. FTS5 undercounts. See NOTES.md section 2."),
-    ]),
-    ("PIPELINES", [
-        ("A - sentiment", "src/run_sentiment_pipeline.py --drug-file ... --subreddit Nootropics. Needs LLM_MAX_TOKENS=16000."),
-        ("A --drug", "YES - --drug NAME and --drug-file PATH"),
-        ("B - extraction", "variable_extraction/main.py run --schema schemas/nootropics_schema.json --input-dir source_B"),
-        ("B --drug", "NO - flag does not exist. B's unit is the patient. Targeting = pre-filtered corpus."),
-        ("B critical", "Do NOT point B at subreddit_posts.json - it reads title+body only and drops 81% of the signal. See NOTES.md section 4."),
-    ]),
-    ("CAVEATS", [
-        ("Population", "r/Nootropics is a HEALTHY-USER population. Answers dose, route, tolerability, subjective effect. Not patient outcomes."),
-        ("Positive over-call", "~10-20% of 'positive' labels are false positives; negatives are reliable."),
-        ("Compound blending", "33% of mentions co-occur with 4'-DMA. A cannot separate them. Use B for per-compound claims."),
-        ("Group attribution", "Many mentions sit inside long stacks. Run the monotherapy check before quoting rates."),
-        ("Multiplicity", "3 tests on compounds, 9 on use-cases with BH. Nothing pre-registered."),
-    ]),
-    ("REPRODUCE", [
-        ("Scripts", "build_corpus.py, build_corpus_B.py, analyze_purpose.py, analyze_B.py, analyze_followups.py, make_sheet.py"),
-        ("Full notes", "studies/tropoflavin_nootropics/NOTES.md"),
-    ]),
+    (
+        "DATA",
+        [
+            (
+                "Comments",
+                "PatientPunk_data/r_nootropics_comments.jsonl - 1,827,221 lines, 2009-09-25 to 2026-08-18",
+            ),
+            (
+                "Posts",
+                "OneDrive/Documents/r_nootropics_posts.jsonl - 184,321 lines, to 2026-08-17",
+            ),
+            (
+                "S3",
+                "s3://patientpunk/raw_data/arctic_shift_ndjson/r_nootropics_{comments,posts}.jsonl",
+            ),
+            (
+                "Truncation warning",
+                "An earlier download stopped at 2019-05-02 while looking healthy. Check max timestamp, not file size.",
+            ),
+        ],
+    ),
+    (
+        "MATCHING",
+        [
+            (
+                "Regex",
+                "tropoflavin | hydroxyflavone | 7[sep]8[sep]dhf | dhf  (word-boundaried, case-insensitive) - see NOTES.md",
+            ),
+            ("Prefilter", "bytes test for dhf / flavon / tropoflav before json.loads"),
+            (
+                "Traps",
+                "Body text only (base36 ids contain i78dhf6). The bare dhf token misses 7,8DHF. FTS5 undercounts. See NOTES.md section 2.",
+            ),
+        ],
+    ),
+    (
+        "PIPELINES",
+        [
+            (
+                "A - sentiment",
+                "src/run_sentiment_pipeline.py --drug-file ... --subreddit Nootropics. Needs LLM_MAX_TOKENS=16000.",
+            ),
+            ("A --drug", "YES - --drug NAME and --drug-file PATH"),
+            (
+                "B - extraction",
+                "variable_extraction/main.py run --schema schemas/nootropics_schema.json --input-dir source_B",
+            ),
+            (
+                "B --drug",
+                "NO - flag does not exist. B's unit is the patient. Targeting = pre-filtered corpus.",
+            ),
+            (
+                "B critical",
+                "Do NOT point B at subreddit_posts.json - it reads title+body only and drops 81% of the signal. See NOTES.md section 4.",
+            ),
+        ],
+    ),
+    (
+        "CAVEATS",
+        [
+            (
+                "Population",
+                "r/Nootropics is a HEALTHY-USER population. Answers dose, route, tolerability, subjective effect. Not patient outcomes.",
+            ),
+            (
+                "Positive over-call",
+                "~10-20% of 'positive' labels are false positives; negatives are reliable.",
+            ),
+            (
+                "Compound blending",
+                "33% of mentions co-occur with 4'-DMA. A cannot separate them. Use B for per-compound claims.",
+            ),
+            (
+                "Group attribution",
+                "Many mentions sit inside long stacks. Run the monotherapy check before quoting rates.",
+            ),
+            (
+                "Multiplicity",
+                "3 tests on compounds, 9 on use-cases with BH. Nothing pre-registered.",
+            ),
+        ],
+    ),
+    (
+        "REPRODUCE",
+        [
+            (
+                "Scripts",
+                "build_corpus.py, build_corpus_B.py, analyze_purpose.py, analyze_B.py, analyze_followups.py, make_sheet.py",
+            ),
+            ("Full notes", "studies/tropoflavin_nootropics/NOTES.md"),
+        ],
+    ),
 ]
 for title, rows_ in SECTIONS:
     r = banner(ws, r, title, 2)
@@ -625,25 +981,58 @@ for title, rows_ in SECTIONS:
 ws = sheet("OMF conditions", [26, 30, 10, 9, 11, 11, 11, 46])
 ws["A1"] = "Conditions of interest to OMF / ASCEND-ME"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
-ws["A2"] = ("ASCEND-ME (Xiao group) proposes a decentralised dose-ranging pilot of 7,8-DHF in ME/CFS, asking "
-            "whether it improves PEM-linked dysfunction. Rates below are r/Nootropics self-reports - a "
-            "healthy-user population, NOT ME/CFS patients.")
+ws["A2"] = (
+    "ASCEND-ME (Xiao group) proposes a decentralised dose-ranging pilot of 7,8-DHF in ME/CFS, asking "
+    "whether it improves PEM-linked dysfunction. Rates below are r/Nootropics self-reports - a "
+    "healthy-user population, NOT ME/CFS patients."
+)
 ws["A2"].font = SMALL
 ws["A2"].alignment = WRAP
 ws.row_dimensions[2].height = 30
-r = banner(ws, 4, "SENTIMENT BY CONDITION TREATED  (7,8-DHF, one vote per user per condition)", 8)
-r = header(ws, r, ["Condition", "ASCEND-ME relevance", "users", "pos", "pos %", "CI low", "CI high", "note"], wrap=True)
+r = banner(
+    ws,
+    4,
+    "SENTIMENT BY CONDITION TREATED  (7,8-DHF, one vote per user per condition)",
+    8,
+)
+r = header(
+    ws,
+    r,
+    [
+        "Condition",
+        "ASCEND-ME relevance",
+        "users",
+        "pos",
+        "pos %",
+        "CI low",
+        "CI high",
+        "note",
+    ],
+    wrap=True,
+)
 for cond in sorted(SE_COND, key=lambda c: -COND_BASE[c]):
     n_, k_ = COND_BASE[cond], COND_POS[cond]
     if not n_:
         continue
     lo, hi = wilson(k_, n_)
-    note = ("PRIMARY endpoint of the proposed trial - and the one domain where 7,8-DHF is NOT elevated"
-            if cond == "energy / fatigue"
-            else "strongest signal in the corpus" if cond in ("depression / mood", "focus / cognition") else "")
-    rr = row(ws, r, [cond, OMF.get(cond, ""), n_, k_, k_ / n_, lo, hi, note],
-             [None, None, "#,##0", "#,##0", "0.0%", "0.0%", "0.0%"])
-    fill = BAD if cond == "energy / fatigue" else (GOOD if cond in ("depression / mood", "focus / cognition") else None)
+    note = (
+        "PRIMARY endpoint of the proposed trial - and the one domain where 7,8-DHF is NOT elevated"
+        if cond == "energy / fatigue"
+        else "strongest signal in the corpus"
+        if cond in ("depression / mood", "focus / cognition")
+        else ""
+    )
+    rr = row(
+        ws,
+        r,
+        [cond, OMF.get(cond, ""), n_, k_, k_ / n_, lo, hi, note],
+        [None, None, "#,##0", "#,##0", "0.0%", "0.0%", "0.0%"],
+    )
+    fill = (
+        BAD
+        if cond == "energy / fatigue"
+        else (GOOD if cond in ("depression / mood", "focus / cognition") else None)
+    )
     if fill:
         for j in range(1, 9):
             ws.cell(r, j).fill = fill
@@ -675,24 +1064,43 @@ ws["A1"].font = Font(bold=True, size=14, color=INK)
 r = banner(ws, 3, "BURDEN", 7)
 for k, v, note in [
     ("Records", f"{SE_N:,}", ""),
-    ("Reporting >=1 side effect", f"{len(SE_WITH):,}  ({100*len(SE_WITH)/SE_N:.1f}%)", ""),
+    (
+        "Reporting >=1 side effect",
+        f"{len(SE_WITH):,}  ({100 * len(SE_WITH) / SE_N:.1f}%)",
+        "",
+    ),
     ("Canonicalised mentions", f"{SE_TOT}", "from 216 raw terms across 135 spellings"),
-    ("Mean per record (all)", f"{SE_TOT/SE_N:.2f}", ""),
-    ("Mean among reporters", f"{SE_TOT/len(SE_WITH):.2f}", "side effects come singly, not in long lists"),
+    ("Mean per record (all)", f"{SE_TOT / SE_N:.2f}", ""),
+    (
+        "Mean among reporters",
+        f"{SE_TOT / len(SE_WITH):.2f}",
+        "side effects come singly, not in long lists",
+    ),
 ]:
     r = kv(ws, r, k, v, note)
 r += 1
 r = banner(ws, r, "SENTIMENT SPLITS SHARPLY ON WHETHER A SIDE EFFECT WAS REPORTED", 7)
 r = header(ws, r, ["Group", "records", "positive", "negative", "", "", ""])
-for lab, sub, fill in (("reported >=1 side effect", SE_WITH, BAD), ("reported none", SE_NONE, GOOD)):
+for lab, sub, fill in (
+    ("reported >=1 side effect", SE_WITH, BAD),
+    ("reported none", SE_NONE, GOOD),
+):
     cnt = collections.Counter(x["sent"] for x in sub)
     m = len(sub)
-    rr = row(ws, r, [lab, m, cnt["positive"] / m, cnt["negative"] / m, "", "", ""],
-             [None, "#,##0", "0.0%", "0.0%"])
+    rr = row(
+        ws,
+        r,
+        [lab, m, cnt["positive"] / m, cnt["negative"] / m, "", "", ""],
+        [None, "#,##0", "0.0%", "0.0%"],
+    )
     ws.cell(r, 1).fill = fill
     r = rr
-c = ws.cell(r, 1, "The 71.1% headline is a blend of these two populations. Side effects are uncommon (14.7% of "
-                  "records) but where present they dominate the verdict.")
+c = ws.cell(
+    r,
+    1,
+    "The 71.1% headline is a blend of these two populations. Side effects are uncommon (14.7% of "
+    "records) but where present they dominate the verdict.",
+)
 c.font = SMALL
 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
 c.alignment = WRAP
@@ -714,17 +1122,26 @@ for (a_, b_), k_ in SE_PAIR.most_common(10):
         break
     lift = (k_ / SE_N) / ((SE_FREQ[a_] / SE_N) * (SE_FREQ[b_] / SE_N))
     r = row(ws, r, [a_, k_, lift, b_, "", "", ""], [None, "#,##0", '0.0"x"'])
-c = ws.cell(r, 1, "TWO CLUSTERS, OPPOSITE IN DIRECTION. An overstimulation hub (overstimulation/anxiety with "
-                  "insomnia 6.4x, GI 24.5x, dizziness 18.4x) and a blunting pair (cognitive dulling with mood "
-                  "flattening, 40.5x). Some users are over-activated, others flattened - what a dose-response "
-                  "that overshoots in some people would look like.")
+c = ws.cell(
+    r,
+    1,
+    "TWO CLUSTERS, OPPOSITE IN DIRECTION. An overstimulation hub (overstimulation/anxiety with "
+    "insomnia 6.4x, GI 24.5x, dizziness 18.4x) and a blunting pair (cognitive dulling with mood "
+    "flattening, 40.5x). Some users are over-activated, others flattened - what a dose-response "
+    "that overshoots in some people would look like.",
+)
 c.font = Font(size=9, color=INK)
 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
 c.alignment = WRAP
 ws.row_dimensions[r].height = 34
 r += 2
 
-r = banner(ws, r, "SIDE EFFECT BY STATED REASON FOR TAKING IT (% of that condition's records)", 7)
+r = banner(
+    ws,
+    r,
+    "SIDE EFFECT BY STATED REASON FOR TAKING IT (% of that condition's records)",
+    7,
+)
 conds_sorted = sorted(SE_COND, key=lambda c: -COND_BASE[c])[:6]
 r = header(ws, r, ["Side effect"] + [c[:14] for c in conds_sorted], wrap=True)
 for s_, _ in SE_FREQ.most_common(8):
@@ -736,18 +1153,27 @@ for s_, _ in SE_FREQ.most_common(8):
     r = row(ws, r, vals, [None] + ["0%"] * len(conds_sorted))
 r += 1
 for txt, col in [
-    ("THE DIAGONAL IS AN ARTIFACT - do not cite it. The indication regexes and the side-effect canonicaliser "
-     "share vocabulary, so naming a side effect files that author under the matching indication. Every "
-     "standout cell above sits on the diagonal.", "A32F2F"),
-    ("REVIEW DONE - see audit_diag.py and audit_fatigue.py. Re-tagging the indication from non-outcome "
-     "sentences only: anxiety 32% -> no records survive, energy/fatigue 11% -> 3% (1 of 32), depression, "
-     "focus and memory -> 0%. Only sleep -> insomnia survives, at 18% (8 of 45). Hand-reading all 6 "
-     "energy/fatigue records found 2-3 genuine, one explicit (CFS, drug exacerbates fatigue and somnolence); "
-     "the rest were tagged by the side-effect word itself. No paradoxical-reaction claim is supportable.", INK),
-    ("HAIR LOSS IS THE EXCEPTION, and the reason to take it seriously: 4% in the neurogenesis/BDNF group and 0% "
-     "everywhere else - not a mirror of any indication, so not explainable by vocabulary overlap. It is also "
-     "absent from the ASCEND-ME safety list (headaches, BP, insomnia/agitation, allergy, visual auras, "
-     "neuropsychiatric, discontinuation, product quality). Candidate addition to prospective monitoring.", INK),
+    (
+        "THE DIAGONAL IS AN ARTIFACT - do not cite it. The indication regexes and the side-effect canonicaliser "
+        "share vocabulary, so naming a side effect files that author under the matching indication. Every "
+        "standout cell above sits on the diagonal.",
+        "A32F2F",
+    ),
+    (
+        "REVIEW DONE - see audit_diag.py and audit_fatigue.py. Re-tagging the indication from non-outcome "
+        "sentences only: anxiety 32% -> no records survive, energy/fatigue 11% -> 3% (1 of 32), depression, "
+        "focus and memory -> 0%. Only sleep -> insomnia survives, at 18% (8 of 45). Hand-reading all 6 "
+        "energy/fatigue records found 2-3 genuine, one explicit (CFS, drug exacerbates fatigue and somnolence); "
+        "the rest were tagged by the side-effect word itself. No paradoxical-reaction claim is supportable.",
+        INK,
+    ),
+    (
+        "HAIR LOSS IS THE EXCEPTION, and the reason to take it seriously: 4% in the neurogenesis/BDNF group and 0% "
+        "everywhere else - not a mirror of any indication, so not explainable by vocabulary overlap. It is also "
+        "absent from the ASCEND-ME safety list (headaches, BP, insomnia/agitation, allergy, visual auras, "
+        "neuropsychiatric, discontinuation, product quality). Candidate addition to prospective monitoring.",
+        INK,
+    ),
 ]:
     c = ws.cell(r, 1, txt)
     c.font = Font(size=9, color=col)
@@ -765,10 +1191,9 @@ print(f"tabs: {wb.sheetnames}")
 # Also emit a flat CSV of every tab. The Drive connector here has no Sheets API
 # and the binary upload path is unreliable at this size, so this is what gets
 # uploaded; the .xlsx above is the formatted version to drag into Drive by hand.
-import csv as _csv
 CSV_OUT = OUT.with_suffix(".csv")
 with CSV_OUT.open("w", newline="", encoding="utf-8") as fh:
-    w = _csv.writer(fh)
+    w = csv.writer(fh)
     for name in wb.sheetnames:
         ws = wb[name]
         w.writerow([])
@@ -780,8 +1205,10 @@ with CSV_OUT.open("w", newline="", encoding="utf-8") as fh:
                 v = c.value
                 if v is None:
                     vals.append("")
-                elif isinstance(v, float) and c.number_format and "%" in c.number_format:
-                    vals.append(f"{v*100:.1f}%")
+                elif (
+                    isinstance(v, float) and c.number_format and "%" in c.number_format
+                ):
+                    vals.append(f"{v * 100:.1f}%")
                 elif isinstance(v, float):
                     vals.append(f"{v:.4g}")
                 else:

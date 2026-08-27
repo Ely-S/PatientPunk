@@ -85,9 +85,10 @@ New-Item -ItemType Directory -Force "$runDir/corpus/users", "$runDir/cache" | Ou
 Copy-Item "studies/tropoflavin_nootropics/source_B/users/*.json" "$runDir/corpus/users/"
 $env:LLM_CACHE = "1"
 $env:LLM_CACHE_DIR = "$runDir/cache"
+$env:LLM_MAX_TOKENS = "16384"
 $env:PP_GROUP_GUARD = "1"
 uv run python variable_extraction/main.py run `
-  --schema variable_extraction/schemas/nootropics_schema.json `
+  --schema schemas/nootropics_schema.json `
   --input-dir "$runDir/corpus" `
   --temp-dir "$runDir/temp" `
   --workers 12
@@ -96,7 +97,20 @@ uv run python variable_extraction/main.py run `
 There is **no `--drug` flag in pipeline B** — its unit is the patient, not the drug,
 which is why targeting means the pre-filtered corpus from step 1.
 
-Expect 752 rows in `$runDir/corpus/records.csv`. The derived columns
+Require the phase summary to report 752 records and zero failures. The default
+8,192-token ceiling failed on two unusually dense histories in the 2026-08-27
+run; 16,384 completed both. Do not analyze a partial CSV.
+
+The extraction CSV contains linked raw values. Run normalization to add the
+decomposed analysis columns:
+
+```powershell
+uv run python variable_extraction/main.py normalize `
+  --records "$runDir/corpus/records.csv" `
+  --out "$runDir/corpus/records_normalized.csv"
+```
+
+Expect 752 rows in `$runDir/corpus/records_normalized.csv`. The derived columns
 `dosage_treatment`, `dosage_value`, `administration_route_treatment`, and
 `administration_route_value` must all be present. Use a fresh cache whenever a
 prompt rule or reasoning mode changes.
@@ -108,7 +122,7 @@ from the repository root. To analyze a versioned pipeline B run, set
 `TROPOFLAVIN_RECORDS` first.
 
 ```powershell
-$env:TROPOFLAVIN_RECORDS = "$runDir/corpus/records.csv"
+$env:TROPOFLAVIN_RECORDS = "$runDir/corpus/records_normalized.csv"
 python studies/tropoflavin_nootropics/analyze_purpose.py      # what people take it for
 python studies/tropoflavin_nootropics/analyze_B.py            # outcomes, linked doses, and routes
 python studies/tropoflavin_nootropics/analyze_followups.py    # no_effect gap, use-case splits

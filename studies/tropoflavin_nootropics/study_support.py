@@ -153,6 +153,105 @@ def summarize_target_values(
     return TargetValueSummary(counts=counts, authors=authors)
 
 
+_NUMBER = r"\d+(?:\.\d+)?"
+_MASS_UNIT = r"mg|mcg|ug|µg|g|gram|grams"
+_REPEATED_UNIT_RANGE = re.compile(
+    rf"(?i)(~?{_NUMBER})\s*({_MASS_UNIT})\s*(?:-|–|to)\s*({_NUMBER})\s*({_MASS_UNIT})\b"
+)
+_SHARED_UNIT_RANGE = re.compile(
+    rf"(?i)(~?{_NUMBER})\s*(?:-|–|to)\s*({_NUMBER})\s*({_MASS_UNIT})\b"
+)
+_SINGLE_MASS = re.compile(rf"(?i)(~?{_NUMBER})\s*({_MASS_UNIT})\b")
+_MASS_TO_MG = {
+    "mg": 1.0,
+    "mcg": 0.001,
+    "ug": 0.001,
+    "µg": 0.001,
+    "g": 1000.0,
+    "gram": 1000.0,
+    "grams": 1000.0,
+}
+
+
+@dataclass(frozen=True)
+class MassDosage:
+    low_mg: float
+    high_mg: float
+
+    @property
+    def midpoint_mg(self) -> float:
+        return (self.low_mg + self.high_mg) / 2
+
+    @property
+    def label(self) -> str:
+        low = f"{self.low_mg:g}"
+        high = f"{self.high_mg:g}"
+        return f"{low} mg" if self.low_mg == self.high_mg else f"{low}-{high} mg"
+
+
+def parse_mass_dosage(value: str) -> MassDosage | None:
+    """Parse the first explicit mass amount or range and normalize it to mg."""
+    repeated = _REPEATED_UNIT_RANGE.search(value)
+    if repeated:
+        low = float(repeated.group(1).lstrip("~")) * _MASS_TO_MG[repeated.group(2).lower()]
+        high = float(repeated.group(3)) * _MASS_TO_MG[repeated.group(4).lower()]
+        return MassDosage(low_mg=min(low, high), high_mg=max(low, high))
+
+    shared = _SHARED_UNIT_RANGE.search(value)
+    if shared:
+        low = float(shared.group(1).lstrip("~"))
+        high = float(shared.group(2))
+        factor = _MASS_TO_MG[shared.group(3).lower()]
+        return MassDosage(
+            low_mg=min(low, high) * factor,
+            high_mg=max(low, high) * factor,
+        )
+
+    single = _SINGLE_MASS.search(value)
+    if single:
+        amount = float(single.group(1).lstrip("~")) * _MASS_TO_MG[single.group(2).lower()]
+        return MassDosage(low_mg=amount, high_mg=amount)
+    return None
+
+
+@dataclass(frozen=True)
+class TargetDosageSummary:
+    counts: dict[str, Counter[str]]
+    authors: dict[str, set[str]]
+    excluded: dict[str, Counter[str]]
+    midpoints_mg: dict[str, list[float]]
+    author_midpoints_mg: dict[str, dict[str, list[float]]]
+
+
+def summarize_target_dosages(records: list[PipelineBRecord]) -> TargetDosageSummary:
+    """Summarize comparable mass doses and retain excluded values for audit."""
+    counts = {compound: Counter() for compound in COMPOUNDS}
+    authors = {compound: set() for compound in COMPOUNDS}
+    excluded = {compound: Counter() for compound in COMPOUNDS}
+    midpoints = {compound: [] for compound in COMPOUNDS}
+    author_midpoints = {compound: {} for compound in COMPOUNDS}
+    for record in records:
+        for pair in linked_values(record, "dosage"):
+            compound = compound_for_treatment(pair.treatment)
+            if compound is None:
+                continue
+            parsed = parse_mass_dosage(pair.value)
+            if parsed is None:
+                excluded[compound][pair.value.lower()] += 1
+                continue
+            counts[compound][parsed.label] += 1
+            authors[compound].add(record.author_hash)
+            midpoints[compound].append(parsed.midpoint_mg)
+            author_midpoints[compound].setdefault(record.author_hash, []).append(parsed.midpoint_mg)
+    return TargetDosageSummary(
+        counts=counts,
+        authors=authors,
+        excluded=excluded,
+        midpoints_mg=midpoints,
+        author_midpoints_mg=author_midpoints,
+    )
+
+
 def readonly_sqlite_uri(path: Path) -> str:
     """Build an absolute, read-only SQLite URI."""
     return f"{path.resolve().as_uri()}?mode=ro"

@@ -201,15 +201,17 @@ proximity. It also does not infer a route from a treatment's usual form.
 **B splits `4dma` from `7,8 dhf` into separate outcome entries. A structurally cannot** — its
 alias regex matches `7,8-DHF` inside `4'-DMA-7,8-DHF` with word boundaries intact on both sides.
 
-**Result:** 752 records, 1,828 field fills (2.43/record), 17 min. Fill rates:
+**Current linked-field run:** 752 records, 2,090 field fills (2.78/record),
+44 minutes including a two-record high-budget repair. Group attribution was
+enabled, reasoning was off, and a fresh cache was used. Fill rates:
 
 | field | filled | field | filled |
 |---|---|---|---|
-| medications | 55.3% | cognitive_neurological | 16.8% |
-| treatment_outcome | 38.4% | other_symptoms | 10.1% |
-| dosage | 28.9% | sleep | 8.5% |
-| mental_health | 20.7% | fatigue_pem | 6.2% |
-| conditions | 16.9% | alternative_treatments | 5.9% |
+| medications | 58.6% | cognitive_neurological | 18.4% |
+| treatment_outcome | 41.2% | administration_route | 15.8% |
+| dosage | 27.0% | other_symptoms | 12.6% |
+| mental_health | 23.5% | sleep | 10.5% |
+| conditions | 17.2% | alternative_treatments | 7.8% |
 
 `python studies/tropoflavin_nootropics/analyze_B.py`
 
@@ -217,25 +219,25 @@ alias regex matches `7,8-DHF` inside `4'-DMA-7,8-DHF` with word boundaries intac
 
 | outcome | 7,8-DHF | 4'-DMA-7,8-DHF |
 |---|---|---|
-| helped | **61.9%** | **70.7%** |
-| worsened | 23.0% | 22.2% |
-| no_effect | **11.5%** | **4.0%** |
-| mixed / unknown | 3.6% | 3.0% |
-| *entries / authors* | *139 / 81* | *99 / 60* |
+| helped | **60.2%** | **64.2%** |
+| worsened | 20.5% | 24.2% |
+| no_effect | **14.3%** | **5.0%** |
+| mixed / unknown | 5.0% | 6.7% |
+| *entries / authors* | *161 / 94* | *120 / 75* |
 
 Reported targets for both: mood, focus, anxiety, depression, sleep, energy, memory.
 
-**This confirms the community's qualitative claim quantitatively.** Users say the derivative is
-stronger; the data agrees — 4'-DMA is reported as helping more often and, more tellingly, is
-**inert a third as often** (4.0% vs 11.5% no_effect). The "both inert no matter the dose" reports
-concentrate on the parent compound.
+The derivative is reported as helping somewhat more often and as inert less
+often. That comparison is descriptive, not causal: authors self-select compounds,
+20 authors appear in both groups, and the matched subset does not reproduce the
+no-effect difference.
 
 ### A vs B — the contamination is measurable
 
-Pipeline A returned **71.1% positive** over both compounds blended. B's split puts plain 7,8-DHF
-at 61.9% and 4'-DMA at 70.7%. A's figure sits on top of the *derivative's* rate, not the parent's
-— exactly what over-capture predicts, since A's alias for `7,8-dhf` matches inside
-`4'-DMA-7,8-DHF`. **Quote B's numbers for per-compound claims; A's are a blend.**
+Pipeline A returned **71.1% positive** over both compounds blended. The current
+group-guarded B split puts plain 7,8-DHF at 60.2% helped and 4'-DMA at 64.2%.
+The regimes are not directly comparable, but B remains the only valid source for
+per-compound claims because A's alias matches inside `4'-DMA-7,8-DHF`.
 
 ---
 
@@ -243,22 +245,24 @@ at 61.9% and 4'-DMA at 70.7%. A's figure sits on top of the *derivative's* rate,
 
 `python studies/tropoflavin_nootropics/analyze_followups.py`
 
-### no_effect gap — significant but fragile
+### no_effect gap - selection-sensitive
 
 Author-level (one vote per author per compound; multi-entry authors collapse to their most
 informative outcome, ranked worsened > no_effect > mixed > helped).
 
-| | 7,8-DHF | 4'-DMA | OR | Fisher p |
-|---|---|---|---|---|
-| **no_effect** | 15/81 = 18.5% | 4/60 = 6.7% | 3.18 | **0.0481** |
-| helped | 39/81 = 48.1% | 34/60 = 56.7% | 0.71 | 0.394 |
-| worsened | 22/81 = 27.2% | 19/60 = 31.7% | 0.80 | 0.579 |
+| | 7,8-DHF | 4'-DMA |
+|---|---|---|
+| **no_effect** | 21/94 = 22.3% | 5/75 = 6.7% |
+| helped | 46/94 = 48.9% | 40/75 = 53.3% |
+| worsened | 20/94 = 21.3% | 23/75 = 30.7% |
 
-Only no_effect separates the compounds. It does **not** survive correction across the three tests
-(Bonferroni needs p<0.017), the CIs overlap, and the collapse rule moves `helped` far more than
-`no_effect` (61.9% → 48.1% vs entry-level). Defensible claim: *the parent compound is inert about
-three times as often*. Not defensible: *the derivative works better* — helped and worsened are
-indistinguishable.
+A full-sample Fisher test is invalid because 20 authors appear in both groups.
+Among those matched authors, no-effect totals are 5/20 versus 4/20; the discordant
+reports are 4 parent-only versus 3 derivative-only (exact McNemar p=1.0). Among
+mutually exclusive authors, the
+rates are 16/74 versus 1/55 (OR 14.9, Fisher p=0.001). The gap is therefore
+strong between self-selected populations but absent within the small matched
+subset. It should not be interpreted as evidence that the derivative works better.
 
 ### sentiment by use-case — artifact, do not report as a finding
 
@@ -315,26 +319,28 @@ cognition?* Join on `post_id` → `treatment_reports.post_id`, tag each record w
 categories from `analyze_purpose.py`, then compare positive rates. Expect small cells for the
 tail categories — pool or drop anything under ~30 users rather than reporting it.
 
-**Confirm the no_effect gap on more data.** ✅ tested (§5) — p=0.048, fragile. It is the only
-compound difference that separates, and it needs either a larger sample or a pre-registered
-single test to stand up.
-
 **Re-run sentiment-by-use-case as category vs category.** The baseline comparison in §5 is
 confounded; see the note there for why and which pairing to use.
 
 **Canonicalise the side-effect vocabulary** before quoting counts, and test whether hair loss
 attributes to 7,8-DHF or to co-stacked substances.
 
-**Re-run treatment-linked dose and route extraction.** #142 and #141 resolve the
-schema problem that made the old 660 dosage entries unusable for per-drug claims.
-The next pipeline B run should report only explicit 7,8-DHF and 4'-DMA pairs,
-separately count authors and entries, and preserve the older extraction as a
-historical baseline. Sparse output is expected because the rules prefer omission
-over fabricated attribution.
+**Treatment-linked dose and route extraction is now complete.** For plain
+7,8-DHF, 61 quantitative mass-dose entries from 46 authors have an author-level
+median of 27.5 mg (IQR 25-50); the most common amounts are 25 mg (20 entries) and
+50 mg (12). For 4'-DMA, 27 entries from 23 authors have a median of 10 mg (IQR
+8-10); 10 mg (10 entries) and 8 mg (6) dominate. Seven non-mass or invalid values
+are retained in the audit count but excluded from dose summaries.
+
+Explicit administration routes are mostly sublingual: 32/46 route entries for
+7,8-DHF and 16/21 for 4'-DMA. Plain 7,8-DHF also has intranasal (7), oral (5), and
+topical (2) reports; the derivative has five oral reports. These are descriptive
+self-reports, not dosing recommendations.
 
 **Null reports are real and countable now.** *"I tried both tropoflavin and eutropoflavin. Both
-sublingually. Both inert no matter the dose."* B puts numbers on this: 11.5% no_effect for the
-parent compound. The patient corpus was too small to show nulls; this one isn't.
+sublingually. Both inert no matter the dose."* B puts numbers on this: 14.3% of the parent
+compound's entry-level outcomes and 22.3% of its author-level outcomes are `no_effect`. The
+patient corpus was too small to show nulls; this one isn't.
 
 **Cross-reference to the patient corpora.** The compound entered ME/CFS discourse in 2021 with
 zero prior mentions, while r/Nootropics peaked in 2014. The dose and route conventions patients

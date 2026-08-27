@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import statistics
 import sys
 
 from study_support import (
@@ -10,10 +11,19 @@ from study_support import (
     StudyPaths,
     compound_for_treatment,
     load_pipeline_b_records,
+    summarize_target_dosages,
     summarize_target_values,
 )
 
 META = {"author_hash", "source", "text_count", "schema_id", "extraction_method", "extracted_at"}
+
+
+def _median_iqr(values: list[float]) -> tuple[float, float, float]:
+    median = statistics.median(values)
+    if len(values) == 1:
+        return median, median, median
+    quartiles = statistics.quantiles(values, n=4, method="inclusive")
+    return median, quartiles[0], quartiles[2]
 
 
 def main() -> None:
@@ -66,20 +76,47 @@ def main() -> None:
             values = ", ".join(value for value, _ in details[compound].most_common(6))
             print(f"     what it helped/affected: {values}")
 
-    for field, title in (
-        ("dosage", "TREATMENT-LINKED DOSAGES"),
-        ("administration_route", "TREATMENT-LINKED ADMINISTRATION ROUTES"),
-    ):
-        summary = summarize_target_values(records, field)
-        print(f"\n{title}")
-        for compound in COMPOUNDS:
-            total = sum(summary.counts[compound].values())
+    dosage_summary = summarize_target_dosages(records)
+    print("\nTREATMENT-LINKED MASS DOSAGES")
+    for compound in COMPOUNDS:
+        total = sum(dosage_summary.counts[compound].values())
+        print(
+            f"\n  {compound}: {total} quantitative entries from "
+            f"{len(dosage_summary.authors[compound])} authors"
+        )
+        entry_values = dosage_summary.midpoints_mg[compound]
+        author_values = [
+            statistics.median(values)
+            for values in dosage_summary.author_midpoints_mg[compound].values()
+        ]
+        if entry_values:
+            entry_median, entry_q1, entry_q3 = _median_iqr(entry_values)
+            author_median, author_q1, author_q3 = _median_iqr(author_values)
             print(
-                f"\n  {compound}: {total} explicit entries from "
-                f"{len(summary.authors[compound])} authors"
+                f"     entry midpoint median {entry_median:g} mg "
+                f"(IQR {entry_q1:g}-{entry_q3:g})"
             )
-            for value, count in summary.counts[compound].most_common(12):
-                print(f"     {value:24s} {count:4,}")
+            print(
+                f"     author median dose {author_median:g} mg "
+                f"(IQR {author_q1:g}-{author_q3:g})"
+            )
+        for value, count in dosage_summary.counts[compound].most_common(12):
+            print(f"     {value:24s} {count:4,}")
+        excluded = dosage_summary.excluded[compound]
+        if excluded:
+            values = ", ".join(f"{value} ({count})" for value, count in excluded.items())
+            print(f"     excluded non-mass/invalid: {values}")
+
+    route_summary = summarize_target_values(records, "administration_route")
+    print("\nTREATMENT-LINKED ADMINISTRATION ROUTES")
+    for compound in COMPOUNDS:
+        total = sum(route_summary.counts[compound].values())
+        print(
+            f"\n  {compound}: {total} explicit entries from "
+            f"{len(route_summary.authors[compound])} authors"
+        )
+        for value, count in route_summary.counts[compound].most_common(12):
+            print(f"     {value:24s} {count:4,}")
 
 
 if __name__ == "__main__":
