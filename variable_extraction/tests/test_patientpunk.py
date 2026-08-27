@@ -1981,6 +1981,42 @@ class TestSubredditProvenance:
                       evaluate._META, codebook.META_COLUMNS):
             assert set(export_csv.META_COLUMNS) <= known
 
+    def test_a_row_from_an_old_csv_falls_back_instead_of_raising(self):
+        """A records.csv written before #109 has no `subreddits` column, so a missing
+        key has to fall back rather than raise KeyError. The round-trip test below
+        cannot cover that: csv.DictWriter always writes every column, so it produces
+        empty values, never missing ones."""
+        from patientpunk.db import _primary_subreddit
+        assert _primary_subreddit({}, "fallback") == "fallback"
+
+    # Both loaders write users.source_subreddit through the same helper, so they
+    # run the same corpus. load_variables needs a run_id; load_extractions does not.
+    LOADERS = {
+        "load_extractions": lambda db, conn, path: db.load_extractions(
+            conn, path, subreddit="fallback"),
+        "load_variables": lambda db, conn, path: db.load_variables(
+            conn, path, db.register_run(conn, "test", {}), subreddit="fallback"),
+    }
+
+    @pytest.mark.parametrize("loader", list(LOADERS), ids=list(LOADERS))
+    def test_it_reaches_the_database(self, tmp_path, loader):
+        """Make sure that the database is populated correctly."""
+        from patientpunk import db
+        path = tmp_path / "records.csv"
+        path.write_text(
+            "author_hash,subreddits\n"
+            "busiest,cfs:24 covidlonghaulers:11\n"
+            "no_column,\n"
+            "already_there,pmdd:3\n", encoding="utf-8")
+
+        conn = db.init_db(tmp_path / "t.db")
+        conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at)"
+                     " VALUES ('already_there', 'stale', 0)")
+        self.LOADERS[loader](db, conn, path)
+
+        assert dict(conn.execute("SELECT user_id, source_subreddit FROM users")) == {
+            "busiest": "cfs", "no_column": "fallback", "already_there": "stale"}
+
 
 class TestAggregateByAuthor:
     """Per-patient corpus aggregation (patientpunk/aggregate.py)."""
