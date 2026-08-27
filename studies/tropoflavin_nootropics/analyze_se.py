@@ -1,6 +1,8 @@
 """Side-effect structure for 7,8-DHF: canonicalised terms, burden, co-occurrence,
 and whether the side-effect profile tracks WHY people say they're taking it."""
 import sqlite3, json, re, collections, math, sys, itertools
+from study_support import StudyPaths, readonly_sqlite_uri
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 CANON = [
@@ -37,7 +39,7 @@ COND = {
 }
 CRX = {k: re.compile(v, re.I) for k, v in COND.items()}
 
-c = sqlite3.connect("file:noots.db?mode=ro", uri=True); c.row_factory = sqlite3.Row
+c = sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database), uri=True); c.row_factory = sqlite3.Row
 rows = c.execute("""SELECT r.sentiment, r.side_effects, r.user_id, p.title, p.body_text
                     FROM treatment_reports r JOIN posts p ON p.post_id=r.post_id
                     WHERE r.run_id=(SELECT MAX(run_id) FROM treatment_reports)""").fetchall()

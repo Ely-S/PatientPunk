@@ -3,9 +3,10 @@
 Exact steps to rebuild this study from raw dumps. `NOTES.md` in this directory holds
 the findings and the reasoning behind each choice; this file is just the procedure.
 
-Everything here assumes the branch this file arrived on — it sits on top of the
-pipeline stack (#121 → #119 → #122 → #118 → #120). On `main` alone the classify
-stage dies on its first batch.
+Everything here assumes the branch this file arrived on. The complete stack is
+#121 -> #119 -> #122 -> #118 -> #120 -> #142 -> #141 -> #140. The final three
+changes add treatment-linked doses, treatment-linked administration routes, and
+this study. On `main` alone the classify stage dies on its first batch.
 
 ## 0. Prerequisites
 
@@ -74,23 +75,42 @@ on large corpora.
 
 ## 3. Pipeline B — variable extraction
 
-```bash
-uv run python variable_extraction/main.py \
-  --corpus studies/tropoflavin_nootropics/source_B \
-  --schema variable_extraction/schemas/nootropics_schema.json \
-  --out studies/tropoflavin_nootropics/source_B
+Create a versioned run directory so the historical extraction is not overwritten.
+The group guard is enabled because this study reports per-compound outcomes and
+should not assign a statement about a group to every treatment in that group.
+
+```powershell
+$runDir = "../PatientPunk_data/studies/tropoflavin_nootropics/runs/2026-08-27-linked-dose-route"
+New-Item -ItemType Directory -Force "$runDir/corpus/users", "$runDir/cache" | Out-Null
+Copy-Item "studies/tropoflavin_nootropics/source_B/users/*.json" "$runDir/corpus/users/"
+$env:LLM_CACHE = "1"
+$env:LLM_CACHE_DIR = "$runDir/cache"
+$env:PP_GROUP_GUARD = "1"
+uv run python variable_extraction/main.py run `
+  --schema variable_extraction/schemas/nootropics_schema.json `
+  --input-dir "$runDir/corpus" `
+  --temp-dir "$runDir/temp" `
+  --workers 12
 ```
 
 There is **no `--drug` flag in pipeline B** — its unit is the patient, not the drug,
 which is why targeting means the pre-filtered corpus from step 1.
 
+Expect 752 rows in `$runDir/corpus/records.csv`. The derived columns
+`dosage_treatment`, `dosage_value`, `administration_route_treatment`, and
+`administration_route_value` must all be present. Use a fresh cache whenever a
+prompt rule or reasoning mode changes.
+
 ## 4. Analyses
 
-Each reads the database or `source_B/records.csv` and prints to stdout.
+Each resolves its inputs relative to this study directory, so these commands work
+from the repository root. To analyze a versioned pipeline B run, set
+`TROPOFLAVIN_RECORDS` first.
 
-```bash
+```powershell
+$env:TROPOFLAVIN_RECORDS = "$runDir/corpus/records.csv"
 python studies/tropoflavin_nootropics/analyze_purpose.py      # what people take it for
-python studies/tropoflavin_nootropics/analyze_B.py            # the two compounds, separated
+python studies/tropoflavin_nootropics/analyze_B.py            # outcomes, linked doses, and routes
 python studies/tropoflavin_nootropics/analyze_followups.py    # no_effect gap, use-case splits
 python studies/tropoflavin_nootropics/analyze_se.py           # side effects
 python studies/tropoflavin_nootropics/analyze_dose2.py        # dose-stratified (strict binding)
@@ -119,13 +139,13 @@ per-compound claims), and r/Nootropics is a healthy-user population.
 
 ## 6. Reproducing the original numbers exactly
 
-The figures above were produced with **reasoning enabled** on `deepseek-v4-flash`. This
-stack suppresses reasoning by default (#121), which makes the model a different
-classifier — cheaper and more reliable, but not the same one.
+The historical figures above were produced with **reasoning enabled** on
+`deepseek-v4-flash`. This stack suppresses reasoning by default (#121), which makes
+the model a different classifier: cheaper and more reliable, but not the same one.
 
-Reasoning-on runs additionally need `REASONING_HEADROOM` and `MAX_TOKENS_PER_ITEM`,
-which are **not in this stack**. Without them, `LLM_REASONING=1` truncates on the first
-prefilter batch.
+The stack now includes bounded output-budget growth for reasoning responses. For a
+new baseline, leave reasoning off. Set `LLM_REASONING=1` only when reproducing the
+historical model regime, and still use a fresh cache.
 
 Two further hazards if you go that route:
 
@@ -136,4 +156,5 @@ Two further hazards if you go that route:
 - `extraction_runs.config` does not record the flag either, so a database cannot say
   which regime produced it.
 
-Treat any comparison across the two regimes as invalid until both are fixed.
+Treat any comparison across the two regimes as invalid until those provenance gaps
+are fixed.

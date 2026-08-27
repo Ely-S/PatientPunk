@@ -1,9 +1,11 @@
 import sqlite3, json, re, sys, collections
+from study_support import StudyPaths, readonly_sqlite_uri
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SIG={"strong":3,"moderate":2,"weak":1,"n/a":0,None:0,"":0}
 COND=re.compile(r"\benergy\b|\bfatigue\b|\btired\b|\bstamina\b",re.I)
 SE  =re.compile(r"fatigue|tired|lethargy|sedat|drowsy|sleepy",re.I)
-c=sqlite3.connect("file:noots.db?mode=ro",uri=True); c.row_factory=sqlite3.Row
+c=sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database),uri=True); c.row_factory=sqlite3.Row
 rows=list(c.execute("""SELECT r.user_id,r.sentiment,r.signal_strength sig,r.side_effects,p.post_date,
   REPLACE(COALESCE(p.title,'')||' '||COALESCE(p.body_text,''),CHAR(10),' ') txt
   FROM treatment_reports r JOIN posts p ON p.post_id=r.post_id"""))

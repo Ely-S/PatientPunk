@@ -1,57 +1,86 @@
-"""Parse pipeline B records.csv: per-compound outcomes, fill rates, doses."""
-import csv, re, sys, collections
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+"""Summarize pipeline B outcomes, linked doses, and administration routes."""
 
-rows = list(csv.DictReader(open("source_B/records.csv", encoding="utf-8")))
-META = {"author_hash","source","text_count","schema_id","extraction_method","extracted_at"}
-fields = [k for k in rows[0] if k not in META]
-print(f"{len(rows):,} records | {len(fields)} clinical fields\n")
+from __future__ import annotations
 
-fill = collections.Counter()
-for r in rows:
-    for k in fields:
-        if (r.get(k) or "").strip():
-            fill[k] += 1
-print("FIELD FILL RATES (top 12)")
-for k, v in fill.most_common(12):
-    print(f"  {k:26s} {v:4,}  {100*v/len(rows):5.1f}%")
+import collections
+import sys
 
-# treatment_outcome format: "drug: outcome[: detail] | drug: outcome..."
-DMA   = re.compile(r"(?i)\b4[ '’]?-?\s?dma|eutropoflav")
-PLAIN = re.compile(r"(?i)tropoflavin|dihydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b")
-per = {"7,8-DHF": collections.Counter(), "4'-DMA": collections.Counter()}
-users = {"7,8-DHF": set(), "4'-DMA": set()}
-detail = {"7,8-DHF": collections.Counter(), "4'-DMA": collections.Counter()}
+from study_support import (
+    COMPOUNDS,
+    StudyPaths,
+    compound_for_treatment,
+    load_pipeline_b_records,
+    summarize_target_values,
+)
 
-for r in rows:
-    for entry in (r.get("treatment_outcome") or "").split("|"):
-        e = entry.strip()
-        if not e: continue
-        parts = [p.strip() for p in e.split(":")]
-        drug = parts[0]
-        outcome = parts[1] if len(parts) > 1 else ""
-        rest = ": ".join(parts[2:]) if len(parts) > 2 else ""
-        which = "4'-DMA" if DMA.search(drug) else ("7,8-DHF" if PLAIN.search(drug) else None)
-        if not which or not outcome: continue
-        per[which][outcome.lower()] += 1
-        users[which].add(r["author_hash"])
-        if rest: detail[which][rest.lower()] += 1
+META = {"author_hash", "source", "text_count", "schema_id", "extraction_method", "extracted_at"}
 
-print("\nOUTCOMES BY COMPOUND  (pipeline B separates these; pipeline A cannot)")
-for k in ("7,8-DHF", "4'-DMA"):
-    tot = sum(per[k].values())
-    if not tot: continue
-    print(f"\n  {k}  —  {tot} outcome entries from {len(users[k])} authors")
-    for o, n in per[k].most_common():
-        print(f"     {o:16s} {n:4,}  {100*n/tot:5.1f}%")
-    if detail[k]:
-        print(f"     what it helped/affected: {', '.join(d for d,_ in detail[k].most_common(6))}")
 
-doses = collections.Counter()
-for r in rows:
-    for d in (r.get("dosage") or "").split("|"):
-        d = d.strip().lower()
-        if d: doses[d] += 1
-print(f"\nDOSAGES RECORDED ({sum(doses.values())} entries, top 12)")
-for d, n in doses.most_common(12):
-    print(f"  {d:22s} {n:3,}")
+def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    records = load_pipeline_b_records(StudyPaths.from_environment().records)
+    if not records:
+        raise SystemExit("Pipeline B records file is empty.")
+
+    rows = [record.model_dump() for record in records]
+    fields = [key for key in rows[0] if key not in META]
+    print(f"{len(rows):,} records | {len(fields)} clinical fields\n")
+
+    fill: collections.Counter[str] = collections.Counter()
+    for row in rows:
+        for key in fields:
+            if str(row.get(key) or "").strip():
+                fill[key] += 1
+    print("FIELD FILL RATES (top 12)")
+    for key, value in fill.most_common(12):
+        print(f"  {key:32s} {value:4,}  {100 * value / len(rows):5.1f}%")
+
+    outcomes = {compound: collections.Counter() for compound in COMPOUNDS}
+    users = {compound: set() for compound in COMPOUNDS}
+    details = {compound: collections.Counter() for compound in COMPOUNDS}
+    for record in records:
+        for entry in record.treatment_outcome.split("|"):
+            treatment, separator, remainder = entry.strip().partition(":")
+            if not separator:
+                continue
+            outcome, detail_separator, detail = remainder.strip().partition(":")
+            compound = compound_for_treatment(treatment)
+            if compound is None or not outcome:
+                continue
+            outcomes[compound][outcome.lower()] += 1
+            users[compound].add(record.author_hash)
+            if detail_separator and detail.strip():
+                details[compound][detail.strip().lower()] += 1
+
+    print("\nOUTCOMES BY COMPOUND")
+    for compound in COMPOUNDS:
+        total = sum(outcomes[compound].values())
+        if not total:
+            continue
+        print(f"\n  {compound}: {total} outcome entries from {len(users[compound])} authors")
+        for outcome, count in outcomes[compound].most_common():
+            print(f"     {outcome:16s} {count:4,}  {100 * count / total:5.1f}%")
+        if details[compound]:
+            values = ", ".join(value for value, _ in details[compound].most_common(6))
+            print(f"     what it helped/affected: {values}")
+
+    for field, title in (
+        ("dosage", "TREATMENT-LINKED DOSAGES"),
+        ("administration_route", "TREATMENT-LINKED ADMINISTRATION ROUTES"),
+    ):
+        summary = summarize_target_values(records, field)
+        print(f"\n{title}")
+        for compound in COMPOUNDS:
+            total = sum(summary.counts[compound].values())
+            print(
+                f"\n  {compound}: {total} explicit entries from "
+                f"{len(summary.authors[compound])} authors"
+            )
+            for value, count in summary.counts[compound].most_common(12):
+                print(f"     {value:24s} {count:4,}")
+
+
+if __name__ == "__main__":
+    main()

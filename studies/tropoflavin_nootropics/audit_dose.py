@@ -1,7 +1,17 @@
 import re, sqlite3, sys, random
+
+from study_support import (
+    DOSE,
+    PROXIMITY_ALIAS as ALIAS,
+    PROXIMITY_WINDOW as WINDOW,
+    UNIT,
+    StudyPaths,
+    proximity_dose_bin as bin_of,
+    readonly_sqlite_uri,
+)
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-exec(open("analyze_dose.py").read().split("c = sqlite3.connect")[0].split('"""',2)[2])
-c=sqlite3.connect("file:noots.db?mode=ro",uri=True); c.row_factory=sqlite3.Row
+c=sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database),uri=True); c.row_factory=sqlite3.Row
 rows=list(c.execute("""SELECT r.sentiment, COALESCE(p.title,'')||' '||COALESCE(p.body_text,'') txt
                        FROM treatment_reports r JOIN posts p ON p.post_id=r.post_id"""))
 hits=[]

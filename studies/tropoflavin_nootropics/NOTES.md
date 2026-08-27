@@ -175,14 +175,28 @@ deliberately excludes comments ("other users' text"). It would run cleanly, prod
 post-author records, and silently drop 81% of the signal — only 345 of the 1,792 mentions are in
 posts. Commenters reach the extractor only via `users/`.
 
-Output: `source_B/records.csv`, one row per author, 33 columns. Relevant fields are `medications`,
-`dosage`, `treatment_outcome`, `conditions`. Sample from the smoke test:
+The historical output was `source_B/records.csv`, one row per author. On the
+#142/#141 stack, dosage and administration route use explicit treatment-value
+pairs and export both raw and decomposed columns. Relevant columns include
+`medications`, `dosage`, `dosage_treatment`, `dosage_value`,
+`administration_route`, `administration_route_treatment`,
+`administration_route_value`, `treatment_outcome`, and `conditions`.
+
+Example of the linked contract:
 
 ```
 medications:        7,8 dhf | polygala tenuifolia
-dosage:             5 grams | 2 grams
+dosage:             7,8 dhf: 5 grams | polygala tenuifolia: 2 grams
+dosage_treatment:   7,8 dhf | polygala tenuifolia
+dosage_value:       5 grams | 2 grams
+administration_route:             7,8 dhf: sublingual
+administration_route_treatment:   7,8 dhf
+administration_route_value:       sublingual
 treatment_outcome:  polygala tenuifolia: helped: alcohol craving | 7,8 dhf: no_effect
 ```
+
+The extractor omits an unlinked value rather than assigning it by list position or
+proximity. It also does not infer a route from a treatment's usual form.
 
 **B splits `4dma` from `7,8 dhf` into separate outcome entries. A structurally cannot** — its
 alias regex matches `7,8-DHF` inside `4'-DMA-7,8-DHF` with word boundaries intact on both sides.
@@ -311,11 +325,12 @@ confounded; see the note there for why and which pairing to use.
 **Canonicalise the side-effect vocabulary** before quoting counts, and test whether hair loss
 attributes to 7,8-DHF or to co-stacked substances.
 
-**Reconcile the dosage field with the sublingual convention.** B recorded 660 dosage entries
-clustering at 10–50 mg, but `dosage` is per-record and not tied to a specific drug, so those
-numbers mix every substance a person listed. The r/cfs account and several r/Nootropics comments
-describe ~1 mg *sublingual* for 7,8-DHF specifically. Needs a drug-linked dose extraction before
-either number can be quoted.
+**Re-run treatment-linked dose and route extraction.** #142 and #141 resolve the
+schema problem that made the old 660 dosage entries unusable for per-drug claims.
+The next pipeline B run should report only explicit 7,8-DHF and 4'-DMA pairs,
+separately count authors and entries, and preserve the older extraction as a
+historical baseline. Sparse output is expected because the rules prefer omission
+over fabricated attribution.
 
 **Null reports are real and countable now.** *"I tried both tropoflavin and eutropoflavin. Both
 sublingually. Both inert no matter the dose."* B puts numbers on this: 11.5% no_effect for the

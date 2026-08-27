@@ -1,54 +1,28 @@
-"""Dose-stratified sentiment and side effects for 7,8-DHF.
+"""Historical proximity-based dose analysis over pipeline A report text.
 
-Neither pipeline links a dose to a drug: treatment_reports has no dose column,
-and pipeline B's `dosage` is per-author free text spanning every compound the
-author discussed. Doses are recovered here from the report's own text, keeping
-only those within WINDOW chars of a 7,8-DHF alias so a stack post's other
-compounds don't contribute their doses.
+Pipeline B now extracts explicit treatment-dose pairs. This script retains the
+older pipeline A sensitivity analysis, where doses are recovered from report
+text within a bounded window of a 7,8-DHF alias.
 """
 from __future__ import annotations
-import json, re, sqlite3, sys, collections, math
+import collections, json, math, sqlite3, sys
+
+from study_support import (
+    PROXIMITY_ALIAS as ALIAS,
+    StudyPaths,
+    doses_near,
+    proximity_dose_bin as bin_of,
+    readonly_sqlite_uri,
+)
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-WINDOW = 150          # chars from an alias mention for a dose to count as its dose
 SIG = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
-
-ALIAS = re.compile(r"(?i)(tropoflavin|7[ .,'-]{0,2}8[ .,'-]{0,2}dhf|7[ ,'-]{0,2}8[ ,'-]{0,2}dihydroxyflavone|dihydroxyflavone)")
-# 10mg / 10 mg / 10-20 mg / 10 to 20mg / 0.5g / 500mcg
-DOSE = re.compile(r"(?i)(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*)?(mg|mcg|ug|µg|g|gram|grams)\b")
-UNIT = {"mg": 1.0, "mcg": 0.001, "ug": 0.001, "µg": 0.001,
-        "g": 1000.0, "gram": 1000.0, "grams": 1000.0}
-
-
-def doses_near(text: str):
-    """Every dose in mg whose match starts within WINDOW chars of an alias hit."""
-    spans = [m.start() for m in ALIAS.finditer(text)]
-    if not spans:
-        return []
-    out = []
-    for m in DOSE.finditer(text):
-        if min(abs(m.start() - s) for s in spans) > WINDOW:
-            continue
-        lo, hi, unit = m.group(1), m.group(2), m.group(3).lower()
-        v = (float(lo) + float(hi)) / 2 if hi else float(lo)   # range -> midpoint
-        out.append(v * UNIT[unit])
-    return out
-
-
-def bin_of(mg: float) -> str | None:
-    if mg < 1:      return None          # sub-mg is a different compound's dose
-    if mg > 1000:   return None          # 7,8-DHF is not dosed in grams
-    if mg < 10:     return "1-9 mg"
-    if mg < 20:     return "10-19 mg"
-    if mg < 30:     return "20-29 mg"
-    if mg < 50:     return "30-49 mg"
-    if mg < 100:    return "50-99 mg"
-    return "100-1000 mg"
 
 
 ORDER = ["1-9 mg", "10-19 mg", "20-29 mg", "30-49 mg", "50-99 mg", "100-1000 mg"]
 
-c = sqlite3.connect("file:noots.db?mode=ro", uri=True)
+c = sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database), uri=True)
 c.row_factory = sqlite3.Row
 rows = list(c.execute("""
     SELECT r.user_id, r.post_id, r.sentiment, r.signal_strength, r.side_effects,

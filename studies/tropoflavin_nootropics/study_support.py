@@ -1,0 +1,256 @@
+"""Shared paths, record boundaries, and attribution helpers for this study."""
+
+from __future__ import annotations
+
+import csv
+import os
+import re
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+STUDY_ROOT = Path(__file__).resolve().parent
+
+
+class StudyPaths(BaseModel):
+    """Validated input and output paths, optionally overridden for versioned runs."""
+
+    model_config = ConfigDict(frozen=True)
+
+    database: Path = STUDY_ROOT / "noots.db"
+    records: Path = STUDY_ROOT / "source_B" / "records.csv"
+    corpus: Path = STUDY_ROOT / "source" / "subreddit_posts.json"
+    workbook: Path = STUDY_ROOT / "results_workbook.xlsx"
+
+    @classmethod
+    def from_environment(cls) -> StudyPaths:
+        values = {
+            field: os.environ[name]
+            for field, name in {
+                "database": "TROPOFLAVIN_DB",
+                "records": "TROPOFLAVIN_RECORDS",
+                "corpus": "TROPOFLAVIN_CORPUS",
+                "workbook": "TROPOFLAVIN_WORKBOOK",
+            }.items()
+            if os.environ.get(name)
+        }
+        return cls.model_validate(values)
+
+
+class PipelineBRecord(BaseModel):
+    """CSV boundary for the linked dosage and administration-route contract."""
+
+    model_config = ConfigDict(extra="allow")
+
+    author_hash: str = Field(min_length=1)
+    treatment_outcome: str = ""
+    dosage_treatment: str
+    dosage_value: str
+    administration_route_treatment: str
+    administration_route_value: str
+
+    @field_validator("author_hash", mode="before")
+    @classmethod
+    def strip_author_hash(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class LinkedValue(BaseModel):
+    """One explicitly attributed treatment-value pair."""
+
+    model_config = ConfigDict(frozen=True)
+
+    treatment: str = Field(min_length=1)
+    value: str = Field(min_length=1)
+
+    @field_validator("treatment", "value", mode="before")
+    @classmethod
+    def strip_value(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+def load_pipeline_b_records(path: Path) -> list[PipelineBRecord]:
+    """Load records.csv and require the post-#142 linked-field contract."""
+    required = {
+        "author_hash",
+        "dosage_treatment",
+        "dosage_value",
+        "administration_route_treatment",
+        "administration_route_value",
+    }
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        missing = sorted(required - set(reader.fieldnames or ()))
+        if missing:
+            names = ", ".join(missing)
+            raise ValueError(
+                f"{path} predates the linked dose/route schema; missing columns: {names}. "
+                "Rerun pipeline B on the #140 stack."
+            )
+        try:
+            return [PipelineBRecord.model_validate(row) for row in reader]
+        except ValidationError as exc:
+            raise ValueError(f"Invalid pipeline B record in {path}: {exc}") from exc
+
+
+def _split_cell(value: str) -> list[str]:
+    return [part.strip() for part in value.split(" | ") if part.strip()]
+
+
+def linked_values(record: PipelineBRecord, field: Literal["dosage", "administration_route"]) -> list[LinkedValue]:
+    """Return aligned treatment-value pairs, rejecting partial or shifted rows."""
+    treatments = _split_cell(getattr(record, f"{field}_treatment"))
+    values = _split_cell(getattr(record, f"{field}_value"))
+    if len(treatments) != len(values):
+        raise ValueError(
+            f"{field} columns are misaligned for author {record.author_hash}: "
+            f"{len(treatments)} treatments and {len(values)} values"
+        )
+    return [
+        LinkedValue(treatment=treatment, value=value)
+        for treatment, value in zip(treatments, values, strict=True)
+    ]
+
+
+DMA = re.compile(r"(?i)\b4[ '’]?-?\s?dma|eutropoflav")
+PLAIN = re.compile(
+    r"(?i)tropoflavin|dihydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b"
+)
+COMPOUNDS = ("7,8-DHF", "4'-DMA")
+
+
+def compound_for_treatment(treatment: str) -> str | None:
+    """Map a treatment label to the parent or derivative, testing derivative first."""
+    if DMA.search(treatment):
+        return "4'-DMA"
+    if PLAIN.search(treatment):
+        return "7,8-DHF"
+    return None
+
+
+@dataclass(frozen=True)
+class TargetValueSummary:
+    counts: dict[str, Counter[str]]
+    authors: dict[str, set[str]]
+
+
+def summarize_target_values(
+    records: list[PipelineBRecord],
+    field: Literal["dosage", "administration_route"],
+) -> TargetValueSummary:
+    counts = {compound: Counter() for compound in COMPOUNDS}
+    authors = {compound: set() for compound in COMPOUNDS}
+    for record in records:
+        for pair in linked_values(record, field):
+            compound = compound_for_treatment(pair.treatment)
+            if compound is None:
+                continue
+            counts[compound][pair.value.lower()] += 1
+            authors[compound].add(record.author_hash)
+    return TargetValueSummary(counts=counts, authors=authors)
+
+
+def readonly_sqlite_uri(path: Path) -> str:
+    """Build an absolute, read-only SQLite URI."""
+    return f"{path.resolve().as_uri()}?mode=ro"
+
+
+PROXIMITY_WINDOW = 150
+PROXIMITY_ALIAS = re.compile(
+    r"(?i)(tropoflavin|7[ .,'-]{0,2}8[ .,'-]{0,2}dhf|"
+    r"7[ ,'-]{0,2}8[ ,'-]{0,2}dihydroxyflavone|dihydroxyflavone)"
+)
+DOSE = re.compile(
+    r"(?i)(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*)?"
+    r"(mg|mcg|ug|µg|g|gram|grams)\b"
+)
+UNIT = {
+    "mg": 1.0,
+    "mcg": 0.001,
+    "ug": 0.001,
+    "µg": 0.001,
+    "g": 1000.0,
+    "gram": 1000.0,
+    "grams": 1000.0,
+}
+
+
+def doses_near(text: str) -> list[float]:
+    """Return doses whose match begins near a 7,8-DHF alias."""
+    spans = [match.start() for match in PROXIMITY_ALIAS.finditer(text)]
+    if not spans:
+        return []
+    output = []
+    for match in DOSE.finditer(text):
+        if min(abs(match.start() - start) for start in spans) > PROXIMITY_WINDOW:
+            continue
+        low, high, unit = match.group(1), match.group(2), match.group(3).lower()
+        value = (float(low) + float(high)) / 2 if high else float(low)
+        output.append(value * UNIT[unit])
+    return output
+
+
+def proximity_dose_bin(mg: float) -> str | None:
+    if mg < 1 or mg > 1000:
+        return None
+    if mg < 10:
+        return "1-9 mg"
+    if mg < 20:
+        return "10-19 mg"
+    if mg < 30:
+        return "20-29 mg"
+    if mg < 50:
+        return "30-49 mg"
+    if mg < 100:
+        return "50-99 mg"
+    return "100-1000 mg"
+
+
+STRICT_ALIAS = re.compile(
+    r"(?i)(tropoflavin|eutropoflavin\w*|(?:4.?dma.?)?7[ .,'-]{0,2}8[ .,'-]{0,2}dhf|"
+    r"7[ .,'-]{0,2}8[ .,'-]{0,2}dihydroxyflavone|dihydroxyflavone)"
+)
+STRICT_FILLER = {
+    "a", "about", "am", "an", "and", "approx", "approximately", "around", "at",
+    "av", "average", "been", "caps", "capsule", "capsules", "currently", "daily",
+    "day", "days", "dose", "dosed", "doses", "dosing", "each", "evening", "every",
+    "for", "from", "g", "have", "i", "in", "is", "it", "its", "just", "maybe",
+    "mg", "morning", "my", "night", "now", "of", "on", "once", "one", "only", "or",
+    "per", "pill", "pills", "pm", "powder", "roughly", "start", "started", "sublingual",
+    "sublingually", "take", "taken", "taking", "tablet", "the", "this", "to", "total",
+    "twice", "typically", "up", "use", "used", "using", "usually", "was", "were", "with", "x",
+}
+WORD = re.compile(r"[A-Za-z][A-Za-z'’-]*")
+
+
+def bind_strict_doses(text: str) -> list[float]:
+    """Return doses separated from an alias only by connective filler."""
+    output = []
+    spans = [(match.start(), match.end()) for match in STRICT_ALIAS.finditer(text)]
+    for match in DOSE.finditer(text):
+        for start, end in spans:
+            gap = text[end : match.start()] if match.start() >= end else text[match.end() : start]
+            if len(gap) > 60:
+                continue
+            if any(word.lower() not in STRICT_FILLER for word in WORD.findall(gap)):
+                continue
+            low, high, unit = match.group(1), match.group(2), match.group(3).lower()
+            value = (float(low) + float(high)) / 2 if high else float(low)
+            output.append(value * UNIT[unit])
+            break
+    return output
+
+
+def strict_dose_bin(mg: float) -> str | None:
+    if not 0.5 <= mg <= 1000:
+        return None
+    if mg < 10:
+        return "<10 mg"
+    if mg < 25:
+        return "10-24 mg"
+    if mg < 50:
+        return "25-49 mg"
+    return "50+ mg"

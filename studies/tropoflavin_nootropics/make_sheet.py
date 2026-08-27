@@ -5,17 +5,24 @@ so the workbook cannot drift from the pipelines. Formatting is carried as .xlsx
 because Drive converts it on upload; CSV cannot hold tabs, bold or number formats.
 """
 from __future__ import annotations
-import collections, csv, json, math, re, sqlite3, sys
-from pathlib import Path
+import collections, json, math, re, sqlite3, sys
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from scipy.stats import fisher_exact
 from statsmodels.stats.multitest import multipletests
+from study_support import (
+    COMPOUNDS,
+    StudyPaths,
+    compound_for_treatment,
+    load_pipeline_b_records,
+    readonly_sqlite_uri,
+    summarize_target_values,
+)
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-HERE = Path(__file__).resolve().parent
-OUT = HERE / "results_workbook.xlsx"
+PATHS = StudyPaths.from_environment()
+OUT = PATHS.workbook
 
 INK, MUTED = "1F2933", "6B7280"
 RULE = Side(style="thin", color="D8DEE4")
@@ -41,11 +48,10 @@ def wilson(k, n, z=1.96):
 
 # ══ gather ══════════════════════════════════════════════════════════════════
 PAT = re.compile(r"(?i)(tropoflavin|hydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b)")
-DMA = re.compile(r"(?i)\b4[ '’]?-?\s?dma|eutropoflav")
-PLAIN = re.compile(r"(?i)tropoflavin|dihydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,2}dhf\b|\bdhf\b")
 SIG = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0, "": 0}
+DM = "4'-DMA"
 
-corpus = json.loads((HERE / "source" / "subreddit_posts.json").read_text(encoding="utf-8"))
+corpus = json.loads(PATHS.corpus.read_text(encoding="utf-8"))
 items = []
 for p in corpus:
     t = ((p.get("title") or "") + " " + (p.get("body") or "")).strip()
@@ -91,7 +97,7 @@ CO = {
 }
 co_n = {k: sum(1 for t in items if re.search(p, t, re.I)) for k, p in CO.items()}
 
-db = sqlite3.connect(HERE / "noots.db")
+db = sqlite3.connect(readonly_sqlite_uri(PATHS.database), uri=True)
 db.row_factory = sqlite3.Row
 A = db.execute("""SELECT r.sentiment, r.signal_strength sig, r.user_id, r.side_effects,
                          p.body_text, p.title, p.post_date
@@ -104,7 +110,8 @@ for r in sorted(A, key=lambda r: (r["post_date"] or 0, SIG.get(r["sig"], 0)), re
 A_vote = collections.Counter(best.values())
 A_N = len(best)
 
-B_rows = list(csv.DictReader((HERE / "source_B" / "records.csv").open(encoding="utf-8")))
+B_records = load_pipeline_b_records(PATHS.records)
+B_rows = [record.model_dump() for record in B_records]
 META = {"author_hash", "source", "text_count", "schema_id", "extraction_method", "extracted_at"}
 B_fields = [k for k in B_rows[0] if k not in META]
 fill = collections.Counter()
@@ -123,7 +130,7 @@ for r in B_rows:
         if len(parts) < 2 or not parts[1]:
             continue
         drug, outcome = parts[0], parts[1].lower()
-        which = "4'-DMA" if DMA.search(drug) else ("7,8-DHF" if PLAIN.search(drug) else None)
+        which = compound_for_treatment(drug)
         if not which or outcome not in RANK:
             continue
         entry_out[which][outcome] += 1
@@ -134,12 +141,22 @@ for r in B_rows:
             author_out[which][r["author_hash"]] = outcome
 auth_out = {k: collections.Counter(v.values()) for k, v in author_out.items()}
 
-doses = collections.Counter()
-for r in B_rows:
-    for d in (r.get("dosage") or "").split("|"):
-        d = d.strip().lower()
-        if d:
-            doses[d] += 1
+dose_summary = summarize_target_values(B_records, "dosage")
+route_summary = summarize_target_values(B_records, "administration_route")
+doses = collections.Counter(
+    {
+        f"{compound}: {value}": count
+        for compound in COMPOUNDS
+        for value, count in dose_summary.counts[compound].items()
+    }
+)
+routes = collections.Counter(
+    {
+        f"{compound}: {value}": count
+        for compound in COMPOUNDS
+        for value, count in route_summary.counts[compound].items()
+    }
+)
 
 se = collections.Counter()
 n_se = 0
@@ -355,8 +372,8 @@ r = kv(ws, r, "Field fills", sum(fill.values()), f"{sum(fill.values())/len(B_row
 r = kv(ws, r, "Runtime", "16m 56s", "752 records, 12 workers, deepseek-v4-flash")
 r = kv(ws, r, "7,8-DHF outcomes", f"{sum(auth_out['7,8-DHF'].values())} authors",
        f"{sum(entry_out['7,8-DHF'].values())} entries")
-r = kv(ws, r, "4'-DMA outcomes", f"{sum(auth_out['4-DMA'].values()) if False else sum(auth_out[chr(52)+chr(39)+'-DMA'].values())} authors",
-       f"{sum(entry_out[chr(52)+chr(39)+'-DMA'].values())} entries")
+r = kv(ws, r, "4'-DMA outcomes", f"{sum(auth_out[DM].values())} authors",
+       f"{sum(entry_out[DM].values())} entries")
 r += 1
 r = banner(ws, r, "HEADLINE", 3)
 for txt in [
@@ -431,7 +448,6 @@ for k, v in fill.most_common():
 r += 1
 r = banner(ws, r, "OUTCOMES BY COMPOUND — author level (one vote per author per compound)", 6)
 r = header(ws, r, ["Outcome", "7,8-DHF n", "7,8-DHF %", "4'-DMA n", "4'-DMA %", ""])
-DM = chr(52) + chr(39) + "-DMA"
 n1, n2 = sum(auth_out["7,8-DHF"].values()), sum(auth_out[DM].values())
 for k in ("helped", "worsened", "no_effect", "mixed", "unknown"):
     rr = row(ws, r, [k, auth_out["7,8-DHF"][k], auth_out["7,8-DHF"][k] / n1,
@@ -515,21 +531,28 @@ c.alignment = Alignment(wrap_text=True, vertical="top")
 ws.row_dimensions[r].height = 74
 ws.freeze_panes = "A4"
 
-# ── 6. Side effects & doses ─────────────────────────────────────────────────
-ws = sheet("Side effects & doses", [34, 10, 10, 6, 24, 10, 46])
-ws["A1"] = "Side effects and dosages"
+# ── 6. Side effects, doses, and routes ─────────────────────────────────────
+ws = sheet("Side effects & doses", [34, 10, 4, 30, 10, 30, 10])
+ws["A1"] = "Side effects, treatment-linked dosages, and routes"
 ws["A1"].font = Font(bold=True, size=14, color=INK)
 ws["A2"] = (f"{n_se:,} of {len(A):,} pipeline-A records carry side effects ({100*n_se/len(A):.1f}%) — "
             f"{sum(se.values()):,} mentions across {len(se):,} distinct terms.")
 ws["A2"].font = Font(size=10, italic=True, color=MUTED)
 r = banner(ws, 4, "SIDE EFFECTS (pipeline A, uncanonicalised — counts understate)", 7)
-r = header(ws, r, ["Term", "n", "", "", "Dosage (pipeline B)", "n", ""])
+r = header(ws, r, ["Term", "n", "", "Dosage (pipeline B)", "n", "Route (pipeline B)", "n"])
 sl = se.most_common(30)
 dl = doses.most_common(30)
-for i in range(max(len(sl), len(dl))):
+rl = routes.most_common(30)
+for i in range(max(len(sl), len(dl), len(rl))):
     a = sl[i] if i < len(sl) else ("", "")
     b = dl[i] if i < len(dl) else ("", "")
-    r = row(ws, r, [a[0], a[1], "", "", b[0], b[1], ""], [None, "#,##0", None, None, None, "#,##0"])
+    c = rl[i] if i < len(rl) else ("", "")
+    r = row(
+        ws,
+        r,
+        [a[0], a[1], "", b[0], b[1], c[0], c[1]],
+        [None, "#,##0", None, None, "#,##0", None, "#,##0"],
+    )
 r += 1
 for txt in [
     "FRAGMENTATION: 135 distinct terms for 216 mentions. headache/headaches, hair loss/hair thinning, "
@@ -539,9 +562,9 @@ for txt in [
     "of stimulation persisting into the evening.",
     "HAIR LOSS is the unexpected signal — 7 + 3 'hair thinning' = 10, third most common. Not an obvious "
     "consequence of TrkB agonism. Whether it attributes to 7,8-DHF or a co-stacked substance is unresolved.",
-    "DOSAGE CAVEAT: pipeline B's dosage field is per-record and NOT linked to a specific drug, so these "
-    "values mix every substance a person listed. They cannot be read as 7,8-DHF doses. The route convention "
-    "reported for 7,8-DHF specifically is ~1 mg sublingual, with capsules described as much weaker.",
+    "DOSE AND ROUTE SCOPE: pipeline B now includes only explicitly stated treatment-value pairs. The tables "
+    "do not infer a route from a product's usual form and omit values that the author did not link to a "
+    "specific treatment. Counts therefore favor precision over recall.",
 ]:
     c = ws.cell(r, 1, txt)
     c.font = Font(size=9, color=MUTED)
@@ -734,6 +757,7 @@ for txt, col in [
     r += 1
 
 
+OUT.parent.mkdir(parents=True, exist_ok=True)
 wb.save(OUT)
 print(f"wrote {OUT} ({OUT.stat().st_size:,} bytes)")
 print(f"tabs: {wb.sheetnames}")
@@ -742,7 +766,7 @@ print(f"tabs: {wb.sheetnames}")
 # and the binary upload path is unreliable at this size, so this is what gets
 # uploaded; the .xlsx above is the formatted version to drag into Drive by hand.
 import csv as _csv
-CSV_OUT = HERE / "results_workbook.csv"
+CSV_OUT = OUT.with_suffix(".csv")
 with CSV_OUT.open("w", newline="", encoding="utf-8") as fh:
     w = _csv.writer(fh)
     for name in wb.sheetnames:

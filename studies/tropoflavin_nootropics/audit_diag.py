@@ -6,6 +6,8 @@ column. Here the indication is read only from sentences that do not describe an
 outcome, so "it made me tired" can no longer file someone under energy/fatigue.
 """
 import sqlite3, json, re, sys, collections
+from study_support import StudyPaths, readonly_sqlite_uri
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SIG={"strong":3,"moderate":2,"weak":1,"n/a":0,None:0,"":0}
 COND={"depression / mood":r"\bdepress|\bantidepress|\bmood\b|anhedoni","anxiety":r"\banxiet|\banxious\b|\bpanic\b",
@@ -34,7 +36,7 @@ DIAG={"sleep":"insomnia / sleep disruption","anxiety":"overstimulation / anxiety
 # a sentence reporting an outcome cannot establish why someone started
 OUT=re.compile(r"\bmade me\b|\bmakes me\b|\bgave me\b|\bgot\b|\bcaused\b|\bcausing\b|\bexacerbat|\bside.?effect|"
  r"\bworsen|\bwore off\b|\bcrash|\bfelt\b|\bfeel\b|\bfeeling\b|\bexperienc|\bresulted\b|\bleft me\b|\bended up\b",re.I)
-c=sqlite3.connect("file:noots.db?mode=ro",uri=True); c.row_factory=sqlite3.Row
+c=sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database),uri=True); c.row_factory=sqlite3.Row
 rows=list(c.execute("""SELECT r.user_id,r.signal_strength sig,r.side_effects,p.post_date,
  REPLACE(COALESCE(p.title,'')||' '||COALESCE(p.body_text,''),CHAR(10),' ') txt
  FROM treatment_reports r JOIN posts p ON p.post_id=r.post_id"""))

@@ -1,7 +1,10 @@
 """Fisher on the no_effect gap, sentiment by use-case, and side effects."""
-import csv, json, re, sqlite3, sys, math, collections
+import collections, json, math, re, sqlite3, sys
+
 from scipy.stats import fisher_exact
 from statsmodels.stats.multitest import multipletests
+from study_support import StudyPaths, load_pipeline_b_records, readonly_sqlite_uri
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 def wilson(k, n, z=1.96):
@@ -16,7 +19,8 @@ PLAIN = re.compile(r"(?i)tropoflavin|dihydroxyflavone|\b7[ .,'-]{0,2}8[ .,'-]{0,
 RANK = {"worsened":4, "no_effect":3, "mixed":2, "helped":1, "unknown":0}  # keep the most informative
 author_out = collections.defaultdict(dict)   # (author, compound) -> outcome
 
-for r in csv.DictReader(open("source_B/records.csv", encoding="utf-8")):
+for record in load_pipeline_b_records(StudyPaths.from_environment().records):
+    r = record.model_dump()
     for entry in (r.get("treatment_outcome") or "").split("|"):
         parts=[p.strip() for p in entry.strip().split(":")]
         if len(parts)<2 or not parts[1]: continue
@@ -55,7 +59,7 @@ PURPOSE = {
  "stimulant recovery": r"\bstimulant\b.{0,30}(recover|damage|crash)|\btolerance\b",
  "neuroprotect / repair": r"neuroprotect|\bregenerat|\bheal\w* (my |the )?brain",
 }
-db=sqlite3.connect("noots.db"); db.row_factory=sqlite3.Row
+db=sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database), uri=True); db.row_factory=sqlite3.Row
 rows=db.execute("""SELECT r.sentiment, r.signal_strength sig, r.user_id, r.side_effects,
                           p.body_text, p.title, p.post_date
                    FROM treatment_reports r JOIN posts p ON p.post_id=r.post_id""").fetchall()

@@ -6,51 +6,23 @@ A dose counts here only if everything between it and the alias is connective
 filler, so "7,8-DHF, 25 mg" binds but "7,8-DHF ... 10 mg Noopept" does not.
 """
 from __future__ import annotations
-import json, re, sqlite3, sys, collections, math
+import collections, json, math, re, sqlite3, sys
+
+from study_support import (
+    STRICT_ALIAS as ALIAS,
+    StudyPaths,
+    bind_strict_doses as bind,
+    readonly_sqlite_uri,
+    strict_dose_bin as bin_of,
+)
+
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 SIG = {"strong":3,"moderate":2,"weak":1,"n/a":0,None:0,"":0}
-ALIAS = re.compile(r"(?i)(tropoflavin|eutropoflavin\w*|(?:4.?dma.?)?7[ .,'-]{0,2}8[ .,'-]{0,2}dhf|7[ .,'-]{0,2}8[ .,'-]{0,2}dihydroxyflavone|dihydroxyflavone)")
-DOSE  = re.compile(r"(?i)(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*)?(mg|mcg|ug|µg|g|gram|grams)\b")
-UNIT  = {"mg":1.0,"mcg":.001,"ug":.001,"µg":.001,"g":1000.,"gram":1000.,"grams":1000.}
-
-# only these may sit between the alias and its dose
-FILLER = {"a","an","and","around","at","about","approx","approximately","av","average",
-          "caps","capsule","capsules","daily","day","days","dose","dosed","doses","dosing",
-          "each","every","for","from","g","have","i","in","is","it","just","maybe","mg","my",
-          "night","of","on","once","one","or","per","pill","pills","powder","roughly","sublingual",
-          "sublingually","take","taken","taking","tablet","the","to","total","twice","up","use",
-          "used","using","was","were","with","x","was","been","only","now","started","start",
-          "morning","evening","am","pm","currently","usually","typically","about","its","this"}
-WORD = re.compile(r"[A-Za-z][A-Za-z'’-]{1,}")
-
-
-def bind(text: str):
-    """Doses in mg that are attributable to a 7,8-DHF alias."""
-    out = []
-    spans = [(m.start(), m.end()) for m in ALIAS.finditer(text)]
-    for m in DOSE.finditer(text):
-        for s0, s1 in spans:
-            gap = text[s1:m.start()] if m.start() >= s1 else text[m.end():s0]
-            if len(gap) > 60:
-                continue
-            if any(w.lower() not in FILLER for w in WORD.findall(gap)):
-                continue
-            lo, hi, u = m.group(1), m.group(2), m.group(3).lower()
-            v = ((float(lo)+float(hi))/2 if hi else float(lo)) * UNIT[u]
-            out.append(v)
-            break
-    return out
-
-
-def bin_of(mg):
-    if not 0.5 <= mg <= 1000: return None
-    return ("<10 mg" if mg < 10 else "10-24 mg" if mg < 25 else
-            "25-49 mg" if mg < 50 else "50+ mg")
 
 
 ORDER = ["<10 mg","10-24 mg","25-49 mg","50+ mg"]
-c = sqlite3.connect("file:noots.db?mode=ro", uri=True); c.row_factory = sqlite3.Row
+c = sqlite3.connect(readonly_sqlite_uri(StudyPaths.from_environment().database), uri=True); c.row_factory = sqlite3.Row
 rows = list(c.execute("""SELECT r.user_id,r.sentiment,r.signal_strength,r.side_effects,r.post_date_x,r.txt FROM (
       SELECT r.user_id,r.sentiment,r.signal_strength,r.side_effects,p.post_date post_date_x,
              REPLACE(COALESCE(p.title,'')||' '||COALESCE(p.body_text,''),CHAR(10),' ') txt
