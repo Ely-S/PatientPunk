@@ -94,9 +94,7 @@ def _record_dropped_fields(names: list[str]) -> None:
 MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
 # single record's reply overran 8192 output tokens and got truncated mid-JSON.
-# The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
-# comfortable margin.
-MAX_TEXT_CHARS = 8_000
+MAX_TEXT_CHARS = int(os.environ.get("LLM_MAX_TEXT_CHARS", "8000") or "8000")
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
