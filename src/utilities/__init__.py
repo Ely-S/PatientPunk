@@ -335,8 +335,14 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 RETRY_DELAYS = [2, 5, 15, 30]
 
 # OpenRouter can report upstream failures inside a stream after returning HTTP 200.
-IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
-                     "no instances available", "temporarily unavailable")
+IN_BAND_TRANSIENT = (
+    "provider_unavailable",
+    "overloaded",
+    "no instances available",
+    "temporarily unavailable",
+    "stream failed",
+    "upstream error",
+)
 
 # Retry truncated replies with progressively larger output ceilings.
 BUDGET_MULTIPLIERS = (1, 2, 4, 8)
@@ -352,12 +358,12 @@ def is_transient_failure(exc: BaseException) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):
         return True
-    # The SDK raises in-band provider failures as APIStatusError. Match their body,
-    # but never retry a 4xx request.
-    if isinstance(exc, anthropic.APIStatusError) and not (
-            isinstance(status, int) and 400 <= status < 500):
-        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
-    return False
+    # Providers can surface an upstream failure through either SDK after the HTTP
+    # request has succeeded. Match the provider message across SDK exception types,
+    # but never retry a deterministic 4xx response.
+    if isinstance(status, int) and 400 <= status < 500:
+        return False
+    return any(token in str(exc).lower() for token in IN_BAND_TRANSIENT)
 
 
 def llm_call(
