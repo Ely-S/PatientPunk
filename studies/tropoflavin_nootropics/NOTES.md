@@ -11,6 +11,14 @@ Working notes. Numbers here are reproducible from the scripts in this directory.
 experimenting with cognitive enhancement. It can answer dose, route, tolerability, subjective
 effect and the 7,8-DHF vs 4'-DMA distinction. It cannot answer patient outcomes.
 
+**Comparator extension:** `comparator_cohort.json` defines one target, eight
+mechanistically tiered comparators, and one adjacent-market control. Every compound is
+run over one shared r/Nootropics source population with identical classifier settings.
+The parent matcher excludes spans that belong only to 4'-DMA-7,8-DHF. Comparisons use
+one most-recent vote per author and compound, with matched-author results retained as a
+sensitivity analysis. These are self-reporting-pattern comparisons, not comparative
+efficacy or safety estimates.
+
 ---
 
 ## 1. Data

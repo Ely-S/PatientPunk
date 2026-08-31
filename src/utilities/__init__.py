@@ -33,13 +33,14 @@ class PipelineConfig:
     client: anthropic.Anthropic
     output_dir: Path
     db_path: Path
-    limit: int = 100
+    limit: int | None = 100
     reclassify: bool = False
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
+    drug_excluded_aliases: list[str] | None = None  # Longer compounds that must not count as target mentions
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -144,6 +145,11 @@ def get_git_commit() -> str:
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+LLM_REASONING_MODE = (
+    "off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF
+    else "on" if LLM_PROVIDER == "openrouter"
+    else "not_applicable"
+)
 
 
 class _ORStream:
@@ -400,6 +406,7 @@ def llm_call(
             prompt=prompt,
             temperature=0.0,
             max_tokens=budget,
+            request_variant={"reasoning_mode": LLM_REASONING_MODE},
             call_fn=lambda: _request_with_transport_retries(budget),
         )
 

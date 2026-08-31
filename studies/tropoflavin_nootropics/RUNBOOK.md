@@ -63,7 +63,7 @@ uv run python src/run_sentiment_pipeline.py \
   --db studies/tropoflavin_nootropics/noots.db \
   --output-dir studies/tropoflavin_nootropics/outputs_A \
   --drug-file studies/tropoflavin_nootropics/aliases_78dhf.txt \
-  --subreddit Nootropics --workers 12 --max-upstream-chars 1500
+  --workers 12 --max-upstream-chars 1500
 ```
 
 `--drug-file` is targeted mode: extract becomes a regex over the alias list, so no
@@ -174,7 +174,8 @@ The combined database retains every Pipeline A table and adds:
   desired-result domain
 - `pipeline_b_compound_exposures`: one row per author and target compound with
   dose, route, efficacy, and explicit dose-route ambiguity in the same table
-- `pipeline_a_side_effects`: canonical side-effect terms and safety-domain buckets
+- `pipeline_a_side_effects`: treatment-linked canonical side-effect terms and
+  safety-domain buckets
 - `combined_pipeline_manifest`: completion status and source provenance
 
 The completed run should contain 661 Pipeline A reports, 752 Pipeline B records,
@@ -198,7 +199,58 @@ connection.close()
 Require `ok`, an empty foreign-key result, and complete manifest rows for both
 pipelines before analysis.
 
-## 6. What you should get
+## 6. Comparator cohort
+
+The cohort is versioned in `comparator_cohort.json`. It keeps the parent compound and
+4'-DMA derivative separate, then applies one pipeline configuration to Semax,
+Cerebrolysin, Selank, NSI-189, Dihexa, lion's mane, 9-MBC, and the BPC-157 control.
+
+Build the private union of every thread containing a configured compound. Usernames
+are hashed before the corpus is written. Source text, the generated corpus, SQLite
+database, cache, and manifests remain outside Git.
+
+```powershell
+$comparatorRun = "../PatientPunk_data/studies/tropoflavin_nootropics/runs/2026-08-31-comparator-cohort"
+$comparatorCorpus = "$comparatorRun/corpus/subreddit_posts.json"
+$comparatorDb = "$comparatorRun/sentiment/comparators.db"
+$comparatorOutput = "$comparatorRun/sentiment/outputs"
+$comparatorReport = "studies/tropoflavin_nootropics/comparator_analysis.md"
+
+uv run python -m studies.tropoflavin_nootropics.build_comparator_corpus `
+  --comments "../PatientPunk_data/r_nootropics_comments.jsonl" `
+  --posts "../../r_nootropics_posts.jsonl" `
+  --output "$comparatorCorpus"
+
+$env:LLM_CACHE = "1"
+$env:LLM_CACHE_DIR = "$comparatorRun/cache"
+$env:LLM_REASONING = "0"
+uv run python -m studies.tropoflavin_nootropics.run_comparator_pipeline `
+  --corpus "$comparatorCorpus" `
+  --database "$comparatorDb" `
+  --output-dir "$comparatorOutput" `
+  --workers 12 `
+  --max-upstream-chars 1500
+
+uv run python -m studies.tropoflavin_nootropics.analyze_comparator_cohort `
+  --sentiment-database "$comparatorDb" `
+  --study-database "$combinedDb" `
+  --output "$comparatorReport"
+```
+
+The corpus is shared, but each target gets its own alias and enclosing-compound
+exclusion rules. This matters for `7,8-DHF`, whose text span must not be counted when
+it occurs only inside `4'-DMA-7,8-DHF`. The analysis uses one most-recent report per
+author and compound, Wilson intervals, Fisher tests with Benjamini-Hochberg correction,
+and a matched-author exact sensitivity analysis. Side effects are joined through the
+classified treatment ID. Dose, route, and symptom outcomes come from the linked
+Pipeline B tables and do not invent administration-level pairings.
+
+The committed report contains aggregate tables and SHA-256 hashes only. Before using
+it, require a nonzero report count for every cohort member in
+`comparator_pipeline_manifest.json`, `PRAGMA integrity_check = ok`, and an empty
+foreign-key check.
+
+## 7. What you should get
 
 | | |
 |---|---|
@@ -209,7 +261,7 @@ Read that with NOTES.md's caveats attached — positives are over-called 10–20
 pipeline, the alias blends 7,8-DHF with its 4'-DMA derivative (quote pipeline B for
 per-compound claims), and r/Nootropics is a healthy-user population.
 
-## 7. Reproducing the original numbers exactly
+## 8. Reproducing the original numbers exactly
 
 The historical figures above were produced with **reasoning enabled** on
 `deepseek-v4-flash`. This stack suppresses reasoning by default (#121), which makes
@@ -219,14 +271,7 @@ The stack now includes bounded output-budget growth for reasoning responses. For
 new baseline, leave reasoning off. Set `LLM_REASONING=1` only when reproducing the
 historical model regime, and still use a fresh cache.
 
-Two further hazards if you go that route:
-
-- The on-disk LLM cache keys on model, prompt, temperature and `max_tokens` — **not** on
-  the reasoning flag. A reasoning-off run will silently return reasoning-on cached
-  answers, mixing regimes with nothing in the output to show it. Point `LLM_CACHE_DIR`
-  at a fresh directory, or set `LLM_CACHE=0`.
-- `extraction_runs.config` does not record the flag either, so a database cannot say
-  which regime produced it.
-
-Treat any comparison across the two regimes as invalid until those provenance gaps
-are fixed.
+The cache key now includes the effective reasoning mode, and
+`extraction_runs.config` records it. A reasoning-off run therefore cannot reuse a
+reasoning-on response. Still use a fresh cache when changing prompts, model behavior,
+or study definitions so the artifact boundary remains obvious.

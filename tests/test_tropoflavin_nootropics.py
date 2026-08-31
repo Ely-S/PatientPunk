@@ -149,6 +149,11 @@ def test_study_design_buckets_are_stable_and_interpretable() -> None:
     assert route_bucket("sublingual") == "oral mucosal"
     assert route_bucket("oral") == "swallowed oral"
     assert desired_result_bucket("better mood and depression") == "mood or depression"
+    assert desired_result_bucket("post-exertional malaise after activity") == (
+        "post-exertional malaise"
+    )
+    assert desired_result_bucket("persistent fatigue") == "general fatigue"
+    assert desired_result_bucket("more energy and motivation") == "energy or motivation"
     assert desired_result_bucket("") == "unspecified"
     assert canonical_side_effect("sleep disruption") == (
         "insomnia or sleep disruption",
@@ -157,6 +162,10 @@ def test_study_design_buckets_are_stable_and_interpretable() -> None:
     assert canonical_side_effect("hair thinning") == (
         "hair loss or thinning",
         "hair or skin",
+    )
+    assert canonical_side_effect("PEM after activity") == (
+        "post-exertional malaise or exertional crash",
+        "fatigue or exertional intolerance",
     )
 
 
@@ -179,6 +188,10 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
                 extraction_type TEXT,
                 config TEXT
             );
+            CREATE TABLE treatment (
+                id INTEGER PRIMARY KEY,
+                canonical_name TEXT NOT NULL
+            );
             CREATE TABLE treatment_reports (
                 report_id INTEGER PRIMARY KEY,
                 run_id INTEGER,
@@ -191,6 +204,7 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
             );
             INSERT INTO users VALUES ('a', 'Nootropics', 1), ('b', 'Nootropics', 1);
             INSERT INTO extraction_runs VALUES (1, 1, 'abc', 'sentiment', '{}');
+            INSERT INTO treatment VALUES (1, '7,8-dhf');
             INSERT INTO treatment_reports VALUES
                 (1, 1, 'p1', 'a', 1, 'positive', 'strong', '["insomnia", "hair thinning"]');
             """
@@ -279,6 +293,9 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
             ).fetchone()[0]
             == 2
         )
+        assert connection.execute(
+            "SELECT DISTINCT drug_id, treatment FROM pipeline_a_side_effects"
+        ).fetchall() == [(1, "7,8-dhf")]
     analysis = render_study_design_report(output)
     assert "## Dose and route co-observation" in analysis
     assert "25 to <50 mg" in analysis

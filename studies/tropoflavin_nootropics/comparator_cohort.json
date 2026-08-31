@@ -1,0 +1,152 @@
+{
+  "schema_id": "tropoflavin_nootropics_comparator_cohort_v1",
+  "version": 1,
+  "target_slug": "78dhf",
+  "compounds": [
+    {
+      "slug": "78dhf",
+      "canonical_name": "7,8-dhf",
+      "display_name": "7,8-DHF",
+      "tier": "target",
+      "analysis_role": "target",
+      "mechanism_note": "Parent flavone and putative BDNF/TrkB-modulating compound",
+      "aliases": [
+        "7,8-dhf",
+        "7,8dhf",
+        "78dhf",
+        "78-dhf",
+        "7.8dhf",
+        "7.8 dhf",
+        "7 8 dhf",
+        "7-8-dhf",
+        "7,8-dihydroxyflavone",
+        "7,8 dihydroxyflavone",
+        "tropoflavin",
+        "dhf"
+      ],
+      "excluded_aliases": [
+        "4'-dma-7,8-dhf",
+        "4-dma-7,8-dhf",
+        "4dma-7,8dhf",
+        "4dma 7,8-dhf",
+        "4 dma 7 8 dhf",
+        "eutropoflavin"
+      ],
+      "prefilter_terms": ["dhf", "tropoflavin", "dihydroxyflavone"]
+    },
+    {
+      "slug": "4dma-78dhf",
+      "canonical_name": "4'-dma-7,8-dhf",
+      "display_name": "4'-DMA-7,8-DHF",
+      "tier": "chemical analogue",
+      "analysis_role": "primary",
+      "mechanism_note": "Closest chemical derivative and primary analogue comparison",
+      "aliases": [
+        "4'-dma-7,8-dhf",
+        "4-dma-7,8-dhf",
+        "4dma-7,8dhf",
+        "4dma 7,8-dhf",
+        "4 dma 7 8 dhf",
+        "eutropoflavin"
+      ],
+      "excluded_aliases": [],
+      "prefilter_terms": ["4dma", "4'-dma", "4-dma", "eutropoflavin"]
+    },
+    {
+      "slug": "semax",
+      "canonical_name": "semax",
+      "display_name": "Semax",
+      "tier": "BDNF/TrkB related",
+      "analysis_role": "primary",
+      "mechanism_note": "Peptide reported to alter BDNF and TrkB expression in preclinical work",
+      "aliases": ["semax", "na-semax", "n-acetyl semax", "n-acetyl-semax", "semax amidate"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["semax"]
+    },
+    {
+      "slug": "cerebrolysin",
+      "canonical_name": "cerebrolysin",
+      "display_name": "Cerebrolysin",
+      "tier": "BDNF/TrkB related",
+      "analysis_role": "primary",
+      "mechanism_note": "Neurotrophic peptide mixture with pathway evidence that varies by model",
+      "aliases": ["cerebrolysin"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["cerebrolysin"]
+    },
+    {
+      "slug": "selank",
+      "canonical_name": "selank",
+      "display_name": "Selank",
+      "tier": "BDNF/TrkB related",
+      "analysis_role": "primary",
+      "mechanism_note": "Peptide comparator with indirect neurotrophic-pathway rationale",
+      "aliases": ["selank", "na-selank", "n-acetyl selank", "n-acetyl-selank"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["selank"]
+    },
+    {
+      "slug": "nsi-189",
+      "canonical_name": "nsi-189",
+      "display_name": "NSI-189",
+      "tier": "broader neurotrophic",
+      "analysis_role": "secondary",
+      "mechanism_note": "Proneurogenic comparator without assuming direct TrkB agonism",
+      "aliases": ["nsi-189", "nsi189", "nsi 189"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["nsi-189", "nsi189", "nsi 189"]
+    },
+    {
+      "slug": "dihexa",
+      "canonical_name": "dihexa",
+      "display_name": "Dihexa",
+      "tier": "broader neurotrophic",
+      "analysis_role": "secondary",
+      "mechanism_note": "HGF/c-Met neurotrophic comparator with a distinct proximal mechanism",
+      "aliases": ["dihexa"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["dihexa"]
+    },
+    {
+      "slug": "lions-mane",
+      "canonical_name": "lions mane",
+      "display_name": "Lion's mane",
+      "tier": "broader neurotrophic",
+      "analysis_role": "secondary",
+      "mechanism_note": "Heterogeneous mushroom and erinacine product class used as an indirect neurotrophic comparator",
+      "aliases": [
+        "lion's mane",
+        "lion’s mane",
+        "lions mane",
+        "lion mane",
+        "hericium erinaceus",
+        "erinacine",
+        "erinamax"
+      ],
+      "excluded_aliases": [],
+      "prefilter_terms": ["lion's mane", "lion’s mane", "lions mane", "lion mane", "hericium", "erinacine", "erinamax"]
+    },
+    {
+      "slug": "9-mbc",
+      "canonical_name": "9-mbc",
+      "display_name": "9-MBC",
+      "tier": "broader neurotrophic",
+      "analysis_role": "exploratory",
+      "mechanism_note": "Lower-volume exploratory neurorestorative comparator",
+      "aliases": ["9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"]
+    },
+    {
+      "slug": "bpc-157",
+      "canonical_name": "bpc-157",
+      "display_name": "BPC-157",
+      "tier": "negative control",
+      "analysis_role": "control",
+      "mechanism_note": "Same adjacent peptide/nootropic market without a BDNF/TrkB cohort claim",
+      "aliases": ["bpc-157", "bpc157", "bpc 157", "body protection compound"],
+      "excluded_aliases": [],
+      "prefilter_terms": ["bpc-157", "bpc157", "bpc 157", "body protection compound"]
+    }
+  ]
+}

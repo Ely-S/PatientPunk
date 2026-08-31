@@ -240,6 +240,19 @@ def route_bucket(route: str) -> str:
 
 _DESIRED_RESULT_PATTERNS = (
     (
+        "post-exertional malaise",
+        re.compile(
+            r"\bpem\b|post.?exertional|fatigue after exertion|"
+            r"(?:exert|activity).{0,30}(?:crash|worsen|malaise)|"
+            r"(?:crash|worsen|malaise).{0,30}(?:exert|activity)",
+            re.I,
+        ),
+    ),
+    (
+        "general fatigue",
+        re.compile(r"fatigue|tired|letharg|exhaust|sleepy|somnol", re.I),
+    ),
+    (
         "mood or depression",
         re.compile(
             r"mood|depress|anhedon|emotion|happ|well.?being|dysphor|confidence", re.I
@@ -259,7 +272,7 @@ _DESIRED_RESULT_PATTERNS = (
     (
         "energy or motivation",
         re.compile(
-            r"energy|motivat|fatigue|tired|letharg|drive|stamina|endurance", re.I
+            r"energy|motivat|drive|stamina|endurance", re.I
         ),
     ),
     ("sleep or wakefulness", re.compile(r"sleep|insomnia|wakeful|vivid dream", re.I)),
@@ -310,6 +323,15 @@ def desired_result_bucket(symptom: str) -> str:
 
 
 _SIDE_EFFECT_PATTERNS = (
+    (
+        "post-exertional malaise or exertional crash",
+        "fatigue or exertional intolerance",
+        re.compile(
+            r"\bpem\b|post.?exertional|fatigue after exertion|"
+            r"(?:exert|activity).{0,30}(?:crash|worsen|malaise)",
+            re.I,
+        ),
+    ),
     (
         "insomnia or sleep disruption",
         "sleep",

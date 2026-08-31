@@ -106,6 +106,8 @@ class PipelineASideEffectRow(BaseModel):
 
     report_id: int = Field(ge=1)
     user_id: str = Field(min_length=1)
+    drug_id: int = Field(ge=1)
+    treatment: str = Field(min_length=1)
     ordinal: int = Field(ge=0)
     raw_value: str = Field(min_length=1)
     canonical_side_effect: str = Field(min_length=1)
@@ -245,9 +247,17 @@ def _route_rows(record: PipelineBRecord) -> list[PipelineBRouteRow]:
 def _side_effect_rows(connection: sqlite3.Connection) -> list[PipelineASideEffectRow]:
     rows: list[PipelineASideEffectRow] = []
     reports = connection.execute(
-        "SELECT report_id, user_id, side_effects FROM treatment_reports"
+        """
+        SELECT reports.report_id,
+               reports.user_id,
+               reports.drug_id,
+               treatment.canonical_name,
+               reports.side_effects
+        FROM treatment_reports AS reports
+        JOIN treatment ON treatment.id = reports.drug_id
+        """
     ).fetchall()
-    for report_id, user_id, raw_side_effects in reports:
+    for report_id, user_id, drug_id, treatment, raw_side_effects in reports:
         if not raw_side_effects:
             continue
         try:
@@ -267,6 +277,8 @@ def _side_effect_rows(connection: sqlite3.Connection) -> list[PipelineASideEffec
                 PipelineASideEffectRow(
                     report_id=report_id,
                     user_id=user_id,
+                    drug_id=drug_id,
+                    treatment=treatment,
                     ordinal=ordinal,
                     raw_value=raw_value,
                     canonical_side_effect=canonical,
@@ -411,7 +423,12 @@ def _insert_pipeline_b(
     columns: list[str],
     config: CombinedDatabaseConfig,
 ) -> CombinedDatabaseReport:
-    required_source_tables = {"users", "treatment_reports", "extraction_runs"}
+    required_source_tables = {
+        "users",
+        "treatment",
+        "treatment_reports",
+        "extraction_runs",
+    }
     source_tables = {
         row[0]
         for row in connection.execute(
@@ -500,6 +517,8 @@ def _insert_pipeline_b(
         CREATE TABLE pipeline_a_side_effects (
             report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
             user_id TEXT NOT NULL REFERENCES users(user_id),
+            drug_id INTEGER NOT NULL REFERENCES treatment(id),
+            treatment TEXT NOT NULL,
             ordinal INTEGER NOT NULL,
             raw_value TEXT NOT NULL,
             canonical_side_effect TEXT NOT NULL,
@@ -525,7 +544,9 @@ def _insert_pipeline_b(
                 target_compound, dose_band_order, route_bucket, conservative_outcome
             );
         CREATE INDEX pipeline_a_side_effects_bucket_idx
-            ON pipeline_a_side_effects(side_effect_bucket, canonical_side_effect);
+            ON pipeline_a_side_effects(
+                treatment, side_effect_bucket, canonical_side_effect
+            );
         """
     )
 
@@ -629,11 +650,13 @@ def _insert_pipeline_b(
         ],
     )
     connection.executemany(
-        "INSERT INTO pipeline_a_side_effects VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pipeline_a_side_effects VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 row.report_id,
                 row.user_id,
+                row.drug_id,
+                row.treatment,
                 row.ordinal,
                 row.raw_value,
                 row.canonical_side_effect,
