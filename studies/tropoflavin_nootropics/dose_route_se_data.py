@@ -233,3 +233,72 @@ BAND_ORDER = ["<5 mg", "5 to <10 mg", "10 to <25 mg", "25 to <50 mg",
               "50 to <100 mg", ">=100 mg", "multiple bands"]
 ROUTE_ORDER = ["oral mucosal", "swallowed oral", "nasal mucosal", "dermal",
                "rectal or vaginal", "parenteral", "pulmonary", "multiple route families"]
+
+
+# --------------------------------------------------------------------------------------
+# Side-effect vocabulary.
+#
+# comparators.db stores whatever string the model produced, so `headache` and `headaches`
+# are two entries for one complaint. Presence/absence per person is safe without this;
+# any count or profile is not. Ordered -- first match wins, so put the specific patterns
+# before the general ones.
+# --------------------------------------------------------------------------------------
+SE_CATEGORIES = [
+    (r"insomnia|sleep|falling asleep|stimulation at night|wake|awake|dream|drowsy",
+     "sleep / wakefulness"),
+    (r"anxi|panic|overstimul|stimulat|jitter|wired|irritab|agitat|restless|crash",
+     "activation / anxiety"),
+    (r"cogniti|brain fog|delirium|spacine|dpdr|depersonal|memory|social|nonsense"
+     r"|concentrat|confus", "cognitive / perceptual"),
+    (r"depress|apath|unmotivat|down in the dumps|anhedon|mood|flat|emotional|blunt",
+     "mood / motivation"),
+    (r"headache|migraine", "headache"),
+    (r"fatigue|tired|lethargy|less energetic|sedat|exhaust", "fatigue / sedation"),
+    (r"hair|hives|boils|rash|acne|skin|itch", "hair / skin"),
+    (r"appetite|craving|food|weight|nausea|stomach|\bgi\b|digest", "appetite / GI"),
+    (r"toleran|withdraw|depend|rebound|duration|short.lived", "tolerance / duration"),
+    (r"libido|sexual|erect", "sexual"),
+    (r"pain|ache|cns overstimulation", "pain"),
+    (r"vision|visual|\beye|optic", "vision"),
+    (r"heart|blood pressure|palpit|tachy|\bbp\b", "cardiovascular"),
+]
+
+
+def canon_side_effect(term: str) -> str | None:
+    """Category for one raw side-effect string, or None if nothing matches.
+
+    Returning None rather than an 'other' bucket is deliberate: unmapped terms are
+    reported separately so the vocabulary's blind spots stay visible.
+    """
+    t = (term or "").strip().lower()
+    for pattern, label in SE_CATEGORIES:
+        if re.search(pattern, t):
+            return label
+    return None
+
+
+def side_effect_terms(con, author: str, drug_id: int) -> list[str]:
+    """Every raw side-effect string this author recorded for this drug."""
+    out = []
+    for (blob,) in con.execute(
+            "select side_effects from treatment_reports where drug_id=? and user_id=?",
+            (drug_id, author)):
+        if not blob:
+            continue
+        try:
+            arr = json.loads(blob) or []
+        except Exception:
+            continue
+        out += [str(x).strip().lower() for x in arr if str(x).strip()]
+    return out
+
+
+def report_count(con, author: str, drug_id: int) -> int:
+    """How many sentiment reports this author filed about this drug.
+
+    The single strongest correlate of 'named a side effect', and almost certainly a
+    detection artifact rather than a risk factor -- more text, more chances.
+    """
+    return con.execute(
+        "select count(*) from treatment_reports where drug_id=? and user_id=?",
+        (drug_id, author)).fetchone()[0]
