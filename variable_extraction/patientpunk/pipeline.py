@@ -24,16 +24,19 @@ Example
 from __future__ import annotations
 
 import json
+import pathlib
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._utils import clean_temp_dir, find_discovery_reports, find_newest_glob, get_schema_id, llm_config
+from ._utils import (PACKAGE_ROOT, clean_temp_dir, find_discovery_reports,
+                      find_newest_glob, get_schema_id, llm_config)
 from .codebook import run_codebook
 from .discover import run_discovery
 from .export_csv import run_export_csv
-from .llm_extract import run_llm_extract
+from .llm_extract import MAX_TEXT_CHARS, run_llm_extract
 from .phase import PhaseResult
 
 # Intermediate file glob patterns that live in temp_dir.
@@ -55,6 +58,53 @@ _TEMP_PATTERNS: list[str] = [
 # ---------------------------------------------------------------------------
 # Configuration dataclass
 # ---------------------------------------------------------------------------
+
+def _git_commit() -> str | None:
+    """The commit this run's code came from, or None outside a checkout.
+
+    Read from .git directly rather than shelling out: the pipeline is deliberately
+    subprocess-free (see TestPipelineNoSubprocess).
+
+    Without this an output cannot be traced back to the code that produced it, and a
+    re-run yielding different records is indistinguishable from a code change. It does
+    not pin the MODEL, which is the other half of the same problem.
+    """
+    for base in (PACKAGE_ROOT, *PACKAGE_ROOT.parents):
+        dot = base / ".git"
+        if not dot.exists():
+            continue
+        git_dir = dot
+        if dot.is_file():
+            # A worktree's .git is a file: "gitdir: <path>".
+            try:
+                git_dir = pathlib.Path(dot.read_text(encoding="utf-8").split(":", 1)[1].strip())
+            except (OSError, IndexError):
+                return None
+        try:
+            head = (git_dir / "HEAD").read_text(encoding="utf-8").strip()
+        except OSError:
+            return None
+        if not head.startswith("ref:"):
+            return head or None            # detached HEAD holds the hash itself
+        ref = head.split(":", 1)[1].strip()
+        try:
+            return (git_dir / ref).read_text(encoding="utf-8").strip() or None
+        except OSError:
+            pass
+        # A packed ref has no loose file.
+        try:
+            for line in (git_dir / "packed-refs").read_text(encoding="utf-8").splitlines():
+                if line.endswith(" " + ref):
+                    return line.split(" ", 1)[0]
+        except OSError:
+            return None
+        return None
+    return None
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 
 class PipelineConfig(BaseModel):
     """All settings that control a pipeline run."""
@@ -217,7 +267,9 @@ class Pipeline:
         # Record the LLM configuration (model / provider / base_url / temperature)
         # so every output is traceable to the model + settings that produced it.
         prov = {**llm_config(), "schema_id": self._schema_id,
-                "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode}
+                "run_llm": cfg.run_llm, "discovery_mode": cfg.discovery_mode,
+                "commit": _git_commit(), "extracted_at": _utc_now(),
+                "max_text_chars": MAX_TEXT_CHARS}
         try:
             (cfg.input_dir / "llm_provenance.json").write_text(
                 json.dumps(prov, indent=2), encoding="utf-8")

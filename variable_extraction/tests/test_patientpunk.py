@@ -3162,6 +3162,29 @@ class TestRunExportCsv:
         assert row["conditions"] == "POTS"  # gap still filled from the second
 
 
+class TestProvenanceRecordsItsCommit:
+    def test_commit_is_read_without_shelling_out(self, monkeypatch):
+        """The pipeline is subprocess-free; the commit must come from .git itself."""
+        import subprocess
+        from patientpunk.pipeline import _git_commit
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("no subprocess"))
+        got = _git_commit()
+        assert got is None or (len(got) == 40 and all(c in "0123456789abcdef" for c in got))
+
+    def test_commit_lookup_survives_a_missing_checkout(self, monkeypatch, tmp_path):
+        import patientpunk.pipeline as m
+        monkeypatch.setattr(m, "PACKAGE_ROOT", tmp_path)
+        assert m._git_commit() is None
+
+    def test_provenance_carries_commit_and_cap(self):
+        """A record that cannot name its code or its text cap is not traceable."""
+        import inspect
+        from patientpunk.pipeline import Pipeline
+        src = inspect.getsource(Pipeline.run)
+        for key in ('"commit"', '"max_text_chars"', '"extracted_at"'):
+            assert key in src, key
+
+
 class TestPipelineNoSubprocess:
     def test_pipeline_does_not_call_subprocess(self, tmp_path, monkeypatch):
         import subprocess
