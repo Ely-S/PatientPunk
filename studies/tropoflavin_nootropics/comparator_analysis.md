@@ -135,34 +135,38 @@ These are the eight most frequently reported canonical effects per compound, ded
 | BPC-157 | headache or migraine | neurologic | 10 | 13 |
 | BPC-157 | cardiovascular or autonomic | cardiovascular or autonomic | 9 | 10 |
 
-## Treatment-linked dosage
+## Dose-stratified side-effect reporting
 
-| Compound | Dose band | Observations | Authors |
-|---|---|---|---|
-| 4'-DMA | non-quantitative | 4 | 4 |
-| 4'-DMA | <5 mg | 3 | 2 |
-| 4'-DMA | 5 to <10 mg | 7 | 7 |
-| 4'-DMA | 10 to <25 mg | 14 | 14 |
-| 4'-DMA | 25 to <50 mg | 2 | 1 |
-| 4'-DMA | 50 to <100 mg | 1 | 1 |
-| 7,8-DHF | non-quantitative | 3 | 3 |
-| 7,8-DHF | <5 mg | 3 | 1 |
-| 7,8-DHF | 5 to <10 mg | 1 | 1 |
-| 7,8-DHF | 10 to <25 mg | 11 | 9 |
-| 7,8-DHF | 25 to <50 mg | 27 | 26 |
-| 7,8-DHF | 50 to <100 mg | 13 | 13 |
-| 7,8-DHF | >=100 mg | 6 | 6 |
+Side-effect reporting is joined by hashed author and compound across all of that author's reports. The denominator is every distinct author in the dose or route bucket. Classifier coverage shows how many denominator authors also had a retained comparator report. These are cross-report associations, not administration-event links, incidence estimates, or dose-response evidence.
 
-## Treatment-linked administration route
+| Compound | Dose band | Observations | Authors | Classifier coverage | Any side effect | Leading mapped effects |
+|---|---|---|---|---|---|---|
+| 4'-DMA | non-quantitative | 4 | 4 | 1/4 | 1/4 (25.0%; 95% CI 4.6% to 69.9%) | none mapped |
+| 4'-DMA | <5 mg | 3 | 2 | 2/2 | 2/2 (100.0%; 95% CI 34.2% to 100.0%) | activation or irritability: 1/2 (50.0%); anxiety or panic: 1/2 (50.0%); cognitive or perceptual disturbance: 1/2 (50.0%) |
+| 4'-DMA | 5 to <10 mg | 7 | 7 | 5/7 | 2/7 (28.6%; 95% CI 8.2% to 64.1%) | insomnia or sleep disruption: 2/7 (28.6%); headache or migraine: 1/7 (14.3%) |
+| 4'-DMA | 10 to <25 mg | 14 | 14 | 6/14 | 2/14 (14.3%; 95% CI 4.0% to 39.9%) | activation or irritability: 1/14 (7.1%); cognitive or perceptual disturbance: 1/14 (7.1%); fatigue or sedation: 1/14 (7.1%) |
+| 4'-DMA | 25 to <50 mg | 2 | 1 | 1/1 | 0/1 (0.0%; 95% CI 0.0% to 79.3%) | none mapped |
+| 4'-DMA | 50 to <100 mg | 1 | 1 | 0/1 | 0/1 (0.0%; 95% CI 0.0% to 79.3%) | none mapped |
+| 7,8-DHF | non-quantitative | 3 | 3 | 3/3 | 1/3 (33.3%; 95% CI 6.1% to 79.2%) | anxiety or panic: 1/3 (33.3%) |
+| 7,8-DHF | <5 mg | 3 | 1 | 1/1 | 1/1 (100.0%; 95% CI 20.7% to 100.0%) | insomnia or sleep disruption: 1/1 (100.0%) |
+| 7,8-DHF | 5 to <10 mg | 1 | 1 | 1/1 | 1/1 (100.0%; 95% CI 20.7% to 100.0%) | anxiety or panic: 1/1 (100.0%) |
+| 7,8-DHF | 10 to <25 mg | 11 | 9 | 8/9 | 3/9 (33.3%; 95% CI 12.1% to 64.6%) | headache or migraine: 2/9 (22.2%); activation or irritability: 1/9 (11.1%); anxiety or panic: 1/9 (11.1%) |
+| 7,8-DHF | 25 to <50 mg | 27 | 26 | 20/26 | 10/26 (38.5%; 95% CI 22.4% to 57.5%) | headache or migraine: 4/26 (15.4%); insomnia or sleep disruption: 2/26 (7.7%); appetite change: 1/26 (3.8%) |
+| 7,8-DHF | 50 to <100 mg | 13 | 13 | 12/13 | 7/13 (53.8%; 95% CI 29.1% to 76.8%) | headache or migraine: 5/13 (38.5%); cognitive or perceptual disturbance: 3/13 (23.1%); activation or irritability: 1/13 (7.7%) |
+| 7,8-DHF | >=100 mg | 6 | 6 | 4/6 | 3/6 (50.0%; 95% CI 18.8% to 81.2%) | headache or migraine: 2/6 (33.3%); cognitive or perceptual disturbance: 1/6 (16.7%); tolerance or short duration: 1/6 (16.7%) |
 
-| Compound | Route family | Observations | Authors |
-|---|---|---|---|
-| 4'-DMA | oral mucosal | 16 | 16 |
-| 4'-DMA | swallowed oral | 5 | 5 |
-| 7,8-DHF | oral mucosal | 32 | 32 |
-| 7,8-DHF | nasal mucosal | 7 | 7 |
-| 7,8-DHF | swallowed oral | 5 | 5 |
-| 7,8-DHF | dermal | 2 | 2 |
+## Route-stratified side-effect reporting
+
+Side-effect reporting is joined by hashed author and compound across all of that author's reports. The denominator is every distinct author in the dose or route bucket. Classifier coverage shows how many denominator authors also had a retained comparator report. These are cross-report associations, not administration-event links, incidence estimates, or dose-response evidence.
+
+| Compound | Route family | Observations | Authors | Classifier coverage | Any side effect | Leading mapped effects |
+|---|---|---|---|---|---|---|
+| 4'-DMA | oral mucosal | 16 | 16 | 13/16 | 5/16 (31.2%; 95% CI 14.2% to 55.6%) | activation or irritability: 1/16 (6.2%); cognitive or perceptual disturbance: 1/16 (6.2%); fatigue or sedation: 1/16 (6.2%) |
+| 4'-DMA | swallowed oral | 5 | 5 | 2/5 | 2/5 (40.0%; 95% CI 11.8% to 76.9%) | insomnia or sleep disruption: 1/5 (20.0%) |
+| 7,8-DHF | dermal | 2 | 2 | 2/2 | 1/2 (50.0%; 95% CI 9.5% to 90.5%) | headache or migraine: 1/2 (50.0%) |
+| 7,8-DHF | nasal mucosal | 7 | 7 | 5/7 | 2/7 (28.6%; 95% CI 8.2% to 64.1%) | headache or migraine: 2/7 (28.6%) |
+| 7,8-DHF | oral mucosal | 32 | 32 | 27/32 | 13/32 (40.6%; 95% CI 25.5% to 57.7%) | insomnia or sleep disruption: 5/32 (15.6%); headache or migraine: 4/32 (12.5%); anxiety or panic: 2/32 (6.2%) |
+| 7,8-DHF | swallowed oral | 5 | 5 | 3/5 | 1/5 (20.0%; 95% CI 3.6% to 62.4%) | headache or migraine: 1/5 (20.0%) |
 
 ## Symptom-linked outcomes
 

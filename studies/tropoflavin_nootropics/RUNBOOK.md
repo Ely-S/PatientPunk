@@ -245,6 +245,14 @@ and a matched-author exact sensitivity analysis. Side effects are joined through
 classified treatment ID. Dose, route, and symptom outcomes come from the linked
 Pipeline B tables and do not invent administration-level pairings.
 
+The aggregate report also joins the two private databases by hashed author and target
+compound. For each dose and route bucket it reports the number of distinct authors,
+how many had a retained comparator classification, how many reported any side effect,
+the all-author percentage with a Wilson interval, and the leading mapped effects.
+This is an author-level cross-report association. It does not claim that a dose or route
+and side effect came from the same administration event. Authors can appear in more
+than one bucket, so rows are not independent dose-response groups.
+
 The committed report contains aggregate tables and SHA-256 hashes only. Before using
 it, require a nonzero report count for every cohort member in
 `comparator_pipeline_manifest.json`, `PRAGMA integrity_check = ok`, and an empty

@@ -41,6 +41,17 @@ disturbance (5), activation or irritability (4), and headache or migraine (3). T
 are author-deduplicated reporting counts, not adverse-event incidence. The linked
 outcome data contained general-fatigue targets but no explicit PEM-targeted rows.
 
+The author-level cross-report join adds side-effect reporting percentages to each dose
+and route bucket. For plain 7,8-DHF, any-side-effect reporting was 33.3% (3/9) at
+10 to <25 mg, 38.5% (10/26) at 25 to <50 mg, 53.8% (7/13) at 50 to <100 mg, and
+50.0% (3/6) at >=100 mg. Oral-mucosal reports were 40.6% (13/32), nasal-mucosal
+28.6% (2/7), swallowed-oral 20.0% (1/5), and dermal 50.0% (1/2). The derivative
+was 28.6% (2/7) at 5 to <10 mg and 14.3% (2/14) at 10 to <25 mg; its route strata
+were 31.2% (5/16) oral mucosal and 40.0% (2/5) swallowed oral. Very small cells,
+incomplete classifier coverage, repeated authors across buckets, and the lack of an
+administration-event link make these descriptive signal checks only. They do not show
+a credible dose-response or route effect.
+
 ---
 
 ## 1. Data

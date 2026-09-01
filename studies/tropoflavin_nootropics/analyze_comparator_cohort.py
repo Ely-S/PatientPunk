@@ -30,6 +30,10 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 SIGNAL_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0}
 SENTIMENTS = ("positive", "negative", "mixed", "neutral")
+STUDY_TARGET_TO_SLUG = {
+    "7,8-DHF": "78dhf",
+    "4'-DMA": "4dma-78dhf",
+}
 
 
 class ComparatorAnalysisConfig(BaseModel):
@@ -107,6 +111,51 @@ class SideEffectSummary(BaseModel):
     safety_domain: str
     users: int = Field(ge=0)
     mentions: int = Field(ge=0)
+
+
+class CanonicalSideEffectRecord(BaseModel):
+    """One internally normalized, treatment-linked side-effect record."""
+
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    user_id: str
+    canonical_side_effect: str
+    safety_domain: str
+
+
+class LeadingEffectSummary(BaseModel):
+    """Author-deduplicated effect within one dose or route stratum."""
+
+    model_config = ConfigDict(frozen=True)
+
+    canonical_side_effect: str
+    authors: int = Field(ge=1)
+
+
+class StratifiedSideEffectSummary(BaseModel):
+    """Cross-report side-effect coverage for one dose or route bucket."""
+
+    model_config = ConfigDict(frozen=True)
+
+    compound: str
+    bucket: str
+    observations: int = Field(ge=1)
+    authors: int = Field(ge=1)
+    classified_authors: int = Field(ge=0)
+    side_effect_authors: int = Field(ge=0)
+    side_effect_rate: float = Field(ge=0, le=1)
+    ci_low: float = Field(ge=0, le=1)
+    ci_high: float = Field(ge=0, le=1)
+    leading_effects: tuple[LeadingEffectSummary, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_author_counts(self) -> StratifiedSideEffectSummary:
+        if self.classified_authors > self.authors:
+            raise ValueError("classified authors exceed stratum authors")
+        if self.side_effect_authors > self.classified_authors:
+            raise ValueError("side-effect authors exceed classified authors")
+        return self
 
 
 def _connect_readonly(path: Path) -> sqlite3.Connection:
@@ -271,10 +320,10 @@ def _comparisons(
     )
 
 
-def _side_effects(
+def _canonical_side_effect_records(
     connection: sqlite3.Connection,
     cohort: ComparatorCohort,
-) -> tuple[SideEffectSummary, ...]:
+) -> tuple[CanonicalSideEffectRecord, ...]:
     canonical_to_slug = {
         compound.canonical_name.lower(): compound.slug for compound in cohort.compounds
     }
@@ -296,8 +345,7 @@ def _side_effects(
         if key not in latest or row["run_id"] > latest[key]["run_id"]:
             latest[key] = row
 
-    mentions: dict[tuple[str, str, str], int] = defaultdict(int)
-    authors: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    records: list[CanonicalSideEffectRecord] = []
     for (_, slug), row in latest.items():
         try:
             values = json.loads(row["side_effects"] or "[]")
@@ -307,10 +355,31 @@ def _side_effects(
             continue
         for raw_value in values:
             canonical, domain = canonical_side_effect(str(raw_value))
-            key = (slug, canonical, domain)
-            mentions[key] += 1
             if row["user_id"]:
-                authors[key].add(row["user_id"])
+                records.append(
+                    CanonicalSideEffectRecord(
+                        slug=slug,
+                        user_id=row["user_id"],
+                        canonical_side_effect=canonical,
+                        safety_domain=domain,
+                    )
+                )
+    return tuple(records)
+
+
+def _side_effects(
+    records: tuple[CanonicalSideEffectRecord, ...],
+) -> tuple[SideEffectSummary, ...]:
+    mentions: dict[tuple[str, str, str], int] = defaultdict(int)
+    authors: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for record in records:
+        key = (
+            record.slug,
+            record.canonical_side_effect,
+            record.safety_domain,
+        )
+        mentions[key] += 1
+        authors[key].add(record.user_id)
     return tuple(
         SideEffectSummary(
             slug=slug,
@@ -338,7 +407,146 @@ def _percent(value: float) -> str:
     return f"{100 * value:.1f}%"
 
 
-def _study_sections(path: Path | None) -> str:
+def _stratified_side_effects(
+    connection: sqlite3.Connection,
+    *,
+    table: str,
+    bucket_column: str,
+    order_column: str,
+    classified_authors: dict[str, set[str]],
+    side_effect_records: tuple[CanonicalSideEffectRecord, ...],
+) -> tuple[StratifiedSideEffectSummary, ...]:
+    """Summarize author-level side-effect reporting within dose or route strata."""
+    allowed = {
+        (
+            "pipeline_b_dosages",
+            "dose_band",
+            "dose_band_order",
+        ),
+        (
+            "pipeline_b_administration_routes",
+            "route_bucket",
+            "route_bucket",
+        ),
+    }
+    if (table, bucket_column, order_column) not in allowed:
+        raise ValueError("Unsupported side-effect stratum")
+
+    authors_by_bucket: dict[tuple[str, str], set[str]] = defaultdict(set)
+    observations: dict[tuple[str, str], int] = defaultdict(int)
+    order_by_bucket: dict[tuple[str, str], int | str] = {}
+    rows = connection.execute(
+        f"""
+        SELECT author_hash, target_compound, {bucket_column}, {order_column}
+        FROM {table}
+        WHERE target_compound IS NOT NULL AND {bucket_column} IS NOT NULL
+        """
+    ).fetchall()
+    for row in rows:
+        if row["target_compound"] not in STUDY_TARGET_TO_SLUG:
+            continue
+        key = (row["target_compound"], row[bucket_column])
+        authors_by_bucket[key].add(row["author_hash"])
+        observations[key] += 1
+        order_by_bucket[key] = row[order_column]
+
+    any_side_effect_authors: dict[str, set[str]] = defaultdict(set)
+    mapped_effect_authors: dict[str, dict[str, set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
+    for record in side_effect_records:
+        any_side_effect_authors[record.slug].add(record.user_id)
+        if record.safety_domain != "other":
+            mapped_effect_authors[record.slug][record.canonical_side_effect].add(
+                record.user_id
+            )
+
+    summaries: list[StratifiedSideEffectSummary] = []
+    for (compound, bucket), authors in authors_by_bucket.items():
+        slug = STUDY_TARGET_TO_SLUG[compound]
+        side_effect_authors = authors & any_side_effect_authors.get(slug, set())
+        covered_authors = authors & classified_authors.get(slug, set())
+        effect_counts = sorted(
+            (
+                len(authors & effect_authors),
+                canonical_effect,
+            )
+            for canonical_effect, effect_authors in mapped_effect_authors.get(
+                slug, {}
+            ).items()
+            if authors & effect_authors
+        )
+        effect_counts.sort(key=lambda item: (-item[0], item[1]))
+        ci_low, ci_high = _wilson(len(side_effect_authors), len(authors))
+        summaries.append(
+            StratifiedSideEffectSummary(
+                compound=compound,
+                bucket=bucket,
+                observations=observations[(compound, bucket)],
+                authors=len(authors),
+                classified_authors=len(covered_authors),
+                side_effect_authors=len(side_effect_authors),
+                side_effect_rate=len(side_effect_authors) / len(authors),
+                ci_low=ci_low,
+                ci_high=ci_high,
+                leading_effects=tuple(
+                    LeadingEffectSummary(
+                        canonical_side_effect=canonical_effect,
+                        authors=count,
+                    )
+                    for count, canonical_effect in effect_counts[:3]
+                ),
+            )
+        )
+
+    return tuple(
+        sorted(
+            summaries,
+            key=lambda summary: (
+                summary.compound,
+                order_by_bucket[(summary.compound, summary.bucket)]
+                if order_by_bucket[(summary.compound, summary.bucket)] is not None
+                else -1,
+                summary.bucket,
+            ),
+        )
+    )
+
+
+def _stratified_rows(
+    summaries: tuple[StratifiedSideEffectSummary, ...],
+) -> list[list[Any]]:
+    rows: list[list[Any]] = []
+    for summary in summaries:
+        leading = "; ".join(
+            f"{effect.canonical_side_effect}: {effect.authors}/{summary.authors} "
+            f"({_percent(effect.authors / summary.authors)})"
+            for effect in summary.leading_effects
+        ) or "none mapped"
+        rows.append(
+            [
+                summary.compound,
+                summary.bucket,
+                summary.observations,
+                summary.authors,
+                f"{summary.classified_authors}/{summary.authors}",
+                (
+                    f"{summary.side_effect_authors}/{summary.authors} "
+                    f"({_percent(summary.side_effect_rate)}; 95% CI "
+                    f"{_percent(summary.ci_low)} to {_percent(summary.ci_high)})"
+                ),
+                leading,
+            ]
+        )
+    return rows
+
+
+def _study_sections(
+    path: Path | None,
+    *,
+    classified_authors: dict[str, set[str]],
+    side_effect_records: tuple[CanonicalSideEffectRecord, ...],
+) -> str:
     if path is None:
         return ""
     with closing(_connect_readonly(path)) as connection:
@@ -357,24 +565,22 @@ def _study_sections(path: Path | None) -> str:
             raise ValueError(
                 f"Study database is missing tables: {sorted(required - tables)}"
             )
-        dose_rows = connection.execute(
-            """
-            SELECT target_compound, dose_band, COUNT(*), COUNT(DISTINCT author_hash)
-            FROM pipeline_b_dosages
-            WHERE target_compound IS NOT NULL
-            GROUP BY target_compound, dose_band, dose_band_order
-            ORDER BY target_compound, COALESCE(dose_band_order, -1)
-            """
-        ).fetchall()
-        route_rows = connection.execute(
-            """
-            SELECT target_compound, route_bucket, COUNT(*), COUNT(DISTINCT author_hash)
-            FROM pipeline_b_administration_routes
-            WHERE target_compound IS NOT NULL
-            GROUP BY target_compound, route_bucket
-            ORDER BY target_compound, COUNT(*) DESC
-            """
-        ).fetchall()
+        dose_summaries = _stratified_side_effects(
+            connection,
+            table="pipeline_b_dosages",
+            bucket_column="dose_band",
+            order_column="dose_band_order",
+            classified_authors=classified_authors,
+            side_effect_records=side_effect_records,
+        )
+        route_summaries = _stratified_side_effects(
+            connection,
+            table="pipeline_b_administration_routes",
+            bucket_column="route_bucket",
+            order_column="route_bucket",
+            classified_authors=classified_authors,
+            side_effect_records=side_effect_records,
+        )
         outcome_rows = connection.execute(
             """
             SELECT target_compound, desired_result_bucket,
@@ -405,18 +611,45 @@ def _study_sections(path: Path | None) -> str:
         f"{'entry' if pem_entries == 1 else 'entries'}. General fatigue remains a "
         "separate endpoint bucket."
     )
+    stratification_note = (
+        "Side-effect reporting is joined by hashed author and compound across all "
+        "of that author's reports. The denominator is every distinct author in the "
+        "dose or route bucket. Classifier coverage shows how many denominator authors "
+        "also had a retained comparator report. These are cross-report associations, "
+        "not administration-event links, incidence estimates, or dose-response evidence."
+    )
 
     return "\n\n".join(
         [
-            "## Treatment-linked dosage\n\n"
+            "## Dose-stratified side-effect reporting\n\n"
+            + stratification_note
+            + "\n\n"
             + _table(
-                ["Compound", "Dose band", "Observations", "Authors"],
-                [list(row) for row in dose_rows],
+                [
+                    "Compound",
+                    "Dose band",
+                    "Observations",
+                    "Authors",
+                    "Classifier coverage",
+                    "Any side effect",
+                    "Leading mapped effects",
+                ],
+                _stratified_rows(dose_summaries),
             ),
-            "## Treatment-linked administration route\n\n"
+            "## Route-stratified side-effect reporting\n\n"
+            + stratification_note
+            + "\n\n"
             + _table(
-                ["Compound", "Route family", "Observations", "Authors"],
-                [list(row) for row in route_rows],
+                [
+                    "Compound",
+                    "Route family",
+                    "Observations",
+                    "Authors",
+                    "Classifier coverage",
+                    "Any side effect",
+                    "Leading mapped effects",
+                ],
+                _stratified_rows(route_summaries),
             ),
             "## Symptom-linked outcomes\n\n"
             + pem_note
@@ -439,7 +672,8 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
         votes = _load_votes(connection, cohort)
         summaries = _sentiment_summaries(cohort, votes)
         comparisons = _comparisons(cohort, votes, summaries)
-        side_effects = _side_effects(connection, cohort)
+        side_effect_records = _canonical_side_effect_records(connection, cohort)
+        side_effects = _side_effects(side_effect_records)
 
     by_slug = cohort.by_slug()
     sentiment_rows = []
@@ -563,7 +797,11 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
             )
         ),
     ]
-    study_sections = _study_sections(config.study_database)
+    study_sections = _study_sections(
+        config.study_database,
+        classified_authors={slug: set(author_votes) for slug, author_votes in votes.items()},
+        side_effect_records=side_effect_records,
+    )
     if study_sections:
         sections.append(study_sections)
     sections.extend(

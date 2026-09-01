@@ -153,8 +153,14 @@ def _create_study_database(path: Path) -> None:
                 desired_result_bucket TEXT, outcome TEXT
             );
             INSERT INTO pipeline_b_dosages VALUES ('u1', '7,8-DHF', '25 to <50 mg', 3);
+            INSERT INTO pipeline_b_dosages VALUES ('u2', '7,8-DHF', '25 to <50 mg', 3);
+            INSERT INTO pipeline_b_dosages VALUES ('u3', '7,8-DHF', '25 to <50 mg', 3);
             INSERT INTO pipeline_b_administration_routes
                 VALUES ('u1', '7,8-DHF', 'oral mucosal', 'sublingual');
+            INSERT INTO pipeline_b_administration_routes
+                VALUES ('u2', '7,8-DHF', 'oral mucosal', 'sublingual');
+            INSERT INTO pipeline_b_administration_routes
+                VALUES ('u3', '7,8-DHF', 'oral mucosal', 'sublingual');
             INSERT INTO pipeline_b_treatment_outcomes
                 VALUES ('u1', '7,8-DHF', 'post-exertional malaise', 'helped');
             """
@@ -184,5 +190,8 @@ def test_report_is_aggregate_treatment_linked_and_reproducible(tmp_path: Path) -
     assert "post-exertional malaise" in report
     assert "Explicit PEM target coverage: 1 treatment-linked outcome entry." in report
     assert "25 to <50 mg" in report
+    assert "| 7,8-DHF | 25 to <50 mg | 3 | 3 | 2/3 | 2/3 (66.7%;" in report
+    assert "insomnia or sleep disruption: 1/3 (33.3%)" in report
+    assert "cross-report associations" in report
     assert str(tmp_path.resolve()) not in report
     assert "SHA-256" in report
