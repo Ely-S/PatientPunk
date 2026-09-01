@@ -15,7 +15,8 @@ STUDY = REPO / "studies" / "tropoflavin_nootropics"
 DATA_ROOT = Path(os.environ.get("PATIENTPUNK_DATA") or REPO.parent / "PatientPunk_data")
 DATA = DATA_ROOT / "studies" / "tropoflavin_nootropics" / "runs"
 
-DB_BLOCK = f'''DB_PATH = r"{DATA / '2026-08-31-comparator-cohort/sentiment/comparators.db'}"
+DB_BLOCK = f'''import sys
+DB_PATH = r"{DATA / '2026-08-31-comparator-cohort/sentiment/comparators.db'}"
 STUDY_DIR = r"{STUDY}"
 if not os.path.exists(DB_PATH):
     raise FileNotFoundError(DB_PATH)
@@ -45,10 +46,10 @@ bands is non-significant, and so is sublingual against every other route.
 
 This is the second build. The first rested on an extraction that had silently missed a
 large share of the compound mentions in its own corpus — see issue #143. A repair run
-recovered 25 exposures, raising the dosed sample by 28% and the routed sample by 41%.
-**The conclusion did not change.** That is worth stating plainly: the added data made the
-intervals narrower without moving them off the baseline, which is a more informative null
-than the one we had before.
+recovered 25 exposures, raising the dosed sample by 28% and the routed sample by 35%.
+**The conclusion did not change.** The added data narrowed the mean 95% interval from 59
+to 55 percentage points and moved nothing off the baseline. That is a modest gain, and
+saying so is the point: this is a better-supported null, not a new result.
 """)
 
 # ── data ──────────────────────────────────────────────────────────────────────────
@@ -69,6 +70,10 @@ about something else.""")
 
 code("""import dose_route_se_data as D
 import collections
+
+# The setup cell opened comparators.db alone. The merge also reads the linked study
+# database, so let the module open both -- it attaches the linked db as schema `L`.
+conn = D.connect()
 
 rows = D.build(conn)
 obs  = [r for r in rows if r["observed"]]
@@ -97,11 +102,9 @@ Three doses fail that check and are dropped here. All three were verified by han
 belonging to a different compound in the same passage — 100 mg of Phenyl Hydrazide,
 10 mg of Kratom, and "less than 5 mg" of a tryptamine.""")
 
-code("""dropped = []
-for (author, compound), rec in D.load_recovered().items():
-    pass  # load_recovered already applies the filter; show what it removed
+code("""import csv
 
-import csv, re
+dropped = []
 raw_pairs = kept_pairs = 0
 for row in csv.DictReader((D.REPAIR / "improved" / "records.csv").open(encoding="utf-8")):
     text = None
@@ -152,8 +155,12 @@ def rate_table(subset, key, order):
 
 def forest(table, title, baseline, ax):
     y = np.arange(len(table))[::-1]
-    ax.axvline(100 * baseline, ls="--", lw=1, color="#888", zorder=1,
-               label=f"baseline {100*baseline:.1f}%")
+    ax.axvline(100 * baseline, ls="--", lw=1, color="#888", zorder=1)
+    # Direct-label the reference line: a legend box collides with the widest bar.
+    # Blended transform -- x in data units, y as a fraction of the axes.
+    ax.text(100 * baseline + 1.5, 0.985, f"cohort baseline {100*baseline:.1f}%",
+            transform=ax.get_xaxis_transform(), va="top", ha="left",
+            fontsize=8, color="#666")
     for yi, row in zip(y, table):
         ax.plot([100 * row["lo"], 100 * row["hi"]], [yi, yi], lw=6,
                 color="#2a78d6", alpha=0.25, solid_capstyle="butt", zorder=2)
@@ -164,7 +171,7 @@ def forest(table, title, baseline, ax):
     ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
     ax.grid(axis="x", lw=0.5, alpha=0.3); ax.set_axisbelow(True)
     for s in ("top", "right", "left"): ax.spines[s].set_visible(False)
-    ax.legend(loc="lower right", fontsize=8, frameon=False)
+    ax.margins(y=0.08)
 
 base = sum(r["has_se"] for r in obs) / len(obs)
 dose_tbl = rate_table(obs, "dose_band", D.BAND_ORDER)
