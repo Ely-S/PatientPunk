@@ -387,6 +387,24 @@ def _study_sections(path: Path | None) -> str:
             ORDER BY target_compound, COUNT(DISTINCT author_hash) DESC
             """
         ).fetchall()
+        outcome_coverage = dict(
+            connection.execute(
+                """
+                SELECT desired_result_bucket, COUNT(*)
+                FROM pipeline_b_treatment_outcomes
+                WHERE target_compound IS NOT NULL
+                  AND desired_result_bucket != 'unspecified'
+                GROUP BY desired_result_bucket
+                """
+            ).fetchall()
+        )
+
+    pem_entries = int(outcome_coverage.get("post-exertional malaise", 0))
+    pem_note = (
+        f"Explicit PEM target coverage: {pem_entries} treatment-linked outcome "
+        f"{'entry' if pem_entries == 1 else 'entries'}. General fatigue remains a "
+        "separate endpoint bucket."
+    )
 
     return "\n\n".join(
         [
@@ -401,6 +419,8 @@ def _study_sections(path: Path | None) -> str:
                 [list(row) for row in route_rows],
             ),
             "## Symptom-linked outcomes\n\n"
+            + pem_note
+            + "\n\n"
             + _table(
                 ["Compound", "Target symptom", "Authors", "Helped", "No effect", "Worsened"],
                 [list(row) for row in outcome_rows],

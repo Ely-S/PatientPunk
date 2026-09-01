@@ -228,7 +228,7 @@ uv run python -m studies.tropoflavin_nootropics.run_comparator_pipeline `
   --corpus "$comparatorCorpus" `
   --database "$comparatorDb" `
   --output-dir "$comparatorOutput" `
-  --workers 12 `
+  --workers 8 `
   --max-upstream-chars 1500
 
 uv run python -m studies.tropoflavin_nootropics.analyze_comparator_cohort `
@@ -249,6 +249,27 @@ The committed report contains aggregate tables and SHA-256 hashes only. Before u
 it, require a nonzero report count for every cohort member in
 `comparator_pipeline_manifest.json`, `PRAGMA integrity_check = ok`, and an empty
 foreign-key check.
+
+The completed 2026-08-31 run produced the following private-database counts. These
+counts are safe aggregates; the corpus, cache, database, and manifest are not committed.
+
+| Compound | Reports | Authors |
+|---|---:|---:|
+| 7,8-DHF | 653 | 279 |
+| 4'-DMA-7,8-DHF | 159 | 88 |
+| Semax | 5,904 | 2,133 |
+| Cerebrolysin | 1,472 | 572 |
+| Selank | 2,170 | 992 |
+| NSI-189 | 2,673 | 879 |
+| Dihexa | 635 | 272 |
+| Lion's mane | 10,459 | 5,215 |
+| 9-MBC | 348 | 177 |
+| BPC-157 | 1,270 | 515 |
+
+Use eight workers for the OpenRouter run unless the configured provider has been load
+tested at higher concurrency. The pipeline writes report rows incrementally and caches
+prefilter and classification responses, so a transport interruption can be resumed with
+the same command.
 
 ## 7. What you should get
 

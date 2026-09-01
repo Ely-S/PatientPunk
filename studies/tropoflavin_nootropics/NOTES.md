@@ -19,6 +19,28 @@ one most-recent vote per author and compound, with matched-author results retain
 sensitivity analysis. These are self-reporting-pattern comparisons, not comparative
 efficacy or safety estimates.
 
+**Completed comparator run (2026-08-31):** the private corpus contains 560,443
+thread-context items, while the committed `comparator_analysis.md` contains aggregates
+only. Every configured cohort had usable reports, from 159 reports and 88 authors for
+4'-DMA-7,8-DHF to 10,459 reports and 5,215 authors for lion's mane. The target had
+653 reports from 279 authors.
+
+At the one-vote-per-author level, 7,8-DHF was 71.3% positive. The parent did not differ
+after FDR correction from 4'-DMA-7,8-DHF (73.9%), Semax (66.8%), Cerebrolysin (68.0%),
+Selank (67.6%), Dihexa (62.5%), 9-MBC (71.8%), or the BPC-157 control (68.2%). It was
+more positive than NSI-189 (59.7%, BH q=0.0022) and lion's mane (59.6%, BH q=0.0008).
+Matched-author overlap was sparse and did not provide robust multiplicity-adjusted
+corroboration, so the independent results remain reporting-pattern differences rather
+than comparative treatment effects.
+
+The leading parent-specific safety signals were insomnia or sleep disruption (31
+authors), cognitive or perceptual disturbance (20), activation or irritability (17),
+anxiety or panic (17), and headache or migraine (15). For 4'-DMA-7,8-DHF they were
+insomnia or sleep disruption (7), anxiety or panic (5), cognitive or perceptual
+disturbance (5), activation or irritability (4), and headache or migraine (3). These
+are author-deduplicated reporting counts, not adverse-event incidence. The linked
+outcome data contained general-fatigue targets but no explicit PEM-targeted rows.
+
 ---
 
 ## 1. Data
@@ -379,9 +401,10 @@ domain.
 current author-compound exposure table can say that dose and route were both
 reported, but it cannot prove they belong to the same administration event.
 
-**Make side effects compound-specific in a future Pipeline B schema.** Pipeline A
-blends the parent and derivative and can inherit context, so it is suitable for
-safety-signal generation but not comparative adverse-event rates.
+**Compound-specific safety signals are now available.** The comparator pipeline binds
+each report and side effect to one treatment ID, and enclosing-compound exclusions keep
+the parent out of derivative-only spans. The output remains signal generation, not a
+comparative adverse-event rate.
 
 **Treatment-linked dose and route extraction is now complete.** For plain
 7,8-DHF, 61 quantitative mass-dose entries from 46 authors have an author-level

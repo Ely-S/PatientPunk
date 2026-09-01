@@ -182,6 +182,7 @@ def test_report_is_aggregate_treatment_linked_and_reproducible(tmp_path: Path) -
     assert "| Semax | BDNF/TrkB related | primary | 2 | 1 | 1 |" in report
     assert "insomnia or sleep disruption" in report
     assert "post-exertional malaise" in report
+    assert "Explicit PEM target coverage: 1 treatment-linked outcome entry." in report
     assert "25 to <50 mg" in report
     assert str(tmp_path.resolve()) not in report
     assert "SHA-256" in report
