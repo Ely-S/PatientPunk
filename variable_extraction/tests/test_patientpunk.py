@@ -2565,6 +2565,33 @@ class TestUntrustedTextWrapping:
             monkeypatch.delenv("LLM_MAX_TEXT_CHARS")
             importlib.reload(m)   # module is shared; restore the default
 
+    def test_priority_subreddits_default_to_the_health_set(self):
+        from patientpunk.llm_extract import HEALTH_SUBREDDITS, resolve_priority_subreddits
+        assert resolve_priority_subreddits(None) == HEALTH_SUBREDDITS
+        assert resolve_priority_subreddits({}) == HEALTH_SUBREDDITS
+        assert resolve_priority_subreddits({"priority_subreddits": []}) == HEALTH_SUBREDDITS
+
+    def test_a_schema_can_name_its_own_priority_subreddits(self):
+        from patientpunk.llm_extract import resolve_priority_subreddits
+        got = resolve_priority_subreddits(
+            {"priority_subreddits": ["Nootropics", "r/StackAdvice"]})
+        assert got == {"nootropics", "stackadvice"}
+
+    def test_priority_subreddits_decide_what_survives_truncation(self):
+        """The relevant comment must be sent first, or the cap can cut it.
+
+        Without a priority set naming the study's own community, every text
+        falls to the "other" bucket and ordering does nothing -- the recall
+        loss that motivated this.
+        """
+        from patientpunk.llm_extract import collect_texts_from_user
+        user = {
+            "posts": [{"subreddit": "AskReddit", "title": "noise", "body": "more noise"}],
+            "comments": [{"subreddit": "Nootropics", "body": "I took 25mg sublingually"}],
+        }
+        assert collect_texts_from_user(user)[0] == "noise"
+        assert collect_texts_from_user(user, {"nootropics"})[0] == "I took 25mg sublingually"
+
     def test_discovery_prompts_carry_the_same_guard(self):
         from patientpunk.discover import build_discovery_prompt
         p = build_discovery_prompt(["age", "conditions"])
