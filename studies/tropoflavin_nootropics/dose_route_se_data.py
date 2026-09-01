@@ -302,3 +302,126 @@ def report_count(con, author: str, drug_id: int) -> int:
     return con.execute(
         "select count(*) from treatment_reports where drug_id=? and user_id=?",
         (drug_id, author)).fetchone()[0]
+
+
+# --------------------------------------------------------------------------------------
+# Post-level unit.
+#
+# At author level a dose and a side effect can come from posts years apart, so the dose
+# attached to an outcome is often the wrong dose -- measured at 21% disagreement against
+# what the post itself says, with a further 33 of 59 dosed authors having no dose in any
+# post that recorded a side effect at all.
+#
+# One row here is one report whose OWN post states a dose. The pairing is the author's,
+# not ours. The cost is that a person can contribute several rows, so anything fitted on
+# these must cluster by author.
+# --------------------------------------------------------------------------------------
+POST_DOSE = re.compile(r"(?<![\w.])(\d{1,5}(?:\.\d+)?)\s*(mg|mcg|ug)\b(\s*/\s*kg)?", re.I)
+POST_STUDY = re.compile(r"\b(mice|mouse|rat|rats|rodent|in vivo|in vitro|i\.?p\.?|gavage"
+                        r"|study|studies|trial|pubmed|doi|et al)\b", re.I)
+POST_WINDOW = 120
+POST_MIN_MG, POST_MAX_MG = 0.05, 1000.0
+
+
+def other_drug_pattern(con) -> re.Pattern:
+    """Drug names seen in this corpus, excluding the target -- used to reject a dose
+    that sits closer to some other compound than to ours."""
+    names = set()
+    for table in ("pipeline_b_dosages", "pipeline_b_administration_routes",
+                  "pipeline_b_treatment_outcomes"):
+        for (t,) in con.execute(f"select distinct treatment from L.{table}"):
+            t = (t or "").strip().lower()
+            if len(t) < 3 or TARGET.search(t):
+                continue
+            t = re.split(r"[+/,]", t)[0].strip()
+            if len(t) >= 3:
+                names.add(t)
+    if not names:
+        return re.compile(r"(?!x)x")
+    return re.compile(r"\b(?:" + "|".join(re.escape(n) for n in
+                                          sorted(names, key=len, reverse=True)) + r")\b", re.I)
+
+
+def dose_in_text(text: str, others: re.Pattern,
+                 compound: str = "7,8-DHF") -> float | None:
+    """The mg figure in this text most defensibly attributable to the target compound.
+
+    Rejects mg/kg and study-citation contexts, and any figure sitting closer to a
+    different drug name than to the compound.
+    """
+    mentions = compound_mentions(text, compound)
+    if not mentions:
+        return None
+    best = None
+    for dm in POST_DOSE.finditer(text):
+        if dm.group(3):
+            continue
+        value, unit = float(dm.group(1)), dm.group(2).lower()
+        mg = value / 1000 if unit in ("mcg", "ug") else value
+        if not (POST_MIN_MG <= mg <= POST_MAX_MG):
+            continue
+        if POST_STUDY.search(text[max(0, dm.start() - 150): dm.end() + 150]):
+            continue
+        gap = min(0 if a <= dm.start() <= b else
+                  min(abs(dm.start() - b), abs(a - dm.end())) for a, b in mentions)
+        if gap > POST_WINDOW:
+            continue
+        rival = min((0 if om.start() <= dm.start() <= om.end() else
+                     min(abs(dm.start() - om.end()), abs(om.start() - dm.end()))
+                     for om in others.finditer(text)), default=None)
+        if rival is not None and rival < gap:
+            continue
+        if best is None or gap < best[0]:
+            best = (gap, mg)
+    return None if best is None else best[1]
+
+
+def build_posts(con, drug_id: int = 1, compound: str = "7,8-DHF") -> list[dict]:
+    """One row per report whose own post states a dose for this drug."""
+    others = other_drug_pattern(con)
+    rows = []
+    for user_id, post_id, blob in con.execute(
+            "select user_id, post_id, side_effects from treatment_reports where drug_id=?",
+            (drug_id,)):
+        rec = con.execute("select coalesce(title,'') || ' ' || body_text, post_date "
+                          "from posts where post_id=?", (post_id,)).fetchone()
+        if not rec:
+            continue
+        text, date = rec
+        mg = dose_in_text(text, others, compound)
+        if mg is None:
+            continue
+        terms = []
+        if blob:
+            try:
+                terms = [str(x).strip().lower() for x in (json.loads(blob) or [])
+                         if str(x).strip()]
+            except Exception:
+                terms = []
+        rows.append(dict(author=user_id, post_id=post_id, date=date, mg=mg,
+                         dose_band=band_of(mg), has_se=bool(terms), terms=terms))
+    return rows
+
+
+# 7,8-DHF specifically -- the same spellings TARGET accepts, minus any occurrence that
+# is the tail of "4'-DMA-7,8-DHF" or "eutropoflavin". Without the lookbehind a post
+# discussing both compounds hands the 4'-DMA dose to 7,8-DHF.
+DHF_ONLY = re.compile(
+    r"(?<!dma)(?<!dma-)(?<!dma -)"
+    r"(?:7\s*[,.\-]?\s*8\s*[-\s]?\s*dhf"
+    r"|7\s*[,.\-]?\s*8\s*[-\s]?\s*dihydroxy\s*-?\s*flavone"
+    r"|dihydroxyflavone|tropoflavin|\bdhf\b)", re.I)
+DMA_MARK = re.compile(r"4\s*'?\s*-?\s*dma|eutropoflavin", re.I)
+
+
+def compound_mentions(text: str, compound: str = "7,8-DHF") -> list[tuple[int, int]]:
+    """Spans naming one compound, excluding the other's name that contains it."""
+    if compound == "4'-DMA":
+        return [m.span() for m in DMA_MARK.finditer(text)]
+    out = []
+    for m in DHF_ONLY.finditer(text):
+        before = text[max(0, m.start() - 24): m.start()].lower()
+        if DMA_MARK.search(before):        # this is the tail of 4'-DMA-7,8-DHF
+            continue
+        out.append(m.span())
+    return out

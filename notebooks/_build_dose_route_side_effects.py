@@ -63,6 +63,13 @@ how the data was made rather than facts about the drug:
 Nothing pharmacological survives. A side-effect rate computed this way measures reporting
 intensity, not risk — which constrains how any drug in this panel can be compared.
 
+Section 6 rebuilds the dose question on a sounder unit. At person level a dose and an
+outcome are joined because the same author wrote both somewhere; where the post itself
+can be checked, that pairing disagrees with the author 21% of the time. Counting only
+posts that state a dose and an outcome together leaves 36 posts from 33 authors, and the
+answer does not change — trend p = 0.35, unchanged by clustering. The post-level estimate
+is smaller and less precise, and it is the one that means what it says.
+
 The reported profile itself is dominated by sleep and activation, each affecting about
 one user in ten.
 """)
@@ -368,7 +375,115 @@ for lab, sub in (("1 report",  [r for r in rows if r["n_reports"] <= 1]),
     print(f"  {lab:14}{len(sub):>7}{mean_n:>14.1f}{100*obs:>9.1f}%"
           f"{100*(1-(1-q)**mean_n):>10.1f}%")""")
 
-md("""## 6. Is 49 dosed users really all there is?
+md("""## 6. The same question with the post as the unit
+
+Every estimate above joins a dose to an outcome because **the same person wrote both**,
+somewhere in their history. That link is often not the author's:
+
+- only 45 of the 173 side-effect reports sit in a post that also states a dose
+- where both exist, the person-level band disagrees with what the post itself says
+  **21% of the time** — usually because the person mentioned several doses over time and
+  the author-level rollup collapsed them to `multiple bands`
+- 33 of 59 dosed users have no dose in any post that recorded a side effect at all
+
+So the exposure column is frequently the wrong dose. That is a measurement error, and no
+amount of data fixes it.
+
+The alternative is to count a row only when one post carries both — *"I dosed 30 mg
+sublingually and..."*. The pairing is then the author's, not ours. The cost is that a
+person can contribute more than one post, so the rows are not independent and anything
+fitted on them must cluster by author.""")
+
+code("""posts = D.build_posts(conn)          # one row per report whose own post states a dose
+post_authors = {p["author"] for p in posts}
+
+kk = sum(p["has_se"] for p in posts)
+pp, ll, hh = D.wilson(kk, len(posts))
+print(f"posts stating a 7,8-DHF dose : {len(posts)}")
+print(f"distinct authors             : {len(post_authors)}")
+print(f"posts per author             : {len(posts)/len(post_authors):.2f}")
+print(f"reporting a side effect      : {kk}/{len(posts)} = {100*pp:.1f}%"
+      f"  [{100*ll:.0f}%, {100*hh:.0f}%]")
+
+print(f"\\n{'band':16}{'posts':>7}{'authors':>9}{'SE':>5}{'rate':>8}   95% CI")
+groups = collections.defaultdict(list)
+for p_ in posts:
+    groups[p_["dose_band"]].append(p_)
+for b in D.BAND_ORDER[:6]:
+    v = groups.get(b)
+    if not v:
+        continue
+    kx = sum(x["has_se"] for x in v)
+    px, lx, hx = D.wilson(kx, len(v))
+    print(f"{b:16}{len(v):>7}{len({x['author'] for x in v}):>9}{kx:>5}"
+          f"{100*px:>7.1f}%   [{100*lx:>4.0f}%, {100*hx:>4.0f}%]")""")
+
+md("""### Attribution is compound-specific
+
+`4'-DMA-7,8-DHF` contains the string `7,8-DHF`, so a naive pattern hands the 4'-DMA dose
+to 7,8-DHF on any post naming both. `D.compound_mentions` excludes an occurrence that is
+the tail of the other compound's name.""")
+
+code("""for t in ("I take 4'-DMA-7,8-DHF at 8mg",
+          "I take 7,8-DHF at 50mg",
+          "I use 4'-DMA-7,8-DHF 8mg and plain 7,8-DHF 50mg"):
+    print(f"{t!r}")
+    print(f"    7,8-DHF spans : {D.compound_mentions(t, '7,8-DHF')}")
+    print(f"    4'-DMA spans  : {D.compound_mentions(t, chr(52)+chr(39)+'-DMA')}")""")
+
+md("""### Does dose predict the outcome, at post level?
+
+Fitted twice: once assuming posts are independent, once clustering by author. With 1.09
+posts per author the correction is nearly a no-op here — which is the honest answer to
+the pseudo-replication worry rather than a reason to ignore it.""")
+
+code("""import math
+import pandas as pd
+import statsmodels.formula.api as smf
+
+dfp = pd.DataFrame([dict(se=int(p_["has_se"]), log_mg=math.log(p_["mg"]),
+                         author=p_["author"]) for p_ in posts])
+for label, kw in (("naive (posts independent)", {}),
+                  ("cluster-robust by author",
+                   dict(cov_type="cluster", cov_kwds={"groups": dfp["author"]}))):
+    m = smf.logit("se ~ log_mg", data=dfp).fit(disp=0, **kw)
+    ci = m.conf_int().loc["log_mg"]
+    print(f"  {label:28} OR per e-fold dose = {math.exp(m.params['log_mg']):.2f}"
+          f"  [{math.exp(ci[0]):.2f}, {math.exp(ci[1]):.2f}]"
+          f"  p = {m.pvalues['log_mg']:.3f}")
+
+cells_p = []
+for i, b in enumerate(D.BAND_ORDER[:6], start=1):
+    v = groups.get(b)
+    if v:
+        cells_p.append((i, sum(x["has_se"] for x in v), len(v)))
+zp, pvp = D.cochran_armitage(cells_p)
+print(f"\\n  trend across bands: z = {zp:+.2f}, p = {pvp:.3f}")
+
+m_ratio = len(posts) / len(post_authors)
+print(f"  mean posts/author {m_ratio:.2f}; design effect at ICC 0.2 = "
+      f"{1 + (m_ratio - 1) * 0.2:.2f}")""")
+
+md("""### What changed, and what did not
+
+| | person-level | post-level |
+|---|---|---|
+| rows | 49 users | 36 posts (33 authors) |
+| dose–outcome pairing | assembled by us | stated by the author |
+| independence | rows independent | clustered, correction ~1.02 |
+| trend | z = +0.70, p = 0.49 | z = -0.94, p = 0.35 |
+
+Both are null, and the post-level estimate is *less* precise because it discards every
+person whose dose and side effect were never in the same post. That is the trade: the
+person-level number is bigger and means less.
+
+Note the direction flips to negative — higher dose, marginally fewer reports. Not
+significant, and consistent with self-titration: someone who reacts badly at 25 mg does
+not go on to try 100 mg, so the high-dose rows are selected for having tolerated the
+compound. That selection biases *against* finding harm at dose, and no re-analysis of
+this data removes it.""")
+
+md("""## 7. Is 49 dosed users really all there is?
 
 That count comes from the extraction, which is known to under-report (issue #143), so it
 is worth checking against the raw text. Scanning the same 752 author histories for a mass
@@ -392,7 +507,7 @@ people. It does not change the shape: 747 of 752 authors mention this compound a
 a twelfth ever write down a number. The doses were never recorded, so they cannot be
 recovered. Reproduce with `raw_dose_count.py` and `raw_dose_strict.py`.""")
 
-md("""## 7. What constrains this
+md("""## 8. What constrains this
 
 **1. The outcome measures reporting, not incidence.** Section 5 is the evidence: what
 predicts it is how much someone wrote, plus a circular term. Someone who tolerated the
