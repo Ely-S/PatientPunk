@@ -18,7 +18,7 @@ from threading import Lock
 from typing import Any, Literal
 
 import typer
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from rich.console import Console
 
 from studies.tropoflavin_nootropics.analyze_78dhf_predictors import (
@@ -246,6 +246,7 @@ class EpisodeExtractionManifest(BaseModel):
     single_route_episodes: int
     missing_episodes: int
     failure_types: dict[str, int] = Field(default_factory=dict)
+    failure_details: dict[str, int] = Field(default_factory=dict)
     records_file: str
     records_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     usage: UsageSummary
@@ -655,6 +656,7 @@ def run_episode_extraction(
     cache_root = config.output_directory / "cache"
     failures: list[int] = []
     failure_types: Counter[str] = Counter()
+    failure_details: Counter[str] = Counter()
     with ThreadPoolExecutor(max_workers=config.workers) as executor:
         futures = {
             executor.submit(
@@ -681,6 +683,12 @@ def run_episode_extraction(
                 while root.__cause__ is not None:
                     root = root.__cause__
                 failure_types[type(root).__name__] += len(batch)
+                if isinstance(root, ValidationError):
+                    for error in root.errors(
+                        include_url=False, include_context=False, include_input=False
+                    ):
+                        location = ".".join(str(part) for part in error["loc"])
+                        failure_details[f"{error['type']}@{location}"] += len(batch)
             else:
                 results_by_id.update((result.item_id, result) for result in results)
             completed += len(batch)
@@ -747,6 +755,7 @@ def run_episode_extraction(
         ),
         missing_episodes=len(contexts) - len(records),
         failure_types=dict(sorted(failure_types.items())),
+        failure_details=dict(sorted(failure_details.items())),
         records_file=records_path.name,
         records_sha256=sha256_file(records_path),
         usage=usage,
@@ -758,7 +767,8 @@ def run_episode_extraction(
     if failures or manifest.missing_episodes:
         raise RuntimeError(
             f"Episode extraction incomplete: {manifest.missing_episodes} missing; "
-            f"failure types: {manifest.failure_types}"
+            f"failure types: {manifest.failure_types}; "
+            f"failure details: {manifest.failure_details}"
         )
     return manifest
 
