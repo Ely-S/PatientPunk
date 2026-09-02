@@ -279,7 +279,99 @@ tested at higher concurrency. The pipeline writes report rows incrementally and 
 prefilter and classification responses, so a transport interruption can be resumed with
 the same command.
 
-## 7. What you should get
+## 7. Run independent subreddit cohorts
+
+`subreddit_cohorts.json` defines the eight additional communities. Run each one into
+its own directory and SQLite database. Never append records to another cohort's
+database and never add denominators across subreddits. The original r/Nootropics
+database remains the ninth independent cohort.
+
+The following commands show one cohort. Repeat them with the `name` and `source_stem`
+pair from `subreddit_cohorts.json`. All private text, model responses, caches,
+databases, and manifests stay under the external data root.
+
+```powershell
+$dataRoot = if ($env:PATIENTPUNK_DATA) {
+  $env:PATIENTPUNK_DATA
+} else {
+  (Resolve-Path "../PatientPunk_data").Path
+}
+$runRoot = Join-Path $dataRoot "studies/tropoflavin_nootropics/runs/YYYY-MM-DD-multisubreddit"
+$subreddit = "Supplements"
+$sourceStem = "Supplements"
+$cohortRun = Join-Path $runRoot $subreddit
+$corpus = Join-Path $cohortRun "comparator_corpus.json"
+$sentimentDb = Join-Path $cohortRun "sentiment.db"
+$sentimentOutput = Join-Path $cohortRun "sentiment_outputs"
+$variableCorpus = Join-Path $cohortRun "variable_retained"
+$combinedDb = Join-Path $cohortRun "combined.db"
+$aggregateReport = Join-Path $cohortRun "aggregate_report.md"
+
+uv run --frozen python -m studies.tropoflavin_nootropics.build_comparator_corpus `
+  --subreddit $subreddit `
+  --comments (Join-Path $dataRoot "r_${sourceStem}_comments.jsonl") `
+  --posts (Join-Path $dataRoot "r_${sourceStem}_posts.jsonl") `
+  --output $corpus
+
+$env:LLM_CACHE = "1"
+$env:LLM_CACHE_DIR = Join-Path $cohortRun "sentiment_cache"
+$env:LLM_REASONING = "0"
+uv run --frozen python -m studies.tropoflavin_nootropics.run_comparator_pipeline `
+  --subreddit $subreddit `
+  --corpus $corpus `
+  --database $sentimentDb `
+  --output-dir $sentimentOutput `
+  --workers 16 `
+  --max-upstream-chars 1500
+
+uv run --frozen python -m studies.tropoflavin_nootropics.build_variable_corpus `
+  --subreddit $subreddit `
+  --source-corpus $corpus `
+  --sentiment-database $sentimentDb `
+  --output-directory $variableCorpus
+
+uv run --frozen python -m studies.tropoflavin_nootropics.run_variable_pipeline `
+  --subreddit $subreddit `
+  --input-directory $variableCorpus `
+  --workers 16
+
+$variableManifest = Get-Content `
+  (Join-Path $variableCorpus "variable_pipeline_manifest.json") | ConvertFrom-Json
+uv run --frozen python -m studies.tropoflavin_nootropics.build_combined_db `
+  --source-db $sentimentDb `
+  --pipeline-b-records (Join-Path $variableCorpus "records_linked.csv") `
+  --pipeline-b-corpus $variableCorpus `
+  --output $combinedDb `
+  --expected-records $variableManifest.record_count `
+  --run-name "YYYY-MM-DD-multisubreddit-$subreddit"
+
+uv run --frozen python -m studies.tropoflavin_nootropics.analyze_comparator_cohort `
+  --subreddit $subreddit `
+  --sentiment-database $sentimentDb `
+  --study-database $combinedDb `
+  --output $aggregateReport `
+  --require-corroborated-attribution `
+  --corpus-manifest (Join-Path $cohortRun "comparator_corpus.manifest.json") `
+  --sentiment-manifest (Join-Path $sentimentOutput "comparator_pipeline_manifest.json") `
+  --variable-corpus-manifest (Join-Path $variableCorpus "variable_corpus.manifest.json") `
+  --variable-pipeline-manifest (Join-Path $variableCorpus "variable_pipeline_manifest.json")
+
+uv run --frozen python -m studies.tropoflavin_nootropics.privacy $aggregateReport
+```
+
+Both model-backed runners reject providers other than OpenRouter. Dispersed GPU
+capacity is not part of this workflow. The sentiment runner and variable runner write
+provider, model, token usage, source hashes, prompt or schema hashes, text limits,
+timestamps, and code commits into external manifests.
+
+After all nine reports exist, run `analyze_author_overlap` against the nine separate
+sentiment databases. It verifies the common global author-hash algorithm, excludes
+deleted identities, and writes counts only. Run `analyze_cross_subreddit` against the
+nine databases and reports to create the unpooled summary. Keep both input config
+files external because they contain machine-specific database paths. Privacy-scan the
+two resulting Markdown files before copying any aggregate report into the repository.
+
+## 8. What you should get
 
 | | |
 |---|---|
@@ -290,7 +382,7 @@ Read that with NOTES.md's caveats attached — positives are over-called 10–20
 pipeline, the alias blends 7,8-DHF with its 4'-DMA derivative (quote pipeline B for
 per-compound claims), and r/Nootropics is a healthy-user population.
 
-## 8. Reproducing the original numbers exactly
+## 9. Reproducing the original numbers exactly
 
 The historical figures above were produced with **reasoning enabled** on
 `deepseek-v4-flash`. This stack suppresses reasoning by default (#121), which makes
