@@ -8,13 +8,20 @@ from pathlib import Path
 
 from studies.tropoflavin_nootropics.analyze_comparator_cohort import (
     ComparatorAnalysisConfig,
+    _comparisons,
+    _sentiment_summaries,
     render_comparator_report,
 )
 from studies.tropoflavin_nootropics.build_comparator_corpus import (
     BuildComparatorCorpusConfig,
     build_comparator_corpus,
 )
+from studies.tropoflavin_nootropics.build_variable_corpus import (
+    VariableCorpusConfig,
+    build_variable_corpus,
+)
 from studies.tropoflavin_nootropics.comparator_support import (
+    compound_for_treatment,
     load_comparator_cohort,
 )
 
@@ -83,6 +90,7 @@ def test_corpus_builder_separates_parent_from_derivative_and_hashes_authors(
     output = tmp_path / "corpus.json"
     manifest = build_comparator_corpus(
         BuildComparatorCorpusConfig(
+            subreddit="Nootropics",
             comments_path=comments_path,
             posts_path=posts_path,
             output_path=output,
@@ -100,6 +108,77 @@ def test_corpus_builder_separates_parent_from_derivative_and_hashes_authors(
     assert "bob" not in serialized
     assert "carol" not in serialized
     assert (tmp_path / "corpus.manifest.json").is_file()
+    assert manifest.subreddit == "Nootropics"
+    assert len(manifest.comments_sha256) == 64
+    assert len(manifest.posts_sha256) == 64
+
+    variable_manifest = build_variable_corpus(
+        VariableCorpusConfig(
+            subreddit="Nootropics",
+            source_corpus=output,
+            output_directory=tmp_path / "variable",
+        )
+    )
+    assert variable_manifest.selected_authors == 3
+    user_files = list((tmp_path / "variable" / "users").glob("*.json"))
+    assert len(user_files) == 3
+    assert all(path.stem != "deleted" for path in user_files)
+    assert "alice" not in "".join(path.read_text(encoding="utf-8") for path in user_files)
+
+
+def test_pipeline_b_mapping_covers_the_full_comparator_cohort() -> None:
+    cohort = load_comparator_cohort()
+    expected = {
+        "7,8-DHF": "7,8-DHF",
+        "eutropoflavin": "4'-DMA",
+        "Semax": "Semax",
+        "Cerebrolysin": "Cerebrolysin",
+        "Selank": "Selank",
+        "NSI-189": "NSI-189",
+        "Dihexa": "Dihexa",
+        "lion's mane": "Lion's mane",
+        "9-MBC": "9-MBC",
+        "BPC-157": "BPC-157",
+    }
+    assert {
+        treatment: compound_for_treatment(treatment, cohort)
+        for treatment in expected
+    } == expected
+
+
+def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:
+    cohort = load_comparator_cohort()
+
+    def vote(user: str, drug: str, sentiment: str) -> dict[str, object]:
+        return {
+            "user_id": user,
+            "drug": drug,
+            "post_id": f"{drug}-{user}",
+            "sentiment": sentiment,
+            "signal": "strong",
+            "post_date": 1,
+            "run_id": 1,
+        }
+
+    votes = {
+        "78dhf": {
+            "shared": vote("shared", "78dhf", "positive"),
+            "target-only": vote("target-only", "78dhf", "positive"),
+        },
+        "semax": {
+            "shared": vote("shared", "semax", "negative"),
+            "comparator-only": vote("comparator-only", "semax", "negative"),
+        },
+    }
+    summaries = _sentiment_summaries(cohort, votes)  # type: ignore[arg-type]
+    comparisons = {row.slug: row for row in _comparisons(cohort, votes, summaries)}  # type: ignore[arg-type]
+    semax = comparisons["semax"]
+
+    assert semax.rate_difference == 1.0
+    assert semax.odds_ratio == float("inf")
+    assert semax.exclusive_target_authors == 1
+    assert semax.exclusive_comparator_authors == 1
+    assert semax.matched_authors == 1
 
 
 def _create_sentiment_database(path: Path) -> None:
@@ -178,6 +257,7 @@ def test_report_is_aggregate_treatment_linked_and_reproducible(tmp_path: Path) -
 
     report = render_comparator_report(
         ComparatorAnalysisConfig(
+            subreddit="Nootropics",
             sentiment_database=sentiment_database,
             study_database=study_database,
             output_path=tmp_path / "report.md",
@@ -193,5 +273,8 @@ def test_report_is_aggregate_treatment_linked_and_reproducible(tmp_path: Path) -
     assert "| 7,8-DHF | 25 to <50 mg | 3 | 3 | 2/3 | 2/3 (66.7%;" in report
     assert "insomnia or sleep disruption: 1/3 (33.3%)" in report
     assert "cross-report associations" in report
+    assert "7,8-DHF minus comparator" in report
+    assert "Exclusive 7,8-DHF authors" in report
+    assert "Matched BH q" in report
     assert str(tmp_path.resolve()) not in report
     assert "SHA-256" in report

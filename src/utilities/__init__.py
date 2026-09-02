@@ -6,6 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from dotenv import load_dotenv
 # Load .env from project root. override=False so explicitly-exported
@@ -97,6 +98,39 @@ else:
 MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
 MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
 
+_USAGE_LOCK = Lock()
+_LLM_USAGE = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
+def _record_llm_usage(usage) -> None:
+    """Accumulate provider-reported token usage without recording prompts."""
+    if usage is None:
+        return
+    prompt_tokens = int(
+        getattr(usage, "prompt_tokens", None)
+        or getattr(usage, "input_tokens", None)
+        or 0
+    )
+    completion_tokens = int(
+        getattr(usage, "completion_tokens", None)
+        or getattr(usage, "output_tokens", None)
+        or 0
+    )
+    total_tokens = int(getattr(usage, "total_tokens", None) or 0)
+    if not total_tokens:
+        total_tokens = prompt_tokens + completion_tokens
+    with _USAGE_LOCK:
+        _LLM_USAGE["requests"] += 1
+        _LLM_USAGE["prompt_tokens"] += prompt_tokens
+        _LLM_USAGE["completion_tokens"] += completion_tokens
+        _LLM_USAGE["total_tokens"] += total_tokens
+
+
+def get_llm_usage_snapshot() -> dict[str, int]:
+    """Return an aggregate copy of provider-reported usage for this process."""
+    with _USAGE_LOCK:
+        return dict(_LLM_USAGE)
+
 
 # ── Git ──────────────────────────────────────────────────────────────────────
 def get_git_commit() -> str:
@@ -168,6 +202,7 @@ class _ORStream:
         parts: list[str] = []
         finish = None
         for chunk in self._stream:
+            _record_llm_usage(getattr(chunk, "usage", None))
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -195,7 +230,8 @@ class _ORMessages:
             body.setdefault("reasoning", {"effort": "none"})
         return _ORStream(self._client, model=model, messages=oai,
                          max_tokens=max_tokens, temperature=temperature,
-                         extra_body=body)
+                         extra_body=body,
+                         stream_options={"include_usage": True})
 
 
 class _ORClient:

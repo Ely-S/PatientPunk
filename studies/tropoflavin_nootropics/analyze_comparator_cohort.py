@@ -19,6 +19,7 @@ from statsmodels.stats.multitest import multipletests
 from studies.tropoflavin_nootropics.comparator_support import (
     DEFAULT_COHORT_CONFIG,
     ComparatorCohort,
+    analysis_compound_name,
     load_comparator_cohort,
     markdown_escape,
     sha256_file,
@@ -30,17 +31,12 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 SIGNAL_RANK = {"strong": 3, "moderate": 2, "weak": 1, "n/a": 0, None: 0}
 SENTIMENTS = ("positive", "negative", "mixed", "neutral")
-STUDY_TARGET_TO_SLUG = {
-    "7,8-DHF": "78dhf",
-    "4'-DMA": "4dma-78dhf",
-}
-
-
 class ComparatorAnalysisConfig(BaseModel):
     """Validated inputs for the aggregate analysis."""
 
     model_config = ConfigDict(frozen=True)
 
+    subreddit: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_]+$")
     sentiment_database: Path
     study_database: Path | None = None
     cohort_path: Path = DEFAULT_COHORT_CONFIG
@@ -86,7 +82,7 @@ class SentimentSummary(BaseModel):
 
 
 class ComparatorResult(BaseModel):
-    """Independent and matched comparison against the target compound."""
+    """Mutually exclusive and matched comparison against the target compound."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -95,10 +91,13 @@ class ComparatorResult(BaseModel):
     p_value: float = Field(ge=0, le=1)
     q_value: float = Field(ge=0, le=1)
     rate_difference: float
+    exclusive_target_authors: int = Field(ge=0)
+    exclusive_comparator_authors: int = Field(ge=0)
     matched_authors: int = Field(ge=0)
     target_only_positive: int = Field(ge=0)
     comparator_only_positive: int = Field(ge=0)
     matched_p_value: float | None = Field(default=None, ge=0, le=1)
+    matched_q_value: float | None = Field(default=None, ge=0, le=1)
 
 
 class SideEffectSummary(BaseModel):
@@ -270,18 +269,30 @@ def _comparisons(
         if compound.slug == target_slug:
             continue
         comparator = summaries[compound.slug]
-        if target.users and comparator.users:
+        comparator_votes = votes.get(compound.slug, {})
+        matched = set(target_votes) & set(comparator_votes)
+        exclusive_target = set(target_votes) - matched
+        exclusive_comparator = set(comparator_votes) - matched
+        target_positive = sum(
+            target_votes[user]["sentiment"] == "positive" for user in exclusive_target
+        )
+        comparator_positive = sum(
+            comparator_votes[user]["sentiment"] == "positive"
+            for user in exclusive_comparator
+        )
+        if exclusive_target and exclusive_comparator:
             odds_ratio, p_value = fisher_exact(
                 [
-                    [target.positive, target.users - target.positive],
-                    [comparator.positive, comparator.users - comparator.positive],
+                    [target_positive, len(exclusive_target) - target_positive],
+                    [
+                        comparator_positive,
+                        len(exclusive_comparator) - comparator_positive,
+                    ],
                 ]
             )
         else:
             odds_ratio, p_value = math.nan, 1.0
 
-        comparator_votes = votes.get(compound.slug, {})
-        matched = set(target_votes) & set(comparator_votes)
         target_only_positive = sum(
             target_votes[user]["sentiment"] == "positive"
             and comparator_votes[user]["sentiment"] != "positive"
@@ -303,7 +314,9 @@ def _comparisons(
                 "slug": compound.slug,
                 "odds_ratio": float(odds_ratio),
                 "p_value": float(p_value),
-                "rate_difference": comparator.positive_rate - target.positive_rate,
+                "rate_difference": target.positive_rate - comparator.positive_rate,
+                "exclusive_target_authors": len(exclusive_target),
+                "exclusive_comparator_authors": len(exclusive_comparator),
                 "matched_authors": len(matched),
                 "target_only_positive": target_only_positive,
                 "comparator_only_positive": comparator_only_positive,
@@ -314,9 +327,22 @@ def _comparisons(
     q_values = multipletests(
         [row["p_value"] for row in provisional], method="fdr_bh"
     )[1]
+    matched_q_values = multipletests(
+        [row["matched_p_value"] or 1.0 for row in provisional], method="fdr_bh"
+    )[1]
     return tuple(
-        ComparatorResult(**row, q_value=float(q_value))
-        for row, q_value in zip(provisional, q_values, strict=True)
+        ComparatorResult(
+            **row,
+            q_value=float(q_value),
+            matched_q_value=(
+                float(matched_q_value)
+                if row["matched_p_value"] is not None
+                else None
+            ),
+        )
+        for row, q_value, matched_q_value in zip(
+            provisional, q_values, matched_q_values, strict=True
+        )
     )
 
 
@@ -415,6 +441,7 @@ def _stratified_side_effects(
     order_column: str,
     classified_authors: dict[str, set[str]],
     side_effect_records: tuple[CanonicalSideEffectRecord, ...],
+    treatment_to_slug: dict[str, str],
 ) -> tuple[StratifiedSideEffectSummary, ...]:
     """Summarize author-level side-effect reporting within dose or route strata."""
     allowed = {
@@ -443,7 +470,7 @@ def _stratified_side_effects(
         """
     ).fetchall()
     for row in rows:
-        if row["target_compound"] not in STUDY_TARGET_TO_SLUG:
+        if row["target_compound"] not in treatment_to_slug:
             continue
         key = (row["target_compound"], row[bucket_column])
         authors_by_bucket[key].add(row["author_hash"])
@@ -463,7 +490,7 @@ def _stratified_side_effects(
 
     summaries: list[StratifiedSideEffectSummary] = []
     for (compound, bucket), authors in authors_by_bucket.items():
-        slug = STUDY_TARGET_TO_SLUG[compound]
+        slug = treatment_to_slug[compound]
         side_effect_authors = authors & any_side_effect_authors.get(slug, set())
         covered_authors = authors & classified_authors.get(slug, set())
         effect_counts = sorted(
@@ -546,6 +573,7 @@ def _study_sections(
     *,
     classified_authors: dict[str, set[str]],
     side_effect_records: tuple[CanonicalSideEffectRecord, ...],
+    cohort: ComparatorCohort,
 ) -> str:
     if path is None:
         return ""
@@ -565,6 +593,10 @@ def _study_sections(
             raise ValueError(
                 f"Study database is missing tables: {sorted(required - tables)}"
             )
+        treatment_to_slug = {
+            analysis_compound_name(compound): compound.slug
+            for compound in cohort.compounds
+        }
         dose_summaries = _stratified_side_effects(
             connection,
             table="pipeline_b_dosages",
@@ -572,6 +604,7 @@ def _study_sections(
             order_column="dose_band_order",
             classified_authors=classified_authors,
             side_effect_records=side_effect_records,
+            treatment_to_slug=treatment_to_slug,
         )
         route_summaries = _stratified_side_effects(
             connection,
@@ -580,6 +613,7 @@ def _study_sections(
             order_column="route_bucket",
             classified_authors=classified_authors,
             side_effect_records=side_effect_records,
+            treatment_to_slug=treatment_to_slug,
         )
         outcome_rows = connection.execute(
             """
@@ -704,9 +738,12 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                 f"{result.odds_ratio:.2f}",
                 f"{result.p_value:.4f}",
                 f"{result.q_value:.4f}",
+                result.exclusive_target_authors,
+                result.exclusive_comparator_authors,
                 result.matched_authors,
                 f"{result.target_only_positive}/{result.comparator_only_positive}",
                 f"{result.matched_p_value:.4f}" if result.matched_p_value is not None else "n/a",
+                f"{result.matched_q_value:.4f}" if result.matched_q_value is not None else "n/a",
             ]
         )
 
@@ -727,10 +764,10 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
             )
 
     sections = [
-        "# 7,8-DHF comparator-cohort analysis",
+        f"# 7,8-DHF comparator-cohort analysis: r/{config.subreddit}",
         (
             "This report answers the OMF collaboration questions with aggregate "
-            "r/Nootropics self-reports. It measures reporting patterns, not efficacy, "
+            f"r/{config.subreddit} self-reports. It measures reporting patterns, not efficacy, "
             "adverse-event incidence, causal dose-response, or medical safety. Every "
             "comparator uses the same source population, classifier, context handling, "
             "and one-vote-per-author rule."
@@ -766,20 +803,25 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
         ),
         (
             "## Comparisons with 7,8-DHF\n\n"
-            "Independent Fisher tests compare positive versus all other labels. "
-            "The q-value is Benjamini-Hochberg corrected across comparators. Matched "
-            "results use authors who reported both compounds; the discordant column "
-            "is 7,8-DHF-only positive / comparator-only positive.\n\n"
+            "The positive-rate difference is 7,8-DHF minus comparator, so positive values "
+            "favor a higher 7,8-DHF positive-reporting share. Fisher tests use mutually "
+            "exclusive authors and report 7,8-DHF/comparator odds ratios. BH q-values are "
+            "corrected across comparators. Matched results use authors who reported both "
+            "compounds; the discordant column is 7,8-DHF-only positive / comparator-only "
+            "positive. Matched q-values are corrected separately.\n\n"
             + _table(
                 [
                     "Comparator",
-                    "Positive-rate difference",
-                    "Odds ratio",
-                    "p",
-                    "BH q",
+                    "7,8-DHF minus comparator",
+                    "Exclusive OR",
+                    "Exclusive p",
+                    "Exclusive BH q",
+                    "Exclusive 7,8-DHF authors",
+                    "Exclusive comparator authors",
                     "Matched authors",
                     "Discordant",
                     "Matched p",
+                    "Matched BH q",
                 ],
                 comparison_rows,
             )
@@ -801,6 +843,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
         config.study_database,
         classified_authors={slug: set(author_votes) for slug, author_votes in votes.items()},
         side_effect_records=side_effect_records,
+        cohort=cohort,
     )
     if study_sections:
         sections.append(study_sections)
@@ -845,6 +888,7 @@ def analyze_comparator_cohort(config: ComparatorAnalysisConfig) -> str:
 
 @app.command()
 def main(
+    subreddit: str = typer.Option(..., help="Subreddit name without the r/ prefix."),
     sentiment_database: Path = typer.Option(..., exists=True, dir_okay=False),
     output: Path = typer.Option(..., dir_okay=False),
     study_database: Path | None = typer.Option(None, exists=True, dir_okay=False),
@@ -854,6 +898,7 @@ def main(
     try:
         analyze_comparator_cohort(
             ComparatorAnalysisConfig(
+                subreddit=subreddit,
                 sentiment_database=sentiment_database,
                 study_database=study_database,
                 cohort_path=cohort,

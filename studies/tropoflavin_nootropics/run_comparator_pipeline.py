@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import sys
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +27,15 @@ if str(SRC_ROOT) not in sys.path:
 
 from import_posts import import_reddit_posts
 from run_sentiment_pipeline import run_pipeline
-from utilities import PipelineConfig, get_client
+from utilities import (
+    LLM_PROVIDER,
+    MODEL_FAST,
+    MODEL_STRONG,
+    PipelineConfig,
+    get_client,
+    get_git_commit,
+    get_llm_usage_snapshot,
+)
 from utilities.db import open_db
 
 console = Console()
@@ -38,6 +47,7 @@ class ComparatorPipelineConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    subreddit: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_]+$")
     corpus_path: Path
     cohort_path: Path = DEFAULT_COHORT_CONFIG
     database_path: Path
@@ -74,12 +84,24 @@ class ComparatorRunSummary(BaseModel):
     side_effect_reports: int = Field(ge=0)
 
 
+class UsageSummary(BaseModel):
+    """Provider-reported aggregate token usage for this process."""
+
+    model_config = ConfigDict(frozen=True)
+
+    requests: int = Field(ge=0)
+    prompt_tokens: int = Field(ge=0)
+    completion_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+
+
 class ComparatorPipelineManifest(BaseModel):
     """Aggregate provenance for a complete or resumed cohort run."""
 
     model_config = ConfigDict(frozen=True)
 
     schema_id: str = "tropoflavin_comparator_pipeline_manifest_v1"
+    subreddit: str
     cohort_schema_id: str
     cohort_sha256: str
     corpus_path: str
@@ -87,6 +109,13 @@ class ComparatorPipelineManifest(BaseModel):
     database_path: str
     posts: int = Field(ge=0)
     extraction_runs: int = Field(ge=0)
+    provider: str
+    model_fast: str
+    model_strong: str
+    code_commit: str
+    max_upstream_chars: int
+    generated_at: str
+    usage: UsageSummary
     results: tuple[ComparatorRunSummary, ...]
 
 
@@ -112,7 +141,7 @@ def _initialize_database(config: ComparatorPipelineConfig) -> None:
             )
         post_count = connection.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
         if post_count == 0:
-            import_reddit_posts(connection, config.corpus_path, subreddit="Nootropics")
+            import_reddit_posts(connection, config.corpus_path, subreddit=config.subreddit)
             post_count = connection.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
             console.print(f"[green]Imported[/green] {post_count:,} posts/comments")
         else:
@@ -181,6 +210,7 @@ def _manifest(config: ComparatorPipelineConfig) -> ComparatorPipelineManifest:
                 )
             )
         return ComparatorPipelineManifest(
+            subreddit=config.subreddit,
             cohort_schema_id=cohort.schema_id,
             cohort_sha256=sha256_file(config.cohort_path),
             corpus_path=str(config.corpus_path.resolve()),
@@ -190,6 +220,13 @@ def _manifest(config: ComparatorPipelineConfig) -> ComparatorPipelineManifest:
             extraction_runs=connection.execute(
                 "SELECT COUNT(*) FROM extraction_runs"
             ).fetchone()[0],
+            provider=LLM_PROVIDER,
+            model_fast=MODEL_FAST,
+            model_strong=MODEL_STRONG,
+            code_commit=get_git_commit(),
+            max_upstream_chars=config.max_upstream_chars,
+            generated_at=datetime.now(UTC).isoformat(),
+            usage=UsageSummary.model_validate(get_llm_usage_snapshot()),
             results=tuple(summaries),
         )
 
@@ -199,6 +236,10 @@ def run_comparator_cohort(
 ) -> ComparatorPipelineManifest:
     """Import the shared corpus, run selected targets, and write a manifest."""
     _initialize_database(config)
+    if LLM_PROVIDER != "openrouter":
+        raise ValueError(
+            f"This study requires OpenRouter, but the configured provider is {LLM_PROVIDER!r}"
+        )
     selected = _selected_compounds(config)
     client = get_client()
     for compound in selected:
@@ -216,6 +257,7 @@ def run_comparator_cohort(
 
 @app.command()
 def main(
+    subreddit: str = typer.Option(..., help="Subreddit name without the r/ prefix."),
     corpus: Path = typer.Option(..., exists=True, dir_okay=False),
     database: Path = typer.Option(..., dir_okay=False),
     output_dir: Path = typer.Option(..., file_okay=False),
@@ -231,6 +273,7 @@ def main(
     try:
         run_comparator_cohort(
             ComparatorPipelineConfig(
+                subreddit=subreddit,
                 corpus_path=corpus,
                 cohort_path=cohort,
                 database_path=database,

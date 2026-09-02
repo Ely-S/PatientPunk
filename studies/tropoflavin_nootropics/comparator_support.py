@@ -108,11 +108,15 @@ class ComparatorCorpusManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     schema_id: str = "tropoflavin_comparator_corpus_manifest_v1"
+    subreddit: str = Field(min_length=1)
     cohort_schema_id: str
     cohort_sha256: str
     comments_path: str
+    comments_sha256: str
     posts_path: str
+    posts_sha256: str
     output_path: str
+    author_hash_algorithm: str = "sha256-128-raw-reddit-username-v1"
     posts: int = Field(ge=0)
     comments: int = Field(ge=0)
     distinct_authors: int = Field(ge=0)
@@ -139,6 +143,24 @@ def hash_author(name: str | None) -> str:
     if not name or name in {"[deleted]", "[removed]"}:
         return "deleted"
     return hashlib.sha256(name.encode("utf-8")).hexdigest()[:32]
+
+
+def analysis_compound_name(compound: ComparatorSpec) -> str:
+    """Stable compound label used by Pipeline B analysis tables."""
+    if compound.slug == "4dma-78dhf":
+        return "4'-DMA"
+    return compound.display_name
+
+
+def compound_for_treatment(
+    treatment: str,
+    cohort: ComparatorCohort,
+) -> str | None:
+    """Map one extracted treatment label to exactly one comparator."""
+    matches = [compound for compound in cohort.compounds if compound.matches(treatment)]
+    if len(matches) != 1:
+        return None
+    return analysis_compound_name(matches[0])
 
 
 def reddit_id(value: str | None) -> str:

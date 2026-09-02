@@ -62,6 +62,7 @@ from ._utils import (
     collect_texts_from_post,
     get_llm_client,
     parse_json_response,
+    record_response_usage,
     response_text,
     split_retry_batch,
 )
@@ -250,6 +251,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                     messages=[{"role": "user", "content": user_message}],
                     **tier,
                 )
+                record_response_usage(response)
                 return response_text(check_response(response, MODEL))
             except Exception as e:
                 # Provider-agnostic retry: works whether the error is raised by the

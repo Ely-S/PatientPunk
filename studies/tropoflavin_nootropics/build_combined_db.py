@@ -19,10 +19,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from rich.console import Console
 
 from patientpunk.normalize import normalize_value
+from studies.tropoflavin_nootropics.comparator_support import (
+    DEFAULT_COHORT_CONFIG,
+    ComparatorCohort,
+    compound_for_treatment as comparator_for_treatment,
+    load_comparator_cohort,
+    sha256_file,
+)
 from studies.tropoflavin_nootropics.study_support import (
     PipelineBRecord,
     canonical_side_effect,
-    compound_for_treatment,
     desired_result_bucket,
     dose_band,
     linked_values,
@@ -45,6 +51,7 @@ class CombinedDatabaseConfig(BaseModel):
     source_database: Path
     pipeline_b_records: Path
     output_database: Path
+    cohort_path: Path = DEFAULT_COHORT_CONFIG
     expected_pipeline_b_records: int = Field(default=752, ge=1)
     pipeline_b_run_name: str = Field(min_length=1)
 
@@ -54,6 +61,8 @@ class CombinedDatabaseConfig(BaseModel):
             raise ValueError(f"Pipeline A database not found: {self.source_database}")
         if not self.pipeline_b_records.is_file():
             raise ValueError(f"Pipeline B records not found: {self.pipeline_b_records}")
+        if not self.cohort_path.is_file():
+            raise ValueError(f"Comparator cohort not found: {self.cohort_path}")
         if self.source_database.resolve() == self.output_database.resolve():
             raise ValueError(
                 "Output database must differ from the Pipeline A source database"
@@ -177,7 +186,10 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _outcome_rows(record: PipelineBRecord) -> list[PipelineBOutcomeRow]:
+def _outcome_rows(
+    record: PipelineBRecord,
+    cohort: ComparatorCohort,
+) -> list[PipelineBOutcomeRow]:
     rows: list[PipelineBOutcomeRow] = []
     for ordinal, raw_entry in enumerate(record.treatment_outcome.split(" | ")):
         raw_entry = raw_entry.strip()
@@ -200,14 +212,17 @@ def _outcome_rows(record: PipelineBRecord) -> list[PipelineBOutcomeRow]:
                 outcome=outcome,
                 symptom=symptom,
                 desired_result_bucket=desired_result_bucket(symptom),
-                target_compound=compound_for_treatment(treatment),
+                target_compound=comparator_for_treatment(treatment, cohort),
                 raw_value=raw_entry,
             )
         )
     return rows
 
 
-def _dosage_rows(record: PipelineBRecord) -> list[PipelineBDosageRow]:
+def _dosage_rows(
+    record: PipelineBRecord,
+    cohort: ComparatorCohort,
+) -> list[PipelineBDosageRow]:
     rows: list[PipelineBDosageRow] = []
     for ordinal, pair in enumerate(linked_values(record, "dosage")):
         mass = parse_mass_dosage(pair.value)
@@ -218,7 +233,7 @@ def _dosage_rows(record: PipelineBRecord) -> list[PipelineBDosageRow]:
                 ordinal=ordinal,
                 treatment=pair.treatment,
                 value=pair.value,
-                target_compound=compound_for_treatment(pair.treatment),
+                target_compound=comparator_for_treatment(pair.treatment, cohort),
                 mass_low_mg=mass.low_mg if mass else None,
                 mass_high_mg=mass.high_mg if mass else None,
                 mass_midpoint_mg=mass.midpoint_mg if mass else None,
@@ -230,7 +245,10 @@ def _dosage_rows(record: PipelineBRecord) -> list[PipelineBDosageRow]:
     return rows
 
 
-def _route_rows(record: PipelineBRecord) -> list[PipelineBRouteRow]:
+def _route_rows(
+    record: PipelineBRecord,
+    cohort: ComparatorCohort,
+) -> list[PipelineBRouteRow]:
     return [
         PipelineBRouteRow(
             author_hash=record.author_hash,
@@ -238,7 +256,7 @@ def _route_rows(record: PipelineBRecord) -> list[PipelineBRouteRow]:
             treatment=pair.treatment,
             route=pair.value,
             route_bucket=route_bucket(pair.value),
-            target_compound=compound_for_treatment(pair.treatment),
+            target_compound=comparator_for_treatment(pair.treatment, cohort),
         )
         for ordinal, pair in enumerate(linked_values(record, "administration_route"))
     ]
@@ -423,6 +441,7 @@ def _insert_pipeline_b(
     columns: list[str],
     config: CombinedDatabaseConfig,
 ) -> CombinedDatabaseReport:
+    cohort = load_comparator_cohort(config.cohort_path)
     required_source_tables = {
         "users",
         "treatment",
@@ -568,9 +587,9 @@ def _insert_pipeline_b(
         raw_rows,
     )
 
-    dosages = [row for record in records for row in _dosage_rows(record)]
-    routes = [row for record in records for row in _route_rows(record)]
-    outcomes = [row for record in records for row in _outcome_rows(record)]
+    dosages = [row for record in records for row in _dosage_rows(record, cohort)]
+    routes = [row for record in records for row in _route_rows(record, cohort)]
+    outcomes = [row for record in records for row in _outcome_rows(record, cohort)]
     exposures = _compound_exposure_rows(dosages, routes, outcomes)
     side_effects = _side_effect_rows(connection)
     connection.executemany(
@@ -689,6 +708,8 @@ def _insert_pipeline_b(
         "outcome_entries": len(outcomes),
         "compound_exposures": len(exposures),
         "records_sha256": _sha256(config.pipeline_b_records),
+        "cohort_schema_id": cohort.schema_id,
+        "cohort_sha256": sha256_file(config.cohort_path),
     }
     connection.executemany(
         "INSERT INTO combined_pipeline_manifest VALUES (?, ?, ?, ?, ?, ?)",
@@ -778,6 +799,10 @@ def main(
         Path,
         typer.Option("--output", dir_okay=False),
     ],
+    cohort: Annotated[
+        Path,
+        typer.Option(exists=True, dir_okay=False, readable=True),
+    ] = DEFAULT_COHORT_CONFIG,
     expected_records: Annotated[int, typer.Option(min=1)] = 752,
     run_name: Annotated[str, typer.Option()] = "2026-08-27-linked-dose-route",
 ) -> None:
@@ -786,6 +811,7 @@ def main(
         source_database=source_database,
         pipeline_b_records=pipeline_b_records,
         output_database=output_database,
+        cohort_path=cohort,
         expected_pipeline_b_records=expected_records,
         pipeline_b_run_name=run_name,
     )

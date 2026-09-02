@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 import typer
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from rich.console import Console
 
 from studies.tropoflavin_nootropics.comparator_support import (
@@ -33,6 +33,7 @@ class BuildComparatorCorpusConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    subreddit: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_]+$")
     comments_path: Path
     posts_path: Path
     cohort_path: Path = DEFAULT_COHORT_CONFIG
@@ -163,7 +164,7 @@ def _collect_threads(
                 "flair": str(record.get("link_flair_text") or ""),
                 "url": (
                     f"https://www.reddit.com"
-                    f"{record.get('permalink', '') or f'/r/Nootropics/comments/{post_id}/'}"
+                    f"{record.get('permalink', '') or f'/r/{config.subreddit}/comments/{post_id}/'}"
                 ),
                 "num_comments_api": int(record.get("num_comments") or 0),
                 "comments_fetched": 0,
@@ -222,10 +223,13 @@ def build_comparator_corpus(
         if comment["author_hash"] != "deleted"
     }
     manifest = ComparatorCorpusManifest(
+        subreddit=config.subreddit,
         cohort_schema_id=cohort.schema_id,
         cohort_sha256=sha256_file(config.cohort_path),
         comments_path=str(config.comments_path.resolve()),
+        comments_sha256=sha256_file(config.comments_path),
         posts_path=str(config.posts_path.resolve()),
+        posts_sha256=sha256_file(config.posts_path),
         output_path=str(config.output_path.resolve()),
         posts=len(posts),
         comments=comment_count,
@@ -253,6 +257,7 @@ def build_comparator_corpus(
 
 @app.command()
 def main(
+    subreddit: str = typer.Option(..., help="Subreddit name without the r/ prefix."),
     comments: Path = typer.Option(..., exists=True, dir_okay=False),
     posts: Path = typer.Option(..., exists=True, dir_okay=False),
     output: Path = typer.Option(..., dir_okay=False),
@@ -262,6 +267,7 @@ def main(
     try:
         build_comparator_corpus(
             BuildComparatorCorpusConfig(
+                subreddit=subreddit,
                 comments_path=comments,
                 posts_path=posts,
                 cohort_path=cohort,

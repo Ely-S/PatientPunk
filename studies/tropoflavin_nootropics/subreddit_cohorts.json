@@ -1,0 +1,14 @@
+{
+  "schema_id": "tropoflavin_subreddit_cohorts_v1",
+  "version": 1,
+  "subreddits": [
+    {"name": "Supplements", "source_stem": "Supplements"},
+    {"name": "Peptides", "source_stem": "Peptides"},
+    {"name": "NootropicsDepot", "source_stem": "NootropicsDepot"},
+    {"name": "NooTopics", "source_stem": "NooTopics"},
+    {"name": "depressionregimens", "source_stem": "depressionregimens"},
+    {"name": "StackAdvice", "source_stem": "StackAdvice"},
+    {"name": "Longevity", "source_stem": "Longevity"},
+    {"name": "Psilocybin", "source_stem": "Psilocybin"}
+  ]
+}
