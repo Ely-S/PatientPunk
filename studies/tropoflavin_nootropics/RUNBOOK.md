@@ -330,6 +330,7 @@ uv run --frozen python -m studies.tropoflavin_nootropics.build_variable_corpus `
   --sentiment-database $sentimentDb `
   --output-directory $variableCorpus
 
+$env:LLM_MAX_TOKENS = "16384"
 uv run --frozen python -m studies.tropoflavin_nootropics.run_variable_pipeline `
   --subreddit $subreddit `
   --input-directory $variableCorpus `
@@ -361,8 +362,8 @@ uv run --frozen python -m studies.tropoflavin_nootropics.privacy $aggregateRepor
 
 Both model-backed runners reject providers other than OpenRouter. Dispersed GPU
 capacity is not part of this workflow. The sentiment runner and variable runner write
-provider, model, token usage, source hashes, prompt or schema hashes, text limits,
-timestamps, and code commits into external manifests.
+provider, model, token usage, source hashes, prompt or schema hashes, input-text and
+output-token limits, timestamps, and code commits into external manifests.
 
 After all nine reports exist, run `analyze_author_overlap` against the nine separate
 sentiment databases. It verifies the common global author-hash algorithm, excludes

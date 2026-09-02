@@ -124,6 +124,7 @@ class VariableRunEvidence(BaseModel):
     model: str
     code_commit: str | None
     max_text_chars: int = Field(ge=1)
+    max_output_tokens: int = Field(default=8192, ge=1)
     record_count: int = Field(ge=0)
     usage: dict[str, int]
 
@@ -1018,7 +1019,8 @@ def _quality_section(
         f"{int(sentiment.usage.get('total_tokens', 0)):,}; variables "
         f"{int(variable_run.usage.get('total_tokens', 0)):,}. Text caps were "
         f"{sentiment.max_upstream_chars:,} upstream characters and "
-        f"{variable_run.max_text_chars:,} Pipeline B characters.\n\n"
+        f"{variable_run.max_text_chars:,} Pipeline B characters, with a "
+        f"{variable_run.max_output_tokens:,}-token Pipeline B output ceiling.\n\n"
         f"Source SHA-256 values: comments `{corpus.comments_sha256}`; posts "
         f"`{corpus.posts_sha256}`. Code commits: sentiment "
         f"`{sentiment.code_commit}`; variables `{variable_run.code_commit}`."

@@ -24,7 +24,7 @@ from patientpunk._utils import (
     get_llm_usage_snapshot,
     llm_config,
 )
-from patientpunk.llm_extract import MAX_TEXT_CHARS
+from patientpunk.llm_extract import MAX_TEXT_CHARS, MAX_TOKENS
 from patientpunk.normalize import (
     ADMINISTRATION_ROUTE_DERIVED,
     DOSAGE_DERIVED,
@@ -77,6 +77,7 @@ class VariablePipelineManifest(BaseModel):
     prompt_implementation_sha256: str
     source_corpus_manifest_sha256: str
     max_text_chars: int = Field(ge=1)
+    max_output_tokens: int = Field(default=8192, ge=1)
     record_count: int = Field(ge=0)
     records_sha256: str
     usage: UsageSummary
@@ -166,6 +167,7 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
         ),
         source_corpus_manifest_sha256=sha256_file(source_manifest),
         max_text_chars=MAX_TEXT_CHARS,
+        max_output_tokens=MAX_TOKENS,
         record_count=record_count,
         records_sha256=sha256_file(records_path),
         usage=usage,
