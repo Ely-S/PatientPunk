@@ -271,6 +271,71 @@ def _write_cache(path: Path, cache: CachedReasonBatch) -> None:
         temporary.replace(path)
 
 
+def _read_cached_batch(
+    items: tuple[BatchItem, ...],
+    prompt_sha256: str,
+    provider: str,
+    model: str,
+    cache_root: Path,
+) -> tuple[ReasonItemResult, ...] | None:
+    payload = _request_payload(items)
+    request_sha256 = _request_sha256(prompt_sha256, model, payload)
+    cache_path = _cache_path(cache_root, request_sha256)
+    if not cache_path.is_file():
+        return None
+    cached = CachedReasonBatch.model_validate_json(
+        cache_path.read_text(encoding="utf-8")
+    )
+    expected_ids = tuple(item.item_id for item in items)
+    actual_ids = tuple(item.item_id for item in cached.items)
+    if (
+        cached.request_sha256 != request_sha256
+        or cached.prompt_sha256 != prompt_sha256
+        or cached.provider != provider
+        or cached.model != model
+        or actual_ids != expected_ids
+    ):
+        return None
+    return cached.items
+
+
+def _read_cached_tree(
+    items: tuple[BatchItem, ...],
+    prompt_sha256: str,
+    provider: str,
+    model: str,
+    cache_root: Path,
+) -> tuple[ReasonItemResult, ...] | None:
+    cached = _read_cached_batch(items, prompt_sha256, provider, model, cache_root)
+    if cached is not None or len(items) == 1:
+        return cached
+    midpoint = len(items) // 2
+    left = _read_cached_tree(
+        items[:midpoint], prompt_sha256, provider, model, cache_root
+    )
+    if left is None:
+        return None
+    right = _read_cached_tree(
+        items[midpoint:], prompt_sha256, provider, model, cache_root
+    )
+    if right is None:
+        return None
+    combined = left + right
+    payload = _request_payload(items)
+    request_sha256 = _request_sha256(prompt_sha256, model, payload)
+    _write_cache(
+        _cache_path(cache_root, request_sha256),
+        CachedReasonBatch(
+            request_sha256=request_sha256,
+            prompt_sha256=prompt_sha256,
+            provider=provider,
+            model=model,
+            items=combined,
+        ),
+    )
+    return combined
+
+
 def _call_batch(
     client: Any,
     items: tuple[BatchItem, ...],
@@ -284,12 +349,9 @@ def _call_batch(
     payload = _request_payload(items)
     request_sha256 = _request_sha256(prompt_sha256, model, payload)
     cache_path = _cache_path(cache_root, request_sha256)
-    if cache_path.is_file():
-        cached = CachedReasonBatch.model_validate_json(
-            cache_path.read_text(encoding="utf-8")
-        )
-        if cached.request_sha256 == request_sha256:
-            return cached.items
+    cached = _read_cached_batch(items, prompt_sha256, provider, model, cache_root)
+    if cached is not None:
+        return cached
 
     expected_ids = tuple(item.item_id for item in items)
     last_error: Exception | None = None
@@ -335,6 +397,9 @@ def _extract_with_split(
     max_output_tokens: int,
     cache_root: Path,
 ) -> tuple[ReasonItemResult, ...]:
+    cached = _read_cached_tree(items, prompt_sha256, provider, model, cache_root)
+    if cached is not None:
+        return cached
     try:
         return _call_batch(
             client,
@@ -350,7 +415,7 @@ def _extract_with_split(
         if len(items) == 1:
             raise
         midpoint = len(items) // 2
-        return _extract_with_split(
+        combined = _extract_with_split(
             client,
             items[:midpoint],
             prompt,
@@ -369,6 +434,19 @@ def _extract_with_split(
             max_output_tokens,
             cache_root,
         )
+        payload = _request_payload(items)
+        request_sha256 = _request_sha256(prompt_sha256, model, payload)
+        _write_cache(
+            _cache_path(cache_root, request_sha256),
+            CachedReasonBatch(
+                request_sha256=request_sha256,
+                prompt_sha256=prompt_sha256,
+                provider=provider,
+                model=model,
+                items=combined,
+            ),
+        )
+        return combined
 
 
 def _chunks(

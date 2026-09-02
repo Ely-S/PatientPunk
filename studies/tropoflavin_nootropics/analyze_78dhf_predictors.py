@@ -1038,10 +1038,28 @@ def _overall_row(
         name,
         len(authors),
         f"{positive}/{len(authors)} ({_percent(rate)})" if authors else "0/0",
-        effects,
-        single_dose,
-        single_route,
-        reasons,
+        (
+            f"{effects}/{len(authors)} ({_percent(effects / len(authors))})"
+            if authors
+            else "0/0"
+        ),
+        (
+            f"{single_dose}/{len(authors)} "
+            f"({_percent(single_dose / len(authors))})"
+            if authors
+            else "0/0"
+        ),
+        (
+            f"{single_route}/{len(authors)} "
+            f"({_percent(single_route / len(authors))})"
+            if authors
+            else "0/0"
+        ),
+        (
+            f"{reasons}/{len(authors)} ({_percent(reasons / len(authors))})"
+            if authors
+            else "0/0"
+        ),
         baseline.eligible_compounds,
         (
             _percent(baseline.mean_positive_rate)
@@ -1086,6 +1104,23 @@ def render_predictor_report(config: PredictorAnalysisConfig) -> str:
     global_baseline = cross_compound_baseline(
         merged.votes, cohort, config.minimum_baseline_authors
     )
+    predictor_labels = (
+        ("dose", "Dosage"),
+        ("route", "Administration route"),
+        ("reason", "Explicit reason for use"),
+    )
+    merged_authors = tuple(merged.target_authors.values())
+    combined_summaries = {
+        predictor: summarize_predictor(
+            merged_authors,
+            predictor,  # type: ignore[arg-type]
+            global_baseline,
+            config.minimum_inference_authors,
+            community_baselines=baselines,
+            adjust_for_subreddit=True,
+        )
+        for predictor, _ in predictor_labels
+    }
 
     coverage_rows: list[list[object]] = [
         _overall_row(dataset.subreddit, dataset, baselines[dataset.subreddit])
@@ -1093,11 +1128,39 @@ def render_predictor_report(config: PredictorAnalysisConfig) -> str:
     ]
     coverage_rows.append(_overall_row("Combined, deduplicated", merged, global_baseline))
 
+    target_positive = sum(author.vote.positive for author in merged_authors)
+    target_effects = sum(author.any_side_effect for author in merged_authors)
+    target_rate = target_positive / len(merged_authors) if merged_authors else 0.0
+    target_difference = (
+        100 * (target_rate - global_baseline.mean_positive_rate)
+        if merged_authors and global_baseline.mean_positive_rate is not None
+        else None
+    )
+    single_dose = sum(
+        author.dose_category not in (None, "multiple dose bands")
+        for author in merged_authors
+    )
+    single_route = sum(
+        author.route_category not in (None, "multiple route families")
+        for author in merged_authors
+    )
+    explicit_reason = sum(bool(author.reasons) for author in merged_authors)
+    corrected_hits = [
+        (predictor, summary.category, outcome)
+        for predictor, summaries in combined_summaries.items()
+        for summary in summaries
+        for outcome, q_value in (
+            ("sentiment", summary.positive_q),
+            ("side effect", summary.side_effect_q),
+        )
+        if q_value is not None and q_value < 0.05
+    ]
+
     sections = [
         "# 7,8-DHF dose, route, reason, sentiment, and side-effect analysis",
         (
             "This focused analysis treats dose, administration route, and a "
-            "an explicit reason for use as predictors. Outcomes are author-level "
+            "directly stated reason for use as predictors. Outcomes are author-level "
             "sentiment and whether the author ever reported at least one mapped "
             "7,8-DHF side effect. It is observational and estimates reporting "
             "associations, not efficacy, incidence, causation, or a dose-response "
@@ -1141,6 +1204,36 @@ def render_predictor_report(config: PredictorAnalysisConfig) -> str:
             ],
             coverage_rows,
         ),
+        (
+            "## Main findings\n\n"
+            f"Across {len(merged_authors):,} globally distinct 7,8-DHF authors, "
+            f"{target_positive:,}/{len(merged_authors):,} ({_percent(target_rate)}) "
+            "were classified positive and "
+            f"{target_effects:,}/{len(merged_authors):,} "
+            f"({_percent(target_effects / len(merged_authors)) if merged_authors else 'n/a'}) "
+            "reported at least "
+            "one mapped side effect. The positive share was "
+            + (
+                f"{target_difference:+.1f} percentage points relative to the "
+                f"unweighted mean across {global_baseline.eligible_compounds} "
+                "eligible comparator compounds."
+                if target_difference is not None
+                else "not comparable to an eligible compound mean."
+            )
+            + "\n\n"
+            f"Predictor coverage was limited: {single_dose:,} authors had one usable "
+            f"dose band, {single_route:,} had one usable route, and "
+            f"{explicit_reason:,} had at least one explicit reason for use. "
+            + (
+                "No combined dose, route, or explicit-reason association with "
+                "sentiment or side-effect reporting passed Benjamini-Hochberg "
+                "correction at q < 0.05."
+                if not corrected_hits
+                else f"{len(corrected_hits)} combined associations passed "
+                "Benjamini-Hochberg correction at q < 0.05; see the contrast "
+                "tables for their estimates."
+            )
+        ),
     ]
 
     global_metric_rows = [
@@ -1176,20 +1269,8 @@ def render_predictor_report(config: PredictorAnalysisConfig) -> str:
         "the selected report's subreddit-specific cross-compound mean before averaging. "
         "The Mantel-Haenszel odds ratios are stratified by that selected subreddit."
     )
-    merged_authors = tuple(merged.target_authors.values())
-    for predictor, label in (
-        ("dose", "Dosage"),
-        ("route", "Administration route"),
-        ("reason", "Explicit reason for use"),
-    ):
-        summaries = summarize_predictor(
-            merged_authors,
-            predictor,  # type: ignore[arg-type]
-            global_baseline,
-            config.minimum_inference_authors,
-            community_baselines=baselines,
-            adjust_for_subreddit=True,
-        )
+    for predictor, label in predictor_labels:
+        summaries = combined_summaries[predictor]
         sections.append(
             f"### Combined: {label}\n\n" + _summary_tables(summaries, combined=True)
         )
@@ -1211,11 +1292,7 @@ def render_predictor_report(config: PredictorAnalysisConfig) -> str:
                 else "No 7,8-DHF author-level outcome is available for this cohort."
             )
         )
-        for predictor, label in (
-            ("dose", "Dosage"),
-            ("route", "Administration route"),
-            ("reason", "Explicit reason for use"),
-        ):
+        for predictor, label in predictor_labels:
             summaries = summarize_predictor(
                 authors,
                 predictor,  # type: ignore[arg-type]
