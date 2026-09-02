@@ -42,6 +42,10 @@ from studies.tropoflavin_nootropics.run_variable_pipeline import (
     calculate_missing_author_records,
     write_linked_records,
 )
+from studies.tropoflavin_nootropics.run_comparator_pipeline import (
+    UsageSummary as SentimentUsageSummary,
+)
+from studies.tropoflavin_nootropics.run_comparator_pipeline import combine_usage
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
@@ -313,6 +317,29 @@ def test_variable_pipeline_requires_exact_retained_author_coverage() -> None:
     assert calculate_missing_author_records(8, 10) == 2
     with pytest.raises(ValueError, match="more records than selected"):
         calculate_missing_author_records(11, 10)
+
+
+def test_sentiment_resume_preserves_prior_provider_usage() -> None:
+    combined = combine_usage(
+        SentimentUsageSummary(
+            requests=4,
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120,
+        ),
+        SentimentUsageSummary(
+            requests=2,
+            prompt_tokens=50,
+            completion_tokens=10,
+            total_tokens=60,
+        ),
+    )
+    assert combined.model_dump() == {
+        "requests": 6,
+        "prompt_tokens": 150,
+        "completion_tokens": 30,
+        "total_tokens": 180,
+    }
 
 
 def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:

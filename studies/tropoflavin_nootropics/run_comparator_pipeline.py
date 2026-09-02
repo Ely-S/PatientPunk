@@ -183,7 +183,22 @@ def _run_one(
     run_pipeline(pipeline_config)
 
 
-def _manifest(config: ComparatorPipelineConfig) -> ComparatorPipelineManifest:
+def combine_usage(left: UsageSummary, right: UsageSummary) -> UsageSummary:
+    """Add provider usage from successive resumable process invocations."""
+    return UsageSummary(
+        requests=left.requests + right.requests,
+        prompt_tokens=left.prompt_tokens + right.prompt_tokens,
+        completion_tokens=left.completion_tokens + right.completion_tokens,
+        total_tokens=left.total_tokens + right.total_tokens,
+    )
+
+
+def _manifest(
+    config: ComparatorPipelineConfig,
+    *,
+    code_commit: str,
+    previous_usage: UsageSummary,
+) -> ComparatorPipelineManifest:
     cohort = load_comparator_cohort(config.cohort_path)
     with closing(open_db(config.database_path)) as connection:
         summaries: list[ComparatorRunSummary] = []
@@ -223,10 +238,13 @@ def _manifest(config: ComparatorPipelineConfig) -> ComparatorPipelineManifest:
             provider=LLM_PROVIDER,
             model_fast=MODEL_FAST,
             model_strong=MODEL_STRONG,
-            code_commit=get_git_commit(),
+            code_commit=code_commit,
             max_upstream_chars=config.max_upstream_chars,
             generated_at=datetime.now(UTC).isoformat(),
-            usage=UsageSummary.model_validate(get_llm_usage_snapshot()),
+            usage=combine_usage(
+                previous_usage,
+                UsageSummary.model_validate(get_llm_usage_snapshot()),
+            ),
             results=tuple(summaries),
         )
 
@@ -235,6 +253,18 @@ def run_comparator_cohort(
     config: ComparatorPipelineConfig,
 ) -> ComparatorPipelineManifest:
     """Import the shared corpus, run selected targets, and write a manifest."""
+    manifest_path = config.output_directory / "comparator_pipeline_manifest.json"
+    previous_usage = UsageSummary(
+        requests=0,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+    )
+    if manifest_path.is_file():
+        previous_usage = ComparatorPipelineManifest.model_validate_json(
+            manifest_path.read_text(encoding="utf-8")
+        ).usage
+    code_commit = get_git_commit()
     _initialize_database(config)
     if LLM_PROVIDER != "openrouter":
         raise ValueError(
@@ -245,8 +275,11 @@ def run_comparator_cohort(
     for compound in selected:
         _run_one(config, compound, client)
 
-    manifest = _manifest(config)
-    manifest_path = config.output_directory / "comparator_pipeline_manifest.json"
+    manifest = _manifest(
+        config,
+        code_commit=code_commit,
+        previous_usage=previous_usage,
+    )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
