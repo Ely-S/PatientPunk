@@ -247,6 +247,7 @@ class EpisodeExtractionManifest(BaseModel):
     missing_episodes: int
     failure_types: dict[str, int] = Field(default_factory=dict)
     failure_details: dict[str, int] = Field(default_factory=dict)
+    failure_messages: dict[str, int] = Field(default_factory=dict)
     records_file: str
     records_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     usage: UsageSummary
@@ -657,6 +658,7 @@ def run_episode_extraction(
     failures: list[int] = []
     failure_types: Counter[str] = Counter()
     failure_details: Counter[str] = Counter()
+    failure_messages: Counter[str] = Counter()
     with ThreadPoolExecutor(max_workers=config.workers) as executor:
         futures = {
             executor.submit(
@@ -689,6 +691,7 @@ def run_episode_extraction(
                     ):
                         location = ".".join(str(part) for part in error["loc"])
                         failure_details[f"{error['type']}@{location}"] += len(batch)
+                        failure_messages[str(error["msg"])] += len(batch)
             else:
                 results_by_id.update((result.item_id, result) for result in results)
             completed += len(batch)
@@ -756,6 +759,7 @@ def run_episode_extraction(
         missing_episodes=len(contexts) - len(records),
         failure_types=dict(sorted(failure_types.items())),
         failure_details=dict(sorted(failure_details.items())),
+        failure_messages=dict(sorted(failure_messages.items())),
         records_file=records_path.name,
         records_sha256=sha256_file(records_path),
         usage=usage,
@@ -768,7 +772,8 @@ def run_episode_extraction(
         raise RuntimeError(
             f"Episode extraction incomplete: {manifest.missing_episodes} missing; "
             f"failure types: {manifest.failure_types}; "
-            f"failure details: {manifest.failure_details}"
+            f"failure details: {manifest.failure_details}; "
+            f"failure messages: {manifest.failure_messages}"
         )
     return manifest
 
