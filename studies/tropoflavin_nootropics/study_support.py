@@ -427,10 +427,12 @@ _SIDE_EFFECT_PATTERNS = (
 def canonical_side_effect(value: str) -> tuple[str, str]:
     """Return a reproducible canonical term and safety-domain bucket."""
     cleaned = " ".join(value.strip().lower().split())
+    if not cleaned:
+        return "unspecified", "other"
     for canonical, bucket, pattern in _SIDE_EFFECT_PATTERNS:
         if pattern.search(cleaned):
             return canonical, bucket
-    return cleaned or "unspecified", "other"
+    return "other reported effect", "other"
 
 
 def parse_mass_dosage(value: str) -> MassDosage | None:

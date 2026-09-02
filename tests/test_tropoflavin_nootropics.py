@@ -169,6 +169,10 @@ def test_study_design_buckets_are_stable_and_interpretable() -> None:
         "post-exertional malaise or exertional crash",
         "fatigue or exertional intolerance",
     )
+    assert canonical_side_effect("an unmatched verbatim phrase") == (
+        "other reported effect",
+        "other",
+    )
 
 
 def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
