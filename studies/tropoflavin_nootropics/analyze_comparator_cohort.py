@@ -8,7 +8,7 @@ import sqlite3
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -126,6 +126,8 @@ class VariableRunEvidence(BaseModel):
     max_text_chars: int = Field(ge=1)
     max_output_tokens: int = Field(default=8192, ge=1)
     record_count: int = Field(ge=0)
+    missing_author_records: int = Field(default=0, ge=0)
+    status: Literal["complete", "incomplete"] = "complete"
     usage: dict[str, int]
 
 
@@ -964,6 +966,8 @@ def _quality_section(
         )
     if sentiment.provider != "openrouter" or variable_run.provider != "openrouter":
         raise ValueError("All new model runs must use OpenRouter")
+    if variable_run.status != "complete" or variable_run.missing_author_records:
+        raise ValueError("Pipeline B manifest is incomplete; resume missing authors first")
 
     match_by_slug = {row.slug: row for row in corpus.matches}
     result_by_slug = {row.slug: row for row in sentiment.results}

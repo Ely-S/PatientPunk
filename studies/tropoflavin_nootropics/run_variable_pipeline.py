@@ -6,6 +6,7 @@ import csv
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -65,6 +66,12 @@ class UsageSummary(BaseModel):
     total_tokens: int = Field(ge=0)
 
 
+class VariableCorpusSelection(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    selected_authors: int = Field(ge=0)
+
+
 class VariablePipelineManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -78,7 +85,10 @@ class VariablePipelineManifest(BaseModel):
     source_corpus_manifest_sha256: str
     max_text_chars: int = Field(ge=1)
     max_output_tokens: int = Field(default=8192, ge=1)
+    source_author_count: int = Field(default=0, ge=0)
     record_count: int = Field(ge=0)
+    missing_author_records: int = Field(default=0, ge=0)
+    status: Literal["complete", "incomplete"] = "complete"
     records_sha256: str
     usage: UsageSummary
     completed_at: str
@@ -113,6 +123,9 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
     source_manifest = config.input_directory / "variable_corpus.manifest.json"
     if not source_manifest.is_file():
         raise ValueError(f"Variable corpus manifest not found: {source_manifest}")
+    source_selection = VariableCorpusSelection.model_validate_json(
+        source_manifest.read_text(encoding="utf-8")
+    )
     manifest_path = config.input_directory / "variable_pipeline_manifest.json"
     previous_usage = UsageSummary(
         requests=0,
@@ -147,6 +160,11 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
         )
     records_path = config.input_directory / "records_linked.csv"
     record_count = write_linked_records(base_records_path, records_path)
+    if record_count > source_selection.selected_authors:
+        raise RuntimeError(
+            "Variable extraction produced more records than selected source authors"
+        )
+    missing_author_records = source_selection.selected_authors - record_count
     current_usage = UsageSummary.model_validate(get_llm_usage_snapshot())
     usage = UsageSummary(
         requests=previous_usage.requests + current_usage.requests,
@@ -168,12 +186,21 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
         source_corpus_manifest_sha256=sha256_file(source_manifest),
         max_text_chars=MAX_TEXT_CHARS,
         max_output_tokens=MAX_TOKENS,
+        source_author_count=source_selection.selected_authors,
         record_count=record_count,
+        missing_author_records=missing_author_records,
+        status="incomplete" if missing_author_records else "complete",
         records_sha256=sha256_file(records_path),
         usage=usage,
         completed_at=datetime.now(UTC).isoformat(),
     )
     safe_json_dump(manifest, manifest_path)
+    if missing_author_records:
+        raise RuntimeError(
+            f"Pipeline B retained {record_count:,} of "
+            f"{source_selection.selected_authors:,} selected authors. "
+            f"Rerun with --resume to retry {missing_author_records:,} missing records."
+        )
     console.print(
         f"[green]Completed[/green] Pipeline B for r/{config.subreddit}: "
         f"{manifest.record_count:,} author records, {usage.total_tokens:,} tokens"

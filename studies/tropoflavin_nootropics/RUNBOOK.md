@@ -336,6 +336,13 @@ uv run --frozen python -m studies.tropoflavin_nootropics.run_variable_pipeline `
   --input-directory $variableCorpus `
   --workers 16
 
+# If the manifest status is incomplete, retry only the missing author records.
+uv run --frozen python -m studies.tropoflavin_nootropics.run_variable_pipeline `
+  --subreddit $subreddit `
+  --input-directory $variableCorpus `
+  --workers 16 `
+  --resume
+
 $variableManifest = Get-Content `
   (Join-Path $variableCorpus "variable_pipeline_manifest.json") | ConvertFrom-Json
 uv run --frozen python -m studies.tropoflavin_nootropics.build_combined_db `
@@ -364,6 +371,10 @@ Both model-backed runners reject providers other than OpenRouter. Dispersed GPU
 capacity is not part of this workflow. The sentiment runner and variable runner write
 provider, model, token usage, source hashes, prompt or schema hashes, input-text and
 output-token limits, timestamps, and code commits into external manifests.
+
+If a provider response is exhausted for an individual author, the first variable run
+writes an `incomplete` manifest and exits nonzero. Run the resume command until the
+manifest status is `complete`; provider token usage is carried forward across attempts.
 
 After all nine reports exist, run `analyze_author_overlap` against the nine separate
 sentiment databases. It verifies the common global author-hash algorithm, excludes
