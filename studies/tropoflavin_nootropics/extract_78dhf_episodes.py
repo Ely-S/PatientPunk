@@ -535,16 +535,58 @@ def _extract_with_split(
 
 
 def _chunks(
-    contexts: tuple[EpisodeContext, ...], batch_size: int
+    items: tuple[BatchItem, ...], batch_size: int
 ) -> tuple[tuple[BatchItem, ...], ...]:
-    indexed = tuple(
-        BatchItem(item_id=index, context=context)
-        for index, context in enumerate(contexts)
-    )
     return tuple(
-        indexed[start : start + batch_size]
-        for start in range(0, len(indexed), batch_size)
+        items[start : start + batch_size]
+        for start in range(0, len(items), batch_size)
     )
+
+
+def _resume_results(
+    records_path: Path,
+    manifest: EpisodeExtractionManifest,
+    contexts: tuple[EpisodeContext, ...],
+) -> dict[int, EpisodeItemResult]:
+    if not records_path.is_file() or sha256_file(records_path) != manifest.records_sha256:
+        return {}
+    records_by_key: dict[tuple[str, str, str, int], EpisodeRecord] = {}
+    for line in records_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        parsed_record = EpisodeRecord.model_validate_json(line)
+        key = (
+            parsed_record.subreddit.casefold(),
+            parsed_record.author_hash,
+            parsed_record.post_id,
+            parsed_record.report_id,
+        )
+        if key in records_by_key:
+            raise ValueError("Prior episode records contain a duplicate source key")
+        records_by_key[key] = parsed_record
+    resumed: dict[int, EpisodeItemResult] = {}
+    for item_id, context in enumerate(contexts):
+        key = (
+            context.subreddit.casefold(),
+            context.author_hash,
+            context.post_id,
+            context.report_id,
+        )
+        resumed_record = records_by_key.get(key)
+        if resumed_record is None:
+            continue
+        resumed[item_id] = EpisodeItemResult(
+            item_id=item_id,
+            explicit_personal_use=resumed_record.explicit_personal_use,
+            dose_status=resumed_record.dose_status,
+            doses=resumed_record.doses,
+            route_status=resumed_record.route_status,
+            routes=resumed_record.routes,
+            reasons=resumed_record.reasons,
+        )
+    if len(resumed) != manifest.completed_episodes:
+        raise ValueError("Prior episode manifest count does not match resumable records")
+    return resumed
 
 
 def run_episode_extraction(
@@ -570,6 +612,7 @@ def run_episode_extraction(
     previous_usage = UsageSummary(
         requests=0, prompt_tokens=0, completion_tokens=0, total_tokens=0
     )
+    previous_manifest: EpisodeExtractionManifest | None = None
     if manifest_path.is_file():
         previous = EpisodeExtractionManifest.model_validate_json(
             manifest_path.read_text(encoding="utf-8")
@@ -581,6 +624,7 @@ def run_episode_extraction(
             and previous.source_databases == source_databases
         ):
             previous_usage = previous.usage
+            previous_manifest = previous
 
     contexts = tuple(
         context
@@ -591,10 +635,20 @@ def run_episode_extraction(
         contexts
     ):
         raise ValueError("Source cohorts contain duplicate global author-post episodes")
-    batches = _chunks(contexts, config.batch_size)
+    records_path = config.output_directory / "episode_records.jsonl"
+    results_by_id = (
+        _resume_results(records_path, previous_manifest, contexts)
+        if previous_manifest is not None
+        else {}
+    )
+    pending = tuple(
+        BatchItem(item_id=item_id, context=context)
+        for item_id, context in enumerate(contexts)
+        if item_id not in results_by_id
+    )
+    batches = _chunks(pending, config.batch_size)
     client = get_llm_client()
     cache_root = config.output_directory / "cache"
-    results_by_id: dict[int, EpisodeItemResult] = {}
     failures: list[int] = []
     with ThreadPoolExecutor(max_workers=config.workers) as executor:
         futures = {
@@ -611,7 +665,7 @@ def run_episode_extraction(
             ): batch
             for batch in batches
         }
-        completed = 0
+        completed = len(results_by_id)
         for future in as_completed(futures):
             batch = futures[future]
             try:
@@ -644,7 +698,6 @@ def run_episode_extraction(
             )
         )
     config.output_directory.mkdir(parents=True, exist_ok=True)
-    records_path = config.output_directory / "episode_records.jsonl"
     records_path.write_text(
         "".join(record.model_dump_json() + "\n" for record in records),
         encoding="utf-8",

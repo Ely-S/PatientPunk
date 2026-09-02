@@ -10,9 +10,13 @@ from studies.tropoflavin_nootropics.analyze_78dhf_episodes import (
 )
 from studies.tropoflavin_nootropics.extract_78dhf_episodes import (
     DoseValue,
+    EpisodeExtractionManifest,
     EpisodeItemResult,
     EpisodeRecord,
+    SourceDatabase,
+    UsageSummary,
     _parse_response,
+    _resume_results,
 )
 
 
@@ -117,3 +121,57 @@ def test_clustered_trend_model_uses_dose_complete_episodes() -> None:
     assert estimate.status in {"estimated", "did not converge"}
     assert estimate.odds_ratio is not None
     assert estimate.odds_ratio > 1
+
+
+def test_episode_resume_loads_only_completed_source_records(tmp_path: Path) -> None:
+    record = EpisodeRecord(
+        subreddit="Nootropics",
+        author_hash="1" * 32,
+        post_id="post-1",
+        report_id=1,
+        explicit_personal_use=False,
+        dose_status="not_reported",
+        doses=(),
+        route_status="not_reported",
+        routes=(),
+        reasons=(),
+    )
+    records_path = tmp_path / "episode_records.jsonl"
+    records_path.write_text(record.model_dump_json() + "\n", encoding="utf-8")
+    from studies.tropoflavin_nootropics.comparator_support import sha256_file
+    from studies.tropoflavin_nootropics.extract_78dhf_episodes import EpisodeContext
+
+    manifest = EpisodeExtractionManifest(
+        provider="openrouter",
+        model="test",
+        code_commit="abc",
+        prompt_file="prompt.txt",
+        prompt_sha256="a" * 64,
+        max_text_chars=6_000,
+        max_output_tokens=4_096,
+        batch_size=8,
+        source_databases=(
+            SourceDatabase(subreddit="Nootropics", database="one.db", sha256="b" * 64),
+        ),
+        source_episodes=2,
+        completed_episodes=1,
+        personal_use_episodes=0,
+        single_dose_episodes=0,
+        single_route_episodes=0,
+        missing_episodes=1,
+        records_file=records_path.name,
+        records_sha256=sha256_file(records_path),
+        usage=UsageSummary(
+            requests=1, prompt_tokens=10, completion_tokens=5, total_tokens=15
+        ),
+        completed_at="2026-09-02T00:00:00+00:00",
+    )
+    contexts = (
+        EpisodeContext("Nootropics", "1" * 32, "post-1", 1, "first"),
+        EpisodeContext("Nootropics", "2" * 32, "post-2", 2, "second"),
+    )
+
+    resumed = _resume_results(records_path, manifest, contexts)
+
+    assert tuple(resumed) == (0,)
+    assert resumed[0].explicit_personal_use is False
