@@ -113,6 +113,8 @@ def test_mass_dosages_are_canonicalized_and_non_mass_values_are_audited() -> Non
     assert parse_mass_dosage("50mg daily").label == "50 mg"
     assert parse_mass_dosage("100 mg - 200 mg").label == "100-200 mg"
     assert parse_mass_dosage("250-500 mcg").label == "0.25-0.5 mg"
+    assert parse_mass_dosage("250 µg").label == "0.25 mg"
+    assert parse_mass_dosage("250 μg").label == "0.25 mg"
     assert parse_mass_dosage("1 month per year") is None
 
     records = [

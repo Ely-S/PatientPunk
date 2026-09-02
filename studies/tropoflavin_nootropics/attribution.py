@@ -16,7 +16,7 @@ from utilities.alias_matching import compile_alias_pattern
 MAX_ATTRIBUTION_DISTANCE = 400
 _DOSE_PATTERN = re.compile(
     r"(?i)~?\d+(?:\.\d+)?\s*(?:(?:-|–|to)\s*~?\d+(?:\.\d+)?\s*)?"
-    r"(?:mg|mcg|ug|µg|g|gram|grams)\b"
+    r"(?:mg|mcg|ug|µg|μg|g|gram|grams)\b"
 )
 _ROUTE_PATTERNS = {
     "oral": re.compile(r"(?i)\b(?:oral(?:ly)?|swallow(?:ed|ing)?|capsule|pill)\b"),

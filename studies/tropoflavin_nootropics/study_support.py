@@ -156,7 +156,7 @@ def summarize_target_values(
 
 
 _NUMBER = r"\d+(?:\.\d+)?"
-_MASS_UNIT = r"mg|mcg|ug|µg|g|gram|grams"
+_MASS_UNIT = r"mg|mcg|ug|µg|μg|g|gram|grams"
 _REPEATED_UNIT_RANGE = re.compile(
     rf"(?i)(~?{_NUMBER})\s*({_MASS_UNIT})\s*(?:-|–|to)\s*({_NUMBER})\s*({_MASS_UNIT})\b"
 )
@@ -169,6 +169,7 @@ _MASS_TO_MG = {
     "mcg": 0.001,
     "ug": 0.001,
     "µg": 0.001,
+    "μg": 0.001,
     "g": 1000.0,
     "gram": 1000.0,
     "grams": 1000.0,
@@ -514,13 +515,14 @@ PROXIMITY_ALIAS = re.compile(
 )
 DOSE = re.compile(
     r"(?i)(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*)?"
-    r"(mg|mcg|ug|µg|g|gram|grams)\b"
+    r"(mg|mcg|ug|µg|μg|g|gram|grams)\b"
 )
 UNIT = {
     "mg": 1.0,
     "mcg": 0.001,
     "ug": 0.001,
     "µg": 0.001,
+    "μg": 0.001,
     "g": 1000.0,
     "gram": 1000.0,
     "grams": 1000.0,
