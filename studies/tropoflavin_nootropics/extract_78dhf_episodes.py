@@ -121,6 +121,38 @@ class EpisodeItemResult(BaseModel):
     routes: tuple[RouteCategory, ...]
     reasons: tuple[ReasonCategory, ...]
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_exact_duplicates(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        raw_doses = normalized.get("doses")
+        if isinstance(raw_doses, list):
+            unique_doses: list[object] = []
+            seen_doses: set[str] = set()
+            for dose in raw_doses:
+                key = json.dumps(dose, sort_keys=True, separators=(",", ":"))
+                if key not in seen_doses:
+                    unique_doses.append(dose)
+                    seen_doses.add(key)
+            normalized["doses"] = unique_doses
+            if normalized.get("dose_status") in {"single", "multiple"}:
+                normalized["dose_status"] = (
+                    "single" if len(unique_doses) == 1 else "multiple"
+                )
+        for field in ("routes", "reasons"):
+            raw_values = normalized.get(field)
+            if isinstance(raw_values, list):
+                normalized[field] = list(dict.fromkeys(raw_values))
+        if normalized.get("route_status") in {"single", "multiple"}:
+            routes = normalized.get("routes")
+            if isinstance(routes, list) and routes:
+                normalized["route_status"] = (
+                    "single" if len(routes) == 1 else "multiple"
+                )
+        return normalized
+
     @model_validator(mode="after")
     def validate_fields(self) -> EpisodeItemResult:
         expected_doses = {

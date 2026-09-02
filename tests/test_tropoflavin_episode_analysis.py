@@ -63,6 +63,21 @@ def test_parse_episode_response_requires_ordered_ids() -> None:
         _parse_response(valid, (3,))
 
 
+def test_episode_response_deduplicates_identical_doses() -> None:
+    duplicated = (
+        '{"items":[{"item_id":0,"explicit_personal_use":true,'
+        '"dose_status":"multiple","doses":['
+        '{"low":20,"high":20,"unit":"mg"},'
+        '{"low":20,"high":20,"unit":"mg"}],'
+        '"route_status":"not_reported","routes":[],"reasons":[]}]}'
+    )
+
+    parsed = _parse_response(duplicated, (0,))
+
+    assert parsed.items[0].dose_status == "single"
+    assert len(parsed.items[0].doses) == 1
+
+
 def test_load_episode_records_rejects_duplicate_source_episode(tmp_path: Path) -> None:
     record = EpisodeRecord(
         subreddit="Nootropics",
