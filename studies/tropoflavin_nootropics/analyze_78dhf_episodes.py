@@ -47,6 +47,9 @@ _SENTIMENT_LEVEL: dict[Sentiment, int] = {
     "neutral": 1,
     "positive": 2,
 }
+TrendOutcome = Literal[
+    "ordinal sentiment", "positive sentiment", "side-effect reporting"
+]
 
 
 class EpisodeAnalysisConfig(BaseModel):
@@ -287,7 +290,7 @@ def _safe_exp(value: float) -> float:
 
 def fit_trend_model(
     episodes: Sequence[Episode],
-    outcome: Literal["ordinal sentiment", "side-effect reporting"],
+    outcome: TrendOutcome,
     minimum_episodes: int,
     minimum_authors: int,
     minimum_community_episodes: int,
@@ -308,7 +311,11 @@ def fit_trend_model(
             status="too sparse for the prespecified model",
             communities=communities,
         )
-    endog_name = "sentiment" if outcome == "ordinal sentiment" else "side_effect"
+    endog_name = {
+        "ordinal sentiment": "sentiment",
+        "positive sentiment": "positive",
+        "side-effect reporting": "side_effect",
+    }[outcome]
     if frame[endog_name].nunique() < 2:
         return TrendEstimate(
             outcome=outcome,
@@ -577,6 +584,13 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
             ),
         )
     )
+    positive_sensitivity = fit_trend_model(
+        combined,
+        "positive sentiment",
+        config.minimum_model_episodes,
+        config.minimum_model_authors,
+        config.minimum_community_episodes,
+    )
     significant = [
         estimate for estimate in primary if estimate.q_value is not None and estimate.q_value < 0.05
     ]
@@ -584,11 +598,26 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
         episode for episode in combined if episode.single_dose_mg is not None
     ]
     repeated = Counter(episode.author_hash for episode in dose_complete)
+    sentiment_counts = Counter(
+        "neutral/mixed"
+        if episode.sentiment in {"neutral", "mixed"}
+        else episode.sentiment
+        for episode in dose_complete
+    )
+    side_effect_count = sum(
+        episode.side_effect_reported for episode in dose_complete
+    )
+    dose_reason = sum(bool(episode.reasons) for episode in dose_complete)
+    dose_route = sum(episode.single_route is not None for episode in dose_complete)
     main_finding = (
         f"The primary model used {len(dose_complete):,} same-post, single-dose "
         f"episodes from {len(repeated):,} authors; "
         f"{sum(count > 1 for count in repeated.values()):,} authors contributed "
-        "more than one dose-complete episode. "
+        "more than one dose-complete episode. Outcomes comprised "
+        f"{sentiment_counts['positive']:,} positive, "
+        f"{sentiment_counts['neutral/mixed']:,} neutral/mixed, and "
+        f"{sentiment_counts['negative']:,} negative episodes; "
+        f"{side_effect_count:,} had a mapped side-effect report. "
         + (
             "Neither primary outcome passed Benjamini-Hochberg correction at "
             "q < 0.05."
@@ -647,6 +676,23 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
             ],
             [_estimate_row(estimate) for estimate in primary],
         ),
+        "## Binary sentiment sensitivity\n\n"
+        + _table(
+            [
+                "Outcome",
+                "Episodes",
+                "Authors",
+                "OR per dose doubling",
+                "95% CI",
+                "p",
+                "BH q",
+                "Status",
+            ],
+            [_estimate_row(positive_sensitivity)],
+        )
+        + "\n\nThis prespecified sensitivity collapses sentiment to positive versus "
+        "negative/neutral/mixed. Its raw p-value is descriptive and is not part of "
+        "the two-outcome primary correction.",
         "## Combined dose descriptives\n\n"
         + _table(
             [
@@ -727,6 +773,11 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
                 "for use, indication severity, and selective posting remain potential "
                 "confounders. Same-post attribution removes cross-report exposure and "
                 "outcome mismatch but does not establish timing within the post. The "
+                f"dose-complete set contained only {dose_reason:,} episodes with an "
+                f"explicit reason and {dose_route:,} with a single route, so adding "
+                "those variables to the primary model would sharply reduce the sample "
+                "and condition on selective reporting. They remain secondary "
+                "descriptives. The "
                 "between-compound sentiment mean is not used in the primary regression; "
                 "subreddit fixed effects address community-level sentiment differences "
                 "without mixing comparator compounds into the within-7,8-DHF dose test."
