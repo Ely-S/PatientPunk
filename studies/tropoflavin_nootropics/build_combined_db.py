@@ -8,7 +8,7 @@ import json
 import os
 import re
 import sqlite3
-from collections import defaultdict
+from collections import Counter, defaultdict
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,9 +19,15 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from rich.console import Console
 
 from patientpunk.normalize import normalize_value
+from studies.tropoflavin_nootropics.attribution import (
+    corroborates_dose,
+    corroborates_route,
+    load_author_segments,
+)
 from studies.tropoflavin_nootropics.comparator_support import (
     DEFAULT_COHORT_CONFIG,
     ComparatorCohort,
+    analysis_compound_name,
     compound_for_treatment as comparator_for_treatment,
     load_comparator_cohort,
     sha256_file,
@@ -52,6 +58,7 @@ class CombinedDatabaseConfig(BaseModel):
     pipeline_b_records: Path
     output_database: Path
     cohort_path: Path = DEFAULT_COHORT_CONFIG
+    pipeline_b_corpus_directory: Path | None = None
     expected_pipeline_b_records: int = Field(default=752, ge=1)
     pipeline_b_run_name: str = Field(min_length=1)
 
@@ -63,6 +70,13 @@ class CombinedDatabaseConfig(BaseModel):
             raise ValueError(f"Pipeline B records not found: {self.pipeline_b_records}")
         if not self.cohort_path.is_file():
             raise ValueError(f"Comparator cohort not found: {self.cohort_path}")
+        if self.pipeline_b_corpus_directory is not None and not (
+            self.pipeline_b_corpus_directory / "users"
+        ).is_dir():
+            raise ValueError(
+                "Pipeline B source corpus is missing its users directory: "
+                f"{self.pipeline_b_corpus_directory}"
+            )
         if self.source_database.resolve() == self.output_database.resolve():
             raise ValueError(
                 "Output database must differ from the Pipeline A source database"
@@ -78,6 +92,7 @@ class PipelineBDosageRow(BaseModel):
     treatment: str = Field(min_length=1)
     value: str = Field(min_length=1)
     target_compound: str | None
+    attribution_status: str
     mass_low_mg: float | None
     mass_high_mg: float | None
     mass_midpoint_mg: float | None
@@ -95,6 +110,7 @@ class PipelineBRouteRow(BaseModel):
     route: str = Field(min_length=1)
     route_bucket: str = Field(min_length=1)
     target_compound: str | None
+    attribution_status: str
 
 
 class PipelineBOutcomeRow(BaseModel):
@@ -222,18 +238,35 @@ def _outcome_rows(
 def _dosage_rows(
     record: PipelineBRecord,
     cohort: ComparatorCohort,
+    author_segments: dict[str, tuple[str, ...]] | None = None,
 ) -> list[PipelineBDosageRow]:
     rows: list[PipelineBDosageRow] = []
+    compounds_by_name = {
+        analysis_compound_name(compound): compound for compound in cohort.compounds
+    }
     for ordinal, pair in enumerate(linked_values(record, "dosage")):
         mass = parse_mass_dosage(pair.value)
         band = dose_band(mass.midpoint_mg) if mass else None
+        target = comparator_for_treatment(pair.treatment, cohort)
+        if target is None:
+            attribution_status = "unmapped treatment"
+        elif author_segments is None:
+            attribution_status = "not checked"
+        else:
+            corroborated = corroborates_dose(
+                compounds_by_name[target],
+                pair.value,
+                author_segments.get(record.author_hash, ()),
+            )
+            attribution_status = "corroborated" if corroborated else "unsupported"
         rows.append(
             PipelineBDosageRow(
                 author_hash=record.author_hash,
                 ordinal=ordinal,
                 treatment=pair.treatment,
                 value=pair.value,
-                target_compound=comparator_for_treatment(pair.treatment, cohort),
+                target_compound=target,
+                attribution_status=attribution_status,
                 mass_low_mg=mass.low_mg if mass else None,
                 mass_high_mg=mass.high_mg if mass else None,
                 mass_midpoint_mg=mass.midpoint_mg if mass else None,
@@ -248,18 +281,37 @@ def _dosage_rows(
 def _route_rows(
     record: PipelineBRecord,
     cohort: ComparatorCohort,
+    author_segments: dict[str, tuple[str, ...]] | None = None,
 ) -> list[PipelineBRouteRow]:
-    return [
-        PipelineBRouteRow(
-            author_hash=record.author_hash,
-            ordinal=ordinal,
-            treatment=pair.treatment,
-            route=pair.value,
-            route_bucket=route_bucket(pair.value),
-            target_compound=comparator_for_treatment(pair.treatment, cohort),
+    compounds_by_name = {
+        analysis_compound_name(compound): compound for compound in cohort.compounds
+    }
+    rows: list[PipelineBRouteRow] = []
+    for ordinal, pair in enumerate(linked_values(record, "administration_route")):
+        target = comparator_for_treatment(pair.treatment, cohort)
+        if target is None:
+            attribution_status = "unmapped treatment"
+        elif author_segments is None:
+            attribution_status = "not checked"
+        else:
+            corroborated = corroborates_route(
+                compounds_by_name[target],
+                pair.value,
+                author_segments.get(record.author_hash, ()),
+            )
+            attribution_status = "corroborated" if corroborated else "unsupported"
+        rows.append(
+            PipelineBRouteRow(
+                author_hash=record.author_hash,
+                ordinal=ordinal,
+                treatment=pair.treatment,
+                route=pair.value,
+                route_bucket=route_bucket(pair.value),
+                target_compound=target,
+                attribution_status=attribution_status,
+            )
         )
-        for ordinal, pair in enumerate(linked_values(record, "administration_route"))
-    ]
+    return rows
 
 
 def _side_effect_rows(connection: sqlite3.Connection) -> list[PipelineASideEffectRow]:
@@ -324,10 +376,10 @@ def _compound_exposure_rows(
     route_groups: dict[tuple[str, str], list[PipelineBRouteRow]] = defaultdict(list)
     outcome_groups: dict[tuple[str, str], list[PipelineBOutcomeRow]] = defaultdict(list)
     for row in dosages:
-        if row.target_compound:
+        if row.target_compound and row.attribution_status in {"corroborated", "not checked"}:
             dosage_groups[(row.author_hash, row.target_compound)].append(row)
     for row in routes:
-        if row.target_compound:
+        if row.target_compound and row.attribution_status in {"corroborated", "not checked"}:
             route_groups[(row.author_hash, row.target_compound)].append(row)
     for row in outcomes:
         if row.target_compound:
@@ -486,6 +538,7 @@ def _insert_pipeline_b(
             treatment TEXT NOT NULL,
             value TEXT NOT NULL,
             target_compound TEXT,
+            attribution_status TEXT NOT NULL,
             mass_low_mg REAL,
             mass_high_mg REAL,
             mass_midpoint_mg REAL,
@@ -501,6 +554,7 @@ def _insert_pipeline_b(
             route TEXT NOT NULL,
             route_bucket TEXT NOT NULL,
             target_compound TEXT,
+            attribution_status TEXT NOT NULL,
             PRIMARY KEY (author_hash, ordinal)
         );
         CREATE TABLE pipeline_b_treatment_outcomes (
@@ -587,14 +641,23 @@ def _insert_pipeline_b(
         raw_rows,
     )
 
-    dosages = [row for record in records for row in _dosage_rows(record, cohort)]
-    routes = [row for record in records for row in _route_rows(record, cohort)]
+    author_segments = (
+        load_author_segments(config.pipeline_b_corpus_directory)
+        if config.pipeline_b_corpus_directory is not None
+        else None
+    )
+    dosages = [
+        row for record in records for row in _dosage_rows(record, cohort, author_segments)
+    ]
+    routes = [
+        row for record in records for row in _route_rows(record, cohort, author_segments)
+    ]
     outcomes = [row for record in records for row in _outcome_rows(record, cohort)]
     exposures = _compound_exposure_rows(dosages, routes, outcomes)
     side_effects = _side_effect_rows(connection)
     connection.executemany(
         """
-        INSERT INTO pipeline_b_dosages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO pipeline_b_dosages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -603,6 +666,7 @@ def _insert_pipeline_b(
                 row.treatment,
                 row.value,
                 row.target_compound,
+                row.attribution_status,
                 row.mass_low_mg,
                 row.mass_high_mg,
                 row.mass_midpoint_mg,
@@ -614,7 +678,7 @@ def _insert_pipeline_b(
         ],
     )
     connection.executemany(
-        "INSERT INTO pipeline_b_administration_routes VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pipeline_b_administration_routes VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 row.author_hash,
@@ -623,6 +687,7 @@ def _insert_pipeline_b(
                 row.route,
                 row.route_bucket,
                 row.target_compound,
+                row.attribution_status,
             )
             for row in routes
         ],
@@ -710,6 +775,13 @@ def _insert_pipeline_b(
         "records_sha256": _sha256(config.pipeline_b_records),
         "cohort_schema_id": cohort.schema_id,
         "cohort_sha256": sha256_file(config.cohort_path),
+        "attribution_checked": author_segments is not None,
+        "dose_attribution": dict(
+            sorted(Counter(row.attribution_status for row in dosages).items())
+        ),
+        "route_attribution": dict(
+            sorted(Counter(row.attribution_status for row in routes).items())
+        ),
     }
     connection.executemany(
         "INSERT INTO combined_pipeline_manifest VALUES (?, ?, ?, ?, ?, ?)",
@@ -803,6 +875,10 @@ def main(
         Path,
         typer.Option(exists=True, dir_okay=False, readable=True),
     ] = DEFAULT_COHORT_CONFIG,
+    pipeline_b_corpus: Annotated[
+        Path | None,
+        typer.Option(exists=True, file_okay=False, readable=True),
+    ] = None,
     expected_records: Annotated[int, typer.Option(min=1)] = 752,
     run_name: Annotated[str, typer.Option()] = "2026-08-27-linked-dose-route",
 ) -> None:
@@ -812,6 +888,7 @@ def main(
         pipeline_b_records=pipeline_b_records,
         output_database=output_database,
         cohort_path=cohort,
+        pipeline_b_corpus_directory=pipeline_b_corpus,
         expected_pipeline_b_records=expected_records,
         pipeline_b_run_name=run_name,
     )

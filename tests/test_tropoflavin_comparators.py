@@ -12,6 +12,15 @@ from studies.tropoflavin_nootropics.analyze_comparator_cohort import (
     _sentiment_summaries,
     render_comparator_report,
 )
+from studies.tropoflavin_nootropics.analyze_author_overlap import (
+    AuthorOverlapConfig,
+    CohortArtifact,
+    render_author_overlap,
+)
+from studies.tropoflavin_nootropics.attribution import (
+    corroborates_dose,
+    corroborates_route,
+)
 from studies.tropoflavin_nootropics.build_comparator_corpus import (
     BuildComparatorCorpusConfig,
     build_comparator_corpus,
@@ -24,6 +33,7 @@ from studies.tropoflavin_nootropics.comparator_support import (
     compound_for_treatment,
     load_comparator_cohort,
 )
+from studies.tropoflavin_nootropics.privacy import scan_aggregate_artifact
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
@@ -144,6 +154,91 @@ def test_pipeline_b_mapping_covers_the_full_comparator_cohort() -> None:
         treatment: compound_for_treatment(treatment, cohort)
         for treatment in expected
     } == expected
+
+
+def test_dose_and_route_require_nearby_same_segment_evidence() -> None:
+    target = load_comparator_cohort().by_slug()["78dhf"]
+    assert corroborates_dose(
+        target,
+        "10 mg",
+        ("I took 10 mg of 7,8-DHF in the morning.",),
+    )
+    assert not corroborates_dose(
+        target,
+        "10 mg",
+        ("I took 10 mg of something.", "Later I tried 7,8-DHF."),
+    )
+    assert corroborates_route(
+        target,
+        "sublingual",
+        ("I used 7,8-DHF sublingually, under my tongue.",),
+    )
+    assert not corroborates_route(
+        target,
+        "oral",
+        ("I used 7,8-DHF but did not describe the route.",),
+    )
+
+
+def test_parent_attribution_rejects_derivative_only_text() -> None:
+    target = load_comparator_cohort().by_slug()["78dhf"]
+    assert not corroborates_dose(
+        target,
+        "10 mg",
+        ("I took 10 mg of 4'-DMA-7,8-DHF.",),
+    )
+
+
+def test_author_overlap_counts_global_hashes_and_excludes_deleted(
+    tmp_path: Path,
+) -> None:
+    shared = "a" * 32
+    first_only = "b" * 32
+    second_only = "c" * 32
+    paths = [tmp_path / "first.db", tmp_path / "second.db"]
+    for path, authors in zip(
+        paths,
+        ((shared, first_only, "deleted"), (shared, second_only)),
+        strict=True,
+    ):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE treatment_reports (user_id TEXT)")
+            connection.executemany(
+                "INSERT INTO treatment_reports VALUES (?)",
+                [(author,) for author in authors],
+            )
+    report = render_author_overlap(
+        AuthorOverlapConfig(
+            cohorts=(
+                CohortArtifact(subreddit="First", sentiment_database=paths[0]),
+                CohortArtifact(subreddit="Second", sentiment_database=paths[1]),
+            ),
+            output_path=tmp_path / "overlap.md",
+        )
+    )
+    assert "| First | 2 | 1 |" in report
+    assert "| Second | 1 | 2 |" in report
+    assert shared not in report
+    assert "| deleted |" not in report.casefold()
+
+
+def test_aggregate_artifact_privacy_scan_blocks_paths_and_author_hashes(
+    tmp_path: Path,
+) -> None:
+    safe = tmp_path / "safe.md"
+    safe.write_text("# Aggregate\n\nAuthors: 12\n", encoding="utf-8")
+    assert scan_aggregate_artifact(safe) == ()
+
+    unsafe = tmp_path / "unsafe.md"
+    unsafe.write_text(
+        "C:\\Users\\person\\data.db\n" + "a" * 32 + "\n",
+        encoding="utf-8",
+    )
+    findings = scan_aggregate_artifact(unsafe)
+    assert {finding.rule for finding in findings} == {
+        "Windows user path",
+        "author-sized hexadecimal identifier",
+    }
 
 
 def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:

@@ -16,6 +16,7 @@ from rich.console import Console
 from scipy.stats import binomtest, fisher_exact
 from statsmodels.stats.multitest import multipletests
 
+from studies.tropoflavin_nootropics.attribution import corroborated_masses
 from studies.tropoflavin_nootropics.comparator_support import (
     DEFAULT_COHORT_CONFIG,
     ComparatorCohort,
@@ -24,7 +25,7 @@ from studies.tropoflavin_nootropics.comparator_support import (
     markdown_escape,
     sha256_file,
 )
-from studies.tropoflavin_nootropics.study_support import canonical_side_effect
+from studies.tropoflavin_nootropics.study_support import canonical_side_effect, dose_band
 
 console = Console()
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -41,6 +42,11 @@ class ComparatorAnalysisConfig(BaseModel):
     study_database: Path | None = None
     cohort_path: Path = DEFAULT_COHORT_CONFIG
     output_path: Path
+    require_corroborated_attribution: bool = False
+    corpus_manifest: Path | None = None
+    sentiment_manifest: Path | None = None
+    variable_corpus_manifest: Path | None = None
+    variable_pipeline_manifest: Path | None = None
 
     @model_validator(mode="after")
     def validate_inputs(self) -> ComparatorAnalysisConfig:
@@ -52,7 +58,74 @@ class ComparatorAnalysisConfig(BaseModel):
                 raise ValueError(f"{label} does not exist: {path}")
         if self.study_database is not None and not self.study_database.is_file():
             raise ValueError(f"study database does not exist: {self.study_database}")
+        for label, path in (
+            ("corpus manifest", self.corpus_manifest),
+            ("sentiment manifest", self.sentiment_manifest),
+            ("variable corpus manifest", self.variable_corpus_manifest),
+            ("variable pipeline manifest", self.variable_pipeline_manifest),
+        ):
+            if path is not None and not path.is_file():
+                raise ValueError(f"{label} does not exist: {path}")
         return self
+
+
+class CorpusMatchEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    matching_items: int = Field(ge=0)
+    distinct_authors: int = Field(ge=0)
+
+
+class CorpusEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    subreddit: str
+    comments_sha256: str
+    posts_sha256: str
+    author_hash_algorithm: str
+    matches: tuple[CorpusMatchEvidence, ...]
+
+
+class SentimentResultEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    reports: int = Field(ge=0)
+    authors: int = Field(ge=0)
+
+
+class SentimentRunEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    subreddit: str
+    provider: str
+    model_fast: str
+    model_strong: str
+    code_commit: str
+    max_upstream_chars: int = Field(ge=0)
+    usage: dict[str, int]
+    results: tuple[SentimentResultEvidence, ...]
+
+
+class VariableCorpusEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    subreddit: str
+    selected_authors: int = Field(ge=0)
+    text_segments: int = Field(ge=0)
+
+
+class VariableRunEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    subreddit: str
+    provider: str
+    model: str
+    code_commit: str | None
+    max_text_chars: int = Field(ge=1)
+    record_count: int = Field(ge=0)
+    usage: dict[str, int]
 
 
 class Vote(TypedDict):
@@ -157,6 +230,20 @@ class StratifiedSideEffectSummary(BaseModel):
         return self
 
 
+class PostDoseSummary(BaseModel):
+    """Same-report compound, dose, sentiment, and side-effect summary."""
+
+    model_config = ConfigDict(frozen=True)
+
+    slug: str
+    dose_band: str
+    dose_band_order: int = Field(ge=1)
+    posts: int = Field(ge=1)
+    authors: int = Field(ge=1)
+    positive_authors: int = Field(ge=0)
+    side_effect_authors: int = Field(ge=0)
+
+
 def _connect_readonly(path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
@@ -254,6 +341,96 @@ def _sentiment_summaries(
             ci_high=ci_high,
         )
     return summaries
+
+
+def _post_level_dose_summaries(
+    connection: sqlite3.Connection,
+    cohort: ComparatorCohort,
+) -> tuple[PostDoseSummary, ...]:
+    """Summarize reports with one unambiguous nearby dose in the same post."""
+    canonical_to_compound = {
+        compound.canonical_name.casefold(): compound for compound in cohort.compounds
+    }
+    rows = connection.execute(
+        """
+        SELECT tr.user_id, tr.post_id, tr.sentiment, tr.signal_strength,
+               tr.side_effects, tr.run_id, lower(t.canonical_name) AS drug,
+               COALESCE(p.title, '') AS title, p.body_text,
+               COALESCE(p.post_date, 0) AS post_date
+        FROM treatment_reports tr
+        JOIN treatment t ON t.id = tr.drug_id
+        JOIN posts p ON p.post_id = tr.post_id
+        WHERE tr.user_id IS NOT NULL
+        """
+    ).fetchall()
+    latest: dict[tuple[str, str], sqlite3.Row] = {}
+    for row in rows:
+        compound = canonical_to_compound.get(row["drug"])
+        if compound is None:
+            continue
+        key = (compound.slug, row["post_id"])
+        existing = latest.get(key)
+        if existing is None or row["run_id"] > existing["run_id"]:
+            latest[key] = row
+
+    posts: dict[tuple[str, str], set[str]] = defaultdict(set)
+    votes: dict[tuple[str, str], dict[str, Vote]] = defaultdict(dict)
+    side_effect_authors: dict[tuple[str, str], set[str]] = defaultdict(set)
+    orders: dict[tuple[str, str], int] = {}
+    for (slug, _post_id), row in latest.items():
+        compound = cohort.by_slug()[slug]
+        text = f"{row['title']} {row['body_text']}".strip()
+        masses = corroborated_masses(compound, (text,))
+        if len(masses) != 1:
+            continue
+        band = dose_band(masses[0].midpoint_mg)
+        key = (slug, band.label)
+        orders[key] = band.order
+        posts[key].add(row["post_id"])
+        vote = Vote(
+            user_id=row["user_id"],
+            drug=slug,
+            post_id=row["post_id"],
+            sentiment=row["sentiment"],
+            signal=row["signal_strength"],
+            post_date=int(row["post_date"]),
+            run_id=int(row["run_id"]),
+        )
+        existing = votes[key].get(vote["user_id"])
+        rank = (vote["post_date"], SIGNAL_RANK.get(vote["signal"], 0), vote["run_id"])
+        if existing is None:
+            votes[key][vote["user_id"]] = vote
+        else:
+            existing_rank = (
+                existing["post_date"],
+                SIGNAL_RANK.get(existing["signal"], 0),
+                existing["run_id"],
+            )
+            if rank > existing_rank:
+                votes[key][vote["user_id"]] = vote
+        try:
+            effects = json.loads(row["side_effects"] or "[]")
+        except json.JSONDecodeError:
+            effects = []
+        if isinstance(effects, list) and effects:
+            side_effect_authors[key].add(row["user_id"])
+
+    return tuple(
+        PostDoseSummary(
+            slug=slug,
+            dose_band=band,
+            dose_band_order=orders[(slug, band)],
+            posts=len(posts[(slug, band)]),
+            authors=len(author_votes),
+            positive_authors=sum(
+                vote["sentiment"] == "positive" for vote in author_votes.values()
+            ),
+            side_effect_authors=len(side_effect_authors[(slug, band)]),
+        )
+        for (slug, band), author_votes in sorted(
+            votes.items(), key=lambda item: (item[0][0], orders[item[0]], item[0][1])
+        )
+    )
 
 
 def _comparisons(
@@ -442,6 +619,7 @@ def _stratified_side_effects(
     classified_authors: dict[str, set[str]],
     side_effect_records: tuple[CanonicalSideEffectRecord, ...],
     treatment_to_slug: dict[str, str],
+    require_corroborated: bool,
 ) -> tuple[StratifiedSideEffectSummary, ...]:
     """Summarize author-level side-effect reporting within dose or route strata."""
     allowed = {
@@ -462,11 +640,15 @@ def _stratified_side_effects(
     authors_by_bucket: dict[tuple[str, str], set[str]] = defaultdict(set)
     observations: dict[tuple[str, str], int] = defaultdict(int)
     order_by_bucket: dict[tuple[str, str], int | str] = {}
+    attribution_filter = (
+        " AND attribution_status = 'corroborated'" if require_corroborated else ""
+    )
     rows = connection.execute(
         f"""
         SELECT author_hash, target_compound, {bucket_column}, {order_column}
         FROM {table}
         WHERE target_compound IS NOT NULL AND {bucket_column} IS NOT NULL
+        {attribution_filter}
         """
     ).fetchall()
     for row in rows:
@@ -574,6 +756,7 @@ def _study_sections(
     classified_authors: dict[str, set[str]],
     side_effect_records: tuple[CanonicalSideEffectRecord, ...],
     cohort: ComparatorCohort,
+    require_corroborated: bool,
 ) -> str:
     if path is None:
         return ""
@@ -597,6 +780,16 @@ def _study_sections(
             analysis_compound_name(compound): compound.slug
             for compound in cohort.compounds
         }
+        if require_corroborated:
+            for table in ("pipeline_b_dosages", "pipeline_b_administration_routes"):
+                columns = {
+                    row[1] for row in connection.execute(f"PRAGMA table_info({table})")
+                }
+                if "attribution_status" not in columns:
+                    raise ValueError(
+                        f"{table} cannot enforce source corroboration because it lacks "
+                        "attribution_status"
+                    )
         dose_summaries = _stratified_side_effects(
             connection,
             table="pipeline_b_dosages",
@@ -605,6 +798,7 @@ def _study_sections(
             classified_authors=classified_authors,
             side_effect_records=side_effect_records,
             treatment_to_slug=treatment_to_slug,
+            require_corroborated=require_corroborated,
         )
         route_summaries = _stratified_side_effects(
             connection,
@@ -614,6 +808,7 @@ def _study_sections(
             classified_authors=classified_authors,
             side_effect_records=side_effect_records,
             treatment_to_slug=treatment_to_slug,
+            require_corroborated=require_corroborated,
         )
         outcome_rows = connection.execute(
             """
@@ -638,6 +833,24 @@ def _study_sections(
                 """
             ).fetchall()
         )
+        attribution_rows = []
+        if require_corroborated:
+            for label, table in (
+                ("Dose", "pipeline_b_dosages"),
+                ("Route", "pipeline_b_administration_routes"),
+            ):
+                attribution_rows.extend(
+                    [label, status, count]
+                    for status, count in connection.execute(
+                        f"""
+                        SELECT attribution_status, COUNT(*)
+                        FROM {table}
+                        WHERE target_compound IS NOT NULL
+                        GROUP BY attribution_status
+                        ORDER BY attribution_status
+                        """
+                    ).fetchall()
+                )
 
     pem_entries = int(outcome_coverage.get("post-exertional malaise", 0))
     pem_note = (
@@ -652,9 +865,20 @@ def _study_sections(
         "also had a retained comparator report. These are cross-report associations, "
         "not administration-event links, incidence estimates, or dose-response evidence."
     )
+    if require_corroborated:
+        stratification_note += (
+            " Dose and route rows are included only when the extracted value and "
+            "compound were found near each other in the same source segment."
+        )
 
     return "\n\n".join(
         [
+            (
+                "## Dose and route attribution checks\n\n"
+                + _table(["Field", "Status", "Rows"], attribution_rows)
+            )
+            if require_corroborated
+            else "",
             "## Dose-stratified side-effect reporting\n\n"
             + stratification_note
             + "\n\n"
@@ -696,6 +920,111 @@ def _study_sections(
     )
 
 
+def _quality_section(
+    config: ComparatorAnalysisConfig,
+    cohort: ComparatorCohort,
+) -> str:
+    paths = (
+        config.corpus_manifest,
+        config.sentiment_manifest,
+        config.variable_corpus_manifest,
+        config.variable_pipeline_manifest,
+    )
+    if not all(paths):
+        return (
+            "## Extraction coverage and provenance\n\n"
+            "Detailed run manifests were not supplied for this legacy analysis."
+        )
+    corpus_path, sentiment_path, variable_corpus_path, variable_run_path = paths
+    assert corpus_path is not None
+    assert sentiment_path is not None
+    assert variable_corpus_path is not None
+    assert variable_run_path is not None
+    corpus = CorpusEvidence.model_validate_json(corpus_path.read_text(encoding="utf-8"))
+    sentiment = SentimentRunEvidence.model_validate_json(
+        sentiment_path.read_text(encoding="utf-8")
+    )
+    variable_corpus = VariableCorpusEvidence.model_validate_json(
+        variable_corpus_path.read_text(encoding="utf-8")
+    )
+    variable_run = VariableRunEvidence.model_validate_json(
+        variable_run_path.read_text(encoding="utf-8")
+    )
+    observed_subreddits = {
+        corpus.subreddit,
+        sentiment.subreddit,
+        variable_corpus.subreddit,
+        variable_run.subreddit,
+    }
+    if observed_subreddits != {config.subreddit}:
+        raise ValueError(
+            "Run manifests do not all match the requested subreddit: "
+            f"{sorted(observed_subreddits)}"
+        )
+    if sentiment.provider != "openrouter" or variable_run.provider != "openrouter":
+        raise ValueError("All new model runs must use OpenRouter")
+
+    match_by_slug = {row.slug: row for row in corpus.matches}
+    result_by_slug = {row.slug: row for row in sentiment.results}
+    coverage_rows: list[list[object]] = []
+    for compound in cohort.compounds:
+        source = match_by_slug[compound.slug]
+        result = result_by_slug[compound.slug]
+        retention = (
+            result.authors / source.distinct_authors if source.distinct_authors else 0.0
+        )
+        coverage_rows.append(
+            [
+                compound.display_name,
+                source.matching_items,
+                source.distinct_authors,
+                result.reports,
+                result.authors,
+                _percent(retention) if source.distinct_authors else "n/a",
+                "too sparse for inference" if result.authors < 10 else "adequate for description",
+            ]
+        )
+    variable_coverage = (
+        variable_run.record_count / variable_corpus.selected_authors
+        if variable_corpus.selected_authors
+        else 0.0
+    )
+    return (
+        "## Extraction coverage and recall checks\n\n"
+        "The retention column compares retained classified authors with authors found "
+        "by deterministic alias matching. It is a recall proxy, not gold-standard "
+        "sensitivity, because model eligibility and alias matching are different "
+        "measurement stages.\n\n"
+        + _table(
+            [
+                "Compound",
+                "Alias-matched items",
+                "Alias-matched authors",
+                "Reports",
+                "Classified authors",
+                "Observed retention",
+                "Sample warning",
+            ],
+            coverage_rows,
+        )
+        + "\n\n"
+        f"Pipeline B produced {variable_run.record_count:,} records from "
+        f"{variable_corpus.selected_authors:,} selected authors "
+        f"({_percent(variable_coverage) if variable_corpus.selected_authors else 'n/a'}) "
+        f"and {variable_corpus.text_segments:,} source segments.\n\n"
+        f"OpenRouter models: sentiment `{sentiment.model_fast}` / "
+        f"`{sentiment.model_strong}`; variables `{variable_run.model}`. "
+        f"Provider-reported token totals: sentiment "
+        f"{int(sentiment.usage.get('total_tokens', 0)):,}; variables "
+        f"{int(variable_run.usage.get('total_tokens', 0)):,}. Text caps were "
+        f"{sentiment.max_upstream_chars:,} upstream characters and "
+        f"{variable_run.max_text_chars:,} Pipeline B characters.\n\n"
+        f"Source SHA-256 values: comments `{corpus.comments_sha256}`; posts "
+        f"`{corpus.posts_sha256}`. Code commits: sentiment "
+        f"`{sentiment.code_commit}`; variables `{variable_run.code_commit}`."
+    )
+
+
 def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
     """Render an aggregate report without source text or author identifiers."""
     cohort = load_comparator_cohort(config.cohort_path)
@@ -708,8 +1037,23 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
         comparisons = _comparisons(cohort, votes, summaries)
         side_effect_records = _canonical_side_effect_records(connection, cohort)
         side_effects = _side_effects(side_effect_records)
+        post_dose_summaries = _post_level_dose_summaries(connection, cohort)
 
     by_slug = cohort.by_slug()
+    post_dose_rows = [
+        [
+            by_slug[summary.slug].display_name,
+            summary.dose_band,
+            summary.posts,
+            summary.authors,
+            f"{summary.positive_authors}/{summary.authors} "
+            f"({_percent(summary.positive_authors / summary.authors)})",
+            f"{summary.side_effect_authors}/{summary.authors} "
+            f"({_percent(summary.side_effect_authors / summary.authors)})",
+            "too sparse for inference" if summary.authors < 10 else "descriptive only",
+        ]
+        for summary in post_dose_summaries
+    ]
     sentiment_rows = []
     for compound in cohort.compounds:
         summary = summaries[compound.slug]
@@ -725,6 +1069,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                 summary.neutral,
                 _percent(summary.positive_rate),
                 f"{_percent(summary.ci_low)} to {_percent(summary.ci_high)}",
+                "too sparse for inference" if summary.users < 10 else "descriptive only",
             ]
         )
 
@@ -744,6 +1089,15 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                 f"{result.target_only_positive}/{result.comparator_only_positive}",
                 f"{result.matched_p_value:.4f}" if result.matched_p_value is not None else "n/a",
                 f"{result.matched_q_value:.4f}" if result.matched_q_value is not None else "n/a",
+                (
+                    "too sparse for inference"
+                    if min(
+                        result.exclusive_target_authors,
+                        result.exclusive_comparator_authors,
+                    )
+                    < 10
+                    else "sensitivity analysis"
+                ),
             ]
         )
 
@@ -772,6 +1126,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
             "comparator uses the same source population, classifier, context handling, "
             "and one-vote-per-author rule."
         ),
+        _quality_section(config, cohort),
         "## Comparator definitions\n\n"
         + _table(
             ["Compound", "Tier", "Role", "Mechanistic rationale"],
@@ -798,6 +1153,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                 "Neutral",
                 "Positive share",
                 "95% Wilson CI",
+                "Inference status",
             ],
             sentiment_rows,
         ),
@@ -822,6 +1178,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                     "Discordant",
                     "Matched p",
                     "Matched BH q",
+                    "Inference status",
                 ],
                 comparison_rows,
             )
@@ -838,12 +1195,32 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                 side_effect_rows,
             )
         ),
+        (
+            "## Post-level compound, dose, and outcome links\n\n"
+            "This stricter view keeps only treatment-specific sentiment reports where "
+            "exactly one quantitative mass dose appears near that compound in the same "
+            "post or comment. Authors receive one vote per compound and dose band. It is "
+            "descriptive and does not establish a dose-response relationship.\n\n"
+            + _table(
+                [
+                    "Compound",
+                    "Dose band",
+                    "Posts",
+                    "Authors",
+                    "Positive authors",
+                    "Side-effect authors",
+                    "Inference status",
+                ],
+                post_dose_rows,
+            )
+        ),
     ]
     study_sections = _study_sections(
         config.study_database,
         classified_authors={slug: set(author_votes) for slug, author_votes in votes.items()},
         side_effect_records=side_effect_records,
         cohort=cohort,
+        require_corroborated=config.require_corroborated_attribution,
     )
     if study_sections:
         sections.append(study_sections)
@@ -893,6 +1270,15 @@ def main(
     output: Path = typer.Option(..., dir_okay=False),
     study_database: Path | None = typer.Option(None, exists=True, dir_okay=False),
     cohort: Path = typer.Option(DEFAULT_COHORT_CONFIG, exists=True, dir_okay=False),
+    require_corroborated_attribution: bool = typer.Option(False),
+    corpus_manifest: Path | None = typer.Option(None, exists=True, dir_okay=False),
+    sentiment_manifest: Path | None = typer.Option(None, exists=True, dir_okay=False),
+    variable_corpus_manifest: Path | None = typer.Option(
+        None, exists=True, dir_okay=False
+    ),
+    variable_pipeline_manifest: Path | None = typer.Option(
+        None, exists=True, dir_okay=False
+    ),
 ) -> None:
     """Write the privacy-safe aggregate report."""
     try:
@@ -903,6 +1289,11 @@ def main(
                 study_database=study_database,
                 cohort_path=cohort,
                 output_path=output,
+                require_corroborated_attribution=require_corroborated_attribution,
+                corpus_manifest=corpus_manifest,
+                sentiment_manifest=sentiment_manifest,
+                variable_corpus_manifest=variable_corpus_manifest,
+                variable_pipeline_manifest=variable_pipeline_manifest,
             )
         )
         console.print(f"[green]Wrote[/green] {output}")
