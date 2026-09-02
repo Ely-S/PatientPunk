@@ -236,6 +236,7 @@ class EpisodeExtractionManifest(BaseModel):
     max_text_chars: int
     max_output_tokens: int
     batch_size: int
+    batch_sizes_used: tuple[int, ...] = ()
     source_databases: tuple[SourceDatabase, ...]
     source_episodes: int
     completed_episodes: int
@@ -646,7 +647,8 @@ def run_episode_extraction(
         for item_id, context in enumerate(contexts)
         if item_id not in results_by_id
     )
-    batches = _chunks(pending, config.batch_size)
+    effective_batch_size = 1 if results_by_id else config.batch_size
+    batches = _chunks(pending, effective_batch_size)
     client = get_llm_client()
     cache_root = config.output_directory / "cache"
     failures: list[int] = []
@@ -711,6 +713,11 @@ def run_episode_extraction(
         ),
         total_tokens=previous_usage.total_tokens + current_usage.total_tokens,
     )
+    prior_batch_sizes = (
+        previous_manifest.batch_sizes_used
+        if previous_manifest and previous_manifest.batch_sizes_used
+        else ((previous_manifest.batch_size,) if previous_manifest else ())
+    )
     manifest = EpisodeExtractionManifest(
         provider=provider,
         model=model,
@@ -720,6 +727,7 @@ def run_episode_extraction(
         max_text_chars=config.max_text_chars,
         max_output_tokens=config.max_output_tokens,
         batch_size=config.batch_size,
+        batch_sizes_used=tuple(dict.fromkeys((*prior_batch_sizes, effective_batch_size))),
         source_databases=source_databases,
         source_episodes=len(contexts),
         completed_episodes=len(records),

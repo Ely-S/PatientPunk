@@ -749,6 +749,8 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
                 f"Episode extraction: provider `{manifest.provider}`; model "
                 f"`{manifest.model}`; code commit `{manifest.code_commit}`; prompt "
                 f"`{manifest.prompt_file}` with SHA-256 `{manifest.prompt_sha256}`; "
+                "batch sizes used "
+                f"{', '.join(str(size) for size in manifest.batch_sizes_used)}; "
                 f"completed {manifest.completed_episodes:,}/{manifest.source_episodes:,} "
                 f"episodes; {manifest.personal_use_episodes:,} explicit personal-use "
                 f"episodes; {manifest.single_dose_episodes:,} single-dose episodes; "
