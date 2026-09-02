@@ -80,6 +80,12 @@ def _git_commit() -> str | None:
                 git_dir = pathlib.Path(dot.read_text(encoding="utf-8").split(":", 1)[1].strip())
             except (OSError, IndexError):
                 return None
+        common_dir = git_dir
+        try:
+            common_path = (git_dir / "commondir").read_text(encoding="utf-8").strip()
+            common_dir = (git_dir / common_path).resolve()
+        except OSError:
+            pass
         try:
             head = (git_dir / "HEAD").read_text(encoding="utf-8").strip()
         except OSError:
@@ -87,13 +93,14 @@ def _git_commit() -> str | None:
         if not head.startswith("ref:"):
             return head or None            # detached HEAD holds the hash itself
         ref = head.split(":", 1)[1].strip()
-        try:
-            return (git_dir / ref).read_text(encoding="utf-8").strip() or None
-        except OSError:
-            pass
+        for ref_root in (git_dir, common_dir):
+            try:
+                return (ref_root / ref).read_text(encoding="utf-8").strip() or None
+            except OSError:
+                pass
         # A packed ref has no loose file.
         try:
-            for line in (git_dir / "packed-refs").read_text(encoding="utf-8").splitlines():
+            for line in (common_dir / "packed-refs").read_text(encoding="utf-8").splitlines():
                 if line.endswith(" " + ref):
                     return line.split(" ", 1)[0]
         except OSError:
