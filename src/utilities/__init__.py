@@ -86,6 +86,7 @@ elif _has_anthropic:
 else:
     LLM_PROVIDER = "anthropic"  # default for backward compatibility
 
+_API_BASE: str | None
 if LLM_PROVIDER == "openrouter":
     _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
     _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
@@ -195,8 +196,8 @@ class _ORStream:
         self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
         return self
 
-    def __exit__(self, *exc) -> bool:
-        return False
+    def __exit__(self, *exc) -> None:
+        return None
 
     def get_final_message(self):
         parts: list[str] = []
@@ -335,6 +336,8 @@ def resolve_aliases(config: "PipelineConfig") -> tuple[str, list[str]]:
     Uses config.drug_aliases if set (hand-curated list); otherwise falls back
     to get_drug_aliases (LLM lookup + disk cache). Target is always included.
     """
+    if config.drug is None:
+        raise ValueError("A target drug is required to resolve aliases")
     target = config.drug.strip().lower()
     if config.drug_aliases is not None:
         aliases = [a.lower().strip() for a in config.drug_aliases if a.strip()]
