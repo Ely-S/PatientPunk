@@ -428,6 +428,45 @@ subreddit-standardized differences and Mantel-Haenszel odds ratios. The report k
 raw percentages alongside normalization because the standardized sentiment score is
 a sensitivity analysis, not a validated clinical scale.
 
+### Same-post 7,8-DHF episode analysis
+
+The stricter episode analysis does not reuse author-level dose, route, or reason
+fields. It extracts those predictors again from each individual 7,8-DHF report so
+that exposure and outcome come from the same Reddit post. Create an external episode
+extraction config with the same `cohorts` entries plus `output_directory`, `workers`,
+`batch_size`, `max_text_chars`, and `max_output_tokens`, then run:
+
+```powershell
+uv run --frozen --env-file .env python -m `
+  studies.tropoflavin_nootropics.extract_78dhf_episodes `
+  --config-path $episodeExtractionConfig
+```
+
+The private cache contains structured responses but no source report text. The model
+receives opaque item numbers, not author or post identifiers. The external records
+retain identifiers only so the analysis can join each extraction back to the exact
+source report.
+
+Create an external analysis config containing `cohorts`, `episode_records`,
+`episode_manifest`, `output_path`, `minimum_model_episodes`,
+`minimum_model_authors`, and `minimum_community_episodes`. Generate and scan the
+aggregate report:
+
+```powershell
+uv run --frozen python -m `
+  studies.tropoflavin_nootropics.analyze_78dhf_episodes `
+  --config-path $episodeAnalysisConfig `
+  --output $episodeReport
+
+uv run --frozen python -m studies.tropoflavin_nootropics.privacy $episodeReport
+```
+
+The primary dose coefficient uses log2 dose and is therefore an odds ratio per dose
+doubling. Ordinal sentiment and any mapped same-report side-effect mention use GEE
+with robust covariance clustered by author. The combined models include subreddit
+fixed effects, and the two primary p-values receive Benjamini-Hochberg correction.
+Route, reason, and dose-band tables are secondary descriptives.
+
 ## 8. What you should get
 
 | | |
