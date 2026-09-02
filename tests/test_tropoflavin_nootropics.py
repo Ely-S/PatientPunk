@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -179,7 +180,7 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "pipeline_a.db"
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection:
         connection.executescript(
             """
             CREATE TABLE users (
@@ -215,6 +216,7 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
                 (1, 1, 'p1', 'a', 1, 'positive', 'strong', '["insomnia", "hair thinning"]');
             """
         )
+        connection.commit()
 
     records = tmp_path / "records_normalized.csv"
     fieldnames = [
@@ -267,7 +269,7 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
     assert report.pipeline_b_records == 2
     assert report.pipeline_b_compound_exposures == 2
     assert report.pipeline_a_side_effects == 2
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection:
         source_tables = {
             row[0]
             for row in connection.execute(
@@ -275,7 +277,7 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
             )
         }
     assert "pipeline_b_records" not in source_tables
-    with sqlite3.connect(output) as connection:
+    with closing(sqlite3.connect(output)) as connection:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         exposure = connection.execute(

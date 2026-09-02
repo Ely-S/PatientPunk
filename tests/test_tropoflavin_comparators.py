@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from studies.tropoflavin_nootropics.analyze_comparator_cohort import (
@@ -139,12 +140,13 @@ def test_corpus_builder_separates_parent_from_derivative_and_hashes_authors(
 
     retained_database = tmp_path / "retained.db"
     retained_author = corpus[0]["author_hash"]
-    with sqlite3.connect(retained_database) as connection:
+    with closing(sqlite3.connect(retained_database)) as connection:
         connection.execute("CREATE TABLE treatment_reports (user_id TEXT)")
         connection.execute(
             "INSERT INTO treatment_reports VALUES (?)",
             (retained_author,),
         )
+        connection.commit()
     retained_manifest = build_variable_corpus(
         VariableCorpusConfig(
             subreddit="Nootropics",
@@ -222,12 +224,13 @@ def test_author_overlap_counts_global_hashes_and_excludes_deleted(
         ((shared, first_only, "deleted"), (shared, second_only)),
         strict=True,
     ):
-        with sqlite3.connect(path) as connection:
+        with closing(sqlite3.connect(path)) as connection:
             connection.execute("CREATE TABLE treatment_reports (user_id TEXT)")
             connection.executemany(
                 "INSERT INTO treatment_reports VALUES (?)",
                 [(author,) for author in authors],
             )
+            connection.commit()
     report = render_author_overlap(
         AuthorOverlapConfig(
             cohorts=(
@@ -337,7 +340,7 @@ def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None
 
 def _create_sentiment_database(path: Path) -> None:
     schema = Path("schema.sql").read_text(encoding="utf-8")
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection:
         connection.executescript(schema)
         connection.executemany(
             "INSERT INTO users VALUES (?, 'Nootropics', 1)",
@@ -367,10 +370,11 @@ def _create_sentiment_database(path: Path) -> None:
                 ("p4", "u3", 2, "positive", None),
             ],
         )
+        connection.commit()
 
 
 def _create_study_database(path: Path) -> None:
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection:
         connection.executescript(
             """
             CREATE TABLE pipeline_b_dosages (
@@ -398,6 +402,7 @@ def _create_study_database(path: Path) -> None:
                 VALUES ('u1', '7,8-DHF', 'post-exertional malaise', 'helped');
             """
         )
+        connection.commit()
 
 
 def test_report_is_aggregate_treatment_linked_and_reproducible(tmp_path: Path) -> None:
