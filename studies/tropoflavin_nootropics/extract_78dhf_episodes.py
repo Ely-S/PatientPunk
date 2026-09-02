@@ -677,7 +677,7 @@ def run_episode_extraction(
                 results = future.result()
             except Exception as exc:  # noqa: BLE001
                 failures.extend(item.item_id for item in batch)
-                root = exc
+                root: BaseException = exc
                 while root.__cause__ is not None:
                     root = root.__cause__
                 failure_types[type(root).__name__] += len(batch)
