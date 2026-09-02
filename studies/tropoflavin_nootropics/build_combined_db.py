@@ -525,9 +525,7 @@ def _insert_pipeline_b(
     definitions = []
     for column in columns:
         sql_type = "INTEGER" if column == "text_count" else "TEXT"
-        constraints = (
-            " PRIMARY KEY REFERENCES users(user_id)" if column == "author_hash" else ""
-        )
+        constraints = " PRIMARY KEY" if column == "author_hash" else ""
         definitions.append(f"{_quote_identifier(column)} {sql_type}{constraints}")
     connection.execute(f"CREATE TABLE pipeline_b_records ({', '.join(definitions)})")
     connection.executescript(
