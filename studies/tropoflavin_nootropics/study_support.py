@@ -97,7 +97,9 @@ def load_pipeline_b_records(path: Path) -> list[PipelineBRecord]:
 
 
 def _split_cell(value: str) -> list[str]:
-    return [part.strip() for part in value.split(" | ") if part.strip()]
+    if not value:
+        return []
+    return [part.strip() for part in value.split(" | ")]
 
 
 def linked_values(
@@ -114,6 +116,7 @@ def linked_values(
     return [
         LinkedValue(treatment=treatment, value=value)
         for treatment, value in zip(treatments, values, strict=True)
+        if treatment and value
     ]
 
 

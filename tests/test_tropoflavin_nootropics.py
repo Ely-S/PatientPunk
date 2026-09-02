@@ -75,6 +75,17 @@ def test_linked_values_preserve_alignment_and_reject_mismatch() -> None:
         linked_values(invalid, "dosage")
 
 
+def test_linked_values_preserve_empty_alignment_placeholders() -> None:
+    record = _record(
+        dosage_treatment="BPC-157 | ",
+        dosage_value="250 mcg | 500 mcg",
+    )
+
+    assert [
+        (pair.treatment, pair.value) for pair in linked_values(record, "dosage")
+    ] == [("BPC-157", "250 mcg")]
+
+
 def test_derivative_classification_takes_precedence_over_parent_alias() -> None:
     assert compound_for_treatment("4'-DMA-7,8-DHF") == "4'-DMA"
     assert compound_for_treatment("eutropoflavin") == "4'-DMA"

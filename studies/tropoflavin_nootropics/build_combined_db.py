@@ -375,15 +375,27 @@ def _compound_exposure_rows(
     dosage_groups: dict[tuple[str, str], list[PipelineBDosageRow]] = defaultdict(list)
     route_groups: dict[tuple[str, str], list[PipelineBRouteRow]] = defaultdict(list)
     outcome_groups: dict[tuple[str, str], list[PipelineBOutcomeRow]] = defaultdict(list)
-    for row in dosages:
-        if row.target_compound and row.attribution_status in {"corroborated", "not checked"}:
-            dosage_groups[(row.author_hash, row.target_compound)].append(row)
-    for row in routes:
-        if row.target_compound and row.attribution_status in {"corroborated", "not checked"}:
-            route_groups[(row.author_hash, row.target_compound)].append(row)
-    for row in outcomes:
-        if row.target_compound:
-            outcome_groups[(row.author_hash, row.target_compound)].append(row)
+    for dosage_row in dosages:
+        if dosage_row.target_compound and dosage_row.attribution_status in {
+            "corroborated",
+            "not checked",
+        }:
+            dosage_groups[
+                (dosage_row.author_hash, dosage_row.target_compound)
+            ].append(dosage_row)
+    for route_row in routes:
+        if route_row.target_compound and route_row.attribution_status in {
+            "corroborated",
+            "not checked",
+        }:
+            route_groups[(route_row.author_hash, route_row.target_compound)].append(
+                route_row
+            )
+    for outcome_row in outcomes:
+        if outcome_row.target_compound:
+            outcome_groups[
+                (outcome_row.author_hash, outcome_row.target_compound)
+            ].append(outcome_row)
 
     keys = set(dosage_groups) | set(route_groups) | set(outcome_groups)
     exposures: list[PipelineBCompoundExposureRow] = []

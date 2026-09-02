@@ -115,7 +115,9 @@ def render_author_overlap(config: AuthorOverlapConfig) -> str:
         "This is a diagnostic for possible double counting. The cohorts remain "
         "separate and no denominators are pooled. Deleted or unidentifiable authors "
         "are excluded. An overlap count means the same deterministic author hash had "
-        "at least one retained comparator report in both subreddits.\n\n"
+        "at least one retained comparator report in both subreddits. Multiple accounts "
+        "owned by one person cannot be detected, so measured overlap is a lower bound "
+        "on possible double counting.\n\n"
         f"Hash algorithm verified across cohorts: `{algorithm}`.\n\n"
         "## Overlap counts\n\n"
         + _table(["Subreddit", *names], matrix)

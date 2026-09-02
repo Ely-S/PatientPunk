@@ -1062,20 +1062,27 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
     ]
     sentiment_rows = []
     for compound in cohort.compounds:
-        summary = summaries[compound.slug]
+        sentiment_summary = summaries[compound.slug]
         sentiment_rows.append(
             [
                 compound.display_name,
                 compound.tier,
                 compound.analysis_role,
-                summary.users,
-                summary.positive,
-                summary.negative,
-                summary.mixed,
-                summary.neutral,
-                _percent(summary.positive_rate),
-                f"{_percent(summary.ci_low)} to {_percent(summary.ci_high)}",
-                "too sparse for inference" if summary.users < 10 else "descriptive only",
+                sentiment_summary.users,
+                sentiment_summary.positive,
+                sentiment_summary.negative,
+                sentiment_summary.mixed,
+                sentiment_summary.neutral,
+                _percent(sentiment_summary.positive_rate),
+                (
+                    f"{_percent(sentiment_summary.ci_low)} to "
+                    f"{_percent(sentiment_summary.ci_high)}"
+                ),
+                (
+                    "too sparse for inference"
+                    if sentiment_summary.users < 10
+                    else "descriptive only"
+                ),
             ]
         )
 
@@ -1109,23 +1116,23 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
 
     side_effect_rows = []
     grouped_side_effects: dict[str, list[SideEffectSummary]] = defaultdict(list)
-    for summary in side_effects:
-        grouped_side_effects[summary.slug].append(summary)
+    for side_effect_summary in side_effects:
+        grouped_side_effects[side_effect_summary.slug].append(side_effect_summary)
     for compound in cohort.compounds:
         denominator = summaries[compound.slug].users
-        for summary in grouped_side_effects[compound.slug][:8]:
+        for side_effect_summary in grouped_side_effects[compound.slug][:8]:
             side_effect_rows.append(
                 [
                     compound.display_name,
-                    summary.canonical_side_effect,
-                    summary.safety_domain,
-                    summary.users,
+                    side_effect_summary.canonical_side_effect,
+                    side_effect_summary.safety_domain,
+                    side_effect_summary.users,
                     (
-                        f"{_percent(summary.users / denominator)}"
+                        f"{_percent(side_effect_summary.users / denominator)}"
                         if denominator
                         else "n/a"
                     ),
-                    summary.mentions,
+                    side_effect_summary.mentions,
                 ]
             )
 
