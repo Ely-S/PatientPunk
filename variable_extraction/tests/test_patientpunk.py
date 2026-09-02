@@ -587,6 +587,22 @@ class TestSchemaFromMinimalFile:
 # pipeline -- config and result
 # =============================================================================
 
+def test_codebook_extension_override_replaces_base_field() -> None:
+    from patientpunk.codebook import build_field_registry
+
+    registry = build_field_registry(
+        {"base_fields": {"medications": {"description": "base"}}},
+        {
+            "extension_fields": {
+                "medications": {"description": "study-specific", "confidence": "high"}
+            }
+        },
+    )
+    rows = [row for row in registry if row["field"] == "medications"]
+    assert len(rows) == 1
+    assert rows[0]["description"] == "study-specific"
+
+
 class TestPipelineConfig:
     def test_defaults(self, tmp_path):
         cfg = PipelineConfig(schema_path=tmp_path / "s.json")

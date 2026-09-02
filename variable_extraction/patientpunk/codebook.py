@@ -123,6 +123,9 @@ def build_field_registry(base_schema: dict, ext_schema: dict,
     # --- Extension fields (hand-written + promoted) ---
     seen_ext = set()
     for fname, fdata in ext_schema.get("extension_fields", {}).items():
+        # An extension may intentionally override a base field's instructions.
+        # Keep one registry row so coverage statistics are consumed exactly once.
+        registry = [row for row in registry if row["field"] != fname]
         registry.append(_ext_row(fname, fdata))
         seen_ext.add(fname)
 
