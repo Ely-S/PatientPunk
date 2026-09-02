@@ -69,3 +69,8 @@ studies/rct_validation/irr_pilot/coding_input.csv
 **/canonicalized_mentions.json
 **/*_executed.ipynb
 **/*_failed.ipynb
+
+# Test coverage output
+.coverage
+coverage.xml
+htmlcov/
