@@ -8,6 +8,7 @@ import re
 import sqlite3
 import sys
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 from dataclasses import dataclass
@@ -244,6 +245,7 @@ class EpisodeExtractionManifest(BaseModel):
     single_dose_episodes: int
     single_route_episodes: int
     missing_episodes: int
+    failure_types: dict[str, int] = Field(default_factory=dict)
     records_file: str
     records_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     usage: UsageSummary
@@ -652,6 +654,7 @@ def run_episode_extraction(
     client = get_llm_client()
     cache_root = config.output_directory / "cache"
     failures: list[int] = []
+    failure_types: Counter[str] = Counter()
     with ThreadPoolExecutor(max_workers=config.workers) as executor:
         futures = {
             executor.submit(
@@ -672,8 +675,12 @@ def run_episode_extraction(
             batch = futures[future]
             try:
                 results = future.result()
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 failures.extend(item.item_id for item in batch)
+                root = exc
+                while root.__cause__ is not None:
+                    root = root.__cause__
+                failure_types[type(root).__name__] += len(batch)
             else:
                 results_by_id.update((result.item_id, result) for result in results)
             completed += len(batch)
@@ -739,6 +746,7 @@ def run_episode_extraction(
             record.route_status == "single" for record in records
         ),
         missing_episodes=len(contexts) - len(records),
+        failure_types=dict(sorted(failure_types.items())),
         records_file=records_path.name,
         records_sha256=sha256_file(records_path),
         usage=usage,
@@ -749,7 +757,8 @@ def run_episode_extraction(
     )
     if failures or manifest.missing_episodes:
         raise RuntimeError(
-            f"Episode extraction incomplete: {manifest.missing_episodes} missing"
+            f"Episode extraction incomplete: {manifest.missing_episodes} missing; "
+            f"failure types: {manifest.failure_types}"
         )
     return manifest
 
