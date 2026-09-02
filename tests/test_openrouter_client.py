@@ -31,9 +31,22 @@ def test_openrouter_adapter_contract(monkeypatch):
     backend.chat.completions.create.return_value = iter([
         SimpleNamespace(choices=[SimpleNamespace(
             delta=SimpleNamespace(content="ok"), finish_reason="length",
-        )]),
+        )], usage=None),
+        SimpleNamespace(
+            choices=[],
+            usage=SimpleNamespace(
+                prompt_tokens=7,
+                completion_tokens=2,
+                total_tokens=9,
+            ),
+        ),
     ])
     monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(
+        utilities,
+        "_LLM_USAGE",
+        {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    )
     client = utilities._ORClient(backend)
 
     with client.messages.stream(
@@ -54,6 +67,13 @@ def test_openrouter_adapter_contract(monkeypatch):
         max_tokens=100,
         temperature=0.0,
         extra_body={"reasoning": {"effort": "none"}},
+        stream_options={"include_usage": True},
     )
     assert message.content[0].text == "ok"
     assert message.stop_reason == "max_tokens"
+    assert utilities.get_llm_usage_snapshot() == {
+        "requests": 1,
+        "prompt_tokens": 7,
+        "completion_tokens": 2,
+        "total_tokens": 9,
+    }
