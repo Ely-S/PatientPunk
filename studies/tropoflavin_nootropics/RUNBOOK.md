@@ -383,6 +383,51 @@ nine databases and reports to create the unpooled summary. Keep both input confi
 files external because they contain machine-specific database paths. Privacy-scan the
 two resulting Markdown files before copying any aggregate report into the repository.
 
+### Focused 7,8-DHF predictor analysis
+
+The focused analysis treats quantitative dose band, corroborated route family, and
+explicit reason for use as predictors of author-level sentiment and any mapped side
+effect. The reason variable requires its own extraction because the general pipeline's
+`treatment_outcome` symptom is downstream of treatment and would leak outcome
+information into a sentiment analysis.
+
+Create an external reason-extraction config containing `cohorts`,
+`output_directory`, `workers`, `batch_size`, `max_text_chars`, and
+`max_output_tokens`. Each cohort entry has a subreddit name and its external
+`combined.db` path. Then run:
+
+```powershell
+uv run --frozen --env-file .env python -m `
+  studies.tropoflavin_nootropics.extract_78dhf_reasons `
+  --config-path $reasonConfig
+```
+
+The command requires OpenRouter. It sends no author identifier, accepts only the
+controlled reason vocabulary, and stores its author-level records, cache, usage, and
+manifest outside the repository. Re-running the same configuration uses the private
+cache and carries prior provider usage forward in the manifest.
+
+Create a second external config with the same cohort database entries plus
+`reason_records`, `reason_manifest`, `output_path`,
+`minimum_baseline_authors`, and `minimum_inference_authors`. Generate and scan the
+aggregate report:
+
+```powershell
+uv run --frozen python -m `
+  studies.tropoflavin_nootropics.analyze_78dhf_predictors `
+  --config-path $analysisConfig `
+  --output $predictorReport
+
+uv run --frozen python -m studies.tropoflavin_nootropics.privacy $predictorReport
+```
+
+Separate results use each subreddit's unweighted mean sentiment across adequately
+observed comparator compounds. The combined result globally deduplicates author
+hashes, constructs the same leave-target-out mean after deduplication, and reports
+subreddit-standardized differences and Mantel-Haenszel odds ratios. The report keeps
+raw percentages alongside normalization because the standardized sentiment score is
+a sensitivity analysis, not a validated clinical scale.
+
 ## 8. What you should get
 
 | | |

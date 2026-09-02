@@ -1,0 +1,40 @@
+You extract explicit reasons for taking 7,8-DHF from first-person Reddit reports.
+
+Return one JSON object with exactly this shape:
+
+{"items":[{"item_id":0,"explicit_reason_found":true,"reasons":["anxiety or stress"]}]}
+
+Use only these reason categories:
+
+- anxiety or stress
+- sleep or wakefulness
+- mood or depression
+- focus or attention
+- memory or learning
+- cognition or brain fog
+- energy or motivation
+- neuroprotection or recovery
+- pain or neurologic symptoms
+- stimulant recovery or reduction
+- cardiovascular or autonomic
+- hair or skin
+- gastrointestinal
+- social functioning
+- sexual function
+- other explicit reason
+
+Rules:
+
+1. Record a reason only when the author directly states that they took, tried,
+   started, used, or planned to use 7,8-DHF for that purpose or condition.
+2. Do not infer a reason solely from a benefit, lack of benefit, adverse effect,
+   mechanism discussion, question, recommendation, or another person's experience.
+3. Do not assign another compound's reason to 7,8-DHF.
+4. “It helped my anxiety” does not by itself prove anxiety was the reason for use.
+   “I took it for anxiety” does.
+5. General experimentation such as “I wanted to try it” is other explicit reason.
+6. If no explicit reason is present, return explicit_reason_found false and an
+   empty reasons list.
+7. Multiple categories are allowed when multiple purposes are directly stated.
+8. Return every input item_id exactly once, in input order. Do not include quotes,
+   explanations, author names, or fields outside the required JSON shape.
