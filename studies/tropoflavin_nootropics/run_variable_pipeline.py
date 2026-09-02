@@ -94,6 +94,15 @@ class VariablePipelineManifest(BaseModel):
     completed_at: str
 
 
+def calculate_missing_author_records(record_count: int, selected_authors: int) -> int:
+    """Return the coverage gap and reject impossible record inflation."""
+    if record_count > selected_authors:
+        raise ValueError(
+            "Variable extraction produced more records than selected source authors"
+        )
+    return selected_authors - record_count
+
+
 def write_linked_records(source: Path, output: Path) -> int:
     """Normalize records and emit aligned treatment, dose, and route columns."""
     with source.open(encoding="utf-8", newline="") as handle:
@@ -160,11 +169,10 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
         )
     records_path = config.input_directory / "records_linked.csv"
     record_count = write_linked_records(base_records_path, records_path)
-    if record_count > source_selection.selected_authors:
-        raise RuntimeError(
-            "Variable extraction produced more records than selected source authors"
-        )
-    missing_author_records = source_selection.selected_authors - record_count
+    missing_author_records = calculate_missing_author_records(
+        record_count,
+        source_selection.selected_authors,
+    )
     current_usage = UsageSummary.model_validate(get_llm_usage_snapshot())
     usage = UsageSummary(
         requests=previous_usage.requests + current_usage.requests,

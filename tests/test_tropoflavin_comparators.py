@@ -8,6 +8,8 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import pytest
+
 from studies.tropoflavin_nootropics.analyze_comparator_cohort import (
     ComparatorAnalysisConfig,
     _comparisons,
@@ -36,7 +38,10 @@ from studies.tropoflavin_nootropics.comparator_support import (
     load_comparator_cohort,
 )
 from studies.tropoflavin_nootropics.privacy import scan_aggregate_artifact
-from studies.tropoflavin_nootropics.run_variable_pipeline import write_linked_records
+from studies.tropoflavin_nootropics.run_variable_pipeline import (
+    calculate_missing_author_records,
+    write_linked_records,
+)
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
@@ -301,6 +306,13 @@ def test_linked_records_export_adds_aligned_dose_and_route_columns(
     assert row["dosage_value"] == "10 mg"
     assert row["administration_route_treatment"] == "7,8-DHF"
     assert row["administration_route_value"] == "sublingual"
+
+
+def test_variable_pipeline_requires_exact_retained_author_coverage() -> None:
+    assert calculate_missing_author_records(10, 10) == 0
+    assert calculate_missing_author_records(8, 10) == 2
+    with pytest.raises(ValueError, match="more records than selected"):
+        calculate_missing_author_records(11, 10)
 
 
 def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:
