@@ -25,6 +25,12 @@ from patientpunk._utils import (
     llm_config,
 )
 from patientpunk.llm_extract import MAX_TEXT_CHARS
+from patientpunk.normalize import (
+    ADMINISTRATION_ROUTE_DERIVED,
+    DOSAGE_DERIVED,
+    TREATMENT_OUTCOME_DERIVED,
+    normalize_records,
+)
 from patientpunk.pipeline import _git_commit
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -77,9 +83,23 @@ class VariablePipelineManifest(BaseModel):
     completed_at: str
 
 
-def _csv_rows(path: Path) -> int:
-    with path.open(encoding="utf-8", newline="") as handle:
-        return sum(1 for _ in csv.DictReader(handle))
+def write_linked_records(source: Path, output: Path) -> int:
+    """Normalize records and emit aligned treatment, dose, and route columns."""
+    with source.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        source_fields = list(reader.fieldnames or ())
+        rows = list(reader)
+    normalized = normalize_records(rows)
+    present = set().union(*(row.keys() for row in normalized)) if normalized else set()
+    derived = TREATMENT_OUTCOME_DERIVED + DOSAGE_DERIVED + ADMINISTRATION_ROUTE_DERIVED
+    fields = source_fields + [
+        field for field in derived if field not in source_fields and field in present
+    ]
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(normalized)
+    return len(normalized)
 
 
 def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineManifest:
@@ -92,6 +112,17 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
     source_manifest = config.input_directory / "variable_corpus.manifest.json"
     if not source_manifest.is_file():
         raise ValueError(f"Variable corpus manifest not found: {source_manifest}")
+    manifest_path = config.input_directory / "variable_pipeline_manifest.json"
+    previous_usage = UsageSummary(
+        requests=0,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+    )
+    if config.resume and manifest_path.is_file():
+        previous_usage = VariablePipelineManifest.model_validate_json(
+            manifest_path.read_text(encoding="utf-8")
+        ).usage
 
     result = Pipeline(
         PipelineConfig(
@@ -108,10 +139,22 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
     if not result.ok:
         raise RuntimeError("Variable extraction pipeline did not complete successfully")
 
-    records_path = config.input_directory / "records.csv"
-    if not records_path.is_file():
-        raise RuntimeError(f"Variable extraction did not create {records_path.name}")
-    usage = UsageSummary.model_validate(get_llm_usage_snapshot())
+    base_records_path = config.input_directory / "records.csv"
+    if not base_records_path.is_file():
+        raise RuntimeError(
+            f"Variable extraction did not create {base_records_path.name}"
+        )
+    records_path = config.input_directory / "records_linked.csv"
+    record_count = write_linked_records(base_records_path, records_path)
+    current_usage = UsageSummary.model_validate(get_llm_usage_snapshot())
+    usage = UsageSummary(
+        requests=previous_usage.requests + current_usage.requests,
+        prompt_tokens=previous_usage.prompt_tokens + current_usage.prompt_tokens,
+        completion_tokens=(
+            previous_usage.completion_tokens + current_usage.completion_tokens
+        ),
+        total_tokens=previous_usage.total_tokens + current_usage.total_tokens,
+    )
     manifest = VariablePipelineManifest(
         subreddit=config.subreddit,
         provider=provider,
@@ -123,12 +166,12 @@ def run_variable_pipeline(config: VariablePipelineConfig) -> VariablePipelineMan
         ),
         source_corpus_manifest_sha256=sha256_file(source_manifest),
         max_text_chars=MAX_TEXT_CHARS,
-        record_count=_csv_rows(records_path),
+        record_count=record_count,
         records_sha256=sha256_file(records_path),
         usage=usage,
         completed_at=datetime.now(UTC).isoformat(),
     )
-    safe_json_dump(manifest, config.input_directory / "variable_pipeline_manifest.json")
+    safe_json_dump(manifest, manifest_path)
     console.print(
         f"[green]Completed[/green] Pipeline B for r/{config.subreddit}: "
         f"{manifest.record_count:,} author records, {usage.total_tokens:,} tokens"

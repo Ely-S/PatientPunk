@@ -1106,6 +1106,7 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
     for summary in side_effects:
         grouped_side_effects[summary.slug].append(summary)
     for compound in cohort.compounds:
+        denominator = summaries[compound.slug].users
         for summary in grouped_side_effects[compound.slug][:8]:
             side_effect_rows.append(
                 [
@@ -1113,6 +1114,11 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
                     summary.canonical_side_effect,
                     summary.safety_domain,
                     summary.users,
+                    (
+                        f"{_percent(summary.users / denominator)}"
+                        if denominator
+                        else "n/a"
+                    ),
                     summary.mentions,
                 ]
             )
@@ -1191,7 +1197,14 @@ def render_comparator_report(config: ComparatorAnalysisConfig) -> str:
             "4'-DMA blending is removed. Counts remain reporting proportions, not "
             "incidence.\n\n"
             + _table(
-                ["Compound", "Canonical effect", "Safety domain", "Users", "Mentions"],
+                [
+                    "Compound",
+                    "Canonical effect",
+                    "Safety domain",
+                    "Authors",
+                    "Share of classified authors",
+                    "Mentions",
+                ],
                 side_effect_rows,
             )
         ),

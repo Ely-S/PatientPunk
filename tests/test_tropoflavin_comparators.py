@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import sqlite3
 from pathlib import Path
@@ -34,6 +35,7 @@ from studies.tropoflavin_nootropics.comparator_support import (
     load_comparator_cohort,
 )
 from studies.tropoflavin_nootropics.privacy import scan_aggregate_artifact
+from studies.tropoflavin_nootropics.run_variable_pipeline import write_linked_records
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
@@ -258,6 +260,33 @@ def test_aggregate_artifact_privacy_scan_blocks_paths_and_author_hashes(
         "Windows user path",
         "author-sized hexadecimal identifier",
     }
+
+
+def test_linked_records_export_adds_aligned_dose_and_route_columns(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "records.csv"
+    with source.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["author_hash", "dosage", "administration_route"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "author_hash": "a" * 32,
+                "dosage": "7,8-DHF: 10 mg",
+                "administration_route": "7,8-DHF: sublingual",
+            }
+        )
+    output = tmp_path / "records_linked.csv"
+    assert write_linked_records(source, output) == 1
+    with output.open(encoding="utf-8", newline="") as handle:
+        row = next(csv.DictReader(handle))
+    assert row["dosage_treatment"] == "7,8-DHF"
+    assert row["dosage_value"] == "10 mg"
+    assert row["administration_route_treatment"] == "7,8-DHF"
+    assert row["administration_route_value"] == "sublingual"
 
 
 def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:
