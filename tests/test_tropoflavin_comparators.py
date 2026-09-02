@@ -261,6 +261,17 @@ def test_aggregate_artifact_privacy_scan_blocks_paths_and_author_hashes(
         "author-sized hexadecimal identifier",
     }
 
+    raw_effect = tmp_path / "raw-effect.md"
+    raw_effect.write_text(
+        "| Compound | Canonical effect | Safety domain | Authors |\n"
+        "|---|---|---|---|\n"
+        "| 7,8-DHF | unmatched verbatim wording | other | 1 |\n",
+        encoding="utf-8",
+    )
+    assert {finding.rule for finding in scan_aggregate_artifact(raw_effect)} == {
+        "noncanonical side-effect wording"
+    }
+
 
 def test_linked_records_export_adds_aligned_dose_and_route_columns(
     tmp_path: Path,

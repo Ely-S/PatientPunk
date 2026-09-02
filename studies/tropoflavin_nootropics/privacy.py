@@ -9,6 +9,11 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from rich.console import Console
 
+from studies.tropoflavin_nootropics.study_support import (
+    CANONICAL_SIDE_EFFECT_BUCKETS,
+    CANONICAL_SIDE_EFFECT_LABELS,
+)
+
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 _FORBIDDEN = {
@@ -38,6 +43,19 @@ def scan_aggregate_artifact(path: Path) -> tuple[PrivacyFinding, ...]:
                 findings.append(
                     PrivacyFinding(path=path, rule=rule, line=line_number)
                 )
+        cells = tuple(cell.strip() for cell in line.strip().strip("|").split("|"))
+        if (
+            len(cells) >= 3
+            and cells[2] in CANONICAL_SIDE_EFFECT_BUCKETS
+            and cells[1] not in CANONICAL_SIDE_EFFECT_LABELS
+        ):
+            findings.append(
+                PrivacyFinding(
+                    path=path,
+                    rule="noncanonical side-effect wording",
+                    line=line_number,
+                )
+            )
     return tuple(findings)
 
 

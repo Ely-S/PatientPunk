@@ -422,6 +422,13 @@ _SIDE_EFFECT_PATTERNS = (
         re.compile(r"tolerance|downregulation|short duration", re.I),
     ),
 )
+CANONICAL_SIDE_EFFECT_LABELS = frozenset(
+    {canonical for canonical, _bucket, _pattern in _SIDE_EFFECT_PATTERNS}
+    | {"other reported effect", "unspecified"}
+)
+CANONICAL_SIDE_EFFECT_BUCKETS = frozenset(
+    {bucket for _canonical, bucket, _pattern in _SIDE_EFFECT_PATTERNS} | {"other"}
+)
 
 
 def canonical_side_effect(value: str) -> tuple[str, str]:
