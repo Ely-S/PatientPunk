@@ -58,14 +58,14 @@ class ComparatorAnalysisConfig(BaseModel):
                 raise ValueError(f"{label} does not exist: {path}")
         if self.study_database is not None and not self.study_database.is_file():
             raise ValueError(f"study database does not exist: {self.study_database}")
-        for label, path in (
+        for label, optional_path in (
             ("corpus manifest", self.corpus_manifest),
             ("sentiment manifest", self.sentiment_manifest),
             ("variable corpus manifest", self.variable_corpus_manifest),
             ("variable pipeline manifest", self.variable_pipeline_manifest),
         ):
-            if path is not None and not path.is_file():
-                raise ValueError(f"{label} does not exist: {path}")
+            if optional_path is not None and not optional_path.is_file():
+                raise ValueError(f"{label} does not exist: {optional_path}")
         return self
 
 
@@ -397,15 +397,15 @@ def _post_level_dose_summaries(
             post_date=int(row["post_date"]),
             run_id=int(row["run_id"]),
         )
-        existing = votes[key].get(vote["user_id"])
+        existing_vote = votes[key].get(vote["user_id"])
         rank = (vote["post_date"], SIGNAL_RANK.get(vote["signal"], 0), vote["run_id"])
-        if existing is None:
+        if existing_vote is None:
             votes[key][vote["user_id"]] = vote
         else:
             existing_rank = (
-                existing["post_date"],
-                SIGNAL_RANK.get(existing["signal"], 0),
-                existing["run_id"],
+                existing_vote["post_date"],
+                SIGNAL_RANK.get(existing_vote["signal"], 0),
+                existing_vote["run_id"],
             )
             if rank > existing_rank:
                 votes[key][vote["user_id"]] = vote
@@ -834,7 +834,7 @@ def _study_sections(
                 """
             ).fetchall()
         )
-        attribution_rows = []
+        attribution_rows: list[list[object]] = []
         if require_corroborated:
             for label, table in (
                 ("Dose", "pipeline_b_dosages"),

@@ -143,8 +143,10 @@ def summarize_target_values(
     records: list[PipelineBRecord],
     field: Literal["dosage", "administration_route"],
 ) -> TargetValueSummary:
-    counts = {compound: Counter() for compound in COMPOUNDS}
-    authors = {compound: set() for compound in COMPOUNDS}
+    counts: dict[str, Counter[str]] = {
+        compound: Counter() for compound in COMPOUNDS
+    }
+    authors: dict[str, set[str]] = {compound: set() for compound in COMPOUNDS}
     for record in records:
         for pair in linked_values(record, field):
             compound = compound_for_treatment(pair.treatment)
@@ -483,11 +485,17 @@ class TargetDosageSummary:
 
 def summarize_target_dosages(records: list[PipelineBRecord]) -> TargetDosageSummary:
     """Summarize comparable mass doses and retain excluded values for audit."""
-    counts = {compound: Counter() for compound in COMPOUNDS}
-    authors = {compound: set() for compound in COMPOUNDS}
-    excluded = {compound: Counter() for compound in COMPOUNDS}
-    midpoints = {compound: [] for compound in COMPOUNDS}
-    author_midpoints = {compound: {} for compound in COMPOUNDS}
+    counts: dict[str, Counter[str]] = {
+        compound: Counter() for compound in COMPOUNDS
+    }
+    authors: dict[str, set[str]] = {compound: set() for compound in COMPOUNDS}
+    excluded: dict[str, Counter[str]] = {
+        compound: Counter() for compound in COMPOUNDS
+    }
+    midpoints: dict[str, list[float]] = {compound: [] for compound in COMPOUNDS}
+    author_midpoints: dict[str, dict[str, list[float]]] = {
+        compound: {} for compound in COMPOUNDS
+    }
     for record in records:
         for pair in linked_values(record, "dosage"):
             compound = compound_for_treatment(pair.treatment)
