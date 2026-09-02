@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -87,6 +89,7 @@ class VariableCorpusConfig(BaseModel):
     source_corpus: Path
     output_directory: Path
     cohort_path: Path = DEFAULT_COHORT_CONFIG
+    sentiment_database: Path | None = None
 
     @model_validator(mode="after")
     def validate_inputs(self) -> VariableCorpusConfig:
@@ -94,6 +97,8 @@ class VariableCorpusConfig(BaseModel):
             raise ValueError(f"Comparator corpus not found: {self.source_corpus}")
         if not self.cohort_path.is_file():
             raise ValueError(f"Comparator cohort not found: {self.cohort_path}")
+        if self.sentiment_database is not None and not self.sentiment_database.is_file():
+            raise ValueError(f"Sentiment database not found: {self.sentiment_database}")
         return self
 
 
@@ -107,6 +112,8 @@ class VariableCorpusManifest(BaseModel):
     cohort_sha256: str
     author_hash_algorithm: str = "sha256-128-raw-reddit-username-v1"
     selected_authors: int = Field(ge=0)
+    eligible_authors: int = Field(ge=0)
+    eligibility_basis: str
     posts: int = Field(ge=0)
     comments: int = Field(ge=0)
     text_segments: int = Field(ge=0)
@@ -125,6 +132,24 @@ def _load_posts(path: Path) -> list[SourcePost]:
     return TypeAdapter(list[SourcePost]).validate_python(payload)
 
 
+def _retained_authors(path: Path) -> set[str]:
+    with closing(
+        sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    ) as connection:
+        if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise ValueError(f"Sentiment database integrity check failed: {path.name}")
+        return {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT DISTINCT user_id
+                FROM treatment_reports
+                WHERE user_id IS NOT NULL AND user_id != 'deleted'
+                """
+            )
+        }
+
+
 def build_variable_corpus(config: VariableCorpusConfig) -> VariableCorpusManifest:
     """Write one file per nondeleted author who directly names a comparator."""
     cohort = load_comparator_cohort(config.cohort_path)
@@ -138,6 +163,12 @@ def build_variable_corpus(config: VariableCorpusConfig) -> VariableCorpusManifes
             if any(compound.matches(comment.body) for compound in cohort.compounds):
                 mentioners.add(comment.author_hash)
     mentioners.discard("deleted")
+    eligible_authors = (
+        _retained_authors(config.sentiment_database)
+        if config.sentiment_database is not None
+        else mentioners
+    )
+    mentioners &= eligible_authors
 
     user_posts: dict[str, list[UserPost]] = {author: [] for author in mentioners}
     user_comments: dict[str, list[UserComment]] = {author: [] for author in mentioners}
@@ -196,6 +227,12 @@ def build_variable_corpus(config: VariableCorpusConfig) -> VariableCorpusManifes
         cohort_schema_id=cohort.schema_id,
         cohort_sha256=sha256_file(config.cohort_path),
         selected_authors=len(mentioners),
+        eligible_authors=len(eligible_authors),
+        eligibility_basis=(
+            "retained comparator sentiment report"
+            if config.sentiment_database is not None
+            else "direct comparator alias mention"
+        ),
         posts=sum(len(values) for values in user_posts.values()),
         comments=sum(len(values) for values in user_comments.values()),
         text_segments=text_segments,
@@ -215,6 +252,9 @@ def main(
     source_corpus: Path = typer.Option(..., exists=True, dir_okay=False),
     output_directory: Path = typer.Option(..., file_okay=False),
     cohort: Path = typer.Option(DEFAULT_COHORT_CONFIG, exists=True, dir_okay=False),
+    sentiment_database: Path | None = typer.Option(
+        None, exists=True, dir_okay=False
+    ),
 ) -> None:
     """Build a private author corpus for Pipeline B."""
     build_variable_corpus(
@@ -223,6 +263,7 @@ def main(
             source_corpus=source_corpus,
             output_directory=output_directory,
             cohort_path=cohort,
+            sentiment_database=sentiment_database,
         )
     )
 

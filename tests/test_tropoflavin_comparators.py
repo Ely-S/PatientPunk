@@ -135,6 +135,25 @@ def test_corpus_builder_separates_parent_from_derivative_and_hashes_authors(
     assert all(path.stem != "deleted" for path in user_files)
     assert "alice" not in "".join(path.read_text(encoding="utf-8") for path in user_files)
 
+    retained_database = tmp_path / "retained.db"
+    retained_author = corpus[0]["author_hash"]
+    with sqlite3.connect(retained_database) as connection:
+        connection.execute("CREATE TABLE treatment_reports (user_id TEXT)")
+        connection.execute(
+            "INSERT INTO treatment_reports VALUES (?)",
+            (retained_author,),
+        )
+    retained_manifest = build_variable_corpus(
+        VariableCorpusConfig(
+            subreddit="Nootropics",
+            source_corpus=output,
+            output_directory=tmp_path / "retained-variable",
+            sentiment_database=retained_database,
+        )
+    )
+    assert retained_manifest.selected_authors == 1
+    assert retained_manifest.eligibility_basis == "retained comparator sentiment report"
+
 
 def test_pipeline_b_mapping_covers_the_full_comparator_cohort() -> None:
     cohort = load_comparator_cohort()
