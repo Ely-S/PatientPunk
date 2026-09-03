@@ -13,10 +13,12 @@ dependencies = [
     "nbconvert>=7.16",
     "nbformat>=5.10",
     "numpy>=2.0",
+    "openpyxl>=3.1",
     "pandas>=2.2",
     "pydantic>=2.5",
     "python-dotenv>=1.0",
     "requests>=2.32",
+    "rich>=13.7",
     # `regex` supports a real, interruptible match timeout -- unlike stdlib `re`,
     # which cannot be aborted mid-match. Discovery runs LLM-generated patterns that
     # can catastrophically backtrack; see discover._finditer_with_timeout.
@@ -24,6 +26,7 @@ dependencies = [
     "scipy>=1.14",
     "seaborn>=0.13",
     "statsmodels>=0.14",
+    "typer>=0.12",
     "openai>=2.45.0",
 ]
 

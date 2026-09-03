@@ -72,7 +72,7 @@ def test_budget_growth_is_bounded():
 def test_only_the_fitting_budget_is_cached():
     """The budget is part of the cache key: the winning reply must land under
     the grown budget's key, and the truncated attempts must leave nothing."""
-    from utilities import LLM_PROVIDER, MODEL_FAST
+    from utilities import LLM_PROVIDER, LLM_REASONING_MODE, MODEL_FAST
 
     budgets: list[int] = []
     client = _client(350, budgets)
@@ -80,8 +80,13 @@ def test_only_the_fitting_budget_is_cached():
 
     def path_for(budget):
         key = llm_cache.make_key(
-            provider=LLM_PROVIDER, model=MODEL_FAST, system=None,
-            prompt="prompt", temperature=0.0, max_tokens=budget,
+            provider=LLM_PROVIDER,
+            model=MODEL_FAST,
+            system=None,
+            prompt="prompt",
+            temperature=0.0,
+            max_tokens=budget,
+            request_variant={"reasoning_mode": LLM_REASONING_MODE},
         )
         return llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
 

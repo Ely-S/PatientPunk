@@ -88,6 +88,17 @@ def test_make_key_stable_and_sensitive():
     different_model = cache.make_key(**{**kwargs, "model": "other-model"})
     assert different_model != a
 
+    reasoning_off = cache.make_key(
+        **kwargs,
+        request_variant={"reasoning_mode": "off"},
+    )
+    reasoning_on = cache.make_key(
+        **kwargs,
+        request_variant={"reasoning_mode": "on"},
+    )
+    assert reasoning_off != reasoning_on
+    assert reasoning_off != a
+
 
 def test_cache_path_layout_and_sanitization(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))
