@@ -9,6 +9,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+from models import SideEffectReport
+
 COMMIT_EVERY = 50  # commit after this many writes
 
 
@@ -93,7 +95,7 @@ class ReportWriter:
 
     def write_one(
         self, post_id: str, drug: str, author: str, sentiment: str, signal: str,
-        side_effects: list[str] | None = None,
+        side_effects: list[SideEffectReport] | None = None,
     ) -> bool:
         """Insert a single result. Returns False if drug is unknown. Auto-commits periodically."""
         drug_id = self._drug_ids.get(drug.lower())
@@ -106,7 +108,10 @@ class ReportWriter:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 self.run_id, post_id, author, drug_id, sentiment, signal,
-                json.dumps(side_effects) if side_effects else None,
+                json.dumps([
+                    side_effect.model_dump(mode="json")
+                    for side_effect in side_effects
+                ]) if side_effects else None,
             ),
         )
         self._pending += 1

@@ -103,7 +103,8 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
-        f'and "side_effects" (array of short lowercase symptom strings, or []).'
+        f'and "side_effects" (array of objects with "side_effect" and '
+        f'"severity", or []).'
     )
 
     raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items))
@@ -120,7 +121,10 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
+            '\n\nRespond ONLY with JSON: '
+            '{"sentiment":"positive/negative/mixed/neutral",'
+            '"signal":"strong/moderate/weak/n/a",'
+            '"side_effects":[{"side_effect":"...","severity":null}]}'
         )
         raw = llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100)
         return ClassificationResult.model_validate(parse_json_object(raw))
