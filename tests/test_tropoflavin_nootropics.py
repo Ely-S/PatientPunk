@@ -224,7 +224,8 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
             INSERT INTO extraction_runs VALUES (1, 1, 'abc', 'sentiment', '{}');
             INSERT INTO treatment VALUES (1, '7,8-dhf');
             INSERT INTO treatment_reports VALUES
-                (1, 1, 'p1', 'a', 1, 'positive', 'strong', '["insomnia", "hair thinning"]');
+                (1, 1, 'p1', 'a', 1, 'positive', 'strong',
+                 '[{"side_effect":"insomnia","severity":"severe"},{"side_effect":"hair thinning","severity":null}]');
             """
         )
         connection.commit()
@@ -315,6 +316,13 @@ def test_combined_database_preserves_pipeline_a_and_adds_queryable_pipeline_b(
         assert connection.execute(
             "SELECT DISTINCT drug_id, treatment FROM pipeline_a_side_effects"
         ).fetchall() == [(1, "7,8-dhf")]
+        assert connection.execute(
+            """
+            SELECT raw_value, severity
+            FROM pipeline_a_side_effects
+            ORDER BY ordinal
+            """
+        ).fetchall() == [("insomnia", "severe"), ("hair thinning", None)]
     analysis = render_study_design_report(output)
     assert "## Dose and route co-observation" in analysis
     assert "25 to <50 mg" in analysis

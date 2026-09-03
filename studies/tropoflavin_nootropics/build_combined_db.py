@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -137,6 +137,7 @@ class PipelineASideEffectRow(BaseModel):
     raw_value: str = Field(min_length=1)
     canonical_side_effect: str = Field(min_length=1)
     side_effect_bucket: str = Field(min_length=1)
+    severity: Literal["mild", "moderate", "severe", "life_threatening"] | None
 
 
 class PipelineBCompoundExposureRow(BaseModel):
@@ -339,7 +340,17 @@ def _side_effect_rows(connection: sqlite3.Connection) -> list[PipelineASideEffec
         if not isinstance(values, list):
             raise ValueError(f"side_effects must be a list in report {report_id}")
         for ordinal, value in enumerate(values):
-            raw_value = str(value).strip()
+            if isinstance(value, str):
+                raw_value = value.strip()
+                severity = None
+            elif isinstance(value, dict):
+                raw_value = str(value.get("side_effect") or "").strip()
+                severity = value.get("severity")
+            else:
+                raise ValueError(
+                    "side_effects entries must be strings or objects "
+                    f"in report {report_id}"
+                )
             if not raw_value:
                 continue
             canonical, bucket = canonical_side_effect(raw_value)
@@ -353,6 +364,7 @@ def _side_effect_rows(connection: sqlite3.Connection) -> list[PipelineASideEffec
                     raw_value=raw_value,
                     canonical_side_effect=canonical,
                     side_effect_bucket=bucket,
+                    severity=severity,
                 )
             )
     return rows
@@ -606,6 +618,11 @@ def _insert_pipeline_b(
             raw_value TEXT NOT NULL,
             canonical_side_effect TEXT NOT NULL,
             side_effect_bucket TEXT NOT NULL,
+            severity TEXT CHECK (
+                severity IS NULL OR severity IN (
+                    'mild', 'moderate', 'severe', 'life_threatening'
+                )
+            ),
             PRIMARY KEY (report_id, ordinal)
         );
         CREATE TABLE combined_pipeline_manifest (
@@ -744,7 +761,7 @@ def _insert_pipeline_b(
         ],
     )
     connection.executemany(
-        "INSERT INTO pipeline_a_side_effects VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pipeline_a_side_effects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 row.report_id,
@@ -755,6 +772,7 @@ def _insert_pipeline_b(
                 row.raw_value,
                 row.canonical_side_effect,
                 row.side_effect_bucket,
+                row.severity,
             )
             for row in side_effects
         ],
