@@ -152,24 +152,35 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
     worse" → if {name} is LDN, this is neutral/n/a (the reply is about LDA, not LDN).
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
-side_effects: list of short lowercase strings naming any side effects the author attributes to {name}
+side_effects: list of objects naming side effects the author attributes to {name}
+  Each object must have exactly this shape:
+    {{"side_effect": "short lowercase symptom", "severity": null}}
+  severity must be one of mild | moderate | severe | life_threatening | null.
+  Set severity only when the author explicitly describes that side effect's intensity.
+  Do not infer severity from the symptom itself. For example, "a mild headache" has
+  severity="mild", while "a headache" and "a seizure" both have severity=null unless
+  the author also states their severity.
   Include only effects the author reports experiencing personally from {name} — not hypothetical,
   not things they read about, not effects from other drugs.
   Use the author's wording, trimmed to the symptom: "gave me insomnia" → "insomnia",
   "made my anxiety way worse" → "anxiety", "brain fog got bad" → "brain fog".
   Collapse obvious duplicates within a single entry. If none reported, use [].
   This applies to positive/negative/mixed entries alike — a positive report can still list
-  tolerable side effects ("it helped but caused insomnia at first" → positive/strong, side_effects=["insomnia"]).
+  tolerable side effects ("it helped but caused mild insomnia at first" → positive/strong,
+  side_effects=[{{"side_effect":"insomnia","severity":"mild"}}]).
 
   LIST FANOUT: when a symptom description applies to multiple drugs in a list, attribute it to
   EVERY drug in that list, including {name} if it appears.
   e.g. "Effexor, Pristiq, and Cymbalta all made me feel really bad" → if {name} is Cymbalta,
-  side_effects=["felt really bad"]. Do not drop {name} just because other drugs share the symptom.
+  side_effects=[{{"side_effect":"felt really bad","severity":null}}]. Do not drop {name}
+  just because other drugs share the symptom.
 
   GENERIC SIDE-EFFECT REFERENCES: when the author says they experienced side effects from {name}
   but doesn't name a specific symptom, capture the phrase they used.
-  e.g. "couldn't tolerate the side effects" → ["side effects"], "I had a bad reaction" → ["bad reaction"],
-  "I reacted badly to it" → ["bad reaction"]. Do NOT invent a specific symptom if none was named.
+  e.g. "couldn't tolerate the side effects" →
+  [{{"side_effect":"side effects","severity":null}}], "I had a bad reaction" →
+  [{{"side_effect":"bad reaction","severity":null}}]. Do NOT invent a specific symptom
+  or severity if none was named.
 
   INTERACTIONS: if a symptom arises only from combining {name} with another drug and {name} alone
   is tolerated, side_effects=[] for {name}. Attribute the problem to the MODIFYING drug instead.
@@ -183,4 +194,4 @@ side_effects: list of short lowercase strings naming any side effects the author
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[...]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[{{"side_effect":"...","severity":null}}]}}"""
