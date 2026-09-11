@@ -25,6 +25,23 @@ jobs:
         run: uv sync --locked
 
       - name: Run tests
-        run: uv run pytest -v
+        run: uv run pytest -v --cov --cov-report=term-missing
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Lint reproducible study update
+        run: >-
+          uv run ruff check
+          studies/tropoflavin_nootropics/episode_dose_audit.py
+          studies/tropoflavin_nootropics/severity_model_data.py
+          studies/tropoflavin_nootropics/severity_model_contracts.py
+          studies/tropoflavin_nootropics/severity_models.py
+          studies/tropoflavin_nootropics/severity_report_data.py
+          studies/tropoflavin_nootropics/severity_report_figures.py
+          studies/tropoflavin_nootropics/publish_severity_reports.py
+          tests/test_tropoflavin_episode_dose_audit.py
+          tests/test_severity_models.py
+          tests/test_severity_publication.py
+
+      - name: Type-check reproducible study update
+        run: uv run mypy

@@ -1,15 +1,20 @@
 # 7,8-DHF (tropoflavin) — r/Nootropics analysis notes
 
-Working notes. Numbers here are reproducible from the scripts in this directory.
+Historical working notes, beginning August 18-19, 2026, with later additions.
+These notes preserve the reasoning and earlier extraction checkpoints; they are
+not the current combined severity report. Start with the [study README](README.md)
+and [current study summary](reports/study_summary.md). Older denominators and
+dose/route estimates below must not be combined with the September 3 rerun.
 
 **Why r/Nootropics and not the patient subreddits:** across all nine patient communities
 (1.35M ME/CFS + 2.49M Long COVID items) this compound has **33 mentions from 13 authors**, of whom
 4 describe taking it — unstudiable. r/Nootropics has **1,792 mentions from ~750 authors**. See
 `studies/tropoflavin/` for the patient-side case series and why it was abandoned.
 
-**Population caveat, applies to everything below:** r/Nootropics is a *healthy-user* population
-experimenting with cognitive enhancement. It can answer dose, route, tolerability, subjective
-effect and the 7,8-DHF vs 4'-DMA distinction. It cannot answer patient outcomes.
+**Population caveat:** r/Nootropics is a self-selected discussion community.
+Membership does not establish that an author is healthy or has a particular
+diagnosis. Its reports can describe perceived effects and use patterns, but they
+cannot establish efficacy in a defined disease population.
 
 **Comparator extension:** `comparator_cohort.json` defines one target, eight
 mechanistically tiered comparators, and one adjacent-market control. Every compound is

@@ -1,12 +1,74 @@
-# Running the 7,8-DHF study
+# Running the 7,8-DHF and comparator study
 
-Exact steps to rebuild this study from raw dumps. `NOTES.md` in this directory holds
-the findings and the reasoning behind each choice; this file is just the procedure.
+Start with [README.md](README.md) for the work completed and
+[the study summary](reports/study_summary.md) for interpretation. This file
+distinguishes offline reproduction from a new extraction run. The saved September
+3 severity results are a frozen checkpoint; new reconstructed calculations have
+their own provenance and do not overwrite it.
 
-Everything here assumes the branch this file arrived on. The complete stack is
-#121 -> #119 -> #122 -> #118 -> #120 -> #142 -> #141 -> #140. The final three
-changes add treatment-linked doses, treatment-linked administration routes, and
-this study. On `main` alone the classify stage dies on its first batch.
+The historical stack from `main` is
+#121 -> #119 -> #122 -> #118 -> #120 -> #142 -> #141 -> #144 -> #140.
+PR #140 targets #144, which supplies explicit side-effect severity. The preceding
+#142 and #141 supply treatment-linked doses and routes. Use this study's full
+branch and lockfile when reproducing its outputs; do not assume a different
+checkout contains the same pipeline or schema.
+
+## Current offline workflow
+
+The existing community databases and aggregate exports suffice for offline
+analysis. No provider credentials or new model API calls are needed. Commands
+below use Bash syntax and run from the repository root. Select the external data
+directory once, honoring an existing override:
+
+```bash
+export PATIENTPUNK_DATA="${PATIENTPUNK_DATA:-../PatientPunk_data}"
+STUDY_RUNS="$PATIENTPUNK_DATA/studies/tropoflavin_nootropics/runs"
+uv sync --locked --group dev
+```
+
+For PowerShell, set the same paths with:
+
+```powershell
+if (-not $env:PATIENTPUNK_DATA) { $env:PATIENTPUNK_DATA = '../PatientPunk_data' }
+$studyRuns = Join-Path $env:PATIENTPUNK_DATA 'studies/tropoflavin_nootropics/runs'
+uv sync --locked --group dev
+```
+
+The saved inputs are:
+
+| External run directory | Contents |
+| --- | --- |
+| `2026-09-01-multisubreddit` | Earlier independent community databases, reason extraction, and same-post episode records |
+| `2026-09-03-side-effect-severity` | Nineteen severity-enabled community databases and aggregate exports |
+| `2026-09-03-side-effect-severity-linear-models/aggregate` | Frozen author-level linear models, exposure eligibility, and high-dose audit |
+| `2026-09-03-side-effect-severity-fine-grained/aggregate` | Frozen distinct-effect, burden, average/maximum, and moderate-or-worse results |
+
+To rebuild the first severity summary from saved databases, use a fresh external
+output directory. Source SQLite databases are opened read-only:
+
+```bash
+uv run python -m studies.tropoflavin_nootropics.analyze_side_effect_severity \
+  --run-root "$STUDY_RUNS/2026-09-03-side-effect-severity" \
+  --output-dir "$STUDY_RUNS/review-severity-summary/aggregate"
+```
+
+Expect 19 input databases and separate community, nootropic-adjacent, patient-
+community, and globally deduplicated scopes. The all-community 7,8-DHF row has
+684 authors, 275 reporting any mapped side effect, and 22 with explicit severity
+for the saved checkpoint. The first summary's dose-band feasibility is not the
+later numeric-dose model population, so its linked sample counts can differ.
+
+The publication and reconstructed-model commands are documented below in
+[the current severity workflow](#10-publish-the-severity-checkpoint-and-reconstruct-models).
+
+## Earlier extraction workflow
+
+Sections 0-7 record the original study build and its subsequent extensions.
+Some original commands and scripts use former in-repository working locations.
+Those locations describe the historical setup, not approved output destinations
+for a new run. Use the external data layout above and the newer configurable
+builders for new work. Keep provider extraction separate from offline report
+reproduction, since extraction consumes provider credits.
 
 ## 0. Prerequisites
 
@@ -467,16 +529,19 @@ with robust covariance clustered by author. The combined models include subreddi
 fixed effects, and the two primary p-values receive Benjamini-Hochberg correction.
 Route, reason, and dose-band tables are secondary descriptives.
 
-## 8. What you should get
+## 8. Original checkpoint, retained for historical comparison
 
 | | |
 |---|---|
 | positive | 214/301 = **71.1%** (95% Wilson 65.7–75.9) |
 | negative | 77 = 25.6% |
 
-Read that with NOTES.md's caveats attached — positives are over-called 10–20% on this
-pipeline, the alias blends 7,8-DHF with its 4'-DMA derivative (quote pipeline B for
-per-compound claims), and r/Nootropics is a healthy-user population.
+These are the original broad-alias counts, not the current parent-compound or
+severity results. The early alias blended 7,8-DHF with its 4'-DMA derivative.
+Subsequent comparator matching separates those names. The informal early concern
+about positive-label overcalling was not an externally validated error rate.
+Community membership does not establish that an author is healthy. See
+[README.md](README.md) for current populations and eligibility definitions.
 
 ## 9. Reproducing the original numbers exactly
 
@@ -492,3 +557,94 @@ The cache key now includes the effective reasoning mode, and
 `extraction_runs.config` records it. A reasoning-off run therefore cannot reuse a
 reasoning-on response. Still use a fresh cache when changing prompts, model behavior,
 or study definitions so the artifact boundary remains obvious.
+
+## 10. Publish the severity checkpoint and reconstruct models
+
+These commands reuse existing local inputs. They do not call an LLM, spend
+provider credits, or modify source databases. Set `PATIENTPUNK_DATA` and
+`STUDY_RUNS` as shown at the top of this runbook. The commands below use Bash;
+in PowerShell use `$env:PATIENTPUNK_DATA`, `$studyRuns`, and backticks for line
+continuation.
+
+### Validate and publish the saved September 3 aggregates
+
+```bash
+uv run --locked python -m studies.tropoflavin_nootropics.publish_severity_reports \
+  --data-root "$PATIENTPUNK_DATA" \
+  --output-directory "$STUDY_RUNS/review-severity-publication"
+```
+
+Check the generated `severity_checkpoint.md`, `severity_checkpoint_models.md`,
+and `severity_checkpoint_exposures.md`. The summary must show 684 classified
+7,8-DHF authors, 22 with explicit severity, and 11 with moderate-or-worse
+severity. The conditional rate is 11/22, not 11/684. The provenance JSON must
+contain relative source paths and SHA-256 digests, not absolute machine paths.
+Open all three PNGs and verify labels and 95% interval captions are readable.
+
+The publisher validates aggregate schemas, denominators, and allowed source
+paths. It does not recover the missing historical modeling code. To refresh
+the committed aggregate presentation after review, explicitly select
+`--output-directory studies/tropoflavin_nootropics/reports`; do not copy the
+private source CSVs into the checkout.
+
+### Reconstruct analyses from the existing databases
+
+```bash
+uv run --locked python -m studies.tropoflavin_nootropics.severity_models \
+  --run-root "$STUDY_RUNS/2026-09-03-side-effect-severity" \
+  --output-dir "$STUDY_RUNS/review-severity-reconstruction"
+```
+
+Inspect the external `severity_reconstructed_eligibility.csv`,
+`severity_reconstructed_status.csv`, `severity_reconstructed_coefficients.csv`,
+and `severity_reconstructed_manifest.json`. The classified and explicitly
+graded totals should agree with the saved checkpoint. Dose eligibility can
+differ because this implementation applies explicit original-band eligibility
+and dose-screen rules to the saved numeric midpoints. It does not reparse or
+independently re-audit dose text.
+See [the reconstruction report](reports/severity_reconstruction.md) for the
+reviewed differences. Do not overwrite historical tables with these new model
+results or present this run as an exact historical reproduction.
+
+The code attempts dose-only, route-only, joint, and interaction designs for
+six outcomes, separately by compound and pooled with compound fixed effects.
+Unsupported models have explicit status rows rather than invented estimates.
+Inspect the status and confidence limits before interpreting coefficients.
+Numeric milligram eligibility does not validate product identity or convert
+volume into mass. Source variables remain observational author-history links.
+
+### Reproduce the frozen high-dose table correction
+
+```bash
+uv run --locked python -m studies.tropoflavin_nootropics.episode_dose_audit \
+  --report studies/tropoflavin_nootropics/reports/78dhf_episode_analysis.md \
+  --output "$STUDY_RUNS/review-severity-publication/audited_episode_report.md"
+```
+
+Verify that the >=100 mg row shows 6 episodes, 4 authors, 5/6 positive, and
+1/6 with a mapped side effect. The notice must still identify other descriptives
+and models as pre-audit. The public aggregate correction cannot recover the
+missing individual exclusion identifiers or refit those historical models.
+Regenerating the episode report with changed source hashes requires a new audit.
+
+### Local quality gates and privacy checks
+
+```bash
+uv run --locked pytest -q --cov --cov-report=term-missing
+uv run --locked mypy
+uv run --locked pre-commit run --all-files
+uv run --locked python -m studies.tropoflavin_nootropics.privacy \
+  studies/tropoflavin_nootropics/reports/severity_checkpoint.md
+git diff --check
+git status --short
+```
+
+Tests use synthetic fixtures and do not require private databases or credentials.
+Coverage is gated at 75% for the new audit, reconstruction, and publication
+modules. The local hooks and CI lint and type-check this new scope without
+requiring a repository-wide legacy cleanup. `pre-commit run --all-files` checks
+tracked files; include newly added source files in the index before that gate.
+
+Before staging reports, inspect the changed-file list for raw posts, account
+identifiers, credentials, databases, CSVs, JSONL, and document/workbook exports.
+Only explicitly reviewed aggregate reports and figures should enter Git.

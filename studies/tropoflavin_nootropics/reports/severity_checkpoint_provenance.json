@@ -1,0 +1,257 @@
+{
+  "schema_id": "tropoflavin_frozen_severity_publication_v1",
+  "mode": "validated rendering of saved aggregate outputs; no model refit",
+  "checkpoint": "2026-09-03 (some files finalized 2026-09-04 UTC)",
+  "sources": [
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity/aggregate/side_effect_severity_by_compound.csv",
+      "sha256": "7d4b7e862adb1e94b9248c40d4f734b471495a72ab23ca6130be8fb2af104428",
+      "size_bytes": 11209
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-linear-models/aggregate/severity_model_eligibility.csv",
+      "sha256": "d4a0058581bbcee7579419b424106399767f9dc49740e40be97342744644258c",
+      "size_bytes": 388
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_eligibility.csv",
+      "sha256": "691e13adf5668b9a64a5e4b57fa028566c50e2670b466e6ff3b639b0dcb98abf",
+      "size_bytes": 693
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/moderate_or_worse_leading_effects.csv",
+      "sha256": "a84f203f4c52a309bba7f62dfc9129cb4df07b774b058382634b73d88080b378",
+      "size_bytes": 1142
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_dose_bucket_definitions.csv",
+      "sha256": "6829e98dab615f38810180ad466b0de450ed533947616a527efb607ab18acb41",
+      "size_bytes": 1178
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_bucket_estimates.csv",
+      "sha256": "016b9dc661257f405e8bd853d6692cab33706d424abb17fd895d0b2969892ad5",
+      "size_bytes": 14168
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-linear-models/aggregate/severity_model_status.csv",
+      "sha256": "f89579d999b507ae5f74504f9b7e4c9e0eea0a216daa72f61c2431f0eb3c5400",
+      "size_bytes": 9412
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_model_status.csv",
+      "sha256": "722499bbb5abe430741bc9fbc5d27017061ddf84e422c652b35aaf7b991578a8",
+      "size_bytes": 27482
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-linear-models/aggregate/severity_model_coefficients.csv",
+      "sha256": "dee512d4d4abbb2a6cb0c2e2550d70c50a293335ffa2b92e9beb6e9e8b06a8b8",
+      "size_bytes": 17203
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_model_coefficients.csv",
+      "sha256": "a9bf03478d0d6e3026ac70257e457628ff59c4c3c32fb39ce3a030542f4b0395",
+      "size_bytes": 79708
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/moderate_or_worse_model_coefficients.csv",
+      "sha256": "8a51a22b21f12af8bb0f04d7c74a4f796d8029a44ff81df92b74d27db7894271",
+      "size_bytes": 1140
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/moderate_or_worse_bpc_dose_route_cells.csv",
+      "sha256": "43b9c3cff6e3bb14738710125c602200fa2782d0b8a15b05c8ad0bf118fd03ce",
+      "size_bytes": 680
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-linear-models/aggregate/severity_model_predictions.csv",
+      "sha256": "5463cb50dde26dbb967551617c7cba0d59ac9fe57d758156fbe36cf2e6be5dc0",
+      "size_bytes": 8631
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_severity_probabilities.csv",
+      "sha256": "846920a8872fc51d7c4851fc3c2f201c9b5db3de506fb5ebc6e0cf346a50a062",
+      "size_bytes": 4321
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/fine_grained_manifest.json",
+      "sha256": "39a89b550aae7343453de2df973f3e575468a7da5dfa795d1e13eebc512edebf",
+      "size_bytes": 5063
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity/aggregate/side_effect_severity_manifest.json",
+      "sha256": "6f660bb033e729814b3cb4cc6d3604cc44f7204a795e37ae75e3a6117f6691e7",
+      "size_bytes": 4837
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-linear-models/aggregate/severity_model_manifest.json",
+      "sha256": "862b9bda1e99afd1ad41b9546def6baf4b00094739c029941e6a92758f991060",
+      "size_bytes": 4651
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/runs/2026-09-03-side-effect-severity-fine-grained/aggregate/moderate_or_worse_manifest.json",
+      "sha256": "df4f29c86af3c500bf6bdb5d3236332a6eb867d31540e4952d072b158520762a",
+      "size_bytes": 839
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/comparator_cohort.json",
+      "sha256": "c420e12d450b0b2637983121cd1db06c56c62e9567e002fb257f01887cfc8063",
+      "size_bytes": 5172
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/severity_report_template.md",
+      "sha256": "a8e22047ecae84eebe59a8c99c1781985e31c0d0074501dffaf9edb01ec06eca",
+      "size_bytes": 9186
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/severity_report_data.py",
+      "sha256": "00f23a80c787872739a38a617b0eb90fc33a9f09cf3678ee62e70d39b12f29a5",
+      "size_bytes": 16810
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/publish_severity_reports.py",
+      "sha256": "cb53071adeb439ef42274c3f111bc84107c1004d42d2e8f3c5c4e2929dd2ace6",
+      "size_bytes": 30758
+    },
+    {
+      "relative_path": "studies/tropoflavin_nootropics/severity_report_figures.py",
+      "sha256": "d2253d2d95fc7ba16970003eb49c428995c66094f67837dd1fbfcbc08713b9c7",
+      "size_bytes": 6749
+    }
+  ],
+  "frozen_settings": {
+    "schema_id": "tropoflavin_side_effect_fine_grained_models_v1",
+    "generated_at": "2026-09-03T23:41:08.061425+00:00",
+    "author_unit": "globally deduplicated author-treatment",
+    "effect_unit": "globally deduplicated author-treatment-canonical side effect; maximum explicit grade retained for repeated mentions",
+    "occurrence_model": "binomial GEE clustered by author",
+    "burden_model": "negative-binomial GEE clustered by author",
+    "severity_model": "proportional-odds ordinal GEE clustered by author with safety-domain fixed effects",
+    "summary_models": "OLS for author-level maximum and mean explicit severity; HC3 treatment-specific and author-clustered pooled intervals",
+    "dose_definition": "geometric mean of positive numeric mg values when all values remain in one dose band; modeled as log2 mg",
+    "route_definition": "exactly one route family per author and treatment; oral mucosal and swallowed oral grouped as oral, nasal mucosal relabeled nasal",
+    "confidence_interval": "95% robust model intervals and 20,000-resample percentile bootstrap descriptive mean intervals",
+    "min_model_n": 20,
+    "min_route_level_n": 5,
+    "min_interaction_cell_n": 5,
+    "robust_log_dose_z": 4.0,
+    "exclude_78dhf_at_or_above_mg": 100.0,
+    "databases": [
+      {
+        "community": "depressionregimens",
+        "filename": "combined.db",
+        "size_bytes": 12382208,
+        "sha256": "755ca9e9adefd1c011765e5d3c1185e001e8a3599ebbcb780df936edded78bc3"
+      },
+      {
+        "community": "Longevity",
+        "filename": "combined.db",
+        "size_bytes": 864256,
+        "sha256": "96a5f6ed5ccfad350092502592ec7a761db7e389a0ec11c57760507eba94c68c"
+      },
+      {
+        "community": "NooTopics",
+        "filename": "combined.db",
+        "size_bytes": 51961856,
+        "sha256": "dc25a5cc8b04dbbbc83c648bb5175d9b02c414cd88e414262f75f32e069bc5f3"
+      },
+      {
+        "community": "Nootropics",
+        "filename": "combined.db",
+        "size_bytes": 273870848,
+        "sha256": "d806d1b3fb0f17ab22f5c1798a088632c01138039c1dfa646ca17cd4c8a6af80"
+      },
+      {
+        "community": "NootropicsDepot",
+        "filename": "combined.db",
+        "size_bytes": 34676736,
+        "sha256": "b652de7a76dbbcc0b8ff172f96678598130d84ababa01fe97a3d36dd34e09aa1"
+      },
+      {
+        "community": "cfs",
+        "filename": "sentiment.db",
+        "size_bytes": 1421312,
+        "sha256": "1747e954e5b70c9d3c5d10bad4453b683b62614e1a70ed8da9279e6c7e05ea7a"
+      },
+      {
+        "community": "cfsme",
+        "filename": "sentiment.db",
+        "size_bytes": 131072,
+        "sha256": "2b1144674b2170e3e09f23d25658ed818d3f8a4260492e51ed3580076ac4b21c"
+      },
+      {
+        "community": "cfsrecovery",
+        "filename": "sentiment.db",
+        "size_bytes": 143360,
+        "sha256": "4b4e86a992c3c03b1b553ca4b08133a7399c20ac8222be6ce5ac717056f1d2dc"
+      },
+      {
+        "community": "CFSScience",
+        "filename": "sentiment.db",
+        "size_bytes": 139264,
+        "sha256": "6797a2aff4454c2dee90b14b489471555210ad53fa542a7f1c693142e5ffa833"
+      },
+      {
+        "community": "covidlonghaulers",
+        "filename": "sentiment.db",
+        "size_bytes": 6553600,
+        "sha256": "56e206f33b4076fa2fd73d32d2450e6101a27e5b161d528f324c1a56b349517a"
+      },
+      {
+        "community": "LongCovid",
+        "filename": "sentiment.db",
+        "size_bytes": 1634304,
+        "sha256": "32f790ced053baa568d7e01dff9316a57595ae9e1b99af78e459a50bbe63e3aa"
+      },
+      {
+        "community": "LongCovid_MECFS_DE",
+        "filename": "sentiment.db",
+        "size_bytes": 131072,
+        "sha256": "c0b7e0cff3bc1784c6666a9043265d6907f045e8e412870c5bc4a4e3eb18d032"
+      },
+      {
+        "community": "Longcovidgutdysbiosis",
+        "filename": "sentiment.db",
+        "size_bytes": 303104,
+        "sha256": "c4f15d22de63b457ce89d6eb06b60493331b0e5f7f0920741a63abf1dc23c224"
+      },
+      {
+        "community": "LongHaulersRecovery",
+        "filename": "sentiment.db",
+        "size_bytes": 323584,
+        "sha256": "774329ad1d1f1407daf7bfa3b35e3e62343de7bd1129f831b3445aeae3d0140e"
+      },
+      {
+        "community": "mecfs",
+        "filename": "sentiment.db",
+        "size_bytes": 143360,
+        "sha256": "dcf435320507af44887b9341e7b84789eb1305e068bbfc1016b922352b56b961"
+      },
+      {
+        "community": "Peptides",
+        "filename": "combined.db",
+        "size_bytes": 129085440,
+        "sha256": "d8a881cbf29c259decfe3fd739f6452d36ae81d50cf35ba634e001fe9a9aa7cc"
+      },
+      {
+        "community": "Psilocybin",
+        "filename": "combined.db",
+        "size_bytes": 1536000,
+        "sha256": "d7629a0ef0d66beba0715334383881b067b3d12cccb9f096560ff56568ee9418"
+      },
+      {
+        "community": "StackAdvice",
+        "filename": "combined.db",
+        "size_bytes": 59924480,
+        "sha256": "860c52889ddf68806d5fee67aaf53a86df0b04ec7d94052d8d5e7286df8e0607"
+      },
+      {
+        "community": "Supplements",
+        "filename": "combined.db",
+        "size_bytes": 106287104,
+        "sha256": "863bf4c13bcf774b99067ed089447bb045a66be8c21003ab7aa420da3a4f84c8"
+      }
+    ]
+  },
+  "proportion_interval": "95% Wilson; independent author binomial model"
+}

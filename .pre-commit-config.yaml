@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: study-update-lint
+        name: Lint study update
+        entry: uv run --locked ruff check
+        language: system
+        files: ^(studies/tropoflavin_nootropics/(episode_dose_audit|severity_model_data|severity_model_contracts|severity_models|severity_report_data|severity_report_figures|publish_severity_reports)|tests/test_(tropoflavin_episode_dose_audit|severity_models|severity_publication))\.py$
+      - id: study-update-types
+        name: Type-check study update
+        entry: uv run --locked mypy
+        language: system
+        pass_filenames: false
+        files: ^studies/tropoflavin_nootropics/(episode_dose_audit|severity_model_data|severity_model_contracts|severity_models|severity_report_data|severity_report_figures|publish_severity_reports)\.py$
+      - id: study-update-tests
+        name: Test study update
+        entry: uv run --locked pytest -q --cov --cov-report=term-missing
+        language: system
+        pass_filenames: false
+        files: ^(studies/tropoflavin_nootropics/|tests/test_.*severity|tests/test_tropoflavin_episode)

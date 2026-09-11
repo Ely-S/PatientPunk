@@ -44,6 +44,10 @@ openai = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.12",
+    "mypy>=1.15",
+    "pre-commit>=4.0",
 ]
 ui = [
     "streamlit>=1.30",
@@ -61,3 +65,41 @@ include = ["patientpunk*"]
 [tool.pytest.ini_options]
 testpaths = ["variable_extraction/tests", "tests"]
 pythonpath = ["src"]
+
+# Scope new quality gates to the reproducible study update. Legacy pipeline
+# modules retain their existing tests and can adopt these gates separately.
+[tool.mypy]
+explicit_package_bases = true
+files = [
+    "studies/tropoflavin_nootropics/episode_dose_audit.py",
+    "studies/tropoflavin_nootropics/severity_model_data.py",
+    "studies/tropoflavin_nootropics/severity_model_contracts.py",
+    "studies/tropoflavin_nootropics/severity_models.py",
+    "studies/tropoflavin_nootropics/severity_report_data.py",
+    "studies/tropoflavin_nootropics/severity_report_figures.py",
+    "studies/tropoflavin_nootropics/publish_severity_reports.py",
+]
+ignore_missing_imports = true
+follow_imports = "silent"
+check_untyped_defs = true
+
+[tool.coverage.run]
+source = [
+    "studies.tropoflavin_nootropics.episode_dose_audit",
+    "studies.tropoflavin_nootropics.severity_model_data",
+    "studies.tropoflavin_nootropics.severity_model_contracts",
+    "studies.tropoflavin_nootropics.severity_models",
+    "studies.tropoflavin_nootropics.severity_report_data",
+    "studies.tropoflavin_nootropics.severity_report_figures",
+    "studies.tropoflavin_nootropics.publish_severity_reports",
+]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM"]
