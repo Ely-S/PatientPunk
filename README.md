@@ -324,12 +324,13 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 **Reply chain handling:** Upstream comment text is included in both the prefilter and classifier so the model can resolve pronouns ("I love it too" → positive, where "it" = the drug in the parent post).
 
-**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment and signal strength. Progress is preserved across crashes — on re-run, pairs already in the table are skipped.
+**Output:** Rows in `treatment_reports` table, written incrementally via `ReportWriter`. Each row links a `post_id` to a `drug_id` with sentiment, signal strength, and any reported side effects. Each side effect stores its name and an optional explicitly stated severity. Progress is preserved across crashes; on re-run, pairs already in the table are skipped.
 
 | Column | Values |
 |--------|--------|
 | `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
 | `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
+| `side_effects` | JSON objects with `side_effect` and nullable `severity` |
 
 ---
 

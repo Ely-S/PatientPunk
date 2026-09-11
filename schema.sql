@@ -86,7 +86,7 @@ CREATE TABLE treatment_reports (
     drug_id         INTEGER NOT NULL REFERENCES treatment(id),
     sentiment       TEXT NOT NULL,
     signal_strength TEXT NOT NULL,
-    side_effects    TEXT              -- JSON array of lowercase symptom strings, or NULL/[] if none
+    side_effects    TEXT              -- JSON array of {side_effect, severity} objects, or NULL if none
 );
 
 CREATE INDEX idx_tr_post ON treatment_reports(post_id);
