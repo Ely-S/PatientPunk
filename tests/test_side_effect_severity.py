@@ -1,7 +1,5 @@
 """Tests for structured side-effect severity extraction and storage."""
 
-from __future__ import annotations
-
 import json
 import sqlite3
 from pathlib import Path
@@ -13,34 +11,24 @@ from models import ClassificationResult, SideEffectReport
 from utilities.db import ReportWriter
 
 
-def test_classification_result_accepts_explicit_and_unspecified_severity():
-    result = ClassificationResult.model_validate({
-        "sentiment": "positive",
-        "signal": "strong",
-        "side_effects": [
-            {"side_effect": "headache", "severity": "mild"},
-            {"side_effect": "insomnia", "severity": None},
-        ],
-    })
-
-    assert result.side_effects == [
-        SideEffectReport(side_effect="headache", severity="mild"),
-        SideEffectReport(side_effect="insomnia", severity=None),
-    ]
-
-
-def test_classification_result_rejects_unknown_severity():
-    with pytest.raises(ValidationError):
-        ClassificationResult.model_validate({
-            "sentiment": "negative",
-            "signal": "moderate",
-            "side_effects": [
-                {"side_effect": "headache", "severity": "extreme"},
-            ],
+def test_side_effect_report_rejects_unknown_severity() -> None:
+    with pytest.raises(ValidationError, match="severity"):
+        SideEffectReport.model_validate({
+            "side_effect": "headache", "severity": "extreme",
         })
 
 
-def test_report_writer_stores_structured_side_effects(tmp_path: Path):
+def test_classification_side_effects_round_trip_to_database(tmp_path: Path) -> None:
+    result = ClassificationResult.model_validate({
+        "sentiment": "negative",
+        "signal": "strong",
+        "side_effects": [
+            {"side_effect": "headache", "severity": "mild"},
+            {"side_effect": "dizziness", "severity": "severe"},
+            {"side_effect": "insomnia", "severity": None},
+            {"side_effect": "nausea"},
+        ],
+    })
     db_path = tmp_path / "reports.db"
     schema_path = Path(__file__).parents[1] / "schema.sql"
     with sqlite3.connect(db_path) as conn:
@@ -55,12 +43,9 @@ def test_report_writer_stores_structured_side_effects(tmp_path: Path):
             post_id="post-1",
             drug="7,8-dhf",
             author="author-1",
-            sentiment="negative",
-            signal="strong",
-            side_effects=[
-                SideEffectReport(side_effect="headache", severity="severe"),
-                SideEffectReport(side_effect="insomnia"),
-            ],
+            sentiment=result.sentiment,
+            signal=result.signal,
+            side_effects=result.side_effects,
         )
 
     with sqlite3.connect(db_path) as conn:
@@ -69,6 +54,8 @@ def test_report_writer_stores_structured_side_effects(tmp_path: Path):
         ).fetchone()[0]
 
     assert json.loads(stored) == [
-        {"side_effect": "headache", "severity": "severe"},
+        {"side_effect": "headache", "severity": "mild"},
+        {"side_effect": "dizziness", "severity": "severe"},
         {"side_effect": "insomnia", "severity": None},
+        {"side_effect": "nausea", "severity": None},
     ]
