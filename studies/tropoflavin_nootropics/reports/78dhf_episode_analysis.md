@@ -1,12 +1,20 @@
 # Same-post 7,8-DHF episode analysis
 
+## High-dose audit correction
+
+Manual review of the original 11 episodes in the >=100 mg bucket excluded 4 doses attributed to another compound and 1 range crossing the 100 mg boundary. The audited descriptive row retains 6 episodes from 4 authors. Explicit side-effect severity was reported in 0/6 (0.0%; 0.0% to 39.0%); missing severity is not absence of harm. Intervals are 95% Wilson intervals for episode reporting proportions and do not account for repeated authors.
+
+Only the high-dose descriptive row is corrected here. All coverage counts, lower-dose rows, route and reason summaries, regression estimates, and p-values remain the original pre-audit results. Those models still include the uncorrected dose attributions and must not be interpreted as audited estimates. The aggregate audit does not identify the excluded episodes, so it cannot support refitting models, reallocating the boundary range, or recomputing a retained median. The median is therefore unavailable. The retained episodes contain no explicit severity grades and cannot estimate severity in this dose bucket.
+
+The [versioned aggregate audit](../audits/78dhf_high_dose_audit.json) records the private source aggregate's filename and SHA-256. Publication validates the original episode-record and database digests, cohort size, and high-dose counts before applying this correction; changed inputs require a new audit.
+
 This analysis requires dose, route, reason, sentiment, and side-effect reporting to be attributable within the same Reddit post. Each globally unique author-post pair is an episode. Repeated episodes are retained and standard errors are clustered by author. A missing mapped side effect means not reported in that episode, not that no side effect occurred.
 
-## Primary design
+## Primary design (pre-audit)
 
 The primary exposure is log2 quantitative dose, so its odds ratio is the change associated with a dose doubling. Ordinal sentiment is coded negative < neutral/mixed < positive. The second outcome is any mapped same-report side-effect mention. Both use generalized estimating equations with author-clustered robust covariance and subreddit fixed effects. Subreddits with fewer than 5 dose-complete episodes are pooled as Other. The two primary p-values receive Benjamini-Hochberg correction.
 
-## Coverage
+## Coverage (pre-audit)
 
 | Cohort | Episodes | Authors | Explicit personal use | Single quantitative dose | Single route | Explicit reason | Mapped side effect reported |
 |---|---|---|---|---|---|---|---|
@@ -21,18 +29,18 @@ The primary exposure is log2 quantitative dose, so its odds ratio is the change 
 | Psilocybin | 0 | 0 | 0/0 | 0/0 | 0/0 | 0/0 | 0/0 |
 | Combined | 1828 | 673 | 824/1828 (45.1%; 42.8% to 47.4%) | 122/1828 (6.7%; 5.6% to 7.9%) | 159/1828 (8.7%; 7.5% to 10.1%) | 172/1828 (9.4%; 8.2% to 10.8%) | 476/1828 (26.0%; 24.1% to 28.1%) |
 
-## Main finding
+## Main finding (pre-audit)
 
 The primary model used 122 same-post, single-dose episodes from 81 authors; 22 authors contributed more than one dose-complete episode. Outcomes comprised 92 positive, 4 neutral/mixed, and 26 negative episodes; 37 had a mapped side-effect report. Neither primary outcome passed Benjamini-Hochberg correction at q < 0.05.
 
-## Combined primary models
+## Combined primary models (pre-audit)
 
 | Outcome | Episodes | Authors | OR per dose doubling | 95% CI | p | BH q | Status |
 |---|---|---|---|---|---|---|---|
 | ordinal sentiment | 122 | 81 | 0.92 | 0.66 to 1.28 | 0.6161 | 0.8820 | estimated |
 | side-effect reporting | 122 | 81 | 1.03 | 0.72 to 1.47 | 0.8820 | 0.8820 | estimated |
 
-## Binary sentiment sensitivity
+## Binary sentiment sensitivity (pre-audit)
 
 | Outcome | Episodes | Authors | OR per dose doubling | 95% CI | p | BH q | Status |
 |---|---|---|---|---|---|---|---|
@@ -40,7 +48,7 @@ The primary model used 122 same-post, single-dose episodes from 81 authors; 22 a
 
 This prespecified sensitivity collapses sentiment to positive versus negative/neutral/mixed. Its raw p-value is descriptive and is not part of the two-outcome primary correction.
 
-## Combined dose descriptives
+## Combined dose descriptives (audited high-dose row only)
 
 | Dose band | Episodes | Authors | Median dose | Positive sentiment | Mapped side effect reported |
 |---|---|---|---|---|---|
@@ -49,9 +57,9 @@ This prespecified sensitivity collapses sentiment to positive versus negative/ne
 | 10 to <25 mg | 28 | 24 | 20.0 mg | 21/28 (75.0%; 56.6% to 87.3%) | 7/28 (25.0%; 12.7% to 43.4%) |
 | 25 to <50 mg | 54 | 41 | 25.0 mg | 43/54 (79.6%; 67.1% to 88.2%) | 16/54 (29.6%; 19.1% to 42.8%) |
 | 50 to <100 mg | 25 | 16 | 50.0 mg | 15/25 (60.0%; 40.7% to 76.6%) | 11/25 (44.0%; 26.7% to 62.9%) |
-| >=100 mg | 11 | 9 | 100.0 mg | 10/11 (90.9%; 62.3% to 98.4%) | 1/11 (9.1%; 1.6% to 37.7%) |
+| >=100 mg (audited) | 6 | 4 | unavailable | 5/6 (83.3%; 43.6% to 97.0%) | 1/6 (16.7%; 3.0% to 56.4%) |
 
-## Combined route descriptives
+## Combined route descriptives (pre-audit)
 
 | Route | Episodes | Authors | Positive sentiment | Mapped side effect reported |
 |---|---|---|---|---|
@@ -60,7 +68,7 @@ This prespecified sensitivity collapses sentiment to positive versus negative/ne
 | other explicit route | 1 | 1 | 1/1 (100.0%; 20.7% to 100.0%) | 0/1 (0.0%; 0.0% to 79.3%) |
 | swallowed oral | 24 | 21 | 21/24 (87.5%; 69.0% to 95.7%) | 4/24 (16.7%; 6.7% to 35.9%) |
 
-## Combined explicit-reason descriptives
+## Combined explicit-reason descriptives (pre-audit)
 
 | Reason | Episodes | Authors | Positive sentiment | Mapped side effect reported |
 |---|---|---|---|---|
@@ -78,7 +86,7 @@ This prespecified sensitivity collapses sentiment to positive versus negative/ne
 | social functioning | 5 | 5 | 5/5 (100.0%; 56.6% to 100.0%) | 1/5 (20.0%; 3.6% to 62.4%) |
 | stimulant recovery or reduction | 11 | 8 | 11/11 (100.0%; 74.1% to 100.0%) | 2/11 (18.2%; 5.1% to 47.7%) |
 
-## Separate subreddit trend estimates
+## Separate subreddit trend estimates (pre-audit)
 
 | Subreddit | Outcome | Episodes | Authors | OR per dose doubling | 95% CI | p | Status |
 |---|---|---|---|---|---|---|---|

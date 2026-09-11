@@ -7,11 +7,12 @@ import sqlite3
 import statistics
 import warnings
 from collections import Counter
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, Sequence, cast
+from typing import Annotated, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -31,6 +32,11 @@ from studies.tropoflavin_nootropics.analyze_78dhf_predictors import (
 from studies.tropoflavin_nootropics.comparator_support import (
     markdown_escape,
     sha256_file,
+)
+from studies.tropoflavin_nootropics.episode_dose_audit import (
+    DEFAULT_AUDIT,
+    apply_high_dose_audit,
+    load_audit,
 )
 from studies.tropoflavin_nootropics.extract_78dhf_episodes import (
     EpisodeExtractionManifest,
@@ -61,6 +67,7 @@ class EpisodeAnalysisConfig(BaseModel):
     episode_records: Path
     episode_manifest: Path
     output_path: Path
+    high_dose_audit: Path = DEFAULT_AUDIT
     minimum_model_episodes: int = Field(default=30, ge=10)
     minimum_model_authors: int = Field(default=20, ge=10)
     minimum_community_episodes: int = Field(default=5, ge=2)
@@ -811,7 +818,9 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
             ),
         ]
     )
-    return "\n\n".join(sections) + "\n"
+    return apply_high_dose_audit(
+        "\n\n".join(sections) + "\n", load_audit(config.high_dose_audit)
+    )
 
 
 def analyze_episodes(config: EpisodeAnalysisConfig) -> str:
@@ -824,8 +833,8 @@ def analyze_episodes(config: EpisodeAnalysisConfig) -> str:
 
 @app.command()
 def main(
-    config_path: Path = typer.Option(..., exists=True, dir_okay=False),
-    output: Path = typer.Option(..., dir_okay=False),
+    config_path: Annotated[Path, typer.Option(exists=True, dir_okay=False)],
+    output: Annotated[Path, typer.Option(dir_okay=False)],
 ) -> None:
     """Generate the same-post 7,8-DHF episode report."""
     config = EpisodeAnalysisConfig.model_validate_json(

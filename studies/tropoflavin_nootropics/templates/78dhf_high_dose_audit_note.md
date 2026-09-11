@@ -1,0 +1,7 @@
+## High-dose audit correction
+
+Manual review of the original $candidate_episodes episodes in the >=100 mg bucket excluded $excluded_other_compound doses attributed to another compound and $excluded_boundary_range range crossing the 100 mg boundary. The audited descriptive row retains $retained_episodes episodes from $retained_authors authors. Explicit side-effect severity was reported in $severity_rate; missing severity is not absence of harm. Intervals are 95% Wilson intervals for episode reporting proportions and do not account for repeated authors.
+
+Only the high-dose descriptive row is corrected here. All coverage counts, lower-dose rows, route and reason summaries, regression estimates, and p-values remain the original pre-audit results. Those models still include the uncorrected dose attributions and must not be interpreted as audited estimates. The aggregate audit does not identify the excluded episodes, so it cannot support refitting models, reallocating the boundary range, or recomputing a retained median. The median is therefore unavailable. The retained episodes contain no explicit severity grades and cannot estimate severity in this dose bucket.
+
+The [versioned aggregate audit](../audits/78dhf_high_dose_audit.json) records the private source aggregate's filename and SHA-256. Publication validates the original episode-record and database digests, cohort size, and high-dose counts before applying this correction; changed inputs require a new audit.
