@@ -190,3 +190,51 @@ def test_episode_resume_loads_only_completed_source_records(tmp_path: Path) -> N
 
     assert tuple(resumed) == (0,)
     assert resumed[0].explicit_personal_use is False
+
+
+def test_dose_checks_drop_foreign_quotes_and_implausible_amounts() -> None:
+    from studies.tropoflavin_nootropics.extract_78dhf_episodes import (
+        DoseValue,
+        EpisodeItemResult,
+        apply_dose_checks,
+    )
+
+    report = "I took 20mg sublingual, it's great. Lion's mane at 3 g daily too."
+    result = EpisodeItemResult(
+        item_id=0,
+        explicit_personal_use=True,
+        dose_status="multiple",
+        doses=(
+            DoseValue(low=20, high=20, unit="mg", outcome="positive", quote="I took 20MG sublingual, its great"),
+            DoseValue(low=3, high=3, unit="g", outcome="unclear", quote="Lion's mane at 3 g daily too."),
+            DoseValue(low=50, high=50, unit="mg", outcome="positive", quote="50mg was the sweet spot"),
+            DoseValue(low=10, high=10, unit="mg", outcome="neutral", quote=None),
+        ),
+        route_status="not_reported",
+        routes=(),
+        reasons=(),
+    )
+    checked, dropped = apply_dose_checks(result, report, max_single_dose_mg=500.0, require_quote=True)
+    assert [dose.midpoint_mg for dose in checked.doses] == [20.0]
+    assert checked.dose_status == "single"
+    assert sorted(reason for _dose, reason in dropped) == [
+        "above plausibility bound",
+        "quote missing",
+        "quote not in report",
+    ]
+    # Nothing dropped: the same object comes back and the status is untouched.
+    untouched, none_dropped = apply_dose_checks(
+        result.model_copy(update={"doses": result.doses[:1], "dose_status": "single"}),
+        report,
+        max_single_dose_mg=None,
+        require_quote=False,
+    )
+    assert none_dropped == () and untouched.dose_status == "single"
+    # Every dose dropped on a personal-use report leaves a non-quantitative record.
+    emptied, _ = apply_dose_checks(
+        result.model_copy(update={"doses": result.doses[2:3], "dose_status": "single"}),
+        report,
+        max_single_dose_mg=500.0,
+        require_quote=True,
+    )
+    assert emptied.doses == () and emptied.dose_status == "non_quantitative"

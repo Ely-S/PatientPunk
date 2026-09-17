@@ -75,6 +75,12 @@ class EpisodeExtractionConfig(BaseModel):
     parent_chars: int | None = Field(default=1_500, ge=100)     # include the parent post as "replying_to", capped; None = report only
     max_text_chars: int = Field(default=6_000, ge=500, le=20_000)
     max_output_tokens: int = Field(default=4_096, ge=512, le=8_192)
+    # Mechanical checks applied when responses become records (the cache keeps the raw
+    # model output). A dose above the bound is implausible for 7,8-DHF and almost always
+    # another compound's amount; a quote that is not in the report came from the parent
+    # post, a paraphrase, or nowhere. Dropped doses are listed in dose_check_drops.jsonl.
+    max_single_dose_mg: float | None = Field(default=500.0, gt=0)
+    require_dose_quotes: bool = False  # set for the v2/v3 prompts, which always emit a quote
 
     @model_validator(mode="after")
     def validate_paths(self) -> EpisodeExtractionConfig:
@@ -287,6 +293,9 @@ class EpisodeExtractionManifest(BaseModel):
     failure_types: dict[str, int] = Field(default_factory=dict)
     failure_details: dict[str, int] = Field(default_factory=dict)
     failure_messages: dict[str, int] = Field(default_factory=dict)
+    max_single_dose_mg: float | None = None
+    require_dose_quotes: bool = False
+    dose_check_drops: dict[str, int] = Field(default_factory=dict)
     records_file: str
     records_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     usage: UsageSummary
@@ -382,6 +391,53 @@ def _request_payload(items: tuple[BatchItem, ...]) -> str:
         ]
     }
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def _normalized(text: str) -> str:
+    return _NON_ALNUM.sub("", text.lower())
+
+
+def apply_dose_checks(
+    result: EpisodeItemResult,
+    report_text: str,
+    max_single_dose_mg: float | None,
+    require_quote: bool,
+) -> tuple[EpisodeItemResult, tuple[tuple[DoseValue, str], ...]]:
+    """Drop dose objects that fail the mechanical checks; return the result and the drops.
+
+    A dose is dropped when its quote is not found verbatim in the report (compared on
+    lower-case letters and digits only), when a quote is required and missing, or when
+    its midpoint exceeds the plausibility bound. ``dose_status`` is recomputed from the
+    doses that remain.
+    """
+    haystack = _normalized(report_text)
+    kept: list[DoseValue] = []
+    dropped: list[tuple[DoseValue, str]] = []
+    for dose in result.doses:
+        quote = _normalized(dose.quote or "")
+        if not quote:
+            if require_quote:
+                dropped.append((dose, "quote missing"))
+                continue
+        elif quote not in haystack:
+            dropped.append((dose, "quote not in report"))
+            continue
+        if max_single_dose_mg is not None and dose.midpoint_mg > max_single_dose_mg:
+            dropped.append((dose, "above plausibility bound"))
+            continue
+        kept.append(dose)
+    if not dropped:
+        return result, ()
+    dose_status: DoseStatus
+    if kept:
+        dose_status = "single" if len(kept) == 1 else "multiple"
+    else:
+        dose_status = "non_quantitative" if result.explicit_personal_use else "not_reported"
+    checked = result.model_copy(update={"doses": tuple(kept), "dose_status": dose_status})
+    return EpisodeItemResult.model_validate(checked.model_dump()), tuple(dropped)
 
 
 def _parse_response(text: str, expected_ids: tuple[int, ...]) -> EpisodeBatchResponse:
@@ -759,10 +815,32 @@ def run_episode_extraction(
                 console.print(f"Processed {completed:,}/{len(contexts):,} episodes")
 
     records: list[EpisodeRecord] = []
+    dose_check_drops: Counter[str] = Counter()
+    drop_lines: list[str] = []
     for item_id, context in enumerate(contexts):
         result = results_by_id.get(item_id)
         if result is None:
             continue
+        result, dropped = apply_dose_checks(
+            result,
+            context.report_text,
+            config.max_single_dose_mg,
+            config.require_dose_quotes,
+        )
+        for dose, reason in dropped:
+            dose_check_drops[reason] += 1
+            drop_lines.append(
+                json.dumps(
+                    {
+                        "subreddit": context.subreddit,
+                        "post_id": context.post_id,
+                        "report_id": context.report_id,
+                        "reason": reason,
+                        "dose": dose.model_dump(mode="json"),
+                    },
+                    ensure_ascii=False,
+                )
+            )
         records.append(
             EpisodeRecord(
                 subreddit=context.subreddit,
@@ -781,6 +859,9 @@ def run_episode_extraction(
     records_path.write_text(
         "".join(record.model_dump_json() + "\n" for record in records),
         encoding="utf-8",
+    )
+    (config.output_directory / "dose_check_drops.jsonl").write_text(
+        "".join(line + "\n" for line in drop_lines), encoding="utf-8"
     )
     current_usage = UsageSummary.model_validate(get_llm_usage_snapshot())
     usage = UsageSummary(
@@ -820,6 +901,9 @@ def run_episode_extraction(
         failure_types=dict(sorted(failure_types.items())),
         failure_details=dict(sorted(failure_details.items())),
         failure_messages=dict(sorted(failure_messages.items())),
+        max_single_dose_mg=config.max_single_dose_mg,
+        require_dose_quotes=config.require_dose_quotes,
+        dose_check_drops=dict(sorted(dose_check_drops.items())),
         records_file=records_path.name,
         records_sha256=sha256_file(records_path),
         usage=usage,
