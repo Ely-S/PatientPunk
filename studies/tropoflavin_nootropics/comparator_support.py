@@ -15,7 +15,7 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from utilities.alias_matching import has_unexcluded_alias
+from utilities.alias_matching import alias_spans, has_unexcluded_alias
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_COHORT_CONFIG = HERE / "comparator_cohort.json"
@@ -58,6 +58,10 @@ class ComparatorSpec(BaseModel):
     def matches(self, text: str) -> bool:
         """Return whether text contains a non-excluded mention of this compound."""
         return has_unexcluded_alias(text, self.aliases, self.excluded_aliases)
+
+    def spans(self, text: str) -> tuple[tuple[int, int], ...]:
+        """Return the surviving mention spans of this compound in text."""
+        return alias_spans(text, self.aliases, self.excluded_aliases)
 
 
 class ComparatorCohort(BaseModel):
