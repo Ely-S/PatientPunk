@@ -1,6 +1,6 @@
 {
-  "schema_id": "tropoflavin_nootropics_comparator_cohort_v1",
-  "version": 1,
+  "schema_id": "tropoflavin_nootropics_comparator_cohort_v2",
+  "version": 2,
   "target_slug": "78dhf",
   "compounds": [
     {
@@ -11,28 +11,25 @@
       "analysis_role": "target",
       "mechanism_note": "Parent flavone and putative BDNF/TrkB-modulating compound",
       "aliases": [
-        "7,8-dhf",
-        "7,8dhf",
-        "78dhf",
-        "78-dhf",
-        "7.8dhf",
-        "7.8 dhf",
-        "7 8 dhf",
-        "7-8-dhf",
-        "7,8-dihydroxyflavone",
-        "7,8 dihydroxyflavone",
-        "tropoflavin",
-        "dhf"
+        "7 , 8 dhf", "7 8 dhf", "7 8 dihydroxyflavone", "7 8-dhf", "7 8-dihydroxyflavone", "7 8dhf",
+        "7'8 - dhf", "7'8 dhf", "7'8 dihydroxyflavone", "7'8' dhf", "7'8'-dhf", "7'8'dhf", "7'8--dhf",
+        "7'8-dhf", "7'8-dihydroxyflavone", "7'8dhf", "7,  8 dhf", "7, 8 - dhf", "7, 8 dhf",
+        "7, 8 dihydroxyflavone", "7, 8, dhf", "7, 8- dhf", "7, 8- dihydroxyflavone", "7, 8-dhf",
+        "7, 8-dihydroxyflavone", "7,-8dhf", "7,8  dhf", "7,8 - dhf", "7,8 - dihydroxyflavone", "7,8 dhf",
+        "7,8 dihydroxyflavone", "7,8'-dhf", "7,8,dhf", "7,8- dhf", "7,8- dihydroxyflavone", "7,8--dhf",
+        "7,8-dhf", "7,8-dihydroxy-flavone", "7,8-dihydroxyflavone", "7,8dhf", "7-,8-dhf", "7-8 - dhf",
+        "7-8 dhf", "7-8 dihydroxyflavone", "7-8' dhf", "7-8'dhf", "7-8,dhf", "7-8-dhf",
+        "7-8-dihydroxyflavone", "7-8dhf", "7.8 dhf", "7.8'dhf", "7.8,dhf", "7.8-dhf",
+        "7.8-dihydroxyflavone", "7.8dhf", "78 dhf", "78 dihydroxy flavone", "78-dhf",
+        "78-dihydroxyflavone", "78dhf", "78dihydroxyflavone", "dhf", "tropoflavin", "tropoflavins"
       ],
-      "excluded_aliases": [
-        "4'-dma-7,8-dhf",
-        "4-dma-7,8-dhf",
-        "4dma-7,8dhf",
-        "4dma 7,8-dhf",
-        "4 dma 7 8 dhf",
-        "eutropoflavin"
+      "excluded_aliases": [],
+      "excluded_compounds": [
+        "4dma-78dhf"
       ],
-      "prefilter_terms": ["dhf", "tropoflavin", "dihydroxyflavone"]
+      "prefilter_terms": [
+        "dhf", "tropoflavin", "dihydroxyflavone", "dihydroxy-flavone", "dihydroxy flavone"
+      ]
     },
     {
       "slug": "4dma-78dhf",
@@ -42,15 +39,51 @@
       "analysis_role": "primary",
       "mechanism_note": "Closest chemical derivative and primary analogue comparison",
       "aliases": [
-        "4'-dma-7,8-dhf",
-        "4-dma-7,8-dhf",
-        "4dma-7,8dhf",
-        "4dma 7,8-dhf",
-        "4 dma 7 8 dhf",
-        "eutropoflavin"
+        "4 ' -dma-7,8-dhf", "4 'dma", "4 'dma, 7'8' dhf", "4 - dma - 7'8 - dhf", "4 -dma-7, 8-dhf",
+        "4 dma", "4 dma - 7,8 dhf", "4 dma 7 8 dhf", "4 dma 7 8dhf", "4 dma 7'8 dhf", "4 dma 7'8-dhf",
+        "4 dma 7'8dhf", "4 dma 7,8 dhf", "4 dma 7,8-dhf", "4 dma 7,8dhf", "4 dma 7-8 dhf", "4 dma 7.8 dhf",
+        "4 dma 78 dhf", "4 dma 78 dihydroxy flavone", "4 dma dhf", "4 dma, 7 8 dhf", "4 dma, 7, 8 dhf",
+        "4 dma, 7,8 dhf", "4 dma, 7-8 dhf", "4 dma-7 8-dhf", "4 dma-7'8 dhf", "4 dma-7,8 dhf",
+        "4 dma-7,8- dhf", "4 dma-7,8-dhf", "4 dma-7,8dhf", "4 dma. 7 8 dhf", "4' -dma - 7,8-dhf",
+        "4' -dma-7, 8- dhf", "4' -dma-7, 8-dhf", "4' -dma-7,8-dhf", "4' dma", "4' dma 7 8 dhf",
+        "4' dma 7'8 dhf", "4' dma 7, 8 dhf", "4' dma 7,8 dhf", "4' dma 7,8-dhf",
+        "4'-dimethylamino 7,8 dihydroxyflavone", "4'-dimethylamino 7,8-dihydroxyflavone",
+        "4'-dimethylamino-7,8-dhf", "4'-dimethylamino-7,8-dihydroxyflavone", "4'-dma", "4'-dma - 7'8 dhf",
+        "4'-dma - 7,8-dhf", "4'-dma 7,8 dhf", "4'-dma 7,8-dhf", "4'-dma, 7,8-dhf", "4'-dma- 7,8- dhf",
+        "4'-dma- 7,8-dhf", "4'-dma-)7,8-dhf", "4'-dma-7 8-dhf", "4'-dma-7 8-dihydroxyflavone",
+        "4'-dma-7'8-dhf", "4'-dma-7, 8-dhf", "4'-dma-7,8 dhf", "4'-dma-7,8'-dhf", "4'-dma-7,8-dhf",
+        "4'-dma-7,8-dihydroxyflavone", "4'-dma-7,8dhf", "4'-dma-7-8-dhf",
+        "4'dimethylamino-7,8-dihydroxyflavone", "4'dma", "4'dma 7 8-dhf", "4'dma 7'8-dhf", "4'dma 7,8 dhf",
+        "4'dma 7,8-dhf", "4'dma 7,8dhf", "4'dma 7-8 dhf", "4'dma 7-8dhf", "4'dma 78dhf", "4'dma dhf",
+        "4'dma, 7,8 dhf", "4'dma-7 8-dhf", "4'dma-7'8 dhf", "4'dma-7'8'dhf", "4'dma-7'8-dhf",
+        "4'dma-7'8dhf", "4'dma-7,8 dhf", "4'dma-7,8-dhf", "4'dma-7,8dhf", "4'dma-7-8-dhf", "4'dma-7.8-dhf",
+        "4'dma7'8-dhf", "4- dma", "4- dma 7 8 dhf", "4-dimethylamino 7,8-dihydroxyflavone",
+        "4-dimethylamino-7,8-dhf", "4-dimethylamino-7,8-dihydroxyflavone", "4-dma", "4-dma , 7,8-dhf",
+        "4-dma - 7,8 dhf", "4-dma 7 8 dhf", "4-dma 7'8 dhf", "4-dma 7'8-dhf", "4-dma 7'8dhf",
+        "4-dma 7, 8 dhf", "4-dma 7,8 dhf", "4-dma 7,8- dhf", "4-dma 7,8--dhf", "4-dma 7,8-dhf",
+        "4-dma 7,8dhf", "4-dma 7-8 dhf", "4-dma 7-8' dhf", "4-dma 7-8,dhf", "4-dma 7-8-dhf",
+        "4-dma 7.8'dhf", "4-dma 7.8,dhf", "4-dma 7.8-dhf", "4-dma 78-dhf", "4-dma dhf", "4-dma'-7,8-dhf",
+        "4-dma'7-8'dhf", "4-dma)-7,8-dhf", "4-dma, 7,8-dhf", "4-dma, 7-8 dhf", "4-dma, 7-8dhf",
+        "4-dma,-7,8-dhf", "4-dma,7,8dhf", "4-dma,7-8 dhf", "4-dma- 7-8 - dhf", "4-dma-(7-8dhf",
+        "4-dma-7 8-dhf", "4-dma-7'8 dhf", "4-dma-7'8-dhf", "4-dma-7, 8 dhf", "4-dma-7, 8-dhf",
+        "4-dma-7,8 dhf", "4-dma-7,8 dihydroxyflavone", "4-dma-7,8'-dhf", "4-dma-7,8-dhf",
+        "4-dma-7,8-dihydroxy-flavone", "4-dma-7,8-dihydroxyflavone", "4-dma-7,8dhf", "4-dma-7-,8-dhf",
+        "4-dma-7-8 dhf", "4-dma-7-8-dhf", "4-dma-7-8dhf", "4-dma-78-dhf", "4-dma-78dhf", "4-dma-dhf",
+        "4-dma7,8-dhf", "4dimethylamino78dihydroxyflavone", "4dma", "4dma -78 dhf", "4dma 7 8 dhf",
+        "4dma 7 8dhf", "4dma 7'8 dhf", "4dma 7'8dhf", "4dma 7, 8 dhf", "4dma 7,8 dhf",
+        "4dma 7,8 dihydroxyflavone", "4dma 7,8-dhf", "4dma 7,8dhf", "4dma 7-8 dhf", "4dma 78 dhf",
+        "4dma 78dhf", "4dma dhf", "4dma, 7, 8 dhf", "4dma, 7,8 dhf", "4dma,7,8dhf", "4dma,dhf",
+        "4dma- 7'8' dhf", "4dma- 7,8dhf", "4dma-7'8 dhf", "4dma-7'8dhf", "4dma-7, 8-dhf", "4dma-7,8 dhf",
+        "4dma-7,8-dhf", "4dma-7,8dhf", "4dma-78-dhf", "4dma-78dhf", "4dma-dhf", "4dma7'8 dhf",
+        "4dma7'8dhf", "4dma7,8 dhf", "4dma7,8dhf", "4dma78dhf", "dimethylamino-7,8-dihydroxyflavone",
+        "dma 7 8 dhf", "dma 7,8 dhf", "dma 7,8-dhf", "dma 78 dhf", "dma,7,8-dhf", "dma- dhf",
+        "dma-7 8-dhf", "dma-7,8 dhf", "dma-7,8-dhf", "dma-7,8dhf", "dma-78dhf", "dma-dhf", "eutropoflavin"
       ],
       "excluded_aliases": [],
-      "prefilter_terms": ["4dma", "4'-dma", "4-dma", "eutropoflavin"]
+      "prefilter_terms": [
+        "4dma", "4'-dma", "4-dma", "eutropoflavin", "4 dma", "4 'dma", "4' dma", "4'dma", "4- dma",
+        "4’-dma", "4′-dma", "dimethylamino", "dma-dhf", "dma dhf"
+      ]
     },
     {
       "slug": "semax",
@@ -59,9 +92,13 @@
       "tier": "BDNF/TrkB related",
       "analysis_role": "primary",
       "mechanism_note": "Peptide reported to alter BDNF and TrkB expression in preclinical work",
-      "aliases": ["semax", "na-semax", "n-acetyl semax", "n-acetyl-semax", "semax amidate"],
+      "aliases": [
+        "semax", "na-semax", "n-acetyl semax", "n-acetyl-semax", "semax amidate"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["semax"]
+      "prefilter_terms": [
+        "semax"
+      ]
     },
     {
       "slug": "cerebrolysin",
@@ -70,9 +107,13 @@
       "tier": "BDNF/TrkB related",
       "analysis_role": "primary",
       "mechanism_note": "Neurotrophic peptide mixture with pathway evidence that varies by model",
-      "aliases": ["cerebrolysin"],
+      "aliases": [
+        "cerebrolysin"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["cerebrolysin"]
+      "prefilter_terms": [
+        "cerebrolysin"
+      ]
     },
     {
       "slug": "selank",
@@ -81,9 +122,13 @@
       "tier": "BDNF/TrkB related",
       "analysis_role": "primary",
       "mechanism_note": "Peptide comparator with indirect neurotrophic-pathway rationale",
-      "aliases": ["selank", "na-selank", "n-acetyl selank", "n-acetyl-selank"],
+      "aliases": [
+        "selank", "na-selank", "n-acetyl selank", "n-acetyl-selank"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["selank"]
+      "prefilter_terms": [
+        "selank"
+      ]
     },
     {
       "slug": "nsi-189",
@@ -92,9 +137,13 @@
       "tier": "broader neurotrophic",
       "analysis_role": "secondary",
       "mechanism_note": "Proneurogenic comparator without assuming direct TrkB agonism",
-      "aliases": ["nsi-189", "nsi189", "nsi 189"],
+      "aliases": [
+        "nsi-189", "nsi189", "nsi 189"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["nsi-189", "nsi189", "nsi 189"]
+      "prefilter_terms": [
+        "nsi-189", "nsi189", "nsi 189"
+      ]
     },
     {
       "slug": "dihexa",
@@ -103,9 +152,13 @@
       "tier": "broader neurotrophic",
       "analysis_role": "secondary",
       "mechanism_note": "HGF/c-Met neurotrophic comparator with a distinct proximal mechanism",
-      "aliases": ["dihexa"],
+      "aliases": [
+        "dihexa"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["dihexa"]
+      "prefilter_terms": [
+        "dihexa"
+      ]
     },
     {
       "slug": "lions-mane",
@@ -115,16 +168,13 @@
       "analysis_role": "secondary",
       "mechanism_note": "Heterogeneous mushroom and erinacine product class used as an indirect neurotrophic comparator",
       "aliases": [
-        "lion's mane",
-        "lion’s mane",
-        "lions mane",
-        "lion mane",
-        "hericium erinaceus",
-        "erinacine",
+        "lion's mane", "lion’s mane", "lions mane", "lion mane", "hericium erinaceus", "erinacine",
         "erinamax"
       ],
       "excluded_aliases": [],
-      "prefilter_terms": ["lion's mane", "lion’s mane", "lions mane", "lion mane", "hericium", "erinacine", "erinamax"]
+      "prefilter_terms": [
+        "lion's mane", "lion’s mane", "lions mane", "lion mane", "hericium", "erinacine", "erinamax"
+      ]
     },
     {
       "slug": "9-mbc",
@@ -133,9 +183,19 @@
       "tier": "broader neurotrophic",
       "analysis_role": "exploratory",
       "mechanism_note": "Lower-volume exploratory neurorestorative comparator",
-      "aliases": ["9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"],
+      "aliases": [
+        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline", "9-me-bc", "9mebc", "9 me bc",
+        "9-methyl-β-carboline", "9me-bc", "9me bc", "9-mebc", "9 mebc", "9 me-bc",
+        "9 methyl beta carboline", "9-methyl-betacarboline", "9-methyl-b-carboline", "9-me bc",
+        "9-me-b-carboline", "9-methyl beta carboline", "9-methyl-bc", "9 -me-bc", "9-me-βc", "9-me-b-c",
+        "9-methyl-beta carboline", "9-methylbetacarboline", "9-methyl-β-carbolines",
+        "9 methyl betacarboline", "9mebcarboline", "9-me -bc"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"]
+      "prefilter_terms": [
+        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline", "9-me", "9me", "9 me", "9 -me", "9-methyl",
+        "9 methyl"
+      ]
     },
     {
       "slug": "bpc-157",
@@ -144,9 +204,13 @@
       "tier": "negative control",
       "analysis_role": "control",
       "mechanism_note": "Same adjacent peptide/nootropic market without a BDNF/TrkB cohort claim",
-      "aliases": ["bpc-157", "bpc157", "bpc 157", "body protection compound"],
+      "aliases": [
+        "bpc-157", "bpc157", "bpc 157", "body protection compound"
+      ],
       "excluded_aliases": [],
-      "prefilter_terms": ["bpc-157", "bpc157", "bpc 157", "body protection compound"]
+      "prefilter_terms": [
+        "bpc-157", "bpc157", "bpc 157", "body protection compound"
+      ]
     }
   ]
 }

@@ -15,7 +15,7 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from utilities.alias_matching import has_unexcluded_alias
+from utilities.alias_matching import alias_spans, has_unexcluded_alias
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_COHORT_CONFIG = HERE / "comparator_cohort.json"
@@ -40,6 +40,7 @@ class ComparatorSpec(BaseModel):
     mechanism_note: str = Field(min_length=1)
     aliases: tuple[str, ...] = Field(min_length=1)
     excluded_aliases: tuple[str, ...] = ()
+    excluded_compounds: tuple[str, ...] = ()  # slugs whose aliases must not count as this compound
     prefilter_terms: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -58,6 +59,10 @@ class ComparatorSpec(BaseModel):
     def matches(self, text: str) -> bool:
         """Return whether text contains a non-excluded mention of this compound."""
         return has_unexcluded_alias(text, self.aliases, self.excluded_aliases)
+
+    def spans(self, text: str) -> tuple[tuple[int, int], ...]:
+        """Return the surviving mention spans of this compound in text."""
+        return alias_spans(text, self.aliases, self.excluded_aliases)
 
 
 class ComparatorCohort(BaseModel):
@@ -81,7 +86,24 @@ class ComparatorCohort(BaseModel):
         targets = [compound for compound in self.compounds if compound.analysis_role == "target"]
         if len(targets) != 1 or targets[0].slug != self.target_slug:
             raise ValueError("Cohort must have exactly one matching target")
+        by_slug = {compound.slug: compound for compound in self.compounds}
+        for compound in self.compounds:
+            unknown = set(compound.excluded_compounds) - set(by_slug)
+            if unknown:
+                raise ValueError(f"{compound.slug}: unknown excluded_compounds {sorted(unknown)}")
         return self
+
+    def resolved(self) -> "ComparatorCohort":
+        """Return a copy whose excluded_aliases include every excluded compound's aliases."""
+        by_slug = {compound.slug: compound for compound in self.compounds}
+        compounds = tuple(
+            compound.model_copy(update={"excluded_aliases": tuple(dict.fromkeys(
+                list(compound.excluded_aliases)
+                + [alias for slug in compound.excluded_compounds for alias in by_slug[slug].aliases]
+            ))})
+            for compound in self.compounds
+        )
+        return self.model_copy(update={"compounds": compounds})
 
     @property
     def target(self) -> ComparatorSpec:
@@ -126,7 +148,7 @@ class ComparatorCorpusManifest(BaseModel):
 
 def load_comparator_cohort(path: Path = DEFAULT_COHORT_CONFIG) -> ComparatorCohort:
     """Load and validate the versioned comparator cohort."""
-    return ComparatorCohort.model_validate_json(path.read_text(encoding="utf-8"))
+    return ComparatorCohort.model_validate_json(path.read_text(encoding="utf-8")).resolved()
 
 
 def sha256_file(path: Path) -> str:

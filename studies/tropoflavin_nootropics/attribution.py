@@ -11,7 +11,6 @@ from pydantic import TypeAdapter
 from studies.tropoflavin_nootropics.build_variable_corpus import UserCorpusRecord
 from studies.tropoflavin_nootropics.comparator_support import ComparatorSpec
 from studies.tropoflavin_nootropics.study_support import MassDosage, parse_mass_dosage
-from utilities.alias_matching import compile_alias_pattern
 
 MAX_ATTRIBUTION_DISTANCE = 400
 _DOSE_PATTERN = re.compile(
@@ -56,20 +55,7 @@ def load_author_segments(directory: Path) -> dict[str, tuple[str, ...]]:
 
 
 def _compound_spans(text: str, compound: ComparatorSpec) -> tuple[tuple[int, int], ...]:
-    include = tuple(compile_alias_pattern(compound.aliases).finditer(text))
-    if not compound.excluded_aliases:
-        return tuple(match.span() for match in include)
-    excluded = tuple(
-        match.span()
-        for match in compile_alias_pattern(compound.excluded_aliases).finditer(text)
-    )
-    return tuple(
-        match.span()
-        for match in include
-        if not any(
-            start <= match.start() and match.end() <= end for start, end in excluded
-        )
-    )
+    return compound.spans(text)
 
 
 def _nearby(
