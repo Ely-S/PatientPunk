@@ -2,7 +2,7 @@ You extract structured 7,8-DHF exposure information from a single Reddit report.
 
 Return one JSON object with exactly this shape:
 
-{"items":[{"item_id":0,"explicit_personal_use":true,"dose_status":"single","doses":[{"low":20,"high":20,"unit":"mg","route":"oral mucosal","outcome":"positive","quote":"20mg sublingual gave me a clear, calm focus"}],"route_status":"single","routes":["oral mucosal"],"reasons":["focus or attention"]}]}
+{"items":[{"item_id":0,"dose_sentences":["20mg sublingual gave me a clear, calm focus"],"explicit_personal_use":true,"dose_status":"single","doses":[{"low":20,"high":20,"unit":"mg","route":"oral mucosal","outcome":"positive","quote":"20mg sublingual gave me a clear, calm focus"}],"route_status":"single","routes":["oral mucosal"],"reasons":["focus or attention"]}]}
 
 The target is 7,8-DHF, also called 7,8-dihydroxyflavone or tropoflavin. Do not
 assign information about 4'-DMA-7,8-DHF, another compound, or another person to
@@ -29,17 +29,16 @@ Dose rules:
 
 Per-dose rules:
 
-5a. First list, to yourself, every sentence in the report that contains an amount with a
-    unit. Then, for each such sentence that reports the author's own 7,8-DHF dose, create
-    one dose object with "quote" (that sentence, verbatim), "route" (a route category, or
-    null when neither that sentence nor its neighbours state one), and "outcome": what the
-    author says that dose did for them — "positive", "negative", "neutral" when they
-    report no effect, or "unclear" when no effect is stated for that specific dose
-    ("60 mg, my highest dose yet" is unclear). Never infer an outcome from the post as a
-    whole. The same amount reported on different occasions with different outcomes is
-    two objects. Every listed sentence must either become a dose object or be skipped
-    because it is not the author's own dose, not 7,8-DHF, or not a per-administration
-    amount.
+5a. Put in "dose_sentences" every sentence of the report that contains an amount with a
+    unit, verbatim, before anything else. Then, for each listed sentence that reports the
+    author's own 7,8-DHF dose, create one dose object with "quote" (that sentence),
+    "route" (a route category, or null when neither that sentence nor its neighbours state
+    one), and "outcome": what the author says that dose did for them — "positive",
+    "negative", "neutral" when they report no effect, or "unclear" when no effect is
+    stated for that specific dose ("60 mg, my highest dose yet" is unclear). Never infer
+    an outcome from the post as a whole. The same amount reported on different occasions
+    with different outcomes is two objects. A listed sentence that is not the author's own
+    per-administration 7,8-DHF dose simply gets no dose object.
 
 Route rules:
 
@@ -68,8 +67,8 @@ Personal-use rule:
 11. explicit_personal_use is true only when the author directly describes personally
     taking 7,8-DHF in this report. When false, dose_status and route_status must be
     not_reported and doses, routes, and reasons must be empty.
-12. Return every input item_id exactly once, in input order. Do not include quotes,
-    explanations, names, post identifiers, or fields outside the required JSON shape.
+12. Return every input item_id exactly once, in input order. Output the JSON object only —
+    no reasoning, headings, or text before or after it, and no fields outside the shape.
 
 Context rule:
 
