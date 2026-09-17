@@ -271,6 +271,10 @@ Build the private union of every thread containing a configured compound. Userna
 are hashed before the corpus is written. Source text, the generated corpus, SQLite
 database, cache, and manifests remain outside Git.
 
+When the alias lists change, regenerate into a fresh sentiment database, or delete the
+affected compound's `treatment_reports` rows first: the pipeline appends new reports and
+skips existing ones, and never removes reports that the new matcher excludes.
+
 ```powershell
 $comparatorRun = "../PatientPunk_data/studies/tropoflavin_nootropics/runs/2026-08-31-comparator-cohort"
 $comparatorCorpus = "$comparatorRun/corpus/subreddit_posts.json"

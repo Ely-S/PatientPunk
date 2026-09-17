@@ -27,8 +27,11 @@ def compile_alias_pattern(aliases: Iterable[str]) -> re.Pattern[str]:
     )
     if not normalized:
         raise ValueError("At least one non-empty alias is required")
+    # A straight quote in an alias also matches its curly look-alikes, so the pattern
+    # is safe on un-normalised text too (alias_spans normalises anyway).
+    quote_class = "['\u2019\u2032\u2018\u0060\u00b4]"
     return re.compile(
-        r"\b(?:" + "|".join(re.escape(alias) for alias in normalized) + r")\b",
+        r"\b(?:" + "|".join(re.escape(alias).replace("'", quote_class) for alias in normalized) + r")\b",
         re.IGNORECASE,
     )
 

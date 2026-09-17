@@ -1,5 +1,9 @@
-from utilities.alias_matching import compile_alias_pattern, has_unexcluded_alias
+import json
 
+import pytest
+
+from studies.tropoflavin_nootropics.comparator_support import load_comparator_cohort, prefilter_hit
+from utilities.alias_matching import compile_alias_pattern, has_unexcluded_alias
 
 PARENT_ALIASES = ["7,8-dhf", "dhf", "tropoflavin"]
 DERIVATIVE_ALIASES = ["4'-dma-7,8-dhf", "4dma-7,8dhf", "eutropoflavin"]
@@ -45,13 +49,25 @@ def test_plain_parent_and_unrelated_words_match_normally() -> None:
 
 # ── Cohort spelling lists ────────────────────────────────────────────────────
 
-import pytest
-
-from studies.tropoflavin_nootropics.comparator_support import load_comparator_cohort
-from utilities.alias_matching import normalize_text
-
-COHORT = load_comparator_cohort().by_slug()
+COHORT_CONFIG = load_comparator_cohort()
+COHORT = COHORT_CONFIG.by_slug()
 PARENT, DERIVATIVE = COHORT["78dhf"], COHORT["4dma-78dhf"]
+
+
+@pytest.mark.parametrize("alias", DERIVATIVE.aliases)
+def test_every_derivative_alias_is_excluded_from_parent(alias: str) -> None:
+    assert DERIVATIVE.matches(alias)
+    assert not PARENT.matches(alias)
+
+
+@pytest.mark.parametrize("alias", PARENT.aliases)
+def test_every_parent_alias_matches_parent_only(alias: str) -> None:
+    assert PARENT.matches(alias)
+    assert not DERIVATIVE.matches(alias)
+
+
+def test_direct_pattern_matches_curly_apostrophe_text() -> None:
+    assert compile_alias_pattern(["4'-dma"]).search("took 4\u2019-DMA today")
 
 
 @pytest.mark.parametrize(
@@ -93,3 +109,13 @@ def test_no_false_matches() -> None:
 def test_spans_index_the_original_text() -> None:
     text = "4’-DMA-7,8-DHF is strong; plain 7,8-DHF is subtle."
     assert [text[s:e] for s, e in PARENT.spans(text)] == ["7,8-DHF"]
+
+
+@pytest.mark.parametrize("compound", COHORT_CONFIG.compounds, ids=lambda c: c.slug)
+def test_every_configured_alias_passes_the_corpus_prefilter(compound) -> None:
+    """A spelling that fails the bytes-level prefilter never reaches the matcher in a corpus build."""
+    inert = [
+        alias for alias in compound.aliases
+        if not prefilter_hit(json.dumps({"body": alias}, ensure_ascii=False).encode("utf-8"), COHORT_CONFIG)
+    ]
+    assert inert == []

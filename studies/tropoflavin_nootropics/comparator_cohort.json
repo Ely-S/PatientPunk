@@ -1,5 +1,5 @@
 {
-  "schema_id": "tropoflavin_nootropics_comparator_cohort_v1",
+  "schema_id": "tropoflavin_nootropics_comparator_cohort_v2",
   "version": 2,
   "target_slug": "78dhf",
   "compounds": [
@@ -23,49 +23,12 @@
         "7.8-dihydroxyflavone", "7.8dhf", "78 dhf", "78 dihydroxy flavone", "78-dhf",
         "78-dihydroxyflavone", "78dhf", "78dihydroxyflavone", "dhf", "tropoflavin", "tropoflavins"
       ],
-      "excluded_aliases": [
-        "4 ' -dma-7,8-dhf", "4 'dma", "4 'dma, 7'8' dhf", "4 - dma - 7'8 - dhf", "4 -dma-7, 8-dhf",
-        "4 dma", "4 dma - 7,8 dhf", "4 dma 7 8 dhf", "4 dma 7 8dhf", "4 dma 7'8 dhf", "4 dma 7'8-dhf",
-        "4 dma 7'8dhf", "4 dma 7,8 dhf", "4 dma 7,8-dhf", "4 dma 7,8dhf", "4 dma 7-8 dhf", "4 dma 7.8 dhf",
-        "4 dma 78 dhf", "4 dma 78 dihydroxy flavone", "4 dma dhf", "4 dma, 7 8 dhf", "4 dma, 7, 8 dhf",
-        "4 dma, 7,8 dhf", "4 dma, 7-8 dhf", "4 dma-7 8-dhf", "4 dma-7'8 dhf", "4 dma-7,8 dhf",
-        "4 dma-7,8- dhf", "4 dma-7,8-dhf", "4 dma-7,8dhf", "4 dma. 7 8 dhf", "4' -dma - 7,8-dhf",
-        "4' -dma-7, 8- dhf", "4' -dma-7, 8-dhf", "4' -dma-7,8-dhf", "4' dma", "4' dma 7 8 dhf",
-        "4' dma 7'8 dhf", "4' dma 7, 8 dhf", "4' dma 7,8 dhf", "4' dma 7,8-dhf",
-        "4'-dimethylamino 7,8 dihydroxyflavone", "4'-dimethylamino 7,8-dihydroxyflavone",
-        "4'-dimethylamino-7,8-dhf", "4'-dimethylamino-7,8-dihydroxyflavone", "4'-dma", "4'-dma - 7'8 dhf",
-        "4'-dma - 7,8-dhf", "4'-dma 7,8 dhf", "4'-dma 7,8-dhf", "4'-dma, 7,8-dhf", "4'-dma- 7,8- dhf",
-        "4'-dma- 7,8-dhf", "4'-dma-)7,8-dhf", "4'-dma-7 8-dhf", "4'-dma-7 8-dihydroxyflavone",
-        "4'-dma-7'8-dhf", "4'-dma-7, 8-dhf", "4'-dma-7,8 dhf", "4'-dma-7,8'-dhf", "4'-dma-7,8-dhf",
-        "4'-dma-7,8-dihydroxyflavone", "4'-dma-7,8dhf", "4'-dma-7-8-dhf",
-        "4'dimethylamino-7,8-dihydroxyflavone", "4'dma", "4'dma 7 8-dhf", "4'dma 7'8-dhf", "4'dma 7,8 dhf",
-        "4'dma 7,8-dhf", "4'dma 7,8dhf", "4'dma 7-8 dhf", "4'dma 7-8dhf", "4'dma 78dhf", "4'dma dhf",
-        "4'dma, 7,8 dhf", "4'dma-7 8-dhf", "4'dma-7'8 dhf", "4'dma-7'8'dhf", "4'dma-7'8-dhf",
-        "4'dma-7'8dhf", "4'dma-7,8 dhf", "4'dma-7,8-dhf", "4'dma-7,8dhf", "4'dma-7-8-dhf", "4'dma-7.8-dhf",
-        "4'dma7'8-dhf", "4- dma", "4- dma 7 8 dhf", "4-dimethylamino 7,8-dihydroxyflavone",
-        "4-dimethylamino-7,8-dhf", "4-dimethylamino-7,8-dihydroxyflavone", "4-dma", "4-dma , 7,8-dhf",
-        "4-dma - 7,8 dhf", "4-dma 7 8 dhf", "4-dma 7'8 dhf", "4-dma 7'8-dhf", "4-dma 7'8dhf",
-        "4-dma 7, 8 dhf", "4-dma 7,8 dhf", "4-dma 7,8- dhf", "4-dma 7,8--dhf", "4-dma 7,8-dhf",
-        "4-dma 7,8dhf", "4-dma 7-8 dhf", "4-dma 7-8' dhf", "4-dma 7-8,dhf", "4-dma 7-8-dhf",
-        "4-dma 7.8'dhf", "4-dma 7.8,dhf", "4-dma 7.8-dhf", "4-dma 78-dhf", "4-dma dhf", "4-dma'-7,8-dhf",
-        "4-dma'7-8'dhf", "4-dma)-7,8-dhf", "4-dma, 7,8-dhf", "4-dma, 7-8 dhf", "4-dma, 7-8dhf",
-        "4-dma,-7,8-dhf", "4-dma,7,8dhf", "4-dma,7-8 dhf", "4-dma- 7-8 - dhf", "4-dma-(7-8dhf",
-        "4-dma-7 8-dhf", "4-dma-7'8 dhf", "4-dma-7'8-dhf", "4-dma-7, 8 dhf", "4-dma-7, 8-dhf",
-        "4-dma-7,8 dhf", "4-dma-7,8 dihydroxyflavone", "4-dma-7,8'-dhf", "4-dma-7,8-dhf",
-        "4-dma-7,8-dihydroxy-flavone", "4-dma-7,8-dihydroxyflavone", "4-dma-7,8dhf", "4-dma-7-,8-dhf",
-        "4-dma-7-8 dhf", "4-dma-7-8-dhf", "4-dma-7-8dhf", "4-dma-78-dhf", "4-dma-78dhf", "4-dma-dhf",
-        "4-dma7,8-dhf", "4dimethylamino78dihydroxyflavone", "4dma", "4dma -78 dhf", "4dma 7 8 dhf",
-        "4dma 7 8dhf", "4dma 7'8 dhf", "4dma 7'8dhf", "4dma 7, 8 dhf", "4dma 7,8 dhf",
-        "4dma 7,8 dihydroxyflavone", "4dma 7,8-dhf", "4dma 7,8dhf", "4dma 7-8 dhf", "4dma 78 dhf",
-        "4dma 78dhf", "4dma dhf", "4dma, 7, 8 dhf", "4dma, 7,8 dhf", "4dma,7,8dhf", "4dma,dhf",
-        "4dma- 7'8' dhf", "4dma- 7,8dhf", "4dma-7'8 dhf", "4dma-7'8dhf", "4dma-7, 8-dhf", "4dma-7,8 dhf",
-        "4dma-7,8-dhf", "4dma-7,8dhf", "4dma-78-dhf", "4dma-78dhf", "4dma-dhf", "4dma7'8 dhf",
-        "4dma7'8dhf", "4dma7,8 dhf", "4dma7,8dhf", "4dma78dhf", "dimethylamino-7,8-dihydroxyflavone",
-        "dma 7 8 dhf", "dma 7,8 dhf", "dma 7,8-dhf", "dma 78 dhf", "dma,7,8-dhf", "dma- dhf",
-        "dma-7 8-dhf", "dma-7,8 dhf", "dma-7,8-dhf", "dma-7,8dhf", "dma-78dhf", "dma-dhf", "eutropoflavin"
+      "excluded_aliases": [],
+      "excluded_compounds": [
+        "4dma-78dhf"
       ],
       "prefilter_terms": [
-        "dhf", "tropoflavin", "dihydroxyflavone"
+        "dhf", "tropoflavin", "dihydroxyflavone", "dihydroxy-flavone", "dihydroxy flavone"
       ]
     },
     {
@@ -118,8 +81,8 @@
       ],
       "excluded_aliases": [],
       "prefilter_terms": [
-        "4dma", "4'-dma", "4-dma", "eutropoflavin", "4 dma", "4’-dma", "4′-dma", "dimethylamino",
-        "dma-dhf", "dma dhf"
+        "4dma", "4'-dma", "4-dma", "eutropoflavin", "4 dma", "4 'dma", "4' dma", "4'dma", "4- dma",
+        "4’-dma", "4′-dma", "dimethylamino", "dma-dhf", "dma dhf"
       ]
     },
     {
@@ -230,7 +193,8 @@
       ],
       "excluded_aliases": [],
       "prefilter_terms": [
-        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"
+        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline", "9-me", "9me", "9 me", "9 -me", "9-methyl",
+        "9 methyl"
       ]
     },
     {
