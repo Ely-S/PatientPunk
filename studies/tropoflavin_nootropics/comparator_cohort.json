@@ -221,7 +221,12 @@
       "analysis_role": "exploratory",
       "mechanism_note": "Lower-volume exploratory neurorestorative comparator",
       "aliases": [
-        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline"
+        "9-mbc", "9mbc", "9 mbc", "9-methyl-beta-carboline", "9-me-bc", "9mebc", "9 me bc",
+        "9-methyl-β-carboline", "9me-bc", "9me bc", "9-mebc", "9 mebc", "9 me-bc",
+        "9 methyl beta carboline", "9-methyl-betacarboline", "9-methyl-b-carboline", "9-me bc",
+        "9-me-b-carboline", "9-methyl beta carboline", "9-methyl-bc", "9 -me-bc", "9-me-βc", "9-me-b-c",
+        "9-methyl-beta carboline", "9-methylbetacarboline", "9-methyl-β-carbolines",
+        "9 methyl betacarboline", "9mebcarboline", "9-me -bc"
       ],
       "excluded_aliases": [],
       "prefilter_terms": [
