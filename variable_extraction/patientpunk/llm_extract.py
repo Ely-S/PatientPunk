@@ -62,6 +62,7 @@ from ._utils import (
     collect_texts_from_post,
     get_llm_client,
     parse_json_response,
+    record_response_usage,
     response_text,
     split_retry_batch,
 )
@@ -103,7 +104,11 @@ MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # single record's reply overran 8192 output tokens and got truncated mid-JSON.
 # The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
 # comfortable margin.
-MAX_TEXT_CHARS = 8_000
+#
+# Raise it only together with LLM_MAX_TOKENS -- the ceiling that bit at 30_000 was
+# the reply's, not the model's context. check_response now raises on a truncated
+# reply rather than storing half a record, so overreaching fails loudly.
+MAX_TEXT_CHARS = int(os.environ.get("LLM_MAX_TEXT_CHARS", "8000") or "8000")
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
@@ -114,6 +119,16 @@ SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # best-effort batch; split_retry_batch falls back to single calls on failure.)
 BATCH_SIZE = 1      # records per LLM call
 
+# Default priority communities, used when a schema names none of its own.
+# A schema overrides these with a "priority_subreddits" list -- see
+# resolve_priority_subreddits. Text from a priority community is sent to the model
+# FIRST, so it is what survives the MAX_TEXT_CHARS cut.
+#
+# These defaults are all long-COVID / ME-CFS communities. A study on any other
+# population that does not set priority_subreddits gets no prioritisation at all:
+# every text falls to the "other" bucket and truncation keeps whatever happened to
+# come first. That is a silent recall loss, not a crash.
+#
 # Subreddits known to contain health/chronic illness content.
 # Text from these is prioritised when building the per-record prompt so the
 # most relevant content always fits within MAX_TEXT_CHARS.
@@ -236,6 +251,7 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
                     messages=[{"role": "user", "content": user_message}],
                     **tier,
                 )
+                record_response_usage(response)
                 return response_text(check_response(response, MODEL))
             except Exception as e:
                 # Provider-agnostic retry: works whether the error is raised by the
@@ -433,14 +449,31 @@ def build_user_message(texts: list[str]) -> str:
 # TEXT COLLECTION - health subreddits prioritised
 # =============================================================================
 
-def collect_texts_from_user(user_data: dict) -> list[str]:
-    """Collect texts, health-subreddit posts first so truncation keeps the best content."""
+def resolve_priority_subreddits(schema: dict | None) -> set[str]:
+    """Communities whose text is sent to the model first.
+
+    A schema sets ``priority_subreddits`` to the communities its population posts
+    in. Falling back to HEALTH_SUBREDDITS keeps existing long-COVID studies byte
+    -identical.
+    """
+    if schema:
+        named = schema.get("priority_subreddits")
+        if named:
+            return {str(x).lower().lstrip("r/") for x in named}
+    return HEALTH_SUBREDDITS
+
+
+def collect_texts_from_user(
+    user_data: dict, priority_subreddits: set[str] | None = None
+) -> list[str]:
+    """Collect texts, priority-community posts first so truncation keeps the best content."""
+    priority = HEALTH_SUBREDDITS if priority_subreddits is None else priority_subreddits
     health_texts = []
     other_texts = []
 
     for post in user_data.get("posts", []):
         sub = post.get("subreddit", "").lower()
-        bucket = health_texts if sub in HEALTH_SUBREDDITS else other_texts
+        bucket = health_texts if sub in priority else other_texts
         if post.get("title"):
             bucket.append(post["title"])
         if post.get("body"):
@@ -448,7 +481,7 @@ def collect_texts_from_user(user_data: dict) -> list[str]:
 
     for comment in user_data.get("comments", []):
         sub = comment.get("subreddit", "").lower()
-        bucket = health_texts if sub in HEALTH_SUBREDDITS else other_texts
+        bucket = health_texts if sub in priority else other_texts
         if comment.get("body"):
             bucket.append(comment["body"])
 
@@ -513,7 +546,7 @@ def _process_one(
     if item_type == "user":
         with open(item, encoding="utf-8") as f:
             user_data = json.load(f)
-        texts = collect_texts_from_user(user_data)
+        texts = collect_texts_from_user(user_data, resolve_priority_subreddits(schema))
         author_hash = user_data.get("author_hash", "unknown")
         source = "user_history"
         post_id = None

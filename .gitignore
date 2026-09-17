@@ -13,6 +13,9 @@ __pycache__/
 build/
 dist/
 .env
+.env.*
+!.env.example
+.venv/
 
 # Runtime data — do not commit data files. Store them externally
 # (PatientPunk_data/ + S3) and provide download instructions in the README.
@@ -46,6 +49,21 @@ cache/
 
 # Database files
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Study exports are regenerated outside the checkout; only reviewed aggregates
+# in reports/ and small configuration/provenance files are published.
+studies/tropoflavin_nootropics/**/*.csv
+studies/tropoflavin_nootropics/**/*.jsonl
+studies/tropoflavin_nootropics/**/*.parquet
+studies/tropoflavin_nootropics/**/*.docx
+studies/tropoflavin_nootropics/**/*.xlsx
+studies/tropoflavin_nootropics/runs/
+studies/tropoflavin_nootropics/source*/
+studies/tropoflavin_nootropics/outputs*/
 
 # Local-only agent config + session notes (not code, not versioned in this repo)
 .cursorrules
@@ -63,3 +81,14 @@ outputs/
 # Kept in gitignored data/ + S3 and distributed to coders privately; never tracked.
 studies/rct_validation/irr_pilot/ai_labels.csv
 studies/rct_validation/irr_pilot/coding_input.csv
+
+# Canonicalisation-stage extraction output (see AGENTS.md: do not commit generated data)
+**/tagged_mentions.json
+**/canonicalized_mentions.json
+**/*_executed.ipynb
+**/*_failed.ipynb
+
+# Test coverage output
+.coverage
+coverage.xml
+htmlcov/

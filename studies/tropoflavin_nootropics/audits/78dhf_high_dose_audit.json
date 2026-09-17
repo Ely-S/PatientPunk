@@ -1,0 +1,31 @@
+{
+  "schema_id": "78dhf_high_dose_aggregate_audit_v1",
+  "source_run": "2026-09-03-side-effect-severity-linear-models",
+  "source_aggregate": "78dhf_high_dose_audit.csv",
+  "source_aggregate_sha256": "bc8320a06ddb308e8c6d362cae864e02d245fe62639d13d64f31bff8d26d3043",
+  "episode_records_sha256": "1df095a6a7a9a1a2250bd4fb32f7bf3ca20bb4f3d84ffdcf9ec44cfad63bdd37",
+  "database_sha256": {
+    "Nootropics": "47bd9f879b53356724ba0d7b6a58422ba66827bfd00d1e9db94718909339831f",
+    "Supplements": "9d49ad9ec26ff0eb751743e426df88e9bde5462a6f637c7961acfa10d706b393",
+    "Peptides": "3927c22da7bc802f6c8dee93d4ffd53f373e25d942f6a1f71b42c77c4a0cf299",
+    "NootropicsDepot": "9967720039935e1fa855fe1cdaf9f9ae123362b10e9653effdd781f49d343a7b",
+    "NooTopics": "a593595e57d70702eb8684b4de2ae69fbbcb436d975b5ff00cbd6f65cc46cace",
+    "depressionregimens": "b9c29799d6de03248f6c059122afa2f253ca7563c192d129988ae299ace65cac",
+    "StackAdvice": "53a3e303a4313143f1d778c079b9419f2d79b01e6671acde73354660af28d61d",
+    "Longevity": "471515cde8a89bdda0f6adf18816222c5e73798881840560647a102cda52ecda",
+    "Psilocybin": "2c1fe504858914b676ef6897f5dc751e84a0695a3610825dfa0265479441edc9"
+  },
+  "cohort_episodes": 1828,
+  "cohort_authors": 673,
+  "candidate_episodes": 11,
+  "candidate_authors": 9,
+  "candidate_positive_reports": 10,
+  "candidate_side_effect_reports": 1,
+  "excluded_other_compound": 4,
+  "excluded_boundary_range": 1,
+  "retained_episodes": 6,
+  "retained_authors": 4,
+  "retained_positive_reports": 5,
+  "retained_side_effect_reports": 1,
+  "retained_explicit_severity_reports": 0
+}

@@ -12,6 +12,7 @@ under `s3://patientpunk/scientific_validation/`).
 
 | Study | Folder | Status |
 |---|---|---|
+| 7,8-DHF and comparators: sentiment, exposure, and side-effect severity | [tropoflavin_nootropics](tropoflavin_nootropics/README.md) | PR #140; multi-community analyses and aggregate reports |
 | RCT historical validation | `rct_validation/` | on `main` (being relocated from `docs/RCT_historical_validation/`) |
 | &nbsp;&nbsp;└ IRR pilot (inter-coder reliability) | `rct_validation/irr_pilot/` | PR #39 |
 | FDA letter analysis (LDN / Mestinon RWE) | `fda_letter/` | PR #52 |

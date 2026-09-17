@@ -6,6 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 
 from dotenv import load_dotenv
 # Load .env from project root. override=False so explicitly-exported
@@ -33,13 +34,14 @@ class PipelineConfig:
     client: anthropic.Anthropic
     output_dir: Path
     db_path: Path
-    limit: int = 100
+    limit: int | None = 100
     reclassify: bool = False
     max_upstream_chars: int | None = None  # None = unlimited; truncate upstream comment text to N chars
     max_upstream_depth: int | None = None  # None = unlimited; max upstream hops for drug context
     workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
+    drug_excluded_aliases: list[str] | None = None  # Longer compounds that must not count as target mentions
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -84,6 +86,7 @@ elif _has_anthropic:
 else:
     LLM_PROVIDER = "anthropic"  # default for backward compatibility
 
+_API_BASE: str | None
 if LLM_PROVIDER == "openrouter":
     _DEFAULT_FAST = "anthropic/claude-haiku-4.5"
     _DEFAULT_STRONG = "anthropic/claude-sonnet-4.6"
@@ -95,6 +98,39 @@ else:
 
 MODEL_FAST = os.environ.get("MODEL_FAST", _DEFAULT_FAST)
 MODEL_STRONG = os.environ.get("MODEL_STRONG", _DEFAULT_STRONG)
+
+_USAGE_LOCK = Lock()
+_LLM_USAGE = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
+def _record_llm_usage(usage) -> None:
+    """Accumulate provider-reported token usage without recording prompts."""
+    if usage is None:
+        return
+    prompt_tokens = int(
+        getattr(usage, "prompt_tokens", None)
+        or getattr(usage, "input_tokens", None)
+        or 0
+    )
+    completion_tokens = int(
+        getattr(usage, "completion_tokens", None)
+        or getattr(usage, "output_tokens", None)
+        or 0
+    )
+    total_tokens = int(getattr(usage, "total_tokens", None) or 0)
+    if not total_tokens:
+        total_tokens = prompt_tokens + completion_tokens
+    with _USAGE_LOCK:
+        _LLM_USAGE["requests"] += 1
+        _LLM_USAGE["prompt_tokens"] += prompt_tokens
+        _LLM_USAGE["completion_tokens"] += completion_tokens
+        _LLM_USAGE["total_tokens"] += total_tokens
+
+
+def get_llm_usage_snapshot() -> dict[str, int]:
+    """Return an aggregate copy of provider-reported usage for this process."""
+    with _USAGE_LOCK:
+        return dict(_LLM_USAGE)
 
 
 # ── Git ──────────────────────────────────────────────────────────────────────
@@ -144,6 +180,11 @@ def get_git_commit() -> str:
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+LLM_REASONING_MODE = (
+    "off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF
+    else "on" if LLM_PROVIDER == "openrouter"
+    else "not_applicable"
+)
 
 
 class _ORStream:
@@ -155,13 +196,14 @@ class _ORStream:
         self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
         return self
 
-    def __exit__(self, *exc) -> bool:
-        return False
+    def __exit__(self, *exc) -> None:
+        return None
 
     def get_final_message(self):
         parts: list[str] = []
         finish = None
         for chunk in self._stream:
+            _record_llm_usage(getattr(chunk, "usage", None))
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -189,7 +231,8 @@ class _ORMessages:
             body.setdefault("reasoning", {"effort": "none"})
         return _ORStream(self._client, model=model, messages=oai,
                          max_tokens=max_tokens, temperature=temperature,
-                         extra_body=body)
+                         extra_body=body,
+                         stream_options={"include_usage": True})
 
 
 class _ORClient:
@@ -293,6 +336,8 @@ def resolve_aliases(config: "PipelineConfig") -> tuple[str, list[str]]:
     Uses config.drug_aliases if set (hand-curated list); otherwise falls back
     to get_drug_aliases (LLM lookup + disk cache). Target is always included.
     """
+    if config.drug is None:
+        raise ValueError("A target drug is required to resolve aliases")
     target = config.drug.strip().lower()
     if config.drug_aliases is not None:
         aliases = [a.lower().strip() for a in config.drug_aliases if a.strip()]
@@ -329,8 +374,14 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 RETRY_DELAYS = [2, 5, 15, 30]
 
 # OpenRouter can report upstream failures inside a stream after returning HTTP 200.
-IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
-                     "no instances available", "temporarily unavailable")
+IN_BAND_TRANSIENT = (
+    "provider_unavailable",
+    "overloaded",
+    "no instances available",
+    "temporarily unavailable",
+    "stream failed",
+    "upstream error",
+)
 
 # Retry truncated replies with progressively larger output ceilings.
 BUDGET_MULTIPLIERS = (1, 2, 4, 8)
@@ -346,12 +397,12 @@ def is_transient_failure(exc: BaseException) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):
         return True
-    # The SDK raises in-band provider failures as APIStatusError. Match their body,
-    # but never retry a 4xx request.
-    if isinstance(exc, anthropic.APIStatusError) and not (
-            isinstance(status, int) and 400 <= status < 500):
-        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
-    return False
+    # Providers can surface an upstream failure through either SDK after the HTTP
+    # request has succeeded. Match the provider message across SDK exception types,
+    # but never retry a deterministic 4xx response.
+    if isinstance(status, int) and 400 <= status < 500:
+        return False
+    return any(token in str(exc).lower() for token in IN_BAND_TRANSIENT)
 
 
 def llm_call(
@@ -400,6 +451,7 @@ def llm_call(
             prompt=prompt,
             temperature=0.0,
             max_tokens=budget,
+            request_variant={"reasoning_mode": LLM_REASONING_MODE},
             call_fn=lambda: _request_with_transport_retries(budget),
         )
 

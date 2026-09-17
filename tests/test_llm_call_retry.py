@@ -40,11 +40,21 @@ def _in_band(status: int) -> anthropic.APIStatusError:
         (_status(429), True),
         (_status(503), True),
         (_in_band(200), True),
+        (RuntimeError("Upstream error from provider: stream failed"), True),
         (_status(402), False),
         (LLMResponseError("truncated at max_tokens"), False),
         (_in_band(400), False),
     ],
-    ids=["transport", "rate-limit", "server", "in-band", "billing", "truncated", "client"],
+    ids=[
+        "transport",
+        "rate-limit",
+        "server",
+        "in-band",
+        "provider-stream",
+        "billing",
+        "truncated",
+        "client",
+    ],
 )
 def test_transient_failure_classification(exc, expected):
     assert is_transient_failure(exc) is expected

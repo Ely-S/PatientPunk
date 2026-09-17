@@ -587,6 +587,22 @@ class TestSchemaFromMinimalFile:
 # pipeline -- config and result
 # =============================================================================
 
+def test_codebook_extension_override_replaces_base_field() -> None:
+    from patientpunk.codebook import build_field_registry
+
+    registry = build_field_registry(
+        {"base_fields": {"medications": {"description": "base"}}},
+        {
+            "extension_fields": {
+                "medications": {"description": "study-specific", "confidence": "high"}
+            }
+        },
+    )
+    rows = [row for row in registry if row["field"] == "medications"]
+    assert len(rows) == 1
+    assert rows[0]["description"] == "study-specific"
+
+
 class TestPipelineConfig:
     def test_defaults(self, tmp_path):
         cfg = PipelineConfig(schema_path=tmp_path / "s.json")
@@ -2546,6 +2562,52 @@ class TestUntrustedTextWrapping:
         assert msg.count("</patient_text>") == 1
         assert "[TRUNCATED]" in msg
 
+    def test_the_cap_is_the_one_that_is_configured(self, monkeypatch):
+        """An aggregated patient can run to 50k chars, so the cap decides how much
+        of them is read at all -- it has to be settable without a code edit."""
+        import patientpunk.llm_extract as m
+        monkeypatch.setattr(m, "MAX_TEXT_CHARS", 100)
+        assert "[TRUNCATED]" in m.build_user_message(["x" * 150])
+        monkeypatch.setattr(m, "MAX_TEXT_CHARS", 500)
+        assert "[TRUNCATED]" not in m.build_user_message(["x" * 150])
+
+    def test_the_cap_reads_its_env_var(self, monkeypatch):
+        import importlib
+        import patientpunk.llm_extract as m
+        monkeypatch.setenv("LLM_MAX_TEXT_CHARS", "1234")
+        try:
+            assert importlib.reload(m).MAX_TEXT_CHARS == 1234
+        finally:
+            monkeypatch.delenv("LLM_MAX_TEXT_CHARS")
+            importlib.reload(m)   # module is shared; restore the default
+
+    def test_priority_subreddits_default_to_the_health_set(self):
+        from patientpunk.llm_extract import HEALTH_SUBREDDITS, resolve_priority_subreddits
+        assert resolve_priority_subreddits(None) == HEALTH_SUBREDDITS
+        assert resolve_priority_subreddits({}) == HEALTH_SUBREDDITS
+        assert resolve_priority_subreddits({"priority_subreddits": []}) == HEALTH_SUBREDDITS
+
+    def test_a_schema_can_name_its_own_priority_subreddits(self):
+        from patientpunk.llm_extract import resolve_priority_subreddits
+        got = resolve_priority_subreddits(
+            {"priority_subreddits": ["Nootropics", "r/StackAdvice"]})
+        assert got == {"nootropics", "stackadvice"}
+
+    def test_priority_subreddits_decide_what_survives_truncation(self):
+        """The relevant comment must be sent first, or the cap can cut it.
+
+        Without a priority set naming the study's own community, every text
+        falls to the "other" bucket and ordering does nothing -- the recall
+        loss that motivated this.
+        """
+        from patientpunk.llm_extract import collect_texts_from_user
+        user = {
+            "posts": [{"subreddit": "AskReddit", "title": "noise", "body": "more noise"}],
+            "comments": [{"subreddit": "Nootropics", "body": "I took 25mg sublingually"}],
+        }
+        assert collect_texts_from_user(user)[0] == "noise"
+        assert collect_texts_from_user(user, {"nootropics"})[0] == "I took 25mg sublingually"
+
     def test_discovery_prompts_carry_the_same_guard(self):
         from patientpunk.discover import build_discovery_prompt
         p = build_discovery_prompt(["age", "conditions"])
@@ -3114,6 +3176,29 @@ class TestRunExportCsv:
         row = next(iter(csv.DictReader(dest.open(encoding="utf-8"))))
         assert row["age"] == "34"           # first file wins; not clobbered
         assert row["conditions"] == "POTS"  # gap still filled from the second
+
+
+class TestProvenanceRecordsItsCommit:
+    def test_commit_is_read_without_shelling_out(self, monkeypatch):
+        """The pipeline is subprocess-free; the commit must come from .git itself."""
+        import subprocess
+        from patientpunk.pipeline import _git_commit
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("no subprocess"))
+        got = _git_commit()
+        assert got is None or (len(got) == 40 and all(c in "0123456789abcdef" for c in got))
+
+    def test_commit_lookup_survives_a_missing_checkout(self, monkeypatch, tmp_path):
+        import patientpunk.pipeline as m
+        monkeypatch.setattr(m, "PACKAGE_ROOT", tmp_path)
+        assert m._git_commit() is None
+
+    def test_provenance_carries_commit_and_cap(self):
+        """A record that cannot name its code or its text cap is not traceable."""
+        import inspect
+        from patientpunk.pipeline import Pipeline
+        src = inspect.getsource(Pipeline.run)
+        for key in ('"commit"', '"max_text_chars"', '"extracted_at"'):
+            assert key in src, key
 
 
 class TestPipelineNoSubprocess:

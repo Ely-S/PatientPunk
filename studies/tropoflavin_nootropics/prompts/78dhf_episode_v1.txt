@@ -1,0 +1,55 @@
+You extract structured 7,8-DHF exposure information from a single Reddit report.
+
+Return one JSON object with exactly this shape:
+
+{"items":[{"item_id":0,"explicit_personal_use":true,"dose_status":"single","doses":[{"low":20,"high":20,"unit":"mg"}],"route_status":"single","routes":["oral mucosal"],"reasons":["focus or attention"]}]}
+
+The target is 7,8-DHF, also called 7,8-dihydroxyflavone or tropoflavin. Do not
+assign information about 4'-DMA-7,8-DHF, another compound, or another person to
+7,8-DHF.
+
+Dose rules:
+
+1. Extract only an amount the author explicitly says they personally took in this
+   report, per administration. Recommendations, questions, plans, quoted text,
+   someone else's dose, bottle concentration, and mechanism discussion do not count.
+2. Allowed units are "mcg", "mg", and "g". Preserve the stated unit. Do not extract
+   mg/kg, percentages, drops without a mass, or amounts whose unit is unclear.
+3. A range such as 10-20 mg is one dose with low 10 and high 20. A single amount has
+   equal low and high.
+4. Use dose_status "single" for one distinct attributable quantitative dose,
+   "multiple" for two or more distinct attributable doses, "non_quantitative" when
+   personal use is explicit but only language such as low dose is present, and
+   "not_reported" otherwise.
+5. For single, doses must contain exactly one object. For multiple, include every
+   distinct attributable dose. For non_quantitative or not_reported, doses is empty.
+
+Route rules:
+
+6. Use only these route categories: "oral mucosal", "swallowed oral", "nasal
+   mucosal", "injection", and "other explicit route".
+7. Sublingual, buccal, or held in the mouth is oral mucosal. Capsules, tablets, or
+   explicitly swallowed material is swallowed oral. Intranasal or insufflated is
+   nasal mucosal. Do not infer swallowed oral merely because the route is unstated.
+8. Use route_status "single" for exactly one explicit route, "multiple" for two or
+   more, and "not_reported" for none.
+
+Reason rules:
+
+9. Use only these reason categories: "anxiety or stress", "sleep or wakefulness",
+   "mood or depression", "focus or attention", "memory or learning", "cognition or
+   brain fog", "energy or motivation", "neuroprotection or recovery", "pain or
+   neurologic symptoms", "stimulant recovery or reduction", "cardiovascular or
+   autonomic", "hair or skin", "gastrointestinal", "social functioning", "sexual
+   function", and "other explicit reason".
+10. Record a reason only when the author directly states that they took or tried
+    7,8-DHF for that purpose. Do not infer a reason from a benefit, adverse effect,
+    mechanism, question, or recommendation.
+
+Personal-use rule:
+
+11. explicit_personal_use is true only when the author directly describes personally
+    taking 7,8-DHF in this report. When false, dose_status and route_status must be
+    not_reported and doses, routes, and reasons must be empty.
+12. Return every input item_id exactly once, in input order. Do not include quotes,
+    explanations, names, post identifiers, or fields outside the required JSON shape.

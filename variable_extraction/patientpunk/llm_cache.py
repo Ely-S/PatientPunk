@@ -27,7 +27,7 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
@@ -161,6 +161,7 @@ def make_key(
     prompt: str,
     temperature: float,
     max_tokens: int,
+    request_variant: dict[str, Any] | None = None,
 ) -> str:
     """SHA-256 hex digest of the canonical request payload."""
     payload = {
@@ -171,6 +172,8 @@ def make_key(
         "temperature": float(temperature),
         "max_tokens": int(max_tokens),
     }
+    if request_variant is not None:
+        payload["request_variant"] = request_variant
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -234,6 +237,7 @@ def cached_completion(
     prompt: str,
     temperature: float,
     max_tokens: int,
+    request_variant: dict[str, Any] | None = None,
     call_fn: Callable[[], str],
 ) -> str:
     """Return a cached response when enabled+hit; otherwise call ``call_fn`` and store.
@@ -250,6 +254,7 @@ def cached_completion(
         prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens,
+        request_variant=request_variant,
     )
     path = cache_path(provider, model, key)
     hit = get(path)

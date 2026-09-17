@@ -25,6 +25,7 @@ from utilities import (
 )
 from utilities.db import open_db, post_text
 from utilities.graph import find_parent_cycles
+from utilities.alias_matching import has_unexcluded_alias
 
 BATCH_SIZE = 10
 SAVE_EVERY = 5  # batches between checkpoint writes
@@ -178,15 +179,21 @@ def run_extraction(config: "PipelineConfig"):
     # the target drug + its aliases (fetched once, cached on disk).
     if config.drug:
         target, aliases = resolve_aliases(config)
-        pattern = re.compile(
-            r"\b(?:" + "|".join(re.escape(a) for a in aliases) + r")\b",
-            re.IGNORECASE,
-        )
+        excluded_aliases = config.drug_excluded_aliases or []
         id_to_drugs = {
-            item["id"]: ([target] if pattern.search(item["text"]) else [])
+            item["id"]: (
+                [target]
+                if has_unexcluded_alias(item["text"], aliases, excluded_aliases)
+                else []
+            )
             for item in all_items
         }
-        log.info(f"Substring-matched {sum(1 for v in id_to_drugs.values() if v)} posts against aliases for {target!r}.")
+        log.info(
+            "Substring-matched %d posts against aliases for %r%s.",
+            sum(1 for value in id_to_drugs.values() if value),
+            target,
+            f" with {len(excluded_aliases)} exclusions" if excluded_aliases else "",
+        )
 
         upstream_drugs = compute_upstream_mentioned_drugs(id_to_parent, id_to_drugs, config.max_upstream_depth)
         tagged = [

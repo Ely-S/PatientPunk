@@ -95,7 +95,7 @@ def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
     so the key asserted 0.0 while the provider default could differ.
     """
     from patientpunk import llm_cache
-    from utilities import LLM_PROVIDER, MODEL_FAST
+    from utilities import LLM_PROVIDER, LLM_REASONING_MODE, MODEL_FAST
 
     monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path))
     llm_cache.set_cache_enabled(True)
@@ -121,6 +121,7 @@ def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
         prompt="prompt",
         temperature=0.0,
         max_tokens=100,
+        request_variant={"reasoning_mode": LLM_REASONING_MODE},
     )
     path = llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
     assert path.exists()

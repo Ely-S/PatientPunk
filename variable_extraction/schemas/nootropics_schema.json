@@ -1,0 +1,48 @@
+{
+  "schema_id": "nootropics_v1",
+  "_description": "r/Nootropics extraction. Base clinical fields only — the r/covidlonghaulers extensions (infection_count, long_covid_duration_months) do not apply to a healthy-user nootropics population.",
+  "_version": 1,
+  "_target_subreddit": "r/Nootropics",
+  "include_base_fields": [
+    "age",
+    "sex_gender",
+    "location_country",
+    "conditions",
+    "onset_trigger",
+    "medications",
+    "dosage",
+    "treatment_outcome",
+    "procedures",
+    "work_disability_status",
+    "mental_health",
+    "prior_infections",
+    "functional_status_tier",
+    "social_impact",
+    "alternative_treatments",
+    "dietary_interventions",
+    "misdiagnosis",
+    "illness_duration",
+    "illness_trajectory",
+    "fatigue_pem",
+    "cognitive_neurological",
+    "cardiovascular_autonomic",
+    "pain",
+    "sleep",
+    "other_symptoms"
+  ],
+  "extension_fields": {
+    "medications": {
+      "description": "Every distinct compound the patient conveys they took -- prescription drugs, over-the-counter drugs, supplements, peptides, nootropics, and investigational or research compounds alike. Extract a compound even when it is unfamiliar, experimental, sold only by online vendors, not an approved drug, or named only by an abbreviation, an acronym, or a chemical name. Examples: LDN, gabapentin, magnesium, noopept, phenylpiracetam, bromantane, agmatine. When the patient lists a stack or regimen, extract EVERY item in that list -- do not summarise it, do not keep only the recognisable names, and do not stop early.",
+      "confidence": "high",
+      "notes": "Overrides the base description, whose examples are all long-COVID drugs. Against this population that wording dropped research chemicals the model had already read: of 42 authors who discuss 7,8-DHF and produced no record of it, 36 had the compound inside the input window. Recall is bought at some cost to attribution -- corroborate an extracted dose against text near the compound before trusting it."
+    }
+  },
+  "priority_subreddits": [
+    "Nootropics",
+    "StackAdvice",
+    "NootropicsDepot",
+    "Supplements",
+    "Peptides",
+    "AfinilCafe"
+  ]
+}

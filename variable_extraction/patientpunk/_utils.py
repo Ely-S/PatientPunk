@@ -46,6 +46,7 @@ import csv
 import json
 import os
 from pathlib import Path
+from threading import Lock
 from types import SimpleNamespace
 
 import httpx
@@ -184,6 +185,40 @@ MODEL_STRONG = _CFG["model_strong"]
 LLM_TEMPERATURE = _CFG["temperature"]
 LLM_SERVICE_TIER = _CFG["service_tier"]
 
+_USAGE_LOCK = Lock()
+_LLM_USAGE = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
+def record_response_usage(response) -> None:
+    """Accumulate provider-reported token usage without retaining request text."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    prompt_tokens = int(
+        getattr(usage, "input_tokens", None)
+        or getattr(usage, "prompt_tokens", None)
+        or 0
+    )
+    completion_tokens = int(
+        getattr(usage, "output_tokens", None)
+        or getattr(usage, "completion_tokens", None)
+        or 0
+    )
+    total_tokens = int(getattr(usage, "total_tokens", None) or 0)
+    if not total_tokens:
+        total_tokens = prompt_tokens + completion_tokens
+    with _USAGE_LOCK:
+        _LLM_USAGE["requests"] += 1
+        _LLM_USAGE["prompt_tokens"] += prompt_tokens
+        _LLM_USAGE["completion_tokens"] += completion_tokens
+        _LLM_USAGE["total_tokens"] += total_tokens
+
+
+def get_llm_usage_snapshot() -> dict[str, int]:
+    """Return an aggregate copy of provider-reported usage for this process."""
+    with _USAGE_LOCK:
+        return dict(_LLM_USAGE)
+
 
 def llm_config() -> dict:
     """Active LLM config for logging / provenance (re-read from env; no api_key)."""
@@ -245,9 +280,10 @@ def check_response(response, model: str = ""):
 # so the extraction modules work unchanged regardless of backend.
 
 class _AnthropicShapedResponse:
-    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn", usage=None) -> None:
         self.content = [SimpleNamespace(text=text)]
         self.stop_reason = stop_reason
+        self.usage = usage
 
 
 class _OpenAIMessages:
@@ -282,7 +318,11 @@ class _OpenAIMessages:
         # OpenAI spells truncation "length"; normalize to the Anthropic name so
         # check_response() works the same on both backends.
         stop_reason = "max_tokens" if choice.finish_reason == "length" else "end_turn"
-        return _AnthropicShapedResponse(choice.message.content, stop_reason)
+        return _AnthropicShapedResponse(
+            choice.message.content,
+            stop_reason,
+            getattr(resp, "usage", None),
+        )
 
 
 class _OpenAIAdapter:
