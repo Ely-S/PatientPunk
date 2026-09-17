@@ -95,6 +95,9 @@ class DoseValue(BaseModel):
     low: float = Field(gt=0)
     high: float = Field(gt=0)
     unit: DoseUnit
+    route: RouteCategory | None = None                                       # v2 prompt
+    outcome: Literal["positive", "negative", "neutral", "unclear"] | None = None
+    quote: str | None = None                                                 # verbatim sentence stating the dose
 
     @model_validator(mode="after")
     def validate_range(self) -> DoseValue:
@@ -174,7 +177,9 @@ class EpisodeItemResult(BaseModel):
             raise ValueError("Route categories must be unique")
         if len(self.reasons) != len(set(self.reasons)):
             raise ValueError("Reason categories must be unique")
-        dose_keys = {(dose.low, dose.high, dose.unit) for dose in self.doses}
+        # v1 records key on the amount alone; v2 records may repeat an amount with a
+        # different route or outcome (same dose, different occasion).
+        dose_keys = {(dose.low, dose.high, dose.unit, dose.route, dose.outcome) for dose in self.doses}
         if len(dose_keys) != len(self.doses):
             raise ValueError("Dose values must be unique")
         if not self.explicit_personal_use and (

@@ -95,6 +95,7 @@ class Episode:
     explicit_personal_use: bool
     dose_status: str
     dose_midpoints_mg: tuple[float, ...]
+    dose_pairs: tuple[tuple[float, str | None, str | None], ...]  # (midpoint mg, route, outcome) per extracted dose; v2 records only carry route/outcome
     route_status: str
     routes: tuple[RouteCategory, ...]
     reasons: tuple[ReasonCategory, ...]
@@ -223,6 +224,7 @@ def _load_cohort_episodes(
                 explicit_personal_use=record.explicit_personal_use,
                 dose_status=record.dose_status,
                 dose_midpoints_mg=tuple(dose.midpoint_mg for dose in record.doses),
+                dose_pairs=tuple((dose.midpoint_mg, dose.route, dose.outcome) for dose in record.doses),
                 route_status=record.route_status,
                 routes=record.routes,
                 reasons=record.reasons,
@@ -498,6 +500,41 @@ def _dose_rows(episodes: Sequence[Episode]) -> list[list[object]]:
     return rows
 
 
+def _pair_rows(episodes: Sequence[Episode]) -> list[list[object]]:
+    """Per-dose outcomes from v2 episode records: one unit per (episode, dose) pair.
+
+    Unlike ``_dose_rows`` this keeps titration reports, using the outcome the author
+    stated for each dose rather than the post-level sentiment. Pairs without a stated
+    outcome ("unclear" or v1 records) are excluded.
+    """
+    groups: dict[str, list[tuple[Episode, float, str]]] = {}
+    for episode in episodes:
+        if not episode.explicit_personal_use:
+            continue
+        for dose, _route, outcome in episode.dose_pairs:
+            if outcome in {"positive", "negative", "neutral", "mixed"} and dose > 0:
+                groups.setdefault(dose_band(dose).label, []).append((episode, dose, outcome))
+    rows: list[list[object]] = []
+    for label in sorted(groups, key=lambda value: dose_band(
+        statistics.median(dose for _e, dose, _o in groups[value])
+    ).order):
+        selected = groups[label]
+        positive = sum(outcome == "positive" for _e, _d, outcome in selected)
+        negative = sum(outcome == "negative" for _e, _d, outcome in selected)
+        rows.append(
+            [
+                label,
+                len(selected),
+                len({episode.author_hash for episode, _d, _o in selected}),
+                len({episode.post_id for episode, _d, _o in selected}),
+                f"{statistics.median(dose for _e, dose, _o in selected):.1f} mg",
+                _count_rate(positive, len(selected)),
+                _count_rate(negative, len(selected)),
+            ]
+        )
+    return rows
+
+
 def _category_rows(
     episodes: Sequence[Episode], category_type: Literal["route", "reason"]
 ) -> list[list[object]]:
@@ -711,6 +748,17 @@ def render_episode_report(config: EpisodeAnalysisConfig) -> str:
                 "Mapped side effect reported",
             ],
             _dose_rows(combined),
+        ),
+        (
+            "\n## Per-dose outcomes (v2 episode records)\n\n"
+            "One unit per (report, dose) pair with an outcome the author stated for that dose; "
+            "titration reports contribute every dose they describe. Post-level sentiment is not used here.\n\n"
+            + _table(
+                ["Dose band", "Pairs", "Authors", "Reports", "Median dose", "Positive at dose", "Negative at dose"],
+                _pair_rows(combined),
+            )
+            if any(outcome for episode in combined for _d, _r, outcome in episode.dose_pairs)
+            else ""
         ),
         "## Combined route descriptives\n\n"
         + _table(
