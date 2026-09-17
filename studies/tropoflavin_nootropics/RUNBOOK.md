@@ -509,6 +509,27 @@ receives opaque item numbers, not author or post identifiers. The external recor
 retain identifiers only so the analysis can join each extraction back to the exact
 source report.
 
+The v2/v3 prompts (`prompts/78dhf_episode_v3.txt`) attach a route, an outcome and a
+verbatim quote to every dose. For them set `prompt_path`, `parent_chars` (the parent
+post is sent as context, default 1500 characters), `solo_above_chars` (longer reports go
+one per call, default 3000), `require_dose_quotes: true` and `max_single_dose_mg`
+(default 500) in the extraction config. A dose whose quote is not found verbatim in the
+report, or that exceeds the bound, is dropped at record time and listed in
+`dose_check_drops.jsonl` next to the records.
+
+To put every extracted dose into the study database as one row per dose per report
+(table `pipeline_a_doses`, replaced on each load and registered in
+`combined_pipeline_manifest` when that table exists), run per subreddit:
+
+```powershell
+uv run --frozen python -m `
+  studies.tropoflavin_nootropics.load_episode_doses `
+  --database $combinedDb `
+  --episode-records $episodeRecords `
+  --episode-manifest $episodeManifest `
+  --subreddit Nootropics
+```
+
 Create an external analysis config containing `cohorts`, `episode_records`,
 `episode_manifest`, `output_path`, `minimum_model_episodes`,
 `minimum_model_authors`, and `minimum_community_episodes`. Generate and scan the

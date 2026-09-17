@@ -238,3 +238,106 @@ def test_dose_checks_drop_foreign_quotes_and_implausible_amounts() -> None:
         require_quote=True,
     )
     assert emptied.doses == () and emptied.dose_status == "non_quantitative"
+
+
+def test_load_episode_doses_writes_one_row_per_dose(tmp_path: Path) -> None:
+    import json
+    import sqlite3
+
+    from studies.tropoflavin_nootropics.extract_78dhf_episodes import (
+        DoseValue,
+        EpisodeRecord,
+    )
+    from studies.tropoflavin_nootropics.load_episode_doses import (
+        DOSE_TABLE,
+        load_episode_doses,
+    )
+
+    author = "0123456789abcdef0123456789abcdef"
+    database = tmp_path / "study.db"
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE users (user_id TEXT PRIMARY KEY, source_subreddit TEXT NOT NULL,
+                scraped_at INTEGER NOT NULL);
+            CREATE TABLE posts (post_id TEXT PRIMARY KEY, title TEXT, parent_id TEXT,
+                user_id TEXT NOT NULL REFERENCES users(user_id), body_text TEXT NOT NULL,
+                flair TEXT, post_date INTEGER, scraped_at INTEGER NOT NULL, metadata TEXT);
+            CREATE TABLE treatment (id INTEGER PRIMARY KEY, canonical_name TEXT NOT NULL UNIQUE,
+                treatment_class TEXT, aliases TEXT, notes TEXT);
+            CREATE TABLE extraction_runs (run_id INTEGER PRIMARY KEY, run_at INTEGER NOT NULL,
+                commit_hash TEXT NOT NULL, extraction_type TEXT NOT NULL, config TEXT NOT NULL);
+            CREATE TABLE treatment_reports (report_id INTEGER PRIMARY KEY,
+                run_id INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+                post_id TEXT NOT NULL REFERENCES posts(post_id),
+                user_id TEXT REFERENCES users(user_id),
+                drug_id INTEGER NOT NULL REFERENCES treatment(id),
+                sentiment TEXT NOT NULL, signal_strength TEXT NOT NULL, side_effects TEXT);
+            CREATE TABLE combined_pipeline_manifest (pipeline TEXT PRIMARY KEY,
+                status TEXT NOT NULL, record_count INTEGER NOT NULL, source_artifact TEXT NOT NULL,
+                imported_at TEXT NOT NULL, details_json TEXT NOT NULL);
+            """
+        )
+        connection.execute("INSERT INTO users VALUES (?, 'Nootropics', 0)", (author,))
+        connection.executemany(
+            "INSERT INTO posts VALUES (?, NULL, NULL, ?, 'text', NULL, 0, 0, NULL)",
+            [("p1", author), ("p2", author)],
+        )
+        connection.execute("INSERT INTO treatment VALUES (1, '7,8-dhf', NULL, NULL, NULL)")
+        connection.execute("INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'sentiment', '{}')")
+        connection.executemany(
+            "INSERT INTO treatment_reports VALUES (?, 1, ?, ?, 1, 'positive', 'strong', NULL)",
+            [(10, "p1", author), (11, "p2", author)],
+        )
+
+    records = tmp_path / "episode_records.jsonl"
+    with_doses = EpisodeRecord(
+        subreddit="Nootropics",
+        author_hash=author,
+        post_id="p1",
+        report_id=10,
+        explicit_personal_use=True,
+        dose_status="multiple",
+        doses=(
+            DoseValue(low=20, high=20, unit="mg", route="oral mucosal", outcome="positive", quote="20mg sublingual was great"),
+            DoseValue(low=10, high=20, unit="mg", outcome="unclear", quote="10-20mg on other days"),
+        ),
+        route_status="single",
+        routes=("oral mucosal",),
+        reasons=(),
+    )
+    without = EpisodeRecord(
+        subreddit="Nootropics",
+        author_hash=author,
+        post_id="p2",
+        report_id=11,
+        explicit_personal_use=False,
+        dose_status="not_reported",
+        doses=(),
+        route_status="not_reported",
+        routes=(),
+        reasons=(),
+    )
+    records.write_text(with_doses.model_dump_json() + "\n" + without.model_dump_json() + "\n")
+
+    assert load_episode_doses(database, records, "nootropics") == 2
+    assert load_episode_doses(database, records, "Nootropics") == 2  # replaced, not appended
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(
+            f"SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, "
+            f"mass_midpoint_mg, route, outcome, quote FROM {DOSE_TABLE} ORDER BY ordinal"
+        ).fetchall()
+        manifest = connection.execute(
+            "SELECT record_count, details_json FROM combined_pipeline_manifest WHERE pipeline = ?",
+            (DOSE_TABLE,),
+        ).fetchone()
+    assert rows == [
+        (10, 1, "p1", author, 1, 20.0, 20.0, "mg", 20.0, "oral mucosal", "positive", "20mg sublingual was great"),
+        (10, 2, "p1", author, 1, 10.0, 20.0, "mg", 15.0, None, "unclear", "10-20mg on other days"),
+    ]
+    assert manifest[0] == 2 and json.loads(manifest[1])["episodes_with_doses"] == 1
+
+    mismatched = tmp_path / "other.jsonl"
+    mismatched.write_text(with_doses.model_copy(update={"post_id": "p9"}).model_dump_json() + "\n")
+    with pytest.raises(ValueError, match="does not match a report"):
+        load_episode_doses(database, mismatched, "Nootropics")
