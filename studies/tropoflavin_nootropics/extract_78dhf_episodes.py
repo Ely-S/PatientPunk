@@ -72,6 +72,7 @@ class EpisodeExtractionConfig(BaseModel):
     workers: int = Field(default=12, ge=1, le=32)
     batch_size: int = Field(default=8, ge=1, le=12)
     solo_above_chars: int | None = Field(default=3_000, ge=200)  # reports longer than this are sent one per call
+    parent_chars: int | None = Field(default=1_500, ge=100)     # include the parent post as "replying_to", capped; None = report only
     max_text_chars: int = Field(default=6_000, ge=500, le=20_000)
     max_output_tokens: int = Field(default=4_096, ge=512, le=8_192)
 
@@ -299,6 +300,7 @@ class EpisodeContext:
     post_id: str
     report_id: int
     report_text: str
+    replying_to: str = ""
 
 
 @dataclass(frozen=True)
@@ -314,17 +316,20 @@ def _connect_readonly(path: Path) -> sqlite3.Connection:
 
 
 def _episode_contexts(
-    cohort: CohortInput, max_text_chars: int
+    cohort: CohortInput, max_text_chars: int, parent_chars: int | None = None
 ) -> tuple[EpisodeContext, ...]:
     with closing(_connect_readonly(cohort.database)) as connection:
         rows = connection.execute(
             """
             SELECT tr.report_id, tr.run_id, tr.post_id, tr.user_id, tr.sentiment,
                    TRIM(COALESCE(p.title, '') || CHAR(10) ||
-                        COALESCE(p.body_text, '')) AS report_text
+                        COALESCE(p.body_text, '')) AS report_text,
+                   TRIM(COALESCE(pp.title, '') || CHAR(10) ||
+                        COALESCE(pp.body_text, '')) AS parent_text
             FROM treatment_reports tr
             JOIN treatment t ON t.id = tr.drug_id
             JOIN posts p ON p.post_id = tr.post_id
+            LEFT JOIN posts pp ON pp.post_id = p.parent_id
             WHERE lower(t.canonical_name) = '7,8-dhf'
             ORDER BY tr.user_id, tr.post_id, tr.run_id, tr.report_id
             """
@@ -355,6 +360,11 @@ def _episode_contexts(
             report_text=" ".join(str(row["report_text"] or "").split())[
                 :max_text_chars
             ],
+            replying_to=(
+                " ".join(str(row["parent_text"] or "").split())[:parent_chars]
+                if parent_chars
+                else ""
+            ),
         )
         for (author, post_id), row in sorted(latest.items())
     )
@@ -363,7 +373,11 @@ def _episode_contexts(
 def _request_payload(items: tuple[BatchItem, ...]) -> str:
     payload = {
         "items": [
-            {"item_id": item.item_id, "report": item.context.report_text}
+            {
+                "item_id": item.item_id,
+                "report": item.context.report_text,
+                **({"replying_to": item.context.replying_to} if item.context.replying_to else {}),
+            }
             for item in items
         ]
     }
@@ -680,7 +694,7 @@ def run_episode_extraction(
     contexts = tuple(
         context
         for cohort in config.cohorts
-        for context in _episode_contexts(cohort, config.max_text_chars)
+        for context in _episode_contexts(cohort, config.max_text_chars, config.parent_chars)
     )
     if len({(context.author_hash, context.post_id) for context in contexts}) != len(
         contexts

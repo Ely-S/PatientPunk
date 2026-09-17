@@ -63,3 +63,9 @@ Personal-use rule:
     not_reported and doses, routes, and reasons must be empty.
 12. Return every input item_id exactly once, in input order. Do not include quotes,
     explanations, names, post identifiers, or fields outside the required JSON shape.
+
+Context rule:
+
+13. An item may include "replying_to": the post the author is answering. It is context
+    only. Use it to decide which compound the author means when the report does not say,
+    and to resolve "same dose as you". Never take a dose from "replying_to" itself.
