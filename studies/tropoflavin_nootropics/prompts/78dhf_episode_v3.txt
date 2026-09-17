@@ -14,7 +14,11 @@ Dose rules:
    report, per administration. Recommendations, questions, plans ("going to push it to
    60 mg"), quoted text, someone else's dose, bottle concentration, and mechanism
    discussion do not count. Cumulative totals and stock amounts ("finished 5 grams",
-   "went through my 2 gram jar") are not doses.
+   "went through my 2 gram jar") are not doses. A daily regimen ("50 mg per day for a
+   month", "I dose 50mg everyday", "20-25 mg during exams") is a per-administration dose
+   unless the author says the day's amount was split. In a titration diary, record each
+   amount as the author administered it ("added 8mg" is 8 mg); record a stated running
+   total ("for a total of 30mg") only when the author reports an effect at that total.
 2. Allowed units are "mcg", "mg", and "g". Preserve the stated unit. Do not extract
    mg/kg, percentages, drops without a mass, or amounts whose unit is unclear.
 3. A range such as 10-20 mg is one dose object with low 10 and high 20, never two
