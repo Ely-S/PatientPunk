@@ -40,6 +40,8 @@ class ComparatorSpec(BaseModel):
     mechanism_note: str = Field(min_length=1)
     aliases: tuple[str, ...] = Field(min_length=1)
     excluded_aliases: tuple[str, ...] = ()
+    distinct_from: tuple[str, ...] = ()   # slugs of sibling compounds the classifier must not confuse with this one
+    distinct_note: str = ""                # plain-language spelling hint for the sibling note
     prefilter_terms: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -62,6 +64,21 @@ class ComparatorSpec(BaseModel):
     def spans(self, text: str) -> tuple[tuple[int, int], ...]:
         """Return the surviving mention spans of this compound in text."""
         return alias_spans(text, self.aliases, self.excluded_aliases)
+
+
+def distinct_note_entries(cohort: "ComparatorCohort", slug: str) -> list[str]:
+    """Render 'Display — also written a, b, c, <hint>' for each sibling of ``slug``.
+
+    Only the six shortest aliases are listed; the hint covers the rest in plain language.
+    """
+    by = cohort.by_slug()
+    entries = []
+    for sib_slug in by[slug].distinct_from:
+        sib = by[sib_slug]
+        short = sorted((a for a in sib.aliases if a.lower() != sib.display_name.lower()), key=len)[:6]
+        note = f", {sib.distinct_note}" if sib.distinct_note else ""
+        entries.append(f"{sib.display_name} — also written {', '.join(short)}{note}")
+    return entries
 
 
 class ComparatorCohort(BaseModel):

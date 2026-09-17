@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -127,20 +128,26 @@ def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None =
 
 def classify_batch(
     client, items: list[tuple[dict, str]], id_to_text: dict, prompts: dict,
-    max_upstream_chars: int | None = None,
+    max_upstream_chars: int | None = None, variant: str = "baseline",
 ) -> list[dict]:
     """Classify a batch of (entry, drug) pairs. All must share the same drug."""
     drug = items[0][1]
     msg = f"Classify each entry separately. Return a JSON array of {len(items)} objects.\n\n"
     for i, (entry, _) in enumerate(items):
         msg += f"--- Entry {i+1} ---\n{format_entry(entry, id_to_text, max_upstream_chars)}\n\n"
+    evidence_fields = (
+        '"used_target" (yes/no/unclear), "evidence" (short verbatim quote from the Text, or ""), '
+        if variant == "evidence" else ""
+    )
     msg += (
         f'Return ONLY a JSON array of {len(items)} objects, each with '
+        f'{evidence_fields}'
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
         f'and "side_effects" (array of objects with "side_effect" and '
         f'"severity", or []).'
     )
+    tokens_per_item = 200 if variant == "evidence" else 80
 
     raw = _retry_empty_response(
         lambda: llm_call(
@@ -148,14 +155,38 @@ def classify_batch(
             msg,
             model=MODEL_STRONG,
             system=prompts[drug],
-            max_tokens=80 * len(items),
+            max_tokens=tokens_per_item * len(items),
         ),
         f"classification batch of {len(items)} for {drug}",
     )
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
-    return [ClassificationResult.model_validate(r) for r in results]
+    parsed = [ClassificationResult.model_validate(r) for r in results]
+    if variant == "evidence":
+        parsed = [_guard_evidence(res, entry["text"]) for res, (entry, _) in zip(parsed, items)]
+    return parsed
+
+
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def _guard_evidence(res: ClassificationResult, text: str) -> ClassificationResult:
+    """A 'yes' quote must appear verbatim in the entry text (ellipsis segments allowed).
+
+    Quotes lifted from the parent post are the reply-inheritance error in disguise;
+    the label is reset to neutral and the reason kept in ``evidence``.
+    """
+    if res.used_target != "yes":
+        return res
+    haystack = _NON_ALNUM.sub("", text.lower())
+    segments = [_NON_ALNUM.sub("", seg.lower()) for seg in re.split(r"\.\.\.|…", res.evidence or "")]
+    segments = [seg for seg in segments if seg]
+    if segments and all(seg in haystack for seg in segments):
+        return res
+    log.warning("evidence quote not found in entry text; resetting to neutral: %r", (res.evidence or "")[:80])
+    return res.model_copy(update={"sentiment": "neutral", "signal": "n/a", "used_target": "no",
+                                  "evidence": f"[not in text] {res.evidence or ''}"})
 
 
 def _classify_one(
@@ -277,7 +308,9 @@ def run_classification(
                     syns = sorted(target_aliases - {drug})
                 else:
                     syns = synonyms_for.get(drug)
-                prompts[drug] = system_prompt(drug, syns, subreddit)
+                prompts[drug] = system_prompt(
+                    drug, syns, subreddit, variant=config.prompt_variant, distinct_from=config.drug_distinct_from,
+                )
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
@@ -346,7 +379,7 @@ def run_classification(
         """Classify a single batch, with per-item fallback on failure."""
         drug = batch[0][1]
         try:
-            return batch, classify_batch(client, batch, id_to_text, prompts, config.max_upstream_chars)
+            return batch, classify_batch(client, batch, id_to_text, prompts, config.max_upstream_chars, variant=config.prompt_variant)
         except (LLMParseError, LLMResponseError, ValidationError) as e:
             log.warning(f"Batch failed for {drug} ({e}); retrying individually...")
             return batch, [
