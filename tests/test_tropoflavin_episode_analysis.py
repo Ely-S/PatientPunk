@@ -325,15 +325,15 @@ def test_load_episode_doses_writes_one_row_per_dose(tmp_path: Path) -> None:
     with sqlite3.connect(database) as connection:
         rows = connection.execute(
             f"SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, "
-            f"mass_midpoint_mg, route, outcome, quote FROM {DOSE_TABLE} ORDER BY ordinal"
+            f"route, outcome, quote FROM {DOSE_TABLE} ORDER BY ordinal"
         ).fetchall()
         manifest = connection.execute(
             "SELECT record_count, details_json FROM combined_pipeline_manifest WHERE pipeline = ?",
             (DOSE_TABLE,),
         ).fetchone()
     assert rows == [
-        (10, 1, "p1", author, 1, 20.0, 20.0, "mg", 20.0, "oral mucosal", "positive", "20mg sublingual was great"),
-        (10, 2, "p1", author, 1, 10.0, 20.0, "mg", 15.0, None, "unclear", "10-20mg on other days"),
+        (10, 1, "p1", author, 1, 20.0, 20.0, "mg", "oral mucosal", "positive", "20mg sublingual was great"),
+        (10, 2, "p1", author, 1, 10.0, 20.0, "mg", None, "unclear", "10-20mg on other days"),
     ]
     assert manifest[0] == 2 and json.loads(manifest[1])["episodes_with_doses"] == 1
 

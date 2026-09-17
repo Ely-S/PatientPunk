@@ -32,7 +32,6 @@ CREATE TABLE {DOSE_TABLE} (
     low              REAL NOT NULL,
     high             REAL NOT NULL,
     unit             TEXT NOT NULL CHECK (unit IN ('mcg', 'mg', 'g')),
-    mass_midpoint_mg REAL NOT NULL,
     route            TEXT,
     outcome          TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
     quote            TEXT,
@@ -118,7 +117,6 @@ def load_episode_doses(
                         dose.low,
                         dose.high,
                         dose.unit,
-                        dose.midpoint_mg,
                         dose.route,
                         dose.outcome,
                         dose.quote,
@@ -128,10 +126,10 @@ def load_episode_doses(
             connection.execute(f"DROP TABLE IF EXISTS {DOSE_TABLE}")
             connection.execute(DOSE_TABLE_DDL)
             connection.execute(
-                f"CREATE INDEX {DOSE_TABLE}_drug_idx ON {DOSE_TABLE}(drug_id, mass_midpoint_mg)"
+                f"CREATE INDEX {DOSE_TABLE}_drug_idx ON {DOSE_TABLE}(drug_id, unit, low)"
             )
             connection.executemany(
-                f"INSERT INTO {DOSE_TABLE} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+                f"INSERT INTO {DOSE_TABLE} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
             )
             if "combined_pipeline_manifest" in tables:
                 connection.execute(
