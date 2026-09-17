@@ -71,6 +71,7 @@ class EpisodeExtractionConfig(BaseModel):
     prompt_path: Path = DEFAULT_PROMPT
     workers: int = Field(default=12, ge=1, le=32)
     batch_size: int = Field(default=8, ge=1, le=12)
+    solo_above_chars: int | None = Field(default=3_000, ge=200)  # reports longer than this are sent one per call
     max_text_chars: int = Field(default=6_000, ge=500, le=20_000)
     max_output_tokens: int = Field(default=4_096, ge=512, le=8_192)
 
@@ -577,12 +578,20 @@ def _extract_with_split(
 
 
 def _chunks(
-    items: tuple[BatchItem, ...], batch_size: int
+    items: tuple[BatchItem, ...],
+    batch_size: int,
+    solo_above_chars: int | None = None,
 ) -> tuple[tuple[BatchItem, ...], ...]:
-    return tuple(
-        items[start : start + batch_size]
-        for start in range(0, len(items), batch_size)
-    )
+    """Group items into batches; long reports go one per batch so their dose steps are not dropped."""
+    if solo_above_chars is None:
+        return tuple(
+            items[start : start + batch_size]
+            for start in range(0, len(items), batch_size)
+        )
+    solo = tuple((item,) for item in items if len(item.context.report_text) > solo_above_chars)
+    short = tuple(item for item in items if len(item.context.report_text) <= solo_above_chars)
+    grouped = tuple(short[start : start + batch_size] for start in range(0, len(short), batch_size))
+    return grouped + solo
 
 
 def _resume_results(
@@ -689,7 +698,7 @@ def run_episode_extraction(
         if item_id not in results_by_id
     )
     effective_batch_size = 1 if results_by_id else config.batch_size
-    batches = _chunks(pending, effective_batch_size)
+    batches = _chunks(pending, effective_batch_size, config.solo_above_chars)
     client = get_llm_client()
     cache_root = config.output_directory / "cache"
     failures: list[int] = []
