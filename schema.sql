@@ -94,6 +94,28 @@ CREATE INDEX idx_tr_drug ON treatment_reports(drug_id);
 CREATE INDEX idx_tr_user ON treatment_reports(user_id);
 CREATE INDEX idx_tr_run  ON treatment_reports(run_id);
 
+-- One row per dose the author states they took, per treatment report.
+-- Written by src/run_dose_pipeline.py after the sentiment pipeline; amounts are
+-- stored as stated (a range keeps low and high) with the sentence they came from.
+CREATE TABLE report_doses (
+    dose_id   INTEGER PRIMARY KEY,
+    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    ordinal   INTEGER NOT NULL,
+    post_id   TEXT NOT NULL REFERENCES posts(post_id),
+    user_id   TEXT REFERENCES users(user_id),
+    drug_id   INTEGER NOT NULL REFERENCES treatment(id),
+    low       REAL NOT NULL,
+    high      REAL NOT NULL,
+    unit      TEXT NOT NULL CHECK (unit IN ('mcg', 'mg', 'g')),
+    route     TEXT,               -- oral mucosal | swallowed oral | nasal mucosal | injection | other explicit route
+    outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
+    quote     TEXT                -- verbatim sentence from the post
+);
+
+CREATE INDEX idx_rd_report ON report_doses(report_id);
+CREATE INDEX idx_rd_drug   ON report_doses(drug_id);
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════
