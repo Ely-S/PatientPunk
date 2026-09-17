@@ -509,7 +509,7 @@ receives opaque item numbers, not author or post identifiers. The external recor
 retain identifiers only so the analysis can join each extraction back to the exact
 source report.
 
-The v2/v3 prompts (`prompts/78dhf_episode_v3.txt`) attach a route, an outcome and a
+The v3 prompt (`prompts/78dhf_episode_v3.txt`) attaches a route, an outcome and a
 verbatim quote to every dose. For them set `prompt_path`, `parent_chars` (the parent
 post is sent as context, default 1500 characters), `solo_above_chars` (longer reports go
 one per call, default 3000), `require_dose_quotes: true` and `max_single_dose_mg`
