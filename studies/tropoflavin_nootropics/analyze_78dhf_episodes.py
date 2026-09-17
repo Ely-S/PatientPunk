@@ -95,10 +95,11 @@ class Episode:
     explicit_personal_use: bool
     dose_status: str
     dose_midpoints_mg: tuple[float, ...]
-    dose_pairs: tuple[tuple[float, str | None, str | None], ...]  # (midpoint mg, route, outcome) per extracted dose; v2 records only carry route/outcome
     route_status: str
     routes: tuple[RouteCategory, ...]
     reasons: tuple[ReasonCategory, ...]
+    # (midpoint mg, route, outcome) per extracted dose; v1 records carry None for route/outcome
+    dose_pairs: tuple[tuple[float, str | None, str | None], ...] = ()
 
     @property
     def sentiment_level(self) -> int:
