@@ -16,10 +16,9 @@ from patientpunk.db import _bucketize_age  # noqa: E402
 SCHEMA_SQL = REPO_ROOT / "schema.sql"
 
 
-def _make_posts_db(path: Path) -> None:
-    """Tiny posts.db: 2 users, 3 posts, 2 drugs, 1 run, 3 TEXT-sentiment reports."""
+def _seed_posts_db(path: Path) -> None:
+    """Fill a schema database: 2 users, 3 posts, 2 drugs, 1 run, 3 TEXT-sentiment reports."""
     conn = sqlite3.connect(path)
-    conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
     conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at) VALUES ('u1','x',0)")
     conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at) VALUES ('u2','x',0)")
     for pid, uid in [("p1", "u1"), ("p2", "u2"), ("p3", "u1")]:
@@ -57,9 +56,9 @@ def _write_csv(path: Path, header, rows) -> None:
 
 
 @pytest.fixture
-def built(tmp_path):
-    posts_db = tmp_path / "posts.db"
-    _make_posts_db(posts_db)
+def built(tmp_path, schema_db):
+    posts_db = schema_db
+    _seed_posts_db(posts_db)
 
     records = tmp_path / "records.csv"
     # meta cols + 1 schema col (conditions) + 2 discovered cols
