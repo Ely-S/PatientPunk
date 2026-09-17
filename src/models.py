@@ -21,3 +21,5 @@ class ClassificationResult(BaseModel):
     sentiment: Literal["positive", "negative", "mixed", "neutral"]
     signal: Literal["strong", "moderate", "weak", "n/a"]
     side_effects: list[SideEffectReport] = Field(default_factory=list)
+    used_target: Literal["yes", "no", "unclear"] | None = None  # "evidence" prompt variant only
+    evidence: str | None = None                                   # verbatim quote supporting the label

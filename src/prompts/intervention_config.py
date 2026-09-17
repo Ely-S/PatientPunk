@@ -70,13 +70,88 @@ Return a JSON array of strings, each 'yes' or 'no', in order.
 """
 
 # Used by classify_sentiment.py
-def system_prompt(drug: str, synonyms: list[str] | None = None, subreddit: str = "Long COVID") -> str:
-    """Generate system prompt for sentiment classification."""
+MULTIPLE_TREATMENTS_BLOCK = """\
+MULTIPLE TREATMENTS: Other treatments are often named in the same text. Attribute to
+  {name} only statements that are about {name}. Do not carry an outcome or side effect
+  reported for another treatment over to {name}. The stack rule above still applies
+  when the author credits the whole regimen; it does not apply when the outcome is
+  explicitly about a different treatment and {name} is merely listed. In that case
+  follow the neutral / weak rules.
+
+"""
+
+DISTINCT_COMPOUND_BLOCK = """\
+DISTINCT COMPOUND: {sibling_full} is a different compound from {name}. Statements about
+  {sibling} (its effects, doses, or side effects) must NOT be attributed to {name}, even
+  though the names overlap. If the author's personal experience is only with {sibling},
+  classify {name} as neutral, even when {name} is mentioned as a comparison, an
+  alternative, or something they have not tried yet.
+
+"""
+
+EVIDENCE_BLOCK = """\
+EVIDENCE: Quote verbatim, from the Text (not from "Replying to"), the sentence where the
+  author reports what {name} did or did not do for them, and set "used_target" to "yes".
+  That sentence may be a comparison drawn from the author's own use of both compounds (it
+  then counts for both, judged by what it says about {name}), or a stack the author says
+  helps that names {name} (then positive/weak). Not evidence: questions, plans,
+  recommendations, pharmacology facts (half-life, bioavailability), dosing or vendor
+  remarks, and sentences about the other compound. Complaints about route, price or dosing
+  frequency are logistics, not a negative effect. If there is no evidence sentence, set
+  "used_target" to "no", "evidence" to "", and sentiment to neutral. If the only sentence
+  could refer to either compound, use "unclear" and neutral.
+
+"""
+PROMPT_VARIANTS = ("baseline", "generic", "distinct", "evidence")
+
+
+def system_prompt(
+    drug: str,
+    synonyms: list[str] | None = None,
+    subreddit: str = "Long COVID",
+    variant: str = "baseline",
+    distinct_from: list[str] | None = None,
+) -> str:
+    """Generate system prompt for sentiment classification.
+
+    variant="generic" appends the MULTIPLE TREATMENTS attribution block after the
+    REPLY CHAIN section; variant="distinct" appends the DISTINCT COMPOUND block naming
+    ``distinct_from`` siblings instead; "baseline" is the unchanged prompt.
+    """
+    if variant not in PROMPT_VARIANTS:
+        raise ValueError(f"Unknown prompt variant {variant!r}; expected one of {PROMPT_VARIANTS}")
     # Keep acronyms uppercase, title-case regular words
     name = drug.upper() if drug.isalpha() and len(drug) <= 4 else drug.title()
     synonym_note = ""
     if synonyms:
         synonym_note = f"\nAlso known as: {', '.join(synonyms)}"
+    if variant == "generic":
+        multiple_treatments = MULTIPLE_TREATMENTS_BLOCK.format(name=name)
+    elif variant == "evidence":
+        multiple_treatments = ""
+        if distinct_from:
+            multiple_treatments = DISTINCT_COMPOUND_BLOCK.format(
+                name=name,
+                sibling_full="; ".join(distinct_from),
+                sibling=", ".join(entry.split(" — ", 1)[0] for entry in distinct_from),
+            )
+        multiple_treatments += EVIDENCE_BLOCK.format(name=name)
+    elif variant == "distinct":
+        if not distinct_from:
+            raise ValueError('variant "distinct" requires a non-empty distinct_from list')
+        # Each entry is "Display name — also written ..."; the short name is the part before the dash.
+        multiple_treatments = DISTINCT_COMPOUND_BLOCK.format(
+            name=name,
+            sibling_full="; ".join(distinct_from),
+            sibling=", ".join(entry.split(" — ", 1)[0] for entry in distinct_from),
+        )
+    else:
+        multiple_treatments = ""
+    json_shape = (
+        '{"used_target":"yes|no|unclear","evidence":"...","sentiment":"...","signal":"...","side_effects":[{"side_effect":"...","severity":null}]}'
+        if variant == "evidence"
+        else '{"sentiment":"...","signal":"...","side_effects":[{"side_effect":"...","severity":null}]}'
+    )
     return f"""\
 Classify Reddit posts/comments about {name} from r/{subreddit}.
 
@@ -152,7 +227,7 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
     worse" → if {name} is LDN, this is neutral/n/a (the reply is about LDA, not LDN).
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
-side_effects: list of objects naming side effects the author attributes to {name}
+{multiple_treatments}side_effects: list of objects naming side effects the author attributes to {name}
   Each object must have exactly this shape:
     {{"side_effect": "short lowercase symptom", "severity": null}}
   severity must be one of mild | moderate | severe | life_threatening | null.
@@ -194,4 +269,4 @@ side_effects: list of objects naming side effects the author attributes to {name
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[{{"side_effect":"...","severity":null}}]}}"""
+Respond ONLY with JSON: {json_shape}"""

@@ -16,6 +16,7 @@ from rich.console import Console
 from studies.tropoflavin_nootropics.comparator_support import (
     DEFAULT_COHORT_CONFIG,
     ComparatorSpec,
+    distinct_note_entries,
     load_comparator_cohort,
     sha256_file,
 )
@@ -58,6 +59,7 @@ class ComparatorPipelineConfig(BaseModel):
     limit: int | None = Field(default=None, ge=1)
     reclassify: bool = False
     only_slugs: tuple[str, ...] = ()
+    prompt_variant: str = "baseline"
 
     @model_validator(mode="after")
     def validate_inputs(self) -> ComparatorPipelineConfig:
@@ -179,6 +181,8 @@ def _run_one(
         drug=compound.canonical_name,
         drug_aliases=list(compound.aliases),
         drug_excluded_aliases=list(compound.excluded_aliases),
+        prompt_variant=config.prompt_variant,
+        drug_distinct_from=distinct_note_entries(load_comparator_cohort(config.cohort_path), compound.slug) or None,
     )
     run_pipeline(pipeline_config)
 
@@ -301,6 +305,7 @@ def main(
     limit: int | None = typer.Option(None, min=1),
     reclassify: bool = typer.Option(False),
     only: list[str] | None = typer.Option(None, help="Repeat to run selected slugs only."),
+    prompt_variant: str = typer.Option("baseline", help="Classifier prompt variant: baseline | generic | distinct | evidence."),
 ) -> None:
     """Run resumable, identically configured sentiment analyses for the cohort."""
     try:
@@ -317,6 +322,7 @@ def main(
                 limit=limit,
                 reclassify=reclassify,
                 only_slugs=tuple(only or ()),
+                prompt_variant=prompt_variant,
             )
         )
     except (OSError, ValueError) as exc:

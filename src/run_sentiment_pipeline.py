@@ -70,6 +70,8 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "output_dir": str(config.output_dir),
         "drug": config.drug,
         "drug_excluded_aliases": config.drug_excluded_aliases or [],
+        "prompt_variant": config.prompt_variant,
+        "drug_distinct_from": config.drug_distinct_from or [],
     }
 
     _banner("CLASSIFY")

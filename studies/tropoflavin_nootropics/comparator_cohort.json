@@ -64,6 +64,8 @@
         "dma 7 8 dhf", "dma 7,8 dhf", "dma 7,8-dhf", "dma 78 dhf", "dma,7,8-dhf", "dma- dhf",
         "dma-7 8-dhf", "dma-7,8 dhf", "dma-7,8-dhf", "dma-7,8dhf", "dma-78dhf", "dma-dhf", "eutropoflavin"
       ],
+      "distinct_from": ["4dma-78dhf"],
+      "distinct_note": "and any 7 8 / dhf / dihydroxyflavone spelling without the 4'-DMA group",
       "prefilter_terms": [
         "dhf", "tropoflavin", "dihydroxyflavone"
       ]
@@ -117,6 +119,8 @@
         "dma-7 8-dhf", "dma-7,8 dhf", "dma-7,8-dhf", "dma-7,8dhf", "dma-78dhf", "dma-dhf", "eutropoflavin"
       ],
       "excluded_aliases": [],
+      "distinct_from": ["78dhf"],
+      "distinct_note": "and any spelling that begins with 4DMA, 4-DMA, 4'-DMA or dimethylamino",
       "prefilter_terms": [
         "4dma", "4'-dma", "4-dma", "eutropoflavin", "4 dma", "4’-dma", "4′-dma", "dimethylamino",
         "dma-dhf", "dma dhf"

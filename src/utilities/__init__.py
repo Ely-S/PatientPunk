@@ -42,6 +42,8 @@ class PipelineConfig:
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
     drug_excluded_aliases: list[str] | None = None  # Longer compounds that must not count as target mentions
+    prompt_variant: str = "baseline"       # Classifier system-prompt variant: "baseline", "generic", "distinct" or "evidence"
+    drug_distinct_from: list[str] | None = None  # Sibling-compound notes for the "distinct"/"evidence" variants
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
