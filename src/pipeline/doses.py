@@ -5,6 +5,12 @@ Runs after the sentiment pipeline. Reads treatment_reports for one drug (latest 
 per post), sends each report to the model with its parent post as context, and writes
 report_doses. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
+
+Standalone by design. Three pieces mirror the sentiment pipeline and are kept as
+self-contained units so a later refactor is a move, not a rewrite:
+  * run_batches()        <-> the thread-pool loop in classify.run_classification
+  * DoseWriter           <-> utilities.db.ReportWriter (could become a write_doses method)
+  * load_dose_contexts() + request_payload() <-> extract.load_posts_from_db + classify.format_entry
 """
 from __future__ import annotations
 
@@ -286,6 +292,21 @@ def _aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
         return []
 
 
+def run_batches(batches, fn, workers: int):
+    """Run ``fn(batch)`` over ``batches`` on a thread pool; yield ``(batch, result, error)`` as each completes.
+
+    Mirrors the pool loop in classify.run_classification (candidate for a shared helper).
+    """
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {pool.submit(fn, batch): batch for batch in batches}
+        for future in as_completed(futures):
+            batch = futures[future]
+            try:
+                yield batch, future.result(), None
+            except Exception as e:  # noqa: BLE001 — transport failures after retries, truncation at the largest budget
+                yield batch, None, e
+
+
 def run_dose_extraction(
     client,
     db_path: Path,
@@ -326,27 +347,24 @@ def run_dose_extraction(
     reports_done = with_doses = rows = failed = dropped_total = 0
     with DoseWriter(db_path, run_config, get_git_commit()) as writer:
         log.info(f"Extraction run {writer.run_id}")
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            futures = {pool.submit(extract_batch, client, batch, system, model): batch for batch in batches}
-            for future in as_completed(futures):
-                batch = futures[future]
-                try:
-                    results, dropped = future.result()
-                except Exception as e:  # transport failures after retries, truncation at the largest budget
-                    log.warning(f"Batch of {len(batch)} failed: {type(e).__name__}: {e}")
-                    failed += len(batch)
+        extract = lambda batch: extract_batch(client, batch, system, model)  # noqa: E731
+        for batch, outcome, error in run_batches(batches, extract, workers):
+            if error is not None:
+                log.warning(f"Batch of {len(batch)} failed: {type(error).__name__}: {error}")
+                failed += len(batch)
+                continue
+            results, dropped = outcome
+            dropped_total += dropped
+            for context in batch:
+                if context.report_id not in results:
+                    failed += 1
                     continue
-                dropped_total += dropped
-                for context in batch:
-                    if context.report_id not in results:
-                        failed += 1
-                        continue
-                    n = writer.write_report(by_report[context.report_id], results[context.report_id])
-                    reports_done += 1
-                    rows += n
-                    with_doses += bool(n)
-                if reports_done % 80 < len(batch):
-                    log.info(f"  {reports_done}/{len(contexts)} reports, {rows} dose rows")
+                n = writer.write_report(by_report[context.report_id], results[context.report_id])
+                reports_done += 1
+                rows += n
+                with_doses += bool(n)
+            if reports_done % 80 < len(batch):
+                log.info(f"  {reports_done}/{len(contexts)} reports, {rows} dose rows")
         run_id = writer.run_id
     summary = DoseRunSummary(run_id, reports_done, with_doses, rows, failed, dropped_total)
     log.info(
