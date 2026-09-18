@@ -157,7 +157,7 @@ class ReportWriter:
                 for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
             ],
         )
-        self._pending += 1
+        self._pending += len(doses)  # one per row written, so COMMIT_EVERY means rows here too
         if self._pending >= COMMIT_EVERY:
             self.flush()
         return len(doses)
