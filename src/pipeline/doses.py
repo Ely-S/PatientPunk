@@ -30,11 +30,14 @@ from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
 from utilities.db import ReportWriter, open_db, post_text
 
-DoseUnit = Literal["mcg", "mg", "g"]
+DoseUnit = Literal["mcg", "mg", "g", "ml", "l", "iu"]  # mass, volume, international units; None = unstated
 _UNIT_SYNONYMS = {
     "mcg": "mcg", "ug": "mcg", "µg": "mcg", "μg": "mcg", "microgram": "mcg", "micrograms": "mcg",
     "mg": "mg", "milligram": "mg", "milligrams": "mg",
     "g": "g", "gram": "g", "grams": "g",
+    "ml": "ml", "mls": "ml", "milliliter": "ml", "milliliters": "ml", "millilitre": "ml", "millilitres": "ml", "cc": "ml",
+    "l": "l", "liter": "l", "liters": "l", "litre": "l", "litres": "l",
+    "iu": "iu", "i.u.": "iu", "international unit": "iu", "international units": "iu", "unit": "iu", "units": "iu",
 }
 TOKENS_PER_ITEM = 400
 _WS = re.compile(r"\s+")

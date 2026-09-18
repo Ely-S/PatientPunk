@@ -35,6 +35,8 @@ def test_prompt_and_response_parsing() -> None:
             {"low": 50, "high": 50, "unit": "mg/day"},
             {"low": 1, "high": 3, "unit": "grams"},
             {"low": 1.5, "high": 1.5, "unit": None},         # bare number, unit unknown
+            {"low": 1, "high": 1, "unit": "mL"},
+            {"low": 5000, "high": 5000, "unit": "IU"},
             {"low": 1, "high": 3, "unit": "grams"},          # duplicate
             {"low": 20, "high": 10, "unit": "mg"},           # high below low
             {"low": 2, "high": 2, "unit": "mg/kg"},          # per-kilogram is not a dose
@@ -50,6 +52,8 @@ def test_prompt_and_response_parsing() -> None:
         (50.0, 50.0, "mg", None, None, None),
         (1.0, 3.0, "g", None, None, None),
         (1.5, 1.5, None, None, None, None),
+        (1.0, 1.0, "ml", None, None, None),
+        (5000.0, 5000.0, "iu", None, None, None),
     ]
     with pytest.raises(LLMParseError, match="do not match"):
         parse_dose_response(raw, [0, 2])

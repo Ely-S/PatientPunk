@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS report_doses (
     drug_id   INTEGER NOT NULL REFERENCES treatment(id),
     low       REAL NOT NULL,
     high      REAL NOT NULL,
-    unit      TEXT CHECK (unit IN ('mcg', 'mg', 'g')),  -- NULL when the author gave a bare number
+    unit      TEXT CHECK (unit IN ('mcg', 'mg', 'g', 'ml', 'l', 'iu')),  -- NULL when the author gave a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
     quote     TEXT
