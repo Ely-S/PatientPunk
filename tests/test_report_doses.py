@@ -8,9 +8,12 @@ from pathlib import Path
 
 import pytest
 
+import pipeline.doses as doses_module
 from pipeline.doses import parse_dose_response, run_dose_extraction
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
+
+SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 
 REPLY_DOSES = [
     {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great."},
@@ -52,8 +55,18 @@ def test_prompt_and_response_parsing() -> None:
         parse_dose_response(raw, [0, 2])
 
 
-def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, stub_llm) -> None:
+def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    payloads: list[dict] = []
+    respond = {"fn": lambda items: []}
+
+    def stub_llm(client, prompt, model=None, system=None, max_tokens=0) -> str:  # stands in for the model call
+        payloads.append(json.loads(prompt))
+        return json.dumps(respond["fn"](payloads[-1]["items"]))
+
+    monkeypatch.setattr(doses_module, "llm_call", stub_llm)
+    schema_db = tmp_path / "study.db"
     with sqlite3.connect(schema_db) as conn:
+        conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
         conn.executescript("""
             INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
             INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
@@ -66,12 +79,12 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, 
                 (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
         """)
-    stub_llm.reply(lambda items: [{"item_id": it["item_id"], "doses": REPLY_DOSES if "20mg" in it["report"] else []} for it in items])
+    respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": REPLY_DOSES if "20mg" in it["report"] else []} for it in items]
 
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
     assert (first.reports, first.reports_with_doses, first.dose_rows, first.failed_reports) == (2, 1, 2, 0)
-    assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in stub_llm.payloads[0]["items"])
+    assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
     with sqlite3.connect(schema_db) as conn:
         rows = conn.execute("SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
@@ -81,7 +94,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, 
     ]
     assert run_type == "report_doses" and json.loads(config)["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
 
-    stub_llm.reply(lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items])
+    respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items]
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:
         assert conn.execute("SELECT run_id, low FROM report_doses").fetchall() == [(second.run_id, 25.0)]

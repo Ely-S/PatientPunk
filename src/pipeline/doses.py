@@ -6,11 +6,12 @@ per post), sends each report to the model with its parent post as context, and w
 report_doses. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
 
-Standalone by design. Three pieces mirror the sentiment pipeline and are kept as
-self-contained units so a later refactor is a move, not a rewrite:
-  * run_batches()        <-> the thread-pool loop in classify.run_classification
-  * DoseWriter           <-> utilities.db.ReportWriter (could become a write_doses method)
+Standalone by design. Pieces that mirror the sentiment pipeline are kept as
+self-contained units so a later refactor is a move, not a rewrite (see the PR's plan):
+  * run_batches() + extract_batch()'s split <-> the pool loop and per-batch fallback in
+    classify.run_classification (and the halving in extract.py / canonicalize.py)
   * load_dose_contexts() + request_payload() <-> extract.load_posts_from_db + classify.format_entry
+Rows are written through utilities.db.ReportWriter.write_doses.
 """
 from __future__ import annotations
 
@@ -18,7 +19,6 @@ import hashlib
 import json
 import re
 import sqlite3
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
-from utilities.db import COMMIT_EVERY, open_db, post_text
+from utilities.db import ReportWriter, open_db, post_text
 
 DoseUnit = Literal["mcg", "mg", "g"]
 _UNIT_SYNONYMS = {
@@ -38,28 +38,6 @@ _UNIT_SYNONYMS = {
 }
 TOKENS_PER_ITEM = 400
 _WS = re.compile(r"\s+")
-
-# Kept identical to schema.sql so the step also works on databases created before the table existed.
-REPORT_DOSES_DDL = """
-CREATE TABLE IF NOT EXISTS report_doses (
-    dose_id   INTEGER PRIMARY KEY,
-    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
-    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
-    ordinal   INTEGER NOT NULL,
-    post_id   TEXT NOT NULL REFERENCES posts(post_id),
-    user_id   TEXT REFERENCES users(user_id),
-    drug_id   INTEGER NOT NULL REFERENCES treatment(id),
-    low       REAL NOT NULL,
-    high      REAL NOT NULL,
-    unit      TEXT CHECK (unit IN ('mcg', 'mg', 'g')),  -- NULL when the author gave a bare number
-    route     TEXT,
-    outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
-    quote     TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
-CREATE INDEX IF NOT EXISTS idx_rd_drug   ON report_doses(drug_id);
-"""
-
 
 class DoseValue(BaseModel):
     """One stated per-administration amount, as the author wrote it."""
@@ -239,52 +217,6 @@ def extract_batch(
         return {**left, **right}, dropped_left + dropped_right
 
 
-class DoseWriter:
-    """Writes report_doses rows under one extraction_runs row; replaces a report's rows on rewrite."""
-
-    def __init__(self, db_path: Path, run_config: dict, commit_hash: str):
-        self._conn = open_db(db_path)
-        self._conn.executescript(REPORT_DOSES_DDL)
-        cursor = self._conn.execute(
-            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) VALUES (?, ?, ?, ?)",
-            (int(time.time()), commit_hash, "report_doses", json.dumps(run_config)),
-        )
-        self.run_id = cursor.lastrowid
-        self._conn.commit()
-        self._pending = 0
-
-    def write_report(self, context: DoseContext, doses: list[DoseValue]) -> int:
-        self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (context.report_id,))
-        self._conn.executemany(
-            "INSERT INTO report_doses (report_id, run_id, ordinal, post_id, user_id, drug_id, "
-            "low, high, unit, route, outcome, quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                (context.report_id, self.run_id, ordinal, context.post_id, context.user_id, context.drug_id,
-                 d.low, d.high, d.unit, d.route, d.outcome, d.quote)
-                for ordinal, d in enumerate(doses, 1)
-            ],
-        )
-        self._pending += 1
-        if self._pending >= COMMIT_EVERY:
-            self.flush()
-        return len(doses)
-
-    def flush(self) -> None:
-        if self._pending:
-            self._conn.commit()
-            self._pending = 0
-
-    def close(self) -> None:
-        self.flush()
-        self._conn.close()
-
-    def __enter__(self) -> DoseWriter:
-        return self
-
-    def __exit__(self, *exc) -> None:
-        self.close()
-
-
 def _aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
     row = conn.execute(
         "SELECT aliases FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)
@@ -350,7 +282,7 @@ def run_dose_extraction(
     batches = make_batches(contexts, batch_size, solo_above_chars)
     by_report = {c.report_id: c for c in contexts}
     reports_done = with_doses = rows = failed = dropped_total = 0
-    with DoseWriter(db_path, run_config, get_git_commit()) as writer:
+    with ReportWriter(db_path, run_config, get_git_commit(), extraction_type="report_doses") as writer:
         log.info(f"Extraction run {writer.run_id}")
         extract = lambda batch: extract_batch(client, batch, system, model)  # noqa: E731
         for batch, outcome, error in run_batches(batches, extract, workers):
@@ -364,7 +296,8 @@ def run_dose_extraction(
                 if context.report_id not in results:
                     failed += 1
                     continue
-                n = writer.write_report(by_report[context.report_id], results[context.report_id])
+                c = by_report[context.report_id]
+                n = writer.write_doses(c.report_id, c.post_id, c.user_id, c.drug_id, results[context.report_id])
                 reports_done += 1
                 rows += n
                 with_doses += bool(n)

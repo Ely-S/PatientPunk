@@ -11,6 +11,27 @@ from pathlib import Path
 
 COMMIT_EVERY = 50  # commit after this many writes
 
+# Kept identical to schema.sql so the dose step also works on databases created before the table existed.
+REPORT_DOSES_DDL = """
+CREATE TABLE IF NOT EXISTS report_doses (
+    dose_id   INTEGER PRIMARY KEY,
+    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    ordinal   INTEGER NOT NULL,
+    post_id   TEXT NOT NULL REFERENCES posts(post_id),
+    user_id   TEXT REFERENCES users(user_id),
+    drug_id   INTEGER NOT NULL REFERENCES treatment(id),
+    low       REAL NOT NULL,
+    high      REAL NOT NULL,
+    unit      TEXT CHECK (unit IN ('mcg', 'mg', 'g')),  -- NULL when the author gave a bare number
+    route     TEXT,
+    outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
+    quote     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
+CREATE INDEX IF NOT EXISTS idx_rd_drug   ON report_doses(drug_id);
+"""
+
 
 def post_text(title: str | None, body_text: str | None, parent_id: str | None) -> str:
     """Reconstruct display text for a post row.
@@ -59,20 +80,23 @@ def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[st
 
 
 class ReportWriter:
-    """Incremental writer for treatment_reports.
+    """Incremental writer for treatment_reports and report_doses.
 
     Creates an extraction_runs row on init, then batches inserts with
-    periodic commits. Use as a context manager.
+    periodic commits. Use as a context manager. ``extraction_type`` names the
+    run: "treatment_sentiment" (default) or "report_doses".
     """
 
-    def __init__(self, db_path: Path, run_config: dict, commit_hash: str):
+    def __init__(self, db_path: Path, run_config: dict, commit_hash: str,
+                 extraction_type: str = "treatment_sentiment"):
         self._conn = open_db(db_path)
+        self._conn.executescript(REPORT_DOSES_DDL)
         self._pending = 0
 
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
-            (int(time.time()), commit_hash, "treatment_sentiment",
+            (int(time.time()), commit_hash, extraction_type,
              json.dumps(run_config)),
         )
         self.run_id = cursor.lastrowid
@@ -114,6 +138,24 @@ class ReportWriter:
             self._conn.commit()
             self._pending = 0
         return True
+
+    def write_doses(self, report_id: int, post_id: str, user_id: str | None, drug_id: int, doses) -> int:
+        """Replace a report's rows in report_doses with ``doses`` (objects with low, high, unit,
+        route, outcome, quote — e.g. pipeline.doses.DoseValue). Returns the number written."""
+        self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (report_id,))
+        self._conn.executemany(
+            "INSERT INTO report_doses (report_id, run_id, ordinal, post_id, user_id, drug_id, "
+            "low, high, unit, route, outcome, quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (report_id, self.run_id, ordinal, post_id, user_id, drug_id,
+                 d.low, d.high, d.unit, d.route, d.outcome, d.quote)
+                for ordinal, d in enumerate(doses, 1)
+            ],
+        )
+        self._pending += 1
+        if self._pending >= COMMIT_EVERY:
+            self.flush()
+        return len(doses)
 
     def flush(self):
         """Commit any pending writes."""
