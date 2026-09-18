@@ -55,7 +55,7 @@ def effects_system_prompt(
     if excluded_compounds:
         excluded_line = (
             f"Do not assign information about {', '.join(excluded_compounds)} to {name}; "
-            "they are different compounds.\n"
+            f"they are different compounds, and their effects get \"other compound\", never \"{name}\".\n"
         )
     example = (
         '[{"item_id": 0, "effects": [{"domain": "energy or motivation", "symptom": "energy",\n'

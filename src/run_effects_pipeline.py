@@ -13,6 +13,11 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug "7,8-dhf"
     python src/run_dose_pipeline.py --db data/posts.db --drug "7,8-dhf" --exclude-compound "4'-DMA-7,8-DHF"
     python src/run_effects_pipeline.py --db data/posts.db --drug "7,8-dhf" --exclude-compound "4'-DMA-7,8-DHF"
+    python src/run_effects_pipeline.py --db data/posts.db --drug "7,8-dhf" --exclude-file study/other_compounds.txt
+
+--exclude-compound / --exclude-file name the compounds (and their common spellings) whose
+effects must not be attributed to the drug: the derivative that contains its name, and the
+other compounds people in the same threads compare it with.
 """
 import argparse
 import sys
@@ -40,6 +45,8 @@ def main() -> None:
                         help="Text file of spellings for the drug, one per line (default: aliases from the treatment table)")
     parser.add_argument("--exclude-compound", action="append", default=[],
                         help="Name of a different compound whose effects must not be attributed to the drug (repeatable)")
+    parser.add_argument("--exclude-file", type=str, default=None,
+                        help="Text file of such compound names and spellings, one per line (added to --exclude-compound)")
     parser.add_argument("--domains-file", type=str, default=None,
                         help=f"Text file of effect domains, one per line (default: the {len(DOMAINS)} built-in domains)")
     parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
@@ -56,13 +63,14 @@ def main() -> None:
 
     aliases = _lines(args.drug_file, "--drug-file", parser) if args.drug_file else None
     domains = _lines(args.domains_file, "--domains-file", parser) if args.domains_file else DOMAINS
+    excluded = list(args.exclude_compound) + (_lines(args.exclude_file, "--exclude-file", parser) if args.exclude_file else [])
 
     summary = run_effects_extraction(
         get_client(),
         Path(args.db),
         args.drug,
         aliases=aliases,
-        excluded_compounds=args.exclude_compound or None,
+        excluded_compounds=excluded or None,
         domains=domains,
         model=args.model,
         workers=args.workers,
