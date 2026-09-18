@@ -18,9 +18,6 @@ CREATE TABLE IF NOT EXISTS report_doses (
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
-    post_id   TEXT NOT NULL REFERENCES posts(post_id),
-    user_id   TEXT REFERENCES users(user_id),
-    drug_id   INTEGER NOT NULL REFERENCES treatment(id),
     low       REAL NOT NULL,
     high      REAL NOT NULL,
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
@@ -29,7 +26,10 @@ CREATE TABLE IF NOT EXISTS report_doses (
     quote     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
-CREATE INDEX IF NOT EXISTS idx_rd_drug   ON report_doses(drug_id);
+-- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
+CREATE VIEW IF NOT EXISTS report_doses_latest AS
+    SELECT d.* FROM report_doses d
+    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
 """
 
 
@@ -139,32 +139,21 @@ class ReportWriter:
             self._pending = 0
         return True
 
-    def delete_doses(self, report_id: int) -> int:
-        """Remove a report's rows from report_doses. Returns the number removed."""
-        removed = self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (report_id,)).rowcount
-        self._pending += 1
-        if self._pending >= COMMIT_EVERY:
-            self.flush()
-        return removed
-
     def write_doses(self, report_id: int, doses) -> int:
         """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
         pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
-        post_id, user_id and drug_id are taken from that report, so a dose row can never
-        disagree with it; an unknown report_id raises ValueError. Insert only: call
-        delete_doses first to replace an earlier run's rows. Returns the number written."""
-        report = self._conn.execute(
-            "SELECT post_id, user_id, drug_id FROM treatment_reports WHERE report_id = ?", (report_id,)
-        ).fetchone()
-        if report is None:
+        Append only, like treatment_reports: earlier runs' rows stay, and the
+        report_doses_latest view returns each report's most recent run. An unknown
+        report_id raises ValueError. Returns the number written."""
+        if self._conn.execute(
+            "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
+        ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
-        post_id, user_id, drug_id = report
         self._conn.executemany(
-            "INSERT INTO report_doses (report_id, run_id, ordinal, post_id, user_id, drug_id, "
-            "low, high, unit, route, outcome, quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                (report_id, self.run_id, ordinal, post_id, user_id, drug_id,
-                 d.low, d.high, d.unit, d.route, d.outcome, d.quote)
+                (report_id, self.run_id, ordinal, d.low, d.high, d.unit, d.route, d.outcome, d.quote)
                 for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
             ],
         )

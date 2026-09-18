@@ -56,7 +56,7 @@ def test_prompt_and_response_parsing() -> None:
         parse_dose_response(raw, [0, 2])
 
 
-def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -87,19 +87,22 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(tmp_path: Path, m
     assert (first.reports, first.reports_with_doses, first.dose_rows, first.failed_reports) == (2, 1, 2, 0)
     assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
     with sqlite3.connect(schema_db) as conn:
-        rows = conn.execute("SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
+        rows = conn.execute("SELECT report_id, ordinal, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
     assert rows == [
-        (3, 0, "reply", "u2", 1, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
-        (3, 1, "reply", "u2", 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
+        (3, 0, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
+        (3, 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
     ]
     assert run_type == "report_doses" and json.loads(config)["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items]
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
-    with sqlite3.connect(schema_db) as conn:
-        assert conn.execute("SELECT run_id, low FROM report_doses").fetchall() == [(second.run_id, 25.0)]
+    with sqlite3.connect(schema_db) as conn:  # both runs kept; the view shows the latest
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
 
     with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:
         with pytest.raises(ValueError, match="does not exist"):
             writer.write_doses(999, [])
+    with pytest.raises(ValueError, match="not a canonical treatment"):
+        run_dose_extraction(None, schema_db, "no-such-drug", workers=1)

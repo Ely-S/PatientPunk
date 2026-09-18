@@ -102,19 +102,18 @@ CREATE TABLE report_doses (
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
-    post_id   TEXT NOT NULL REFERENCES posts(post_id),
-    user_id   TEXT REFERENCES users(user_id),
-    drug_id   INTEGER NOT NULL REFERENCES treatment(id),
     low       REAL NOT NULL,
     high      REAL NOT NULL,
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
-    route     TEXT,               -- oral mucosal | swallowed oral | nasal mucosal | injection | other explicit route
+    route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
-    quote     TEXT                -- verbatim sentence from the post
+    quote     TEXT
 );
-
 CREATE INDEX idx_rd_report ON report_doses(report_id);
-CREATE INDEX idx_rd_drug   ON report_doses(drug_id);
+-- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
+CREATE VIEW IF NOT EXISTS report_doses_latest AS
+    SELECT d.* FROM report_doses d
+    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
 
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)

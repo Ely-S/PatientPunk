@@ -267,6 +267,8 @@ def run_dose_extraction(
     """Extract doses for every latest report of ``drug`` in ``db_path`` and write report_doses."""
     conn = open_db(db_path)
     try:
+        if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
+            raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
         contexts = load_dose_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
         if aliases is None:
             aliases = _aliases_from_db(conn, drug)
@@ -301,7 +303,6 @@ def run_dose_extraction(
                 if context.report_id not in results:
                     failed += 1
                     continue
-                writer.delete_doses(context.report_id)  # a rerun replaces the report's rows
                 n = writer.write_doses(context.report_id, results[context.report_id])
                 reports_done += 1
                 rows += n
