@@ -12,6 +12,7 @@ import pipeline.doses as doses_module
 from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
+from utilities.db import ReportWriter
 
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 
@@ -98,3 +99,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(tmp_path: Path, m
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:
         assert conn.execute("SELECT run_id, low FROM report_doses").fetchall() == [(second.run_id, 25.0)]
+
+    with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:
+        with pytest.raises(ValueError, match="does not exist"):
+            writer.write_doses(999, [])

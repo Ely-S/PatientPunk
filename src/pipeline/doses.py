@@ -286,7 +286,6 @@ def run_dose_extraction(
     }
     log.info(f"{len(contexts)} reports for {drug!r}; model {model}")
     batches = make_batches(contexts, batch_size, solo_above_chars)
-    by_report = {c.report_id: c for c in contexts}
     reports_done = with_doses = rows = failed = dropped_total = 0
     with ReportWriter(db_path, run_config, get_git_commit(), extraction_type="report_doses") as writer:
         log.info(f"Extraction run {writer.run_id}")
@@ -302,9 +301,8 @@ def run_dose_extraction(
                 if context.report_id not in results:
                     failed += 1
                     continue
-                c = by_report[context.report_id]
-                writer.delete_doses(c.report_id)  # a rerun replaces the report's rows
-                n = writer.write_doses(c.report_id, c.post_id, c.user_id, c.drug_id, results[context.report_id])
+                writer.delete_doses(context.report_id)  # a rerun replaces the report's rows
+                n = writer.write_doses(context.report_id, results[context.report_id])
                 reports_done += 1
                 rows += n
                 with_doses += bool(n)

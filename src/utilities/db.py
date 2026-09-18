@@ -147,10 +147,18 @@ class ReportWriter:
             self.flush()
         return removed
 
-    def write_doses(self, report_id: int, post_id: str, user_id: str | None, drug_id: int, doses) -> int:
+    def write_doses(self, report_id: int, doses) -> int:
         """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
-        pipeline.doses.DoseValue) as this run's rows for a report. Insert only: call
+        pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
+        post_id, user_id and drug_id are taken from that report, so a dose row can never
+        disagree with it; an unknown report_id raises ValueError. Insert only: call
         delete_doses first to replace an earlier run's rows. Returns the number written."""
+        report = self._conn.execute(
+            "SELECT post_id, user_id, drug_id FROM treatment_reports WHERE report_id = ?", (report_id,)
+        ).fetchone()
+        if report is None:
+            raise ValueError(f"treatment report {report_id} does not exist")
+        post_id, user_id, drug_id = report
         self._conn.executemany(
             "INSERT INTO report_doses (report_id, run_id, ordinal, post_id, user_id, drug_id, "
             "low, high, unit, route, outcome, quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
