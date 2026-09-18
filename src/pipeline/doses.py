@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS report_doses (
     drug_id   INTEGER NOT NULL REFERENCES treatment(id),
     low       REAL NOT NULL,
     high      REAL NOT NULL,
-    unit      TEXT NOT NULL CHECK (unit IN ('mcg', 'mg', 'g')),
+    unit      TEXT CHECK (unit IN ('mcg', 'mg', 'g')),  -- NULL when the author gave a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
     quote     TEXT
@@ -68,7 +68,7 @@ class DoseValue(BaseModel):
 
     low: float = Field(gt=0)
     high: float = Field(gt=0)
-    unit: DoseUnit
+    unit: DoseUnit | None  # None: the author gave a number with no unit (kept as stated)
     route: Literal["oral mucosal", "swallowed oral", "nasal mucosal", "injection", "other explicit route"] | None = None
     outcome: Literal["positive", "negative", "neutral", "unclear"] | None = None
     quote: str | None = None
@@ -82,7 +82,12 @@ class DoseValue(BaseModel):
         raw_unit = str(data.get("unit") or "").strip().lower()
         unit, _, per = raw_unit.partition("/")  # "mg/day" is a dose; "mg/kg" is not
         unit = unit.strip()
-        data["unit"] = raw_unit if per.strip() in {"kg", "kilo", "kilogram", "lb", "lbs"} else _UNIT_SYNONYMS.get(unit, unit)
+        if unit in {"", "null", "none", "unspecified", "unknown"}:
+            data["unit"] = None  # bare number, kept as stated
+        elif per.strip() in {"kg", "kilo", "kilogram", "lb", "lbs"}:
+            data["unit"] = raw_unit  # fails the Literal check: per-weight doses are dropped
+        else:
+            data["unit"] = _UNIT_SYNONYMS.get(unit, unit)
         if data.get("route") not in ROUTE_CATEGORIES:
             data["route"] = None
         if data.get("outcome") not in OUTCOMES:
