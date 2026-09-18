@@ -1,4 +1,4 @@
-"""Shared fixtures: a database built from schema.sql, a row seeder, and a stubbed model call."""
+"""Shared fixtures: a database built from schema.sql and a stubbed model call."""
 
 from __future__ import annotations
 
@@ -20,41 +20,6 @@ def schema_db(tmp_path: Path) -> Path:
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
     return path
-
-
-@pytest.fixture
-def seed_reports() -> Callable[..., None]:
-    """Insert users, posts, one treatment, one sentiment run and its reports into a schema database.
-
-    ``posts`` are ``(post_id, parent_id, user_id, title, body)``; ``reports`` are
-    ``(post_id, user_id, sentiment)`` and get report_id 1..n in the order given.
-    """
-
-    def seed(
-        db_path: Path,
-        posts: list[tuple],
-        reports: list[tuple],
-        *,
-        drug: str = "7,8-dhf",
-        aliases: tuple[str, ...] = ("tropoflavin",),
-    ) -> None:
-        with sqlite3.connect(db_path) as conn:
-            conn.executemany(
-                "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at) VALUES (?, 'test', 0)",
-                [(user,) for _pid, _parent, user, _title, _body in posts],
-            )
-            conn.executemany(
-                "INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES (?, ?, ?, ?, ?, 0)",
-                posts,
-            )
-            conn.execute("INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, ?, ?)", (drug, json.dumps(list(aliases))))
-            conn.execute("INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}')")
-            conn.executemany(
-                "INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES (1, ?, ?, 1, ?, 'strong')",
-                reports,
-            )
-
-    return seed
 
 
 class StubLLM:

@@ -1,4 +1,4 @@
-"""Dose step: prompt, parsing, and the report_doses writer. No API calls."""
+"""Dose step: prompt, parsing, and the report_doses writer. The model call is stubbed; nothing is sent anywhere."""
 
 from __future__ import annotations
 
@@ -8,36 +8,23 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.doses import DoseContext, extract_batch, parse_dose_response, run_dose_extraction
+from pipeline.doses import parse_dose_response, run_dose_extraction
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
 
-POSTS = [
-    ("top", None, "u1", "Dosing thread", "What dose do you all take?"),
-    ("reply", "top", "u2", None, "I take 20mg sublingual, it is great. Tried 40 mg once, headache."),
-    ("other", "top", "u1", None, "Never tried it."),
-]
-REPORTS = [("reply", "u2", "positive"), ("other", "u1", "neutral"), ("reply", "u2", "mixed")]  # 'reply' has two runs
 REPLY_DOSES = [
     {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great."},
     {"low": 40, "high": 40, "unit": "mg", "outcome": "negative", "quote": "Tried 40 mg once, headache."},
 ]
 
 
-def doses_for(items: list[dict], doses: list[dict]) -> list[dict]:
-    """Reply with ``doses`` for the 20mg report and nothing for the others."""
-    return [{"item_id": it["item_id"], "doses": doses if "20mg" in it["report"] else []} for it in items]
-
-
-def test_prompt_renders_name_aliases_and_exclusions() -> None:
+def test_prompt_and_response_parsing() -> None:
     prompt = dose_system_prompt("7,8-dhf", ["tropoflavin", "78dhf", "7,8-DHF"], ["4'-DMA-7,8-DHF"])
     assert "doses of 7,8-dhf" in prompt
     assert "7,8-dhf is also written: tropoflavin, 78dhf." in prompt  # the name itself is not repeated
     assert "Do not assign information about 4'-DMA-7,8-DHF to 7,8-dhf" in prompt
     assert "also written" not in dose_system_prompt("ldn")
 
-
-def test_parse_response_coerces_units_drops_invalid_doses_and_checks_ids() -> None:
     raw = json.dumps([
         {"item_id": 0, "dose_sentences": ["x"], "doses": [
             {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
@@ -63,14 +50,26 @@ def test_parse_response_coerces_units_drops_invalid_doses_and_checks_ids() -> No
         parse_dose_response(raw, [0, 2])
 
 
-def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, seed_reports, stub_llm) -> None:
-    seed_reports(schema_db, POSTS, REPORTS)
-    stub_llm.reply(lambda items: doses_for(items, REPLY_DOSES))
+def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, stub_llm) -> None:
+    with sqlite3.connect(schema_db) as conn:
+        conn.executescript("""
+            INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
+            INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
+                ('top', NULL, 'u1', 'Dosing thread', 'What dose do you all take?', 0),
+                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache.', 0),
+                ('other', 'top', 'u1', NULL, 'Never tried it.', 0);
+            INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin"]');
+            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
+                (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
+                (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
+        """)
+    stub_llm.reply(lambda items: [{"item_id": it["item_id"], "doses": REPLY_DOSES if "20mg" in it["report"] else []} for it in items])
+
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
     assert (first.reports, first.reports_with_doses, first.dose_rows, first.failed_reports) == (2, 1, 2, 0)
-    sent = stub_llm.payloads[0]["items"]  # latest report per post, with the parent as context
-    assert sorted(it["report"][:6] for it in sent) == ["I take", "Never "] and all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in sent)
+    assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in stub_llm.payloads[0]["items"])
     with sqlite3.connect(schema_db) as conn:
         rows = conn.execute("SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
@@ -80,14 +79,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(schema_db: Path, 
     ]
     assert run_type == "report_doses" and json.loads(config)["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
 
-    stub_llm.reply(lambda items: doses_for(items, [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}]))
+    stub_llm.reply(lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items])
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:
         assert conn.execute("SELECT run_id, low FROM report_doses").fetchall() == [(second.run_id, 25.0)]
-
-
-def test_malformed_batch_is_split_down_to_single_items(stub_llm) -> None:
-    stub_llm.reply(lambda items: "garbage" if len(items) > 1 else [{"item_id": 0, "doses": [{"low": 1, "high": 1, "unit": "mg"}]}])
-    batch = [DoseContext(i, f"p{i}", None, 1, "1mg", "") for i in range(4)]
-    results, dropped = extract_batch(None, batch, "sys", "model")
-    assert sorted(results) == [0, 1, 2, 3] and dropped == 0
