@@ -9,11 +9,10 @@ from typing import NamedTuple
 import pytest
 
 import extract_demographics_conditions
+from extract_demographics_conditions import run_demographics
 from import_posts import import_reddit_posts
 from run_sentiment_pipeline import run_pipeline
-from extract_demographics_conditions import run_demographics
 from utilities import PipelineConfig
-
 
 # ---------------------------------------------------------------------------
 # Fake Anthropic client for deterministic pipeline testing
@@ -271,3 +270,21 @@ class TestPopulateDbEndToEnd:
         assert len(classify_prompts) == 1
         assert classify_prompts[0].count("--- Entry ") == 1
         assert "I love it so much" in classify_prompts[0]
+
+        commit_hash, raw_provenance = db.conn.execute(
+            "SELECT commit_hash, config FROM extraction_runs "
+            "WHERE extraction_type = 'treatment_sentiment' ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        provenance = json.loads(raw_provenance)
+        assert provenance["schema_id"] == "treatment_sentiment_run_provenance_v1"
+        assert provenance["git"]["commit"] == commit_hash
+        assert provenance["llm"]["fast_model"]
+        assert provenance["llm"]["strong_model"]
+        assert set(provenance["prompts"]) == {
+            "extract",
+            "canonicalize",
+            "drug_aliases_builder",
+            "prefilter",
+            "sentiment_builder",
+        }
+        assert len(provenance["fingerprint"]) == 64

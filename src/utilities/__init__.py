@@ -6,6 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 # Load .env from project root. override=False so explicitly-exported
@@ -144,6 +145,13 @@ def get_git_commit() -> str:
 #
 # Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+LLM_REASONING_MODE: Literal["enabled", "disabled", "not_applicable"]
+if LLM_PROVIDER != "openrouter":
+    LLM_REASONING_MODE = "not_applicable"
+elif _REASONING_OFF:
+    LLM_REASONING_MODE = "disabled"
+else:
+    LLM_REASONING_MODE = "enabled"
 
 
 class _ORStream:

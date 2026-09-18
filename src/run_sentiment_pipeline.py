@@ -19,12 +19,26 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities.db import ReportWriter, upsert_treatments
-from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
-from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
-
+from pipeline.extract import run_extraction
+from utilities import (
+    LLM_PROVIDER,
+    LLM_REASONING_MODE,
+    MODEL_FAST,
+    MODEL_STRONG,
+    TAGGED_MENTIONS,
+    PipelineConfig,
+    get_client,
+    log,
+)
+from utilities.db import ReportWriter, upsert_treatments
+from utilities.run_provenance import (
+    PipelineOptions,
+    RunProvenance,
+    build_run_provenance,
+    hash_aliases,
+)
 
 
 def _banner(label: str) -> None:
@@ -33,9 +47,46 @@ def _banner(label: str) -> None:
     log.info(f"{'═' * 60}\n")
 
 
+def _provenance_for(
+    config: PipelineConfig,
+    *,
+    skip_extract: bool,
+    skip_canonicalize: bool,
+    skip_prefilter: bool,
+) -> RunProvenance:
+    configured_aliases = config.drug_aliases or []
+    options = PipelineOptions(
+        limit=config.limit,
+        reclassify=config.reclassify,
+        skip_extract=skip_extract,
+        skip_canonicalize=skip_canonicalize,
+        skip_prefilter=skip_prefilter,
+        max_upstream_chars=config.max_upstream_chars,
+        max_upstream_depth=config.max_upstream_depth,
+        workers=config.workers,
+        drug=config.drug,
+        configured_drug_aliases_count=len(configured_aliases),
+        configured_drug_aliases_sha256=hash_aliases(config.drug_aliases),
+    )
+    return build_run_provenance(
+        provider=LLM_PROVIDER,
+        fast_model=MODEL_FAST,
+        strong_model=MODEL_STRONG,
+        reasoning_mode=LLM_REASONING_MODE,
+        options=options,
+    )
+
+
 def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_canonicalize: bool = False, skip_prefilter: bool = False) -> None:
     """Run the full pipeline programmatically given a PipelineConfig."""
     import json
+
+    provenance = _provenance_for(
+        config,
+        skip_extract=skip_extract,
+        skip_canonicalize=skip_canonicalize,
+        skip_prefilter=skip_prefilter,
+    )
 
     if not skip_extract:
         _banner("EXTRACT")
@@ -52,17 +103,8 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         count = upsert_treatments(config.db_path, all_drugs)
         log.info(f"{count} treatments in database (no aliases).")
 
-    run_config = {
-        "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},
-        "limit": config.limit,
-        "reclassify": config.reclassify,
-        "skip_canonicalize": skip_canonicalize,
-        "output_dir": str(config.output_dir),
-        "drug": config.drug,
-    }
-
     _banner("CLASSIFY")
-    with ReportWriter(config.db_path, run_config=run_config, commit_hash=get_git_commit()) as writer:
+    with ReportWriter(config.db_path, provenance=provenance) as writer:
         log.info(f"Extraction run {writer.run_id}")
         run_classification(config, writer=writer, skip_prefilter=skip_prefilter)
 

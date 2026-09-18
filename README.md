@@ -335,7 +335,9 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 ## Run traceability
 
-Each pipeline run creates a new row in `extraction_runs` with a unique `run_id`, along with the timestamp, git commit hash, extraction type, and config used. Every row written to `treatment_reports`, `user_profiles`, `conditions`, and `variables` is tagged with this `run_id`, so results are always traceable to the exact run that produced them.
+Each sentiment pipeline run creates a new row in `extraction_runs` with a unique `run_id`. Its versioned provenance records the Git commit and dirty state, provider and models, reasoning mode, prompt hashes, behavior-affecting options, and a deterministic fingerprint. Every row written to `treatment_reports` is tagged with this `run_id`.
+
+The fingerprint identifies the recorded run definition. It is traceability metadata only: it does not change caching or resume behavior. A dirty checkout is recorded explicitly because its commit alone is not sufficient to reproduce the run.
 
 Re-running the pipeline does not delete old data. The classify step skips `(post_id, drug_id)` pairs that already exist in `treatment_reports`, so only new pairs are processed. Use `--reclassify` to force re-classification of all pairs — old results are preserved with their original `run_id` alongside the new ones.
 

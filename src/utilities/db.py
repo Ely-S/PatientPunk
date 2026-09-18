@@ -4,10 +4,16 @@ Thin layer over treatment_reports — handles run logging, lookups,
 existence checks, and incremental inserts. Keeps classify_sentiment
 free of schema details.
 """
+from __future__ import annotations
+
 import json
 import sqlite3
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from utilities.run_provenance import RunProvenance
 
 COMMIT_EVERY = 50  # commit after this many writes
 
@@ -65,15 +71,19 @@ class ReportWriter:
     periodic commits. Use as a context manager.
     """
 
-    def __init__(self, db_path: Path, run_config: dict, commit_hash: str):
+    def __init__(self, db_path: Path, provenance: RunProvenance):
         self._conn = open_db(db_path)
         self._pending = 0
 
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
-            (int(time.time()), commit_hash, "treatment_sentiment",
-             json.dumps(run_config)),
+            (
+                int(time.time()),
+                provenance.git.commit,
+                "treatment_sentiment",
+                provenance.model_dump_json(),
+            ),
         )
         self.run_id = cursor.lastrowid
         self._conn.commit()
