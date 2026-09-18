@@ -116,6 +116,29 @@ CREATE TABLE report_doses (
 CREATE INDEX idx_rd_report ON report_doses(report_id);
 CREATE INDEX idx_rd_drug   ON report_doses(drug_id);
 
+-- One row per effect the author says the drug had on them, per treatment report.
+-- Written by src/run_effects_pipeline.py after the dose step; every row carries the
+-- sentence it came from and, when the author ties the effect to a stated dose, the
+-- report_doses row it belongs to.
+CREATE TABLE report_effects (
+    effect_id   INTEGER PRIMARY KEY,
+    report_id   INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    run_id      INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    ordinal     INTEGER NOT NULL,
+    post_id     TEXT NOT NULL REFERENCES posts(post_id),
+    user_id     TEXT REFERENCES users(user_id),
+    drug_id     INTEGER NOT NULL REFERENCES treatment(id),
+    domain      TEXT NOT NULL,       -- one of the run's domain list, recorded in extraction_runs.config
+    symptom     TEXT NOT NULL,       -- the author's own words for what changed
+    direction   TEXT NOT NULL CHECK (direction IN ('improved', 'worsened', 'no_change', 'mixed')),
+    attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
+    quote       TEXT NOT NULL,       -- verbatim sentence from the post
+    dose_id     INTEGER REFERENCES report_doses(dose_id)  -- NULL unless the author ties the effect to a stated dose
+);
+
+CREATE INDEX idx_re_report ON report_effects(report_id);
+CREATE INDEX idx_re_drug   ON report_effects(drug_id);
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════
