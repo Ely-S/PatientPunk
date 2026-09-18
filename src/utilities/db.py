@@ -14,7 +14,7 @@ COMMIT_EVERY = 50  # commit after this many writes
 # Kept identical to schema.sql so the dose step also works on databases created before the table existed.
 REPORT_DOSES_DDL = """
 CREATE TABLE IF NOT EXISTS report_doses (
-    dose_id   INTEGER PRIMARY KEY,
+    dose_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
