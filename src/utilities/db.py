@@ -157,7 +157,7 @@ class ReportWriter:
             [
                 (report_id, self.run_id, ordinal, post_id, user_id, drug_id,
                  d.low, d.high, d.unit, d.route, d.outcome, d.quote)
-                for ordinal, d in enumerate(doses, 1)
+                for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
             ],
         )
         self._pending += 1

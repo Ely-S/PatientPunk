@@ -89,8 +89,8 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_them(tmp_path: Path, m
         rows = conn.execute("SELECT report_id, ordinal, post_id, user_id, drug_id, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
     assert rows == [
-        (3, 1, "reply", "u2", 1, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
-        (3, 2, "reply", "u2", 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
+        (3, 0, "reply", "u2", 1, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
+        (3, 1, "reply", "u2", 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
     ]
     assert run_type == "report_doses" and json.loads(config)["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
 
