@@ -6,29 +6,33 @@ per post), sends each report to the model with its parent post as context, and w
 report_doses. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
 
-Standalone by design. Pieces that mirror the sentiment pipeline are kept as
-self-contained units so a later refactor is a move, not a rewrite (see the PR's plan):
-  * run_batches() + extract_batch()'s split <-> the pool loop and per-batch fallback in
-    classify.run_classification (and the halving in extract.py / canonicalize.py)
-  * load_dose_contexts() + request_payload() <-> extract.load_posts_from_db + classify.format_entry
-Rows are written through utilities.db.ReportWriter.write_doses.
+The mechanics shared with the other per-report steps (the report context query, batching,
+the thread-pool loop, the split-on-malformed-reply retry, the alias lookup) live in
+pipeline/report_context.py; this module keeps only what is dose-specific: the dose object,
+the payload and parse functions, and the run. Rows are written through
+utilities.db.ReportWriter.write_doses.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-import re
-import sqlite3
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from pipeline.report_context import (
+    ReportContext,
+    aliases_from_db,
+    extract_with_split,
+    load_report_contexts,
+    make_batches,
+    run_batches,
+)
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
-from utilities.db import ReportWriter, open_db, post_text
+from utilities.db import ReportWriter, open_db
 
 # Units are stored as the author wrote them. This map is NOT applied at write time; it is
 # the helper analyses call when they need comparable amounts (normalize_unit below).
@@ -50,7 +54,6 @@ def normalize_unit(unit: str | None) -> str | None:
 
 
 TOKENS_PER_ITEM = 400
-_WS = re.compile(r"\s+")
 
 class DoseValue(BaseModel):
     """One stated per-administration amount, as the author wrote it."""
@@ -87,14 +90,7 @@ class DoseValue(BaseModel):
         return self
 
 
-@dataclass(frozen=True)
-class DoseContext:
-    report_id: int
-    post_id: str
-    user_id: str | None
-    drug_id: int
-    text: str
-    replying_to: str
+DoseContext = ReportContext  # the dose step's context is the shared one, without a thread title
 
 
 @dataclass(frozen=True)
@@ -107,59 +103,7 @@ class DoseRunSummary:
     dropped_doses: int  # dose objects the model returned that did not validate
 
 
-def load_dose_contexts(
-    conn: sqlite3.Connection,
-    drug: str,
-    *,
-    parent_chars: int | None = 1500,
-    limit: int | None = None,
-    max_text_chars: int = 8000,
-) -> list[DoseContext]:
-    """Latest treatment report per post for ``drug``, with the parent post as context."""
-    rows = conn.execute(
-        """
-        SELECT tr.report_id, tr.post_id, tr.user_id, tr.drug_id,
-               p.title, p.body_text, p.parent_id,
-               pp.title AS parent_title, pp.body_text AS parent_body, pp.parent_id AS parent_parent
-        FROM treatment_reports tr
-        JOIN treatment t ON t.id = tr.drug_id
-        JOIN posts p ON p.post_id = tr.post_id
-        LEFT JOIN posts pp ON pp.post_id = p.parent_id
-        WHERE lower(t.canonical_name) = lower(?)
-          AND tr.report_id = (
-              SELECT MAX(tr2.report_id) FROM treatment_reports tr2
-              WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
-          )
-        ORDER BY tr.report_id
-        """,
-        (drug,),
-    ).fetchall()
-    contexts: list[DoseContext] = []
-    for report_id, post_id, user_id, drug_id, title, body, parent_id, ptitle, pbody, pparent in rows:
-        text = _WS.sub(" ", post_text(title, body, parent_id)).strip()[:max_text_chars]
-        if not text:
-            continue
-        parent = ""
-        if parent_chars and parent_id is not None and (ptitle or pbody):
-            parent = _WS.sub(" ", post_text(ptitle, pbody, pparent)).strip()[:parent_chars]
-        contexts.append(DoseContext(report_id, post_id, user_id, drug_id, text, parent))
-        if limit and len(contexts) >= limit:
-            break
-    return contexts
-
-
-def make_batches(
-    contexts: list[DoseContext], batch_size: int, solo_above_chars: int | None
-) -> list[list[DoseContext]]:
-    """Group short reports ``batch_size`` per call; long reports go one per call."""
-    short = [c for c in contexts if solo_above_chars is None or len(c.text) <= solo_above_chars]
-    long_ = [c for c in contexts if solo_above_chars is not None and len(c.text) > solo_above_chars]
-    batches = [short[i:i + batch_size] for i in range(0, len(short), batch_size)]
-    batches.extend([c] for c in long_)
-    return batches
-
-
-def request_payload(batch: list[DoseContext]) -> str:
+def request_payload(batch: list[ReportContext]) -> str:
     items = []
     for i, context in enumerate(batch):
         item: dict[str, object] = {"item_id": i, "report": context.text}
@@ -204,50 +148,12 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
 
 
 def extract_batch(
-    client, batch: list[DoseContext], system: str, model: str
+    client, batch: list[ReportContext], system: str, model: str
 ) -> tuple[dict[int, list[DoseValue]], int]:
     """Extract one batch; on a malformed reply, split the batch and retry down to single items."""
-    payload = request_payload(batch)
-    try:
-        raw = llm_call(client, payload, model=model, system=system, max_tokens=TOKENS_PER_ITEM * len(batch))
-        per_item, dropped = parse_dose_response(raw, list(range(len(batch))))
-        return {batch[i].report_id: doses for i, doses in per_item.items()}, dropped
-    except LLMParseError as e:
-        if len(batch) == 1:
-            log.warning(f"Skipping report {batch[0].report_id}: {e}")
-            return {}, 0
-        log.warning(f"Malformed reply for a batch of {len(batch)}; splitting. {e}")
-        mid = len(batch) // 2
-        left, dropped_left = extract_batch(client, batch[:mid], system, model)
-        right, dropped_right = extract_batch(client, batch[mid:], system, model)
-        return {**left, **right}, dropped_left + dropped_right
-
-
-def _aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
-    row = conn.execute(
-        "SELECT aliases FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)
-    ).fetchone()
-    if not row or not row[0]:
-        return []
-    try:
-        return [str(a) for a in json.loads(row[0]) if str(a).strip()]
-    except (TypeError, ValueError):
-        return []
-
-
-def run_batches(batches, fn, workers: int):
-    """Run ``fn(batch)`` over ``batches`` on a thread pool; yield ``(batch, result, error)`` as each completes.
-
-    Mirrors the pool loop in classify.run_classification (candidate for a shared helper).
-    """
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        futures = {pool.submit(fn, batch): batch for batch in batches}
-        for future in as_completed(futures):
-            batch = futures[future]
-            try:
-                yield batch, future.result(), None
-            except Exception as e:  # noqa: BLE001 — transport failures after retries, truncation at the largest budget
-                yield batch, None, e
+    return extract_with_split(
+        client, batch, system, model, request_payload, parse_dose_response, TOKENS_PER_ITEM, call=llm_call
+    )
 
 
 def run_dose_extraction(
@@ -269,9 +175,9 @@ def run_dose_extraction(
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
             raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
-        contexts = load_dose_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
+        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
         if aliases is None:
-            aliases = _aliases_from_db(conn, drug)
+            aliases = aliases_from_db(conn, drug)
     finally:
         conn.close()
     system = dose_system_prompt(drug, aliases, excluded_compounds)
