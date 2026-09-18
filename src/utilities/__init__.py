@@ -40,6 +40,7 @@ class PipelineConfig:
     workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
+    drug_excluded_aliases: list[str] | None = None  # Longer compounds that must not count as target mentions
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
