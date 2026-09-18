@@ -277,14 +277,8 @@ class TestPopulateDbEndToEnd:
         ).fetchone()
         provenance = json.loads(raw_provenance)
         assert provenance["schema_id"] == "treatment_sentiment_run_provenance_v1"
-        assert provenance["git"]["commit"] == commit_hash
-        assert provenance["llm"]["fast_model"]
-        assert provenance["llm"]["strong_model"]
-        assert set(provenance["prompts"]) == {
-            "extract",
-            "canonicalize",
-            "drug_aliases_builder",
-            "prefilter",
-            "sentiment_builder",
-        }
+        assert provenance["git_commit"] == commit_hash
+        assert provenance["fast_model"]
+        assert provenance["strong_model"]
+        assert len(provenance["prompt_bundle_sha256"]) == 64
         assert len(provenance["fingerprint"]) == 64

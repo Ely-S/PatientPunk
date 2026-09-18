@@ -80,7 +80,7 @@ class ReportWriter:
             "VALUES (?, ?, ?, ?)",
             (
                 int(time.time()),
-                provenance.git.commit,
+                provenance.git_commit,
                 "treatment_sentiment",
                 provenance.model_dump_json(),
             ),

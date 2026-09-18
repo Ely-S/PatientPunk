@@ -54,7 +54,6 @@ def _provenance_for(
     skip_canonicalize: bool,
     skip_prefilter: bool,
 ) -> RunProvenance:
-    configured_aliases = config.drug_aliases or []
     options = PipelineOptions(
         limit=config.limit,
         reclassify=config.reclassify,
@@ -65,7 +64,6 @@ def _provenance_for(
         max_upstream_depth=config.max_upstream_depth,
         workers=config.workers,
         drug=config.drug,
-        configured_drug_aliases_count=len(configured_aliases),
         configured_drug_aliases_sha256=hash_aliases(config.drug_aliases),
     )
     return build_run_provenance(

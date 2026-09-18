@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from utilities import run_provenance
 from utilities.run_provenance import (
-    GitState,
     PipelineOptions,
     build_run_provenance,
     hash_aliases,
@@ -20,7 +19,6 @@ def _options(**changes: object) -> PipelineOptions:
         "max_upstream_depth": None,
         "workers": 20,
         "drug": "ldn",
-        "configured_drug_aliases_count": 2,
         "configured_drug_aliases_sha256": hash_aliases(
             ["ldn", "low dose naltrexone"]
         ),
@@ -33,7 +31,7 @@ def _build(monkeypatch, options: PipelineOptions):
     monkeypatch.setattr(
         run_provenance,
         "read_git_state",
-        lambda: GitState(commit="a" * 40, dirty=False),
+        lambda: ("a" * 40, False),
     )
     return build_run_provenance(
         provider="openrouter",
@@ -52,9 +50,11 @@ def test_run_fingerprint_is_deterministic_and_sensitive_to_options(monkeypatch) 
     assert first.fingerprint == repeated.fingerprint
     assert first.fingerprint != changed.fingerprint
     assert first.schema_id == "treatment_sentiment_run_provenance_v1"
-    assert first.git == GitState(commit="a" * 40, dirty=False)
-    assert first.llm.reasoning_mode == "disabled"
-    assert all(len(value) == 64 for value in first.prompts.model_dump().values())
+    assert first.git_commit == "a" * 40
+    assert first.git_dirty is False
+    assert first.reasoning_mode == "disabled"
+    assert len(first.prompt_bundle_sha256) == 64
+    assert first.model_dump(mode="json")["fingerprint"] == first.fingerprint
 
 
 def test_alias_hash_ignores_case_order_and_duplicates() -> None:

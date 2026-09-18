@@ -335,7 +335,7 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 
 ## Run traceability
 
-Each sentiment pipeline run creates a new row in `extraction_runs` with a unique `run_id`. Its versioned provenance records the Git commit and dirty state, provider and models, reasoning mode, prompt hashes, behavior-affecting options, and a deterministic fingerprint. Every row written to `treatment_reports` is tagged with this `run_id`.
+Each sentiment pipeline run creates a new row in `extraction_runs` with a unique `run_id`. Its versioned provenance records the Git commit and dirty state, provider and models, reasoning mode, a prompt-bundle hash, behavior-affecting options, and a deterministic fingerprint. Every row written to `treatment_reports` is tagged with this `run_id`.
 
 The fingerprint identifies the recorded run definition. It is traceability metadata only: it does not change caching or resume behavior. A dirty checkout is recorded explicitly because its commit alone is not sufficient to reproduce the run.
 

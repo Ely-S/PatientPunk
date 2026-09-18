@@ -18,7 +18,7 @@ Each sentiment run stores one validated provenance record with:
 - a schema identifier;
 - Git commit and dirty state;
 - provider, fast model, strong model, and reasoning mode;
-- SHA-256 identities for all prompt definitions;
+- one SHA-256 identity for the complete prompt bundle;
 - behavior-affecting pipeline options; and
 - a SHA-256 fingerprint of the canonical provenance record.
 
