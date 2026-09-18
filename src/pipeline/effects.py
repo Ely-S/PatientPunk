@@ -242,7 +242,7 @@ class EffectWriter(ReportWriter):
             [
                 (report_id, self.run_id, ordinal, post_id, user_id, drug_id,
                  e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose)
-                for ordinal, e in enumerate(effects, 1)
+                for ordinal, e in enumerate(effects)
             ],
         )
         self._pending += 1

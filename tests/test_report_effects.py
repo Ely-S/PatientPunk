@@ -149,8 +149,8 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces_them(tm
         ).fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
     assert rows == [
-        (3, 1, "reply", "u2", 1, "cognition or brain fog", "brain fog", "improved", "target", "At 20mg it fixed my brain fog.", 7),
-        (3, 2, "reply", "u2", 1, "sleep or wakefulness", "sleep", "worsened", "target", "It also ruins my sleep.", None),
+        (3, 0, "reply", "u2", 1, "cognition or brain fog", "brain fog", "improved", "target", "At 20mg it fixed my brain fog.", 7),
+        (3, 1, "reply", "u2", 1, "sleep or wakefulness", "sleep", "worsened", "target", "It also ruins my sleep.", None),
     ]
     config = json.loads(config)
     assert run_type == "report_effects" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
