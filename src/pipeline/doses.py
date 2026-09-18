@@ -303,6 +303,7 @@ def run_dose_extraction(
                     failed += 1
                     continue
                 c = by_report[context.report_id]
+                writer.delete_doses(c.report_id)  # a rerun replaces the report's rows
                 n = writer.write_doses(c.report_id, c.post_id, c.user_id, c.drug_id, results[context.report_id])
                 reports_done += 1
                 rows += n

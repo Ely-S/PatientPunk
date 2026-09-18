@@ -139,10 +139,18 @@ class ReportWriter:
             self._pending = 0
         return True
 
+    def delete_doses(self, report_id: int) -> int:
+        """Remove a report's rows from report_doses. Returns the number removed."""
+        removed = self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (report_id,)).rowcount
+        self._pending += 1
+        if self._pending >= COMMIT_EVERY:
+            self.flush()
+        return removed
+
     def write_doses(self, report_id: int, post_id: str, user_id: str | None, drug_id: int, doses) -> int:
-        """Replace a report's rows in report_doses with ``doses`` (objects with low, high, unit,
-        route, outcome, quote — e.g. pipeline.doses.DoseValue). Returns the number written."""
-        self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (report_id,))
+        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
+        pipeline.doses.DoseValue) as this run's rows for a report. Insert only: call
+        delete_doses first to replace an earlier run's rows. Returns the number written."""
         self._conn.executemany(
             "INSERT INTO report_doses (report_id, run_id, ordinal, post_id, user_id, drug_id, "
             "low, high, unit, route, outcome, quote) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
