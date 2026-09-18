@@ -177,6 +177,7 @@ class TestPopulateDbEndToEnd:
             "conditions",
             "extraction_runs",
             "posts",
+            "report_doses",
             "treatment",
             "treatment_reports",
             "user_profiles",

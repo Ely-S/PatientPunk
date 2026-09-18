@@ -11,6 +11,27 @@ from pathlib import Path
 
 COMMIT_EVERY = 50  # commit after this many writes
 
+# Kept identical to schema.sql so the dose step also works on databases created before the table existed.
+REPORT_DOSES_DDL = """
+CREATE TABLE IF NOT EXISTS report_doses (
+    dose_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    ordinal   INTEGER NOT NULL,
+    low       REAL NOT NULL,
+    high      REAL NOT NULL,
+    unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
+    route     TEXT,
+    outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
+    quote     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
+-- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
+CREATE VIEW IF NOT EXISTS report_doses_latest AS
+    SELECT d.* FROM report_doses d
+    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
+"""
+
 
 def post_text(title: str | None, body_text: str | None, parent_id: str | None) -> str:
     """Reconstruct display text for a post row.
@@ -59,20 +80,23 @@ def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[st
 
 
 class ReportWriter:
-    """Incremental writer for treatment_reports.
+    """Incremental writer for treatment_reports and report_doses.
 
     Creates an extraction_runs row on init, then batches inserts with
-    periodic commits. Use as a context manager.
+    periodic commits. Use as a context manager. ``extraction_type`` names the
+    run: "treatment_sentiment" (default) or "report_doses".
     """
 
-    def __init__(self, db_path: Path, run_config: dict, commit_hash: str):
+    def __init__(self, db_path: Path, run_config: dict, commit_hash: str,
+                 extraction_type: str = "treatment_sentiment"):
         self._conn = open_db(db_path)
+        self._conn.executescript(REPORT_DOSES_DDL)
         self._pending = 0
 
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
-            (int(time.time()), commit_hash, "treatment_sentiment",
+            (int(time.time()), commit_hash, extraction_type,
              json.dumps(run_config)),
         )
         self.run_id = cursor.lastrowid
@@ -114,6 +138,29 @@ class ReportWriter:
             self._conn.commit()
             self._pending = 0
         return True
+
+    def write_doses(self, report_id: int, doses) -> int:
+        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
+        pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
+        Append only, like treatment_reports: earlier runs' rows stay, and the
+        report_doses_latest view returns each report's most recent run. An unknown
+        report_id raises ValueError. Returns the number written."""
+        if self._conn.execute(
+            "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
+        ).fetchone() is None:
+            raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.executemany(
+            "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (report_id, self.run_id, ordinal, d.low, d.high, d.unit, d.route, d.outcome, d.quote)
+                for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
+            ],
+        )
+        self._pending += len(doses)  # one per row written, so COMMIT_EVERY means rows here too
+        if self._pending >= COMMIT_EVERY:
+            self.flush()
+        return len(doses)
 
     def flush(self):
         """Commit any pending writes."""
