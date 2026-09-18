@@ -30,15 +30,25 @@ from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
 from utilities.db import ReportWriter, open_db, post_text
 
-DoseUnit = Literal["mcg", "mg", "g", "ml", "l", "iu"]  # mass, volume, international units; None = unstated
-_UNIT_SYNONYMS = {
+# Units are stored as the author wrote them. This map is NOT applied at write time; it is
+# the helper analyses call when they need comparable amounts (normalize_unit below).
+UNIT_SYNONYMS = {
     "mcg": "mcg", "ug": "mcg", "µg": "mcg", "μg": "mcg", "microgram": "mcg", "micrograms": "mcg",
     "mg": "mg", "milligram": "mg", "milligrams": "mg",
     "g": "g", "gram": "g", "grams": "g",
     "ml": "ml", "mls": "ml", "milliliter": "ml", "milliliters": "ml", "millilitre": "ml", "millilitres": "ml", "cc": "ml",
     "l": "l", "liter": "l", "liters": "l", "litre": "l", "litres": "l",
-    "iu": "iu", "i.u.": "iu", "international unit": "iu", "international units": "iu", "unit": "iu", "units": "iu",
+    "iu": "iu", "i.u.": "iu", "international unit": "iu", "international units": "iu",
 }
+
+
+def normalize_unit(unit: str | None) -> str | None:
+    """Canonical unit for a stored one ("mL" -> "ml", "milligrams" -> "mg"), or None when unknown or absent."""
+    if not unit:
+        return None
+    return UNIT_SYNONYMS.get(unit.strip().lower())
+
+
 TOKENS_PER_ITEM = 400
 _WS = re.compile(r"\s+")
 
@@ -49,7 +59,7 @@ class DoseValue(BaseModel):
 
     low: float = Field(gt=0)
     high: float = Field(gt=0)
-    unit: DoseUnit | None  # None: the author gave a number with no unit (kept as stated)
+    unit: str | None = Field(default=None, max_length=40)  # as the author wrote it; None = bare number
     route: Literal["oral mucosal", "swallowed oral", "nasal mucosal", "injection", "other explicit route"] | None = None
     outcome: Literal["positive", "negative", "neutral", "unclear"] | None = None
     quote: str | None = None
@@ -60,15 +70,8 @@ class DoseValue(BaseModel):
         if not isinstance(value, dict):
             return value
         data = dict(value)
-        raw_unit = str(data.get("unit") or "").strip().lower()
-        unit, _, per = raw_unit.partition("/")  # "mg/day" is a dose; "mg/kg" is not
-        unit = unit.strip()
-        if unit in {"", "null", "none", "unspecified", "unknown"}:
-            data["unit"] = None  # bare number, kept as stated
-        elif per.strip() in {"kg", "kilo", "kilogram", "lb", "lbs"}:
-            data["unit"] = raw_unit  # fails the Literal check: per-weight doses are dropped
-        else:
-            data["unit"] = _UNIT_SYNONYMS.get(unit, unit)
+        raw_unit = str(data.get("unit") or "").strip()
+        data["unit"] = None if raw_unit.lower() in {"", "null", "none", "unspecified", "unknown"} else raw_unit
         if data.get("route") not in ROUTE_CATEGORIES:
             data["route"] = None
         if data.get("outcome") not in OUTCOMES:

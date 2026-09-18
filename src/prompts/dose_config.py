@@ -51,11 +51,10 @@ Dose rules:
    text, someone else's dose, bottle concentration, and mechanism discussion do not count.
    Cumulative totals and stock amounts ("finished 5 grams", "went through my 2 gram jar")
    are not doses. Never assign another compound's dose or another person's dose to {name}.
-2. Allowed units are mass ("mcg", "mg", "g"), volume ("ml", "l") and "iu". Preserve the
-   stated unit ("1 ml", "2 L of water", "5000 IU"). When the author gives a bare number with
-   no unit ("started on 1.5", ".25 to .5"), keep the number and set "unit" to null; never
-   invent a unit. Do not extract mg/kg, percentages, or counts of pills, capsules, drops or
-   sprays.
+2. Copy the unit exactly as the author wrote it, whatever it is: "mg", "mcg", "g", "ml",
+   "L", "IU", "drops", "capsules", "tablets", "sprays", "puffs", "patches", "mg/kg", "%".
+   Never convert or normalise it. When the author gives a bare number with no unit
+   ("started on 1.5", ".25 to .5"), keep the number and set "unit" to null; never invent one.
 3. A range such as 10-20 mg is one dose object with low 10 and high 20, never two objects. A
    single amount has equal low and high. A split dose ("split the 25mg into two") is
    recorded at the amount taken per administration (12.5).

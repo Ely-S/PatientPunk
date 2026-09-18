@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import pipeline.doses as doses_module
-from pipeline.doses import parse_dose_response, run_dose_extraction
+from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
 
@@ -31,30 +31,26 @@ def test_prompt_and_response_parsing() -> None:
     raw = json.dumps([
         {"item_id": 0, "dose_sentences": ["x"], "doses": [
             {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
-            {"low": 500, "high": 500, "unit": "ug"},
-            {"low": 50, "high": 50, "unit": "mg/day"},
-            {"low": 1, "high": 3, "unit": "grams"},
             {"low": 1.5, "high": 1.5, "unit": None},         # bare number, unit unknown
-            {"low": 1, "high": 1, "unit": "mL"},
-            {"low": 5000, "high": 5000, "unit": "IU"},
+            {"low": 2, "high": 2, "unit": "capsules"},       # any unit is kept as written
+            {"low": 2, "high": 2, "unit": "mg/kg"},
+            {"low": 1, "high": 3, "unit": "grams"},
             {"low": 1, "high": 3, "unit": "grams"},          # duplicate
             {"low": 20, "high": 10, "unit": "mg"},           # high below low
-            {"low": 2, "high": 2, "unit": "mg/kg"},          # per-kilogram is not a dose
-            {"low": 5, "high": 5, "unit": "drops"},
+            {"low": "twenty", "high": 20, "unit": "mg"},     # not a number
         ]},
         {"item_id": 1, "doses": []},
     ])
     per_item, dropped = parse_dose_response(raw, [0, 1])
-    assert dropped == 3 and per_item[1] == []
+    assert dropped == 2 and per_item[1] == []
     assert [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in per_item[0]] == [
-        (20.0, 20.0, "mg", None, None, "20mg"),
-        (500.0, 500.0, "mcg", None, None, None),
-        (50.0, 50.0, "mg", None, None, None),
-        (1.0, 3.0, "g", None, None, None),
+        (20.0, 20.0, "milligrams", None, None, "20mg"),
         (1.5, 1.5, None, None, None, None),
-        (1.0, 1.0, "ml", None, None, None),
-        (5000.0, 5000.0, "iu", None, None, None),
+        (2.0, 2.0, "capsules", None, None, None),
+        (2.0, 2.0, "mg/kg", None, None, None),
+        (1.0, 3.0, "grams", None, None, None),
     ]
+    assert [normalize_unit(u) for u in ("milligrams", "mL", "IU", "capsules", None)] == ["mg", "ml", "iu", None, None]
     with pytest.raises(LLMParseError, match="do not match"):
         parse_dose_response(raw, [0, 2])
 
