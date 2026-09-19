@@ -2,8 +2,8 @@
 doses.py — One row per dose the author states they took, per treatment report.
 
 Runs after the sentiment pipeline. Reads treatment_reports for one drug (latest report
-per post), sends each report to the model with its parent post as context, and writes
-report_doses. Amounts are stored as stated (a range keeps its low and high); every row
+per post), sends each report to the model with the shared context (the parent post) and
+the shared exclusion names, and writes report_doses; a rerun replaces a report's rows. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
 
 The mechanics shared with the other per-report steps (the report context query, batching,
@@ -23,11 +23,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from pipeline.report_context import (
+    DEFAULT_PARENT_CHARS,
+    DEFAULT_THREAD_CHARS,
     ReportContext,
     aliases_from_db,
     extract_with_split,
     load_report_contexts,
     make_batches,
+    resolve_exclusions,
     run_batches,
 )
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
@@ -165,7 +168,7 @@ def run_dose_extraction(
     model: str = MODEL_STRONG,
     workers: int = 8,
     batch_size: int = 8,
-    parent_chars: int | None = 1500,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
     solo_above_chars: int | None = 3000,
     limit: int | None = None,
 ) -> DoseRunSummary:
@@ -174,16 +177,18 @@ def run_dose_extraction(
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
             raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
-        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
+        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, thread_chars=DEFAULT_THREAD_CHARS, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
+        excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
     finally:
         conn.close()
     system = dose_system_prompt(drug, aliases, excluded_compounds)
     run_config = {
         "drug": drug,
         "aliases": aliases,
-        "excluded_compounds": excluded_compounds or [],
+        "excluded_compounds": excluded_compounds,
+        "exclusions_source": exclusions_source,
         "model": model,
         "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
         "parent_chars": parent_chars,

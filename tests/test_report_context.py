@@ -10,11 +10,14 @@ import pytest
 
 import pipeline.report_context as rc
 from pipeline.report_context import (
+    DEFAULT_PARENT_CHARS,
+    DEFAULT_THREAD_CHARS,
     ReportContext,
     aliases_from_db,
     extract_with_split,
     load_report_contexts,
     make_batches,
+    resolve_exclusions,
 )
 from utilities import LLMParseError
 
@@ -50,7 +53,8 @@ def test_loader_takes_the_latest_report_per_post_with_the_parent_as_context(seed
     assert contexts[1].replying_to == "I take 20mg "  # capped at parent_chars
     full = {c.post_id: c for c in load_report_contexts(seeded, "7,8-dhf")}
     assert full["deep"].replying_to == "I take 20mg sublingual, it is great. Tried 40 mg once, headache."  # a reply's parent is body only
-    assert all(c.thread_title == "" for c in contexts)  # off unless asked for
+    assert all(c.thread_title == "" for c in contexts)  # off by default: context is one parent up
+    assert all(c.thread_title == "Dosing thread" for c in load_report_contexts(seeded, "7,8-dhf", thread_chars=200))  # opt-in
     assert load_report_contexts(seeded, "7,8-dhf", parent_chars=12, limit=1) == contexts[:1]
     assert load_report_contexts(seeded, "ldn") == []
 
@@ -109,3 +113,35 @@ def test_aliases_from_db_reads_the_stored_spellings(seeded: sqlite3.Connection) 
     assert aliases_from_db(seeded, "nope") == []
     seeded.execute("UPDATE treatment SET aliases = 'not json' WHERE id = 1")
     assert aliases_from_db(seeded, "7,8-dhf") == []
+
+
+def test_both_steps_send_the_same_context_by_default() -> None:
+    """The dose and effects steps take their context settings from this module, so a change here reaches both."""
+    import inspect
+
+    import pipeline.doses as doses
+    import pipeline.effects as effects
+
+    for fn in (doses.run_dose_extraction, effects.run_effects_extraction, load_report_contexts):
+        params = inspect.signature(fn).parameters
+        assert params["parent_chars"].default == DEFAULT_PARENT_CHARS
+        assert "thread_chars" not in params or params["thread_chars"].default == DEFAULT_THREAD_CHARS
+    assert DEFAULT_THREAD_CHARS is None  # one parent up, nothing else (user decision)
+    context = ReportContext(1, "p1", None, 1, "I take 20mg.", "What dose?", "")
+    dose_item = json.loads(doses.request_payload([context]))["items"][0]
+    effect_item = json.loads(effects.request_payload([context], {}))["items"][0]
+    assert dose_item == effect_item == {"item_id": 0, "report": "I take 20mg.", "replying_to": "What dose?"}
+
+
+def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3.Connection) -> None:
+    assert resolve_exclusions(seeded, "7,8-dhf", ["4'-DMA-7,8-DHF"]) == (["4'-DMA-7,8-DHF"], "flags")
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == ([], "none")  # run 1 recorded no drug
+    seeded.execute("INSERT INTO extraction_runs VALUES (2, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "7,8-DHF", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin"]}),))
+    seeded.execute("INSERT INTO extraction_runs VALUES (3, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "ldn", "drug_excluded_aliases": ["naltrexone-bupropion"]}),))
+    seeded.execute("INSERT INTO extraction_runs VALUES (4, 0, 'abc', 'report_doses', ?)",
+                   (json.dumps({"drug": "7,8-dhf", "excluded_compounds": ["ignored: not a sentiment run"]}),))
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf", "eutropoflavin"], "sentiment_run")  # latest matching drug
+    assert resolve_exclusions(seeded, "ldn", None) == (["naltrexone-bupropion"], "sentiment_run")
+    assert resolve_exclusions(seeded, "7,8-dhf", ["x"]) == (["x"], "flags")  # flags still win

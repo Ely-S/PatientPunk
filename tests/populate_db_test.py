@@ -178,6 +178,7 @@ class TestPopulateDbEndToEnd:
             "extraction_runs",
             "posts",
             "report_doses",
+            "report_effects",
             "treatment",
             "treatment_reports",
             "user_profiles",

@@ -26,10 +26,6 @@ CREATE TABLE IF NOT EXISTS report_doses (
     quote     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
--- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
-CREATE VIEW IF NOT EXISTS report_doses_latest AS
-    SELECT d.* FROM report_doses d
-    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
 """
 
 
@@ -142,13 +138,17 @@ class ReportWriter:
     def write_doses(self, report_id: int, doses) -> int:
         """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
         pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
-        Append only, like treatment_reports: earlier runs' rows stay, and the
-        report_doses_latest view returns each report's most recent run. An unknown
+        A rerun replaces the report's rows: earlier rows for the report are deleted first,
+        so a run that finds no dose retracts what an earlier run wrote. An unknown
         report_id raises ValueError. Returns the number written."""
         if self._conn.execute(
             "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.execute("DELETE FROM report_doses WHERE report_id = ?", (report_id,))
+        if self._has_table("report_effects"):  # effects that pointed at the replaced dose rows lose their link
+            self._conn.execute("UPDATE report_effects SET dose_id = NULL WHERE report_id = ? AND dose_id IS NOT NULL", (report_id,))
+        self._pending += 1  # the delete must reach the commit even when nothing is inserted
         self._conn.executemany(
             "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -161,6 +161,35 @@ class ReportWriter:
         if self._pending >= COMMIT_EVERY:
             self.flush()
         return len(doses)
+
+    def write_effects(self, report_id: int, effects) -> int:
+        """Insert ``effects`` (objects with domain, symptom, direction, attribution, quote, dose —
+        e.g. pipeline.effects.EffectValue) as this run's rows for an existing treatment report.
+        A rerun replaces the report's rows, like write_doses. An unknown report_id raises
+        ValueError. Returns the number written."""
+        if self._conn.execute(
+            "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
+        ).fetchone() is None:
+            raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.execute("DELETE FROM report_effects WHERE report_id = ?", (report_id,))
+        self._pending += 1  # the delete must reach the commit even when nothing is inserted
+        self._conn.executemany(
+            "INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote, dose_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (report_id, self.run_id, ordinal, e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose)
+                for ordinal, e in enumerate(effects)  # 0-based, like report_doses
+            ],
+        )
+        self._pending += len(effects)
+        if self._pending >= COMMIT_EVERY:
+            self.flush()
+        return len(effects)
+
+    def _has_table(self, name: str) -> bool:
+        return self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone() is not None
 
     def flush(self):
         """Commit any pending writes."""
