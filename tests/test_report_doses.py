@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 import pipeline.doses as doses_module
-from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
+from pipeline.doses import make_batches, normalize_unit, parse_dose_response, request_payload, run_dose_extraction
+from pipeline.report_context import load_report_contexts
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
 from utilities.db import ReportWriter
@@ -106,3 +107,64 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
             writer.write_doses(999, [])
     with pytest.raises(ValueError, match="not a canonical treatment"):
         run_dose_extraction(None, schema_db, "no-such-drug", workers=1)
+
+
+def test_dose_payload_is_unchanged_by_the_shared_context_module(tmp_path: Path) -> None:
+    """Pins the exact JSON the dose step sends, so moving the mechanics cannot change a run."""
+    schema_db = tmp_path / "study.db"
+    with sqlite3.connect(schema_db) as conn:
+        conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
+        conn.executescript("""
+            INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
+            INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
+                ('top', NULL, 'u1', 'Dosing thread', 'What dose do you all take?', 0),
+                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual,  it is great.', 0),
+                ('long', 'top', 'u1', NULL, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 0);
+            INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', NULL);
+            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
+                (1, 'top', 'u1', 1, 'neutral', 'weak'), (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'long', 'u1', 1, 'neutral', 'weak');
+        """)
+        contexts = load_report_contexts(conn, "7,8-dhf", parent_chars=1500, limit=None)
+    batches = make_batches(contexts, batch_size=8, solo_above_chars=50)  # the two 40-char texts batch; the 60-char one goes solo
+    assert [request_payload(b) for b in batches] == [
+        '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take?"}, '
+        '{"item_id": 1, "report": "I take 20mg sublingual, it is great.", "replying_to": "Dosing thread What dose do you all take?"}]}',
+        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing thread What dose do you all take?"}]}',
+    ]
+
+
+def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: Path) -> None:
+    """The expected strings were generated from origin/main's doses.py (pre-refactor) on this seed.
+
+    Exercises what the first identity test does not: the parent cut at parent_chars, the report
+    cut at max_text_chars (strip, then slice, so a trailing space survives), the latest-run
+    report winning for a post with two reports, non-ASCII kept verbatim, and a two-item batch
+    next to two solo items.
+    """
+    schema_db = tmp_path / "study.db"
+    with sqlite3.connect(schema_db) as conn:
+        conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
+        conn.executescript("""
+            INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
+            INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
+                ('top', NULL, 'u1', 'Dosing thread', 'What dose do you all take? Sublingual for me, 20 mg.', 0),
+                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual,  it is great \u2014 tr\u00e8s bien.', 0),
+                ('reply2', 'top', 'u1', NULL, 'Same, 20 mg.', 0),
+                ('long', 'top', 'u1', NULL, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 0);
+            INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', NULL);
+            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}'), (2, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
+                (1, 'top', 'u1', 1, 'neutral', 'weak'), (1, 'reply', 'u2', 1, 'positive', 'strong'),
+                (1, 'reply2', 'u1', 1, 'neutral', 'weak'), (1, 'long', 'u1', 1, 'neutral', 'weak'),
+                (2, 'reply', 'u2', 1, 'mixed', 'weak');
+        """)
+        contexts = load_report_contexts(conn, "7,8-dhf", parent_chars=12, limit=None, max_text_chars=60)
+    assert [c.report_id for c in contexts] == [1, 3, 4, 5]  # 'reply' resolves to its run-2 report
+    batches = make_batches(contexts, batch_size=8, solo_above_chars=55)
+    assert [request_payload(b) for b in batches] == [
+        '{"items": [{"item_id": 0, "report": "Same, 20 mg.", "replying_to": "Dosing threa"}, '
+        '{"item_id": 1, "report": "I take 20mg sublingual, it is great \u2014 tr\u00e8s bien.", "replying_to": "Dosing threa"}]}',
+        '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take? Sublingual for me, "}]}',
+        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing threa"}]}',
+    ]
