@@ -169,6 +169,28 @@ class ReportWriter:
             [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in doses],
         )
 
+    def write_effects(self, report_id: int, effects) -> int:
+        """Insert ``effects`` (objects with domain, symptom, direction, attribution, quote, dose —
+        e.g. pipeline.effects.EffectValue) as this run's rows for an existing treatment report.
+        Append only, like report_doses; report_effects_latest returns each report's most recent
+        run. An unknown report_id raises ValueError. Returns the number written."""
+        if self._conn.execute(
+            "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
+        ).fetchone() is None:
+            raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.executemany(
+            "INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote, dose_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (report_id, self.run_id, ordinal, e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose)
+                for ordinal, e in enumerate(effects)  # 0-based, like report_doses
+            ],
+        )
+        self._pending += len(effects)
+        if self._pending >= COMMIT_EVERY:
+            self.flush()
+        return len(effects)
+
     def flush(self):
         """Commit any pending writes."""
         if self._pending > 0:
