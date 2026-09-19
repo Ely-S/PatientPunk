@@ -90,7 +90,6 @@ class DoseValue(BaseModel):
         return self
 
 
-DoseContext = ReportContext  # the dose step's context is the shared one, without a thread title
 
 
 @dataclass(frozen=True)
