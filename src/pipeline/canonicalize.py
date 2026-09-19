@@ -21,6 +21,7 @@ from utilities import (
     resolve_aliases, llm_call, parse_json_object, log,
 )
 from utilities.db import upsert_treatments
+from pipeline.report_context import extract_with_split
 from prompts.intervention_config import CANONICALIZE_COMPOUND_PROMPT
 
 BATCH_SIZE = 3500
@@ -42,44 +43,36 @@ def canonicalize_batch(
     names: list[str],
     model=MODEL_STRONG,
 ) -> CanonicalizationBatchResult:
-    """Canonicalize names, splitting unusable batches."""
+    """Canonicalize names, splitting unusable batches.
+
+    An unparseable or unusable reply splits the batch in half and retries, at most
+    MAX_SPLIT_DEPTH deep; names whose sub-batch still fails are kept raw and counted.
+    The prompt, budget and split sequence are those of the original in-module loop; the
+    mechanics live in pipeline.report_context.extract_with_split.
+    """
 
     if not names:
         return CanonicalizationBatchResult(mapping={})
 
-    def _canonicalize(batch: list[str], depth: int) -> CanonicalizationBatchResult:
-        prompt = (
-            CANONICALIZE_COMPOUND_PROMPT
-            + f"\n\nDrug names to canonicalize:\n{json.dumps(batch)}"
-        )
-        max_tokens = max(MIN_OUTPUT_TOKENS, len(batch) * TOKENS_PER_NAME)
+    def payload(batch: list[str]) -> str:
+        return CANONICALIZE_COMPOUND_PROMPT + f"\n\nDrug names to canonicalize:\n{json.dumps(batch)}"
 
-        try:
-            raw = llm_call(client, prompt, model=model, max_tokens=max_tokens)
-            mapping = {name: name for name in batch} | parse_json_object(raw)
-            return CanonicalizationBatchResult(mapping=mapping)
-        except (LLMParseError, LLMResponseError) as exc:
-            if len(batch) == 1 or depth >= MAX_SPLIT_DEPTH:
-                return CanonicalizationBatchResult(
-                    mapping={name: name for name in batch},
-                    failed_names=len(batch),
-                )
+    def parse(raw: str, batch: list[str]) -> tuple[dict[str, str], int]:
+        return {name: name for name in batch} | parse_json_object(raw), 0
 
-            midpoint = len(batch) // 2
-            log.warning(
-                "%s; splitting %d names and retrying both halves.",
-                exc,
-                len(batch),
-            )
-            left = _canonicalize(batch[:midpoint], depth + 1)
-            right = _canonicalize(batch[midpoint:], depth + 1)
-            return CanonicalizationBatchResult(
-                mapping=left.mapping | right.mapping,
-                failed_names=left.failed_names + right.failed_names,
-                split_names=len(batch),
-            )
-
-    return _canonicalize(names, depth=0)
+    stats: dict[str, int] = {}
+    mapping, _ = extract_with_split(
+        client, names, None, model, payload, None, call=llm_call,
+        key_fn=lambda name: name, parse_batch_fn=parse,
+        budget_fn=lambda n: max(MIN_OUTPUT_TOKENS, n * TOKENS_PER_NAME),
+        split_on=(LLMParseError, LLMResponseError), max_depth=MAX_SPLIT_DEPTH,
+        on_failure=lambda batch, exc: {name: name for name in batch}, stats=stats,
+    )
+    return CanonicalizationBatchResult(
+        mapping=mapping,
+        failed_names=stats.get("failed_items", 0),
+        split_names=len(names) if stats.get("splits") else 0,
+    )
 
 
 def _canonicalize_entries(tagged: list[dict], canon_map: dict[str, str]) -> None:

@@ -25,6 +25,7 @@ from utilities import (
 )
 from utilities.db import open_db, post_text
 from utilities.graph import find_parent_cycles
+from pipeline.report_context import extract_with_split
 
 BATCH_SIZE = 10
 SAVE_EVERY = 5  # batches between checkpoint writes
@@ -40,40 +41,32 @@ def is_only_questions(text: str) -> bool:
 
 MAX_TOKENS_PER_TEXT = 250
 
-def extract_batch(client, texts: list[str], _depth: int = 0) -> list[list[str]]:
-    """Ask fast model to extract drug mentions from a batch of texts."""
-    msg = EXTRACT_PROMPT + "\n" + "".join(
-        f"--- {i+1} ---\n{text}\n\n" for i, text in enumerate(texts)
-    )
-    try:
-        raw = llm_call(client, msg, model=MODEL_FAST,
-                       max_tokens=len(texts) * MAX_TOKENS_PER_TEXT)
-    except LLMResponseError as e:
-        # Retry as smaller batches if there is an error.
-        if len(texts) > 1 and _depth < 2:
-            log.warning(f"{e} — retrying as smaller batches...")
-            mid = len(texts) // 2
-            return (extract_batch(client, texts[:mid], _depth + 1)
-                    + extract_batch(client, texts[mid:], _depth + 1))
-        log.warning(f"{e} — giving up on {len(texts)} text(s)")
-        return [[] for _ in texts]
+def extract_batch(client, texts: list[str]) -> list[list[str]]:
+    """Ask fast model to extract drug mentions from a batch of texts.
 
-    try:
+    A truncated, unparseable or miscounted reply splits the batch in half and retries, at most
+    twice deep (a batch of 10 ends at 2-3 texts); texts that never get a usable reply get [].
+    The prompt, budget and split sequence are those of the original in-module loop; the
+    mechanics live in pipeline.report_context.extract_with_split.
+    """
+    items = list(enumerate(texts))
+
+    def payload(batch: list[tuple[int, str]]) -> str:
+        return EXTRACT_PROMPT + "\n" + "".join(f"--- {i+1} ---\n{text}\n\n" for i, (_, text) in enumerate(batch))
+
+    def parse(raw: str, batch: list[tuple[int, str]]) -> tuple[dict[int, list], int]:
         results = parse_json_array(raw)
-    except LLMParseError as e:
-        log.warning(f"Parse failed: {e}")
-        results = []
+        if len(results) != len(batch):
+            raise LLMParseError(f"Expected {len(batch)} results, got {len(results)}")
+        return {index: result for (index, _), result in zip(batch, results)}, 0
 
-    if len(results) == len(texts):
-        return results
-
-    if len(texts) > 1 and _depth < 2:
-        log.warning(f"Mismatch ({len(results)}/{len(texts)}) — retrying as smaller batches...")
-        mid = len(texts) // 2
-        return extract_batch(client, texts[:mid], _depth + 1) + extract_batch(client, texts[mid:], _depth + 1)
-
-    log.warning(f"Expected {len(texts)} results, got {len(results)}")
-    return [[] for _ in texts]
+    found, _ = extract_with_split(
+        client, items, None, MODEL_FAST, payload, None, MAX_TOKENS_PER_TEXT, call=llm_call,
+        key_fn=lambda item: item[0], parse_batch_fn=parse,
+        split_on=(LLMParseError, LLMResponseError), max_depth=2,
+        on_failure=lambda batch, exc: {index: [] for index, _ in batch},
+    )
+    return [found.get(i, []) for i in range(len(texts))]
 
 
 def _detect_parent_cycles(id_to_parent: dict) -> None:
