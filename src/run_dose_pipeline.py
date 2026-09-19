@@ -4,10 +4,9 @@ run_dose_pipeline.py — Extract every dose the author states they took, one row
 
 Run after run_sentiment_pipeline.py with the same --db and --drug. Reads the latest
 treatment report per post for that drug, sends each report (with its parent post as
-context) to the model, and writes report_doses under a new extraction_runs row.
-Runs append: earlier rows stay, and the report_doses_latest view shows each report's most
-recent run. Without --exclude-compound / --exclude-file the exclusions recorded by the
-sentiment run are used. Cached model replies make reruns free.
+context) to the model, and writes report_doses rows under a new extraction_runs row; a rerun
+replaces a report's rows. Without --exclude-compound / --exclude-file the exclusions recorded
+by the sentiment run are used. Cached model replies make reruns free.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug "7,8-dhf"

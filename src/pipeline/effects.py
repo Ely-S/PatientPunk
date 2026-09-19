@@ -2,9 +2,9 @@
 effects.py — One row per effect the author says the drug had on them, per treatment report.
 
 Runs after the sentiment and dose steps. For each latest treatment report of one drug it
-sends the report with its parent post, the thread title and the report's dose rows as
-context, and appends report_effects rows (report_effects_latest shows each report's most
-recent run, like report_doses_latest). Every row carries its sentence; an effect the author
+sends the report with its parent post and the report's dose rows as context, and writes
+report_effects rows (a rerun replaces a report's rows, like report_doses). Every row
+carries its sentence; an effect the author
 ties to a stated dose points at that report_doses row. The mechanics (context query,
 batching, pool, split retry, alias lookup) come from pipeline/report_context.py.
 """
@@ -22,7 +22,6 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from pipeline.report_context import (
     DEFAULT_PARENT_CHARS,
-    DEFAULT_THREAD_CHARS,
     ReportContext,
     aliases_from_db,
     extract_with_split,
@@ -50,12 +49,9 @@ CREATE TABLE IF NOT EXISTS report_effects (
     direction   TEXT NOT NULL CHECK (direction IN ('improved', 'worsened', 'no_change', 'mixed')),
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,
-    dose_id     INTEGER REFERENCES report_doses(dose_id)
+    dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_re_report ON report_effects(report_id);
-CREATE VIEW IF NOT EXISTS report_effects_latest AS
-    SELECT e.* FROM report_effects e
-    WHERE e.run_id = (SELECT MAX(run_id) FROM report_effects WHERE report_id = e.report_id);
 """
 
 
@@ -103,7 +99,8 @@ class EffectRunSummary:
 
 
 def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, list[tuple[int, str]]], int | None]:
-    """Each report's dose rows from its latest dose run, as (dose_id, quote), and that run's id."""
+    """Each report's dose rows, as (dose_id, quote), and the dose run they came from (a rerun replaces
+    a report's rows, so a report has one run's rows)."""
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'report_doses'").fetchone():
         return {}, None
     doses: dict[int, list[tuple[int, str]]] = {}
@@ -114,7 +111,6 @@ def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, li
         JOIN treatment_reports tr ON tr.report_id = d.report_id
         JOIN treatment t ON t.id = tr.drug_id
         WHERE lower(t.canonical_name) = lower(?)
-          AND d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id)
         ORDER BY d.report_id, d.ordinal
         """,
         (drug,),
@@ -128,8 +124,6 @@ def request_payload(batch: list[ReportContext], doses_by_report: dict[int, list[
     items = []
     for i, context in enumerate(batch):
         item: dict[str, object] = {"item_id": i, "report": context.text}
-        if context.thread_title:
-            item["thread"] = context.thread_title
         if context.replying_to:
             item["replying_to"] = context.replying_to
         if doses_by_report.get(context.report_id):
@@ -229,18 +223,17 @@ def run_effects_extraction(
     workers: int = 8,
     batch_size: int = 8,
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
-    thread_chars: int | None = DEFAULT_THREAD_CHARS,
     solo_above_chars: int | None = 3000,
     limit: int | None = None,
 ) -> EffectRunSummary:
-    """Extract effects for every latest report of ``drug`` in ``db_path`` and append report_effects rows."""
+    """Extract effects for every latest report of ``drug`` in ``db_path`` and write report_effects rows."""
     domains = tuple(d.strip().lower() for d in domains if d.strip())
     conn = open_db(db_path)
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
             raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
         conn.executescript(REPORT_EFFECTS_DDL)
-        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, thread_chars=thread_chars, limit=limit)
+        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
         excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
@@ -258,7 +251,6 @@ def run_effects_extraction(
         "model": model,
         "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
         "parent_chars": parent_chars,
-        "thread_chars": thread_chars,
         "solo_above_chars": solo_above_chars,
         "batch_size": batch_size,
         "limit": limit,

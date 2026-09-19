@@ -26,10 +26,6 @@ CREATE TABLE IF NOT EXISTS report_doses (
     quote     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
--- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
-CREATE VIEW IF NOT EXISTS report_doses_latest AS
-    SELECT d.* FROM report_doses d
-    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
 """
 
 
@@ -80,12 +76,12 @@ def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[st
 
 
 class ReportWriter:
-    """Incremental writer for treatment_reports and the per-report tables (report_doses).
+    """Incremental writer for treatment_reports and the per-report tables (report_doses, report_effects).
 
     Creates an extraction_runs row on init, then batches inserts with
     periodic commits. Use as a context manager. ``extraction_type`` names the
-    run: "treatment_sentiment" (default) or "report_doses". A per-report step
-    writes through insert_report_rows (or a per-table wrapper like write_doses).
+    run: "treatment_sentiment" (default), "report_doses" or "report_effects". A
+    per-report step writes through insert_report_rows (via write_doses / write_effects).
     """
 
     def __init__(self, db_path: Path, run_config: dict, commit_hash: str,
@@ -141,15 +137,17 @@ class ReportWriter:
         return True
 
     def insert_report_rows(self, table: str, columns: tuple[str, ...], report_id: int, rows: list[tuple]) -> int:
-        """Insert ``rows`` (value tuples in ``columns`` order) as this run's rows for an existing
-        treatment report, numbered 0-based in ``ordinal`` like the study's other ordinal columns.
-        Append only, like treatment_reports: earlier runs' rows stay, and a per-table
-        ``_latest`` view returns each report's most recent run. An unknown report_id raises
-        ValueError. Returns the number written."""
+        """Replace an existing treatment report's rows in ``table`` with ``rows`` (value tuples in
+        ``columns`` order), numbered 0-based in ``ordinal`` like the study's other ordinal columns,
+        under this run's id. A rerun replaces the report's rows: earlier rows for the report are
+        deleted first, so a run that finds nothing retracts what an earlier run wrote. An unknown
+        report_id raises ValueError. Returns the number written."""
         if self._conn.execute(
             "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.execute(f"DELETE FROM {table} WHERE report_id = ?", (report_id,))
+        self._pending += 1  # the delete must reach the commit even when nothing is inserted
         names = ", ".join(("report_id", "run_id", "ordinal", *columns))
         marks = ", ".join(["?"] * (3 + len(columns)))
         self._conn.executemany(
@@ -162,34 +160,28 @@ class ReportWriter:
         return len(rows)
 
     def write_doses(self, report_id: int, doses) -> int:
-        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
-        pipeline.doses.DoseValue) as this run's report_doses rows; see insert_report_rows."""
+        """Replace a report's report_doses rows with ``doses`` (objects with low, high, unit,
+        route, outcome, quote — e.g. pipeline.doses.DoseValue); see insert_report_rows. Effect
+        rows that pointed at the replaced dose rows lose their link."""
+        if self._has_table("report_effects"):  # in the same transaction as the delete below, so it reaches the commit
+            self._conn.execute("UPDATE report_effects SET dose_id = NULL WHERE report_id = ? AND dose_id IS NOT NULL", (report_id,))
         return self.insert_report_rows(
             "report_doses", ("low", "high", "unit", "route", "outcome", "quote"), report_id,
             [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in doses],
         )
 
     def write_effects(self, report_id: int, effects) -> int:
-        """Insert ``effects`` (objects with domain, symptom, direction, attribution, quote, dose —
-        e.g. pipeline.effects.EffectValue) as this run's rows for an existing treatment report.
-        Append only, like report_doses; report_effects_latest returns each report's most recent
-        run. An unknown report_id raises ValueError. Returns the number written."""
-        if self._conn.execute(
-            "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
-        ).fetchone() is None:
-            raise ValueError(f"treatment report {report_id} does not exist")
-        self._conn.executemany(
-            "INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote, dose_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                (report_id, self.run_id, ordinal, e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose)
-                for ordinal, e in enumerate(effects)  # 0-based, like report_doses
-            ],
+        """Replace a report's report_effects rows with ``effects`` (objects with domain, symptom,
+        direction, attribution, quote, dose — e.g. pipeline.effects.EffectValue); see insert_report_rows."""
+        return self.insert_report_rows(
+            "report_effects", ("domain", "symptom", "direction", "attribution", "quote", "dose_id"), report_id,
+            [(e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose) for e in effects],
         )
-        self._pending += len(effects)
-        if self._pending >= COMMIT_EVERY:
-            self.flush()
-        return len(effects)
+
+    def _has_table(self, name: str) -> bool:
+        return self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone() is not None
 
     def flush(self):
         """Commit any pending writes."""

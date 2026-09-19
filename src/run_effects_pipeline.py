@@ -4,8 +4,8 @@ run_effects_pipeline.py — Extract every effect the author says the drug had, o
 
 Run after run_sentiment_pipeline.py and run_dose_pipeline.py with the same --db and --drug.
 Reads the latest treatment report per post for that drug, sends each report (with its parent
-post, the thread title and its dose rows as context) to the model, and appends report_effects
-rows under a new extraction_runs row; report_effects_latest shows each report's most recent run.
+post and its dose rows as context) to the model, and writes report_effects rows under a new
+extraction_runs row; a rerun replaces a report's rows.
 Without --exclude-compound / --exclude-file the exclusions recorded by the sentiment run are used.
 
 Usage:
@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from pipeline.effects import run_effects_extraction  # noqa: E402
-from pipeline.report_context import DEFAULT_PARENT_CHARS, DEFAULT_THREAD_CHARS, read_list_file  # noqa: E402
+from pipeline.report_context import DEFAULT_PARENT_CHARS, read_list_file  # noqa: E402
 from prompts.effects_config import DOMAINS  # noqa: E402
 from utilities import MODEL_STRONG, get_client, log  # noqa: E402
 
@@ -50,8 +50,6 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--parent-chars", type=int, default=DEFAULT_PARENT_CHARS,
                         help="Characters of the parent post sent as context; 0 sends none")
-    parser.add_argument("--thread-chars", type=int, default=DEFAULT_THREAD_CHARS,
-                        help="Characters of the thread's root title sent as context; 0 sends none")
     parser.add_argument("--solo-above-chars", type=int, default=3000,
                         help="Reports longer than this go one per call; 0 disables")
     parser.add_argument("--limit", type=int, default=0, help="Process at most N reports (0 = all)")
@@ -72,7 +70,6 @@ def main() -> None:
         workers=args.workers,
         batch_size=args.batch_size,
         parent_chars=args.parent_chars or None,
-        thread_chars=args.thread_chars or None,
         solo_above_chars=args.solo_above_chars or None,
         limit=args.limit or None,
     )
