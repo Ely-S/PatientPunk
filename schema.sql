@@ -115,6 +115,27 @@ CREATE VIEW IF NOT EXISTS report_doses_latest AS
     SELECT d.* FROM report_doses d
     WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
 
+-- One row per effect the author says the drug had on them, per treatment report.
+-- Written by src/run_effects_pipeline.py after the dose step; an effect the author ties
+-- to a stated dose points at that report_doses row.
+CREATE TABLE report_effects (
+    effect_id   INTEGER PRIMARY KEY,
+    report_id   INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    run_id      INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    ordinal     INTEGER NOT NULL,
+    domain      TEXT NOT NULL,       -- one of the run's domain list, recorded in extraction_runs.config
+    symptom     TEXT NOT NULL,       -- the author's own words for what changed
+    direction   TEXT NOT NULL CHECK (direction IN ('improved', 'worsened', 'no_change', 'mixed')),
+    attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
+    quote       TEXT NOT NULL,       -- verbatim sentence from the post
+    dose_id     INTEGER REFERENCES report_doses(dose_id)  -- NULL unless the author ties the effect to a stated dose
+);
+CREATE INDEX idx_re_report ON report_effects(report_id);
+-- Runs append; nothing is deleted. Each report's rows from its most recent effects run:
+CREATE VIEW IF NOT EXISTS report_effects_latest AS
+    SELECT e.* FROM report_effects e
+    WHERE e.run_id = (SELECT MAX(run_id) FROM report_effects WHERE report_id = e.report_id);
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════
