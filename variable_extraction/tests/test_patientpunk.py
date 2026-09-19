@@ -2355,6 +2355,18 @@ class TestUntrustedTextWrapping:
         assert msg.count("</patient_text>") == 1
         assert "[TRUNCATED]" in msg
 
+    def test_the_cap_reads_its_env_var(self, monkeypatch):
+        """Read at import, so it only lands on reload -- and the module is shared,
+        so the reload back has to happen even when the assert fails."""
+        import importlib
+        import patientpunk.llm_extract as m
+        monkeypatch.setenv("LLM_MAX_TEXT_CHARS", "1234")
+        try:
+            assert importlib.reload(m).MAX_TEXT_CHARS == 1234
+        finally:
+            monkeypatch.undo()
+            importlib.reload(m)
+
     def test_discovery_prompts_carry_the_same_guard(self):
         from patientpunk.discover import build_discovery_prompt
         p = build_discovery_prompt(["age", "conditions"])
