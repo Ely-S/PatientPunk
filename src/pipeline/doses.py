@@ -2,8 +2,8 @@
 doses.py — One row per dose the author states they took, per treatment report.
 
 Runs after the sentiment pipeline. Reads treatment_reports for one drug (latest report
-per post), sends each report to the model with the shared context (parent post, thread
-title) and the shared exclusion names, and writes report_doses. Amounts are stored as stated (a range keeps its low and high); every row
+per post), sends each report to the model with the shared context (the parent post) and
+the shared exclusion names, and writes report_doses; a rerun replaces a report's rows. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
 
 The mechanics shared with the other per-report steps (the report context query, batching,
@@ -109,8 +109,6 @@ def request_payload(batch: list[ReportContext]) -> str:
     items = []
     for i, context in enumerate(batch):
         item: dict[str, object] = {"item_id": i, "report": context.text}
-        if context.thread_title:
-            item["thread"] = context.thread_title
         if context.replying_to:
             item["replying_to"] = context.replying_to
         items.append(item)
@@ -171,7 +169,6 @@ def run_dose_extraction(
     workers: int = 8,
     batch_size: int = 8,
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
-    thread_chars: int | None = DEFAULT_THREAD_CHARS,
     solo_above_chars: int | None = 3000,
     limit: int | None = None,
 ) -> DoseRunSummary:
@@ -180,7 +177,7 @@ def run_dose_extraction(
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
             raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
-        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, thread_chars=thread_chars, limit=limit)
+        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, thread_chars=DEFAULT_THREAD_CHARS, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
         excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
@@ -195,7 +192,6 @@ def run_dose_extraction(
         "model": model,
         "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
         "parent_chars": parent_chars,
-        "thread_chars": thread_chars,
         "solo_above_chars": solo_above_chars,
         "batch_size": batch_size,
         "limit": limit,

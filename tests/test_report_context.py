@@ -53,8 +53,8 @@ def test_loader_takes_the_latest_report_per_post_with_the_parent_as_context(seed
     assert contexts[1].replying_to == "I take 20mg "  # capped at parent_chars
     full = {c.post_id: c for c in load_report_contexts(seeded, "7,8-dhf")}
     assert full["deep"].replying_to == "I take 20mg sublingual, it is great. Tried 40 mg once, headache."  # a reply's parent is body only
-    assert all(c.thread_title == "Dosing thread" for c in contexts)  # on by default (DEFAULT_THREAD_CHARS)
-    assert all(c.thread_title == "" for c in load_report_contexts(seeded, "7,8-dhf", thread_chars=None))  # off when asked
+    assert all(c.thread_title == "" for c in contexts)  # off by default: context is one parent up
+    assert all(c.thread_title == "Dosing thread" for c in load_report_contexts(seeded, "7,8-dhf", thread_chars=200))  # opt-in
     assert load_report_contexts(seeded, "7,8-dhf", parent_chars=12, limit=1) == contexts[:1]
     assert load_report_contexts(seeded, "ldn") == []
 
@@ -124,11 +124,13 @@ def test_both_steps_send_the_same_context_by_default() -> None:
 
     for fn in (doses.run_dose_extraction, effects.run_effects_extraction, load_report_contexts):
         params = inspect.signature(fn).parameters
-        assert (params["parent_chars"].default, params["thread_chars"].default) == (DEFAULT_PARENT_CHARS, DEFAULT_THREAD_CHARS)
-    context = ReportContext(1, "p1", None, 1, "I take 20mg.", "What dose?", "Dosing thread")
+        assert params["parent_chars"].default == DEFAULT_PARENT_CHARS
+        assert "thread_chars" not in params or params["thread_chars"].default == DEFAULT_THREAD_CHARS
+    assert DEFAULT_THREAD_CHARS is None  # one parent up, nothing else (user decision)
+    context = ReportContext(1, "p1", None, 1, "I take 20mg.", "What dose?", "")
     dose_item = json.loads(doses.request_payload([context]))["items"][0]
     effect_item = json.loads(effects.request_payload([context], {}))["items"][0]
-    assert dose_item == effect_item == {"item_id": 0, "report": "I take 20mg.", "thread": "Dosing thread", "replying_to": "What dose?"}
+    assert dose_item == effect_item == {"item_id": 0, "report": "I take 20mg.", "replying_to": "What dose?"}
 
 
 def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3.Connection) -> None:

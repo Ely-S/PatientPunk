@@ -63,7 +63,7 @@ def test_write_time_checks_drop_foreign_quotes_and_null_unlisted_dose_ids() -> N
     assert [(e.symptom, e.dose) for e in kept] == [("brain fog", 7), ("sleep", None)] and (quote_drops, dose_drops) == (1, 1)
 
 
-def test_run_writes_rows_links_doses_records_config_and_a_rerun_appends(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -103,7 +103,7 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_appends(tmp_path
     assert (first.dropped_effects, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
     reply_item = next(it for p in payloads for it in p["items"] if "20mg" in it["report"])
     assert reply_item["doses"] == [{"id": 7, "quote": "At 20mg it fixed my brain fog."}]
-    assert reply_item["thread"] == "Tropoflavin thread" and reply_item["replying_to"] == "Asking for a friend."
+    assert reply_item["replying_to"] == "Asking for a friend." and "thread" not in reply_item  # one parent up, nothing else
     with sqlite3.connect(db) as conn:
         rows = conn.execute("SELECT report_id, ordinal, domain, symptom, direction, attribution, quote, dose_id FROM report_effects ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
@@ -119,8 +119,11 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_appends(tmp_path
         {"domain": "overall", "symptom": "overall", "direction": "no_change", "attribution": "7,8-dhf", "quote": "ruins my sleep"}
     ] if "20mg" in it["report"] else []} for it in items]
     second = run_effects_extraction(None, db, "7,8-dhf", workers=1)
-    with sqlite3.connect(db) as conn:  # both runs kept; the view shows the latest
-        assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (3,)
-        assert conn.execute("SELECT run_id, domain FROM report_effects_latest").fetchall() == [(second.run_id, "overall")]
+    with sqlite3.connect(db) as conn:  # a rerun replaces the report's rows
+        assert conn.execute("SELECT run_id, domain FROM report_effects").fetchall() == [(second.run_id, "overall")]
+    respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": []} for it in items]
+    run_effects_extraction(None, db, "7,8-dhf", workers=1)
+    with sqlite3.connect(db) as conn:  # a rerun that finds nothing retracts the earlier rows
+        assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (0,)
     with pytest.raises(ValueError, match="not a canonical treatment"):
         run_effects_extraction(None, db, "no-such-drug", workers=1)

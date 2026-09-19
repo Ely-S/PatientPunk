@@ -4,8 +4,8 @@ report_context.py — Shared mechanics for the per-report extraction steps (dose
 Moved out of pipeline/doses.py unchanged: the report context query (latest treatment
 report per post for one drug, with the parent post as context), batching, the thread-pool
 loop, and the split-on-malformed-reply retry, plus the alias lookup. The context every
-step sends alongside a report is defined once here: the parent post (DEFAULT_PARENT_CHARS)
-and the thread's root title (DEFAULT_THREAD_CHARS), so the dose and effects steps cannot
+step sends alongside a report is defined once here: the parent post (DEFAULT_PARENT_CHARS);
+the thread's root title is available (thread_chars) but off by default, so the dose and effects steps cannot
 drift from each other. The same goes for the exclusion names (resolve_exclusions).
 
 A step built on this module supplies three things: a payload function (what one batch
@@ -30,7 +30,7 @@ _WS = re.compile(r"\s+")
 
 # What a per-report step sends with each report, shared by every step.
 DEFAULT_PARENT_CHARS = 1500   # the post being replied to, capped
-DEFAULT_THREAD_CHARS = 200    # the title of the post that started the thread, capped
+DEFAULT_THREAD_CHARS = None   # the thread's root title is NOT sent: context is one parent up (user decision); pass thread_chars to opt in
 
 # Title of the post that started the thread, walking parent_id up from a post.
 _THREAD_TITLE_SQL = """

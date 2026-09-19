@@ -63,8 +63,8 @@ def effects_system_prompt(
         'day", "dose": 1}]}]'
     )
     return f"""You extract what Reddit authors say {name} did for them. Each input item is one
-report. "thread" is the title of the post that started the thread and "replying_to"
-is the post the author is answering; both are context only. "doses", when present,
+report. "replying_to" is the post the author is answering; it is context only, for
+working out what "it" refers to. "doses", when present,
 lists the doses already extracted from this report, each with an id and its sentence.
 
 {alias_line}{excluded_line}
@@ -80,7 +80,7 @@ Rules:
 1. Record an effect only when the author reports what happened to them after taking
    {name}, alone or in a stack. Expectations, plans, questions, recommendations,
    mechanism talk ("it raises BDNF"), other people's experiences, and quoted text do not
-   count. Writing "it" counts when "thread" or "replying_to" shows that "it" is {name}.
+   count. Writing "it" counts when "replying_to" shows that "it" is {name}.
    An item with nothing to record has "effects": [].
 2. One effect object per domain and direction the author reports. "symptom" is the
    author's own words for what changed, 1-4 words ("brain fog", "less tired", "insomnia").
@@ -93,9 +93,9 @@ Rules:
    when they credit a combination that includes it without singling it out; "unclear" when
    the report does not say which compound produced the effect; "other compound" when the
    author attributes the effect to a different compound they name. When the report does not
-   name the compound, decide from "replying_to" and "thread": a reply under a post about
-   another compound is about that compound, so "other compound"; if the context does not
-   settle it, "unclear".
+   name the compound, decide from "replying_to": a reply under a post about another
+   compound is about that compound, so "other compound"; if it does not settle it,
+   "unclear".
 5. "quote" is the sentence that states the effect, copied exactly from "report", never
    from "replying_to". An effect whose quote is not found verbatim in the report is discarded.
 6. "dose" is the id of the listed dose the author ties this effect to ("at 50 mg I got
