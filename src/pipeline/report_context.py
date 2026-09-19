@@ -114,34 +114,63 @@ def make_batches(
 
 def extract_with_split(
     client,
-    batch: list[ReportContext],
-    system: str,
+    batch: list,
+    system: str | None,
     model: str,
-    payload_fn: Callable[[list[ReportContext]], str],
-    parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]],
-    tokens_per_item: int,
+    payload_fn: Callable[[list], str],
+    parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]] | None,
+    tokens_per_item: int | None = None,
     call: Callable | None = None,
-) -> tuple[dict[int, Any], int]:
-    """Extract one batch; on a malformed reply, split the batch and retry down to single items.
+    *,
+    key_fn: Callable[[Any], Any] | None = None,
+    parse_batch_fn: Callable[[str, list], tuple[dict, int]] | None = None,
+    budget_fn: Callable[[int], int] | None = None,
+    split_on: tuple[type[BaseException], ...] = (LLMParseError,),
+    max_depth: int | None = None,
+    on_failure: Callable[[list, BaseException], dict] | None = None,
+    stats: dict | None = None,
+    _depth: int = 0,
+) -> tuple[dict, int]:
+    """Send one batch; when the reply is unusable, split it in half and retry, down to single items.
 
-    ``parse_fn(raw, expected_item_ids)`` returns ``(per_item_id, dropped)``; the result is
-    re-keyed by report_id. ``call`` defaults to utilities.llm_call, looked up at call time, so
-    a direct caller can stub ``report_context.llm_call``. Step modules pass ``call=llm_call``
-    from their own globals, so to stub a step, patch that step's module (``pipeline.doses.llm_call``).
+    Results are keyed by ``key_fn(item)`` (default ``item.report_id``). Parsing is either
+    ``parse_fn(raw, expected_item_ids) -> (per_index, dropped)``, re-keyed here, or
+    ``parse_batch_fn(raw, batch) -> (keyed, dropped)`` when the step keys its own results.
+    ``budget_fn(n)`` gives max_tokens for ``n`` items (default ``tokens_per_item * n``); ``system``
+    is only sent when set. ``split_on`` names the exceptions that trigger a split; anything else
+    propagates. A batch that can no longer be split (one item, or ``_depth == max_depth``) goes to
+    ``on_failure(batch, exc)``, which returns the keyed results to record for it (default: none, logged).
+    ``stats``, when given, accumulates ``splits`` and ``failed_items``. ``call`` defaults to
+    utilities.llm_call, looked up at call time, so a direct caller can stub ``report_context.llm_call``;
+    step modules pass ``call=llm_call`` from their own globals, so to stub a step, patch that module.
     """
     fn = call or llm_call
+    key = key_fn or (lambda item: item.report_id)
+    kwargs = {"model": model, "max_tokens": budget_fn(len(batch)) if budget_fn else tokens_per_item * len(batch)}
+    if system:
+        kwargs["system"] = system
     try:
-        raw = fn(client, payload_fn(batch), model=model, system=system, max_tokens=tokens_per_item * len(batch))
+        raw = fn(client, payload_fn(batch), **kwargs)
+        if parse_batch_fn is not None:
+            return parse_batch_fn(raw, batch)
         per_item, dropped = parse_fn(raw, list(range(len(batch))))
-        return {batch[i].report_id: value for i, value in per_item.items()}, dropped
-    except LLMParseError as e:
-        if len(batch) == 1:
-            log.warning(f"Skipping report {batch[0].report_id}: {e}")
-            return {}, 0
-        log.warning(f"Malformed reply for a batch of {len(batch)}; splitting. {e}")
+        return {key(batch[i]): value for i, value in per_item.items()}, dropped
+    except split_on as e:
+        if len(batch) == 1 or (max_depth is not None and _depth >= max_depth):
+            if stats is not None:
+                stats["failed_items"] = stats.get("failed_items", 0) + len(batch)
+            if on_failure is None:
+                log.warning(f"Skipping {len(batch)} item(s) whose reply stayed unusable: {e}")
+                return {}, 0
+            return on_failure(batch, e), 0
+        log.warning(f"Unusable reply for a batch of {len(batch)}; splitting. {e}")
+        if stats is not None:
+            stats["splits"] = stats.get("splits", 0) + 1
         mid = len(batch) // 2
-        left, dropped_left = extract_with_split(client, batch[:mid], system, model, payload_fn, parse_fn, tokens_per_item, call)
-        right, dropped_right = extract_with_split(client, batch[mid:], system, model, payload_fn, parse_fn, tokens_per_item, call)
+        opts = dict(key_fn=key_fn, parse_batch_fn=parse_batch_fn, budget_fn=budget_fn, split_on=split_on,
+                    max_depth=max_depth, on_failure=on_failure, stats=stats, _depth=_depth + 1)
+        left, dropped_left = extract_with_split(client, batch[:mid], system, model, payload_fn, parse_fn, tokens_per_item, call, **opts)
+        right, dropped_right = extract_with_split(client, batch[mid:], system, model, payload_fn, parse_fn, tokens_per_item, call, **opts)
         return {**left, **right}, dropped_left + dropped_right
 
 
