@@ -161,8 +161,14 @@ def make_key(
     prompt: str,
     temperature: float,
     max_tokens: int,
+    extra: dict | None = None,
 ) -> str:
-    """SHA-256 hex digest of the canonical request payload."""
+    """SHA-256 hex digest of the canonical request payload.
+
+    ``extra`` carries request parameters beyond the common set (e.g. reasoning
+    effort).  It is omitted from the payload when empty so that keys minted
+    before it existed stay valid.
+    """
     payload = {
         "provider": provider or "",
         "model": model or "",
@@ -171,6 +177,8 @@ def make_key(
         "temperature": float(temperature),
         "max_tokens": int(max_tokens),
     }
+    if extra:
+        payload["extra"] = extra
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -235,6 +243,7 @@ def cached_completion(
     temperature: float,
     max_tokens: int,
     call_fn: Callable[[], str],
+    extra: dict | None = None,
 ) -> str:
     """Return a cached response when enabled+hit; otherwise call ``call_fn`` and store.
 
@@ -250,6 +259,7 @@ def cached_completion(
         prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra=extra,
     )
     path = cache_path(provider, model, key)
     hit = get(path)
