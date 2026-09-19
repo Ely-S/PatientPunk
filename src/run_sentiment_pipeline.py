@@ -135,10 +135,7 @@ def main():
         if not drug:
             parser.error("--drug-exclude-file requires --drug or --drug-file")
         exclude_file_path = Path(args.drug_exclude_file)
-        try:
-            raw_exclusions = exclude_file_path.read_text(encoding="utf-8").splitlines()
-        except OSError as e:
-            parser.error(f"cannot read --drug-exclude-file {exclude_file_path}: {e}")
+        raw_exclusions = exclude_file_path.read_text(encoding="utf-8").splitlines()  # unreadable file: let it raise
         drug_excluded_aliases = list(
             dict.fromkeys(line.strip() for line in raw_exclusions if line.strip())
         )
