@@ -33,7 +33,7 @@ WITH RECURSIVE chain(post_id, parent_id, title, depth) AS (
     UNION ALL
     SELECT p.post_id, p.parent_id, p.title, chain.depth + 1
     FROM posts p JOIN chain ON p.post_id = chain.parent_id
-    WHERE chain.depth < 64
+    WHERE chain.depth < 256  -- terminates on cyclic parent links; deeper posts get no title (real chains reach ~70)
 )
 SELECT title FROM chain WHERE parent_id IS NULL LIMIT 1
 """
@@ -125,8 +125,9 @@ def extract_with_split(
     """Extract one batch; on a malformed reply, split the batch and retry down to single items.
 
     ``parse_fn(raw, expected_item_ids)`` returns ``(per_item_id, dropped)``; the result is
-    re-keyed by report_id. ``call`` defaults to utilities.llm_call (looked up at call time,
-    so tests can stub it on this module).
+    re-keyed by report_id. ``call`` defaults to utilities.llm_call, looked up at call time, so
+    a direct caller can stub ``report_context.llm_call``. Step modules pass ``call=llm_call``
+    from their own globals, so to stub a step, patch that step's module (``pipeline.doses.llm_call``).
     """
     fn = call or llm_call
     try:
