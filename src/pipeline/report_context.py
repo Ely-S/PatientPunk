@@ -4,6 +4,7 @@ report_context.py — Shared mechanics for the per-report extraction steps (dose
 run_report_step takes one drug's latest report per post with its parent post as context, batches them, calls
 the model on a thread pool with a split-on-malformed-reply retry, and writes each report's rows under a new
 extraction_runs row. A step supplies a Step from its setup function; add_step_arguments / step_kwargs are its CLI flags.
+Exclusion names come from one place for every step (resolve_exclusions).
 """
 from __future__ import annotations
 
@@ -90,6 +91,31 @@ def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
         return [str(a) for a in json.loads(row[0]) if str(a).strip()]
     except (TypeError, ValueError) as e:
         raise ValueError(f"treatment.aliases for {drug!r} is not a JSON list: {row[0]!r}") from e
+
+
+def resolve_exclusions(
+    conn: sqlite3.Connection, drug: str, explicit: list[str] | None
+) -> tuple[list[str], str]:
+    """Names of other compounds the prompt must not attribute to ``drug``, and where they came from.
+
+    Explicit names (the --exclude-compound / --exclude-file flags) win. Otherwise the list the
+    sentiment run recorded for this drug (``drug_excluded_aliases`` in its run config, written
+    by run_sentiment_pipeline --drug-exclude-file) is inherited, so the steps cannot disagree
+    about what is not the drug. Returns (names, "flags" | "sentiment_run" | "none").
+    """
+    if explicit:
+        return list(explicit), "flags"
+    for (config,) in conn.execute(
+        "SELECT config FROM extraction_runs WHERE extraction_type = 'treatment_sentiment' ORDER BY run_id DESC"
+    ):
+        try:
+            cfg = json.loads(config or "{}")
+        except ValueError:
+            continue
+        if str(cfg.get("drug") or "").lower() == drug.lower():
+            names = [str(n) for n in cfg.get("drug_excluded_aliases") or [] if str(n).strip()]
+            return names, ("sentiment_run" if names else "none")
+    return [], "none"
 
 
 def make_batches(
@@ -205,11 +231,11 @@ def run_report_step(
 ) -> StepSummary:
     """Run one step over every latest report of ``drug`` in ``db_path`` under a new extraction_runs row.
     ``setup_fn(conn, aliases, excluded_compounds) -> Step`` runs on the open connection before the run, so a
-    step can read its own tables there; aliases come from the treatment table unless given. ``call`` is the
-    model call, ``llm_call`` unless given: tests pass a stub, or monkeypatch ``llm_call`` in this module."""
+    step can read its own tables there; aliases come from the treatment table unless given, exclusion names
+    from resolve_exclusions. ``call`` is the model call, ``llm_call`` unless given: tests pass a stub, or
+    monkeypatch ``llm_call`` in this module."""
     if call is None:
         call = llm_call
-    excluded_compounds = list(excluded_compounds or [])
     conn = open_db(db_path)
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
@@ -217,6 +243,7 @@ def run_report_step(
         contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
+        excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
         step = setup_fn(conn, aliases, excluded_compounds)
     finally:
         conn.close()
@@ -224,6 +251,7 @@ def run_report_step(
         "drug": drug,
         "aliases": aliases,
         "excluded_compounds": excluded_compounds,
+        "exclusions_source": exclusions_source,
         "model": model,
         "prompt_sha256": hashlib.sha256(step.system.encode("utf-8")).hexdigest(),
         "parent_chars": parent_chars,
@@ -300,7 +328,8 @@ def add_step_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--exclude-compound", action="append", default=[],
                         help="Name of a different compound whose information must not be attributed to the drug (repeatable)")
     parser.add_argument("--exclude-file", type=str, default=None,
-                        help="Text file of such compound names, one per line (added to --exclude-compound)")
+                        help="Text file of such compound names, one per line (added to --exclude-compound). "
+                             "With neither flag, the exclusions recorded by the sentiment run are used")
     parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=8)

@@ -2,9 +2,9 @@
 doses.py — One row per dose the author states they took, per treatment report.
 
 Runs after the sentiment pipeline. Reads treatment_reports for one drug (latest report
-per post), sends each report to the model with its parent post as context, and writes
-report_doses. Amounts are stored as stated (a range keeps its low and high); every row
-carries the sentence it came from.
+per post), sends each report to the model with the shared context (the parent post) and
+the shared exclusion names, and writes report_doses. Amounts are stored as stated (a range
+keeps its low and high); every row carries the sentence it came from.
 
 The run itself (report loading, batching, the pool, the split retry) is pipeline/report_context.py;
 this module keeps the dose object, the parse function, and the prompt. Rows are

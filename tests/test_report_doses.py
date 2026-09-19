@@ -90,6 +90,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
 
     assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 2, 0, 0)
     assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
+    assert all(it["thread"] == "Dosing thread" for it in payloads[0]["items"])
     with sqlite3.connect(schema_db) as conn:
         rows = conn.execute("SELECT report_id, ordinal, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
@@ -97,13 +98,17 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
         (3, 0, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
         (3, 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
     ]
-    assert run_type == "report_doses" and json.loads(config)["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
+    config = json.loads(config)
+    assert run_type == "report_doses" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"] and config["exclusions_source"] == "flags"
+    assert config["thread_chars"] == 200
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items]
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # both runs kept; the view shows the latest
         assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
         assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
+        second_config = json.loads(conn.execute("SELECT config FROM extraction_runs WHERE run_id = ?", (second.run_id,)).fetchone()[0])
+        assert (second_config["excluded_compounds"], second_config["exclusions_source"]) == ([], "none")  # no flags, no sentiment-run list
 
     with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:
         with pytest.raises(ValueError, match="does not exist"):
@@ -113,7 +118,11 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
 
 
 def test_dose_payload_is_unchanged_by_the_shared_context_module(tmp_path: Path) -> None:
-    """Pins the exact JSON the dose step sends, so moving the mechanics cannot change a run."""
+    """Pins the exact JSON the dose step sends, so a change to the shared mechanics cannot alter a run silently.
+
+    Expected strings regenerated deliberately when the thread title joined the shared context: the only
+    difference from the pre-refactor payload is the "thread" key on replies.
+    """
     schema_db = tmp_path / "study.db"
     with sqlite3.connect(schema_db) as conn:
         conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
@@ -132,13 +141,14 @@ def test_dose_payload_is_unchanged_by_the_shared_context_module(tmp_path: Path) 
     batches = make_batches(contexts, batch_size=8, solo_above_chars=50)  # the two 40-char texts batch; the 60-char one goes solo
     assert [serialize_batch(b) for b in batches] == [
         '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take?"}, '
-        '{"item_id": 1, "report": "I take 20mg sublingual, it is great.", "replying_to": "Dosing thread What dose do you all take?"}]}',
-        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing thread What dose do you all take?"}]}',
+        '{"item_id": 1, "report": "I take 20mg sublingual, it is great.", "thread": "Dosing thread", "replying_to": "Dosing thread What dose do you all take?"}]}',
+        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "thread": "Dosing thread", "replying_to": "Dosing thread What dose do you all take?"}]}',
     ]
 
 
 def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: Path) -> None:
-    """The expected strings were generated from origin/main's doses.py (pre-refactor) on this seed.
+    """The expected strings were generated from origin/main's doses.py (pre-refactor) on this seed, then the
+    "thread" key added when the thread title joined the shared context (a deliberate change).
 
     Exercises what the first identity test does not: the parent cut at parent_chars, the report
     cut at max_text_chars (strip, then slice, so a trailing space survives), the latest-run
@@ -166,8 +176,8 @@ def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: 
     assert [c.report_id for c in contexts] == [1, 3, 4, 5]  # 'reply' resolves to its run-2 report
     batches = make_batches(contexts, batch_size=8, solo_above_chars=55)
     assert [serialize_batch(b) for b in batches] == [
-        '{"items": [{"item_id": 0, "report": "Same, 20 mg.", "replying_to": "Dosing threa"}, '
-        '{"item_id": 1, "report": "I take 20mg sublingual, it is great \u2014 tr\u00e8s bien.", "replying_to": "Dosing threa"}]}',
+        '{"items": [{"item_id": 0, "report": "Same, 20 mg.", "thread": "Dosing thread", "replying_to": "Dosing threa"}, '
+        '{"item_id": 1, "report": "I take 20mg sublingual, it is great \u2014 tr\u00e8s bien.", "thread": "Dosing thread", "replying_to": "Dosing threa"}]}',
         '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take? Sublingual for me, "}]}',
-        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing threa"}]}',
+        '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "thread": "Dosing thread", "replying_to": "Dosing threa"}]}',
     ]

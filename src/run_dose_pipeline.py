@@ -6,7 +6,8 @@ Run after run_sentiment_pipeline.py with the same --db and --drug. Reads the lat
 treatment report per post for that drug, sends each report (with its parent post as
 context) to the model, and writes report_doses under a new extraction_runs row.
 Runs append: earlier rows stay, and the report_doses_latest view shows each report's most
-recent run. Cached model replies make reruns free.
+recent run. Without --exclude-compound / --exclude-file the exclusions recorded by the
+sentiment run are used. Cached model replies make reruns free.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug "7,8-dhf"
