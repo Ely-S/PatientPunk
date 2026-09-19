@@ -111,3 +111,11 @@ def test_extract_tags_with_exclusions(tmp_path: Path) -> None:
     # The replies still reach the output through upstream context, not their own text.
     assert tagged["derivative_only"]["drugs_context"] == ["7,8-dhf"]
     assert tagged["neither"]["drugs_direct"] == [] and tagged["neither"]["drugs_context"] == ["7,8-dhf"]
+
+
+def test_dash_look_alikes_are_normalised() -> None:
+    parent, excluded = ["7,8-dhf", "dhf"], ["4'-dma-7,8-dhf"]
+    assert has_unexcluded_alias("took 7,8\u2013dhf today", parent, excluded)          # en dash in the parent
+    assert not has_unexcluded_alias("took 4\u2019\u2013dma\u20147,8\u2011dhf", parent, excluded)  # curly quote + three dash kinds
+    spans = alias_spans("x 7,8\u2012dhf y", parent)
+    assert spans == ((2, 9),) and "x 7,8\u2012dhf y"[2:9] == "7,8\u2012dhf"       # spans index the original text

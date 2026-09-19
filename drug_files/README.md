@@ -1,22 +1,25 @@
 # Drug files
 
 Spelling lists the sentiment pipeline reads through `--drug-file` and `--drug-exclude-file`.
-One spelling per line, matched literally (case-insensitive, word-bounded, curly apostrophes
-normalised). Nothing here is a pattern, and nothing in `src/` knows any of these names.
+One file per compound, one spelling per line, first line the canonical name. Spellings are
+matched literally: case-insensitive, word-bounded, with curly apostrophes and dash look-alikes
+normalised. Nothing here is a pattern, and nothing in `src/` knows any of these names.
 
-- `<drug>.txt` — first line is the canonical name, the rest are spellings that count as the drug.
-- `<drug>.exclude.txt` — spellings of *other* compounds that must not count as `<drug>` when
-  they enclose one of its spellings ("4'-DMA-7,8-DHF" contains "7,8-DHF"). A post that names
-  both compounds separately still counts.
+There is no separate exclusion file. To run a compound whose name occurs inside another
+compound's name, pass the other compound's list as the exclusions: a match that sits inside
+one of those spellings does not count, while a post that names both separately still does.
 
 ```bash
 python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs \
-    --drug-file drug_files/78dhf.txt --drug-exclude-file drug_files/78dhf.exclude.txt
+    --drug-file drug_files/78dhf.txt --drug-exclude-file drug_files/4dma-78dhf.txt
 ```
 
-Provenance: the 7,8-DHF, 4'-DMA-7,8-DHF and 9-MBC lists were derived in PR #146 from the
-spellings observed across nine nootropics subreddit corpora (`comparator_cohort.json` in the
-tropoflavin study). Two additions on top of #146: `78dhf.txt` restores the bare
-`dihydroxyflavone` spelling (12 genuine 7,8-DHF posts on r/Nootropics use only that word),
-and `78dhf.exclude.txt` therefore also lists other dihydroxyflavones (6,7-, 5,7-, 3,7-…) so
-they do not match it. Add a spelling by appending a line; keep lists sorted only if you like.
+| file | lines | notes |
+|---|---|---|
+| `78dhf.txt` | 65 | 7,8-DHF. Contains bare `dhf`, which also matches dihydrofolate ("DHFR reduces DHF") and dengue text; rare in nootropics corpora, worth knowing elsewhere. |
+| `4dma-78dhf.txt` | 195 | 4'-DMA-7,8-DHF; the exclude input for a 7,8-DHF run. |
+| `9-mbc.txt` | 29 | 9-MBC. |
+
+Provenance: all three lists come from PR #146, derived from the spellings observed across nine
+nootropics subreddit corpora (`comparator_cohort.json` in the tropoflavin study). Add a spelling
+by appending a line.

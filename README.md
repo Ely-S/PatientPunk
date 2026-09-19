@@ -234,11 +234,11 @@ uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outp
 
 To add or remove synonyms for a target, edit `outputs/aliases_<target>.json` directly and rerun — the cache is a plain JSON array of lowercase strings.
 
-`--drug-file path` replaces the LLM alias lookup with a hand-curated list (one spelling per line, first line canonical). `--drug-exclude-file path` lists spellings of a *different* compound that contains the target's name; a match that sits inside one of those spellings does not count, while a post that names both separately still does. Both lists are inputs, not part of the repo:
+`--drug-file path` replaces the LLM alias lookup with a hand-curated list (one spelling per line, first line canonical). `--drug-exclude-file path` lists spellings of a *different* compound that contains the target's name; a match that sits inside one of those spellings does not count, while a post that names both separately still does. The lists live in `drug_files/` (one spelling per line; `drug_files/README.md` has the format). The exclude input for a compound is simply the other compound's own list:
 
 ```bash
 uv run python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs \
-    --drug-file ~/lists/target.txt --drug-exclude-file ~/lists/enclosing_compound.txt
+    --drug-file drug_files/78dhf.txt --drug-exclude-file drug_files/4dma-78dhf.txt
 ```
 
 Steps 3a and 3b are independent — run in either order. Both are keyed on `author_hash` (SHA-256 of username).

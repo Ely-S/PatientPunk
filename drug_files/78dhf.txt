@@ -63,4 +63,3 @@
 dhf
 tropoflavin
 tropoflavins
-dihydroxyflavone
