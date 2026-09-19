@@ -3,9 +3,10 @@ report_context.py — Shared mechanics for the per-report extraction steps (dose
 
 Moved out of pipeline/doses.py unchanged: the report context query (latest treatment
 report per post for one drug, with the parent post as context), batching, the thread-pool
-loop, and the split-on-malformed-reply retry, plus the alias lookup. The one addition is
-an optional thread-root title on ReportContext, fetched only when ``thread_chars`` is set;
-the dose step leaves it off, so its rows and payloads are byte-identical to before.
+loop, and the split-on-malformed-reply retry, plus the alias lookup. The context every
+step sends alongside a report is defined once here: the parent post (DEFAULT_PARENT_CHARS)
+and the thread's root title (DEFAULT_THREAD_CHARS), so the dose and effects steps cannot
+drift from each other. The same goes for the exclusion names (resolve_exclusions).
 
 A step built on this module supplies three things: a payload function (what one batch
 looks like to the model), a parse function (what comes back, keyed by item id), and a
@@ -19,12 +20,17 @@ import sqlite3
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from utilities import LLMParseError, llm_call, log
 from utilities.db import post_text
 
 _WS = re.compile(r"\s+")
+
+# What a per-report step sends with each report, shared by every step.
+DEFAULT_PARENT_CHARS = 1500   # the post being replied to, capped
+DEFAULT_THREAD_CHARS = 200    # the title of the post that started the thread, capped
 
 # Title of the post that started the thread, walking parent_id up from a post.
 _THREAD_TITLE_SQL = """
@@ -47,22 +53,21 @@ class ReportContext:
     drug_id: int
     text: str
     replying_to: str
-    thread_title: str = ""  # only when load_report_contexts(thread_chars=...) asks for it
+    thread_title: str = ""  # empty for a top-level post or when thread_chars is None
 
 
 def load_report_contexts(
     conn: sqlite3.Connection,
     drug: str,
     *,
-    parent_chars: int | None = 1500,
-    thread_chars: int | None = None,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
+    thread_chars: int | None = DEFAULT_THREAD_CHARS,
     limit: int | None = None,
     max_text_chars: int = 8000,
 ) -> list[ReportContext]:
-    """Latest treatment report per post for ``drug``, with the parent post as context.
-
-    With ``thread_chars`` set, replies also carry the title of the post that started the
-    thread (a top-level post already starts with its own title).
+    """Latest treatment report per post for ``drug``, with the parent post and the thread's
+    root title as context (a top-level post already starts with its own title). Pass None
+    to leave either out.
     """
     rows = conn.execute(
         """
@@ -143,6 +148,36 @@ def extract_with_split(
         left, dropped_left = extract_with_split(client, batch[:mid], system, model, payload_fn, parse_fn, tokens_per_item, call)
         right, dropped_right = extract_with_split(client, batch[mid:], system, model, payload_fn, parse_fn, tokens_per_item, call)
         return {**left, **right}, dropped_left + dropped_right
+
+
+def read_list_file(path: str | Path) -> list[str]:
+    """Non-blank lines of a text file (drug spellings, exclusion names, domains); [] when none."""
+    return [line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def resolve_exclusions(
+    conn: sqlite3.Connection, drug: str, explicit: list[str] | None
+) -> tuple[list[str], str]:
+    """Names of other compounds the prompt must not attribute to ``drug``, and where they came from.
+
+    Explicit names (the --exclude-compound / --exclude-file flags) win. Otherwise the list the
+    sentiment run recorded for this drug (``drug_excluded_aliases`` in its run config, written
+    by run_sentiment_pipeline --drug-exclude-file) is inherited, so the steps cannot disagree
+    about what is not the drug. Returns (names, "flags" | "sentiment_run" | "none").
+    """
+    if explicit:
+        return list(explicit), "flags"
+    for (config,) in conn.execute(
+        "SELECT config FROM extraction_runs WHERE extraction_type = 'treatment_sentiment' ORDER BY run_id DESC"
+    ):
+        try:
+            cfg = json.loads(config or "{}")
+        except ValueError:
+            continue
+        if str(cfg.get("drug") or "").lower() == drug.lower():
+            names = [str(n) for n in cfg.get("drug_excluded_aliases") or [] if str(n).strip()]
+            return names, ("sentiment_run" if names else "none")
+    return [], "none"
 
 
 def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:

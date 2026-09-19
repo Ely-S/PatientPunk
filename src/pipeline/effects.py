@@ -21,11 +21,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from pipeline.report_context import (
+    DEFAULT_PARENT_CHARS,
+    DEFAULT_THREAD_CHARS,
     ReportContext,
     aliases_from_db,
     extract_with_split,
     load_report_contexts,
     make_batches,
+    resolve_exclusions,
     run_batches,
 )
 from prompts.effects_config import ATTRIBUTIONS, DOMAINS, effects_system_prompt
@@ -225,8 +228,8 @@ def run_effects_extraction(
     model: str = MODEL_STRONG,
     workers: int = 8,
     batch_size: int = 8,
-    parent_chars: int | None = 1500,
-    thread_chars: int | None = 200,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
+    thread_chars: int | None = DEFAULT_THREAD_CHARS,
     solo_above_chars: int | None = 3000,
     limit: int | None = None,
 ) -> EffectRunSummary:
@@ -240,6 +243,7 @@ def run_effects_extraction(
         contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, thread_chars=thread_chars, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
+        excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
         doses_by_report, dose_run_id = load_report_doses(conn, drug)
     finally:
         conn.close()
@@ -248,7 +252,8 @@ def run_effects_extraction(
     run_config = {
         "drug": drug,
         "aliases": aliases,
-        "excluded_compounds": excluded_compounds or [],
+        "excluded_compounds": excluded_compounds,
+        "exclusions_source": exclusions_source,
         "domains": list(domains),
         "model": model,
         "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),

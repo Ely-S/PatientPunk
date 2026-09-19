@@ -6,6 +6,7 @@ Run after run_sentiment_pipeline.py and run_dose_pipeline.py with the same --db 
 Reads the latest treatment report per post for that drug, sends each report (with its parent
 post, the thread title and its dose rows as context) to the model, and appends report_effects
 rows under a new extraction_runs row; report_effects_latest shows each report's most recent run.
+Without --exclude-compound / --exclude-file the exclusions recorded by the sentiment run are used.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug "7,8-dhf"
@@ -19,12 +20,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from pipeline.effects import run_effects_extraction  # noqa: E402
+from pipeline.report_context import DEFAULT_PARENT_CHARS, DEFAULT_THREAD_CHARS, read_list_file  # noqa: E402
 from prompts.effects_config import DOMAINS  # noqa: E402
 from utilities import MODEL_STRONG, get_client, log  # noqa: E402
 
 
 def _lines(parser: argparse.ArgumentParser, path: str, flag: str) -> list[str]:
-    lines = [line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    lines = read_list_file(path)
     if not lines:
         parser.error(f"{flag} {path} contains no non-blank lines")
     return lines
@@ -39,15 +41,16 @@ def main() -> None:
     parser.add_argument("--exclude-compound", action="append", default=[],
                         help="Name of a different compound whose effects must not be attributed to the drug (repeatable)")
     parser.add_argument("--exclude-file", type=str, default=None,
-                        help="Text file of such compound names, one per line (added to --exclude-compound)")
+                        help="Text file of such compound names, one per line (added to --exclude-compound). "
+                             "With neither flag, the exclusions recorded by the sentiment run are used")
     parser.add_argument("--domains-file", type=str, default=None,
                         help="Text file of effect domains, one per line (default: the built-in list)")
     parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--parent-chars", type=int, default=1500,
+    parser.add_argument("--parent-chars", type=int, default=DEFAULT_PARENT_CHARS,
                         help="Characters of the parent post sent as context; 0 sends none")
-    parser.add_argument("--thread-chars", type=int, default=200,
+    parser.add_argument("--thread-chars", type=int, default=DEFAULT_THREAD_CHARS,
                         help="Characters of the thread's root title sent as context; 0 sends none")
     parser.add_argument("--solo-above-chars", type=int, default=3000,
                         help="Reports longer than this go one per call; 0 disables")
