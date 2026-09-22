@@ -245,7 +245,11 @@ def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3
                    (json.dumps({"drug": "ldn", "drug_excluded_aliases": ["naltrexone-bupropion"]}),))
     seeded.execute("INSERT INTO extraction_runs VALUES (4, 0, 'abc', 'report_doses', ?)",
                    (json.dumps({"drug": "7,8-dhf", "excluded_compounds": ["ignored: not a sentiment run"]}),))
-    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf", "eutropoflavin"], "sentiment_run")  # latest matching drug
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf"], "sentiment_run")  # older run: first spelling = the name
+    seeded.execute("INSERT INTO extraction_runs VALUES (5, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "7,8-dhf", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin", "4dma"],
+                                "drug_excluded_compounds": ["4'-DMA-7,8-DHF"]}),))
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-DMA-7,8-DHF"], "sentiment_run")  # the name, never the spellings
     assert resolve_exclusions(seeded, "ldn", None) == (["naltrexone-bupropion"], "sentiment_run")
     assert resolve_exclusions(seeded, "7,8-dhf", ["x"]) == (["x"], "flags")  # flags still win
     assert resolve_exclusions(seeded, "7,8-dhf", []) == ([], "flags")  # an explicit empty list (--no-exclusions) is not "inherit"

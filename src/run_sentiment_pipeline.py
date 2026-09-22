@@ -60,6 +60,12 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "output_dir": str(config.output_dir),
         "drug": config.drug,
         "drug_excluded_aliases": config.drug_excluded_aliases or [],
+        # The excluded compound's canonical name: the first line of --drug-exclude-file, by the drug_files
+        # convention. The dose and effects steps inherit this for their prompts, not the spelling list.
+        "drug_excluded_compounds": (config.drug_excluded_aliases or [])[:1],
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
+        "workers": config.workers,
     }
 
     _banner("CLASSIFY")

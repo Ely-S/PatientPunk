@@ -98,10 +98,12 @@ def resolve_exclusions(
 ) -> tuple[list[str], str]:
     """Names of other compounds the prompt must not attribute to ``drug``, and where they came from.
 
-    Explicit names (the --exclude-compound / --exclude-file flags) win. Otherwise the list the
-    sentiment run recorded for this drug (``drug_excluded_aliases`` in its run config, written
-    by run_sentiment_pipeline --drug-exclude-file) is inherited, so the steps cannot disagree
-    about what is not the drug. Returns (names, "flags" | "sentiment_run" | "none").
+    Explicit names (the --exclude-compound / --exclude-file flags) win. Otherwise the compound
+    name the sentiment run recorded for this drug is inherited (``drug_excluded_compounds`` in
+    its run config: the canonical name from --drug-exclude-file; runs from before that key
+    recorded only the spelling list, whose first entry is that name by the same convention),
+    so the steps cannot disagree about what is not the drug, and the prompt names a compound
+    rather than listing its spellings. Returns (names, "flags" | "sentiment_run" | "none").
     """
     if explicit is not None:  # [] is an explicit "none" (--no-exclusions)
         return list(explicit), "flags"
@@ -113,7 +115,10 @@ def resolve_exclusions(
         except ValueError:
             continue
         if str(cfg.get("drug") or "").lower() == drug.lower():
-            names = [str(n) for n in cfg.get("drug_excluded_aliases") or [] if str(n).strip()]
+            recorded = cfg.get("drug_excluded_compounds")
+            if recorded is None:  # older sentiment run: the spelling list, first entry = the canonical name
+                recorded = (cfg.get("drug_excluded_aliases") or [])[:1]
+            names = [str(n) for n in recorded if str(n).strip()]
             return names, ("sentiment_run" if names else "none")
     return [], "none"
 
