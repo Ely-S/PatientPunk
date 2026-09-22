@@ -255,9 +255,6 @@ def run_effects_extraction(
 
     def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
         conn.executescript(REPORT_DOSES_DDL + REPORT_EFFECTS_DDL)  # report_runs and the dose view first: load_report_doses reads it
-        if "severity" not in {row[1] for row in conn.execute("PRAGMA table_info(report_effects)")}:  # table from before severity
-            conn.execute("ALTER TABLE report_effects ADD COLUMN severity TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening'))")
-            conn.commit()
         doses_by_report, dose_run_id = load_report_doses(conn, drug)
         target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
         excluded_names = frozenset(n.strip().lower() for n in excluded_compounds if n.strip())
