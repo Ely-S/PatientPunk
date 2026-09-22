@@ -4,17 +4,18 @@ effects.py — One row per effect the author says the drug had on them, per trea
 Runs after the sentiment and dose steps. For each latest treatment report of one drug it
 sends the report with its parent post and the report's dose rows as context, and writes
 report_effects rows (a rerun replaces a report's rows, like report_doses). Every row
-carries its sentence; an effect the author
-ties to a stated dose points at that report_doses row. The mechanics (context query,
-batching, pool, split retry, alias lookup) come from pipeline/report_context.py.
+carries its sentence; an effect the author ties to a stated dose points at that
+report_doses row. The run itself (report loading, batching, the pool, the split retry) is
+pipeline/report_context.py; this module keeps the effect object, the payload, the parser,
+the write-time checks and the prompt.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import sqlite3
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -22,17 +23,17 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from pipeline.report_context import (
     DEFAULT_PARENT_CHARS,
+    DEFAULT_SOLO_ABOVE_CHARS,
     ReportContext,
-    aliases_from_db,
-    extract_with_split,
-    load_report_contexts,
-    make_batches,
-    resolve_exclusions,
-    run_batches,
+    Step,
+    StepSummary,
+    request_items,
+    response_items,
+    run_report_step,
 )
 from prompts.effects_config import ATTRIBUTIONS, DOMAINS, effects_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
-from utilities.db import ReportWriter, open_db
+from utilities import MODEL_STRONG, LLMParseError, llm_call, log
+from utilities.db import ReportWriter
 
 TOKENS_PER_ITEM = 500
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -87,13 +88,7 @@ class EffectValue(BaseModel):
 
 
 @dataclass(frozen=True)
-class EffectRunSummary:
-    run_id: int
-    reports: int
-    reports_with_effects: int
-    effect_rows: int
-    failed_reports: int
-    dropped_effects: int   # effect objects that did not validate (bad direction, unknown domain, no quote)
+class EffectRunSummary(StepSummary):
     quote_drops: int       # effects dropped because their quote is not in the report
     dose_link_drops: int   # dose ids the model returned that were not among the report's listed doses
 
@@ -121,37 +116,24 @@ def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, li
 
 
 def request_payload(batch: list[ReportContext], doses_by_report: dict[int, list[tuple[int, str]]]) -> str:
-    items = []
-    for i, context in enumerate(batch):
-        item: dict[str, object] = {"item_id": i, "report": context.text}
-        if context.replying_to:
-            item["replying_to"] = context.replying_to
+    items = request_items(batch)
+    for item, context in zip(items, batch):
         if doses_by_report.get(context.report_id):
             item["doses"] = [{"id": dose_id, "quote": quote} for dose_id, quote in doses_by_report[context.report_id]]
-        items.append(item)
     return json.dumps({"items": items}, ensure_ascii=False)
 
 
 def parse_effects_response(
     raw: str, expected_ids: list[int], target_names: frozenset[str], domains: frozenset[str] = frozenset(DOMAINS)
 ) -> tuple[dict[int, list[EffectValue]], int]:
-    """Parse the model's array; returns effects per item id and how many effect objects were dropped.
+    """Effects per item id, and how many effect objects were dropped.
 
     The prompt names the drug in the attribution field; the table stores ``target``. Any
     label outside the vocabulary is treated as another named compound.
     """
-    objects = parse_json_array(raw)
-    if not all(isinstance(o, dict) for o in objects):
-        raise LLMParseError("Response array must contain objects")
-    try:
-        ids = [int(o.get("item_id")) for o in objects]
-    except (TypeError, ValueError) as e:
-        raise LLMParseError(f"Non-integer item_id in response: {e}") from e
-    if ids != expected_ids:
-        raise LLMParseError(f"Response item ids {ids} do not match request {expected_ids}")
     result: dict[int, list[EffectValue]] = {}
     dropped = 0
-    for obj in objects:
+    for item_id, obj in response_items(raw, expected_ids).items():
         effects: list[EffectValue] = []
         seen: set[tuple] = set()
         raw_effects = obj.get("effects") or []
@@ -176,7 +158,7 @@ def parse_effects_response(
             if key not in seen:
                 seen.add(key)
                 effects.append(effect)
-        result[int(obj["item_id"])] = effects
+        result[item_id] = effects
     return result, dropped
 
 
@@ -201,16 +183,6 @@ def apply_effect_checks(
     return kept, quote_drops, dose_link_drops
 
 
-def extract_batch(client, batch, system, model, doses_by_report, target_names, domains):
-    """Extract one batch; on a malformed reply, split the batch and retry down to single items."""
-    return extract_with_split(
-        client, batch, system, model,
-        lambda b: request_payload(b, doses_by_report),
-        lambda raw, ids: parse_effects_response(raw, ids, target_names, domains),
-        TOKENS_PER_ITEM, call=llm_call,
-    )
-
-
 def run_effects_extraction(
     client,
     db_path: Path,
@@ -223,71 +195,39 @@ def run_effects_extraction(
     workers: int = 8,
     batch_size: int = 8,
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
-    solo_above_chars: int | None = 3000,
+    solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
     limit: int | None = None,
 ) -> EffectRunSummary:
     """Extract effects for every latest report of ``drug`` in ``db_path`` and write report_effects rows."""
     domains = tuple(d.strip().lower() for d in domains if d.strip())
-    conn = open_db(db_path)
-    try:
-        if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
-            raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
+    domain_set = frozenset(domains)
+    drops: Counter[str] = Counter()
+
+    def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
         conn.executescript(REPORT_EFFECTS_DDL)
-        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
-        if aliases is None:
-            aliases = aliases_from_db(conn, drug)
-        excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
         doses_by_report, dose_run_id = load_report_doses(conn, drug)
-    finally:
-        conn.close()
-    system = effects_system_prompt(drug, aliases, excluded_compounds, domains)
-    target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
-    run_config = {
-        "drug": drug,
-        "aliases": aliases,
-        "excluded_compounds": excluded_compounds,
-        "exclusions_source": exclusions_source,
-        "domains": list(domains),
-        "model": model,
-        "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
-        "parent_chars": parent_chars,
-        "solo_above_chars": solo_above_chars,
-        "batch_size": batch_size,
-        "limit": limit,
-        "dose_run_id": dose_run_id,
-    }
-    log.info(f"{len(contexts)} reports for {drug!r}, {len(doses_by_report)} with dose rows (dose run {dose_run_id}); model {model}")
-    batches = make_batches(contexts, batch_size, solo_above_chars)
-    reports_done = with_effects = rows = failed = dropped_total = quote_drops = link_drops = 0
-    with ReportWriter(db_path, run_config, get_git_commit(), extraction_type="report_effects") as writer:
-        log.info(f"Extraction run {writer.run_id}")
-        extract = lambda batch: extract_batch(client, batch, system, model, doses_by_report, target_names, frozenset(domains))  # noqa: E731
-        for batch, outcome, error in run_batches(batches, extract, workers):
-            if error is not None:
-                log.warning(f"Batch of {len(batch)} failed: {type(error).__name__}: {error}")
-                failed += len(batch)
-                continue
-            results, dropped = outcome
-            dropped_total += dropped
-            for context in batch:
-                if context.report_id not in results:
-                    failed += 1
-                    continue
-                listed = {dose_id for dose_id, _quote in doses_by_report.get(context.report_id, [])}
-                kept, q_drops, d_drops = apply_effect_checks(results[context.report_id], context.text, listed)
-                quote_drops += q_drops
-                link_drops += d_drops
-                n = writer.write_effects(context.report_id, kept)
-                reports_done += 1
-                rows += n
-                with_effects += bool(n)
-            if reports_done % 80 < len(batch):
-                log.info(f"  {reports_done}/{len(contexts)} reports, {rows} effect rows")
-        run_id = writer.run_id
-    summary = EffectRunSummary(run_id, reports_done, with_effects, rows, failed, dropped_total, quote_drops, link_drops)
-    log.info(
-        f"Done: {summary.reports} reports, {summary.reports_with_effects} with effects, {summary.effect_rows} effect rows, "
-        f"{summary.failed_reports} failed, {summary.dropped_effects} effect objects dropped, "
-        f"{summary.quote_drops} quotes not in report, {summary.dose_link_drops} dose links outside the listed doses"
+        target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
+        log.info(f"{len(doses_by_report)} reports with dose rows (dose run {dose_run_id})")
+
+        def write(writer: ReportWriter, context: ReportContext, effects: list[EffectValue]) -> int:
+            listed = {dose_id for dose_id, _quote in doses_by_report.get(context.report_id, [])}
+            kept, quote_drops, dose_link_drops = apply_effect_checks(effects, context.text, listed)
+            drops.update(quote_drops=quote_drops, dose_link_drops=dose_link_drops)
+            return writer.write_effects(context.report_id, kept)
+
+        return Step(
+            system=effects_system_prompt(drug, aliases, excluded_compounds, domains),
+            payload_fn=lambda batch: request_payload(batch, doses_by_report),
+            parse_fn=lambda raw, ids: parse_effects_response(raw, ids, target_names, domain_set),
+            write_fn=write,
+            tokens_per_item=TOKENS_PER_ITEM,
+            call=llm_call,
+            run_config={"domains": list(domains), "dose_run_id": dose_run_id},
+        )
+
+    s = run_report_step(
+        client, db_path, drug, extraction_type="report_effects", setup_fn=setup,
+        aliases=aliases, excluded_compounds=excluded_compounds, model=model, workers=workers,
+        batch_size=batch_size, parent_chars=parent_chars, solo_above_chars=solo_above_chars, limit=limit,
     )
-    return summary
+    return EffectRunSummary(**asdict(s), quote_drops=drops["quote_drops"], dose_link_drops=drops["dose_link_drops"])

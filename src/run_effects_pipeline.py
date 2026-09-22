@@ -20,62 +20,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from pipeline.effects import run_effects_extraction  # noqa: E402
-from pipeline.report_context import DEFAULT_PARENT_CHARS, read_list_file  # noqa: E402
+from pipeline.report_context import add_step_arguments, read_list_file, step_kwargs  # noqa: E402
 from prompts.effects_config import DOMAINS  # noqa: E402
-from utilities import MODEL_STRONG, get_client, log  # noqa: E402
-
-
-def _lines(parser: argparse.ArgumentParser, path: str, flag: str) -> list[str]:
-    lines = read_list_file(path)
-    if not lines:
-        parser.error(f"{flag} {path} contains no non-blank lines")
-    return lines
+from utilities import get_client, log  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract stated effects per treatment report")
-    parser.add_argument("--db", required=True, help="SQLite database with treatment_reports for the drug")
-    parser.add_argument("--drug", required=True, help="Canonical treatment name as stored in the treatment table")
-    parser.add_argument("--drug-file", type=str, default=None,
-                        help="Text file of spellings for the drug, one per line (default: aliases from the treatment table)")
-    parser.add_argument("--exclude-compound", action="append", default=[],
-                        help="Name of a different compound whose effects must not be attributed to the drug (repeatable)")
-    parser.add_argument("--exclude-file", type=str, default=None,
-                        help="Text file of such compound names, one per line (added to --exclude-compound). "
-                             "With neither flag, the exclusions recorded by the sentiment run are used")
+    add_step_arguments(parser)
     parser.add_argument("--domains-file", type=str, default=None,
                         help="Text file of effect domains, one per line (default: the built-in list)")
-    parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
-    parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--parent-chars", type=int, default=DEFAULT_PARENT_CHARS,
-                        help="Characters of the parent post sent as context; 0 sends none")
-    parser.add_argument("--solo-above-chars", type=int, default=3000,
-                        help="Reports longer than this go one per call; 0 disables")
-    parser.add_argument("--limit", type=int, default=0, help="Process at most N reports (0 = all)")
     args = parser.parse_args()
+    options = step_kwargs(parser, args)  # list-file errors surface before a client is built
+    domains = read_list_file(parser, args, "domains_file") or DOMAINS
 
-    aliases = _lines(parser, args.drug_file, "--drug-file") if args.drug_file else None
-    excluded = list(args.exclude_compound) + (_lines(parser, args.exclude_file, "--exclude-file") if args.exclude_file else [])
-    domains = _lines(parser, args.domains_file, "--domains-file") if args.domains_file else DOMAINS
-
-    summary = run_effects_extraction(
-        get_client(),
-        Path(args.db),
-        args.drug,
-        aliases=aliases,
-        excluded_compounds=excluded or None,
-        domains=domains,
-        model=args.model,
-        workers=args.workers,
-        batch_size=args.batch_size,
-        parent_chars=args.parent_chars or None,
-        solo_above_chars=args.solo_above_chars or None,
-        limit=args.limit or None,
-    )
+    summary = run_effects_extraction(get_client(), Path(args.db), args.drug, domains=domains, **options)
     log.info(
-        f"Run {summary.run_id}: {summary.reports} reports, {summary.reports_with_effects} with effects, "
-        f"{summary.effect_rows} effect rows, {summary.failed_reports} failed, "
+        f"Run {summary.run_id}: {summary.reports} reports, {summary.reports_with_rows} with effects, "
+        f"{summary.rows} effect rows, {summary.failed} failed, "
         f"{summary.quote_drops} quotes not in report, {summary.dose_link_drops} dose links dropped"
     )
 

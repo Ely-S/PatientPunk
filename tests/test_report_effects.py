@@ -99,8 +99,8 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_pat
 
     first = run_effects_extraction(None, db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
-    assert (first.reports, first.reports_with_effects, first.effect_rows, first.failed_reports) == (2, 1, 2, 0)
-    assert (first.dropped_effects, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
+    assert (first.reports, first.reports_with_rows, first.rows, first.failed) == (2, 1, 2, 0)
+    assert (first.dropped, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
     reply_item = next(it for p in payloads for it in p["items"] if "20mg" in it["report"])
     assert reply_item["doses"] == [{"id": 7, "quote": "At 20mg it fixed my brain fog."}]
     assert reply_item["replying_to"] == "Asking for a friend." and "thread" not in reply_item  # one parent up, nothing else
