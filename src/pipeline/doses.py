@@ -30,8 +30,20 @@ from pipeline.report_context import (
     make_batches,
     run_batches,
 )
-from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
+from prompts.dose_config import (
+    OUTCOMES,
+    ROUTE_CATEGORIES,
+    ROUTE_DETAILS,
+    dose_system_prompt,
+)
+from utilities import (
+    MODEL_STRONG,
+    LLMParseError,
+    get_git_commit,
+    llm_call,
+    log,
+    parse_json_array,
+)
 from utilities.db import ReportWriter, open_db
 
 # Units are stored as the author wrote them. This map is NOT applied at write time; it is
@@ -64,6 +76,7 @@ class DoseValue(BaseModel):
     high: float = Field(gt=0)
     unit: str | None = Field(default=None, max_length=40)  # as the author wrote it; None = bare number
     route: Literal["oral mucosal", "swallowed oral", "nasal mucosal", "injection", "other explicit route"] | None = None
+    route_detail: str | None = None
     outcome: Literal["positive", "negative", "neutral", "unclear"] | None = None
     quote: str | None = None
 
@@ -77,6 +90,8 @@ class DoseValue(BaseModel):
         data["unit"] = None if raw_unit.lower() in {"", "null", "none", "unspecified", "unknown"} else raw_unit
         if data.get("route") not in ROUTE_CATEGORIES:
             data["route"] = None
+        if data.get("route_detail") not in ROUTE_DETAILS.get(data.get("route") or "", ()):
+            data["route_detail"] = None
         if data.get("outcome") not in OUTCOMES:
             data["outcome"] = None
         quote = data.get("quote")
@@ -137,7 +152,7 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
             except ValidationError:
                 dropped += 1
                 continue
-            key = (dose.low, dose.high, dose.unit, dose.route, dose.outcome, dose.quote)
+            key = (dose.low, dose.high, dose.unit, dose.route, dose.route_detail, dose.outcome, dose.quote)
             if key in seen:
                 continue
             seen.add(key)

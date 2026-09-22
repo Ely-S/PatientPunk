@@ -107,7 +107,8 @@ CREATE TABLE report_doses (
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
-    quote     TEXT
+    quote     TEXT,
+    route_detail TEXT
 );
 CREATE INDEX idx_rd_report ON report_doses(report_id);
 -- Runs append; nothing is deleted. Each report's rows from its most recent dose run:

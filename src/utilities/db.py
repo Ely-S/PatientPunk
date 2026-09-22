@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS report_doses (
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),
-    quote     TEXT
+    quote     TEXT,
+    route_detail TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
 -- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
@@ -91,6 +92,12 @@ class ReportWriter:
                  extraction_type: str = "treatment_sentiment"):
         self._conn = open_db(db_path)
         self._conn.executescript(REPORT_DOSES_DDL)
+        # Serialize the column check with the migration when writers start together.
+        with self._conn:
+            self._conn.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(report_doses)")}
+            if "route_detail" not in columns:
+                self._conn.execute("ALTER TABLE report_doses ADD COLUMN route_detail TEXT")
         self._pending = 0
 
         cursor = self._conn.execute(
@@ -140,7 +147,7 @@ class ReportWriter:
         return True
 
     def write_doses(self, report_id: int, doses) -> int:
-        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
+        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote, and optional route_detail; e.g.
         pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
         Append only, like treatment_reports: earlier runs' rows stay, and the
         report_doses_latest view returns each report's most recent run. An unknown
@@ -150,10 +157,11 @@ class ReportWriter:
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
         self._conn.executemany(
-            "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote, route_detail) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                (report_id, self.run_id, ordinal, d.low, d.high, d.unit, d.route, d.outcome, d.quote)
+                (report_id, self.run_id, ordinal, d.low, d.high, d.unit, d.route, d.outcome, d.quote,
+                 getattr(d, "route_detail", None))
                 for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
             ],
         )

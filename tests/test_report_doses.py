@@ -4,14 +4,24 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
+from importlib.resources import files
 from pathlib import Path
+from string import Formatter
 
 import pytest
 
 import pipeline.doses as doses_module
-from pipeline.doses import make_batches, normalize_unit, parse_dose_response, request_payload, run_dose_extraction
+from pipeline.doses import (
+    DoseValue,
+    make_batches,
+    normalize_unit,
+    parse_dose_response,
+    request_payload,
+    run_dose_extraction,
+)
 from pipeline.report_context import load_report_contexts
-from prompts.dose_config import dose_system_prompt
+from prompts.dose_config import ROUTE_DETAILS, dose_system_prompt
 from utilities import LLMParseError
 from utilities.db import ReportWriter
 
@@ -168,3 +178,105 @@ def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: 
         '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take? Sublingual for me, "}]}',
         '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing threa"}]}',
     ]
+
+
+@pytest.mark.parametrize(("route", "detail"), [
+    ("oral mucosal", "sublingual"), ("oral mucosal", "buccal"),
+    ("swallowed oral", "oral"), ("nasal mucosal", "intranasal"),
+    ("injection", "subcutaneous"), ("injection", "intravenous"),
+    ("other explicit route", "transdermal"), ("other explicit route", "rectal"),
+])
+def test_route_detail_preserves_specific_routes(route: str, detail: str) -> None:
+    dose = DoseValue.model_validate({"low": 5, "high": 5, "route": route, "route_detail": detail})
+    assert (dose.route, dose.route_detail) == (route, detail)
+
+
+@pytest.mark.parametrize(("route", "detail"), [
+    ("injection", "transdermal"), ("other explicit route", "subcutaneous"),
+    (None, "rectal"), ("unknown", "rectal"),
+    ("injection", "invented"), ("injection", ["subcutaneous"]), ("injection", None),
+])
+def test_invalid_route_detail_does_not_discard_the_dose(route: str | None, detail: object) -> None:
+    dose = DoseValue.model_validate({"low": 5, "high": 5, "route": route, "route_detail": detail})
+    assert dose.low == 5 and dose.route_detail is None
+    assert dose.route == (None if route == "unknown" else route)
+
+
+def test_route_detail_distinguishes_doses_during_deduplication() -> None:
+    raw = json.dumps([{"item_id": 0, "doses": [
+        {"low": 5, "high": 5, "route": "other explicit route", "route_detail": detail}
+        for detail in ("transdermal", "rectal", "transdermal")
+    ]}])
+    parsed, dropped = parse_dose_response(raw, [0])
+    assert [dose.route_detail for dose in parsed[0]] == ["transdermal", "rectal"]
+    assert dropped == 0
+
+
+def test_legacy_dose_response_defaults_to_null_detail() -> None:
+    raw = '[{"item_id": 0, "doses": [{"low": 5, "high": 5, "unit": "mg", "route": "injection"}]}]'
+    parsed, dropped = parse_dose_response(raw, [0])
+    assert parsed[0][0].model_dump() == {
+        "low": 5.0, "high": 5.0, "unit": "mg", "route": "injection",
+        "route_detail": None, "outcome": None, "quote": None,
+    }
+    assert dropped == 0
+
+
+def test_dose_prompt_template_and_example_match_the_schema() -> None:
+    template = files("prompts").joinpath("dose_system.txt").read_text(encoding="utf-8")
+    assert {name for _, name, _, _ in Formatter().parse(template) if name} == {
+        "name", "alias_line", "excluded_line", "example", "route_details",
+    }
+    prompt = dose_system_prompt("ldn")
+    example = next(line for line in prompt.splitlines() if line.startswith('[{"item_id":'))
+    parsed, dropped = parse_dose_response(example, [0])
+    assert parsed[0][0].route_detail == "sublingual" and dropped == 0
+    for route, details in ROUTE_DETAILS.items():
+        assert f'"{route}": {", ".join(details)}.' in prompt
+        for detail in details:
+            assert DoseValue.model_validate({
+                "low": 5, "high": 5, "route": route, "route_detail": detail,
+            }).route_detail == detail
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_route_detail_round_trip_and_existing_database_migration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, legacy: bool,
+) -> None:
+    db_path = tmp_path / "study.db"
+    with closing(sqlite3.connect(db_path)) as conn, conn:
+        conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))
+        if legacy:
+            conn.execute("ALTER TABLE report_doses DROP COLUMN route_detail")
+        conn.executescript("""
+            INSERT INTO users VALUES ('u', 'test', 0);
+            INSERT INTO posts (post_id, user_id, body_text, scraped_at)
+                VALUES ('p', 'u', 'I took 5 mg transdermally, then 5 mg rectally.', 0);
+            INSERT INTO treatment (id, canonical_name) VALUES (1, 'ldn');
+            INSERT INTO extraction_runs VALUES
+                (1, 0, 'test', 'treatment_sentiment', '{}'), (2, 0, 'test', 'report_doses', '{}');
+            INSERT INTO treatment_reports (report_id, run_id, post_id, user_id, drug_id, sentiment, signal_strength)
+                VALUES (1, 1, 'p', 'u', 1, 'neutral', 'strong');
+            INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit)
+                VALUES (1, 2, 0, 5, 5, 'mg');
+        """)
+
+    def stub_llm(*args: object, **kwargs: object) -> str:
+        return json.dumps([{"item_id": 0, "doses": [
+            {"low": 5, "high": 5, "unit": "mg", "route": "other explicit route", "route_detail": detail}
+            for detail in ("transdermal", "rectal")
+        ]}])
+
+    monkeypatch.setattr(doses_module, "llm_call", stub_llm)
+    for _ in range(2):  # Migration is idempotent; subsequent runs append normally.
+        summary = run_dose_extraction(None, db_path, "ldn", workers=1)
+        assert (summary.reports, summary.dose_rows, summary.failed_reports) == (1, 2, 0)
+    with closing(sqlite3.connect(db_path)) as conn:
+        assert conn.execute("SELECT route_detail FROM report_doses WHERE run_id = 2").fetchall() == [(None,)]
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (5,)
+        assert conn.execute(
+            "SELECT run_id, route, route_detail FROM report_doses_latest ORDER BY ordinal"
+        ).fetchall() == [
+            (summary.run_id, "other explicit route", "transdermal"),
+            (summary.run_id, "other explicit route", "rectal"),
+        ]
