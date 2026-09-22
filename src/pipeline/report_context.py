@@ -4,8 +4,9 @@ report_context.py — Shared mechanics for the per-report extraction steps (dose
 A per-report step reads the latest treatment report per post for one drug, sends each
 report to the model with its parent post as context, and writes one table. Everything but
 the step's own content lives here: the report context query, batching, the thread-pool
-loop, the split-on-malformed-reply retry, the alias lookup, and the run itself
-(run_report_step). The one addition over the original doses.py code is an optional
+loop, the split-on-malformed-reply retry, the alias lookup, the run itself
+(run_report_step) and the flags every step's CLI takes (add_step_arguments, step_kwargs).
+The one addition over the original doses.py code is an optional
 thread-root title on ReportContext, fetched only when ``thread_chars`` is set; no step
 sets it, so rows and payloads are byte-identical to before.
 
@@ -16,6 +17,7 @@ utilities.db.ReportWriter for its table.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
@@ -305,3 +307,53 @@ def run_report_step(
         + "".join(f", {v} {k.replace('_', ' ')}" for k, v in summary.extra.items())
     )
     return summary
+
+
+# ── The CLI ─────────────────────────────────────────────────────────────────────────────
+
+def read_list_file(path: str | Path) -> list[str]:
+    """Non-blank lines of a text file (drug spellings, exclusion names); [] when none."""
+    return [line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def add_step_arguments(parser: argparse.ArgumentParser, noun: str) -> None:
+    """The flags every per-report step takes; ``noun`` is what the step extracts ("doses"), for the help texts."""
+    parser.add_argument("--db", required=True, help="SQLite database with treatment_reports for the drug")
+    parser.add_argument("--drug", required=True, help="Canonical treatment name as stored in the treatment table")
+    parser.add_argument("--drug-file", type=str, default=None,
+                        help="Text file of spellings for the drug, one per line (default: aliases from the treatment table)")
+    parser.add_argument("--exclude-compound", action="append", default=[],
+                        help=f"Name of a different compound whose {noun} must not be attributed to the drug (repeatable)")
+    parser.add_argument("--exclude-file", type=str, default=None,
+                        help="Text file of such compound names, one per line (added to --exclude-compound)")
+    parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--parent-chars", type=int, default=DEFAULT_PARENT_CHARS,
+                        help="Characters of the parent post sent as context; 0 sends none")
+    parser.add_argument("--solo-above-chars", type=int, default=DEFAULT_SOLO_ABOVE_CHARS,
+                        help="Reports longer than this go one per call; 0 disables")
+    parser.add_argument("--limit", type=int, default=0, help="Process at most N reports (0 = all)")
+
+
+def _required_lines(parser: argparse.ArgumentParser, path: str, flag: str) -> list[str]:
+    lines = read_list_file(path)
+    if not lines:
+        parser.error(f"{flag} {path} contains no non-blank lines")
+    return lines
+
+
+def step_kwargs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> dict[str, Any]:
+    """Keyword arguments for a step's run function, from the flags add_step_arguments added."""
+    aliases = _required_lines(parser, args.drug_file, "--drug-file") if args.drug_file else None
+    excluded = list(args.exclude_compound) + (_required_lines(parser, args.exclude_file, "--exclude-file") if args.exclude_file else [])
+    return {
+        "aliases": aliases,
+        "excluded_compounds": excluded or None,
+        "model": args.model,
+        "workers": args.workers,
+        "batch_size": args.batch_size,
+        "parent_chars": args.parent_chars or None,
+        "solo_above_chars": args.solo_above_chars or None,
+        "limit": args.limit or None,
+    }
