@@ -6,9 +6,8 @@ report to the model with its parent post as context, and writes one table. Every
 the step's own content lives here: the report context query, batching, the thread-pool
 loop, the split-on-malformed-reply retry, the alias lookup, the run itself
 (run_report_step) and the flags every step's CLI takes (add_step_arguments, step_kwargs).
-The one addition over the original doses.py code is an optional
-thread-root title on ReportContext, fetched only when ``thread_chars`` is set; no step
-sets it, so rows and payloads are byte-identical to before.
+The context sent with a report is the parent post only (DEFAULT_PARENT_CHARS), the same
+for every step.
 
 A step supplies a ``Step`` from its setup function (the system prompt, a payload function
 for what one batch looks like to the model, a parse function for what comes back keyed by
@@ -38,19 +37,6 @@ _WS = re.compile(r"\s+")
 DEFAULT_PARENT_CHARS = 1500      # the post being replied to, capped
 DEFAULT_SOLO_ABOVE_CHARS = 3000  # reports longer than this go one per call
 
-# Title of the post that started the thread, walking parent_id up from a post.
-_THREAD_TITLE_SQL = """
-WITH RECURSIVE chain(post_id, parent_id, title, depth) AS (
-    SELECT post_id, parent_id, title, 0 FROM posts WHERE post_id = ?
-    UNION ALL
-    SELECT p.post_id, p.parent_id, p.title, chain.depth + 1
-    FROM posts p JOIN chain ON p.post_id = chain.parent_id
-    WHERE chain.depth < 256  -- terminates on cyclic parent links; deeper posts get no title (real chains reach ~70)
-)
-SELECT title FROM chain WHERE parent_id IS NULL LIMIT 1
-"""
-
-
 @dataclass(frozen=True)
 class ReportContext:
     report_id: int
@@ -59,7 +45,6 @@ class ReportContext:
     drug_id: int
     text: str
     replying_to: str
-    thread_title: str = ""  # only when load_report_contexts(thread_chars=...) asks for it
 
 
 def load_report_contexts(
@@ -67,15 +52,10 @@ def load_report_contexts(
     drug: str,
     *,
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
-    thread_chars: int | None = None,
     limit: int | None = None,
     max_text_chars: int = 8000,
 ) -> list[ReportContext]:
-    """Latest treatment report per post for ``drug``, with the parent post as context.
-
-    With ``thread_chars`` set, replies also carry the title of the post that started the
-    thread (a top-level post already starts with its own title).
-    """
+    """Latest treatment report per post for ``drug``, with the parent post as context."""
     rows = conn.execute(
         """
         SELECT tr.report_id, tr.post_id, tr.user_id, tr.drug_id,
@@ -102,12 +82,7 @@ def load_report_contexts(
         parent = ""
         if parent_chars and parent_id is not None and (ptitle or pbody):
             parent = _WS.sub(" ", post_text(ptitle, pbody, pparent)).strip()[:parent_chars]
-        thread = ""
-        if thread_chars and parent_id is not None:
-            root = conn.execute(_THREAD_TITLE_SQL, (parent_id,)).fetchone()
-            if root and root[0]:
-                thread = _WS.sub(" ", root[0]).strip()[:thread_chars]
-        contexts.append(ReportContext(report_id, post_id, user_id, drug_id, text, parent, thread))
+        contexts.append(ReportContext(report_id, post_id, user_id, drug_id, text, parent))
         if limit and len(contexts) >= limit:
             break
     return contexts

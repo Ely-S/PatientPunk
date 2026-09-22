@@ -50,19 +50,8 @@ def test_loader_takes_the_latest_report_per_post_with_the_parent_as_context(seed
     assert contexts[1].replying_to == "I take 20mg "  # capped at parent_chars
     full = {c.post_id: c for c in load_report_contexts(seeded, "7,8-dhf")}
     assert full["deep"].replying_to == "I take 20mg sublingual, it is great. Tried 40 mg once, headache."  # a reply's parent is body only
-    assert all(c.thread_title == "" for c in contexts)  # off unless asked for
     assert load_report_contexts(seeded, "7,8-dhf", parent_chars=12, limit=1) == contexts[:1]
     assert load_report_contexts(seeded, "ldn") == []
-
-
-def test_loader_adds_the_thread_root_title_only_when_asked(seeded: sqlite3.Connection) -> None:
-    by_post = {c.post_id: c for c in load_report_contexts(seeded, "7,8-dhf", thread_chars=6)}
-    assert by_post["deep"].thread_title == "Dosing"       # two levels up, capped
-    assert by_post["reply"].thread_title == "Dosing"
-    assert by_post["other"].thread_title == "Dosing"
-    seeded.execute("INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES ('lone', NULL, 'u1', 'Solo', 'x', 0)")
-    seeded.execute("INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES (1, 'lone', 'u1', 1, 'neutral', 'weak')")
-    assert {c.post_id: c.thread_title for c in load_report_contexts(seeded, "7,8-dhf", thread_chars=6)}["lone"] == ""  # top-level: none
 
 
 def test_batches_short_reports_together_and_long_ones_alone() -> None:
