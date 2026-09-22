@@ -80,7 +80,7 @@ def load_report_contexts(
 
 
 def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
-    """Spellings the sentiment run stored for ``drug`` in the treatment table; [] when none."""
+    """Spellings the sentiment run stored for ``drug`` in the treatment table; [] when none, ValueError when corrupt."""
     row = conn.execute(
         "SELECT aliases FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)
     ).fetchone()
@@ -88,8 +88,8 @@ def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
         return []
     try:
         return [str(a) for a in json.loads(row[0]) if str(a).strip()]
-    except (TypeError, ValueError):
-        return []
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"treatment.aliases for {drug!r} is not a JSON list: {row[0]!r}") from e
 
 
 def make_batches(

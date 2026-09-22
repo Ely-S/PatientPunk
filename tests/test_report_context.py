@@ -112,12 +112,13 @@ def test_split_retries_a_malformed_reply_down_to_single_items() -> None:
     assert extract_with_split(None, batch[:1], always_bad, "model") == ({}, 0)  # a single item that stays malformed is skipped
 
 
-def test_aliases_from_db_reads_the_stored_spellings(seeded: sqlite3.Connection) -> None:
+def test_aliases_from_db_reads_the_stored_spellings_and_rejects_corrupt_json(seeded: sqlite3.Connection) -> None:
     assert aliases_from_db(seeded, "7,8-DHF") == ["tropoflavin", "78dhf"]  # blank entries dropped
     assert aliases_from_db(seeded, "ldn") == []
     assert aliases_from_db(seeded, "nope") == []
     seeded.execute("UPDATE treatment SET aliases = 'not json' WHERE id = 1")
-    assert aliases_from_db(seeded, "7,8-dhf") == []
+    with pytest.raises(ValueError, match="not a JSON list"):
+        aliases_from_db(seeded, "7,8-dhf")
 
 
 def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> None:
