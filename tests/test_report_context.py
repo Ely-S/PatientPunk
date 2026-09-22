@@ -157,6 +157,34 @@ def test_a_bug_in_a_step_aborts_the_run_instead_of_counting_as_failed(seeded_db:
         run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup, workers=1, call=lambda *a, **k: "[]")
 
 
+def test_an_error_stops_the_queued_model_calls_and_drops_the_uncommitted_rows(seeded_db: Path) -> None:
+    """workers=1 keeps at most two batches in flight: a write_fn that raises on the first report ends the run before
+    the rest are called, and the rows written since the writer's last periodic commit are rolled back."""
+    with sqlite3.connect(seeded_db) as conn:
+        conn.executescript("".join(
+            f"INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES ('x{i}', 'top', 'u1', NULL, 'Report {i}.', 0);"
+            f"INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES (1, 'x{i}', 'u1', 1, 'neutral', 'weak');"
+            for i in range(8)
+        ))
+    calls: list[int] = []
+
+    def call(client, prompt, model=None, system=None, max_tokens=0) -> str:
+        calls.append(len(json.loads(prompt)["items"]))
+        return json.dumps([{"item_id": 0, "value": "row"}])
+
+    def write(writer, context, value) -> int:
+        writer.insert_report_rows("report_doses", ("low", "high", "unit", "route", "outcome", "quote"), context.report_id, [(1.0, 1.0, "mg", None, None, "q")])
+        raise RuntimeError("disk full")
+
+    setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, parse, write, tokens_per_item=7)  # noqa: E731
+    with pytest.raises(RuntimeError, match="disk full"):
+        run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup, workers=1, batch_size=1, call=call)
+    assert 1 <= len(calls) <= 3  # eleven batches: the one that failed plus at most workers * 2 already submitted
+    with sqlite3.connect(seeded_db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM extraction_runs WHERE extraction_type = 'report_doses'").fetchone()[0] == 1  # the run row stays
+
+
 def test_a_step_cannot_override_the_shared_run_config_keys(seeded_db: Path) -> None:
     setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, parse, None, tokens_per_item=7, run_config={"model": "x", "extra": 1})  # noqa: E731
     with pytest.raises(ValueError, match=r"shared keys: \['model'\]"):

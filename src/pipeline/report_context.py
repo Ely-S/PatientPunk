@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -235,35 +235,52 @@ def run_report_step(
         raise ValueError(f"Step.run_config must not override shared keys: {sorted(clash)}")
     run_config |= step.run_config
     log.info(f"{len(contexts)} reports for {drug!r}; model {model}")
-    batches = make_batches(contexts, batch_size, solo_above_chars)
+    batches = iter(make_batches(contexts, batch_size, solo_above_chars))
     reports = with_rows = rows = failed = dropped = 0
+    workers = max(1, workers)
     with (
         ReportWriter(db_path, run_config, get_git_commit(), extraction_type=extraction_type) as writer,
-        ThreadPoolExecutor(max_workers=max(1, workers)) as pool,
+        ThreadPoolExecutor(max_workers=workers) as pool,
     ):
         log.info(f"Extraction run {writer.run_id}")
-        futures = {pool.submit(extract_with_split, client, batch, step, model, call): batch for batch in batches}
-        for future in as_completed(futures):
-            batch = futures[future]
-            try:
-                results, dropped_in_batch = future.result()
-            except Exception as e:  # noqa: BLE001
-                if not is_transient_or_truncated(e):  # a configuration error or a bug: stop, it is not a failed batch
-                    raise
-                log.warning(f"Batch of {len(batch)} failed: {type(e).__name__}: {e}")
-                failed += len(batch)
-                continue
-            dropped += dropped_in_batch
-            for context in batch:
-                if context.report_id not in results:
-                    failed += 1
-                    continue
-                n = step.write_fn(writer, context, results[context.report_id])
-                reports += 1
-                rows += n
-                with_rows += bool(n)
-            if reports % 80 < len(batch):  # about every 80 reports
-                log.info(f"  {reports}/{len(contexts)} reports, {rows} rows")
+        # At most workers * 2 batches in flight, the next submitted as one completes (like the sentiment
+        # classifier), so an error ends the run after the calls already made, not after the whole queue.
+        in_flight: dict[Future, list[ReportContext]] = {}
+
+        def submit_next() -> None:
+            for batch in batches:
+                in_flight[pool.submit(extract_with_split, client, batch, step, model, call)] = batch
+                return
+
+        try:
+            for _ in range(workers * 2):
+                submit_next()
+            while in_flight:
+                future = next(as_completed(in_flight))
+                batch = in_flight.pop(future)
+                try:
+                    results, dropped_in_batch = future.result()
+                except Exception as e:  # noqa: BLE001
+                    if not is_transient_or_truncated(e):  # a configuration error or a bug: stop, it is not a failed batch
+                        raise
+                    log.warning(f"Batch of {len(batch)} failed: {type(e).__name__}: {e}")
+                    failed += len(batch)
+                else:
+                    dropped += dropped_in_batch
+                    for context in batch:
+                        if context.report_id not in results:
+                            failed += 1
+                            continue
+                        n = step.write_fn(writer, context, results[context.report_id])
+                        reports += 1
+                        rows += n
+                        with_rows += bool(n)
+                    if reports % 80 < len(batch):  # about every 80 reports
+                        log.info(f"  {reports}/{len(contexts)} reports, {rows} rows")
+                submit_next()
+        except BaseException:
+            pool.shutdown(wait=False, cancel_futures=True)  # queued batches never call the model; in-flight ones finish
+            raise
         summary = StepSummary(writer.run_id, reports, with_rows, rows, failed, dropped)
     log.info(
         f"Done: {summary.reports} reports, {summary.reports_with_rows} with rows, {summary.rows} rows, "

@@ -182,5 +182,9 @@ class ReportWriter:
     def __enter__(self):
         return self
 
-    def __exit__(self, *exc):
-        self.close()
+    def __exit__(self, exc_type, *_):
+        if exc_type is None:
+            self.flush()
+        else:
+            self._conn.rollback()  # a run that raised keeps nothing since its last periodic commit
+        self._conn.close()
