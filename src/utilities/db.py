@@ -80,11 +80,12 @@ def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[st
 
 
 class ReportWriter:
-    """Incremental writer for treatment_reports and report_doses.
+    """Incremental writer for treatment_reports and the per-report tables (report_doses).
 
     Creates an extraction_runs row on init, then batches inserts with
     periodic commits. Use as a context manager. ``extraction_type`` names the
-    run: "treatment_sentiment" (default) or "report_doses".
+    run: "treatment_sentiment" (default) or "report_doses". A per-report step
+    writes through insert_report_rows (or a per-table wrapper like write_doses).
     """
 
     def __init__(self, db_path: Path, run_config: dict, commit_hash: str,
@@ -139,28 +140,34 @@ class ReportWriter:
             self._pending = 0
         return True
 
-    def write_doses(self, report_id: int, doses) -> int:
-        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
-        pipeline.doses.DoseValue) as this run's rows for an existing treatment report.
-        Append only, like treatment_reports: earlier runs' rows stay, and the
-        report_doses_latest view returns each report's most recent run. An unknown
-        report_id raises ValueError. Returns the number written."""
+    def insert_report_rows(self, table: str, columns: tuple[str, ...], report_id: int, rows: list[tuple]) -> int:
+        """Insert ``rows`` (value tuples in ``columns`` order) as this run's rows for an existing
+        treatment report, numbered 0-based in ``ordinal`` like the study's other ordinal columns.
+        Append only, like treatment_reports: earlier runs' rows stay, and a per-table
+        ``_latest`` view returns each report's most recent run. An unknown report_id raises
+        ValueError. Returns the number written."""
         if self._conn.execute(
             "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
+        names = ", ".join(("report_id", "run_id", "ordinal", *columns))
+        marks = ", ".join("?" * (3 + len(columns)))
         self._conn.executemany(
-            "INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit, route, outcome, quote) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                (report_id, self.run_id, ordinal, d.low, d.high, d.unit, d.route, d.outcome, d.quote)
-                for ordinal, d in enumerate(doses)  # 0-based, like the study's other ordinal columns
-            ],
+            f"INSERT INTO {table} ({names}) VALUES ({marks})",
+            [(report_id, self.run_id, ordinal, *row) for ordinal, row in enumerate(rows)],
         )
-        self._pending += len(doses)  # one per row written, so COMMIT_EVERY means rows here too
+        self._pending += len(rows)  # one per row written, so COMMIT_EVERY means rows here too
         if self._pending >= COMMIT_EVERY:
             self.flush()
-        return len(doses)
+        return len(rows)
+
+    def write_doses(self, report_id: int, doses) -> int:
+        """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
+        pipeline.doses.DoseValue) as this run's report_doses rows; see insert_report_rows."""
+        return self.insert_report_rows(
+            "report_doses", ("low", "high", "unit", "route", "outcome", "quote"), report_id,
+            [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in doses],
+        )
 
     def flush(self):
         """Commit any pending writes."""
