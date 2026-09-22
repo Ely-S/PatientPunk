@@ -15,7 +15,7 @@ from utilities import LLMParseError
 
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 TARGET = frozenset({"target", "7,8-dhf", "tropoflavin"})
-REPORT = "At 20mg it fixed my brain fog. It also ruins my sleep."
+REPORT = "At 20mg it fixed my brain fog. It also ruins my sleep. This stack helped my focus."
 
 
 def test_prompt_renders_name_aliases_exclusions_and_domains() -> None:
@@ -37,20 +37,30 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
         {"domain": "vibes", "symptom": "vibes", "direction": "improved", "attribution": "7,8-dhf", "quote": "good vibes"},  # unknown domain
         {"domain": "overall", "symptom": "", "direction": "no change", "attribution": "stack", "quote": "did nothing"},
         {"domain": "overall", "direction": "improved", "attribution": "unclear", "quote": ""},  # no quote
+        {"domain": "overall", "symptom": "y", "direction": "improved", "attribution": "", "quote": "it worked"},  # no attribution
+        {"domain": "pain or neurologic symptoms", "symptom": "headache", "direction": "worsened", "severity": "Mild", "attribution": "7,8-dhf", "quote": "a mild headache and severe dizziness"},
+        {"domain": "pain or neurologic symptoms", "symptom": "dizziness", "direction": "worsened", "severity": "severe", "attribution": "7,8-dhf", "quote": "a mild headache and severe dizziness"},  # same domain, quote: kept apart
+        {"domain": "gastrointestinal", "symptom": "nausea", "direction": "worsened", "severity": "brutal", "attribution": "7,8-dhf", "quote": "nausea"},  # not a severity: unspecified
         effect, dict(effect), "not an object",
     ]}, {"item_id": 1, "effects": []}])
     per_item, dropped = parse_effects_response(raw, [0, 1], TARGET)
-    assert dropped == 4 and per_item[1] == []
-    assert [(e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose) for e in per_item[0]] == [
-        ("mood or depression", "mood", "improved", "target", "it lifted my mood", 2),
-        ("energy or motivation", "energy", "improved", "other compound", "polygala gave me energy", None),
-        ("overall", "overall", "no_change", "stack", "did nothing", None),
-        ("overall", "x", "improved", "unclear", "it worked", None),
+    assert dropped == 5 and per_item[1] == []
+    assert [(e.domain, e.symptom, e.direction, e.severity, e.attribution, e.quote, e.dose) for e in per_item[0]] == [
+        ("mood or depression", "mood", "improved", None, "target", "it lifted my mood", 2),
+        ("energy or motivation", "energy", "improved", None, "other compound", "polygala gave me energy", None),
+        ("overall", "overall", "no_change", None, "stack", "did nothing", None),
+        ("pain or neurologic symptoms", "headache", "worsened", "mild", "target", "a mild headache and severe dizziness", None),
+        ("pain or neurologic symptoms", "dizziness", "worsened", "severe", "target", "a mild headache and severe dizziness", None),
+        ("gastrointestinal", "nausea", "worsened", None, "target", "nausea", None),
+        ("overall", "x", "improved", None, "unclear", "it worked", None),
     ]
     with pytest.raises(LLMParseError, match="do not match"):
         parse_effects_response(raw, [0, 2], TARGET)
     with pytest.raises(LLMParseError):
         parse_effects_response("no json here", [0], TARGET)
+    for malformed in ('[{"item_id": 0}]', '[{"item_id": 0, "effects": null}]', '[{"item_id": 0, "effects": {}}]'):
+        with pytest.raises(LLMParseError, match="must be an array"):  # retried, never written as "no effects"
+            parse_effects_response(malformed, [0], TARGET)
 
 
 def test_write_time_checks_drop_foreign_quotes_and_null_unlisted_dose_ids() -> None:
@@ -94,33 +104,35 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_pat
         {"domain": "cognition or brain fog", "symptom": "brain fog", "direction": "improved", "attribution": "7,8-dhf", "quote": "At 20mg it fixed my brain fog.", "dose": 7},
         {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "worsened", "attribution": "7,8-dhf", "quote": "It also ruins my sleep.", "dose": 42},
         {"domain": "mood or depression", "symptom": "mood", "direction": "improved", "attribution": "7,8-dhf", "quote": "lifted from the parent post"},
+        {"domain": "focus or attention", "symptom": "focus", "direction": "improved", "attribution": "stack", "quote": "This stack helped my focus."},
     ]
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": reply_effects if "20mg" in it["report"] else []} for it in items]
 
     first = run_effects_extraction(None, db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
-    assert (first.reports, first.reports_with_rows, first.rows, first.failed) == (2, 1, 2, 0)
+    assert (first.reports, first.reports_with_rows, first.rows, first.failed) == (2, 1, 3, 0)
     assert (first.dropped, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
     reply_item = next(it for p in payloads for it in p["items"] if "20mg" in it["report"])
     assert reply_item["doses"] == [{"id": 7, "quote": "At 20mg it fixed my brain fog."}]
     assert reply_item["replying_to"] == "Asking for a friend." and "thread" not in reply_item  # one parent up, nothing else
     with sqlite3.connect(db) as conn:
-        rows = conn.execute("SELECT report_id, ordinal, domain, symptom, direction, attribution, quote, dose_id FROM report_effects ORDER BY ordinal").fetchall()
+        rows = conn.execute("SELECT report_id, ordinal, domain, symptom, direction, severity, attribution, quote, dose_id FROM report_effects ORDER BY ordinal").fetchall()
         run_type, config = conn.execute("SELECT extraction_type, config FROM extraction_runs WHERE run_id = ?", (first.run_id,)).fetchone()
     assert rows == [
-        (3, 0, "cognition or brain fog", "brain fog", "improved", "target", "At 20mg it fixed my brain fog.", 7),
-        (3, 1, "sleep or wakefulness", "sleep", "worsened", "target", "It also ruins my sleep.", None),
+        (3, 0, "cognition or brain fog", "brain fog", "improved", None, "target", "At 20mg it fixed my brain fog.", 7),
+        (3, 1, "sleep or wakefulness", "sleep", "worsened", None, "target", "It also ruins my sleep.", None),
+        (3, 2, "focus or attention", "focus", "improved", None, "stack", "This stack helped my focus.", None),  # a stack credit stays "stack"
     ]
     config = json.loads(config)
     assert run_type == "report_effects" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
     assert config["aliases"] == ["tropoflavin"] and config["domains"] == list(DOMAINS) and config["dose_run_id"] == 2
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": [
-        {"domain": "overall", "symptom": "overall", "direction": "no_change", "attribution": "7,8-dhf", "quote": "ruins my sleep"}
+        {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "worsened", "severity": "severe", "attribution": "7,8-dhf", "quote": "ruins my sleep"}
     ] if "20mg" in it["report"] else []} for it in items]
     second = run_effects_extraction(None, db, "7,8-dhf", workers=1)
-    with sqlite3.connect(db) as conn:  # a rerun replaces the report's rows
-        assert conn.execute("SELECT run_id, domain FROM report_effects").fetchall() == [(second.run_id, "overall")]
+    with sqlite3.connect(db) as conn:  # a rerun replaces the report's rows; a stated severity is stored
+        assert conn.execute("SELECT run_id, domain, severity FROM report_effects").fetchall() == [(second.run_id, "sleep or wakefulness", "severe")]
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": []} for it in items]
     run_effects_extraction(None, db, "7,8-dhf", workers=1)
     with sqlite3.connect(db) as conn:  # a rerun that finds nothing retracts the earlier rows

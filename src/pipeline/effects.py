@@ -41,19 +41,21 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 # Kept identical to schema.sql so the step also works on databases created before the table existed.
 REPORT_EFFECTS_DDL = """
 CREATE TABLE IF NOT EXISTS report_effects (
-    effect_id   INTEGER PRIMARY KEY,
+    effect_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     report_id   INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id      INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal     INTEGER NOT NULL,
     domain      TEXT NOT NULL,
     symptom     TEXT NOT NULL,
     direction   TEXT NOT NULL CHECK (direction IN ('improved', 'worsened', 'no_change', 'mixed')),
+    severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,
     dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_re_report ON report_effects(report_id);
 """
+SEVERITIES = ("mild", "moderate", "severe", "life_threatening")
 
 
 class EffectValue(BaseModel):
@@ -64,6 +66,7 @@ class EffectValue(BaseModel):
     domain: str
     symptom: str
     direction: Literal["improved", "worsened", "no_change", "mixed"]
+    severity: Literal["mild", "moderate", "severe", "life_threatening"] | None = None  # only when the author states it
     attribution: Literal["target", "stack", "unclear", "other compound"]
     quote: str
     dose: int | None = None
@@ -80,6 +83,8 @@ class EffectValue(BaseModel):
         data["domain"] = (data["domain"] or "").lower()
         data["symptom"] = data["symptom"] or data["domain"]  # a row with no symptom word still names its domain
         data["direction"] = str(data.get("direction") or "").strip().lower().replace(" ", "_")
+        severity = str(data.get("severity") or "").strip().lower().replace(" ", "_").replace("-", "_")
+        data["severity"] = severity if severity in SEVERITIES else None  # anything else is "not stated"
         dose = data.get("dose")
         if isinstance(dose, str) and dose.strip().isdigit():
             dose = int(dose)
@@ -128,16 +133,17 @@ def parse_effects_response(
 ) -> tuple[dict[int, list[EffectValue]], int]:
     """Effects per item id, and how many effect objects were dropped.
 
-    The prompt names the drug in the attribution field; the table stores ``target``. Any
-    label outside the vocabulary is treated as another named compound.
+    The prompt names the drug in the attribution field; the table stores ``target``. A label
+    outside the vocabulary is the name of another compound, so ``other compound``; an empty
+    one drops the effect. A missing or non-array ``effects`` field is a parse error.
     """
     result: dict[int, list[EffectValue]] = {}
     dropped = 0
     for item_id, obj in response_items(raw, expected_ids).items():
         effects: list[EffectValue] = []
         seen: set[tuple] = set()
-        raw_effects = obj.get("effects") or []
-        if not isinstance(raw_effects, list):
+        raw_effects = obj.get("effects")
+        if not isinstance(raw_effects, list):  # missing or malformed: the whole batch is retried, nothing is written
             raise LLMParseError("\"effects\" must be an array")
         for raw_effect in raw_effects:
             if not isinstance(raw_effect, dict):
@@ -145,6 +151,9 @@ def parse_effects_response(
                 continue
             data = dict(raw_effect)
             label = str(data.get("attribution") or "").strip().lower()
+            if not label:  # no attribution is not a claim about another compound
+                dropped += 1
+                continue
             data["attribution"] = "target" if label in target_names else label if label in ATTRIBUTIONS else "other compound"
             try:
                 effect = EffectValue.model_validate(data)
@@ -154,7 +163,7 @@ def parse_effects_response(
             if effect.domain not in domains:
                 dropped += 1
                 continue
-            key = (effect.domain, effect.direction, effect.attribution, effect.quote)
+            key = (effect.domain, effect.symptom, effect.direction, effect.severity, effect.attribution, effect.quote, effect.dose)
             if key not in seen:
                 seen.add(key)
                 effects.append(effect)
@@ -205,6 +214,9 @@ def run_effects_extraction(
 
     def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
         conn.executescript(REPORT_EFFECTS_DDL)
+        if "severity" not in {row[1] for row in conn.execute("PRAGMA table_info(report_effects)")}:  # table from before severity
+            conn.execute("ALTER TABLE report_effects ADD COLUMN severity TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening'))")
+            conn.commit()
         doses_by_report, dose_run_id = load_report_doses(conn, drug)
         target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
         log.info(f"{len(doses_by_report)} reports with dose rows (dose run {dose_run_id})")

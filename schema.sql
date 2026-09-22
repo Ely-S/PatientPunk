@@ -98,7 +98,7 @@ CREATE INDEX idx_tr_run  ON treatment_reports(run_id);
 -- Written by src/run_dose_pipeline.py after the sentiment pipeline; amounts are
 -- stored as stated (a range keeps low and high) with the sentence they came from.
 CREATE TABLE report_doses (
-    dose_id   INTEGER PRIMARY KEY,
+    dose_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
@@ -116,13 +116,14 @@ CREATE INDEX idx_rd_report ON report_doses(report_id);
 -- Written by src/run_effects_pipeline.py after the dose step; an effect the author ties
 -- to a stated dose points at that report_doses row.
 CREATE TABLE report_effects (
-    effect_id   INTEGER PRIMARY KEY,
+    effect_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     report_id   INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id      INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal     INTEGER NOT NULL,
     domain      TEXT NOT NULL,       -- one of the run's domain list, recorded in extraction_runs.config
     symptom     TEXT NOT NULL,       -- the author's own words for what changed
     direction   TEXT NOT NULL CHECK (direction IN ('improved', 'worsened', 'no_change', 'mixed')),
+    severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),  -- only when the author states it; NULL means unspecified, not mild
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,       -- verbatim sentence from the post
     dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL  -- NULL unless the author ties the effect to a stated dose; a dose rerun clears it

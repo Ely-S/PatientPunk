@@ -172,10 +172,10 @@ class ReportWriter:
 
     def write_effects(self, report_id: int, effects) -> int:
         """Replace a report's report_effects rows with ``effects`` (objects with domain, symptom,
-        direction, attribution, quote, dose — e.g. pipeline.effects.EffectValue); see insert_report_rows."""
+        direction, severity, attribution, quote, dose — e.g. pipeline.effects.EffectValue); see insert_report_rows."""
         return self.insert_report_rows(
-            "report_effects", ("domain", "symptom", "direction", "attribution", "quote", "dose_id"), report_id,
-            [(e.domain, e.symptom, e.direction, e.attribution, e.quote, e.dose) for e in effects],
+            "report_effects", ("domain", "symptom", "direction", "severity", "attribution", "quote", "dose_id"), report_id,
+            [(e.domain, e.symptom, e.direction, e.severity, e.attribution, e.quote, e.dose) for e in effects],
         )
 
     def _has_table(self, name: str) -> bool:
