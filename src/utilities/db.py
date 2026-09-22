@@ -151,7 +151,7 @@ class ReportWriter:
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
         names = ", ".join(("report_id", "run_id", "ordinal", *columns))
-        marks = ", ".join("?" * (3 + len(columns)))
+        marks = ", ".join(["?"] * (3 + len(columns)))
         self._conn.executemany(
             f"INSERT INTO {table} ({names}) VALUES ({marks})",
             [(report_id, self.run_id, ordinal, *row) for ordinal, row in enumerate(rows)],

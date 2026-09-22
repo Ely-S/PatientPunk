@@ -85,7 +85,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
 
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
-    assert (first.reports, first.reports_with_doses, first.dose_rows, first.failed_reports) == (2, 1, 2, 0)
+    assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 2, 0, 0)
     assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
     with sqlite3.connect(schema_db) as conn:
         rows = conn.execute("SELECT report_id, ordinal, low, high, unit, route, outcome, quote FROM report_doses ORDER BY ordinal").fetchall()

@@ -6,17 +6,13 @@ per post), sends each report to the model with its parent post as context, and w
 report_doses. Amounts are stored as stated (a range keeps its low and high); every row
 carries the sentence it came from.
 
-The mechanics shared with the other per-report steps (the report context query, batching,
-the thread-pool loop, the split-on-malformed-reply retry, the alias lookup, the run loop)
-live in pipeline/report_context.py; this module keeps only what is dose-specific: the dose
-object, the payload and parse functions, and the prompt. Rows are written through
-utilities.db.ReportWriter.write_doses.
+The run itself (report loading, batching, the pool, the split retry) is pipeline/report_context.py;
+this module keeps the dose object, the payload and parse functions, and the prompt. Rows are
+written through utilities.db.ReportWriter.write_doses.
 """
 from __future__ import annotations
 
 import json
-import sqlite3
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -27,12 +23,13 @@ from pipeline.report_context import (
     DEFAULT_SOLO_ABOVE_CHARS,
     ReportContext,
     Step,
-    StepInputs,
+    StepSummary,
+    request_items,
+    response_items,
     run_report_step,
 )
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, llm_call, parse_json_array
-from utilities.db import ReportWriter
+from utilities import MODEL_STRONG, LLMParseError, llm_call
 
 # Units are stored as the author wrote them. This map is NOT applied at write time; it is
 # the helper analyses call when they need comparable amounts (normalize_unit below).
@@ -90,40 +87,15 @@ class DoseValue(BaseModel):
         return self
 
 
-@dataclass(frozen=True)
-class DoseRunSummary:
-    run_id: int
-    reports: int
-    reports_with_doses: int
-    dose_rows: int
-    failed_reports: int
-    dropped_doses: int  # dose objects the model returned that did not validate
-
-
 def request_payload(batch: list[ReportContext]) -> str:
-    items = []
-    for i, context in enumerate(batch):
-        item: dict[str, object] = {"item_id": i, "report": context.text}
-        if context.replying_to:
-            item["replying_to"] = context.replying_to
-        items.append(item)
-    return json.dumps({"items": items}, ensure_ascii=False)
+    return json.dumps({"items": request_items(batch)}, ensure_ascii=False)
 
 
 def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, list[DoseValue]], int]:
-    """Parse the model's array; returns doses per item id and how many dose objects were dropped."""
-    objects = parse_json_array(raw)
-    if not all(isinstance(o, dict) for o in objects):
-        raise LLMParseError("Response array must contain objects")
-    try:
-        ids = [int(o.get("item_id")) for o in objects]
-    except (TypeError, ValueError) as e:
-        raise LLMParseError(f"Non-integer item_id in response: {e}") from e
-    if ids != expected_ids:
-        raise LLMParseError(f"Response item ids {ids} do not match request {expected_ids}")
+    """Doses per item id, and how many dose objects did not validate."""
     result: dict[int, list[DoseValue]] = {}
     dropped = 0
-    for obj in objects:
+    for item_id, obj in response_items(raw, expected_ids).items():
         doses: list[DoseValue] = []
         seen: set[tuple] = set()
         raw_doses = obj.get("doses") or []
@@ -140,7 +112,7 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
                 continue
             seen.add(key)
             doses.append(dose)
-        result[int(obj["item_id"])] = doses
+        result[item_id] = doses
     return result, dropped
 
 
@@ -157,16 +129,21 @@ def run_dose_extraction(
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
     solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
     limit: int | None = None,
-) -> DoseRunSummary:
+) -> StepSummary:
     """Extract doses for every latest report of ``drug`` in ``db_path`` and write report_doses."""
 
-    def setup(conn: sqlite3.Connection, inputs: StepInputs) -> Step:
-        system = dose_system_prompt(drug, inputs.aliases, inputs.excluded_compounds)
-        return Step(system, request_payload, parse_dose_response, TOKENS_PER_ITEM, call=llm_call)
+    def setup(_conn, aliases: list[str], excluded_compounds: list[str]) -> Step:
+        return Step(
+            system=dose_system_prompt(drug, aliases, excluded_compounds),
+            payload_fn=request_payload,
+            parse_fn=parse_dose_response,
+            write_fn=lambda writer, context, doses: writer.write_doses(context.report_id, doses),
+            tokens_per_item=TOKENS_PER_ITEM,
+            call=llm_call,
+        )
 
-    s = run_report_step(
-        client, db_path, drug, extraction_type="report_doses", setup_fn=setup, write_fn=ReportWriter.write_doses,
+    return run_report_step(
+        client, db_path, drug, extraction_type="report_doses", setup_fn=setup,
         aliases=aliases, excluded_compounds=excluded_compounds, model=model, workers=workers,
         batch_size=batch_size, parent_chars=parent_chars, solo_above_chars=solo_above_chars, limit=limit,
     )
-    return DoseRunSummary(s.run_id, s.reports, s.reports_with_rows, s.rows, s.failed, s.dropped)

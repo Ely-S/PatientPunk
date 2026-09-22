@@ -5,7 +5,8 @@ run_dose_pipeline.py — Extract every dose the author states they took, one row
 Run after run_sentiment_pipeline.py with the same --db and --drug. Reads the latest
 treatment report per post for that drug, sends each report (with its parent post as
 context) to the model, and writes report_doses under a new extraction_runs row.
-Re-running replaces a report's rows; cached model replies make reruns free.
+Runs append: earlier rows stay, and the report_doses_latest view shows each report's most
+recent run. Cached model replies make reruns free.
 
 Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --drug "7,8-dhf"
@@ -24,14 +25,14 @@ from utilities import get_client, log  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract stated doses per treatment report")
-    add_step_arguments(parser, noun="doses")
+    add_step_arguments(parser)
     args = parser.parse_args()
     options = step_kwargs(parser, args)  # list-file errors surface before a client is built
 
     summary = run_dose_extraction(get_client(), Path(args.db), args.drug, **options)
     log.info(
-        f"Run {summary.run_id}: {summary.reports} reports, {summary.reports_with_doses} with doses, "
-        f"{summary.dose_rows} dose rows, {summary.failed_reports} failed"
+        f"Run {summary.run_id}: {summary.reports} reports, {summary.reports_with_rows} with doses, "
+        f"{summary.rows} dose rows, {summary.failed} failed"
     )
 
 
