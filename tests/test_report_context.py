@@ -100,16 +100,16 @@ def test_split_retries_a_malformed_reply_down_to_single_items() -> None:
         budgets.append(max_tokens)
         return "garbage" if len(items) > 1 else json.dumps([{"item_id": 0, "value": items[0]["report"]}])
 
-    step = Step("sys", serialize_batch, parse, write_fn=None, tokens_per_item=7, call=stub)
+    step = Step("sys", serialize_batch, parse, write_fn=None, tokens_per_item=7)
     batch = [ReportContext(i, f"p{i}", None, 1, f"t{i}", "") for i in range(4)]
 
-    results, dropped = extract_with_split(None, batch, step, "model")
+    results, dropped = extract_with_split(None, batch, step, "model", stub)
 
     assert results == {0: "t0", 1: "t1", 2: "t2", 3: "t3"} and dropped == 0
     assert sizes == [4, 2, 1, 1, 2, 1, 1] and budgets == [7 * n for n in sizes]
 
-    always_bad = Step("sys", serialize_batch, parse, write_fn=None, tokens_per_item=7, call=lambda *a, **k: "garbage")
-    assert extract_with_split(None, batch[:1], always_bad, "model") == ({}, 0)  # a single item that stays malformed is skipped
+    always_bad = lambda *a, **k: "garbage"  # noqa: E731
+    assert extract_with_split(None, batch[:1], step, "model", always_bad) == ({}, 0)  # a single item that stays malformed is skipped
 
 
 def test_aliases_from_db_reads_the_stored_spellings_and_rejects_corrupt_json(seeded: sqlite3.Connection) -> None:
@@ -133,14 +133,14 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
 
     def setup(conn, aliases, excluded):
         assert conn.execute("SELECT 1").fetchone() and aliases == ["tropoflavin", "78dhf"] and excluded == ["x"]
-        return Step("sys", serialize_batch, lambda raw, ids: parse(raw, ids, dropped=1), write, tokens_per_item=7, call=call, run_config={"extra": 1})
+        return Step("sys", serialize_batch, lambda raw, ids: parse(raw, ids, dropped=1), write, tokens_per_item=7, run_config={"extra": 1})
 
     def write(writer, context, value):
         written.append((context.report_id, value))
         return 1
 
     summary = run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup,
-                              excluded_compounds=["x"], workers=1, batch_size=2, solo_above_chars=None)
+                              excluded_compounds=["x"], workers=1, batch_size=2, solo_above_chars=None, call=call)
 
     assert (summary.reports, summary.reports_with_rows, summary.rows, summary.failed, summary.dropped) == (1, 1, 1, 2, 1)
     assert written == [(4, "row")]

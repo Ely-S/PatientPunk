@@ -28,7 +28,7 @@ from pipeline.report_context import (
     serialize_batch,
 )
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, llm_call
+from utilities import MODEL_STRONG, LLMParseError
 
 # Units are stored as the author wrote them. This map is NOT applied at write time; it is
 # the helper analyses call when they need comparable amounts (normalize_unit below).
@@ -134,7 +134,6 @@ def run_dose_extraction(
             parse_fn=parse_dose_response,
             write_fn=lambda writer, context, doses: writer.write_doses(context.report_id, doses),
             tokens_per_item=TOKENS_PER_ITEM,
-            call=llm_call,
         )
 
     return run_report_step(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-import pipeline.doses as doses_module
+from pipeline import report_context
 from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
 from pipeline.report_context import load_report_contexts, make_batches, serialize_batch
 from prompts.dose_config import dose_system_prompt
@@ -65,7 +65,7 @@ def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Pat
         payloads.append(json.loads(prompt))
         return json.dumps(respond["fn"](payloads[-1]["items"]))
 
-    monkeypatch.setattr(doses_module, "llm_call", stub_llm)
+    monkeypatch.setattr(report_context, "llm_call", stub_llm)
     schema_db = tmp_path / "study.db"
     with sqlite3.connect(schema_db) as conn:
         conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))

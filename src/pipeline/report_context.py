@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from utilities import MODEL_STRONG, LLMParseError, get_git_commit, log, parse_json_array
+from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
 from utilities.db import ReportWriter, open_db, post_text
 
 DEFAULT_PARENT_CHARS = 1500      # of the post being replied to, sent as context
@@ -115,7 +115,6 @@ class Step:
     parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]]  # (reply, item ids) -> (values per id, dropped: objects that did not validate)
     write_fn: Callable[[ReportWriter, ReportContext, Any], int]       # writes one report's values; returns rows written
     tokens_per_item: int
-    call: Callable                                                    # the model call: pass llm_call from the step's module, stub it there
     run_config: dict[str, Any] = field(default_factory=dict)          # step-specific keys for the extraction_runs row
 
 
@@ -155,11 +154,13 @@ def response_items(raw: str, expected_ids: list[int]) -> dict[int, dict]:
     return dict(zip(ids, objects))
 
 
-def extract_with_split(client, batch: list[ReportContext], step: Step, model: str) -> tuple[dict[int, Any], int]:
+def extract_with_split(
+    client, batch: list[ReportContext], step: Step, model: str, call: Callable[..., str]
+) -> tuple[dict[int, Any], int]:
     """Values per report_id and the dropped count for one batch; a malformed reply splits it, a malformed single is skipped."""
     try:
-        raw = step.call(client, step.payload_fn(batch), model=model, system=step.system,
-                        max_tokens=step.tokens_per_item * len(batch))
+        raw = call(client, step.payload_fn(batch), model=model, system=step.system,
+                   max_tokens=step.tokens_per_item * len(batch))
         per_item, dropped = step.parse_fn(raw, list(range(len(batch))))
         return {batch[i].report_id: value for i, value in per_item.items()}, dropped
     except LLMParseError as e:
@@ -168,8 +169,8 @@ def extract_with_split(client, batch: list[ReportContext], step: Step, model: st
             return {}, 0
         log.warning(f"Malformed reply for a batch of {len(batch)}; splitting. {e}")
         mid = len(batch) // 2
-        left, dropped_left = extract_with_split(client, batch[:mid], step, model)
-        right, dropped_right = extract_with_split(client, batch[mid:], step, model)
+        left, dropped_left = extract_with_split(client, batch[:mid], step, model, call)
+        right, dropped_right = extract_with_split(client, batch[mid:], step, model, call)
         return {**left, **right}, dropped_left + dropped_right
 
 
@@ -200,10 +201,14 @@ def run_report_step(
     parent_chars: int | None = DEFAULT_PARENT_CHARS,
     solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
     limit: int | None = None,
+    call: Callable[..., str] | None = None,
 ) -> StepSummary:
     """Run one step over every latest report of ``drug`` in ``db_path`` under a new extraction_runs row.
     ``setup_fn(conn, aliases, excluded_compounds) -> Step`` runs on the open connection before the run, so a
-    step can read its own tables there; aliases come from the treatment table unless given."""
+    step can read its own tables there; aliases come from the treatment table unless given. ``call`` is the
+    model call, ``llm_call`` unless given: tests pass a stub, or monkeypatch ``llm_call`` in this module."""
+    if call is None:
+        call = llm_call
     excluded_compounds = list(excluded_compounds or [])
     conn = open_db(db_path)
     try:
@@ -235,7 +240,7 @@ def run_report_step(
         ThreadPoolExecutor(max_workers=max(1, workers)) as pool,
     ):
         log.info(f"Extraction run {writer.run_id}")
-        futures = {pool.submit(extract_with_split, client, batch, step, model): batch for batch in batches}
+        futures = {pool.submit(extract_with_split, client, batch, step, model, call): batch for batch in batches}
         for future in as_completed(futures):
             batch = futures[future]
             try:
