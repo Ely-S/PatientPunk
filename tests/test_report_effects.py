@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,17 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
     for malformed in ('[{"item_id": 0}]', '[{"item_id": 0, "effects": null}]', '[{"item_id": 0, "effects": {}}]'):
         with pytest.raises(LLMParseError, match="must be an array"):  # retried, never written as "no effects"
             parse_effects_response(malformed, [0], TARGET)
+
+
+def test_cli_rejects_a_domains_file_without_overall(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    import run_effects_pipeline
+
+    domains = tmp_path / "domains.txt"
+    domains.write_text("mood\nsleep\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["run_effects_pipeline.py", "--db", "x.db", "--drug", "7,8-dhf", "--domains-file", str(domains)])
+    with pytest.raises(SystemExit):
+        run_effects_pipeline.main()
+    assert '"overall"' in capsys.readouterr().err
 
 
 def test_write_time_checks_drop_foreign_quotes_and_null_unlisted_dose_ids() -> None:

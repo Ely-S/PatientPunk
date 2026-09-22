@@ -34,6 +34,8 @@ def main() -> None:
     args = parser.parse_args()
     options = step_kwargs(parser, args)  # list-file errors surface before a client is built
     domains = read_list_file(parser, args, "domains_file") or DOMAINS
+    if "overall" not in {d.lower() for d in domains}:
+        parser.error('--domains-file must include "overall": the prompt files a verdict that names no symptom under it')
 
     summary = run_effects_extraction(get_client(), Path(args.db), args.drug, domains=domains, **options)
     log.info(
