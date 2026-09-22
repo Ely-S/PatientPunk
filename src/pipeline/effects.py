@@ -11,13 +11,12 @@ the write-time checks and the prompt.
 """
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
@@ -27,9 +26,9 @@ from pipeline.report_context import (
     ReportContext,
     Step,
     StepSummary,
-    request_items,
     response_items,
     run_report_step,
+    serialize_batch,
 )
 from prompts.effects_config import ATTRIBUTIONS, DOMAINS, effects_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, llm_call, log
@@ -121,11 +120,13 @@ def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, li
 
 
 def request_payload(batch: list[ReportContext], doses_by_report: dict[int, list[tuple[int, str]]]) -> str:
-    items = request_items(batch)
-    for item, context in zip(items, batch):
-        if doses_by_report.get(context.report_id):
-            item["doses"] = [{"id": dose_id, "quote": quote} for dose_id, quote in doses_by_report[context.report_id]]
-    return json.dumps({"items": items}, ensure_ascii=False)
+    """The shared request body, each item also carrying the report's dose rows as ``doses: [{id, quote}]`` when it has any."""
+
+    def doses_for(context: ReportContext) -> dict[str, Any]:
+        listed = doses_by_report.get(context.report_id)
+        return {"doses": [{"id": dose_id, "quote": quote} for dose_id, quote in listed]} if listed else {}
+
+    return serialize_batch(batch, doses_for)
 
 
 def parse_effects_response(

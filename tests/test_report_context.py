@@ -231,7 +231,7 @@ def test_both_steps_send_the_same_context_by_default() -> None:
         assert params["parent_chars"].default == DEFAULT_PARENT_CHARS
         assert "thread_chars" not in params  # one parent up, nothing else (user decision)
     context = ReportContext(1, "p1", None, 1, "I take 20mg.", "What dose?")
-    dose_item = json.loads(doses.request_payload([context]))["items"][0]
+    dose_item = json.loads(serialize_batch([context]))["items"][0]
     effect_item = json.loads(effects.request_payload([context], {}))["items"][0]
     assert dose_item == effect_item == {"item_id": 0, "report": "I take 20mg.", "replying_to": "What dose?"}
 
