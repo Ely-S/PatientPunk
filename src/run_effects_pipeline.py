@@ -38,7 +38,8 @@ def main() -> None:
     summary = run_effects_extraction(get_client(), Path(args.db), args.drug, domains=domains, **options)
     log.info(
         f"Run {summary.run_id}: {summary.reports} reports, {summary.reports_with_rows} with effects, "
-        f"{summary.rows} effect rows, {summary.failed} failed, "
+        f"{summary.rows} effect rows, {summary.failed} failed, {summary.dropped} objects dropped, "
+        f"{summary.alias_label_drops} alias labels dropped, {summary.other_compound_relabels} relabelled other compound, "
         f"{summary.quote_drops} quotes not in report, {summary.dose_link_drops} dose links dropped"
     )
 

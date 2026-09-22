@@ -33,6 +33,9 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
     raw = json.dumps([{"item_id": 0, "effects": [
         {"domain": "Mood or depression", "symptom": " mood ", "direction": "Improved", "attribution": "Tropoflavin", "quote": " it lifted my mood ", "dose": "2"},
         {"domain": "energy or motivation", "symptom": "energy", "direction": "improved", "attribution": "polygala", "quote": "polygala gave me energy"},
+        {"domain": "energy or motivation", "symptom": "energy", "direction": "improved", "attribution": "4'-DMA-7,8-DHF", "quote": "DMA gave me energy"},  # an excluded name that contains an alias
+        {"domain": "overall", "symptom": "x", "direction": "improved", "attribution": "7,8-DHF (tropoflavin)", "quote": "it worked"},  # contains an alias, is not one: dropped
+        {"domain": "overall", "symptom": "x", "direction": "improved", "attribution": "7,8-DHF alone", "quote": "it worked"},
         {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "better", "attribution": "7,8-dhf", "quote": "slept well"},  # bad direction
         {"domain": "vibes", "symptom": "vibes", "direction": "improved", "attribution": "7,8-dhf", "quote": "good vibes"},  # unknown domain
         {"domain": "overall", "symptom": "", "direction": "no change", "attribution": "stack", "quote": "did nothing"},
@@ -43,11 +46,13 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
         {"domain": "gastrointestinal", "symptom": "nausea", "direction": "worsened", "severity": "brutal", "attribution": "7,8-dhf", "quote": "nausea"},  # not a severity: unspecified
         effect, dict(effect), "not an object",
     ]}, {"item_id": 1, "effects": []}])
-    per_item, dropped = parse_effects_response(raw, [0, 1], TARGET)
+    per_item, dropped, counts = parse_effects_response(raw, [0, 1], TARGET, excluded_names=frozenset({"4'-dma-7,8-dhf"}))
     assert dropped == 5 and per_item[1] == []
+    assert counts == {"other_compound_relabels": 2, "alias_label_drops": 2}
     assert [(e.domain, e.symptom, e.direction, e.severity, e.attribution, e.quote, e.dose) for e in per_item[0]] == [
         ("mood or depression", "mood", "improved", None, "target", "it lifted my mood", 2),
         ("energy or motivation", "energy", "improved", None, "other compound", "polygala gave me energy", None),
+        ("energy or motivation", "energy", "improved", None, "other compound", "DMA gave me energy", None),
         ("overall", "overall", "no_change", None, "stack", "did nothing", None),
         ("pain or neurologic symptoms", "headache", "worsened", "mild", "target", "a mild headache and severe dizziness", None),
         ("pain or neurologic symptoms", "dizziness", "worsened", "severe", "target", "a mild headache and severe dizziness", None),
@@ -106,6 +111,7 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
         {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "worsened", "attribution": "7,8-dhf", "quote": "It also ruins my sleep.", "dose": 42},
         {"domain": "mood or depression", "symptom": "mood", "direction": "improved", "attribution": "7,8-dhf", "quote": "lifted from the parent post"},
         {"domain": "focus or attention", "symptom": "focus", "direction": "improved", "attribution": "stack", "quote": "This stack helped my focus."},
+        {"domain": "overall", "symptom": "overall", "direction": "improved", "attribution": "7,8-DHF sublingual", "quote": "It also ruins my sleep."},  # dropped: names the drug without being an alias
     ]
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": reply_effects if "20mg" in it["report"] else []} for it in items]
 
@@ -113,6 +119,7 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
 
     assert (first.reports, first.reports_with_rows, first.rows, first.failed) == (2, 1, 3, 0)
     assert (first.dropped, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
+    assert (first.alias_label_drops, first.other_compound_relabels) == (1, 0)
     reply_item = next(it for p in payloads for it in p["items"] if "20mg" in it["report"])
     assert reply_item["doses"] == [{"id": 7, "quote": "At 20mg it fixed my brain fog."}]
     assert reply_item["replying_to"] == "Asking for a friend." and "thread" not in reply_item  # one parent up, nothing else

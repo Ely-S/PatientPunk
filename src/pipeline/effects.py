@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -103,8 +104,10 @@ class EffectValue(BaseModel):
 
 @dataclass(frozen=True)
 class EffectRunSummary(StepSummary):
-    quote_drops: int       # effects dropped because their quote is not in the report
-    dose_link_drops: int   # dose ids the model returned that were not among the report's listed doses
+    quote_drops: int              # effects dropped because their quote is not in the report
+    dose_link_drops: int          # dose ids the model returned that were not among the report's listed doses
+    alias_label_drops: int        # effects dropped because the attribution label contains a name of the drug without being one
+    other_compound_relabels: int  # attribution labels outside the vocabulary and the drug's names, stored as "other compound"
 
 
 def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, list[tuple[int, str]]], int | None]:
@@ -138,16 +141,24 @@ def request_payload(batch: list[ReportContext], doses_by_report: dict[int, list[
 
 
 def parse_effects_response(
-    raw: str, expected_ids: list[int], target_names: frozenset[str], domains: frozenset[str] = frozenset(DOMAINS)
-) -> tuple[dict[int, list[EffectValue]], int]:
-    """Effects per item id, and how many effect objects were dropped.
+    raw: str,
+    expected_ids: list[int],
+    target_names: frozenset[str],
+    domains: frozenset[str] = frozenset(DOMAINS),
+    excluded_names: frozenset[str] = frozenset(),
+) -> tuple[dict[int, list[EffectValue]], int, Counter[str]]:
+    """Effects per item id, how many effect objects were dropped, and counts of what the parser changed.
 
-    The prompt names the drug in the attribution field; the table stores ``target``. A label
-    outside the vocabulary is the name of another compound, so ``other compound``; an empty
-    one drops the effect. A missing or non-array ``effects`` field is a parse error.
+    The prompt names the drug in the attribution field; the table stores ``target``. A label that
+    names an excluded compound, or contains none of the drug's names, is another compound, so
+    ``other compound`` (counted as ``other_compound_relabels``). A label that contains one of the
+    drug's names without being one ("7,8-DHF (tropoflavin)", "7,8-DHF alone") could mean target,
+    stack or another compound: the effect is dropped and counted as ``alias_label_drops``. An empty
+    label drops the effect. A missing or non-array ``effects`` field is a parse error.
     """
     result: dict[int, list[EffectValue]] = {}
     dropped = 0
+    counts: Counter[str] = Counter()
     for item_id, obj in response_items(raw, expected_ids).items():
         effects: list[EffectValue] = []
         seen: set[tuple] = set()
@@ -163,7 +174,16 @@ def parse_effects_response(
             if not label:  # no attribution is not a claim about another compound
                 dropped += 1
                 continue
-            data["attribution"] = "target" if label in target_names else label if label in ATTRIBUTIONS else "other compound"
+            if label in target_names:
+                data["attribution"] = "target"
+            elif label in ATTRIBUTIONS:
+                data["attribution"] = label
+            elif any(name in label for name in excluded_names) or not any(name in label for name in target_names):
+                data["attribution"] = "other compound"
+                counts["other_compound_relabels"] += 1
+            else:
+                counts["alias_label_drops"] += 1
+                continue
             try:
                 effect = EffectValue.model_validate(data)
             except ValidationError:
@@ -177,7 +197,7 @@ def parse_effects_response(
                 seen.add(key)
                 effects.append(effect)
         result[item_id] = effects
-    return result, dropped
+    return result, dropped, counts
 
 
 def apply_effect_checks(
@@ -219,7 +239,8 @@ def run_effects_extraction(
     """Extract effects for every latest report of ``drug`` in ``db_path`` and write report_effects rows."""
     domains = tuple(d.strip().lower() for d in domains if d.strip())
     domain_set = frozenset(domains)
-    drops: Counter[str] = Counter()
+    counts: Counter[str] = Counter()
+    counts_lock = threading.Lock()  # parse runs on the pool's threads
 
     def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
         conn.executescript(REPORT_DOSES_DDL + REPORT_EFFECTS_DDL)  # report_runs and the dose view first: load_report_doses reads it
@@ -228,18 +249,25 @@ def run_effects_extraction(
             conn.commit()
         doses_by_report, dose_run_id = load_report_doses(conn, drug)
         target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
+        excluded_names = frozenset(n.strip().lower() for n in excluded_compounds if n.strip())
         log.info(f"{len(doses_by_report)} reports with dose rows (dose run {dose_run_id})")
+
+        def parse(raw: str, ids: list[int]) -> tuple[dict[int, list[EffectValue]], int]:
+            per_item, dropped, parse_counts = parse_effects_response(raw, ids, target_names, domain_set, excluded_names)
+            with counts_lock:
+                counts.update(parse_counts)
+            return per_item, dropped
 
         def write(writer: ReportWriter, context: ReportContext, effects: list[EffectValue]) -> int:
             listed = {dose_id for dose_id, _quote in doses_by_report.get(context.report_id, [])}
             kept, quote_drops, dose_link_drops = apply_effect_checks(effects, context.text, listed)
-            drops.update(quote_drops=quote_drops, dose_link_drops=dose_link_drops)
+            counts.update(quote_drops=quote_drops, dose_link_drops=dose_link_drops)
             return writer.write_effects(context.report_id, kept)
 
         return Step(
             system=effects_system_prompt(drug, aliases, excluded_compounds, domains),
             payload_fn=lambda batch: request_payload(batch, doses_by_report),
-            parse_fn=lambda raw, ids: parse_effects_response(raw, ids, target_names, domain_set),
+            parse_fn=parse,
             write_fn=write,
             tokens_per_item=TOKENS_PER_ITEM,
             run_config={"domains": list(domains), "dose_run_id": dose_run_id},
@@ -250,4 +278,7 @@ def run_effects_extraction(
         aliases=aliases, excluded_compounds=excluded_compounds, model=model, workers=workers,
         batch_size=batch_size, parent_chars=parent_chars, solo_above_chars=solo_above_chars, limit=limit,
     )
-    return EffectRunSummary(**asdict(s), quote_drops=drops["quote_drops"], dose_link_drops=drops["dose_link_drops"])
+    return EffectRunSummary(
+        **asdict(s), quote_drops=counts["quote_drops"], dose_link_drops=counts["dose_link_drops"],
+        alias_label_drops=counts["alias_label_drops"], other_compound_relabels=counts["other_compound_relabels"],
+    )
