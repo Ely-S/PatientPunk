@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS report_effects (
     severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,
-    dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL
+    dose_id     INTEGER REFERENCES report_doses(dose_id)
 );
 CREATE INDEX IF NOT EXISTS idx_re_report ON report_effects(report_id);
 -- Rows written before report_runs existed count as processed by the run that wrote them.

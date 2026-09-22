@@ -143,7 +143,7 @@ CREATE TABLE report_effects (
     severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),  -- only when the author states it; NULL means unspecified, not mild
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,       -- verbatim sentence from the post
-    dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL  -- NULL unless the author ties the effect to a stated dose (a row of the dose run in the effects run's config, dose_run_id)
+    dose_id     INTEGER REFERENCES report_doses(dose_id)  -- NULL unless the author ties the effect to a stated dose (a row of the dose run in the effects run's config, dose_run_id)
 );
 CREATE INDEX idx_re_report ON report_effects(report_id);
 -- Each report's rows from its newest effects run (report_runs); none when that run found no effect.
