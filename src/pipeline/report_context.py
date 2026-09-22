@@ -103,7 +103,7 @@ def resolve_exclusions(
     by run_sentiment_pipeline --drug-exclude-file) is inherited, so the steps cannot disagree
     about what is not the drug. Returns (names, "flags" | "sentiment_run" | "none").
     """
-    if explicit:
+    if explicit is not None:  # [] is an explicit "none" (--no-exclusions)
         return list(explicit), "flags"
     for (config,) in conn.execute(
         "SELECT config FROM extraction_runs WHERE extraction_type = 'treatment_sentiment' ORDER BY run_id DESC"
@@ -330,6 +330,8 @@ def add_step_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--exclude-file", type=str, default=None,
                         help="Text file of such compound names, one per line (added to --exclude-compound). "
                              "With neither flag, the exclusions recorded by the sentiment run are used")
+    parser.add_argument("--no-exclusions", action="store_true",
+                        help="Run with no excluded compounds, even if the sentiment run recorded some")
     parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -356,7 +358,7 @@ def step_kwargs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> di
     excluded = args.exclude_compound + (read_list_file(parser, args, "exclude_file") or [])
     return {
         "aliases": read_list_file(parser, args, "drug_file"),
-        "excluded_compounds": excluded or None,
+        "excluded_compounds": [] if args.no_exclusions else (excluded or None),
         "model": args.model,
         "workers": args.workers,
         "batch_size": args.batch_size,

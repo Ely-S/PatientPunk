@@ -212,7 +212,8 @@ def test_step_flags_read_list_files_and_reject_empty_ones(tmp_path: Path) -> Non
     names.write_text(" a \n\nb\n", encoding="utf-8")
     kwargs = step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--exclude-compound", "c", "--exclude-file", str(names)]))
     assert kwargs["aliases"] is None and kwargs["excluded_compounds"] == ["c", "a", "b"] and kwargs["limit"] is None
-    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d"]))["excluded_compounds"] is None
+    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d"]))["excluded_compounds"] is None  # inherit
+    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--no-exclusions"]))["excluded_compounds"] == []
     names.write_text("\n \n", encoding="utf-8")
     with pytest.raises(SystemExit):
         step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--drug-file", str(names)]))
@@ -247,3 +248,4 @@ def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3
     assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf", "eutropoflavin"], "sentiment_run")  # latest matching drug
     assert resolve_exclusions(seeded, "ldn", None) == (["naltrexone-bupropion"], "sentiment_run")
     assert resolve_exclusions(seeded, "7,8-dhf", ["x"]) == (["x"], "flags")  # flags still win
+    assert resolve_exclusions(seeded, "7,8-dhf", []) == ([], "flags")  # an explicit empty list (--no-exclusions) is not "inherit"
