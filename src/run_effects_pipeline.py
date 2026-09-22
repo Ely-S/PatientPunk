@@ -5,7 +5,8 @@ run_effects_pipeline.py — Extract every effect the author says the drug had, o
 Run after run_sentiment_pipeline.py and run_dose_pipeline.py with the same --db and --drug.
 Reads the latest treatment report per post for that drug, sends each report (with its parent
 post and its dose rows as context) to the model, and writes report_effects rows under a new
-extraction_runs row; a rerun replaces a report's rows.
+extraction_runs row. Runs append: earlier rows stay, and the report_effects_latest view shows each
+report's most recent run.
 Without --exclude-compound / --exclude-file the exclusions recorded by the sentiment run are used.
 
 Usage:

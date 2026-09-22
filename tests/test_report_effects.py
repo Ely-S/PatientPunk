@@ -73,7 +73,7 @@ def test_write_time_checks_drop_foreign_quotes_and_null_unlisted_dose_ids() -> N
     assert [(e.symptom, e.dose) for e in kept] == [("brain fog", 7), ("sleep", None)] and (quote_drops, dose_drops) == (1, 1)
 
 
-def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_reruns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -99,6 +99,7 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_pat
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
             INSERT INTO report_doses (dose_id, report_id, run_id, ordinal, low, high, unit, quote)
                 VALUES (7, 3, 2, 0, 20, 20, 'mg', 'At 20mg it fixed my brain fog.');
+            INSERT INTO report_runs VALUES (2, 3);  -- dose run 2 processed report 3
         """)
     reply_effects = [
         {"domain": "cognition or brain fog", "symptom": "brain fog", "direction": "improved", "attribution": "7,8-dhf", "quote": "At 20mg it fixed my brain fog.", "dose": 7},
@@ -131,11 +132,13 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_pat
         {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "worsened", "severity": "severe", "attribution": "7,8-dhf", "quote": "ruins my sleep"}
     ] if "20mg" in it["report"] else []} for it in items]
     second = run_effects_extraction(None, db, "7,8-dhf", workers=1)
-    with sqlite3.connect(db) as conn:  # a rerun replaces the report's rows; a stated severity is stored
-        assert conn.execute("SELECT run_id, domain, severity FROM report_effects").fetchall() == [(second.run_id, "sleep or wakefulness", "severe")]
+    with sqlite3.connect(db) as conn:  # runs append; the view shows the report's rows from its newest run; a stated severity is stored
+        assert conn.execute("SELECT run_id, domain, severity FROM report_effects_latest").fetchall() == [(second.run_id, "sleep or wakefulness", "severe")]
+        assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (4,)
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": []} for it in items]
     run_effects_extraction(None, db, "7,8-dhf", workers=1)
-    with sqlite3.connect(db) as conn:  # a rerun that finds nothing retracts the earlier rows
-        assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (0,)
+    with sqlite3.connect(db) as conn:  # a rerun that finds nothing retracts the earlier rows from the view; the table keeps them
+        assert conn.execute("SELECT COUNT(*) FROM report_effects_latest").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (4,)
     with pytest.raises(ValueError, match="not a canonical treatment"):
         run_effects_extraction(None, db, "no-such-drug", workers=1)

@@ -94,6 +94,17 @@ CREATE INDEX idx_tr_drug ON treatment_reports(drug_id);
 CREATE INDEX idx_tr_user ON treatment_reports(user_id);
 CREATE INDEX idx_tr_run  ON treatment_reports(run_id);
 
+-- The per-report steps (doses, effects) append: every run's rows are kept, like treatment_reports.
+-- A run records here each report it processed, including those it found nothing for, so the
+-- _latest views below select each report's rows from its newest processing run and a run that
+-- found nothing retracts older rows without deleting them. Written by utilities.db.ReportWriter.
+CREATE TABLE report_runs (
+    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    PRIMARY KEY (run_id, report_id)
+);
+CREATE INDEX idx_rr_report ON report_runs(report_id);
+
 -- One row per dose the author states they took, per treatment report.
 -- Written by src/run_dose_pipeline.py after the sentiment pipeline; amounts are
 -- stored as stated (a range keeps low and high) with the sentence they came from.
@@ -110,7 +121,13 @@ CREATE TABLE report_doses (
     quote     TEXT
 );
 CREATE INDEX idx_rd_report ON report_doses(report_id);
--- A rerun replaces a report's rows (see utilities.db.ReportWriter.write_doses).
+-- Each report's rows from its newest dose run (report_runs); none when that run found no dose.
+CREATE VIEW IF NOT EXISTS report_doses_latest AS
+    SELECT d.* FROM report_doses d
+    WHERE d.run_id = (
+        SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
+        WHERE rr.report_id = d.report_id AND r.extraction_type = 'report_doses'
+    );
 
 -- One row per effect the author says the drug had on them, per treatment report.
 -- Written by src/run_effects_pipeline.py after the dose step; an effect the author ties
@@ -126,10 +143,16 @@ CREATE TABLE report_effects (
     severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),  -- only when the author states it; NULL means unspecified, not mild
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,       -- verbatim sentence from the post
-    dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL  -- NULL unless the author ties the effect to a stated dose; a dose rerun clears it
+    dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL  -- NULL unless the author ties the effect to a stated dose (a row of the dose run in the effects run's config, dose_run_id)
 );
 CREATE INDEX idx_re_report ON report_effects(report_id);
--- A rerun replaces a report's rows (see utilities.db.ReportWriter.write_effects).
+-- Each report's rows from its newest effects run (report_runs); none when that run found no effect.
+CREATE VIEW IF NOT EXISTS report_effects_latest AS
+    SELECT e.* FROM report_effects e
+    WHERE e.run_id = (
+        SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
+        WHERE rr.report_id = e.report_id AND r.extraction_type = 'report_effects'
+    );
 
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)

@@ -179,6 +179,7 @@ class TestPopulateDbEndToEnd:
             "posts",
             "report_doses",
             "report_effects",
+            "report_runs",
             "sqlite_sequence",  # SQLite's own table, created by the AUTOINCREMENT ids
             "treatment",
             "treatment_reports",

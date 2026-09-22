@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from pipeline import report_context
-from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
+from pipeline.doses import DoseValue, normalize_unit, parse_dose_response, run_dose_extraction
 from pipeline.report_context import load_report_contexts, make_batches, serialize_batch
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
@@ -60,7 +60,7 @@ def test_prompt_and_response_parsing() -> None:
             parse_dose_response(malformed, [0])
 
 
-def test_run_writes_one_row_per_dose_and_a_rerun_replaces_the_reports_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -103,29 +103,33 @@ def test_run_writes_one_row_per_dose_and_a_rerun_replaces_the_reports_rows(tmp_p
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items]
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
-    with sqlite3.connect(schema_db) as conn:  # a rerun replaces the report's rows
-        assert conn.execute("SELECT run_id, low FROM report_doses").fetchall() == [(second.run_id, 25.0)]
+    with sqlite3.connect(schema_db) as conn:  # runs append; the view shows the report's rows from its newest run
+        assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
         second_config = json.loads(conn.execute("SELECT config FROM extraction_runs WHERE run_id = ?", (second.run_id,)).fetchone()[0])
         assert (second_config["excluded_compounds"], second_config["exclusions_source"]) == ([], "none")  # no flags, no sentiment-run list
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": []} for it in items]
-    run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
-    with sqlite3.connect(schema_db) as conn:  # a rerun that finds nothing retracts the earlier rows
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (0,)
+    third = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
+    with sqlite3.connect(schema_db) as conn:  # a rerun that finds nothing retracts the earlier rows from the view; the table keeps them
+        assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT report_id FROM report_runs WHERE run_id = ? ORDER BY report_id", (third.run_id,)).fetchall() == [(2,), (3,)]
 
-    with sqlite3.connect(schema_db) as conn:  # an effect linked to a dose row loses the link when the doses are replaced
+    with sqlite3.connect(schema_db) as conn:  # an effect row linked to a dose row
         conn.execute("INSERT INTO extraction_runs VALUES (9, 0, 'abc', 'report_doses', '{}')")
         conn.execute("INSERT INTO report_doses (dose_id, report_id, run_id, ordinal, low, high, unit) VALUES (7, 3, 9, 0, 20, 20, 'mg')")
         conn.execute("INSERT INTO extraction_runs VALUES (10, 0, 'abc', 'report_effects', '{}')")
         conn.execute("INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote, dose_id) "
                      "VALUES (3, 10, 0, 'overall', 'overall', 'improved', 'target', 'q', 7)")
-    with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:
-        writer.write_doses(3, [])
+    with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:  # a dose rerun: the link stays, the view moves on
+        writer.write_doses(3, [DoseValue(low=30, high=30, unit="mg")])
         with pytest.raises(ValueError, match="does not exist"):
             writer.write_doses(999, [])
     with sqlite3.connect(schema_db) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (0,)
-        assert conn.execute("SELECT dose_id FROM report_effects").fetchall() == [(None,)]
+        assert conn.execute("SELECT dose_id FROM report_effects").fetchall() == [(7,)]
+        assert conn.execute("SELECT COUNT(*) FROM report_doses WHERE dose_id = 7").fetchone() == (1,)
+        assert conn.execute("SELECT run_id, low FROM report_doses_latest WHERE report_id = 3").fetchall() == [(writer.run_id, 30.0)]
     with pytest.raises(ValueError, match="not a canonical treatment"):
         run_dose_extraction(None, schema_db, "no-such-drug", workers=1)
 

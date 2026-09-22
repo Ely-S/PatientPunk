@@ -3,11 +3,11 @@ effects.py — One row per effect the author says the drug had on them, per trea
 
 Runs after the sentiment and dose steps. For each latest treatment report of one drug it
 sends the report with its parent post and the report's dose rows as context, and writes
-report_effects rows (a rerun replaces a report's rows, like report_doses). Every row
-carries its sentence; an effect the author ties to a stated dose points at that
-report_doses row. The run itself (report loading, batching, the pool, the split retry) is
-pipeline/report_context.py; this module keeps the effect object, the payload, the parser,
-the write-time checks and the prompt.
+report_effects rows (runs append; report_effects_latest shows each report's newest run, like
+report_doses_latest). Every row carries its sentence; an effect the author ties to a stated
+dose points at that report_doses row. The run itself (report loading, batching, the pool, the
+split retry) is pipeline/report_context.py; this module keeps the effect object, the payload,
+the parser, the write-time checks and the prompt.
 """
 from __future__ import annotations
 
@@ -32,12 +32,13 @@ from pipeline.report_context import (
 )
 from prompts.effects_config import ATTRIBUTIONS, DOMAINS, effects_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, log
-from utilities.db import ReportWriter
+from utilities.db import REPORT_DOSES_DDL, ReportWriter
 
 TOKENS_PER_ITEM = 500
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 
-# Kept identical to schema.sql so the step also works on databases created before the table existed.
+# Kept identical to schema.sql (with IF NOT EXISTS, the backfill, and the view recreated) so the step also works
+# on databases created before the table existed. Run after utilities.db.REPORT_DOSES_DDL, which creates report_runs.
 REPORT_EFFECTS_DDL = """
 CREATE TABLE IF NOT EXISTS report_effects (
     effect_id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +54,15 @@ CREATE TABLE IF NOT EXISTS report_effects (
     dose_id     INTEGER REFERENCES report_doses(dose_id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_re_report ON report_effects(report_id);
+-- Rows written before report_runs existed count as processed by the run that wrote them.
+INSERT OR IGNORE INTO report_runs (run_id, report_id) SELECT DISTINCT run_id, report_id FROM report_effects;
+DROP VIEW IF EXISTS report_effects_latest;  -- recreated: a database from before report_runs has an older definition
+CREATE VIEW report_effects_latest AS
+    SELECT e.* FROM report_effects e
+    WHERE e.run_id = (
+        SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
+        WHERE rr.report_id = e.report_id AND r.extraction_type = 'report_effects'
+    );
 """
 SEVERITIES = ("mild", "moderate", "severe", "life_threatening")
 
@@ -98,15 +108,13 @@ class EffectRunSummary(StepSummary):
 
 
 def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, list[tuple[int, str]]], int | None]:
-    """Each report's dose rows, as (dose_id, quote), and the dose run they came from (a rerun replaces
-    a report's rows, so a report has one run's rows)."""
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'report_doses'").fetchone():
-        return {}, None
+    """Each report's dose rows from its newest dose run (report_doses_latest), as (dose_id, quote), and the
+    newest of those runs."""
     doses: dict[int, list[tuple[int, str]]] = {}
     run_ids: set[int] = set()
     for report_id, dose_id, run_id, quote in conn.execute(
         """
-        SELECT d.report_id, d.dose_id, d.run_id, d.quote FROM report_doses d
+        SELECT d.report_id, d.dose_id, d.run_id, d.quote FROM report_doses_latest d
         JOIN treatment_reports tr ON tr.report_id = d.report_id
         JOIN treatment t ON t.id = tr.drug_id
         WHERE lower(t.canonical_name) = lower(?)
@@ -214,7 +222,7 @@ def run_effects_extraction(
     drops: Counter[str] = Counter()
 
     def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
-        conn.executescript(REPORT_EFFECTS_DDL)
+        conn.executescript(REPORT_DOSES_DDL + REPORT_EFFECTS_DDL)  # report_runs and the dose view first: load_report_doses reads it
         if "severity" not in {row[1] for row in conn.execute("PRAGMA table_info(report_effects)")}:  # table from before severity
             conn.execute("ALTER TABLE report_effects ADD COLUMN severity TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening'))")
             conn.commit()
