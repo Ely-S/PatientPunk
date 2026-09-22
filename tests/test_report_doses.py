@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 import pipeline.doses as doses_module
-from pipeline.doses import normalize_unit, parse_dose_response, request_payload, run_dose_extraction
-from pipeline.report_context import load_report_contexts, make_batches
+from pipeline.doses import normalize_unit, parse_dose_response, run_dose_extraction
+from pipeline.report_context import load_report_contexts, make_batches, serialize_batch
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
 from utilities.db import ReportWriter
@@ -127,7 +127,7 @@ def test_dose_payload_is_unchanged_by_the_shared_context_module(tmp_path: Path) 
         """)
         contexts = load_report_contexts(conn, "7,8-dhf", parent_chars=1500, limit=None)
     batches = make_batches(contexts, batch_size=8, solo_above_chars=50)  # the two 40-char texts batch; the 60-char one goes solo
-    assert [request_payload(b) for b in batches] == [
+    assert [serialize_batch(b) for b in batches] == [
         '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take?"}, '
         '{"item_id": 1, "report": "I take 20mg sublingual, it is great.", "replying_to": "Dosing thread What dose do you all take?"}]}',
         '{"items": [{"item_id": 0, "report": "' + "x" * 60 + '", "replying_to": "Dosing thread What dose do you all take?"}]}',
@@ -162,7 +162,7 @@ def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: 
         contexts = load_report_contexts(conn, "7,8-dhf", parent_chars=12, limit=None, max_text_chars=60)
     assert [c.report_id for c in contexts] == [1, 3, 4, 5]  # 'reply' resolves to its run-2 report
     batches = make_batches(contexts, batch_size=8, solo_above_chars=55)
-    assert [request_payload(b) for b in batches] == [
+    assert [serialize_batch(b) for b in batches] == [
         '{"items": [{"item_id": 0, "report": "Same, 20 mg.", "replying_to": "Dosing threa"}, '
         '{"item_id": 1, "report": "I take 20mg sublingual, it is great \u2014 tr\u00e8s bien.", "replying_to": "Dosing threa"}]}',
         '{"items": [{"item_id": 0, "report": "Dosing thread What dose do you all take? Sublingual for me, "}]}',

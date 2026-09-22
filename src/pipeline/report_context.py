@@ -111,7 +111,7 @@ class Step:
     """What a step contributes to a run; its setup function builds this once aliases and exclusions are known."""
 
     system: str
-    payload_fn: Callable[[list[ReportContext]], str]                  # a batch's request body (see request_items)
+    payload_fn: Callable[[list[ReportContext]], str]                  # a batch's request body (see serialize_batch)
     parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]]  # (reply, item ids) -> (values per id, dropped)
     write_fn: Callable[[ReportWriter, ReportContext, Any], int]       # writes one report's values; returns rows written
     tokens_per_item: int
@@ -128,6 +128,17 @@ def request_items(batch: list[ReportContext]) -> list[dict[str, Any]]:
             item["replying_to"] = context.replying_to
         items.append(item)
     return items
+
+
+def serialize_batch(
+    batch: list[ReportContext], extra: Callable[[ReportContext], dict[str, Any]] | None = None
+) -> str:
+    """A batch's request body, ``{"items": request_items(batch)}``; each item also carries ``extra(context)`` when given."""
+    items = request_items(batch)
+    if extra:
+        for item, context in zip(items, batch):
+            item.update(extra(context))
+    return json.dumps({"items": items}, ensure_ascii=False)
 
 
 def response_items(raw: str, expected_ids: list[int]) -> dict[int, dict]:

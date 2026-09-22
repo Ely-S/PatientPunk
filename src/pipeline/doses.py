@@ -7,12 +7,11 @@ report_doses. Amounts are stored as stated (a range keeps its low and high); eve
 carries the sentence it came from.
 
 The run itself (report loading, batching, the pool, the split retry) is pipeline/report_context.py;
-this module keeps the dose object, the payload and parse functions, and the prompt. Rows are
+this module keeps the dose object, the parse function, and the prompt. Rows are
 written through utilities.db.ReportWriter.write_doses.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Literal
 
@@ -24,9 +23,9 @@ from pipeline.report_context import (
     ReportContext,
     Step,
     StepSummary,
-    request_items,
     response_items,
     run_report_step,
+    serialize_batch,
 )
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
 from utilities import MODEL_STRONG, LLMParseError, llm_call
@@ -87,10 +86,6 @@ class DoseValue(BaseModel):
         return self
 
 
-def request_payload(batch: list[ReportContext]) -> str:
-    return json.dumps({"items": request_items(batch)}, ensure_ascii=False)
-
-
 def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, list[DoseValue]], int]:
     """Doses per item id, and how many dose objects did not validate."""
     result: dict[int, list[DoseValue]] = {}
@@ -135,7 +130,7 @@ def run_dose_extraction(
     def setup(_conn, aliases: list[str], excluded_compounds: list[str]) -> Step:
         return Step(
             system=dose_system_prompt(drug, aliases, excluded_compounds),
-            payload_fn=request_payload,
+            payload_fn=serialize_batch,
             parse_fn=parse_dose_response,
             write_fn=lambda writer, context, doses: writer.write_doses(context.report_id, doses),
             tokens_per_item=TOKENS_PER_ITEM,

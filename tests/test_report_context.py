@@ -20,6 +20,7 @@ from pipeline.report_context import (
     request_items,
     response_items,
     run_report_step,
+    serialize_batch,
     step_kwargs,
 )
 from utilities import LLMParseError
@@ -54,10 +55,6 @@ def seeded(seeded_db: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(seeded_db)
     yield conn
     conn.close()
-
-
-def payload(batch: list[ReportContext]) -> str:
-    return json.dumps({"items": request_items(batch)})
 
 
 def parse(raw: str, expected_ids: list[int]) -> tuple[dict[int, str], int]:
@@ -101,7 +98,7 @@ def test_split_retries_a_malformed_reply_down_to_single_items() -> None:
         budgets.append(max_tokens)
         return "garbage" if len(items) > 1 else json.dumps([{"item_id": 0, "value": items[0]["report"]}])
 
-    step = Step("sys", payload, parse, write_fn=None, tokens_per_item=7, call=stub)
+    step = Step("sys", serialize_batch, parse, write_fn=None, tokens_per_item=7, call=stub)
     batch = [ReportContext(i, f"p{i}", None, 1, f"t{i}", "") for i in range(4)]
 
     results, dropped = extract_with_split(None, batch, step, "model")
@@ -109,7 +106,7 @@ def test_split_retries_a_malformed_reply_down_to_single_items() -> None:
     assert results == {0: "t0", 1: "t1", 2: "t2", 3: "t3"} and dropped == 0
     assert sizes == [4, 2, 1, 1, 2, 1, 1] and budgets == [7 * n for n in sizes]
 
-    always_bad = Step("sys", payload, parse, write_fn=None, tokens_per_item=7, call=lambda *a, **k: "garbage")
+    always_bad = Step("sys", serialize_batch, parse, write_fn=None, tokens_per_item=7, call=lambda *a, **k: "garbage")
     assert extract_with_split(None, batch[:1], always_bad, "model") == ({}, 0)  # a single item that stays malformed is skipped
 
 
@@ -133,7 +130,7 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
 
     def setup(conn, aliases, excluded):
         assert conn.execute("SELECT 1").fetchone() and aliases == ["tropoflavin", "78dhf"] and excluded == ["x"]
-        return Step("sys", payload, lambda raw, ids: (parse(raw, ids)[0], 1), write, tokens_per_item=7, call=call, run_config={"extra": 1})
+        return Step("sys", serialize_batch, lambda raw, ids: (parse(raw, ids)[0], 1), write, tokens_per_item=7, call=call, run_config={"extra": 1})
 
     def write(writer, context, value):
         written.append((context.report_id, value))
