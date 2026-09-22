@@ -112,7 +112,7 @@ class Step:
 
     system: str
     payload_fn: Callable[[list[ReportContext]], str]                  # a batch's request body (see serialize_batch)
-    parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]]  # (reply, item ids) -> (values per id, dropped)
+    parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]]  # (reply, item ids) -> (values per id, dropped: objects that did not validate)
     write_fn: Callable[[ReportWriter, ReportContext, Any], int]       # writes one report's values; returns rows written
     tokens_per_item: int
     call: Callable                                                    # the model call: pass llm_call from the step's module, stub it there

@@ -57,8 +57,10 @@ def seeded(seeded_db: Path) -> sqlite3.Connection:
     conn.close()
 
 
-def parse(raw: str, expected_ids: list[int]) -> tuple[dict[int, str], int]:
-    return {i: obj["value"] for i, obj in response_items(raw, expected_ids).items()}, 0
+def parse(raw: str, expected_ids: list[int], dropped: int = 0) -> tuple[dict[int, str], int]:
+    """A step's parse_fn for these tests: each reply object's ``value`` by item id, plus how many reply objects the
+    step threw away. This parser validates nothing, so the caller says; the runner sums it into StepSummary.dropped."""
+    return {i: obj["value"] for i, obj in response_items(raw, expected_ids).items()}, dropped
 
 
 def test_loader_takes_the_latest_report_per_post_with_the_parent_as_context(seeded: sqlite3.Connection) -> None:
@@ -130,7 +132,7 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
 
     def setup(conn, aliases, excluded):
         assert conn.execute("SELECT 1").fetchone() and aliases == ["tropoflavin", "78dhf"] and excluded == ["x"]
-        return Step("sys", serialize_batch, lambda raw, ids: (parse(raw, ids)[0], 1), write, tokens_per_item=7, call=call, run_config={"extra": 1})
+        return Step("sys", serialize_batch, lambda raw, ids: parse(raw, ids, dropped=1), write, tokens_per_item=7, call=call, run_config={"extra": 1})
 
     def write(writer, context, value):
         written.append((context.report_id, value))
