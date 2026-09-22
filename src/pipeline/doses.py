@@ -7,15 +7,15 @@ report_doses. Amounts are stored as stated (a range keeps its low and high); eve
 carries the sentence it came from.
 
 The mechanics shared with the other per-report steps (the report context query, batching,
-the thread-pool loop, the split-on-malformed-reply retry, the alias lookup) live in
-pipeline/report_context.py; this module keeps only what is dose-specific: the dose object,
-the payload and parse functions, and the run. Rows are written through
+the thread-pool loop, the split-on-malformed-reply retry, the alias lookup, the run loop)
+live in pipeline/report_context.py; this module keeps only what is dose-specific: the dose
+object, the payload and parse functions, and the prompt. Rows are written through
 utilities.db.ReportWriter.write_doses.
 """
 from __future__ import annotations
 
-import hashlib
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -23,16 +23,16 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from pipeline.report_context import (
+    DEFAULT_PARENT_CHARS,
+    DEFAULT_SOLO_ABOVE_CHARS,
     ReportContext,
-    aliases_from_db,
-    extract_with_split,
-    load_report_contexts,
-    make_batches,
-    run_batches,
+    Step,
+    StepInputs,
+    run_report_step,
 )
 from prompts.dose_config import OUTCOMES, ROUTE_CATEGORIES, dose_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
-from utilities.db import ReportWriter, open_db
+from utilities import MODEL_STRONG, LLMParseError, llm_call, parse_json_array
+from utilities.db import ReportWriter
 
 # Units are stored as the author wrote them. This map is NOT applied at write time; it is
 # the helper analyses call when they need comparable amounts (normalize_unit below).
@@ -90,8 +90,6 @@ class DoseValue(BaseModel):
         return self
 
 
-
-
 @dataclass(frozen=True)
 class DoseRunSummary:
     run_id: int
@@ -146,15 +144,6 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
     return result, dropped
 
 
-def extract_batch(
-    client, batch: list[ReportContext], system: str, model: str
-) -> tuple[dict[int, list[DoseValue]], int]:
-    """Extract one batch; on a malformed reply, split the batch and retry down to single items."""
-    return extract_with_split(
-        client, batch, system, model, request_payload, parse_dose_response, TOKENS_PER_ITEM, call=llm_call
-    )
-
-
 def run_dose_extraction(
     client,
     db_path: Path,
@@ -165,59 +154,19 @@ def run_dose_extraction(
     model: str = MODEL_STRONG,
     workers: int = 8,
     batch_size: int = 8,
-    parent_chars: int | None = 1500,
-    solo_above_chars: int | None = 3000,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
+    solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
     limit: int | None = None,
 ) -> DoseRunSummary:
     """Extract doses for every latest report of ``drug`` in ``db_path`` and write report_doses."""
-    conn = open_db(db_path)
-    try:
-        if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
-            raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
-        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
-        if aliases is None:
-            aliases = aliases_from_db(conn, drug)
-    finally:
-        conn.close()
-    system = dose_system_prompt(drug, aliases, excluded_compounds)
-    run_config = {
-        "drug": drug,
-        "aliases": aliases,
-        "excluded_compounds": excluded_compounds or [],
-        "model": model,
-        "prompt_sha256": hashlib.sha256(system.encode("utf-8")).hexdigest(),
-        "parent_chars": parent_chars,
-        "solo_above_chars": solo_above_chars,
-        "batch_size": batch_size,
-        "limit": limit,
-    }
-    log.info(f"{len(contexts)} reports for {drug!r}; model {model}")
-    batches = make_batches(contexts, batch_size, solo_above_chars)
-    reports_done = with_doses = rows = failed = dropped_total = 0
-    with ReportWriter(db_path, run_config, get_git_commit(), extraction_type="report_doses") as writer:
-        log.info(f"Extraction run {writer.run_id}")
-        extract = lambda batch: extract_batch(client, batch, system, model)  # noqa: E731
-        for batch, outcome, error in run_batches(batches, extract, workers):
-            if error is not None:
-                log.warning(f"Batch of {len(batch)} failed: {type(error).__name__}: {error}")
-                failed += len(batch)
-                continue
-            results, dropped = outcome
-            dropped_total += dropped
-            for context in batch:
-                if context.report_id not in results:
-                    failed += 1
-                    continue
-                n = writer.write_doses(context.report_id, results[context.report_id])
-                reports_done += 1
-                rows += n
-                with_doses += bool(n)
-            if reports_done % 80 < len(batch):
-                log.info(f"  {reports_done}/{len(contexts)} reports, {rows} dose rows")
-        run_id = writer.run_id
-    summary = DoseRunSummary(run_id, reports_done, with_doses, rows, failed, dropped_total)
-    log.info(
-        f"Done: {summary.reports} reports, {summary.reports_with_doses} with doses, "
-        f"{summary.dose_rows} dose rows, {summary.failed_reports} failed, {summary.dropped_doses} dose objects dropped"
+
+    def setup(conn: sqlite3.Connection, inputs: StepInputs) -> Step:
+        system = dose_system_prompt(drug, inputs.aliases, inputs.excluded_compounds)
+        return Step(system, request_payload, parse_dose_response, TOKENS_PER_ITEM, call=llm_call)
+
+    s = run_report_step(
+        client, db_path, drug, extraction_type="report_doses", setup_fn=setup, write_fn=ReportWriter.write_doses,
+        aliases=aliases, excluded_compounds=excluded_compounds, model=model, workers=workers,
+        batch_size=batch_size, parent_chars=parent_chars, solo_above_chars=solo_above_chars, limit=limit,
     )
-    return summary
+    return DoseRunSummary(s.run_id, s.reports, s.reports_with_rows, s.rows, s.failed, s.dropped)

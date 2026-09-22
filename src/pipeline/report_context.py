@@ -1,30 +1,40 @@
 """
 report_context.py — Shared mechanics for the per-report extraction steps (doses, effects).
 
-Moved out of pipeline/doses.py unchanged: the report context query (latest treatment
-report per post for one drug, with the parent post as context), batching, the thread-pool
-loop, and the split-on-malformed-reply retry, plus the alias lookup. The one addition is
-an optional thread-root title on ReportContext, fetched only when ``thread_chars`` is set;
-the dose step leaves it off, so its rows and payloads are byte-identical to before.
+A per-report step reads the latest treatment report per post for one drug, sends each
+report to the model with its parent post as context, and writes one table. Everything but
+the step's own content lives here: the report context query, batching, the thread-pool
+loop, the split-on-malformed-reply retry, the alias lookup, and the run itself
+(run_report_step). The one addition over the original doses.py code is an optional
+thread-root title on ReportContext, fetched only when ``thread_chars`` is set; no step
+sets it, so rows and payloads are byte-identical to before.
 
-A step built on this module supplies three things: a payload function (what one batch
-looks like to the model), a parse function (what comes back, keyed by item id), and a
-writer method on utilities.db.ReportWriter for its table.
+A step supplies a ``Step`` from its setup function (the system prompt, a payload function
+for what one batch looks like to the model, a parse function for what comes back keyed by
+item id, optional per-report checks, extra run-config keys) and a writer method on
+utilities.db.ReportWriter for its table.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
+from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from utilities import LLMParseError, llm_call, log
-from utilities.db import post_text
+from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log
+from utilities.db import ReportWriter, open_db, post_text
 
 _WS = re.compile(r"\s+")
+
+# What a per-report step sends with each report and how it batches, shared by every step.
+DEFAULT_PARENT_CHARS = 1500      # the post being replied to, capped
+DEFAULT_SOLO_ABOVE_CHARS = 3000  # reports longer than this go one per call
 
 # Title of the post that started the thread, walking parent_id up from a post.
 _THREAD_TITLE_SQL = """
@@ -54,7 +64,7 @@ def load_report_contexts(
     conn: sqlite3.Connection,
     drug: str,
     *,
-    parent_chars: int | None = 1500,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
     thread_chars: int | None = None,
     limit: int | None = None,
     max_text_chars: int = 8000,
@@ -126,8 +136,8 @@ def extract_with_split(
 
     ``parse_fn(raw, expected_item_ids)`` returns ``(per_item_id, dropped)``; the result is
     re-keyed by report_id. ``call`` defaults to utilities.llm_call, looked up at call time, so
-    a direct caller can stub ``report_context.llm_call``. Step modules pass ``call=llm_call``
-    from their own globals, so to stub a step, patch that step's module (``pipeline.doses.llm_call``).
+    a direct caller can stub ``report_context.llm_call``. A step passes ``call=llm_call`` from
+    its own globals on its Step, so to stub a step, patch that step's module (``pipeline.doses.llm_call``).
     """
     fn = call or llm_call
     try:
@@ -171,3 +181,127 @@ def run_batches(batches: list, fn: Callable, workers: int) -> Iterator[tuple[Any
                 yield batch, future.result(), None
             except Exception as e:  # noqa: BLE001 — transport failures after retries, truncation at the largest budget
                 yield batch, None, e
+
+
+# ── The run ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class StepInputs:
+    """What the shared loader resolved for a run, handed to the step's setup function."""
+
+    contexts: list[ReportContext]
+    aliases: list[str]
+    excluded_compounds: list[str]
+
+
+@dataclass(frozen=True)
+class Step:
+    """What a step contributes to a run; its setup function builds this once the inputs are known."""
+
+    system: str
+    payload_fn: Callable[[list[ReportContext]], str]
+    parse_fn: Callable[[str, list[int]], tuple[dict[int, Any], int]]
+    tokens_per_item: int
+    # Per-report checks before the write: (context, values) -> (kept values, counters to sum into the summary).
+    check_fn: Callable[[ReportContext, Any], tuple[Any, dict[str, int]]] | None = None
+    run_config: dict[str, Any] = field(default_factory=dict)  # step-specific keys recorded on the extraction_runs row
+    call: Callable | None = None  # the model call; a step passes its own module's llm_call so tests can stub it there
+
+
+@dataclass(frozen=True)
+class StepSummary:
+    run_id: int
+    reports: int
+    reports_with_rows: int
+    rows: int
+    failed: int
+    dropped: int            # objects the model returned that did not validate
+    extra: dict[str, int]   # the step's check_fn counters, summed over the run
+
+
+def run_report_step(
+    client,
+    db_path: Path,
+    drug: str,
+    *,
+    extraction_type: str,
+    setup_fn: Callable[[sqlite3.Connection, StepInputs], Step],
+    write_fn: Callable[[ReportWriter, int, Any], int],
+    aliases: list[str] | None = None,
+    excluded_compounds: list[str] | None = None,
+    model: str = MODEL_STRONG,
+    workers: int = 8,
+    batch_size: int = 8,
+    parent_chars: int | None = DEFAULT_PARENT_CHARS,
+    solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
+    limit: int | None = None,
+) -> StepSummary:
+    """Run one per-report step over every latest report of ``drug`` in ``db_path``.
+
+    Checks the drug is a canonical treatment name, loads the reports and the aliases (from
+    the treatment table unless given), then calls ``setup_fn(conn, inputs)`` on the still-open
+    connection for the step's prompt and functions and whatever else it reads. Batches go to
+    the model on a thread pool; each report's values pass through the step's ``check_fn`` (when
+    set) and then ``write_fn(writer, report_id, values)`` under a new extraction_runs row.
+    """
+    conn = open_db(db_path)
+    try:
+        if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
+            raise ValueError(f"{drug!r} is not a canonical treatment name in this database")
+        contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
+        if aliases is None:
+            aliases = aliases_from_db(conn, drug)
+        inputs = StepInputs(contexts, aliases, list(excluded_compounds or []))
+        step = setup_fn(conn, inputs)
+    finally:
+        conn.close()
+    run_config = {
+        "drug": drug,
+        "aliases": aliases,
+        "excluded_compounds": inputs.excluded_compounds,
+        "model": model,
+        "prompt_sha256": hashlib.sha256(step.system.encode("utf-8")).hexdigest(),
+        "parent_chars": parent_chars,
+        "solo_above_chars": solo_above_chars,
+        "batch_size": batch_size,
+        "limit": limit,
+        **step.run_config,
+    }
+    log.info(f"{len(contexts)} reports for {drug!r}; model {model}")
+    batches = make_batches(contexts, batch_size, solo_above_chars)
+    reports_done = with_rows = rows = failed = dropped_total = 0
+    extra: Counter[str] = Counter()
+    with ReportWriter(db_path, run_config, get_git_commit(), extraction_type=extraction_type) as writer:
+        log.info(f"Extraction run {writer.run_id}")
+        extract = lambda batch: extract_with_split(  # noqa: E731
+            client, batch, step.system, model, step.payload_fn, step.parse_fn, step.tokens_per_item, call=step.call
+        )
+        for batch, outcome, error in run_batches(batches, extract, workers):
+            if error is not None:
+                log.warning(f"Batch of {len(batch)} failed: {type(error).__name__}: {error}")
+                failed += len(batch)
+                continue
+            results, dropped = outcome
+            dropped_total += dropped
+            for context in batch:
+                if context.report_id not in results:
+                    failed += 1
+                    continue
+                values = results[context.report_id]
+                if step.check_fn is not None:
+                    values, counters = step.check_fn(context, values)
+                    extra.update(counters)
+                n = write_fn(writer, context.report_id, values)
+                reports_done += 1
+                rows += n
+                with_rows += bool(n)
+            if reports_done % 80 < len(batch):
+                log.info(f"  {reports_done}/{len(contexts)} reports, {rows} rows")
+        run_id = writer.run_id
+    summary = StepSummary(run_id, reports_done, with_rows, rows, failed, dropped_total, dict(extra))
+    log.info(
+        f"Done: {summary.reports} reports, {summary.reports_with_rows} with rows, {summary.rows} rows, "
+        f"{summary.failed} failed, {summary.dropped} objects dropped"
+        + "".join(f", {v} {k.replace('_', ' ')}" for k, v in summary.extra.items())
+    )
+    return summary

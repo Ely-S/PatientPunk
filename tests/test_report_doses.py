@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 import pipeline.doses as doses_module
-from pipeline.doses import make_batches, normalize_unit, parse_dose_response, request_payload, run_dose_extraction
-from pipeline.report_context import load_report_contexts
+from pipeline.doses import normalize_unit, parse_dose_response, request_payload, run_dose_extraction
+from pipeline.report_context import load_report_contexts, make_batches
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
 from utilities.db import ReportWriter
