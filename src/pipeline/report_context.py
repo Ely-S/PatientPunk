@@ -230,8 +230,10 @@ def run_report_step(
         "solo_above_chars": solo_above_chars,
         "batch_size": batch_size,
         "limit": limit,
-        **step.run_config,
     }
+    if clash := run_config.keys() & step.run_config.keys():
+        raise ValueError(f"Step.run_config must not override shared keys: {sorted(clash)}")
+    run_config |= step.run_config
     log.info(f"{len(contexts)} reports for {drug!r}; model {model}")
     batches = make_batches(contexts, batch_size, solo_above_chars)
     reports = with_rows = rows = failed = dropped = 0

@@ -149,6 +149,12 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
     assert config["excluded_compounds"] == ["x"] and config["aliases"] == ["tropoflavin", "78dhf"] and config["extra"] == 1
 
 
+def test_a_step_cannot_override_the_shared_run_config_keys(seeded_db: Path) -> None:
+    setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, parse, None, tokens_per_item=7, run_config={"model": "x", "extra": 1})  # noqa: E731
+    with pytest.raises(ValueError, match=r"shared keys: \['model'\]"):
+        run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup, workers=1)
+
+
 def test_step_flags_read_list_files_and_reject_empty_ones(tmp_path: Path) -> None:
     parser = argparse.ArgumentParser()
     add_step_arguments(parser)
