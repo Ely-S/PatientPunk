@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-import pipeline.effects as effects_module
+from pipeline import report_context
 from pipeline.effects import EffectValue, apply_effect_checks, parse_effects_response, run_effects_extraction
 from prompts.effects_config import DOMAINS, effects_system_prompt
 from utilities import LLMParseError
@@ -81,7 +81,7 @@ def test_run_writes_rows_links_doses_records_config_and_a_rerun_replaces(tmp_pat
         payloads.append(json.loads(prompt))
         return json.dumps(respond["fn"](payloads[-1]["items"]))
 
-    monkeypatch.setattr(effects_module, "llm_call", stub_llm)
+    monkeypatch.setattr(report_context, "llm_call", stub_llm)
     db = tmp_path / "study.db"
     with sqlite3.connect(db) as conn:
         conn.executescript(SCHEMA_SQL.read_text(encoding="utf-8"))

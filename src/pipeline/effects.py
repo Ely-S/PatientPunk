@@ -31,7 +31,7 @@ from pipeline.report_context import (
     serialize_batch,
 )
 from prompts.effects_config import ATTRIBUTIONS, DOMAINS, effects_system_prompt
-from utilities import MODEL_STRONG, LLMParseError, llm_call, log
+from utilities import MODEL_STRONG, LLMParseError, log
 from utilities.db import ReportWriter
 
 TOKENS_PER_ITEM = 500
@@ -234,7 +234,6 @@ def run_effects_extraction(
             parse_fn=lambda raw, ids: parse_effects_response(raw, ids, target_names, domain_set),
             write_fn=write,
             tokens_per_item=TOKENS_PER_ITEM,
-            call=llm_call,
             run_config={"domains": list(domains), "dose_run_id": dose_run_id},
         )
 
