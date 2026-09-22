@@ -98,6 +98,8 @@ class EffectValue(BaseModel):
         dose = data.get("dose")
         if isinstance(dose, str) and dose.strip().isdigit():
             dose = int(dose)
+        if isinstance(dose, float) and dose.is_integer():
+            dose = int(dose)
         data["dose"] = dose if isinstance(dose, int) and not isinstance(dose, bool) else None
         return data
 
@@ -108,6 +110,7 @@ class EffectRunSummary(StepSummary):
     dose_link_drops: int          # dose ids the model returned that were not among the report's listed doses
     alias_label_drops: int        # effects dropped because the attribution label contains a name of the drug without being one
     other_compound_relabels: int  # attribution labels outside the vocabulary and the drug's names, stored as "other compound"
+    rewrites: int                 # values replaced, not rejected: unknown severity -> NULL, unparseable dose -> NULL, empty symptom -> the domain
 
 
 def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, list[tuple[int, str]]], int | None]:
@@ -154,7 +157,9 @@ def parse_effects_response(
     ``other compound`` (counted as ``other_compound_relabels``). A label that contains one of the
     drug's names without being one ("7,8-DHF (tropoflavin)", "7,8-DHF alone") could mean target,
     stack or another compound: the effect is dropped and counted as ``alias_label_drops``. An empty
-    label drops the effect. A missing or non-array ``effects`` field is a parse error.
+    label drops the effect. A missing or non-array ``effects`` field is a parse error. A value
+    EffectValue.coerce replaces rather than rejects (an unknown severity, an unparseable dose, an
+    empty symptom) is counted as ``rewrites``.
     """
     result: dict[int, list[EffectValue]] = {}
     dropped = 0
@@ -189,6 +194,11 @@ def parse_effects_response(
             except ValidationError:
                 dropped += 1
                 continue
+            counts["rewrites"] += sum((
+                data.get("severity") not in (None, "") and effect.severity is None,
+                data.get("dose") not in (None, "") and effect.dose is None,
+                not (isinstance(data.get("symptom"), str) and data["symptom"].strip()),
+            ))
             if effect.domain not in domains:
                 dropped += 1
                 continue
@@ -281,4 +291,5 @@ def run_effects_extraction(
     return EffectRunSummary(
         **asdict(s), quote_drops=counts["quote_drops"], dose_link_drops=counts["dose_link_drops"],
         alias_label_drops=counts["alias_label_drops"], other_compound_relabels=counts["other_compound_relabels"],
+        rewrites=counts["rewrites"],
     )

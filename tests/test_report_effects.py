@@ -44,11 +44,13 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
         {"domain": "pain or neurologic symptoms", "symptom": "headache", "direction": "worsened", "severity": "Mild", "attribution": "7,8-dhf", "quote": "a mild headache and severe dizziness"},
         {"domain": "pain or neurologic symptoms", "symptom": "dizziness", "direction": "worsened", "severity": "severe", "attribution": "7,8-dhf", "quote": "a mild headache and severe dizziness"},  # same domain, quote: kept apart
         {"domain": "gastrointestinal", "symptom": "nausea", "direction": "worsened", "severity": "brutal", "attribution": "7,8-dhf", "quote": "nausea"},  # not a severity: unspecified
+        {"domain": "gastrointestinal", "symptom": "cramps", "direction": "worsened", "attribution": "7,8-dhf", "quote": "cramps", "dose": 7.0},  # an integral float id is the id
+        {"domain": "gastrointestinal", "symptom": "bloating", "direction": "worsened", "attribution": "7,8-dhf", "quote": "bloating", "dose": "seven"},  # unparseable: no link
         effect, dict(effect), "not an object",
     ]}, {"item_id": 1, "effects": []}])
     per_item, dropped, counts = parse_effects_response(raw, [0, 1], TARGET, excluded_names=frozenset({"4'-dma-7,8-dhf"}))
     assert dropped == 5 and per_item[1] == []
-    assert counts == {"other_compound_relabels": 2, "alias_label_drops": 2}
+    assert counts == {"other_compound_relabels": 2, "alias_label_drops": 2, "rewrites": 3}  # empty symptom, "brutal", "seven"
     assert [(e.domain, e.symptom, e.direction, e.severity, e.attribution, e.quote, e.dose) for e in per_item[0]] == [
         ("mood or depression", "mood", "improved", None, "target", "it lifted my mood", 2),
         ("energy or motivation", "energy", "improved", None, "other compound", "polygala gave me energy", None),
@@ -57,6 +59,8 @@ def test_parse_coerces_attribution_drops_bad_objects_dedupes_and_checks_ids() ->
         ("pain or neurologic symptoms", "headache", "worsened", "mild", "target", "a mild headache and severe dizziness", None),
         ("pain or neurologic symptoms", "dizziness", "worsened", "severe", "target", "a mild headache and severe dizziness", None),
         ("gastrointestinal", "nausea", "worsened", None, "target", "nausea", None),
+        ("gastrointestinal", "cramps", "worsened", None, "target", "cramps", 7),
+        ("gastrointestinal", "bloating", "worsened", None, "target", "bloating", None),
         ("overall", "x", "improved", None, "unclear", "it worked", None),
     ]
     with pytest.raises(LLMParseError, match="do not match"):
@@ -119,7 +123,7 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
 
     assert (first.reports, first.reports_with_rows, first.rows, first.failed) == (2, 1, 3, 0)
     assert (first.dropped, first.quote_drops, first.dose_link_drops) == (0, 1, 1)
-    assert (first.alias_label_drops, first.other_compound_relabels) == (1, 0)
+    assert (first.alias_label_drops, first.other_compound_relabels, first.rewrites) == (1, 0, 0)
     reply_item = next(it for p in payloads for it in p["items"] if "20mg" in it["report"])
     assert reply_item["doses"] == [{"id": 7, "quote": "At 20mg it fixed my brain fog."}]
     assert reply_item["replying_to"] == "Asking for a friend." and "thread" not in reply_item  # one parent up, nothing else
