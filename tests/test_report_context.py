@@ -7,6 +7,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+import httpx
 import pytest
 
 from pipeline.report_context import (
@@ -122,13 +123,13 @@ def test_aliases_from_db_reads_the_stored_spellings_and_rejects_corrupt_json(see
 
 
 def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> None:
-    """Three reports, batches of two: the two-item batch's transport error fails both; the solo report answers with one row and one dropped object."""
+    """Three reports, batches of two: the two-item batch's transient transport error fails both; the solo report answers with one row and one dropped object."""
     written: list[tuple[int, str]] = []
 
     def call(client, prompt, model=None, system=None, max_tokens=0) -> str:
         items = json.loads(prompt)["items"]
         if len(items) > 1:
-            raise RuntimeError("transport down")
+            raise httpx.ConnectError("transport down")
         return json.dumps([{"item_id": 0, "value": "row"}])
 
     def setup(conn, aliases, excluded):
@@ -147,6 +148,13 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
     with sqlite3.connect(seeded_db) as conn:
         config = json.loads(conn.execute("SELECT config FROM extraction_runs WHERE run_id = ?", (summary.run_id,)).fetchone()[0])
     assert config["excluded_compounds"] == ["x"] and config["aliases"] == ["tropoflavin", "78dhf"] and config["extra"] == 1
+
+
+def test_a_bug_in_a_step_aborts_the_run_instead_of_counting_as_failed(seeded_db: Path) -> None:
+    """Only what llm_call gives up on (a transient failure after its retries, truncation at the largest budget) is a failed batch."""
+    setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, lambda raw, ids: {}["missing"], None, tokens_per_item=7)  # noqa: E731
+    with pytest.raises(KeyError, match="missing"):
+        run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup, workers=1, call=lambda *a, **k: "[]")
 
 
 def test_a_step_cannot_override_the_shared_run_config_keys(seeded_db: Path) -> None:

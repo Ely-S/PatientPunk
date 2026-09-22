@@ -355,6 +355,14 @@ def is_transient_failure(exc: BaseException) -> bool:
     return False
 
 
+def is_transient_or_truncated(exc: BaseException) -> bool:
+    """Whether ``llm_call`` gave the request up after its retries: a transient failure that outlasted
+    them, or a reply still truncated at the largest budget. Anything else is a configuration error
+    (a bad key or model name) or a bug, which a caller must not count as a failed batch."""
+    from patientpunk._utils import LLMTruncationError
+    return is_transient_failure(exc) or isinstance(exc, LLMTruncationError)
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,

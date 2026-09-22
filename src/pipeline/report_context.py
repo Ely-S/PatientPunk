@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from utilities import MODEL_STRONG, LLMParseError, get_git_commit, llm_call, log, parse_json_array
+from utilities import MODEL_STRONG, LLMParseError, get_git_commit, is_transient_or_truncated, llm_call, log, parse_json_array
 from utilities.db import ReportWriter, open_db, post_text
 
 DEFAULT_PARENT_CHARS = 1500      # of the post being replied to, sent as context
@@ -247,7 +247,9 @@ def run_report_step(
             batch = futures[future]
             try:
                 results, dropped_in_batch = future.result()
-            except Exception as e:  # noqa: BLE001 — transport failures after retries, truncation at the largest budget
+            except Exception as e:  # noqa: BLE001
+                if not is_transient_or_truncated(e):  # a configuration error or a bug: stop, it is not a failed batch
+                    raise
                 log.warning(f"Batch of {len(batch)} failed: {type(e).__name__}: {e}")
                 failed += len(batch)
                 continue
