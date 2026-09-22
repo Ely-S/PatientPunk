@@ -106,7 +106,7 @@ class EffectValue(BaseModel):
 
 @dataclass(frozen=True)
 class EffectRunSummary(StepSummary):
-    quote_drops: int              # effects dropped because their quote is not in the report
+    quote_drops: int              # effects dropped because their quote is not in the report or has fewer than three words
     dose_link_drops: int          # dose ids the model returned that were not among the report's listed doses
     alias_label_drops: int        # effects dropped because the attribution label contains a name of the drug without being one
     other_compound_relabels: int  # attribution labels outside the vocabulary and the drug's names, stored as "other compound"
@@ -214,14 +214,15 @@ def apply_effect_checks(
     effects: list[EffectValue], report_text: str, listed_dose_ids: set[int]
 ) -> tuple[list[EffectValue], int, int]:
     """Write-time checks: drop an effect whose quote is not in the report (compared on
-    lower-case letters and digits); null a ``dose`` that is not one of the report's listed
-    dose ids. Returns the kept effects and the two counts."""
+    lower-case letters and digits) or has fewer than three words (the prompt asks for the
+    sentence); null a ``dose`` that is not one of the report's listed dose ids. Returns the
+    kept effects and the two counts."""
     haystack = _NON_ALNUM.sub("", report_text.lower())
     kept: list[EffectValue] = []
     quote_drops = dose_link_drops = 0
     for effect in effects:
-        needle = _NON_ALNUM.sub("", effect.quote.lower())
-        if not needle or needle not in haystack:
+        words = [w for w in _NON_ALNUM.split(effect.quote.lower()) if w]
+        if len(words) < 3 or "".join(words) not in haystack:
             quote_drops += 1
             continue
         if effect.dose is not None and effect.dose not in listed_dose_ids:

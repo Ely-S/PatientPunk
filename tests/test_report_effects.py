@@ -89,9 +89,10 @@ def test_write_time_checks_drop_foreign_quotes_and_null_unlisted_dose_ids() -> N
         EffectValue(domain="cognition or brain fog", symptom="brain fog", direction="improved", attribution="target", quote="at 20MG, it fixed my brain-fog", dose=7),
         EffectValue(domain="sleep or wakefulness", symptom="sleep", direction="worsened", attribution="target", quote="It also ruins my sleep.", dose=99),
         EffectValue(domain="mood or depression", symptom="mood", direction="improved", attribution="target", quote="it combines well with tropoflavin"),
+        EffectValue(domain="sleep or wakefulness", symptom="sleep", direction="worsened", attribution="target", quote="my sleep."),  # in the report, but two words
     ]
     kept, quote_drops, dose_drops = apply_effect_checks(effects, REPORT, listed_dose_ids={7})
-    assert [(e.symptom, e.dose) for e in kept] == [("brain fog", 7), ("sleep", None)] and (quote_drops, dose_drops) == (1, 1)
+    assert [(e.symptom, e.dose) for e in kept] == [("brain fog", 7), ("sleep", None)] and (quote_drops, dose_drops) == (2, 1)
 
 
 def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_reruns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
