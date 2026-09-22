@@ -27,8 +27,11 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
+from patientpunk._utils import LLMResponseError
+
 from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
+from prompts import twitter_intervention_config as twitter_prompts
 from utilities import (
     TAGGED_MENTIONS, CANONICALIZED_MENTIONS, MODEL_FAST, MODEL_STRONG, LLMParseError,
     PipelineConfig, get_client, resolve_aliases, llm_call, parse_json_array, parse_json_object, log,
@@ -61,24 +64,33 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
     return block
 
 
-def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call."""
-    msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None, prompt: str = PREFILTER_PROMPT) -> bool:
+    """Fallback single-item prefilter call.
+
+    On a per-item LLM failure, pass the item through to the strong classifier
+    rather than silently dropping it — the prefilter is a cost gate, not a
+    correctness gate.
+    """
+    msg = prompt + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
+    try:
+        return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+    except LLMResponseError as err:
+        log.warning(f"Prefilter fallback failed for {entry['id']}:{drug} ({err}); passing through.")
+        return True
 
 
-def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
+def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None, prompt: str = PREFILTER_PROMPT) -> list[bool]:
     """Ask fast model if each (entry, drug) pair expresses personal experience."""
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
-    msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
+    msg = f"{prompt}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
         answers = parse_json_array(llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10))
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
         return [_is_yes(a) for a in answers]
-    except LLMParseError as err:
+    except (LLMParseError, LLMResponseError) as err:
         log.warning(f"Prefilter batch failed ({err}); falling back to individual calls.")
-        return [_prefilter_one(client, e, d, id_to_text, max_upstream_chars) for e, d in items]
+        return [_prefilter_one(client, e, d, id_to_text, max_upstream_chars, prompt) for e, d in items]
 
 
 def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
@@ -160,6 +172,12 @@ def run_classification(
         synonyms_for = {}
         subreddit = "Long COVID"
 
+    # Twitter DBs (source_subreddit == "twitter") use the Twitter prompt
+    # variants; the Reddit path is unchanged.
+    _is_twitter = (subreddit or "").strip().lower() == "twitter"
+    _system_prompt = twitter_prompts.system_prompt if _is_twitter else system_prompt
+    _pf_prompt = twitter_prompts.PREFILTER_PROMPT if _is_twitter else PREFILTER_PROMPT
+
     target_aliases: set[str] | None = None
     if config.drug:
         target, aliases = resolve_aliases(config)
@@ -220,7 +238,7 @@ def run_classification(
                     syns = sorted(target_aliases - {drug})
                 else:
                     syns = synonyms_for.get(drug)
-                prompts[drug] = system_prompt(drug, syns, subreddit)
+                prompts[drug] = _system_prompt(drug, syns, subreddit)
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
@@ -256,7 +274,7 @@ def run_classification(
             done_pf = 0
             with ThreadPoolExecutor(max_workers=config.workers) as pool:
                 futures = {
-                    pool.submit(prefilter_batch, client, batch, id_to_text, config.max_upstream_chars): batch
+                    pool.submit(prefilter_batch, client, batch, id_to_text, config.max_upstream_chars, _pf_prompt): batch
                     for batch in prefilter_batches
                 }
                 for future in as_completed(futures):
