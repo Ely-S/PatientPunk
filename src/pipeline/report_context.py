@@ -1,18 +1,9 @@
 """
 report_context.py — Shared mechanics for the per-report extraction steps (doses, effects).
 
-A per-report step reads the latest treatment report per post for one drug, sends each
-report to the model with its parent post as context, and writes one table. Everything but
-the step's own content lives here: the report context query, batching, the thread-pool
-loop, the split-on-malformed-reply retry, the alias lookup, the run itself
-(run_report_step) and the flags every step's CLI takes (add_step_arguments, step_kwargs).
-The context sent with a report is the parent post only (DEFAULT_PARENT_CHARS), the same
-for every step.
-
-A step supplies a ``Step`` from its setup function (the system prompt, a payload function
-for what one batch looks like to the model, a parse function for what comes back keyed by
-item id, optional per-report checks, extra run-config keys) and a writer method on
-utilities.db.ReportWriter for its table.
+One drug's latest report per post with its parent post as context, batched, extracted on a thread pool
+with a split-on-malformed-reply retry, written to the step's table (run_report_step). A step supplies a
+Step from its setup function and a ReportWriter method; add_step_arguments / step_kwargs are its CLI flags.
 """
 from __future__ import annotations
 
@@ -109,13 +100,10 @@ def extract_with_split(
     tokens_per_item: int,
     call: Callable | None = None,
 ) -> tuple[dict[int, Any], int]:
-    """Extract one batch; on a malformed reply, split the batch and retry down to single items.
+    """Extract one batch; a malformed reply splits it and retries down to single items (a bad single item is skipped).
 
-    ``parse_fn(raw, expected_item_ids)`` returns ``(per_item_id, dropped)``; the result is
-    re-keyed by report_id. ``call`` defaults to utilities.llm_call, looked up at call time, so
-    a direct caller can stub ``report_context.llm_call``. A step passes ``call=llm_call`` from
-    its own globals on its Step, so to stub a step, patch that step's module (``pipeline.doses.llm_call``).
-    """
+    ``parse_fn(raw, expected_item_ids) -> (per_item_id, dropped)``, re-keyed by report_id. ``call`` defaults to
+    utilities.llm_call at call time: stub ``report_context.llm_call``, or a step's own module (it passes its ``llm_call`` on its Step)."""
     fn = call or llm_call
     try:
         raw = fn(client, payload_fn(batch), model=model, system=system, max_tokens=tokens_per_item * len(batch))
@@ -146,10 +134,7 @@ def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
 
 
 def run_batches(batches: list, fn: Callable, workers: int) -> Iterator[tuple[Any, Any, Exception | None]]:
-    """Run ``fn(batch)`` over ``batches`` on a thread pool; yield ``(batch, result, error)`` as each completes.
-
-    Mirrors the pool loop in classify.run_classification (candidate for a shared helper).
-    """
+    """Run ``fn(batch)`` over ``batches`` on a thread pool; yield ``(batch, result, error)`` as each completes."""
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         futures = {pool.submit(fn, batch): batch for batch in batches}
         for future in as_completed(futures):
@@ -213,14 +198,11 @@ def run_report_step(
     solo_above_chars: int | None = DEFAULT_SOLO_ABOVE_CHARS,
     limit: int | None = None,
 ) -> StepSummary:
-    """Run one per-report step over every latest report of ``drug`` in ``db_path``.
+    """Run one per-report step over every latest report of ``drug`` in ``db_path``; returns its StepSummary.
 
-    Checks the drug is a canonical treatment name, loads the reports and the aliases (from
-    the treatment table unless given), then calls ``setup_fn(conn, inputs)`` on the still-open
-    connection for the step's prompt and functions and whatever else it reads. Batches go to
-    the model on a thread pool; each report's values pass through the step's ``check_fn`` (when
-    set) and then ``write_fn(writer, report_id, values)`` under a new extraction_runs row.
-    """
+    Validates the drug, loads reports and aliases (treatment table unless given), then calls
+    ``setup_fn(conn, inputs) -> Step`` on the open connection. Per report, under a new extraction_runs row:
+    ``check_fn(context, values) -> (kept, counters)`` when set, then ``write_fn(writer, report_id, kept)``."""
     conn = open_db(db_path)
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
