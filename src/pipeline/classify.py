@@ -81,10 +81,10 @@ def _is_yes(s: str) -> bool:
 
 def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format a single (entry, drug) item for the prefilter prompt."""
-    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")[:max_upstream_chars]
     block = f"--- {i+1} --- Drug: {drug}\n"
     if upstream_comment:
-        block += f"Replying to: {upstream_comment[:max_upstream_chars]}\n\n"
+        block += f"Replying to: {upstream_comment}\n\n"
     block += f"Comment: {entry['text']}\n\n"
     return block
 
@@ -138,11 +138,12 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
 
 
 def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
-    """Format entry for classification prompt."""
+    """Format entry for classification prompt. The parent's text is shown when there is
+    any to show; with max_upstream_chars=0 there is none, so the header is omitted too."""
     msg = f"Text:\n{entry['text']}"
-    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")[:max_upstream_chars]
     if upstream_comment:
-        msg += f"\n\nReplying to:\n{upstream_comment[:max_upstream_chars]}"
+        msg += f"\n\nReplying to:\n{upstream_comment}"
     return msg
 
 
