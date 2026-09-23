@@ -49,6 +49,12 @@ def _pf_key(entry: dict, drug: str) -> str:
     return f"{entry['id']}:{drug}"
 
 
+def _entry_drugs(entry: dict) -> list[str]:
+    """Drugs to pair with an entry, in a fixed order so the work queue -- and with it
+    the prefilter and classify batches -- is the same in every process."""
+    return sorted(set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", [])))
+
+
 def _is_yes(s: str) -> bool:
     return str(s).strip().lower().startswith("yes")
 
@@ -212,8 +218,7 @@ def run_classification(
     skipped = 0
 
     for entry in tagged:
-        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
-        for drug in all_drugs:
+        for drug in _entry_drugs(entry):
             if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
