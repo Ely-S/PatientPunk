@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
+from importlib.resources import files
 from pathlib import Path
+from string import Formatter
 
 import pytest
 
 from pipeline import report_context
-from pipeline.doses import DoseValue, normalize_unit, parse_dose_response, run_dose_extraction
+from pipeline.doses import (
+    DoseValue,
+    normalize_unit,
+    parse_dose_response,
+    run_dose_extraction,
+)
 from pipeline.report_context import load_report_contexts, make_batches, serialize_batch
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
@@ -20,6 +28,7 @@ SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 REPLY_DOSES = [
     {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great."},
     {"low": 40, "high": 40, "unit": "mg", "outcome": "negative", "quote": "Tried 40 mg once, headache."},
+    {"low": None, "high": None, "unit": None, "route": "nasal mucosal", "outcome": "positive", "quote": "I also tried it nasally and it helped."},
 ]
 
 
@@ -60,7 +69,62 @@ def test_prompt_and_response_parsing() -> None:
             parse_dose_response(malformed, [0])
 
 
-def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(("overrides", "accepted"), [
+    ({}, True),
+    ({"low": None, "high": None, "unit": None}, True),
+    ({"route": None}, False),
+    ({"route": "unknown"}, False),
+    ({"quote": ""}, False),
+    ({"unit": "mg"}, False),
+    ({"low": 20}, False),
+    ({"high": 20}, False),
+    ({"low": 0, "high": 0}, False),
+    ({"low": "low dose", "high": "low dose"}, False),
+])
+def test_route_without_amount_requires_a_valid_route_and_quote(overrides: dict, accepted: bool) -> None:
+    raw = {"route": "oral mucosal", "quote": "I take it under my tongue.", **overrides}
+    per_item, dropped = parse_dose_response(json.dumps([{"item_id": 0, "doses": [raw]}]), [0])
+    assert (len(per_item[0]), dropped) == (int(accepted), int(not accepted))
+    if accepted:
+        assert per_item[0][0].model_dump() == {
+            "low": None, "high": None, "unit": None, "route": "oral mucosal",
+            "outcome": None, "quote": "I take it under my tongue.",
+        }
+
+
+def test_prompt_resource_and_numeric_example_match_the_contract() -> None:
+    template = files("prompts").joinpath("dose_system.txt").read_text(encoding="utf-8")
+    assert {name for _, name, _, _ in Formatter().parse(template) if name} == {
+        "name", "alias_line", "excluded_line", "example",
+    }
+    prompt = dose_system_prompt("ldn")
+    example = prompt.split("shaped like:\n\n", 1)[1].split("\n\nDose rules:", 1)[0]
+    per_item, dropped = parse_dose_response(example, [0])
+    assert dropped == 0
+    assert per_item[0][0].model_dump() == {
+        "low": 20.0, "high": 20.0, "unit": "mg", "route": "oral mucosal",
+        "outcome": "positive", "quote": "20mg sublingual gave me a clear, calm focus",
+    }
+
+
+def test_old_amount_constraints_fail_before_any_model_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db = tmp_path / "old.db"
+    with closing(sqlite3.connect(db)) as conn:
+        conn.executescript("""
+            CREATE TABLE treatment (id INTEGER PRIMARY KEY, canonical_name TEXT);
+            INSERT INTO treatment VALUES (1, 'ldn');
+            CREATE TABLE report_doses (low REAL NOT NULL, high REAL NOT NULL);
+        """)
+    monkeypatch.setattr(report_context, "load_report_contexts", lambda *args, **kwargs: [])
+    def unexpected_call(*args, **kwargs):
+        pytest.fail("An unsupported database must be rejected before calling the model")
+    monkeypatch.setattr(report_context, "llm_call", unexpected_call)
+    with pytest.raises(ValueError, match="Use a fresh database"):
+        run_dose_extraction(None, db, "ldn", aliases=[], excluded_compounds=[], workers=1)
+
+
+@pytest.mark.parametrize("runtime_table", [False, True])
+def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime_table: bool) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -76,7 +140,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
             INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
             INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
                 ('top', NULL, 'u1', 'Dosing thread', 'What dose do you all take?', 0),
-                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache.', 0),
+                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache. I also tried it nasally and it helped.', 0),
                 ('other', 'top', 'u1', NULL, 'Never tried it.', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin"]');
             INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
@@ -84,11 +148,13 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
                 (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
         """)
+        if runtime_table:  # Also exercise table creation by ReportWriter, not just schema.sql.
+            conn.executescript("DROP VIEW report_doses_latest; DROP TABLE report_doses;")
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": REPLY_DOSES if "20mg" in it["report"] else []} for it in items]
 
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
-    assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 2, 0, 0)
+    assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 3, 0, 0)
     assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
     assert all("thread" not in it for it in payloads[0]["items"])  # context is one parent up, nothing else
     with sqlite3.connect(schema_db) as conn:
@@ -97,6 +163,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     assert rows == [
         (3, 0, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
         (3, 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
+        (3, 2, None, None, None, "nasal mucosal", "positive", "I also tried it nasally and it helped."),
     ]
     config = json.loads(config)
     assert run_type == "report_doses" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"] and config["exclusions_source"] == "flags"
@@ -105,7 +172,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # runs append; the view shows the report's rows from its newest run
         assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (4,)
         second_config = json.loads(conn.execute("SELECT config FROM extraction_runs WHERE run_id = ?", (second.run_id,)).fetchone()[0])
         assert (second_config["excluded_compounds"], second_config["exclusions_source"]) == ([], "none")  # no flags, no sentiment-run list
 
@@ -113,7 +180,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     third = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # a rerun that finds nothing retracts the earlier rows from the view; the table keeps them
         assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (4,)
         assert conn.execute("SELECT report_id FROM report_runs WHERE run_id = ? ORDER BY report_id", (third.run_id,)).fetchall() == [(2,), (3,)]
         # rows written for the post's OLDER treatment report (id 1, superseded by id 3) stay out of the view
         conn.execute("INSERT INTO report_runs VALUES (?, 1)", (second.run_id,))
