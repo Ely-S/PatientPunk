@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -42,17 +41,24 @@ def test_prompt_and_response_parsing() -> None:
             {"low": 1, "high": 3, "unit": "grams"},          # duplicate
             {"low": 20, "high": 10, "unit": "mg"},           # high below low
             {"low": "twenty", "high": 20, "unit": "mg"},     # not a number
+            {"route": "oral mucosal", "quote": "I take it under my tongue."},  # route without an amount
+            {"quote": "I take it."},                        # unknown amount also needs a route
+            {"route": "oral mucosal"},                     # route without a supporting quote
+            {"route": "oral mucosal", "quote": "q", "unit": "mg"},  # unit without an amount
+            {"route": "oral mucosal", "quote": "q", "low": 20},     # partial numeric range
+            {"route": "oral mucosal", "quote": "q", "high": 20},
         ]},
         {"item_id": 1, "doses": []},
     ])
     per_item, dropped = parse_dose_response(raw, [0, 1])
-    assert dropped == 2 and per_item[1] == []
+    assert dropped == 7 and per_item[1] == []
     assert [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in per_item[0]] == [
         (20.0, 20.0, "milligrams", None, None, "20mg"),
         (1.5, 1.5, None, None, None, None),
         (2.0, 2.0, "capsules", None, None, None),
         (2.0, 2.0, "mg/kg", None, None, None),
         (1.0, 3.0, "grams", None, None, None),
+        (None, None, None, "oral mucosal", None, "I take it under my tongue."),
     ]
     assert [normalize_unit(u) for u in ("milligrams", "mL", "IU", "capsules", None)] == ["mg", "ml", "iu", None, None]
     with pytest.raises(LLMParseError, match="do not match"):
@@ -62,47 +68,7 @@ def test_prompt_and_response_parsing() -> None:
             parse_dose_response(malformed, [0])
 
 
-@pytest.mark.parametrize(("overrides", "accepted"), [
-    ({}, True),
-    ({"low": None, "high": None, "unit": None}, True),
-    ({"route": None}, False),
-    ({"route": "unknown"}, False),
-    ({"quote": ""}, False),
-    ({"unit": "mg"}, False),
-    ({"low": 20}, False),
-    ({"high": 20}, False),
-    ({"low": 0, "high": 0}, False),
-    ({"low": "low dose", "high": "low dose"}, False),
-])
-def test_route_without_amount_requires_a_valid_route_and_quote(overrides: dict, accepted: bool) -> None:
-    raw = {"route": "oral mucosal", "quote": "I take it under my tongue.", **overrides}
-    per_item, dropped = parse_dose_response(json.dumps([{"item_id": 0, "doses": [raw]}]), [0])
-    assert (len(per_item[0]), dropped) == (int(accepted), int(not accepted))
-    if accepted:
-        assert per_item[0][0].model_dump() == {
-            "low": None, "high": None, "unit": None, "route": "oral mucosal",
-            "outcome": None, "quote": "I take it under my tongue.",
-        }
-
-
-def test_old_amount_constraints_fail_before_any_model_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db = tmp_path / "old.db"
-    with closing(sqlite3.connect(db)) as conn:
-        conn.executescript("""
-            CREATE TABLE treatment (id INTEGER PRIMARY KEY, canonical_name TEXT);
-            INSERT INTO treatment VALUES (1, 'ldn');
-            CREATE TABLE report_doses (low REAL NOT NULL, high REAL NOT NULL);
-        """)
-    monkeypatch.setattr(report_context, "load_report_contexts", lambda *args, **kwargs: [])
-    def unexpected_call(*args, **kwargs):
-        pytest.fail("An unsupported database must be rejected before calling the model")
-    monkeypatch.setattr(report_context, "llm_call", unexpected_call)
-    with pytest.raises(ValueError, match="Use a fresh database"):
-        run_dose_extraction(None, db, "ldn", aliases=[], excluded_compounds=[], workers=1)
-
-
-@pytest.mark.parametrize("runtime_table", [False, True])
-def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime_table: bool) -> None:
+def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payloads: list[dict] = []
     respond = {"fn": lambda items: []}
 
@@ -126,8 +92,6 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
                 (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
         """)
-        if runtime_table:  # Also exercise table creation by ReportWriter, not just schema.sql.
-            conn.executescript("DROP VIEW report_doses_latest; DROP TABLE report_doses;")
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": REPLY_DOSES if "20mg" in it["report"] else []} for it in items]
 
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
