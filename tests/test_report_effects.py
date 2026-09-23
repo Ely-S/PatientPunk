@@ -150,7 +150,7 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
     ]
     config = json.loads(config)
     assert run_type == "report_effects" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"]
-    assert config["aliases"] == ["tropoflavin"] and config["domains"] == list(DOMAINS) and config["dose_run_id"] == 2
+    assert config["aliases"] == ["tropoflavin"] and config["domains"] == list(DOMAINS) and config["dose_run_ids"] == [2]
 
     respond["fn"] = lambda items: [{"item_id": it["item_id"], "effects": [
         {"domain": "sleep or wakefulness", "symptom": "sleep", "direction": "worsened", "severity": "severe", "attribution": "7,8-dhf", "quote": "ruins my sleep"}
@@ -164,5 +164,10 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
     with sqlite3.connect(db) as conn:  # a rerun that finds nothing retracts the earlier rows from the view; the table keeps them
         assert conn.execute("SELECT COUNT(*) FROM report_effects_latest").fetchone() == (0,)
         assert conn.execute("SELECT COUNT(*) FROM report_effects").fetchone() == (4,)
+        # rows written for the post's OLDER treatment report (id 1, superseded by id 3) stay out of the view
+        conn.execute("INSERT INTO report_runs VALUES (?, 1)", (second.run_id,))
+        conn.execute("INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote) "
+                     "VALUES (1, ?, 0, 'overall', 'overall', 'improved', 'target', 'q')", (second.run_id,))
+        assert conn.execute("SELECT COUNT(*) FROM report_effects_latest").fetchone() == (0,)
     with pytest.raises(ValueError, match="not a canonical treatment"):
         run_effects_extraction(None, db, "no-such-drug", workers=1)

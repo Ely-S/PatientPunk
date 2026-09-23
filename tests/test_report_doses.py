@@ -115,6 +115,11 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
         assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
         assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
         assert conn.execute("SELECT report_id FROM report_runs WHERE run_id = ? ORDER BY report_id", (third.run_id,)).fetchall() == [(2,), (3,)]
+        # rows written for the post's OLDER treatment report (id 1, superseded by id 3) stay out of the view
+        conn.execute("INSERT INTO report_runs VALUES (?, 1)", (second.run_id,))
+        conn.execute("INSERT INTO report_doses (report_id, run_id, ordinal, low, high, unit) VALUES (1, ?, 0, 5, 5, 'mg')", (second.run_id,))
+        assert conn.execute("SELECT COUNT(*) FROM report_doses WHERE report_id = 1").fetchone() == (1,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
 
     with sqlite3.connect(schema_db) as conn:  # an effect row linked to a dose row
         conn.execute("INSERT INTO extraction_runs VALUES (9, 0, 'abc', 'report_doses', '{}')")

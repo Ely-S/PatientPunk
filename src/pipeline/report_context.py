@@ -249,6 +249,7 @@ def run_report_step(
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
         excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
+        log.info(f"Excluded compounds ({exclusions_source}): {', '.join(excluded_compounds) or 'none'}")
         step = setup_fn(conn, aliases, excluded_compounds)
     finally:
         conn.close()
@@ -361,6 +362,8 @@ def read_list_file(parser: argparse.ArgumentParser, args: argparse.Namespace, de
 def step_kwargs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> dict[str, Any]:
     """Keyword arguments for a step's run function, from the flags add_step_arguments added."""
     excluded = args.exclude_compound + (read_list_file(parser, args, "exclude_file") or [])
+    if args.no_exclusions and excluded:
+        parser.error("--no-exclusions cannot be combined with --exclude-compound / --exclude-file")
     return {
         "aliases": read_list_file(parser, args, "drug_file"),
         "excluded_compounds": [] if args.no_exclusions else (excluded or None),

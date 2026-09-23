@@ -63,6 +63,10 @@ CREATE VIEW report_effects_latest AS
     WHERE e.run_id = (
         SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
         WHERE rr.report_id = e.report_id AND r.extraction_type = 'report_effects'
+    )
+      AND e.report_id = (  -- and only for each post's latest treatment report (a reclassified post gets a new report)
+        SELECT MAX(tr2.report_id) FROM treatment_reports tr2 JOIN treatment_reports tr ON tr.report_id = e.report_id
+        WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
     );
 """
 SEVERITIES = ("mild", "moderate", "severe", "life_threatening")
@@ -114,8 +118,8 @@ class EffectRunSummary(StepSummary):
 
 
 def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, list[tuple[int, str]]], int | None]:
-    """Each report's dose rows from its newest dose run (report_doses_latest), as (dose_id, quote), and the
-    newest of those runs."""
+    """Each report's current dose rows, as (dose_id, quote), and the sorted ids of the dose runs they come
+    from (one after a full run; several after a --limit or partly failed rerun)."""
     doses: dict[int, list[tuple[int, str]]] = {}
     run_ids: set[int] = set()
     for report_id, dose_id, run_id, quote in conn.execute(
@@ -130,7 +134,7 @@ def load_report_doses(conn: sqlite3.Connection, drug: str) -> tuple[dict[int, li
     ):
         doses.setdefault(report_id, []).append((dose_id, quote or ""))
         run_ids.add(run_id)
-    return doses, (max(run_ids) if run_ids else None)
+    return doses, sorted(run_ids)
 
 
 def request_payload(batch: list[ReportContext], doses_by_report: dict[int, list[tuple[int, str]]]) -> str:
@@ -255,10 +259,10 @@ def run_effects_extraction(
 
     def setup(conn: sqlite3.Connection, aliases: list[str], excluded_compounds: list[str]) -> Step:
         conn.executescript(REPORT_DOSES_DDL + REPORT_EFFECTS_DDL)  # report_runs and the dose view first: load_report_doses reads it
-        doses_by_report, dose_run_id = load_report_doses(conn, drug)
+        doses_by_report, dose_run_ids = load_report_doses(conn, drug)
         target_names = frozenset(a.strip().lower() for a in ["target", drug, *aliases] if a.strip())
         excluded_names = frozenset(n.strip().lower() for n in excluded_compounds if n.strip())
-        log.info(f"{len(doses_by_report)} reports with dose rows (dose run {dose_run_id})")
+        log.info(f"{len(doses_by_report)} reports with dose rows (dose runs {dose_run_ids or 'none'})")
 
         def parse(raw: str, ids: list[int]) -> tuple[dict[int, list[EffectValue]], int]:
             per_item, dropped, parse_counts = parse_effects_response(raw, ids, target_names, domain_set, excluded_names)
@@ -278,7 +282,7 @@ def run_effects_extraction(
             parse_fn=parse,
             write_fn=write,
             tokens_per_item=TOKENS_PER_ITEM,
-            run_config={"domains": list(domains), "dose_run_id": dose_run_id},
+            run_config={"domains": list(domains), "dose_run_ids": dose_run_ids},  # the dose runs the linked rows come from
         )
 
     s = run_report_step(

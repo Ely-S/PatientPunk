@@ -127,6 +127,10 @@ CREATE VIEW IF NOT EXISTS report_doses_latest AS
     WHERE d.run_id = (
         SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
         WHERE rr.report_id = d.report_id AND r.extraction_type = 'report_doses'
+    )
+      AND d.report_id = (  -- and only for each post's latest treatment report (a reclassified post gets a new report)
+        SELECT MAX(tr2.report_id) FROM treatment_reports tr2 JOIN treatment_reports tr ON tr.report_id = d.report_id
+        WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
     );
 
 -- One row per effect the author says the drug had on them, per treatment report.
@@ -143,7 +147,7 @@ CREATE TABLE report_effects (
     severity    TEXT CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),  -- only when the author states it; NULL means unspecified, not mild
     attribution TEXT NOT NULL CHECK (attribution IN ('target', 'stack', 'unclear', 'other compound')),
     quote       TEXT NOT NULL,       -- verbatim sentence from the post
-    dose_id     INTEGER REFERENCES report_doses(dose_id)  -- NULL unless the author ties the effect to a stated dose (a row of the dose run in the effects run's config, dose_run_id)
+    dose_id     INTEGER REFERENCES report_doses(dose_id)  -- NULL unless the author ties the effect to a stated dose; the dose row's own run_id says which dose run it came from
 );
 CREATE INDEX idx_re_report ON report_effects(report_id);
 -- Each report's rows from its newest effects run (report_runs); none when that run found no effect.
@@ -152,6 +156,10 @@ CREATE VIEW IF NOT EXISTS report_effects_latest AS
     WHERE e.run_id = (
         SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
         WHERE rr.report_id = e.report_id AND r.extraction_type = 'report_effects'
+    )
+      AND e.report_id = (  -- and only for each post's latest treatment report (a reclassified post gets a new report)
+        SELECT MAX(tr2.report_id) FROM treatment_reports tr2 JOIN treatment_reports tr ON tr.report_id = e.report_id
+        WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
     );
 
 -- ══════════════════════════════════════════════════════

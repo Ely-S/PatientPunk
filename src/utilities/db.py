@@ -41,6 +41,10 @@ CREATE VIEW report_doses_latest AS
     WHERE d.run_id = (
         SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
         WHERE rr.report_id = d.report_id AND r.extraction_type = 'report_doses'
+    )
+      AND d.report_id = (  -- and only for each post's latest treatment report (a reclassified post gets a new report)
+        SELECT MAX(tr2.report_id) FROM treatment_reports tr2 JOIN treatment_reports tr ON tr.report_id = d.report_id
+        WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
     );
 """
 

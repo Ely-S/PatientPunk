@@ -214,6 +214,8 @@ def test_step_flags_read_list_files_and_reject_empty_ones(tmp_path: Path) -> Non
     assert kwargs["aliases"] is None and kwargs["excluded_compounds"] == ["c", "a", "b"] and kwargs["limit"] is None
     assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d"]))["excluded_compounds"] is None  # inherit
     assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--no-exclusions"]))["excluded_compounds"] == []
+    with pytest.raises(SystemExit):  # asking for none and for some at once
+        step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--no-exclusions", "--exclude-compound", "c"]))
     names.write_text("\n \n", encoding="utf-8")
     with pytest.raises(SystemExit):
         step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--drug-file", str(names)]))
