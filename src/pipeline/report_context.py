@@ -4,6 +4,7 @@ report_context.py — Shared mechanics for the per-report extraction steps (dose
 run_report_step takes one drug's latest report per post with its parent post as context, batches them, calls
 the model on a thread pool with a split-on-malformed-reply retry, and writes each report's rows under a new
 extraction_runs row. A step supplies a Step from its setup function; add_step_arguments / step_kwargs are its CLI flags.
+Exclusion names come from one place for every step (resolve_exclusions).
 """
 from __future__ import annotations
 
@@ -90,6 +91,36 @@ def aliases_from_db(conn: sqlite3.Connection, drug: str) -> list[str]:
         return [str(a) for a in json.loads(row[0]) if str(a).strip()]
     except (TypeError, ValueError) as e:
         raise ValueError(f"treatment.aliases for {drug!r} is not a JSON list: {row[0]!r}") from e
+
+
+def resolve_exclusions(
+    conn: sqlite3.Connection, drug: str, explicit: list[str] | None
+) -> tuple[list[str], str]:
+    """Names of other compounds the prompt must not attribute to ``drug``, and where they came from.
+
+    Explicit names (the --exclude-compound / --exclude-file flags) win. Otherwise the compound
+    name the sentiment run recorded for this drug is inherited (``drug_excluded_compounds`` in
+    its run config: the canonical name from --drug-exclude-file; runs from before that key
+    recorded only the spelling list, whose first entry is that name by the same convention),
+    so the steps cannot disagree about what is not the drug, and the prompt names a compound
+    rather than listing its spellings. Returns (names, "flags" | "sentiment_run" | "none").
+    """
+    if explicit is not None:  # [] is an explicit "none" (--no-exclusions)
+        return list(explicit), "flags"
+    for (config,) in conn.execute(
+        "SELECT config FROM extraction_runs WHERE extraction_type = 'treatment_sentiment' ORDER BY run_id DESC"
+    ):
+        try:
+            cfg = json.loads(config or "{}")
+        except ValueError:
+            continue
+        if str(cfg.get("drug") or "").lower() == drug.lower():
+            recorded = cfg.get("drug_excluded_compounds")
+            if recorded is None:  # older sentiment run: the spelling list, first entry = the canonical name
+                recorded = (cfg.get("drug_excluded_aliases") or [])[:1]
+            names = [str(n) for n in recorded if str(n).strip()]
+            return names, ("sentiment_run" if names else "none")
+    return [], "none"
 
 
 def make_batches(
@@ -205,11 +236,11 @@ def run_report_step(
 ) -> StepSummary:
     """Run one step over every latest report of ``drug`` in ``db_path`` under a new extraction_runs row.
     ``setup_fn(conn, aliases, excluded_compounds) -> Step`` runs on the open connection before the run, so a
-    step can read its own tables there; aliases come from the treatment table unless given. ``call`` is the
-    model call, ``llm_call`` unless given: tests pass a stub, or monkeypatch ``llm_call`` in this module."""
+    step can read its own tables there; aliases come from the treatment table unless given, exclusion names
+    from resolve_exclusions. ``call`` is the model call, ``llm_call`` unless given: tests pass a stub, or
+    monkeypatch ``llm_call`` in this module."""
     if call is None:
         call = llm_call
-    excluded_compounds = list(excluded_compounds or [])
     conn = open_db(db_path)
     try:
         if conn.execute("SELECT 1 FROM treatment WHERE lower(canonical_name) = lower(?)", (drug,)).fetchone() is None:
@@ -217,6 +248,8 @@ def run_report_step(
         contexts = load_report_contexts(conn, drug, parent_chars=parent_chars, limit=limit)
         if aliases is None:
             aliases = aliases_from_db(conn, drug)
+        excluded_compounds, exclusions_source = resolve_exclusions(conn, drug, excluded_compounds)
+        log.info(f"Excluded compounds ({exclusions_source}): {', '.join(excluded_compounds) or 'none'}")
         step = setup_fn(conn, aliases, excluded_compounds)
     finally:
         conn.close()
@@ -224,6 +257,7 @@ def run_report_step(
         "drug": drug,
         "aliases": aliases,
         "excluded_compounds": excluded_compounds,
+        "exclusions_source": exclusions_source,
         "model": model,
         "prompt_sha256": hashlib.sha256(step.system.encode("utf-8")).hexdigest(),
         "parent_chars": parent_chars,
@@ -300,7 +334,10 @@ def add_step_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--exclude-compound", action="append", default=[],
                         help="Name of a different compound whose information must not be attributed to the drug (repeatable)")
     parser.add_argument("--exclude-file", type=str, default=None,
-                        help="Text file of such compound names, one per line (added to --exclude-compound)")
+                        help="Text file of such compound names, one per line (added to --exclude-compound). "
+                             "With neither flag, the exclusions recorded by the sentiment run are used")
+    parser.add_argument("--no-exclusions", action="store_true",
+                        help="Run with no excluded compounds, even if the sentiment run recorded some")
     parser.add_argument("--model", type=str, default=MODEL_STRONG, help=f"Model for the extraction (default: {MODEL_STRONG})")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -325,9 +362,11 @@ def read_list_file(parser: argparse.ArgumentParser, args: argparse.Namespace, de
 def step_kwargs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> dict[str, Any]:
     """Keyword arguments for a step's run function, from the flags add_step_arguments added."""
     excluded = args.exclude_compound + (read_list_file(parser, args, "exclude_file") or [])
+    if args.no_exclusions and excluded:
+        parser.error("--no-exclusions cannot be combined with --exclude-compound / --exclude-file")
     return {
         "aliases": read_list_file(parser, args, "drug_file"),
-        "excluded_compounds": excluded or None,
+        "excluded_compounds": [] if args.no_exclusions else (excluded or None),
         "model": args.model,
         "workers": args.workers,
         "batch_size": args.batch_size,

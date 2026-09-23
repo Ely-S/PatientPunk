@@ -11,8 +11,15 @@ from pathlib import Path
 
 COMMIT_EVERY = 50  # commit after this many writes
 
-# Kept identical to schema.sql so the dose step also works on databases created before the table existed.
+# Kept identical to schema.sql (with IF NOT EXISTS, the backfill, and the view recreated) so the per-report
+# steps also work on databases created before these existed.
 REPORT_DOSES_DDL = """
+CREATE TABLE IF NOT EXISTS report_runs (
+    run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
+    PRIMARY KEY (run_id, report_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rr_report ON report_runs(report_id);
 CREATE TABLE IF NOT EXISTS report_doses (
     dose_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
@@ -26,10 +33,19 @@ CREATE TABLE IF NOT EXISTS report_doses (
     quote     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_rd_report ON report_doses(report_id);
--- Runs append; nothing is deleted. Each report's rows from its most recent dose run:
-CREATE VIEW IF NOT EXISTS report_doses_latest AS
+-- Rows written before report_runs existed count as processed by the run that wrote them.
+INSERT OR IGNORE INTO report_runs (run_id, report_id) SELECT DISTINCT run_id, report_id FROM report_doses;
+DROP VIEW IF EXISTS report_doses_latest;  -- recreated: a database from before report_runs has an older definition
+CREATE VIEW report_doses_latest AS
     SELECT d.* FROM report_doses d
-    WHERE d.run_id = (SELECT MAX(run_id) FROM report_doses WHERE report_id = d.report_id);
+    WHERE d.run_id = (
+        SELECT MAX(rr.run_id) FROM report_runs rr JOIN extraction_runs r ON r.run_id = rr.run_id
+        WHERE rr.report_id = d.report_id AND r.extraction_type = 'report_doses'
+    )
+      AND d.report_id = (  -- and only for each post's latest treatment report (a reclassified post gets a new report)
+        SELECT MAX(tr2.report_id) FROM treatment_reports tr2 JOIN treatment_reports tr ON tr.report_id = d.report_id
+        WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
+    );
 """
 
 
@@ -80,12 +96,12 @@ def upsert_treatments(db_path: Path, drugs: set[str], aliases: dict[str, list[st
 
 
 class ReportWriter:
-    """Incremental writer for treatment_reports and the per-report tables (report_doses).
+    """Incremental writer for treatment_reports and the per-report tables (report_doses, report_effects).
 
     Creates an extraction_runs row on init, then batches inserts with
     periodic commits. Use as a context manager. ``extraction_type`` names the
-    run: "treatment_sentiment" (default) or "report_doses". A per-report step
-    writes through insert_report_rows (or a per-table wrapper like write_doses).
+    run: "treatment_sentiment" (default), "report_doses" or "report_effects". A
+    per-report step writes through insert_report_rows (via write_doses / write_effects).
     """
 
     def __init__(self, db_path: Path, run_config: dict, commit_hash: str,
@@ -143,13 +159,17 @@ class ReportWriter:
     def insert_report_rows(self, table: str, columns: tuple[str, ...], report_id: int, rows: list[tuple]) -> int:
         """Insert ``rows`` (value tuples in ``columns`` order) as this run's rows for an existing
         treatment report, numbered 0-based in ``ordinal`` like the study's other ordinal columns.
-        Append only, like treatment_reports: earlier runs' rows stay, and a per-table
-        ``_latest`` view returns each report's most recent run. An unknown report_id raises
-        ValueError. Returns the number written."""
+        Append only, like treatment_reports: earlier runs' rows stay. The report is recorded in
+        report_runs as processed by this run, also when ``rows`` is empty, so the table's ``_latest``
+        view shows each report's rows from its newest processing run and a run that finds nothing
+        retracts what an earlier run wrote. An unknown report_id raises ValueError. Returns the
+        number written."""
         if self._conn.execute(
             "SELECT 1 FROM treatment_reports WHERE report_id = ?", (report_id,)
         ).fetchone() is None:
             raise ValueError(f"treatment report {report_id} does not exist")
+        self._conn.execute("INSERT INTO report_runs (run_id, report_id) VALUES (?, ?)", (self.run_id, report_id))
+        self._pending += 1  # the record must reach the commit even when nothing is inserted
         names = ", ".join(("report_id", "run_id", "ordinal", *columns))
         marks = ", ".join(["?"] * (3 + len(columns)))
         self._conn.executemany(
@@ -163,10 +183,19 @@ class ReportWriter:
 
     def write_doses(self, report_id: int, doses) -> int:
         """Insert ``doses`` (objects with low, high, unit, route, outcome, quote — e.g.
-        pipeline.doses.DoseValue) as this run's report_doses rows; see insert_report_rows."""
+        pipeline.doses.DoseValue) as this run's report_doses rows; see insert_report_rows. Earlier
+        dose rows stay, so effect rows that point at them keep their link."""
         return self.insert_report_rows(
             "report_doses", ("low", "high", "unit", "route", "outcome", "quote"), report_id,
             [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in doses],
+        )
+
+    def write_effects(self, report_id: int, effects) -> int:
+        """Insert ``effects`` (objects with domain, symptom, direction, severity, attribution, quote,
+        dose — e.g. pipeline.effects.EffectValue) as this run's report_effects rows; see insert_report_rows."""
+        return self.insert_report_rows(
+            "report_effects", ("domain", "symptom", "direction", "severity", "attribution", "quote", "dose_id"), report_id,
+            [(e.domain, e.symptom, e.direction, e.severity, e.attribution, e.quote, e.dose) for e in effects],
         )
 
     def flush(self):

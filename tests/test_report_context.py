@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from pipeline.report_context import (
+    DEFAULT_PARENT_CHARS,
     ReportContext,
     Step,
     add_step_arguments,
@@ -19,6 +20,7 @@ from pipeline.report_context import (
     load_report_contexts,
     make_batches,
     request_items,
+    resolve_exclusions,
     response_items,
     run_report_step,
     serialize_batch,
@@ -210,7 +212,46 @@ def test_step_flags_read_list_files_and_reject_empty_ones(tmp_path: Path) -> Non
     names.write_text(" a \n\nb\n", encoding="utf-8")
     kwargs = step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--exclude-compound", "c", "--exclude-file", str(names)]))
     assert kwargs["aliases"] is None and kwargs["excluded_compounds"] == ["c", "a", "b"] and kwargs["limit"] is None
-    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d"]))["excluded_compounds"] is None
+    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d"]))["excluded_compounds"] is None  # inherit
+    assert step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--no-exclusions"]))["excluded_compounds"] == []
+    with pytest.raises(SystemExit):  # asking for none and for some at once
+        step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--no-exclusions", "--exclude-compound", "c"]))
     names.write_text("\n \n", encoding="utf-8")
     with pytest.raises(SystemExit):
         step_kwargs(parser, parser.parse_args(["--db", "x", "--drug", "d", "--drug-file", str(names)]))
+
+
+def test_both_steps_send_the_same_context_by_default() -> None:
+    """The dose and effects steps take their context settings from this module, so a change here reaches both."""
+    import inspect
+
+    import pipeline.doses as doses
+    import pipeline.effects as effects
+
+    for fn in (doses.run_dose_extraction, effects.run_effects_extraction, load_report_contexts):
+        params = inspect.signature(fn).parameters
+        assert params["parent_chars"].default == DEFAULT_PARENT_CHARS
+        assert "thread_chars" not in params  # one parent up, nothing else (user decision)
+    context = ReportContext(1, "p1", None, 1, "I take 20mg.", "What dose?")
+    dose_item = json.loads(serialize_batch([context]))["items"][0]
+    effect_item = json.loads(effects.request_payload([context], {}))["items"][0]
+    assert dose_item == effect_item == {"item_id": 0, "report": "I take 20mg.", "replying_to": "What dose?"}
+
+
+def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3.Connection) -> None:
+    assert resolve_exclusions(seeded, "7,8-dhf", ["4'-DMA-7,8-DHF"]) == (["4'-DMA-7,8-DHF"], "flags")
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == ([], "none")  # run 1 recorded no drug
+    seeded.execute("INSERT INTO extraction_runs VALUES (2, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "7,8-DHF", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin"]}),))
+    seeded.execute("INSERT INTO extraction_runs VALUES (3, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "ldn", "drug_excluded_aliases": ["naltrexone-bupropion"]}),))
+    seeded.execute("INSERT INTO extraction_runs VALUES (4, 0, 'abc', 'report_doses', ?)",
+                   (json.dumps({"drug": "7,8-dhf", "excluded_compounds": ["ignored: not a sentiment run"]}),))
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf"], "sentiment_run")  # older run: first spelling = the name
+    seeded.execute("INSERT INTO extraction_runs VALUES (5, 0, 'abc', 'treatment_sentiment', ?)",
+                   (json.dumps({"drug": "7,8-dhf", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin", "4dma"],
+                                "drug_excluded_compounds": ["4'-DMA-7,8-DHF"]}),))
+    assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-DMA-7,8-DHF"], "sentiment_run")  # the name, never the spellings
+    assert resolve_exclusions(seeded, "ldn", None) == (["naltrexone-bupropion"], "sentiment_run")
+    assert resolve_exclusions(seeded, "7,8-dhf", ["x"]) == (["x"], "flags")  # flags still win
+    assert resolve_exclusions(seeded, "7,8-dhf", []) == ([], "flags")  # an explicit empty list (--no-exclusions) is not "inherit"
