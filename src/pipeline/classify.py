@@ -24,9 +24,9 @@ from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 from patientpunk._utils import LLMResponseError
 
 from models import ClassificationResult
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 
 BATCH_SIZE = 10
 PREFILTER_BATCH_SIZE = 20
-_YES_NO = TypeAdapter(list[Literal["yes", "no"]])
 EMPTY_RESPONSE_ATTEMPTS = 3
 
 
@@ -55,12 +54,7 @@ def _retry_empty_response(call_fn: Callable[[], str], label: str) -> str:
             is_empty = "empty" in str(exc).lower()
             if not is_empty or attempt == EMPTY_RESPONSE_ATTEMPTS:
                 raise
-            log.warning(
-                "Empty response for %s (attempt %d/%d); retrying...",
-                label,
-                attempt,
-                EMPTY_RESPONSE_ATTEMPTS,
-            )
+            log.warning("Empty response for %s (attempt %d/%d); retrying...", label, attempt, EMPTY_RESPONSE_ATTEMPTS)
     raise AssertionError("unreachable")  # pragma: no cover
 
 
@@ -99,17 +93,13 @@ def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstrea
     """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
     try:
-        raw = _retry_empty_response(
-            lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=10),
-            f"prefilter item {entry['id']}:{drug}",
-        )
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=10), f"prefilter {entry['id']}:{drug}")
         plain = raw.strip().lower()
-        answers = [plain] if plain in {"yes", "no"} else parse_json_array(raw)
-        answers = _YES_NO.validate_python([str(a).strip().lower() for a in answers])
-        if len(answers) != 1:
-            raise LLMParseError(f"expected 1 answer, got {len(answers)}")
+        answers = [plain] if plain in {"yes", "no"} else [str(a).strip().lower() for a in parse_json_array(raw)]
+        if len(answers) != 1 or answers[0] not in {"yes", "no"}:
+            raise LLMParseError(f"expected one yes/no answer, got {raw!r}")
         return answers[0] == "yes"
-    except (LLMParseError, LLMResponseError, ValidationError) as err:
+    except (LLMParseError, LLMResponseError) as err:
         log.warning(f"Prefilter fallback failed for {entry['id']}:{drug} ({err}); passing through.")
         return True
 
@@ -119,15 +109,7 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        raw = _retry_empty_response(
-            lambda: llm_call(
-                client,
-                msg,
-                model=MODEL_FAST,
-                max_tokens=len(items) * 10,
-            ),
-            f"prefilter batch of {len(items)}",
-        )
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10), f"prefilter batch of {len(items)}")
         answers = parse_json_array(raw)
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
@@ -163,16 +145,8 @@ def classify_batch(
         f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
-    raw = _retry_empty_response(
-        lambda: llm_call(
-            client,
-            msg,
-            model=MODEL_STRONG,
-            system=prompts[drug],
-            max_tokens=80 * len(items),
-        ),
-        f"classification batch of {len(items)} for {drug}",
-    )
+    raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items)),
+                                f"classification batch of {len(items)} for {drug}")
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
@@ -188,16 +162,8 @@ def _classify_one(
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
             '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
         )
-        raw = _retry_empty_response(
-            lambda: llm_call(
-                client,
-                msg,
-                model=MODEL_STRONG,
-                system=prompts[drug],
-                max_tokens=100,
-            ),
-            f"classification item {entry['id']}:{drug}",
-        )
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100),
+                                    f"classification item {entry['id']}:{drug}")
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, LLMResponseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
