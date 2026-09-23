@@ -55,6 +55,9 @@ def test_prompt_and_response_parsing() -> None:
     assert [normalize_unit(u) for u in ("milligrams", "mL", "IU", "capsules", None)] == ["mg", "ml", "iu", None, None]
     with pytest.raises(LLMParseError, match="do not match"):
         parse_dose_response(raw, [0, 2])
+    for malformed in ('[{"item_id": 0}]', '[{"item_id": 0, "doses": null}]', '[{"item_id": 0, "doses": {}}]'):
+        with pytest.raises(LLMParseError, match="must be an array"):  # retried, never written as "no doses"
+            parse_dose_response(malformed, [0])
 
 
 def test_run_writes_one_row_per_dose_and_a_rerun_appends_a_new_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -93,8 +93,8 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
     for item_id, obj in response_items(raw, expected_ids).items():
         doses: list[DoseValue] = []
         seen: set[tuple] = set()
-        raw_doses = obj.get("doses") or []
-        if not isinstance(raw_doses, list):
+        raw_doses = obj.get("doses")
+        if not isinstance(raw_doses, list):  # missing or malformed: the batch is split and retried, nothing is written
             raise LLMParseError("\"doses\" must be an array")
         for raw_dose in raw_doses:
             try:
