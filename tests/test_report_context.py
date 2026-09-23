@@ -150,6 +150,18 @@ def test_runner_counts_answered_failed_and_dropped_reports(seeded_db: Path) -> N
     assert config["excluded_compounds"] == ["x"] and config["aliases"] == ["tropoflavin", "78dhf"] and config["extra"] == 1
 
 
+def test_an_empty_model_reply_is_a_failed_batch_not_an_abort(seeded_db: Path) -> None:
+    """An empty reply (LLMResponseError from llm_call) is the provider's failure: the batch is counted failed and the run goes on."""
+    from patientpunk._utils import LLMResponseError
+
+    def call(client, prompt, model=None, system=None, max_tokens=0) -> str:
+        raise LLMResponseError("empty response")
+
+    setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, parse, lambda w, c, v: 1, tokens_per_item=7)  # noqa: E731
+    summary = run_report_step(None, seeded_db, "7,8-dhf", extraction_type="report_doses", setup_fn=setup, workers=1, call=call)
+    assert (summary.reports, summary.failed, summary.rows) == (0, 3, 0)
+
+
 def test_a_bug_in_a_step_aborts_the_run_instead_of_counting_as_failed(seeded_db: Path) -> None:
     """Only what llm_call gives up on (a transient failure after its retries, truncation at the largest budget) is a failed batch."""
     setup = lambda conn, aliases, excluded: Step("sys", serialize_batch, lambda raw, ids: {}["missing"], None, tokens_per_item=7)  # noqa: E731
