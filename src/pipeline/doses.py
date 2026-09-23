@@ -5,8 +5,7 @@ Runs after the sentiment pipeline. Reads treatment_reports for one drug (latest 
 per post), sends each report to the model with the shared context (the parent post) and
 the shared exclusion names, and writes report_doses; runs append, and report_doses_latest
 shows each report's newest run. Amounts are stored as stated (a range keeps its low and
-high); an explicit route without an amount keeps both null. This requires a fresh
-database; existing dose tables are not migrated.
+high); every row carries the sentence it came from.
 
 The run itself (report loading, batching, the pool, the split retry) is pipeline/report_context.py;
 this module keeps the dose object, the parse function, and the prompt. Rows are
@@ -22,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from pipeline.report_context import (
     DEFAULT_PARENT_CHARS,
     DEFAULT_SOLO_ABOVE_CHARS,
+    ReportContext,
     Step,
     StepSummary,
     response_items,

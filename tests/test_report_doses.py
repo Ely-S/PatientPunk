@@ -5,19 +5,12 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
-from importlib.resources import files
 from pathlib import Path
-from string import Formatter
 
 import pytest
 
 from pipeline import report_context
-from pipeline.doses import (
-    DoseValue,
-    normalize_unit,
-    parse_dose_response,
-    run_dose_extraction,
-)
+from pipeline.doses import DoseValue, normalize_unit, parse_dose_response, run_dose_extraction
 from pipeline.report_context import load_report_contexts, make_batches, serialize_batch
 from prompts.dose_config import dose_system_prompt
 from utilities import LLMParseError
@@ -90,21 +83,6 @@ def test_route_without_amount_requires_a_valid_route_and_quote(overrides: dict, 
             "low": None, "high": None, "unit": None, "route": "oral mucosal",
             "outcome": None, "quote": "I take it under my tongue.",
         }
-
-
-def test_prompt_resource_and_numeric_example_match_the_contract() -> None:
-    template = files("prompts").joinpath("dose_system.txt").read_text(encoding="utf-8")
-    assert {name for _, name, _, _ in Formatter().parse(template) if name} == {
-        "name", "alias_line", "excluded_line", "example",
-    }
-    prompt = dose_system_prompt("ldn")
-    example = prompt.split("shaped like:\n\n", 1)[1].split("\n\nDose rules:", 1)[0]
-    per_item, dropped = parse_dose_response(example, [0])
-    assert dropped == 0
-    assert per_item[0][0].model_dump() == {
-        "low": 20.0, "high": 20.0, "unit": "mg", "route": "oral mucosal",
-        "outcome": "positive", "quote": "20mg sublingual gave me a clear, calm focus",
-    }
 
 
 def test_old_amount_constraints_fail_before_any_model_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,10 +1,8 @@
-"""Extraction prompt for stated doses and explicit routes without an amount.
+"""Dose-extraction prompt: one object per dose the author states they took.
 
 Used by pipeline/doses.py. Templated with the drug's display name and aliases; the rules
 are compound-agnostic.
 """
-
-from importlib.resources import files
 
 ROUTE_CATEGORIES = (
     "oral mucosal",
@@ -38,5 +36,51 @@ def dose_system_prompt(
             f"Do not assign information about {', '.join(excluded_compounds)} to {name}; "
             "they are different compounds.\n"
         )
-    template = files("prompts").joinpath("dose_system.txt").read_text(encoding="utf-8")
-    return template.format(name=name, alias_line=alias_line, excluded_line=excluded_line, example=_EXAMPLE)
+    return f"""You extract the doses of {name} that Reddit authors report taking. Each input item is one
+report; "replying_to", when present, is the post the author is answering.
+
+{alias_line}{excluded_line}
+Return ONLY a JSON array with exactly one object per input item, in input order, shaped like:
+
+{_EXAMPLE}
+
+Dose rules:
+
+1. Extract only an amount or route the author explicitly says they personally took or
+   used, per administration. Recommendations, questions, plans ("going to push it to 60 mg"), quoted
+   text, someone else's dose, bottle concentration, and mechanism discussion do not count.
+   Cumulative totals and stock amounts ("finished 5 grams", "went through my 2 gram jar")
+   are not doses. Never assign another compound's dose or another person's dose to {name}.
+2. Copy the unit exactly as the author wrote it, whatever it is: "mg", "mcg", "g", "ml",
+   "L", "IU", "drops", "capsules", "tablets", "sprays", "puffs", "patches", "mg/kg", "%".
+   Never convert or normalise it. When the author gives a bare number with no unit
+   ("started on 1.5", ".25 to .5"), keep the number and set "unit" to null; never invent one.
+3. A range such as 10-20 mg is one dose object with low 10 and high 20, never two objects. A
+   single amount has equal low and high. A split dose ("split the 25mg into two") is
+   recorded at the amount taken per administration (12.5).
+4. Put in "dose_sentences" every sentence of the report that contains an amount with a
+   unit or an explicit route, verbatim, before anything else. Then, for each listed sentence
+   that reports the author's own {name} dose or route, create one dose object. A listed sentence
+   that is not the author's own per-administration {name} dose or route gets no dose object. An item with
+   no such sentence has "doses": [].
+5. "quote" is that sentence, copied exactly from the report, never from "replying_to". A
+   dose whose quote is not found verbatim in the report is discarded.
+6. "route" is one of "oral mucosal" (sublingual, buccal, held in the mouth), "swallowed
+   oral" (capsules, tablets, explicitly swallowed), "nasal mucosal" (intranasal,
+   insufflated), "injection", or "other explicit route"; null when neither that sentence
+   nor its neighbours state one. Do not infer swallowed oral merely because the route is
+   unstated.
+   When an explicit route has no stated amount, set low, high, and unit to null; never
+   invent a number or use zero. For example, "I take it under my tongue" has route
+   "oral mucosal" and no amount. Keep a stated amount and its route in one object,
+   without an extra route-only duplicate. "Low dose" without a route creates no object.
+7. "outcome" is what the author says that dose did for them: "positive", "negative",
+   "neutral" when they report no effect, or "unclear" when no effect is stated for that
+   specific dose ("60 mg, my highest dose yet" is unclear). Never infer an outcome from
+   the post as a whole. The same amount reported on different occasions with different
+   outcomes is two objects.
+8. "replying_to" is context only. Use it to decide which compound the author means when
+   the report does not say, and to resolve "same dose as you". Never take a dose or route from it.
+9. Return every item_id exactly once, in input order. Output the JSON array only: no
+   reasoning, headings, or text before or after it, and no fields outside the shape.
+"""
