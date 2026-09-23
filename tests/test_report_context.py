@@ -37,7 +37,7 @@ SEED = """
         ('deep',  'reply', 'u1', NULL, 'Same here.', 0),
         ('other', 'top',   'u1', NULL, 'Never tried it.', 0);
     INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin", " ", "78dhf"]'), (2, 'ldn', NULL);
-    INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
+    INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
     INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
         (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
         (1, 'deep',  'u1', 1, 'positive', 'weak'),   (1, 'reply', 'u2', 1, 'mixed', 'strong');
@@ -241,14 +241,14 @@ def test_both_steps_send_the_same_context_by_default() -> None:
 def test_resolve_exclusions_prefers_flags_then_the_sentiment_run(seeded: sqlite3.Connection) -> None:
     assert resolve_exclusions(seeded, "7,8-dhf", ["4'-DMA-7,8-DHF"]) == (["4'-DMA-7,8-DHF"], "flags")
     assert resolve_exclusions(seeded, "7,8-dhf", None) == ([], "none")  # run 1 recorded no drug
-    seeded.execute("INSERT INTO extraction_runs VALUES (2, 0, 'abc', 'treatment_sentiment', ?)",
+    seeded.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (2, 0, 'abc', 'treatment_sentiment', ?)",
                    (json.dumps({"drug": "7,8-DHF", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin"]}),))
-    seeded.execute("INSERT INTO extraction_runs VALUES (3, 0, 'abc', 'treatment_sentiment', ?)",
+    seeded.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (3, 0, 'abc', 'treatment_sentiment', ?)",
                    (json.dumps({"drug": "ldn", "drug_excluded_aliases": ["naltrexone-bupropion"]}),))
-    seeded.execute("INSERT INTO extraction_runs VALUES (4, 0, 'abc', 'report_doses', ?)",
+    seeded.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (4, 0, 'abc', 'report_doses', ?)",
                    (json.dumps({"drug": "7,8-dhf", "excluded_compounds": ["ignored: not a sentiment run"]}),))
     assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-dma-7,8-dhf"], "sentiment_run")  # older run: first spelling = the name
-    seeded.execute("INSERT INTO extraction_runs VALUES (5, 0, 'abc', 'treatment_sentiment', ?)",
+    seeded.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (5, 0, 'abc', 'treatment_sentiment', ?)",
                    (json.dumps({"drug": "7,8-dhf", "drug_excluded_aliases": ["4'-dma-7,8-dhf", "eutropoflavin", "4dma"],
                                 "drug_excluded_compounds": ["4'-DMA-7,8-DHF"]}),))
     assert resolve_exclusions(seeded, "7,8-dhf", None) == (["4'-DMA-7,8-DHF"], "sentiment_run")  # the name, never the spellings

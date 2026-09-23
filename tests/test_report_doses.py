@@ -79,7 +79,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
                 ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache.', 0),
                 ('other', 'top', 'u1', NULL, 'Never tried it.', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin"]');
-            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
             INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
                 (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins
@@ -122,9 +122,9 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
         assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
 
     with sqlite3.connect(schema_db) as conn:  # an effect row linked to a dose row
-        conn.execute("INSERT INTO extraction_runs VALUES (9, 0, 'abc', 'report_doses', '{}')")
+        conn.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (9, 0, 'abc', 'report_doses', '{}')")
         conn.execute("INSERT INTO report_doses (dose_id, report_id, run_id, ordinal, low, high, unit) VALUES (7, 3, 9, 0, 20, 20, 'mg')")
-        conn.execute("INSERT INTO extraction_runs VALUES (10, 0, 'abc', 'report_effects', '{}')")
+        conn.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (10, 0, 'abc', 'report_effects', '{}')")
         conn.execute("INSERT INTO report_effects (report_id, run_id, ordinal, domain, symptom, direction, attribution, quote, dose_id) "
                      "VALUES (3, 10, 0, 'overall', 'overall', 'improved', 'target', 'q', 7)")
     with ReportWriter(schema_db, {}, "test", extraction_type="report_doses") as writer:  # a dose rerun: the link stays, the view moves on
@@ -154,7 +154,7 @@ def test_dose_payload_is_unchanged_by_the_shared_context_module(tmp_path: Path) 
                 ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual,  it is great.', 0),
                 ('long', 'top', 'u1', NULL, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', NULL);
-            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
             INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
                 (1, 'top', 'u1', 1, 'neutral', 'weak'), (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'long', 'u1', 1, 'neutral', 'weak');
         """)
@@ -187,7 +187,7 @@ def test_dose_payload_identity_covers_truncation_tiebreak_and_unicode(tmp_path: 
                 ('reply2', 'top', 'u1', NULL, 'Same, 20 mg.', 0),
                 ('long', 'top', 'u1', NULL, 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', NULL);
-            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{}'), (2, 0, 'abc', 'treatment_sentiment', '{}');
+            INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{}'), (2, 0, 'abc', 'treatment_sentiment', '{}');
             INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
                 (1, 'top', 'u1', 1, 'neutral', 'weak'), (1, 'reply', 'u2', 1, 'positive', 'strong'),
                 (1, 'reply2', 'u1', 1, 'neutral', 'weak'), (1, 'long', 'u1', 1, 'neutral', 'weak'),

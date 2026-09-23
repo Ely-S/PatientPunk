@@ -13,6 +13,8 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import hashlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -24,6 +26,7 @@ from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commi
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
+from prompts.intervention_config import PREFILTER_PROMPT, system_prompt
 
 
 
@@ -66,6 +69,9 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "max_upstream_depth": config.max_upstream_depth,
         "max_upstream_chars": config.max_upstream_chars,
         "workers": config.workers,
+        # The classify prompts are rendered per drug, so this hashes their SOURCE (the prefilter text plus
+        # system_prompt's code), not a rendered prompt like the dose and effects runs' prompt_sha256.
+        "prompt_source_sha256": hashlib.sha256((PREFILTER_PROMPT + "\n" + inspect.getsource(system_prompt)).encode()).hexdigest(),
     }
 
     _banner("CLASSIFY")

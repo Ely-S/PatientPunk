@@ -46,7 +46,8 @@ CREATE TABLE extraction_runs (
     run_at  INTEGER NOT NULL,
     commit_hash TEXT NOT NULL,
     extraction_type TEXT NOT NULL,
-    config  TEXT NOT NULL   -- JSON: models, prompt, version, temperature, etc.
+    config  TEXT NOT NULL,  -- JSON: models, prompt, version, temperature, etc.
+    finished_at INTEGER     -- set when the run's writer exits cleanly; NULL means the run did not finish
 );
 
 -- ══════════════════════════════════════════════════════

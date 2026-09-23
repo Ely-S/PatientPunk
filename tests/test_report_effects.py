@@ -115,7 +115,7 @@ def test_run_writes_rows_links_doses_records_config_and_the_latest_view_follows_
                 ('reply', 'mid', 'u2', NULL, '{REPORT}', 0),
                 ('other', 'root', 'u1', NULL, 'Never tried it.', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin"]');
-            INSERT INTO extraction_runs VALUES (1, 0, 'abc', 'treatment_sentiment', '{{}}'), (2, 0, 'abc', 'report_doses', '{{}}');
+            INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{{}}'), (2, 0, 'abc', 'report_doses', '{{}}');
             INSERT INTO treatment_reports (run_id, post_id, user_id, drug_id, sentiment, signal_strength) VALUES
                 (1, 'reply', 'u2', 1, 'positive', 'strong'), (1, 'other', 'u1', 1, 'neutral', 'strong'),
                 (1, 'reply', 'u2', 1, 'mixed', 'strong');  -- 'reply' classified twice; the latest report wins

@@ -9,6 +9,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+from utilities import LLM_PROVIDER, LLM_REASONING_MODE, git_is_dirty
+
 COMMIT_EVERY = 50  # commit after this many writes
 
 # Kept identical to schema.sql (with IF NOT EXISTS, the backfill, and the view recreated) so the per-report
@@ -108,8 +110,12 @@ class ReportWriter:
                  extraction_type: str = "treatment_sentiment"):
         self._conn = open_db(db_path)
         self._conn.executescript(REPORT_DOSES_DDL)
+        if "finished_at" not in {row[1] for row in self._conn.execute("PRAGMA table_info(extraction_runs)")}:
+            self._conn.execute("ALTER TABLE extraction_runs ADD COLUMN finished_at INTEGER")  # a database from before it existed
         self._pending = 0
 
+        # Every run records what produced it; a key the caller already set is kept as the caller set it.
+        run_config = {"provider": LLM_PROVIDER, "reasoning_mode": LLM_REASONING_MODE, "git_dirty": git_is_dirty()} | run_config
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
@@ -213,7 +219,8 @@ class ReportWriter:
 
     def __exit__(self, exc_type, *_):
         if exc_type is None:
-            self.flush()
+            self._conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), self.run_id))
+            self._conn.commit()  # the run's last writes and its finish time land together
         else:
             self._conn.rollback()  # a run that raised keeps nothing since its last periodic commit
         self._conn.close()
