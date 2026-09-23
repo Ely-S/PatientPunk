@@ -23,9 +23,10 @@ import json
 from collections import Counter, defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
+from patientpunk._utils import LLMResponseError
 
 from models import ClassificationResult
 from prompts.intervention_config import system_prompt, PREFILTER_PROMPT
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
 
 BATCH_SIZE = 10
 PREFILTER_BATCH_SIZE = 20
+_YES_NO = TypeAdapter(list[Literal["yes", "no"]])
 
 
 def _pf_key(entry: dict, drug: str) -> str:
@@ -62,9 +64,25 @@ def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstr
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call."""
+    """Fallback single-item prefilter call.
+
+    The prompt asks for a JSON array, so the reply is parsed like the batch reply
+    (a plain ``yes``/``no`` is accepted too). Anything else -- an unparseable or
+    malformed reply, or a provider error -- passes the pair through to the strong
+    classifier: the prefilter is a cost gate, not a verdict.
+    """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    return _is_yes(llm_call(client, msg, model=MODEL_FAST, max_tokens=10))
+    try:
+        raw = llm_call(client, msg, model=MODEL_FAST, max_tokens=10)
+        plain = raw.strip().lower()
+        answers = [plain] if plain in {"yes", "no"} else parse_json_array(raw)
+        answers = _YES_NO.validate_python([str(a).strip().lower() for a in answers])
+        if len(answers) != 1:
+            raise LLMParseError(f"expected 1 answer, got {len(answers)}")
+        return answers[0] == "yes"
+    except (LLMParseError, LLMResponseError, ValidationError) as err:
+        log.warning(f"Prefilter fallback failed for {entry['id']}:{drug} ({err}); passing through.")
+        return True
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
@@ -76,7 +94,7 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
         return [_is_yes(a) for a in answers]
-    except LLMParseError as err:
+    except (LLMParseError, LLMResponseError) as err:
         log.warning(f"Prefilter batch failed ({err}); falling back to individual calls.")
         return [_prefilter_one(client, e, d, id_to_text, max_upstream_chars) for e, d in items]
 
