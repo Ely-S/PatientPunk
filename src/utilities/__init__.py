@@ -139,12 +139,30 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+def git_is_dirty() -> bool | None:
+    """True when the checkout has uncommitted changes, False when clean, None when git is unavailable.
+    Recorded on every run: the commit alone cannot reproduce a run made from a dirty tree."""
+    import subprocess
+    try:
+        return bool(subprocess.run(
+            ["git", "status", "--porcelain"], cwd=_root_env.parent, capture_output=True, text=True, check=True,
+        ).stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        log.warning(
+            "Could not check git working tree state (got %s). Provenance manifest "
+            "will record git_dirty as null.", type(e).__name__,
+        )
+        return None
+
+
 # ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
 # OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
 # paramater only seems to be accessable on the OpenAI surface
 #
-# Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
+# Set LLM_REASONING=1 to use the model/provider's default reasoning behavior.
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+# Only OpenRouter's reasoning is controlled here; other providers are "not_applicable".
+LLM_REASONING_MODE = "not_applicable" if LLM_PROVIDER != "openrouter" else "disabled" if _REASONING_OFF else "provider_default"
 
 
 class _ORStream:
