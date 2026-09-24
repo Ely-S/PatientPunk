@@ -55,7 +55,10 @@ def _retry_empty_response(call_fn: Callable[[], str], label: str) -> str:
             if not is_empty or attempt == EMPTY_RESPONSE_ATTEMPTS:
                 raise
             log.warning("Empty response for %s (attempt %d/%d); retrying...", label, attempt, EMPTY_RESPONSE_ATTEMPTS)
-    raise AssertionError("unreachable")  # pragma: no cover
+    raise AssertionError(
+        f"_retry_empty_response: exhausted {EMPTY_RESPONSE_ATTEMPTS} attempts "
+        f"without returning or raising for {label}"
+    )  # pragma: no cover
 
 
 def _pf_key(entry: dict, drug: str) -> str:
