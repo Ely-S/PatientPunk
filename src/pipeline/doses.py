@@ -53,12 +53,12 @@ def normalize_unit(unit: str | None) -> str | None:
 TOKENS_PER_ITEM = 400
 
 class DoseValue(BaseModel):
-    """One stated per-administration amount, as the author wrote it."""
+    """A stated amount, or an explicit route whose amount was not reported."""
 
     model_config = ConfigDict(frozen=True)
 
-    low: float = Field(gt=0)
-    high: float = Field(gt=0)
+    low: float | None = Field(default=None, gt=0)
+    high: float | None = Field(default=None, gt=0)
     unit: str | None = Field(default=None, max_length=40)  # as the author wrote it; None = bare number
     route: Literal["oral mucosal", "swallowed oral", "nasal mucosal", "injection", "other explicit route"] | None = None
     outcome: Literal["positive", "negative", "neutral", "unclear"] | None = None
@@ -82,7 +82,14 @@ class DoseValue(BaseModel):
 
     @model_validator(mode="after")
     def check_range(self) -> DoseValue:
-        if self.high < self.low:
+        if self.low is None or self.high is None:
+            if self.low is not None or self.high is not None:
+                raise ValueError("low and high must both be present or both be null")
+            if self.route is None or not self.quote:
+                raise ValueError("an unknown amount requires an explicit route and its quote")
+            if self.unit is not None:
+                raise ValueError("unit must be null when the amount is unknown")
+        elif self.high < self.low:
             raise ValueError("high must be greater than or equal to low")
         return self
 
@@ -128,7 +135,12 @@ def run_dose_extraction(
 ) -> StepSummary:
     """Extract doses for every latest report of ``drug`` in ``db_path`` and write report_doses."""
 
-    def setup(_conn, aliases: list[str], excluded_compounds: list[str]) -> Step:
+    def setup(conn, aliases: list[str], excluded_compounds: list[str]) -> Step:
+        if any(row[1] in {"low", "high"} and row[3] for row in conn.execute("PRAGMA table_info(report_doses)")):
+            raise ValueError(
+                "This dose step requires nullable amounts in report_doses. "
+                "Use a fresh database; existing dose tables are not migrated."
+            )
         return Step(
             system=dose_system_prompt(drug, aliases, excluded_compounds),
             payload_fn=serialize_batch,

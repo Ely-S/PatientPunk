@@ -106,7 +106,7 @@ CREATE TABLE report_runs (
 );
 CREATE INDEX idx_rr_report ON report_runs(report_id);
 
--- One row per dose the author states they took, per treatment report.
+-- One row per stated dose or explicit route without an amount, per treatment report.
 -- Written by src/run_dose_pipeline.py after the sentiment pipeline; amounts are
 -- stored as stated (a range keeps low and high) with the sentence they came from.
 CREATE TABLE report_doses (
@@ -114,8 +114,8 @@ CREATE TABLE report_doses (
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
-    low       REAL NOT NULL,
-    high      REAL NOT NULL,
+    low       REAL,                   -- low/high are both NULL only for an explicit route without an amount
+    high      REAL,
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),

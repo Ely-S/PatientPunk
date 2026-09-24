@@ -46,8 +46,8 @@ Return ONLY a JSON array with exactly one object per input item, in input order,
 
 Dose rules:
 
-1. Extract only an amount the author explicitly says they personally took, per
-   administration. Recommendations, questions, plans ("going to push it to 60 mg"), quoted
+1. Extract only an amount or route the author explicitly says they personally took or
+   used, per administration. Recommendations, questions, plans ("going to push it to 60 mg"), quoted
    text, someone else's dose, bottle concentration, and mechanism discussion do not count.
    Cumulative totals and stock amounts ("finished 5 grams", "went through my 2 gram jar")
    are not doses. Never assign another compound's dose or another person's dose to {name}.
@@ -59,9 +59,9 @@ Dose rules:
    single amount has equal low and high. A split dose ("split the 25mg into two") is
    recorded at the amount taken per administration (12.5).
 4. Put in "dose_sentences" every sentence of the report that contains an amount with a
-   unit, verbatim, before anything else. Then, for each listed sentence that reports the
-   author's own {name} dose, create one dose object. A listed sentence that is not the
-   author's own per-administration {name} dose simply gets no dose object. An item with
+   unit or an explicit route, verbatim, before anything else. Then, for each listed sentence
+   that reports the author's own {name} dose or route, create one dose object. A listed sentence
+   that is not the author's own per-administration {name} dose or route gets no dose object. An item with
    no such sentence has "doses": [].
 5. "quote" is that sentence, copied exactly from the report, never from "replying_to". A
    dose whose quote is not found verbatim in the report is discarded.
@@ -70,13 +70,17 @@ Dose rules:
    insufflated), "injection", or "other explicit route"; null when neither that sentence
    nor its neighbours state one. Do not infer swallowed oral merely because the route is
    unstated.
+   When an explicit route has no stated amount, set low, high, and unit to null; never
+   invent a number or use zero. For example, "I take it under my tongue" has route
+   "oral mucosal" and no amount. Keep a stated amount and its route in one object,
+   without an extra route-only duplicate. "Low dose" without a route creates no object.
 7. "outcome" is what the author says that dose did for them: "positive", "negative",
    "neutral" when they report no effect, or "unclear" when no effect is stated for that
    specific dose ("60 mg, my highest dose yet" is unclear). Never infer an outcome from
    the post as a whole. The same amount reported on different occasions with different
    outcomes is two objects.
 8. "replying_to" is context only. Use it to decide which compound the author means when
-   the report does not say, and to resolve "same dose as you". Never take a dose from it.
+   the report does not say, and to resolve "same dose as you". Never take a dose or route from it.
 9. Return every item_id exactly once, in input order. Output the JSON array only: no
    reasoning, headings, or text before or after it, and no fields outside the shape.
 """

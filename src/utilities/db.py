@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS report_doses (
     report_id INTEGER NOT NULL REFERENCES treatment_reports(report_id),
     run_id    INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     ordinal   INTEGER NOT NULL,
-    low       REAL NOT NULL,
-    high      REAL NOT NULL,
+    low       REAL,                   -- low/high are both NULL only for an explicit route without an amount
+    high      REAL,
     unit      TEXT,                   -- as the author wrote it (mg, mL, IU, drops, capsules...); NULL for a bare number
     route     TEXT,
     outcome   TEXT CHECK (outcome IN ('positive', 'negative', 'neutral', 'unclear')),

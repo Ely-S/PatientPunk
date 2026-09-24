@@ -58,6 +58,8 @@ def drug_aliases_prompt(target: str) -> str:
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
 Does the AUTHOR express personal experience with the specified treatment?
+Answer 'yes' for explicit personal use even when no outcome is stated ("I take 20 mg daily").
+Plans, recommendations, and hypothetical use alone are not personal use.
 "Treatment" includes drugs, supplements, but not diet and lifestyle changes!!!
 IMPORTANT: Use the "Replying to" context to resolve what the comment refers to.
 Short replies like "Helps me", "wasn't for me", "same here" count as YES if the
@@ -82,6 +84,11 @@ Classify Reddit posts/comments about {name} from r/{subreddit}.
 
 You are identifying whether the author has personally used or tried: {name}{synonym_note}
 
+personal_use: true only when the author reports actually taking or having tried {name}.
+  No outcome is required. Questions, recommendations, plans, hypothetical use, and
+  someone else's experience alone are false. Parent context may resolve the treatment,
+  but cannot establish that the reply's author used it.
+
 sentiment: positive | negative | mixed | neutral
   positive = {name} helped them personally
   negative = {name} didn't help or made things worse
@@ -94,8 +101,8 @@ sentiment: positive | negative | mixed | neutral
              - dose-titration struggles: "4.5mg was bad, 3mg is good for me"
              - some symptoms responded, others didn't improve: "works for inflammation, this foot pain is stubborn"
              - partial improvement: "it helped but wasn't a miracle"
-             - using it "on and off" in a medication stack
-  neutral  = the author has NOT personally used or tried {name} — includes:
+             - using it "on and off" in a medication stack while reporting benefit
+  neutral  = no personal outcome is stated for {name}. Includes:
              questions, advice to others, citing studies or statistics,
              discussing the evidence base, expressing opinions about the research
              or skepticism about efficacy WITHOUT reporting personal use,
@@ -107,7 +114,10 @@ sentiment: positive | negative | mixed | neutral
 
   THE KEY QUESTION: has this person personally used or tried {name}?
   If no → neutral, regardless of how strong their opinion about the evidence is.
-  If yes → positive / negative / mixed based on their outcome.
+  If yes and an outcome is stated → positive / negative / mixed based on that outcome.
+  If yes but no outcome is stated → neutral / n/a, personal_use=true.
+  "I take 20 mg daily" is neutral / n/a with personal_use=true, not evidence of benefit
+  or no effect. "It did nothing for me" remains negative with personal_use=true.
 
 signal: strong | moderate | weak | n/a
   strong   = any of:
@@ -127,8 +137,7 @@ signal: strong | moderate | weak | n/a
   moderate = simple affirmation or negation without emphasis or detail
              ("it works for me", "for me it is", "yes", "it helps")
              OR listed explicitly among the author's most successful treatments
-  weak     = still using without complaint, mentioned in a stack without ranking,
-             slight or uncertain effect, or improvement noted while on multiple drugs
+  weak     = slight or uncertain effect, or improvement noted while on multiple drugs
              where {name} is named but not specifically credited
   n/a      = neutral entry
 
@@ -183,4 +192,4 @@ side_effects: list of short lowercase strings naming any side effects the author
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[...]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","personal_use":true,"side_effects":[...]}}"""

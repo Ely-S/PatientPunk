@@ -20,6 +20,7 @@ SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 REPLY_DOSES = [
     {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great."},
     {"low": 40, "high": 40, "unit": "mg", "outcome": "negative", "quote": "Tried 40 mg once, headache."},
+    {"low": None, "high": None, "unit": None, "route": "nasal mucosal", "outcome": "positive", "quote": "I also tried it nasally and it helped."},
 ]
 
 
@@ -40,17 +41,24 @@ def test_prompt_and_response_parsing() -> None:
             {"low": 1, "high": 3, "unit": "grams"},          # duplicate
             {"low": 20, "high": 10, "unit": "mg"},           # high below low
             {"low": "twenty", "high": 20, "unit": "mg"},     # not a number
+            {"route": "oral mucosal", "quote": "I take it under my tongue."},  # route without an amount
+            {"quote": "I take it."},                        # unknown amount also needs a route
+            {"route": "oral mucosal"},                     # route without a supporting quote
+            {"route": "oral mucosal", "quote": "q", "unit": "mg"},  # unit without an amount
+            {"route": "oral mucosal", "quote": "q", "low": 20},     # partial numeric range
+            {"route": "oral mucosal", "quote": "q", "high": 20},
         ]},
         {"item_id": 1, "doses": []},
     ])
     per_item, dropped = parse_dose_response(raw, [0, 1])
-    assert dropped == 2 and per_item[1] == []
+    assert dropped == 7 and per_item[1] == []
     assert [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in per_item[0]] == [
         (20.0, 20.0, "milligrams", None, None, "20mg"),
         (1.5, 1.5, None, None, None, None),
         (2.0, 2.0, "capsules", None, None, None),
         (2.0, 2.0, "mg/kg", None, None, None),
         (1.0, 3.0, "grams", None, None, None),
+        (None, None, None, "oral mucosal", None, "I take it under my tongue."),
     ]
     assert [normalize_unit(u) for u in ("milligrams", "mL", "IU", "capsules", None)] == ["mg", "ml", "iu", None, None]
     with pytest.raises(LLMParseError, match="do not match"):
@@ -76,7 +84,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
             INSERT INTO users VALUES ('u1', 'test', 0), ('u2', 'test', 0);
             INSERT INTO posts (post_id, parent_id, user_id, title, body_text, scraped_at) VALUES
                 ('top', NULL, 'u1', 'Dosing thread', 'What dose do you all take?', 0),
-                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache.', 0),
+                ('reply', 'top', 'u2', NULL, 'I take 20mg sublingual, it is great. Tried 40 mg once, headache. I also tried it nasally and it helped.', 0),
                 ('other', 'top', 'u1', NULL, 'Never tried it.', 0);
             INSERT INTO treatment (id, canonical_name, aliases) VALUES (1, '7,8-dhf', '["tropoflavin"]');
             INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'abc', 'treatment_sentiment', '{}');
@@ -88,7 +96,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
 
     first = run_dose_extraction(None, schema_db, "7,8-dhf", excluded_compounds=["4'-DMA-7,8-DHF"], workers=1)
 
-    assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 2, 0, 0)
+    assert (first.reports, first.reports_with_rows, first.rows, first.failed, first.dropped) == (2, 1, 3, 0, 0)
     assert all(it["replying_to"] == "Dosing thread What dose do you all take?" for it in payloads[0]["items"])
     assert all("thread" not in it for it in payloads[0]["items"])  # context is one parent up, nothing else
     with sqlite3.connect(schema_db) as conn:
@@ -97,6 +105,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     assert rows == [
         (3, 0, 20.0, 20.0, "mg", "oral mucosal", "positive", "I take 20mg sublingual, it is great."),
         (3, 1, 40.0, 40.0, "mg", None, "negative", "Tried 40 mg once, headache."),
+        (3, 2, None, None, None, "nasal mucosal", "positive", "I also tried it nasally and it helped."),
     ]
     config = json.loads(config)
     assert run_type == "report_doses" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"] and config["exclusions_source"] == "flags"
@@ -105,7 +114,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # runs append; the view shows the report's rows from its newest run
         assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (4,)
         second_config = json.loads(conn.execute("SELECT config FROM extraction_runs WHERE run_id = ?", (second.run_id,)).fetchone()[0])
         assert (second_config["excluded_compounds"], second_config["exclusions_source"]) == ([], "none")  # no flags, no sentiment-run list
 
@@ -113,7 +122,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     third = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # a rerun that finds nothing retracts the earlier rows from the view; the table keeps them
         assert conn.execute("SELECT COUNT(*) FROM report_doses_latest").fetchone() == (0,)
-        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (3,)
+        assert conn.execute("SELECT COUNT(*) FROM report_doses").fetchone() == (4,)
         assert conn.execute("SELECT report_id FROM report_runs WHERE run_id = ? ORDER BY report_id", (third.run_id,)).fetchall() == [(2,), (3,)]
         # rows written for the post's OLDER treatment report (id 1, superseded by id 3) stay out of the view
         conn.execute("INSERT INTO report_runs VALUES (?, 1)", (second.run_id,))
