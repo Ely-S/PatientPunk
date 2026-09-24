@@ -142,6 +142,7 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
+        f'"personal_use" (boolean), '
         f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
@@ -160,7 +161,7 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","side_effects":["..."]}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","personal_use":true,"side_effects":["..."]}'
         )
         raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100),
                                     f"classification item {entry['id']}:{drug}")
@@ -264,8 +265,8 @@ def run_classification(
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
-    # Prefilter with fast model — results cached to prefilter_results.json
-    prefilter_path = config.path("prefilter_results.json")
+    # Separate cache: old prefilter decisions may exclude use without an outcome.
+    prefilter_path = config.path("prefilter_personal_use_results.json")
     filtered: set[str] = set()
     if skip_prefilter:
         log.info("Skipping prefilter, sending all pairs to classify...")
@@ -355,7 +356,7 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
-                if result.signal != "n/a":
+                if result.signal != "n/a" or result.personal_use:
                     drug_counter[drug] += 1
                     if writer is not None:
                         writer.write_one(
