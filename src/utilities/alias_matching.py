@@ -1,8 +1,13 @@
 """Exact alias matching with enclosing-compound exclusions.
 
 Aliases and exclusions are literal spellings (case-insensitive, word-bounded).
-Apostrophe look-alikes (’ ′ ‘ ` ´) are normalised to ``'`` before matching;
+Apostrophe look-alikes (’ ′ ‘ ` ´) are normalised to ``'`` and dash look-alikes
+(‐ ‑ ‒ – — ― −) to ``-`` before matching;
 each is one code point, so spans stay valid on the original text.
+
+Ported from PR #146 (commit 998e634) so the core pipeline can exclude enclosing
+compounds without the study layer. The code is identical to that commit; the study's
+cohort config, corpus prefilter, and span-based attribution stay on the study branch.
 """
 
 from __future__ import annotations
@@ -11,11 +16,12 @@ import re
 from collections.abc import Iterable
 
 _APOSTROPHES = re.compile("[\u2019\u2032\u2018\u0060\u00b4]")
+_DASHES = re.compile("[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]")
 
 
 def normalize_text(text: str) -> str:
-    """Map apostrophe look-alikes to a straight quote; length is preserved."""
-    return _APOSTROPHES.sub("'", text)
+    """Map apostrophe and dash look-alikes to ' and -; length is preserved."""
+    return _DASHES.sub("-", _APOSTROPHES.sub("'", text))
 
 
 def compile_alias_pattern(aliases: Iterable[str]) -> re.Pattern[str]:

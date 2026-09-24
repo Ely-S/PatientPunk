@@ -58,6 +58,8 @@ def drug_aliases_prompt(target: str) -> str:
 PREFILTER_PROMPT = """\
 For each item below, answer ONLY 'yes' or 'no':
 Does the AUTHOR express personal experience with the specified treatment?
+Answer 'yes' for explicit personal use even when no outcome is stated ("I take 20 mg daily").
+Plans, recommendations, and hypothetical use alone are not personal use.
 "Treatment" includes drugs, supplements, but not diet and lifestyle changes!!!
 IMPORTANT: Use the "Replying to" context to resolve what the comment refers to.
 Short replies like "Helps me", "wasn't for me", "same here" count as YES if the
@@ -82,6 +84,11 @@ Classify Reddit posts/comments about {name} from r/{subreddit}.
 
 You are identifying whether the author has personally used or tried: {name}{synonym_note}
 
+personal_use: true only when the author reports actually taking or having tried {name}.
+  No outcome is required. Questions, recommendations, plans, hypothetical use, and
+  someone else's experience alone are false. Parent context may resolve the treatment,
+  but cannot establish that the reply's author used it.
+
 sentiment: positive | negative | mixed | neutral
   positive = {name} helped them personally
   negative = {name} didn't help or made things worse
@@ -94,8 +101,8 @@ sentiment: positive | negative | mixed | neutral
              - dose-titration struggles: "4.5mg was bad, 3mg is good for me"
              - some symptoms responded, others didn't improve: "works for inflammation, this foot pain is stubborn"
              - partial improvement: "it helped but wasn't a miracle"
-             - using it "on and off" in a medication stack
-  neutral  = the author has NOT personally used or tried {name} — includes:
+             - using it "on and off" in a medication stack while reporting benefit
+  neutral  = no personal outcome is stated for {name}. Includes:
              questions, advice to others, citing studies or statistics,
              discussing the evidence base, expressing opinions about the research
              or skepticism about efficacy WITHOUT reporting personal use,
@@ -107,7 +114,10 @@ sentiment: positive | negative | mixed | neutral
 
   THE KEY QUESTION: has this person personally used or tried {name}?
   If no → neutral, regardless of how strong their opinion about the evidence is.
-  If yes → positive / negative / mixed based on their outcome.
+  If yes and an outcome is stated → positive / negative / mixed based on that outcome.
+  If yes but no outcome is stated → neutral / n/a, personal_use=true.
+  "I take 20 mg daily" is neutral / n/a with personal_use=true, not evidence of benefit
+  or no effect. "It did nothing for me" remains negative with personal_use=true.
 
 signal: strong | moderate | weak | n/a
   strong   = any of:
@@ -127,8 +137,7 @@ signal: strong | moderate | weak | n/a
   moderate = simple affirmation or negation without emphasis or detail
              ("it works for me", "for me it is", "yes", "it helps")
              OR listed explicitly among the author's most successful treatments
-  weak     = still using without complaint, mentioned in a stack without ranking,
-             slight or uncertain effect, or improvement noted while on multiple drugs
+  weak     = slight or uncertain effect, or improvement noted while on multiple drugs
              where {name} is named but not specifically credited
   n/a      = neutral entry
 
@@ -152,35 +161,24 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
     worse" → if {name} is LDN, this is neutral/n/a (the reply is about LDA, not LDN).
   KEY: ask — does this reply express how the AUTHOR feels about {name}? If no → neutral/n/a.
 
-side_effects: list of objects naming side effects the author attributes to {name}
-  Each object must have exactly this shape:
-    {{"side_effect": "short lowercase symptom", "severity": null}}
-  severity must be one of mild | moderate | severe | life_threatening | null.
-  Set severity only when the author explicitly describes that side effect's intensity.
-  Do not infer severity from the symptom itself. For example, "a mild headache" has
-  severity="mild", while "a headache" and "a seizure" both have severity=null unless
-  the author also states their severity.
+side_effects: list of short lowercase strings naming any side effects the author attributes to {name}
   Include only effects the author reports experiencing personally from {name} — not hypothetical,
   not things they read about, not effects from other drugs.
   Use the author's wording, trimmed to the symptom: "gave me insomnia" → "insomnia",
   "made my anxiety way worse" → "anxiety", "brain fog got bad" → "brain fog".
   Collapse obvious duplicates within a single entry. If none reported, use [].
   This applies to positive/negative/mixed entries alike — a positive report can still list
-  tolerable side effects ("it helped but caused mild insomnia at first" → positive/strong,
-  side_effects=[{{"side_effect":"insomnia","severity":"mild"}}]).
+  tolerable side effects ("it helped but caused insomnia at first" → positive/strong, side_effects=["insomnia"]).
 
   LIST FANOUT: when a symptom description applies to multiple drugs in a list, attribute it to
   EVERY drug in that list, including {name} if it appears.
   e.g. "Effexor, Pristiq, and Cymbalta all made me feel really bad" → if {name} is Cymbalta,
-  side_effects=[{{"side_effect":"felt really bad","severity":null}}]. Do not drop {name}
-  just because other drugs share the symptom.
+  side_effects=["felt really bad"]. Do not drop {name} just because other drugs share the symptom.
 
   GENERIC SIDE-EFFECT REFERENCES: when the author says they experienced side effects from {name}
   but doesn't name a specific symptom, capture the phrase they used.
-  e.g. "couldn't tolerate the side effects" →
-  [{{"side_effect":"side effects","severity":null}}], "I had a bad reaction" →
-  [{{"side_effect":"bad reaction","severity":null}}]. Do NOT invent a specific symptom
-  or severity if none was named.
+  e.g. "couldn't tolerate the side effects" → ["side effects"], "I had a bad reaction" → ["bad reaction"],
+  "I reacted badly to it" → ["bad reaction"]. Do NOT invent a specific symptom if none was named.
 
   INTERACTIONS: if a symptom arises only from combining {name} with another drug and {name} alone
   is tolerated, side_effects=[] for {name}. Attribute the problem to the MODIFYING drug instead.
@@ -194,4 +192,4 @@ side_effects: list of objects naming side effects the author attributes to {name
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","side_effects":[{{"side_effect":"...","severity":null}}]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","personal_use":true,"side_effects":[...]}}"""

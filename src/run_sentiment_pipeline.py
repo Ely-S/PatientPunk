@@ -13,6 +13,8 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import hashlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -20,19 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import ReportWriter, upsert_treatments
-from utilities import (
-    LLM_REASONING_MODE,
-    MODEL_FAST,
-    MODEL_STRONG,
-    PipelineConfig,
-    TAGGED_MENTIONS,
-    get_client,
-    get_git_commit,
-    log,
-)
+from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commit, log, MODEL_FAST, MODEL_STRONG
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
+from prompts.intervention_config import PREFILTER_PROMPT, system_prompt
 
 
 
@@ -63,13 +57,21 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
 
     run_config = {
         "models": {"fast": MODEL_FAST, "strong": MODEL_STRONG},
-        "reasoning_mode": LLM_REASONING_MODE,
         "limit": config.limit,
         "reclassify": config.reclassify,
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
         "drug_excluded_aliases": config.drug_excluded_aliases or [],
+        # The excluded compound's canonical name: the first line of --drug-exclude-file, by the drug_files
+        # convention. The dose and effects steps inherit this for their prompts, not the spelling list.
+        "drug_excluded_compounds": (config.drug_excluded_aliases or [])[:1],
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
+        "workers": config.workers,
+        # The classify prompts are rendered per drug, so this hashes their SOURCE (the prefilter text plus
+        # system_prompt's code), not a rendered prompt like the dose and effects runs' prompt_sha256.
+        "prompt_source_sha256": hashlib.sha256((PREFILTER_PROMPT + "\n" + inspect.getsource(system_prompt)).encode()).hexdigest(),
     }
 
     _banner("CLASSIFY")
@@ -145,10 +147,7 @@ def main():
         if not drug:
             parser.error("--drug-exclude-file requires --drug or --drug-file")
         exclude_file_path = Path(args.drug_exclude_file)
-        try:
-            raw_exclusions = exclude_file_path.read_text(encoding="utf-8").splitlines()
-        except OSError as e:
-            parser.error(f"cannot read --drug-exclude-file {exclude_file_path}: {e}")
+        raw_exclusions = exclude_file_path.read_text(encoding="utf-8").splitlines()  # unreadable file: let it raise
         drug_excluded_aliases = list(
             dict.fromkeys(line.strip() for line in raw_exclusions if line.strip())
         )

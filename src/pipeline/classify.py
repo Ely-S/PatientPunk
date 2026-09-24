@@ -54,18 +54,22 @@ def _retry_empty_response(call_fn: Callable[[], str], label: str) -> str:
             is_empty = "empty" in str(exc).lower()
             if not is_empty or attempt == EMPTY_RESPONSE_ATTEMPTS:
                 raise
-            log.warning(
-                "Empty response for %s (attempt %d/%d); retrying...",
-                label,
-                attempt,
-                EMPTY_RESPONSE_ATTEMPTS,
-            )
-    raise AssertionError("unreachable")  # pragma: no cover
+            log.warning("Empty response for %s (attempt %d/%d); retrying...", label, attempt, EMPTY_RESPONSE_ATTEMPTS)
+    raise AssertionError(
+        f"_retry_empty_response: exhausted {EMPTY_RESPONSE_ATTEMPTS} attempts "
+        f"without returning or raising for {label}"
+    )  # pragma: no cover
 
 
 def _pf_key(entry: dict, drug: str) -> str:
     """Cache/filter key for a single (entry, drug) pair."""
     return f"{entry['id']}:{drug}"
+
+
+def _entry_drugs(entry: dict) -> list[str]:
+    """Drugs to pair with an entry, in a fixed order so the work queue -- and with it
+    the prefilter and classify batches -- is the same in every process."""
+    return sorted(set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", [])))
 
 
 def _is_yes(s: str) -> bool:
@@ -74,23 +78,33 @@ def _is_yes(s: str) -> bool:
 
 def _prefilter_block(i: int, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
     """Format a single (entry, drug) item for the prefilter prompt."""
-    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")[:max_upstream_chars]
     block = f"--- {i+1} --- Drug: {drug}\n"
     if upstream_comment:
-        block += f"Replying to: {upstream_comment[:max_upstream_chars]}\n\n"
+        block += f"Replying to: {upstream_comment}\n\n"
     block += f"Comment: {entry['text']}\n\n"
     return block
 
 
 def _prefilter_one(client, entry: dict, drug: str, id_to_text: dict, max_upstream_chars: int | None = None) -> bool:
-    """Fallback single-item prefilter call."""
+    """Fallback single-item prefilter call.
+
+    The prompt asks for a JSON array, so the reply is parsed like the batch reply
+    (a plain ``yes``/``no`` is accepted too). Anything else -- an unparseable or
+    malformed reply, or a provider error -- passes the pair through to the strong
+    classifier: the prefilter is a cost gate, not a verdict.
+    """
     msg = PREFILTER_PROMPT + "\nExpecting 1 answer.\n\n" + _prefilter_block(0, entry, drug, id_to_text, max_upstream_chars)
-    return _is_yes(
-        _retry_empty_response(
-            lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=10),
-            f"prefilter item {entry['id']}:{drug}",
-        )
-    )
+    try:
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=10), f"prefilter {entry['id']}:{drug}")
+        plain = raw.strip().lower()
+        answers = [plain] if plain in {"yes", "no"} else [str(a).strip().lower() for a in parse_json_array(raw)]
+        if len(answers) != 1 or answers[0] not in {"yes", "no"}:
+            raise LLMParseError(f"expected one yes/no answer, got {raw!r}")
+        return answers[0] == "yes"
+    except (LLMParseError, LLMResponseError) as err:
+        log.warning(f"Prefilter fallback failed for {entry['id']}:{drug} ({err}); passing through.")
+        return True
 
 
 def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max_upstream_chars: int | None = None) -> list[bool]:
@@ -98,15 +112,7 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
     blocks = [_prefilter_block(i, e, d, id_to_text, max_upstream_chars) for i, (e, d) in enumerate(items)]
     msg = f"{PREFILTER_PROMPT}\nExpecting {len(items)} answers.\n\n{''.join(blocks)}"
     try:
-        raw = _retry_empty_response(
-            lambda: llm_call(
-                client,
-                msg,
-                model=MODEL_FAST,
-                max_tokens=len(items) * 10,
-            ),
-            f"prefilter batch of {len(items)}",
-        )
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_FAST, max_tokens=len(items) * 10), f"prefilter batch of {len(items)}")
         answers = parse_json_array(raw)
         if len(answers) != len(items):
             raise LLMParseError(f"expected {len(items)} answers, got {len(answers)}")
@@ -117,11 +123,12 @@ def prefilter_batch(client, items: list[tuple[dict, str]], id_to_text: dict, max
 
 
 def format_entry(entry: dict, id_to_text: dict, max_upstream_chars: int | None = None) -> str:
-    """Format entry for classification prompt."""
+    """Format entry for classification prompt. The parent's text is shown when there is
+    any to show; with max_upstream_chars=0 there is none, so the header is omitted too."""
     msg = f"Text:\n{entry['text']}"
-    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")
+    upstream_comment = id_to_text.get(entry.get("parent_id", ""), "")[:max_upstream_chars]
     if upstream_comment:
-        msg += f"\n\nReplying to:\n{upstream_comment[:max_upstream_chars]}"
+        msg += f"\n\nReplying to:\n{upstream_comment}"
     return msg
 
 
@@ -138,20 +145,12 @@ def classify_batch(
         f'Return ONLY a JSON array of {len(items)} objects, each with '
         f'"sentiment" (positive/negative/mixed/neutral), '
         f'"signal" (strong/moderate/weak/n/a), '
-        f'and "side_effects" (array of objects with "side_effect" and '
-        f'"severity", or []).'
+        f'"personal_use" (boolean), '
+        f'and "side_effects" (array of short lowercase symptom strings, or []).'
     )
 
-    raw = _retry_empty_response(
-        lambda: llm_call(
-            client,
-            msg,
-            model=MODEL_STRONG,
-            system=prompts[drug],
-            max_tokens=80 * len(items),
-        ),
-        f"classification batch of {len(items)} for {drug}",
-    )
+    raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=80 * len(items)),
+                                f"classification batch of {len(items)} for {drug}")
     results = parse_json_array(raw)  # raises LLMParseError on bad JSON
     if len(results) != len(items):
         raise LLMParseError(f"Expected {len(items)} results, got {len(results)}")
@@ -165,21 +164,10 @@ def _classify_one(
     """Fallback single-item classify call; returns a null result on failure."""
     try:
         msg = format_entry(entry, id_to_text, max_upstream_chars) + (
-            '\n\nRespond ONLY with JSON: '
-            '{"sentiment":"positive/negative/mixed/neutral",'
-            '"signal":"strong/moderate/weak/n/a",'
-            '"side_effects":[{"side_effect":"...","severity":null}]}'
+            '\n\nRespond ONLY with JSON: {"sentiment":"positive/negative/mixed/neutral","signal":"strong/moderate/weak/n/a","personal_use":true,"side_effects":["..."]}'
         )
-        raw = _retry_empty_response(
-            lambda: llm_call(
-                client,
-                msg,
-                model=MODEL_STRONG,
-                system=prompts[drug],
-                max_tokens=100,
-            ),
-            f"classification item {entry['id']}:{drug}",
-        )
+        raw = _retry_empty_response(lambda: llm_call(client, msg, model=MODEL_STRONG, system=prompts[drug], max_tokens=100),
+                                    f"classification item {entry['id']}:{drug}")
         return ClassificationResult.model_validate(parse_json_object(raw))
     except (LLMParseError, LLMResponseError, ValidationError) as e:
         log.warning(f"Skipping {entry['id']}:{drug}: {e}")
@@ -251,8 +239,7 @@ def run_classification(
     skipped = 0
 
     for entry in tagged:
-        all_drugs = set(entry.get("drugs_direct", [])) | set(entry.get("drugs_context", []))
-        for drug in all_drugs:
+        for drug in _entry_drugs(entry):
             if target_aliases is not None and drug not in target_aliases:
                 continue
             if (
@@ -281,8 +268,8 @@ def run_classification(
 
     log.info(f"{skipped} already in DB, {len(to_do)} entry×drug pairs to process...")
 
-    # Prefilter with fast model — results cached to prefilter_results.json
-    prefilter_path = config.path("prefilter_results.json")
+    # Separate cache: old prefilter decisions may exclude use without an outcome.
+    prefilter_path = config.path("prefilter_personal_use_results.json")
     filtered: set[str] = set()
     if skip_prefilter:
         log.info("Skipping prefilter, sending all pairs to classify...")
@@ -372,7 +359,7 @@ def run_classification(
             batch, results = future.result()
 
             for (entry, drug), result in zip(batch, results):
-                if result.signal != "n/a":
+                if result.signal != "n/a" or result.personal_use:
                     drug_counter[drug] += 1
                     if writer is not None:
                         writer.write_one(

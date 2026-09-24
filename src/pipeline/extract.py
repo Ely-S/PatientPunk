@@ -179,6 +179,8 @@ def run_extraction(config: "PipelineConfig"):
     # the target drug + its aliases (fetched once, cached on disk).
     if config.drug:
         target, aliases = resolve_aliases(config)
+        # A match that sits inside an excluded compound's spelling does not count
+        # (e.g. "7,8-dhf" inside "4'-dma-7,8-dhf"); see #140 / #146.
         excluded_aliases = config.drug_excluded_aliases or []
         id_to_drugs = {
             item["id"]: (

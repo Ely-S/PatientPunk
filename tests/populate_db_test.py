@@ -12,6 +12,8 @@ import extract_demographics_conditions
 from import_posts import import_reddit_posts
 from run_sentiment_pipeline import run_pipeline
 from extract_demographics_conditions import run_demographics
+from patientpunk.db import query_treatment_outcomes
+from pipeline.doses import run_dose_extraction
 from utilities import PipelineConfig
 
 
@@ -31,8 +33,8 @@ from utilities import PipelineConfig
 #   canonicalize→ {"ldn": "ldn"} (only one drug).
 #   prefilter   → Post2 is an article (no personal experience) → no;
 #                 Comment1 ("I love it so much") → yes.
-#   classify    → one pair reaches classify: (Comment1, ldn)
-#                 → positive / strong.
+#   classify    → Comment1 is positive/strong; UseOnly is retained as neutral/n/a.
+#                 AdviceOnly passes the fast gate but is rejected by the classifier.
 
 def _stub_response(messages, system):
     prompt = messages[0]["content"] if messages else ""
@@ -67,12 +69,24 @@ def _stub_response(messages, system):
     # Prefilter: "Does the AUTHOR express personal experience" is in PREFILTER_PROMPT.
     if "Does the AUTHOR express personal experience" in prompt:
         blocks = re.split(r"--- \d+ ---", prompt)[1:]
-        return json.dumps(["yes" if "I love it" in b else "no" for b in blocks])
+        return json.dumps(["yes" if any(s in b for s in ("I love it", "I take 20 mg", "Consider LDN")) else "no" for b in blocks])
 
     # Classify (batch): per classify_batch() in src/pipeline/classify.py.
     if "Classify each entry separately" in prompt:
-        n = prompt.count("--- Entry ")
-        return json.dumps([{"sentiment": "positive", "signal": "strong"}] * n)
+        assert '"personal_use" (boolean)' in prompt
+        blocks = re.split(r"--- Entry \d+ ---", prompt)[1:]
+        return json.dumps([
+            {"sentiment": "neutral", "signal": "n/a", "personal_use": "I take 20 mg" in b}
+            if "I take 20 mg" in b or "Consider LDN" in b else {"sentiment": "positive", "signal": "strong"}
+            for b in blocks
+        ])
+
+    if system and "You extract the doses of" in str(system):
+        return json.dumps([
+            {"item_id": it["item_id"], "doses": [{"low": 20, "high": 20, "unit": "mg", "outcome": "unclear", "quote": it["report"]}]
+             if "I take 20 mg" in it["report"] else []}
+            for it in json.loads(prompt)["items"]
+        ])
 
     # Classify (per-item fallback): system prompt identifies it.
     if system and "Classify Reddit posts/comments" in (
@@ -177,6 +191,10 @@ class TestPopulateDbEndToEnd:
             "conditions",
             "extraction_runs",
             "posts",
+            "report_doses",
+            "report_effects",
+            "report_runs",
+            "sqlite_sequence",  # SQLite's own table, created by the AUTOINCREMENT ids
             "treatment",
             "treatment_reports",
             "user_profiles",
@@ -235,6 +253,13 @@ class TestPopulateDbEndToEnd:
         assert conditions == [("b", "fibromyalgia", "illness")]
 
     def test_6_sentiment_pipeline(self, db: DB):
+        db.conn.executemany(
+            "INSERT INTO posts (post_id, user_id, body_text, scraped_at) VALUES (?, 'b', ?, 0)",
+            [("UseOnly", "I take 20 mg LDN daily."), ("AdviceOnly", "Consider LDN.")],
+        )
+        db.conn.commit()
+        # An old negative decision must not hide the newly eligible use report.
+        (db.path.parent / "prefilter_results.json").write_text(json.dumps({"UseOnly:ldn": False}))
         fake = FakeAnthropic()
         config = PipelineConfig(
             client=fake,
@@ -249,25 +274,35 @@ class TestPopulateDbEndToEnd:
         ).fetchall()
         assert treatments == [("ldn",)]
 
-        # Only Comment1/ldn makes it through to a treatment_report.
+        # Retain confirmed use without assigning an outcome.
         reports = db.conn.execute(
             "SELECT post_id, user_id, sentiment, signal_strength "
             "FROM treatment_reports ORDER BY post_id"
         ).fetchall()
-        assert reports == [("Comment1", "b", "positive", "strong")]
+        assert reports == [("Comment1", "b", "positive", "strong"), ("UseOnly", "b", "neutral", "n/a")]
+        outcomes = query_treatment_outcomes(db.conn, drug="ldn")
+        assert (outcomes[0]["n_reports"], outcomes[0]["pct_positive"], outcomes[0]["avg_sentiment"]) == (1, 100.0, 1.0)
 
         # Negative space: Post1 (question), Post2 (article, prefilter=no),
-        # and Comment2 (question) must NOT have reports.
+        # Comment2 (question), and AdviceOnly must NOT have reports.
         filtered_out = db.conn.execute(
             "SELECT post_id FROM treatment_reports "
-            "WHERE post_id IN ('Post1', 'Post2', 'Comment2')"
+            "WHERE post_id IN ('Post1', 'Post2', 'Comment2', 'AdviceOnly')"
         ).fetchall()
         assert filtered_out == []
 
-        # Prove classify was only called for the surviving (Comment1, ldn) pair.
+        # The strong classifier decides whether the three candidates are retained.
         # Parent-post text ("Do you like LDN") may appear as upstream context,
-        # so we assert on entry count — the prompt batches one Entry per pair.
+        # so we assert on entry count: the prompt batches one Entry per pair.
         classify_prompts = fake.prompts_matching("Classify each entry separately")
         assert len(classify_prompts) == 1
-        assert classify_prompts[0].count("--- Entry ") == 1
+        assert classify_prompts[0].count("--- Entry ") == 3
         assert "I love it so much" in classify_prompts[0]
+
+        # The retained use report reaches dose extraction with an unknown outcome.
+        dose_run = run_dose_extraction(fake, db.path, "ldn", workers=1)
+        assert (dose_run.reports, dose_run.rows, dose_run.failed) == (2, 1, 0)
+        assert db.conn.execute(
+            "SELECT tr.post_id, d.low, d.high, d.unit, d.outcome FROM report_doses d "
+            "JOIN treatment_reports tr ON tr.report_id = d.report_id"
+        ).fetchall() == [("UseOnly", 20.0, 20.0, "mg", "unclear")]
