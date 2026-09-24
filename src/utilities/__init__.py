@@ -145,9 +145,13 @@ def git_is_dirty() -> bool | None:
     import subprocess
     try:
         return bool(subprocess.run(
-            ["git", "status", "--porcelain"], capture_output=True, text=True, check=True,
+            ["git", "status", "--porcelain"], cwd=_root_env.parent, capture_output=True, text=True, check=True,
         ).stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        log.warning(
+            "Could not check git working tree state (got %s). Provenance manifest "
+            "will record git_dirty as null.", type(e).__name__,
+        )
         return None
 
 
@@ -155,10 +159,10 @@ def git_is_dirty() -> bool | None:
 # OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
 # paramater only seems to be accessable on the OpenAI surface
 #
-# Set LLM_REASONING=1 to re-enable reasoning (and re-inflate every budget).
+# Set LLM_REASONING=1 to use the model/provider's default reasoning behavior.
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
-# Recorded on every run. Only OpenRouter's reasoning is switched here, so any other provider is "not_applicable".
-LLM_REASONING_MODE = "not_applicable" if LLM_PROVIDER != "openrouter" else "disabled" if _REASONING_OFF else "enabled"
+# Only OpenRouter's reasoning is controlled here; other providers are "not_applicable".
+LLM_REASONING_MODE = "not_applicable" if LLM_PROVIDER != "openrouter" else "disabled" if _REASONING_OFF else "provider_default"
 
 
 class _ORStream:
