@@ -271,9 +271,10 @@ Build the private union of every thread containing a configured compound. Userna
 are hashed before the corpus is written. Source text, the generated corpus, SQLite
 database, cache, and manifests remain outside Git.
 
-When the alias lists change, regenerate into a fresh sentiment database, or delete the
-affected compound's `treatment_reports` rows first: the pipeline appends new reports and
-skips existing ones, and never removes reports that the new matcher excludes.
+When alias lists or a prefilter change, regenerate into a fresh database and output
+directory. The v2 runner writes `comparator_run_identity.json` before import and rejects
+an existing database whose corpus identity is missing or different. Do not delete selected
+rows from a historical database to turn it into a new cohort.
 
 ```powershell
 $comparatorRun = "../PatientPunk_data/studies/tropoflavin_nootropics/runs/2026-08-31-comparator-cohort"
@@ -291,6 +292,7 @@ $env:LLM_CACHE = "1"
 $env:LLM_CACHE_DIR = "$comparatorRun/cache"
 $env:LLM_REASONING = "0"
 uv run python -m studies.tropoflavin_nootropics.run_comparator_pipeline `
+  --subreddit Nootropics `
   --corpus "$comparatorCorpus" `
   --database "$comparatorDb" `
   --output-dir "$comparatorOutput" `
@@ -302,6 +304,56 @@ uv run python -m studies.tropoflavin_nootropics.analyze_comparator_cohort `
   --study-database "$combinedDb" `
   --output "$comparatorReport"
 ```
+
+The runner now executes personal-use and sentiment classification, normalized dose and
+route extraction, and normalized effect and explicit-severity extraction in that order.
+Use `--skip-doses --skip-effects` only for a deliberate sentiment-only run. The effect
+step cannot run while the dose step is skipped because its dose links refer to
+`report_doses` rows.
+
+### Focused rerun from an intervention-specific prefilter
+
+An intervention-specific prefilter is not a union comparator corpus. Run it only for
+the matching treatment slug. The following example processes the expanded 9-MBC
+prefilter across the nine nootropic-adjacent communities after it has been downloaded
+under the external data root:
+
+```powershell
+$dataRoot = if ($env:PATIENTPUNK_DATA) {
+  $env:PATIENTPUNK_DATA
+} else {
+  (Resolve-Path "../PatientPunk_data").Path
+}
+$prefilterRoot = Join-Path $dataRoot `
+  "raw_data/arctic_shift_ndjson/peptide/9mbc_prefilter_expanded_aliases_20260924"
+$rerunRoot = Join-Path $dataRoot `
+  "studies/tropoflavin_nootropics/runs/YYYY-MM-DD-9mbc-expanded-prefilter"
+$communities = @(
+  "Nootropics", "Supplements", "Peptides", "NootropicsDepot", "NooTopics",
+  "depressionregimens", "StackAdvice", "Longevity", "Psilocybin"
+)
+
+foreach ($subreddit in $communities) {
+  $communityRoot = Join-Path $rerunRoot $subreddit
+  uv run --frozen python -m studies.tropoflavin_nootropics.run_comparator_pipeline `
+    --subreddit $subreddit `
+    --corpus (Join-Path $prefilterRoot "$subreddit/subreddit_posts.json") `
+    --database (Join-Path $communityRoot "sentiment.db") `
+    --output-dir (Join-Path $communityRoot "pipeline_outputs") `
+    --only 9-mbc `
+    --workers 8 `
+    --max-upstream-chars 1500
+}
+
+uv run --frozen python -m studies.tropoflavin_nootropics.analyze_side_effect_severity `
+  --run-root $rerunRoot `
+  --output-dir (Join-Path $rerunRoot "aggregate_severity")
+```
+
+The aggregate analyzer reads `report_effects_latest` and `report_doses_latest` when
+they exist. It counts only `worsened` effects attributed to the target as side effects.
+Improved, no-change, mixed, stack-attributed, unclear, and other-compound effects are
+excluded. Explicit severity remains missing unless the author supplied a grade.
 
 The corpus is shared, but each target gets its own alias and enclosing-compound
 exclusion rules. This matters for `7,8-DHF`, whose text span must not be counted when
@@ -342,8 +394,8 @@ counts are safe aggregates; the corpus, cache, database, and manifest are not co
 
 Use eight workers for the OpenRouter run unless the configured provider has been load
 tested at higher concurrency. The pipeline writes report rows incrementally and caches
-prefilter and classification responses, so a transport interruption can be resumed with
-the same command.
+model responses, so a transport interruption can be resumed with the same command when
+the run identity still matches.
 
 ## 7. Run independent subreddit cohorts
 

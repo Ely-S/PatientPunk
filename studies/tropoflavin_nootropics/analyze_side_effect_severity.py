@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -16,6 +17,12 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from rich.console import Console
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from pipeline.doses import normalize_unit  # noqa: E402
 from studies.tropoflavin_nootropics.comparator_support import (
     DEFAULT_COHORT_CONFIG,
     ComparatorCohort,
@@ -24,7 +31,11 @@ from studies.tropoflavin_nootropics.comparator_support import (
     load_comparator_cohort,
     sha256_file,
 )
-from studies.tropoflavin_nootropics.study_support import canonical_side_effect
+from studies.tropoflavin_nootropics.study_support import (
+    canonical_side_effect,
+    dose_band,
+    route_bucket,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
@@ -186,6 +197,59 @@ def _max_severity(left: Severity | None, right: Severity | None) -> Severity | N
     return left if SEVERITY_ORDER[left] >= SEVERITY_ORDER[right] else right
 
 
+def _dose_midpoint_mg(low: object, high: object, unit: object) -> float | None:
+    if low is None or high is None:
+        return None
+    normalized = normalize_unit(None if unit is None else str(unit))
+    factor = {"mcg": 0.001, "mg": 1.0, "g": 1000.0}.get(normalized or "")
+    if factor is None:
+        return None
+    return (float(low) + float(high)) / 2 * factor
+
+
+def _normalized_route(value: object) -> str | None:
+    if value is None:
+        return None
+    route = str(value).strip().lower()
+    if route in {
+        "oral mucosal",
+        "swallowed oral",
+        "nasal mucosal",
+        "other explicit route",
+    }:
+        return route
+    return route_bucket(route)
+
+
+def _latest_report_rows(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(treatment_reports)")
+    }
+    if "post_id" not in columns:
+        return connection.execute(
+            """
+            SELECT reports.report_id, reports.user_id, treatment.canonical_name,
+                   reports.side_effects
+            FROM treatment_reports AS reports
+            JOIN treatment ON treatment.id = reports.drug_id
+            """
+        ).fetchall()
+    return connection.execute(
+        """
+        SELECT reports.report_id, reports.user_id, treatment.canonical_name,
+               reports.side_effects
+        FROM treatment_reports AS reports
+        JOIN treatment ON treatment.id = reports.drug_id
+        WHERE reports.report_id = (
+            SELECT MAX(newer.report_id)
+            FROM treatment_reports AS newer
+            WHERE newer.post_id = reports.post_id
+              AND newer.drug_id = reports.drug_id
+        )
+        """
+    ).fetchall()
+
+
 def _load_artifact(
     artifact: Artifact,
     cohort: ComparatorCohort,
@@ -197,13 +261,13 @@ def _load_artifact(
         integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
         if integrity != "ok":
             raise ValueError(f"Integrity check failed for {artifact.path}: {integrity}")
-        rows = connection.execute(
-            """
-            SELECT reports.user_id, treatment.canonical_name, reports.side_effects
-            FROM treatment_reports AS reports
-            JOIN treatment ON treatment.id = reports.drug_id
-            """
-        ).fetchall()
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+            )
+        }
+        rows = _latest_report_rows(connection)
         seen_authors: set[tuple[str, str]] = set()
         for row in rows:
             compound = _compound_name(str(row["canonical_name"]), cohort)
@@ -220,26 +284,74 @@ def _load_artifact(
                         compound=compound,
                     )
                 )
-            for raw_effect, severity in _decode_effects(row["side_effects"]):
-                canonical, _bucket = canonical_side_effect(raw_effect)
+            if "report_effects_latest" not in tables:
+                for raw_effect, severity in _decode_effects(row["side_effects"]):
+                    canonical, _bucket = canonical_side_effect(raw_effect)
+                    effects.append(
+                        EffectObservation(
+                            group=artifact.group,
+                            community=artifact.community,
+                            author=author_key[0],
+                            compound=compound,
+                            canonical_effect=canonical,
+                            severity=severity,
+                        )
+                    )
+
+        if "report_effects_latest" in tables:
+            for row in connection.execute(
+                """
+                SELECT reports.user_id, treatment.canonical_name,
+                       effects.symptom, effects.severity
+                FROM report_effects_latest AS effects
+                JOIN treatment_reports AS reports
+                  ON reports.report_id = effects.report_id
+                JOIN treatment ON treatment.id = reports.drug_id
+                WHERE effects.attribution = 'target'
+                  AND effects.direction = 'worsened'
+                """
+            ):
+                compound = _compound_name(str(row["canonical_name"]), cohort)
+                if compound is None:
+                    continue
+                canonical, _bucket = canonical_side_effect(str(row["symptom"]))
                 effects.append(
                     EffectObservation(
                         group=artifact.group,
                         community=artifact.community,
-                        author=author_key[0],
+                        author=str(row["user_id"]),
                         compound=compound,
                         canonical_effect=canonical,
-                        severity=severity,
+                        severity=row["severity"],
                     )
                 )
 
-        tables = {
-            row[0]
+        if "report_doses_latest" in tables:
             for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
-        if "pipeline_b_compound_exposures" in tables:
+                """
+                SELECT reports.user_id, treatment.canonical_name,
+                       doses.low, doses.high, doses.unit, doses.route
+                FROM report_doses_latest AS doses
+                JOIN treatment_reports AS reports
+                  ON reports.report_id = doses.report_id
+                JOIN treatment ON treatment.id = reports.drug_id
+                """
+            ):
+                compound = _compound_name(str(row["canonical_name"]), cohort)
+                if compound is None:
+                    continue
+                midpoint = _dose_midpoint_mg(row["low"], row["high"], row["unit"])
+                exposures.append(
+                    ExposureObservation(
+                        group=artifact.group,
+                        community=artifact.community,
+                        author=str(row["user_id"]),
+                        compound=compound,
+                        dose_band=dose_band(midpoint).label if midpoint is not None else None,
+                        route_bucket=_normalized_route(row["route"]),
+                    )
+                )
+        elif "pipeline_b_compound_exposures" in tables:
             for row in connection.execute(
                 """
                 SELECT author_hash, target_compound, dose_band, route_bucket
@@ -577,10 +689,14 @@ def _render_report(
     )
     return (
         "# Side-effect severity rerun\n\n"
-        "## What changed\n\n"
-        "Pipeline A was rerun with each side effect stored as an effect and an "
-        "optional explicit severity. Severity is recorded only when the author "
-        "directly grades it. Symptom names are never used to infer severity.\n\n"
+        "## Method\n\n"
+        "Current-pipeline databases use normalized report-effect and report-dose "
+        "rows. A side effect is a worsened effect attributed to the target compound; "
+        "stack, unclear, other-compound, improved, no-change, and mixed rows are not "
+        "counted as side effects. Severity is recorded only when the author directly "
+        "grades it, and symptom names are never used to infer severity. Legacy "
+        "databases without normalized tables retain the earlier embedded-effect "
+        "fallback.\n\n"
         f"This report covers {len(artifacts)} independent community databases. "
         "Community results remain separate, and the aggregate scopes deduplicate the "
         "same hashed author across communities.\n\n"

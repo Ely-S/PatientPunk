@@ -19,7 +19,7 @@ side effect is not confirmed absence of an adverse event.
 | Stage | Work completed | Where to look |
 | --- | --- | --- |
 | Corpus construction | Intervention-name screening, parent-thread context, hashed authors, and separate community corpora | `build_comparator_corpus.py`, `build_sqlite_comparator_corpora.py` |
-| Extraction | Personal-use screening; treatment sentiment; linked dose and route; explicit reason for taking 7,8-DHF | `run_comparator_pipeline.py`, `run_variable_pipeline.py`, `extract_78dhf_reasons.py` |
+| Extraction | Personal-use screening and treatment sentiment, followed by normalized report-level dose, route, effect, and explicit-severity extraction; explicit reason for taking 7,8-DHF remains a separate study step | `run_comparator_pipeline.py`, `src/pipeline/doses.py`, `src/pipeline/effects.py`, `extract_78dhf_reasons.py` |
 | Comparator analysis | Ten configured compounds; independent and matched-author sentiment comparisons; multiple-testing correction | [Original comparator report](comparator_analysis.md), `analyze_comparator_cohort.py` |
 | Community overlap | Independent community estimates plus separate globally deduplicated summaries | [Overlap](reports/author_overlap.md), [Independent cohorts](reports/unpooled_summary.md) |
 | Predictor analysis | Dose, route, and explicit reason versus sentiment and side-effect reporting; between-compound sentiment normalization | [Predictor report](reports/78dhf_predictor_analysis.md) |
@@ -147,6 +147,35 @@ Markdown, and aggregate figures belong in this study's Git diff. Raw posts,
 author rows or identifiers, databases, per-record model responses, CSV exports,
 and Word workbooks/documents stay external. Public reports do not contain private
 storage URLs or machine-specific paths.
+
+### Current-pipeline reruns
+
+The current rerun path is deliberately separate from the saved September reports.
+`run_comparator_pipeline.py` now runs the current mainline stages in order for each
+selected treatment:
+
+1. personal-use and sentiment classification into `treatment_reports`;
+2. stated dose and route extraction into `report_doses`;
+3. effect, attribution, direction, and explicit severity extraction into
+   `report_effects`.
+
+The normalized `report_doses_latest` and `report_effects_latest` views are the source
+for a new severity analysis. A side effect is a `worsened` effect attributed to the
+target treatment. Effects attributed to a stack, an unclear source, or another
+compound are excluded, as are improved, no-change, and mixed effects. Severity stays
+missing unless the author explicitly grades it.
+
+Every run directory receives `comparator_run_identity.json` before import. Its corpus,
+cohort, subreddit, and database hashes must match on resume. A database with posts but
+without this identity is rejected, which prevents a new prefilter from being silently
+mixed with historical reports. Generated corpora, databases, response artifacts, and
+manifests remain under `PATIENTPUNK_DATA` or the sibling `PatientPunk_data` directory.
+
+An intervention-specific prefilter must be paired with the same `--only` slug. For
+example, a 9-MBC-only prefilter is valid for `--only 9-mbc`; it is not a complete corpus
+for the other nine treatments. Run each of the nine nootropic-adjacent communities in
+its own fresh database, then use `analyze_side_effect_severity.py` on their common run
+root for community-specific and globally deduplicated aggregate results.
 
 ## What remains open
 

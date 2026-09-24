@@ -10,16 +10,17 @@ from pathlib import Path
 
 import pytest
 
+import studies.tropoflavin_nootropics.run_comparator_pipeline as comparator_runner
+from studies.tropoflavin_nootropics.analyze_author_overlap import (
+    AuthorOverlapConfig,
+    CohortArtifact,
+    render_author_overlap,
+)
 from studies.tropoflavin_nootropics.analyze_comparator_cohort import (
     ComparatorAnalysisConfig,
     _comparisons,
     _sentiment_summaries,
     render_comparator_report,
-)
-from studies.tropoflavin_nootropics.analyze_author_overlap import (
-    AuthorOverlapConfig,
-    CohortArtifact,
-    render_author_overlap,
 )
 from studies.tropoflavin_nootropics.attribution import (
     corroborates_dose,
@@ -38,14 +39,21 @@ from studies.tropoflavin_nootropics.comparator_support import (
     load_comparator_cohort,
 )
 from studies.tropoflavin_nootropics.privacy import scan_aggregate_artifact
-from studies.tropoflavin_nootropics.run_variable_pipeline import (
-    calculate_missing_author_records,
-    write_linked_records,
+from studies.tropoflavin_nootropics.run_comparator_pipeline import (
+    ComparatorPipelineConfig,
+    _manifest,
+    _prepare_run_identity,
+    _run_one,
+    combine_usage,
 )
 from studies.tropoflavin_nootropics.run_comparator_pipeline import (
     UsageSummary as SentimentUsageSummary,
 )
-from studies.tropoflavin_nootropics.run_comparator_pipeline import combine_usage
+from studies.tropoflavin_nootropics.run_variable_pipeline import (
+    calculate_missing_author_records,
+    write_linked_records,
+)
+from utilities import PipelineConfig
 
 
 def _write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
@@ -186,6 +194,19 @@ def test_pipeline_b_mapping_covers_the_full_comparator_cohort() -> None:
         treatment: compound_for_treatment(treatment, cohort)
         for treatment in expected
     } == expected
+
+
+def test_comparator_aliases_match_current_pipeline_drug_files() -> None:
+    cohort = load_comparator_cohort()
+    for compound in cohort.compounds:
+        aliases = {
+            line.strip()
+            for line in (Path("drug_files") / f"{compound.slug}.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        }
+        assert aliases == set(compound.aliases), compound.slug
 
 
 def test_dose_and_route_require_nearby_same_segment_evidence() -> None:
@@ -342,6 +363,147 @@ def test_sentiment_resume_preserves_prior_provider_usage() -> None:
     }
 
 
+def test_current_comparator_runner_executes_sentiment_dose_and_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text("[]\n", encoding="utf-8")
+    config = ComparatorPipelineConfig(
+        subreddit="Nootropics",
+        corpus_path=corpus,
+        database_path=tmp_path / "fresh.db",
+        output_directory=tmp_path / "output",
+        workers=2,
+    )
+    cohort = load_comparator_cohort()
+    target = cohort.by_slug()["78dhf"]
+    calls: list[tuple[str, object]] = []
+
+    def fake_sentiment(pipeline_config: object) -> None:
+        calls.append(("sentiment", pipeline_config))
+
+    def fake_doses(*args: object, **kwargs: object) -> None:
+        calls.append(("doses", kwargs))
+
+    def fake_effects(*args: object, **kwargs: object) -> None:
+        calls.append(("effects", kwargs))
+
+    monkeypatch.setattr(comparator_runner, "run_pipeline", fake_sentiment)
+    monkeypatch.setattr(comparator_runner, "run_dose_extraction", fake_doses)
+    monkeypatch.setattr(comparator_runner, "run_effects_extraction", fake_effects)
+
+    _run_one(config, target, cohort.compounds, object())
+
+    assert [name for name, _value in calls] == ["sentiment", "doses", "effects"]
+    sentiment_config = calls[0][1]
+    assert isinstance(sentiment_config, PipelineConfig)
+    assert sentiment_config.drug_excluded_aliases[0] == "4'-dma-7,8-dhf"
+    dose_options = calls[1][1]
+    effect_options = calls[2][1]
+    assert isinstance(dose_options, dict)
+    assert isinstance(effect_options, dict)
+    assert dose_options["excluded_compounds"] == ["4'-dma-7,8-dhf"]
+    assert effect_options["excluded_compounds"] == ["4'-dma-7,8-dhf"]
+
+
+def test_comparator_run_identity_rejects_a_changed_corpus(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text("[]\n", encoding="utf-8")
+    config = ComparatorPipelineConfig(
+        subreddit="Nootropics",
+        corpus_path=corpus,
+        database_path=tmp_path / "fresh.db",
+        output_directory=tmp_path / "output",
+    )
+
+    first = _prepare_run_identity(config)
+    assert _prepare_run_identity(config) == first
+    assert first.corpus_file == "corpus.json"
+    assert first.database_file == "fresh.db"
+
+    corpus.write_text('[{"post_id": "new"}]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="fresh database and output directory"):
+        _prepare_run_identity(config)
+
+
+def test_comparator_manifest_summarizes_normalized_latest_tables(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "corpus.json"
+    corpus.write_text("[]\n", encoding="utf-8")
+    database = tmp_path / "fresh.db"
+    with closing(sqlite3.connect(database)) as connection:
+        connection.executescript(Path("schema.sql").read_text(encoding="utf-8"))
+        connection.execute("INSERT INTO users VALUES ('author', 'Nootropics', 1)")
+        connection.execute(
+            "INSERT INTO posts VALUES ('post', NULL, NULL, 'author', '', NULL, 1, 1, NULL)"
+        )
+        connection.execute(
+            "INSERT INTO treatment (id, canonical_name) VALUES (1, '7,8-dhf')"
+        )
+        connection.executemany(
+            "INSERT INTO extraction_runs VALUES (?, 1, 'abc', ?, '{}', 2)",
+            [
+                (1, "treatment_sentiment"),
+                (2, "report_doses"),
+                (3, "report_effects"),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO treatment_reports
+                (report_id, run_id, post_id, user_id, drug_id, sentiment,
+                 signal_strength, side_effects)
+            VALUES (1, 1, 'post', 'author', 1, 'positive', 'strong', NULL)
+            """
+        )
+        connection.executemany(
+            "INSERT INTO report_runs VALUES (?, 1)", [(2,), (3,)]
+        )
+        connection.execute(
+            """
+            INSERT INTO report_doses
+                (report_id, run_id, ordinal, low, high, unit, route, quote)
+            VALUES (1, 2, 0, 25, 25, 'mg', 'oral mucosal', 'I took 25 mg')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO report_effects
+                (report_id, run_id, ordinal, domain, symptom, direction,
+                 severity, attribution, quote)
+            VALUES (1, 3, 0, 'sleep or wakefulness', 'insomnia', 'worsened',
+                    'moderate', 'target', 'It caused moderate insomnia')
+            """
+        )
+        connection.commit()
+
+    config = ComparatorPipelineConfig(
+        subreddit="Nootropics",
+        corpus_path=corpus,
+        database_path=database,
+        output_directory=tmp_path / "output",
+    )
+    zero_usage = SentimentUsageSummary(
+        requests=0,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+    )
+    manifest = _manifest(config, code_commit="abc", previous_usage=zero_usage)
+    target = next(result for result in manifest.results if result.slug == "78dhf")
+
+    assert target.reports == 1
+    assert target.authors == 1
+    assert target.side_effect_reports == 1
+    assert target.side_effect_authors == 1
+    assert target.explicit_severity_authors == 1
+    assert target.dose_or_route_reports == 1
+    assert target.dose_rows == 1
+    assert target.effect_rows == 1
+
+
 def test_comparison_direction_and_exclusive_author_sets_are_consistent() -> None:
     cohort = load_comparator_cohort()
 
@@ -394,7 +556,11 @@ def _create_sentiment_database(path: Path) -> None:
             [(1, "7,8-dhf"), (2, "semax"), (3, "4'-dma-7,8-dhf")],
         )
         connection.execute(
-            "INSERT INTO extraction_runs VALUES (1, 1, 'abc', 'treatment_sentiment', '{}')"
+            """
+            INSERT INTO extraction_runs
+                (run_id, run_at, commit_hash, extraction_type, config, finished_at)
+            VALUES (1, 1, 'abc', 'treatment_sentiment', '{}', 2)
+            """
         )
         connection.executemany(
             """
