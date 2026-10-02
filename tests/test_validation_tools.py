@@ -130,3 +130,23 @@ def test_report_fails_a_target_and_answers_pem(tmp_path):
 def test_load_sheet_rejects_unknown_verdicts(tmp_path):
     with pytest.raises(SystemExit, match="unrecognised"):
         S.load_sheet(_scored(tmp_path, [{"stratum": "x", "direction": "yes"}]))
+
+
+# ── Repeat-pass agreement (scripts/compare_probe_runs.py) ──────────────────
+
+import compare_probe_runs as C  # noqa: E402
+
+
+def test_kappa_is_one_for_identical_labels_and_zero_for_chance():
+    assert C.cohen_kappa([True, False, True], [True, False, True]) == (1.0, 1.0)
+    kappa, raw = C.cohen_kappa([True, True, False, False], [True, False, True, False])
+    assert kappa == pytest.approx(0.0) and raw == 0.5
+
+
+def test_compare_treats_a_missing_pair_as_negative():
+    pair = {"directions": {"helped"}, "ae_status": "reported", "severe": True,
+            "classes": {"pain"}}
+    rows = {r["field"]: r for r in C.compare({("a", "lsd"): pair}, {}, {("a", "lsd"), ("b", "lsd")})}
+    assert rows["any helped"]["agreement"] == 0.5
+    assert rows["AE status"]["positive (left)"] == 1 and rows["AE status"]["positive (right)"] == 0
+    assert rows["symptom-class set: exact match (effect-bearing in either run)"]["agreement"] == 0.0
