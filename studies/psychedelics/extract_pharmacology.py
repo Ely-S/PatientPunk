@@ -89,7 +89,7 @@ PRICING_SNAPSHOT_DATE = "2026-08-07"
 PRICING_SOURCE = "openrouter /models/{id}/endpoints, modal endpoint price"
 # v2: subject / exposure_status are model-labelled fields rather than regex verdicts.
 SCHEMA_VERSION = "pharmacology-exposure-v2"
-PROMPT_VERSION = "2026-08-07-v4-quote-retry-feedback"
+PROMPT_VERSION = "2026-08-07-v5-evidence-anchors"
 PLACEHOLDER_RE = re.compile(
     r"^\s*(not specified|unknown|none mentioned|n/?a|not available|unspecified)\s*$",
     re.I,
@@ -440,11 +440,33 @@ def _reject_placeholders(value: Any, path: str = "response") -> None:
         raise ValueError(f"{path}: placeholder value is forbidden: {value!r}")
     if isinstance(value, dict):
         for key, child in value.items():
-            if key not in {"quote", "exposure_quote"}:
+            # Every quote field is exempt, not just two. Now that a quote may
+            # paraphrase, a model labelling subject=unclear can legitimately
+            # write subject_quote="unknown"; rejecting that burns retry
+            # variants and eventually fails the unit over a non-issue.
+            if not (key == "quote" or key.endswith("_quote")):
                 _reject_placeholders(child, f"{path}.{key}")
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_placeholders(child, f"{path}[{index}]")
+
+
+# A quote may paraphrase its source, so exact containment is not required — that
+# rule discarded units over a spare word. This is only a floor against
+# fabrication: an invented quote shares almost no vocabulary with the source it
+# cites, while a genuine paraphrase keeps most of it. Human quote grounding on a
+# sample stays the real gate; this one runs before the money is spent.
+QUOTE_GROUNDING_MIN_OVERLAP = 0.5
+_QUOTE_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _quote_grounding(quote: str, window_text: str) -> float:
+    """Return the share of a quote's words that occur in its source window."""
+    quote_tokens = _QUOTE_TOKEN_RE.findall(quote.lower())
+    if not quote_tokens:
+        return 0.0
+    source_tokens = set(_QUOTE_TOKEN_RE.findall(window_text.lower()))
+    return sum(token in source_tokens for token in quote_tokens) / len(quote_tokens)
 
 
 def _quotes(event: ExposureEvent) -> Iterable[tuple[str, str]]:
@@ -489,11 +511,15 @@ def validate_extraction(
             raise ValueError(
                 f"events[{event_index}]: source ID/type does not match source_window_id"
             )
-        source_text = source["text"]
         for quote_path, quote in _quotes(event):
-            if not quote or quote not in source_text:
+            if not quote or not quote.strip():
                 raise ValueError(
-                    f"events[{event_index}].{quote_path}: quote is not an exact source substring"
+                    f"events[{event_index}].{quote_path}: evidence quote must be non-empty"
+                )
+            if _quote_grounding(quote, source["text"]) < QUOTE_GROUNDING_MIN_OVERLAP:
+                raise ValueError(
+                    f"events[{event_index}].{quote_path}: quote is not grounded in "
+                    "the cited source window; quote the author's own words"
                 )
         fingerprint = sha256_text(
             canonical_json(event.model_dump(mode="json", exclude_none=True))
@@ -592,20 +618,18 @@ exposure event if supported, but leave its dose/effect/adverse-event lists empty
 when the attribution cannot be isolated.
 
 Return valid JSON matching the supplied schema. Every exposure, dose, effect,
-duration, and adverse event needs its own verbatim quote copied exactly from the
-same SOURCE block: copy the characters as they appear (spelling, punctuation,
-capitalization) rather than retyping or shortening them from memory, since a
-quote that drifts from the source text at all will be rejected. In addition to
-being verbatim, each quote must be the closest and most specific legitimate
-anchor for the claim. Do not quote a merely nearby sentence, a general warning,
-reader-directed advice, or another person's experience just because those words
-appear in the same source window. Prefer the smallest complete clause that
-directly supports the field; choose subject, exposure-status, dose, effect,
-duration, and adverse-event quotes independently when their anchors differ.
+duration, and adverse event needs its own concise evidence quote tied to the same
+SOURCE block. The evidence quote may lightly normalize or paraphrase the source;
+it does not need to be an exact substring. It must faithfully support the field,
+must not invent or combine unsupported facts, and must be specific enough for a
+reviewer to trace back to the source window. Do not use a merely nearby sentence,
+a general warning, reader-directed advice, or another person's experience just
+because those words appear in the same source window. Choose subject,
+exposure-status, dose, effect, duration, and adverse-event evidence independently
+when their anchors differ.
 If RETRY FEEDBACK names a mechanical validation failure, repair that specific
-field in the new complete JSON response. Do not repeat a paraphrase: copy an
-exact contiguous substring from the indicated SOURCE window, using the
-source_window_id from its header.
+field in the new complete JSON response while preserving the source-supported
+meaning.
 Omit optional keys that lack evidence. Never emit placeholders such as "not
 specified", "unknown", "none mentioned", "n/a", or "unspecified". Return
 events=[] only when the text does not discuss the target drug at all.
@@ -625,9 +649,10 @@ DURATION:
 
 ADVERSE EVENTS:
 - reported means at least one event is stated.
-- explicit_none requires an exact adverse_event_status_quote in which the author
-  explicitly denies adverse effects, such as "no side effects at all". Vague
-  positive wording ("it was fine") is not a denial; use not_stated.
+- explicit_none requires an adverse_event_status_quote in which the author
+  explicitly denies adverse effects, such as "no side effects at all". The
+  evidence quote may be paraphrased, but it must preserve the denial's meaning.
+  Vague positive wording ("it was fine") is not a denial; use not_stated.
 - adverse_event_status_quote is ONLY valid when adverse_event_status=
   explicit_none. Omit the key entirely for reported and not_stated -- including
   it there is a schema violation, not an optional extra detail.
@@ -658,7 +683,7 @@ def schema_payload() -> dict[str, Any]:
     return ExtractionEnvelope.model_json_schema()
 
 
-VALIDATOR_VERSION = "2026-08-07-v4-empty-result-warning"
+VALIDATOR_VERSION = "2026-08-09-v6-quote-grounding-floor"
 
 
 def validator_sha() -> str:
@@ -674,6 +699,7 @@ def validator_sha() -> str:
                 "validator_version": VALIDATOR_VERSION,
                 "placeholder": PLACEHOLDER_RE.pattern,
                 "botlike": study.BOTLIKE_RE.pattern,
+                "quote_grounding_min_overlap": QUOTE_GROUNDING_MIN_OVERLAP,
             }
         )
     )
@@ -1674,6 +1700,29 @@ def finalize(
     if conflicts:
         raise ValueError(
             f"finalize configuration conflicts with prepared run: {conflicts}"
+        )
+    # The manifest is stamped with this module's current versions, but the
+    # events were accepted under whatever rules were loaded when they were
+    # extracted. Bumping PROMPT_VERSION or VALIDATOR_VERSION between the run
+    # and its finalize would otherwise label an existing run with acceptance
+    # rules it was never validated under.
+    acceptance = {
+        "prompt_version": PROMPT_VERSION,
+        "prompt_sha": prompt_sha(),
+        "validator_version": VALIDATOR_VERSION,
+        "validator_sha": validator_sha(),
+        "schema_version": SCHEMA_VERSION,
+    }
+    drift = {
+        key: (identity.get(key), value)
+        for key, value in acceptance.items()
+        if identity.get(key) != value
+    }
+    if drift:
+        raise ValueError(
+            "finalize acceptance rules differ from the rules this run was "
+            f"extracted under: {drift}. Check out the matching revision to "
+            "finalize this run, or re-extract it under the current rules."
         )
     unit_keys = {unit["unit_key"] for unit in units}
     ledger = [

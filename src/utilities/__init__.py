@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
+import httpx
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -38,6 +40,7 @@ class PipelineConfig:
     workers: int = 20                      # ThreadPoolExecutor workers; 1 = sequential
     drug: str | None = None                # If set, extract + canonicalize + classify operate on this drug and its synonyms only
     drug_aliases: list[str] | None = None  # If set, use as the alias list directly and skip LLM alias lookup
+    drug_excluded_aliases: list[str] | None = None  # Longer compounds that must not count as target mentions
 
     def __post_init__(self):
         if self.max_upstream_chars is not None and self.max_upstream_chars < 0:
@@ -136,6 +139,85 @@ def get_git_commit() -> str:
         return "unknown"
 
 
+def git_is_dirty() -> bool | None:
+    """True when the checkout has uncommitted changes, False when clean, None when git is unavailable.
+    Recorded on every run: the commit alone cannot reproduce a run made from a dirty tree."""
+    import subprocess
+    try:
+        return bool(subprocess.run(
+            ["git", "status", "--porcelain"], cwd=_root_env.parent, capture_output=True, text=True, check=True,
+        ).stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        log.warning(
+            "Could not check git working tree state (got %s). Provenance manifest "
+            "will record git_dirty as null.", type(e).__name__,
+        )
+        return None
+
+
+# ── OpenRouter via its OpenAI-compatible endpoint ────────────────────────────
+# OpenRouter has an Anthropic-style interface and an OpenAI interface.  The effort 
+# paramater only seems to be accessable on the OpenAI surface
+#
+# Set LLM_REASONING=1 to use the model/provider's default reasoning behavior.
+_REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
+# Only OpenRouter's reasoning is controlled here; other providers are "not_applicable".
+LLM_REASONING_MODE = "not_applicable" if LLM_PROVIDER != "openrouter" else "disabled" if _REASONING_OFF else "provider_default"
+
+
+class _ORStream:
+
+    def __init__(self, client, **kwargs) -> None:
+        self._client, self._kwargs = client, kwargs
+
+    def __enter__(self):
+        self._stream = self._client.chat.completions.create(stream=True, **self._kwargs)
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        return False
+
+    def get_final_message(self):
+        parts: list[str] = []
+        finish = None
+        for chunk in self._stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if getattr(delta, "content", None):
+                parts.append(delta.content)
+            if chunk.choices[0].finish_reason:
+                finish = chunk.choices[0].finish_reason
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="".join(parts))],
+            stop_reason="max_tokens" if finish == "length" else "end_turn",
+        )
+
+
+class _ORMessages:
+    def __init__(self, client) -> None:
+        self._client = client
+
+    def stream(self, *, model, messages, max_tokens=1024, system=None,
+               temperature=0.0, extra_body=None, **_ignored):
+        oai = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": m["role"], "content": m["content"]} for m in messages]
+        body = dict(extra_body or {})
+        if _REASONING_OFF:
+            body.setdefault("reasoning", {"effort": "none"})
+        return _ORStream(self._client, model=model, messages=oai,
+                         max_tokens=max_tokens, temperature=temperature,
+                         extra_body=body)
+
+
+class _ORClient:
+    """Anthropic-SDK-shaped wrapper so callers need not know which surface is in use."""
+
+    def __init__(self, client) -> None:
+        self.messages = _ORMessages(client)
+
+
 # ── Client ───────────────────────────────────────────────────────────────────
 def get_client() -> anthropic.Anthropic:
     """Return a configured Anthropic client (direct or via OpenRouter).
@@ -158,11 +240,23 @@ def get_client() -> anthropic.Anthropic:
             f"  Or switch provider: LLM_PROVIDER={'anthropic' if LLM_PROVIDER == 'openrouter' else 'openrouter'}"
         )
 
-    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}")
+    log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}"
+             + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
+
+    if LLM_PROVIDER == "openrouter":
+        # Deliberately the OpenAI surface by defult so we have access to reasoning settings
+        import openai
+        return _ORClient(openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            max_retries=4,
+            timeout=600.0,   # a canonicalization batch has run 710s; streaming keeps it alive
+        ))
 
     kwargs: dict = {
         "api_key": api_key,
-        "max_retries": 4,
+        # The application loop below owns retries; do not nest SDK retries.
+        "max_retries": 0,
         "timeout": 60.0,
     }
     if _API_BASE:
@@ -251,6 +345,43 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
+RETRY_DELAYS = [2, 5, 15, 30]
+
+# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
+IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
+                     "no instances available", "temporarily unavailable")
+
+# Retry truncated replies with progressively larger output ceilings.
+BUDGET_MULTIPLIERS = (1, 2, 4, 8)
+
+
+def is_transient_failure(exc: BaseException) -> bool:
+    """Return whether retrying the same request may succeed."""
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
+                        anthropic.RateLimitError, anthropic.InternalServerError)):
+        return True
+    if isinstance(exc, httpx.TransportError):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status == 429 or (isinstance(status, int) and 500 <= status < 600):
+        return True
+    # The SDK raises in-band provider failures as APIStatusError. Match their body,
+    # but never retry a 4xx request.
+    if isinstance(exc, anthropic.APIStatusError) and not (
+            isinstance(status, int) and 400 <= status < 500):
+        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
+    return False
+
+
+def is_transient_or_truncated(exc: BaseException) -> bool:
+    """Whether ``llm_call`` gave the request up after its retries: a transient failure that outlasted
+    them, or a reply the provider returned empty or still truncated at the largest budget
+    (``LLMResponseError`` and its subclass ``LLMTruncationError``). Anything else is a configuration
+    error (a bad key or model name) or a bug, which a caller must not count as a failed batch."""
+    from patientpunk._utils import LLMResponseError
+    return is_transient_failure(exc) or isinstance(exc, LLMResponseError)
+
+
 def llm_call(
     client: anthropic.Anthropic,
     prompt: str,
@@ -258,27 +389,60 @@ def llm_call(
     system: str | None = None,
     max_tokens: int = 100,
 ) -> str:
+    """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import check_response, response_text
+    from patientpunk._utils import LLMTruncationError, check_response, response_text
 
-    def _call() -> str:
+    def _request_once(budget: int) -> str:
         kwargs = {
             "model": model,
-            "max_tokens": max_tokens,
+            "max_tokens": budget,
             "temperature": 0.0,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
             kwargs["system"] = system
         with client.messages.stream(**kwargs) as stream:
-            return response_text(check_response(stream.get_final_message(), model=model))
+            message = check_response(stream.get_final_message(), model=model)
+            return response_text(message)
 
-    return cached_completion(
-        provider=LLM_PROVIDER,
-        model=model,
-        system=system,
-        prompt=prompt,
-        temperature=0.0,
-        max_tokens=max_tokens,
-        call_fn=_call,
-    )
+    def _request_with_transport_retries(budget: int) -> str:
+        for attempt, delay in enumerate([0] + RETRY_DELAYS):
+            if delay:
+                time.sleep(delay)
+            try:
+                return _request_once(budget)
+            except Exception as exc:
+                if not is_transient_failure(exc) or attempt == len(RETRY_DELAYS):
+                    raise
+                log.warning(
+                    f"{type(exc).__name__} on {model} "
+                    f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _cached_request(budget: int) -> str:
+        return cached_completion(
+            provider=LLM_PROVIDER,
+            model=model,
+            system=system,
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=budget,
+            call_fn=lambda: _request_with_transport_retries(budget),
+        )
+
+    budgets = tuple(max_tokens * factor for factor in BUDGET_MULTIPLIERS)
+    for index, budget in enumerate(budgets):
+        try:
+            return _cached_request(budget)
+        except LLMTruncationError:
+            if index == len(budgets) - 1:
+                raise
+            next_budget = budgets[index + 1]
+            log.warning(
+                "Reply reached max_tokens=%d on %s; retrying with max_tokens=%d.",
+                budget,
+                model,
+                next_budget,
+            )
+    raise AssertionError("unreachable")  # pragma: no cover

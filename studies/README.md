@@ -16,6 +16,7 @@ under `s3://patientpunk/scientific_validation/`).
 | &nbsp;&nbsp;└ IRR pilot (inter-coder reliability) | `rct_validation/irr_pilot/` | PR #39 |
 | FDA letter analysis (LDN / Mestinon RWE) | `fda_letter/` | PR #52 |
 | &nbsp;&nbsp;└ Phoenix Rising corpus | `fda_letter/phoenix_rising/` | PR #41 |
+| Clustering study (long COVID / ME-CFS) | `clustering/` | PR #110 — corpus ready, no run yet |
 | NATURAL exploration — TrialScout (U of Toronto) | `natural_exploration/` | **not ready to merge** |
 
 ## Why these are nested
