@@ -143,9 +143,19 @@ and, more seriously, **a survivorship bias against units the model thought
 longest about** — throughput had collapsed to 2.2 units/min with ~5% of units
 failing permanently. Raised to 90s and concurrency raised to 30 workers on the
 user's instruction; throughput recovered to ~28 units/min and only **4 further
-transport failures occurred across the remaining ~935 units**. All 14 units that
-had permanently failed under the 60s timeout succeeded on retry, confirming the
-timeout as the cause rather than bad data.
+transport failures occurred across the remaining ~935 units**.
+
+Checked against the attempt ledger, two different sets of units are involved:
+
+- **Recovered.** 17 units ever hit a client-side timeout, and 16 of them went on
+  to complete. 15 completed units needed more than three attempts — they
+  exhausted the three-attempt ladder in one invocation and succeeded in a resumed
+  one — and 14 of those 15 had at least one transport failure (7 a timeout).
+  For those units the transport layer, not bad data, was the cause.
+- **Still failed.** The 14 units in §2 and §7 are a separate set and remain
+  `failed`. Only one of them ever timed out. Nine exhausted their attempts on
+  three validation failures, three ended after a single null-content transport
+  failure, and the other two mixed transport and validation failures.
 
 Residual risk: at 3,673 average output tokens, 90s still implies sustaining
 ~41 tok/s, so the extreme tail can still time out. The rate is now rare but not
