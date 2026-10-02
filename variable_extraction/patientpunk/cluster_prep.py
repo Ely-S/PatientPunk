@@ -27,7 +27,7 @@ from pathlib import Path
 
 DEFAULT_META = {
     "author_hash", "source", "source_type", "post_id", "text_count",
-    "schema_id", "extraction_method", "extracted_at",
+    "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
 

@@ -208,6 +208,10 @@ class LLMResponseError(RuntimeError):
         self.response_id = response_id
 
 
+class LLMTruncationError(LLMResponseError):
+    """A response ended because it reached the output-token limit."""
+
+
 def response_text(response) -> str:
     """Concatenate text content blocks; skip thinking/tool blocks without ``.text``.
 
@@ -230,7 +234,7 @@ def check_response(response, model: str = ""):
     make the loss permanent across re-runs.
     """
     if getattr(response, "stop_reason", None) == "max_tokens":
-        raise LLMResponseError(
+        raise LLMTruncationError(
             f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
             f"or shrink the batch)"
         )

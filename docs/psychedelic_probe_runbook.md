@@ -6,7 +6,7 @@ This pipeline re-extracts drug/dose/effect/adverse-event data from raw Reddit
 text for patients already known to report psilocybin, ketamine, or LSD. It
 replaces `studies/psychedelics/extract_pharmacology.py`, which stays untouched.
 
-Read `studies/psychedelics/_handoff.txt` §2 before interpreting any output. The
+Read `docs/second_pass_design.md` §8 before interpreting any output. The
 research and privacy constraints there govern this work: no efficacy or
 incidence claims, silence is never "no adverse events", and quote-bearing
 artifacts never leave the private database.

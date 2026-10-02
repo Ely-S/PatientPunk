@@ -284,19 +284,23 @@ needed.
 
 ## 8. Constraints that carry over unchanged
 
-From `studies/psychedelics/_handoff.txt` §2, and binding on every probe:
+Carried over from the legacy psychedelics study, and binding on every probe:
 
 - Self-selected Reddit reporting cohort, not a clinical cohort.
 - No efficacy, causal, incidence, or dose-response-over-time claims.
 - No chronology inferred from timestamps; duration must be explicitly stated.
 - A rate is "share of extractable reports mentioning X," never incidence. Always
   state the denominator.
-- Silence is never "none."
+- Silence is never "none." Adverse events are reported, explicit_none, or
+  not_stated.
 - One person may report repeated or contradictory exposures; do not collapse them
   into one summary.
 - No collective "stack" outcome assigned to a single component unless the source
   attributes it specifically.
 - Quote-bearing artifacts stay private (§4.5) and are never committed.
+- Individual LLM records are unstable: two identical legacy passes agreed on
+  field set only 36.5% of the time and on values 58.8%. Report validated cohort
+  aggregates only, never per-person stories or paired public quotes.
 
 ---
 
