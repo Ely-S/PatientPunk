@@ -44,8 +44,14 @@ cache/
 **/extraction_metadata_*.json
 **/phase1_candidates.json
 
-# Database files
+# Database files. The WAL sidecars hold uncommitted pages of the same private
+# content — quotes, source text, hashed authors — while a run is in flight.
 *.db
+*.db-wal
+*.db-shm
+
+# Private per-probe databases (raw provider responses, source text, quotes)
+data/probes/
 
 # Local-only agent config + session notes (not code, not versioned in this repo)
 .cursorrules
