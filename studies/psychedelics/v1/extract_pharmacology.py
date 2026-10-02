@@ -42,11 +42,11 @@ from pydantic import (
     model_validator,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from studies.psychedelics import psychedelics as study  # noqa: E402
+from studies.psychedelics.v1 import psychedelics as study  # noqa: E402
 
 
 OUTPUT_DIR = REPO_ROOT / "data" / "psychedelics_pharmacology"

@@ -1,3 +1,5 @@
+import os
+
 import nbformat as nbf
 
 nb = nbf.v4.new_notebook()
@@ -1173,5 +1175,5 @@ nb.metadata.update({
     "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
     "language_info": {"name": "python"},
 })
-nbf.write(nb, "/Users/eli/Desktop/PatientPunk/studies/psychedelics/psychedelics_analysis.ipynb")
+nbf.write(nb, os.path.join(os.path.dirname(os.path.abspath(__file__)), "psychedelics_analysis.ipynb"))
 print("written", len(c), "cells")
