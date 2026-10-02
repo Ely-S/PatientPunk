@@ -1952,6 +1952,36 @@ class TestActiveExtractorTextCollection:
         assert texts == ["Post title", "Post body"]
 
 
+class TestSubredditProvenance:
+    def test_aggregate_counts_the_communities_each_patient_wrote_in(self):
+        from patientpunk.aggregate import aggregate_corpus_by_author
+        posts = [{"author_hash": "a", "body": "x", "subreddit": "cfs"},
+                 {"author_hash": "a", "body": "x", "subreddit": "cfs"},
+                 {"author_hash": "a", "body": "x", "subreddit": "clh",
+                  "comments": [{"author_hash": "b", "body": "x"}]},
+                 {"author_hash": "c", "body": "x"}]
+        got = {p["author_hash"]: p["subreddits"]
+               for p in aggregate_corpus_by_author(posts, min_items=1)[0]}
+        assert got["a"] == "cfs:2 clh:1"   # counted per community
+        assert got["b"] == "clh:1"         # commenter credited to where they wrote
+        assert got["c"] == ""              # absent subreddit not guessed
+
+    def test_it_reaches_the_csv_row(self):
+        """META_COLUMNS only reserves the column; build_csv_row has to fill it."""
+        from patientpunk.export_csv import build_csv_row
+        row = build_csv_row({"record_meta": {"subreddits": "cfs:5"}, "fields": {}},
+                            field_names=[], sep=" | ", include_confidence=False)
+        assert row["subreddits"] == "cfs:5"
+
+    def test_every_metadata_column_is_known_downstream(self):
+        """A column export_csv writes but a consumer does not know is read as an
+        extracted field -- clustered on, loaded as a variable, scored."""
+        from patientpunk import cluster_prep, codebook, db, evaluate, export_csv
+        for known in (cluster_prep.DEFAULT_META, db.VARIABLE_META_COLUMNS,
+                      evaluate._META, codebook.META_COLUMNS):
+            assert set(export_csv.META_COLUMNS) <= known
+
+
 class TestAggregateByAuthor:
     """Per-patient corpus aggregation (patientpunk/aggregate.py)."""
 

@@ -13,6 +13,8 @@ Usage:
     python src/run_sentiment_pipeline.py --db data/posts.db --output-dir outputs --limit 50
 """
 import argparse
+import hashlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -24,6 +26,7 @@ from utilities import PipelineConfig, TAGGED_MENTIONS, get_client, get_git_commi
 from pipeline.extract import run_extraction
 from pipeline.canonicalize import run_canonicalization
 from pipeline.classify import run_classification
+from prompts.intervention_config import PREFILTER_PROMPT, system_prompt
 
 
 
@@ -59,6 +62,16 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
         "skip_canonicalize": skip_canonicalize,
         "output_dir": str(config.output_dir),
         "drug": config.drug,
+        "drug_excluded_aliases": config.drug_excluded_aliases or [],
+        # The excluded compound's canonical name: the first line of --drug-exclude-file, by the drug_files
+        # convention. The dose and effects steps inherit this for their prompts, not the spelling list.
+        "drug_excluded_compounds": (config.drug_excluded_aliases or [])[:1],
+        "max_upstream_depth": config.max_upstream_depth,
+        "max_upstream_chars": config.max_upstream_chars,
+        "workers": config.workers,
+        # The classify prompts are rendered per drug, so this hashes their SOURCE (the prefilter text plus
+        # system_prompt's code), not a rendered prompt like the dose and effects runs' prompt_sha256.
+        "prompt_source_sha256": hashlib.sha256((PREFILTER_PROMPT + "\n" + inspect.getsource(system_prompt)).encode()).hexdigest(),
     }
 
     _banner("CLASSIFY")
@@ -85,6 +98,16 @@ def main():
     drug_group = parser.add_mutually_exclusive_group()
     drug_group.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
     drug_group.add_argument("--drug-file", type=str, default=None, help="Text file of drug + aliases, one per line, first line canonical. Skips the LLM alias lookup.")
+    parser.add_argument(
+        "--drug-exclude-file",
+        type=str,
+        default=None,
+        help=(
+            "Optional aliases for enclosing compounds that must not count as target "
+            "mentions, one per line. For example, exclude 4'-DMA-7,8-DHF from a "
+            "7,8-DHF run while retaining texts that name both separately."
+        ),
+    )
     parser.add_argument(
         "--workers", type=int, default=20,
         help="Parallel workers for extract/classify (default: 20, use 1 for sequential). "
@@ -119,6 +142,20 @@ def main():
             )
         drug = drug_aliases[0]
 
+    drug_excluded_aliases = None
+    if args.drug_exclude_file:
+        if not drug:
+            parser.error("--drug-exclude-file requires --drug or --drug-file")
+        exclude_file_path = Path(args.drug_exclude_file)
+        raw_exclusions = exclude_file_path.read_text(encoding="utf-8").splitlines()  # unreadable file: let it raise
+        drug_excluded_aliases = list(
+            dict.fromkeys(line.strip() for line in raw_exclusions if line.strip())
+        )
+        if not drug_excluded_aliases:
+            parser.error(
+                f"--drug-exclude-file {exclude_file_path} contains no non-blank lines"
+            )
+
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -133,6 +170,7 @@ def main():
         workers=args.workers,
         drug=drug,
         drug_aliases=drug_aliases,
+        drug_excluded_aliases=drug_excluded_aliases,
     )
 
     run_pipeline(config, skip_extract=args.skip_extract, skip_canonicalize=args.skip_canonicalize, skip_prefilter=args.skip_prefilter)
