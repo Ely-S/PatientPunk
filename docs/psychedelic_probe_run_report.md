@@ -30,7 +30,7 @@ not be used for anything until that sample is done.
 ~1,207 legacy, and largest unit 5,998 chars vs 5,990. Source windows (4,180) and
 total characters (2,182,844) match exactly. The one-unit delta is unexplained.
 
-**Research constraints carried from `_handoff.txt` §2**, which govern any use of
+**Research constraints from `docs/second_pass_design.md` §8**, which govern any use of
 this output: self-selected Reddit reporting cohort, not a clinical cohort; no
 efficacy, causal, incidence, or dose-response claims; silence is never
 "no adverse events."
