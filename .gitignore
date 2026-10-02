@@ -13,6 +13,8 @@ __pycache__/
 build/
 dist/
 .env
+.env.*
+!.env.example
 
 # Runtime data — do not commit data files. Store them externally
 # (PatientPunk_data/ + S3) and provide download instructions in the README.
