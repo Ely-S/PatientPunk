@@ -61,7 +61,7 @@ _SIGNAL_SCORE: dict[str, float] = {
 # demographics CSV).  Used by load_variables to decide which columns are data.
 VARIABLE_META_COLUMNS: set[str] = {
     "author_hash", "source", "source_type", "post_id", "text_count",
-    "schema_id", "extraction_method", "extracted_at",
+    "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
 
@@ -329,7 +329,7 @@ def query_treatment_outcomes(
     age_bucket: str | None = None,
 ) -> list[dict]:
     """
-    Return treatment outcome statistics, optionally filtered by cohort.
+    Return treatment outcome statistics, excluding n/a signals, optionally filtered by cohort.
 
     Parameters
     ----------
@@ -345,7 +345,7 @@ def query_treatment_outcomes(
         avg_sentiment, avg_signal
     """
     params: list = []
-    where_clauses: list[str] = []
+    where_clauses: list[str] = ["tr.signal_strength != 'n/a'"]
 
     if drug:
         where_clauses.append("t.canonical_name = ? COLLATE NOCASE")
