@@ -55,6 +55,11 @@ cache/
 # Private per-probe databases (raw provider responses, source text, quotes)
 data/probes/
 
+# Rendered exports of the psychedelics study notebooks (regenerate with
+# studies/psychedelics/v2/_export_html.py)
+studies/psychedelics/**/*.html
+studies/psychedelics/**/*.pdf
+
 # Local-only agent config + session notes (not code, not versioned in this repo)
 .cursorrules
 CONTINUITY.md
