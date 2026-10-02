@@ -1,7 +1,7 @@
 # Second-pass extraction — design
 
 Status: design agreed, not yet built. Supersedes the prototype in
-`studies/psychedelics/extract_pharmacology.py`, which is a POC to be discarded.
+`studies/psychedelics/v1/extract_pharmacology.py`, which is a POC to be discarded.
 
 ---
 

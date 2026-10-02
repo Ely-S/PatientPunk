@@ -4,7 +4,7 @@
 
 This pipeline re-extracts drug/dose/effect/adverse-event data from raw Reddit
 text for patients already known to report psilocybin, ketamine, or LSD. It
-replaces `studies/psychedelics/extract_pharmacology.py`, which stays untouched.
+replaces `studies/psychedelics/v1/extract_pharmacology.py`, which stays untouched.
 
 Read `docs/second_pass_design.md` §8 before interpreting any output. The
 research and privacy constraints there govern this work: no efficacy or

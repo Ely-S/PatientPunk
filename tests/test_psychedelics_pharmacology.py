@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from studies.psychedelics import extract_pharmacology as ep
-from studies.psychedelics import psychedelics as study
+from studies.psychedelics.v1 import extract_pharmacology as ep
+from studies.psychedelics.v1 import psychedelics as study
 
 
 def _current_acceptance() -> dict:
