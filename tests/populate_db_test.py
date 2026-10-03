@@ -83,7 +83,7 @@ def _stub_response(messages, system):
 
     if system and "You extract the doses of" in str(system):
         return json.dumps([
-            {"item_id": it["item_id"], "doses": [{"low": 20, "high": 20, "unit": "mg", "outcome": "unclear", "quote": it["report"]}]
+            {"item_id": it["item_id"], "doses": [{"low": 20, "high": 20, "unit": "mg", "outcome": "unclear", "quote": it["report"], "attribution": "target"}]
              if "I take 20 mg" in it["report"] else []}
             for it in json.loads(prompt)["items"]
         ])

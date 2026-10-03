@@ -18,9 +18,9 @@ from utilities.db import ReportWriter
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 
 REPLY_DOSES = [
-    {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great."},
-    {"low": 40, "high": 40, "unit": "mg", "outcome": "negative", "quote": "Tried 40 mg once, headache."},
-    {"low": None, "high": None, "unit": None, "route": "nasal mucosal", "outcome": "positive", "quote": "I also tried it nasally and it helped."},
+    {"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", "outcome": "positive", "quote": "I take 20mg sublingual, it is great.", "attribution": "target"},
+    {"low": 40, "high": 40, "unit": "mg", "outcome": "negative", "quote": "Tried 40 mg once, headache.", "attribution": "target"},
+    {"low": None, "high": None, "unit": None, "route": "nasal mucosal", "outcome": "positive", "quote": "I also tried it nasally and it helped.", "attribution": "target"},
 ]
 
 
@@ -29,24 +29,30 @@ def test_prompt_and_response_parsing() -> None:
     assert "doses of 7,8-dhf" in prompt
     assert "7,8-dhf is also written: tropoflavin, 78dhf." in prompt  # the name itself is not repeated
     assert "Do not assign information about 4'-DMA-7,8-DHF to 7,8-dhf" in prompt
+    assert '"attribution": "other"' in prompt
+    assert '"unclear"' in prompt
     assert "also written" not in dose_system_prompt("ldn")
+    assert "I took 20mg of ldn" in dose_system_prompt("ldn")
 
+    candidates = [
+        {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
+        {"low": 1.5, "high": 1.5, "unit": None},
+        {"low": 2, "high": 2, "unit": "capsules"},
+        {"low": 2, "high": 2, "unit": "mg/kg"},
+        {"low": 1, "high": 3, "unit": "grams"},
+        {"low": 1, "high": 3, "unit": "grams"},
+        {"low": 20, "high": 10, "unit": "mg"},
+        {"low": "twenty", "high": 20, "unit": "mg"},
+        {"route": "oral mucosal", "quote": "I take it under my tongue."},
+        {"quote": "I take it."},
+        {"route": "oral mucosal"},
+        {"route": "oral mucosal", "quote": "q", "unit": "mg"},
+        {"route": "oral mucosal", "quote": "q", "low": 20},
+        {"route": "oral mucosal", "quote": "q", "high": 20},
+    ]
     raw = json.dumps([
         {"item_id": 0, "dose_sentences": ["x"], "doses": [
-            {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
-            {"low": 1.5, "high": 1.5, "unit": None},         # bare number, unit unknown
-            {"low": 2, "high": 2, "unit": "capsules"},       # any unit is kept as written
-            {"low": 2, "high": 2, "unit": "mg/kg"},
-            {"low": 1, "high": 3, "unit": "grams"},
-            {"low": 1, "high": 3, "unit": "grams"},          # duplicate
-            {"low": 20, "high": 10, "unit": "mg"},           # high below low
-            {"low": "twenty", "high": 20, "unit": "mg"},     # not a number
-            {"route": "oral mucosal", "quote": "I take it under my tongue."},  # route without an amount
-            {"quote": "I take it."},                        # unknown amount also needs a route
-            {"route": "oral mucosal"},                     # route without a supporting quote
-            {"route": "oral mucosal", "quote": "q", "unit": "mg"},  # unit without an amount
-            {"route": "oral mucosal", "quote": "q", "low": 20},     # partial numeric range
-            {"route": "oral mucosal", "quote": "q", "high": 20},
+            dict(candidate, attribution="target") for candidate in candidates
         ]},
         {"item_id": 1, "doses": []},
     ])
@@ -66,6 +72,22 @@ def test_prompt_and_response_parsing() -> None:
     for malformed in ('[{"item_id": 0}]', '[{"item_id": 0, "doses": null}]', '[{"item_id": 0, "doses": {}}]'):
         with pytest.raises(LLMParseError, match="must be an array"):  # retried, never written as "no doses"
             parse_dose_response(malformed, [0])
+
+
+def test_only_explicit_target_attribution_is_persisted() -> None:
+    """Issue 1: other-compound and uncertain doses cannot enter the target table."""
+    raw = json.dumps([{"item_id": 0, "doses": [
+        {"low": 20, "high": 20, "unit": "mg", "quote": "I took 20mg of 7,8-DHF", "attribution": "target"},
+        {"low": 15, "high": 15, "unit": "mg", "quote": "I took 15mg of NSI-189", "attribution": "other"},
+        {"low": 500, "high": 500, "unit": "mg", "quote": "I used 500mg of Lion's Mane", "attribution": "other"},
+        {"low": 10, "high": 10, "unit": "mg", "quote": "I later took 10mg", "attribution": "unclear"},
+    ]}])
+    per_item, dropped = parse_dose_response(raw, [0])
+    assert [dose.low for dose in per_item[0]] == [20]
+    assert dropped == 0
+    missing_attribution = json.dumps([{"item_id": 0, "doses": [{"low": 30, "high": 30, "unit": "mg"}]}])
+    with pytest.raises(LLMParseError, match="must have.*attribution"):
+        parse_dose_response(missing_attribution, [0])
 
 
 def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -110,7 +132,7 @@ def test_run_writes_one_row_per_dose_and_the_latest_view_follows_the_newest_run(
     config = json.loads(config)
     assert run_type == "report_doses" and config["excluded_compounds"] == ["4'-DMA-7,8-DHF"] and config["exclusions_source"] == "flags"
 
-    respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q"}] if "20mg" in it["report"] else []} for it in items]
+    respond["fn"] = lambda items: [{"item_id": it["item_id"], "doses": [{"low": 25, "high": 25, "unit": "mg", "quote": "q", "attribution": "target"}] if "20mg" in it["report"] else []} for it in items]
     second = run_dose_extraction(None, schema_db, "7,8-dhf", workers=1)
     with sqlite3.connect(schema_db) as conn:  # runs append; the view shows the report's rows from its newest run
         assert conn.execute("SELECT run_id, low FROM report_doses_latest").fetchall() == [(second.run_id, 25.0)]
