@@ -150,3 +150,15 @@ def test_compare_treats_a_missing_pair_as_negative():
     assert rows["any helped"]["agreement"] == 0.5
     assert rows["AE status"]["positive (left)"] == 1 and rows["AE status"]["positive (right)"] == 0
     assert rows["symptom-class set: exact match (effect-bearing in either run)"]["agreement"] == 0.0
+
+
+def test_sheet_shows_extracted_values_next_to_same_named_scores(probe_db, tmp_path):
+    out = tmp_path / "sheet.csv"
+    B.write_sheet(B.sample(B.load_records(probe_db, RUN), seed=1), out, 1, RUN)
+    header = next(csv.reader(out.open()))
+    assert len(header) == len(set(header))
+    rows = list(csv.DictReader(out.open()))
+    ae = next(r for r in rows if r["record_type"] == "adverse_event")
+    assert ae["extracted_ae_severity"] == "severe" and ae["extracted_ae_category"] == "other"
+    effect = next(r for r in rows if r["record_type"] == "effect")
+    assert effect["extracted_direction"] in {"helped", "no_effect"} and effect["direction"] == ""

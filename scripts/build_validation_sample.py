@@ -56,6 +56,9 @@ STRATA = (
      lambda r: r["record_type"] == "claim" and not r["included"]),
 )
 
+# Scoring columns share names with three extracted fields (direction, ae_category,
+# ae_severity), so those extracted values are written as `extracted_*` and COLUMNS
+# must never repeat a name: a repeat silently overwrites the extracted value.
 SCORE_COLUMNS = (
     "quote_supports_field", "drug_attribution", "self_actual_use", "direction",
     "symptom_class_matches_meaning", "ae_category", "ae_severity", "dose", "duration",
@@ -67,9 +70,9 @@ PEM_COLUMN = "describes_pem"
 COLUMNS = (
     "row_id", "stratum", "drug", "record_type", "claim_id", "record_index",
     "included", "subject", "exposure_status", "adverse_event_status",
-    "direction", "confidence", "magnitude", "magnitude_basis",
+    "extracted_direction", "confidence", "magnitude", "magnitude_basis",
     "symptom_target", "symptom_class", "symptom_labels",
-    "ae_category", "ae_raw_event", "ae_severity",
+    "extracted_ae_category", "ae_raw_event", "extracted_ae_severity",
     "duration_bin", "duration_raw", "doses",
     "field_quote", "subject_quote", "exposure_status_quote", "exposure_quote",
     "adverse_event_status_quote", "duration_quote", "dose_quotes",
@@ -196,12 +199,16 @@ def _prefill(r: dict) -> dict:
 
 
 def write_sheet(rows: list[dict], out: Path, seed: int, run_id: str) -> None:
+    assert len(COLUMNS) == len(set(COLUMNS)), "sheet columns must be unique"
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS, extrasaction="ignore")
         w.writeheader()
         for n, r in enumerate(rows, 1):
             row = {k: r.get(k) for k in COLUMNS} | _prefill(r)
+            row |= {"extracted_direction": r.get("direction"),
+                    "extracted_ae_category": r.get("ae_category"),
+                    "extracted_ae_severity": r.get("ae_severity")}
             row |= {"row_id": n, "symptom_labels": "|".join(r["labels"]),
                     "notes": "", "seed": seed, "run_id": run_id}
             w.writerow({k: "" if v is None else v for k, v in row.items()})

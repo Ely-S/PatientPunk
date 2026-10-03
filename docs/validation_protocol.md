@@ -37,6 +37,9 @@ records are concentrated in a few accounts.
 Each row is one record: an effect, an adverse event, or (for `random_excluded`) a whole
 claim. It shows the extracted fields, the quote cited for that record (`field_quote`), the
 claim's subject / exposure / dose / duration quotes, and the full `source_window_text`.
+Three extracted fields share a name with their scoring column, so they appear as
+`extracted_direction`, `extracted_ae_category` and `extracted_ae_severity`. The plain
+`direction`, `ae_category` and `ae_severity` columns are the verdicts.
 
 ## How to score
 
