@@ -34,28 +34,28 @@ def test_prompt_and_response_parsing() -> None:
     assert "also written" not in dose_system_prompt("ldn")
     assert "I took 20mg of ldn" in dose_system_prompt("ldn")
 
-    candidates = [
-        {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
-        {"low": 1.5, "high": 1.5, "unit": None},
-        {"low": 2, "high": 2, "unit": "capsules"},
-        {"low": 2, "high": 2, "unit": "mg/kg"},
-        {"low": 1, "high": 3, "unit": "grams"},
-        {"low": 1, "high": 3, "unit": "grams"},
-        {"low": 20, "high": 10, "unit": "mg"},
-        {"low": "twenty", "high": 20, "unit": "mg"},
-        {"route": "oral mucosal", "quote": "I take it under my tongue."},
-        {"quote": "I take it."},
-        {"route": "oral mucosal"},
-        {"route": "oral mucosal", "quote": "q", "unit": "mg"},
-        {"route": "oral mucosal", "quote": "q", "low": 20},
-        {"route": "oral mucosal", "quote": "q", "high": 20},
-    ]
-    raw = json.dumps([
+    items = [
         {"item_id": 0, "dose_sentences": ["x"], "doses": [
-            dict(candidate, attribution="target") for candidate in candidates
+            {"low": "20", "high": 20, "unit": "milligrams", "route": "snorted", "outcome": "great", "quote": " 20mg "},
+            {"low": 1.5, "high": 1.5, "unit": None},         # bare number, unit unknown
+            {"low": 2, "high": 2, "unit": "capsules"},       # any unit is kept as written
+            {"low": 2, "high": 2, "unit": "mg/kg"},
+            {"low": 1, "high": 3, "unit": "grams"},
+            {"low": 1, "high": 3, "unit": "grams"},          # duplicate
+            {"low": 20, "high": 10, "unit": "mg"},           # high below low
+            {"low": "twenty", "high": 20, "unit": "mg"},     # not a number
+            {"route": "oral mucosal", "quote": "I take it under my tongue."},  # route without an amount
+            {"quote": "I take it."},                        # unknown amount also needs a route
+            {"route": "oral mucosal"},                     # route without a supporting quote
+            {"route": "oral mucosal", "quote": "q", "unit": "mg"},  # unit without an amount
+            {"route": "oral mucosal", "quote": "q", "low": 20},     # partial numeric range
+            {"route": "oral mucosal", "quote": "q", "high": 20},
         ]},
         {"item_id": 1, "doses": []},
-    ])
+    ]
+    for dose in items[0]["doses"]:
+        dose["attribution"] = "target"
+    raw = json.dumps(items)
     per_item, dropped = parse_dose_response(raw, [0, 1])
     assert dropped == 7 and per_item[1] == []
     assert [(d.low, d.high, d.unit, d.route, d.outcome, d.quote) for d in per_item[0]] == [
