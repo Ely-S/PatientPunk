@@ -21,7 +21,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from pipeline.report_context import (
     DEFAULT_PARENT_CHARS,
     DEFAULT_SOLO_ABOVE_CHARS,
-    ReportContext,
     Step,
     StepSummary,
     response_items,
@@ -94,6 +93,12 @@ class DoseValue(BaseModel):
         return self
 
 
+class DoseCandidate(DoseValue):
+    """Model response boundary; only target-attributed candidates are persisted."""
+
+    attribution: Literal["target", "other", "unclear"]
+
+
 def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, list[DoseValue]], int]:
     """Doses per item id, and how many dose objects did not validate."""
     result: dict[int, list[DoseValue]] = {}
@@ -105,10 +110,14 @@ def parse_dose_response(raw: str, expected_ids: list[int]) -> tuple[dict[int, li
         if not isinstance(raw_doses, list):  # missing or malformed: the batch is split and retried, nothing is written
             raise LLMParseError("\"doses\" must be an array")
         for raw_dose in raw_doses:
+            if not isinstance(raw_dose, dict) or raw_dose.get("attribution") not in {"target", "other", "unclear"}:
+                raise LLMParseError("each dose candidate must have target, other, or unclear attribution")
             try:
-                dose = DoseValue.model_validate(raw_dose)
+                dose = DoseCandidate.model_validate(raw_dose)
             except ValidationError:
                 dropped += 1
+                continue
+            if dose.attribution != "target":
                 continue
             key = (dose.low, dose.high, dose.unit, dose.route, dose.outcome, dose.quote)
             if key in seen:

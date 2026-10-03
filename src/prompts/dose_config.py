@@ -14,9 +14,12 @@ ROUTE_CATEGORIES = (
 OUTCOMES = ("positive", "negative", "neutral", "unclear")
 
 _EXAMPLE = (
-    '[{"item_id": 0, "dose_sentences": ["20mg sublingual gave me a clear, calm focus"], '
-    '"doses": [{"low": 20, "high": 20, "unit": "mg", "route": "oral mucosal", '
-    '"outcome": "positive", "quote": "20mg sublingual gave me a clear, calm focus"}]}]'
+    '[{"item_id": 0, "dose_sentences": ["I took 20mg of <TARGET>", '
+    '"I also took 10mg of another compound"], "doses": ['
+    '{"low": 20, "high": 20, "unit": "mg", "attribution": "target", '
+    '"quote": "I took 20mg of <TARGET>"}, '
+    '{"low": 10, "high": 10, "unit": "mg", "attribution": "other", '
+    '"quote": "I also took 10mg of another compound"}]}]'
 )
 
 
@@ -36,13 +39,14 @@ def dose_system_prompt(
             f"Do not assign information about {', '.join(excluded_compounds)} to {name}; "
             "they are different compounds.\n"
         )
+    example = _EXAMPLE.replace("<TARGET>", name)
     return f"""You extract the doses of {name} that Reddit authors report taking. Each input item is one
 report; "replying_to", when present, is the post the author is answering.
 
 {alias_line}{excluded_line}
 Return ONLY a JSON array with exactly one object per input item, in input order, shaped like:
 
-{_EXAMPLE}
+{example}
 
 Dose rules:
 
@@ -51,6 +55,11 @@ Dose rules:
    text, someone else's dose, bottle concentration, and mechanism discussion do not count.
    Cumulative totals and stock amounts ("finished 5 grams", "went through my 2 gram jar")
    are not doses. Never assign another compound's dose or another person's dose to {name}.
+   For each personal-use candidate, assign "attribution": "target" for {name}, "other" for
+   another compound, or "unclear" if the compound cannot be established. Include all three
+   kinds in "doses"; only "target" candidates will be saved. A mention of {name} elsewhere
+   does not make an adjacent dose its dose. Follow compound switches and resolve pronouns
+   from context; if still uncertain, use "unclear", never guess "target".
 2. Copy the unit exactly as the author wrote it, whatever it is: "mg", "mcg", "g", "ml",
    "L", "IU", "drops", "capsules", "tablets", "sprays", "puffs", "patches", "mg/kg", "%".
    Never convert or normalise it. When the author gives a bare number with no unit
@@ -60,9 +69,8 @@ Dose rules:
    recorded at the amount taken per administration (12.5).
 4. Put in "dose_sentences" every sentence of the report that contains an amount with a
    unit or an explicit route, verbatim, before anything else. Then, for each listed sentence
-   that reports the author's own {name} dose or route, create one dose object. A listed sentence
-   that is not the author's own per-administration {name} dose or route gets no dose object. An item with
-   no such sentence has "doses": [].
+   that reports the author's own per-administration dose or route, create one dose object
+   with its compound attribution. An item with no such sentence has "doses": [].
 5. "quote" is that sentence, copied exactly from the report, never from "replying_to". A
    dose whose quote is not found verbatim in the report is discarded.
 6. "route" is one of "oral mucosal" (sublingual, buccal, held in the mouth), "swallowed
