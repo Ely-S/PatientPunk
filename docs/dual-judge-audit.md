@@ -34,6 +34,9 @@ with their subscription accounts. Claude must show `authMethod: claude.ai` in
 a first live call is the definitive check. If that happens, use `claude auth login`.
 No `.env` file is read by the audit. Pay-as-you-go API-key and alternate-provider
 environment variables are removed from each judge process.
+The Claude judge uses `--safe-mode` to disable customizations while retaining OAuth
+authentication. Do not replace it with `--bare`: bare mode does not read OAuth or
+keychain credentials and cannot use this subscription-only setup.
 
 With `PATIENTPUNK_DATA` set to the external data directory, an unattended command is:
 

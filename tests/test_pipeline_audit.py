@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -161,3 +162,17 @@ def test_subscription_environment_removes_payg_credentials(monkeypatch: pytest.M
 
 def test_cli_model_configuration_is_explicit() -> None:
     assert CliJudge("opus", "claude-opus-5-5").model == "claude-opus-5-5"
+
+
+def test_claude_judge_keeps_oauth_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.extend(command)
+        payload = {"structured_output": verdict("supported").model_dump()}
+        return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert CliJudge("opus", "claude-opus-5-5").review("fabricated test").judgment == "supported"
+    assert "--safe-mode" in seen
+    assert "--bare" not in seen

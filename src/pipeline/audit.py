@@ -206,7 +206,7 @@ class CliJudge:
             work = Path(directory)
             if self.backend == "opus":
                 command = [
-                    "claude", "--bare", "-p", "--model", self.model,
+                    "claude", "--safe-mode", "-p", "--model", self.model,
                     "--tools", "", "--strict-mcp-config", "--disallowedTools", "mcp__*",
                     "--no-session-persistence", "--output-format", "json",
                     "--json-schema", json.dumps(schema),
@@ -232,7 +232,8 @@ class CliJudge:
                 except (ValueError, AttributeError):
                     message = ""
                 if "oauth session expired" in message or "not logged in" in message:
-                    raise JudgeUnavailableError("Claude subscription session expired; run claude auth login")
+                    raise JudgeUnavailableError("Claude subscription authentication unavailable; "
+                                                "run claude auth login")
             raise JudgeUnavailableError(f"{self.backend} CLI failed (exit {completed.returncode}); "
                                         "check subscription access and model availability")
         payload = json.loads(completed.stdout)
