@@ -46,6 +46,8 @@ cache/
 
 # Database files
 *.db
+*.sqlite
+*.sqlite3
 
 # Local-only agent config + session notes (not code, not versioned in this repo)
 .cursorrules
