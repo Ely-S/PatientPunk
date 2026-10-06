@@ -3,8 +3,8 @@
 This optional, read-only step audits the latest persisted sentiment, dose, and effect
 decisions after those pipelines complete. It uses two fresh CLI sessions per decision:
 Claude Opus 5.5 and GPT-6 Astra, with GPT-6.1 Sol selectable. The first verdicts are
-independent. When they disagree, each sees the prior round's two verdicts and rechecks
-the original report. Discussion stops at agreement or 10 rounds. Agreement on an
+independent. When they disagree, each sees every prior verdict, labeled as its own or
+the other judge's, and rechecks the original report. Discussion stops at agreement or 10 rounds. Agreement on an
 unsupported decision requires the same issue code and exact evidence quote. The audit
 never changes the pipeline database. It writes all verdicts, exchanges, and provenance
 to a separate SQLite database outside the checkout.
@@ -13,8 +13,8 @@ to a separate SQLite database outside the checkout.
 
 One task is created for each latest stored treatment report, dose row, and effect row.
 A completed dose or effect run with no rows creates a `no_dose` or `no_effect` task for
-that report. A response is `supported`, `flagged`, or `unresolved`. Invalid evidence,
-unclear cases, and disagreement after 10 rounds remain unresolved. A CLI failure stops
+that report. A response is `supported`, `flagged`, or `unresolved`. A malformed reply or invalid
+evidence quote is retried once; a reply that fails again, unclear cases, and disagreement after 10 rounds remain unresolved. A CLI failure stops
 the run; completed decisions are retained and skipped on restart. This is model
 agreement, not ground truth. Calibrate both judges against a human-reviewed sample
 before treating aggregate audit rates as validation metrics.

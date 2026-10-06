@@ -117,7 +117,8 @@ def test_bad_evidence_is_unresolved_without_database_change(pipeline_db: Path,
                   evidence_quote="Not in this report", rationale="Wrong dose attributed here.")
     output = tmp_path / "audit.sqlite"
     counts = run_audit(pipeline_db, output, kinds={"dose"}, check_auth=False,
-                       opus=SequenceJudge(bad), codex=SequenceJudge(verdict("supported")))
+                       opus=SequenceJudge(bad, bad),
+                       codex=SequenceJudge(verdict("supported")))
     assert counts.unresolved == 1
     assert counts.supported == 0
     with sqlite3.connect(pipeline_db) as conn:
@@ -125,6 +126,7 @@ def test_bad_evidence_is_unresolved_without_database_change(pipeline_db: Path,
     with sqlite3.connect(output) as conn:
         stored = json.loads(conn.execute("SELECT result_json FROM audit_results").fetchone()[0])
     assert stored["status"] == "unresolved"
+    assert len(stored["rounds"][0]["errors"]) == 2  # original reply and one retry
 
 
 def test_resume_skips_completed_decision(pipeline_db: Path, tmp_path: Path) -> None:
@@ -176,3 +178,55 @@ def test_claude_judge_keeps_oauth_available(monkeypatch: pytest.MonkeyPatch) -> 
     assert CliJudge("opus", "claude-opus-5-5").review("fabricated test").judgment == "supported"
     assert "--safe-mode" in seen
     assert "--bare" not in seen
+
+
+def _dose_task() -> AuditTask:
+    return AuditTask(decision_id="d", report_id=1, run_id=2, record_id=3,
+                     source=Source(post_id="p", report="I took 25 mg myself",
+                                   treatment="7,8-DHF"),
+                     value=DoseValue(low=25, high=25, unit="mg"))
+
+
+def test_discussion_tells_each_judge_which_prior_verdict_is_its_own() -> None:
+    opus = SequenceJudge(verdict("unsupported", "wrong_compound"), verdict("supported"))
+    codex = SequenceJudge(verdict("supported"), verdict("supported"))
+    adjudicate(_dose_task(), opus, codex)
+
+    def prior(prompt: str) -> list[dict[str, dict[str, str]]]:
+        return json.loads(prompt.split("Prior rounds JSON:", 1)[1])
+
+    assert opus.prompts[1] != codex.prompts[1]
+    assert prior(opus.prompts[1])[0]["your_verdict"]["judgment"] == "unsupported"
+    assert prior(opus.prompts[1])[0]["other_judge_verdict"]["judgment"] == "supported"
+    assert prior(codex.prompts[1])[0]["your_verdict"]["judgment"] == "supported"
+    assert prior(codex.prompts[1])[0]["other_judge_verdict"]["judgment"] == "unsupported"
+    assert "opus" not in opus.prompts[1] and "codex" not in opus.prompts[1]
+
+
+def test_one_malformed_reply_is_retried_not_recorded_as_unresolved() -> None:
+    bad = Verdict(judgment="supported", issue_code="none",
+                  evidence_quote="Not in this report", rationale="Quote does not match source.")
+    opus = SequenceJudge(bad, verdict("supported"))
+    result = adjudicate(_dose_task(), opus, SequenceJudge(verdict("supported")))
+    assert result.status == "supported"
+    assert len(opus.prompts) == 2 and opus.prompts[0] == opus.prompts[1]
+    assert result.rounds[0].errors == []
+    assert len(result.rounds[0].retried) == 1 and result.rounds[0].retried[0].startswith("opus:")
+
+
+def test_dose_and_effect_tasks_use_their_own_run_exclusions(pipeline_db: Path) -> None:
+    with sqlite3.connect(pipeline_db) as conn:
+        conn.execute("UPDATE extraction_runs SET config=? WHERE run_id=2",
+                     (json.dumps({"excluded_compounds": ["flag-compound"]}),))
+    tasks = load_tasks(pipeline_db, "7,8-DHF")
+    by_kind = {task.value.kind: task.source.excluded_compounds for task in tasks}
+    assert by_kind == {"sentiment": ["4-DMA"], "dose": ["flag-compound"], "effect": ["4-DMA"]}
+
+
+def test_claude_output_without_verdict_is_a_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, json.dumps({"subtype": "success"}), "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="neither structured_output nor a result"):
+        CliJudge("opus", "claude-opus-5-5").review("fabricated test")

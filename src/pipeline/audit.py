@@ -118,6 +118,7 @@ class JudgeRound(BaseModel):
     opus: Verdict | None = None
     codex: Verdict | None = None
     errors: list[str] = Field(default_factory=list)
+    retried: list[str] = Field(default_factory=list)
 
 
 class AuditResult(BaseModel):
@@ -164,7 +165,20 @@ def _verify_verdict(verdict: Verdict, task: AuditTask) -> Verdict:
     return verdict
 
 
-def _render_prompt(name: str, task: AuditTask, previous: list[JudgeRound]) -> str:
+JudgeName = Literal["opus", "codex"]
+
+
+def _from_perspective(previous: list[JudgeRound], judge: JudgeName) -> list[dict[str, object]]:
+    """Label prior verdicts as the reader's own or the other judge's, not by backend name."""
+    other: JudgeName = "codex" if judge == "opus" else "opus"
+    return [{"round_number": round_.round_number,
+             "your_verdict": getattr(round_, judge).model_dump(),
+             "other_judge_verdict": getattr(round_, other).model_dump()}
+            for round_ in previous]
+
+
+def _render_prompt(name: str, task: AuditTask, previous: list[JudgeRound],
+                   judge: JudgeName | None = None) -> str:
     template = (PROMPTS / name).read_text(encoding="utf-8")
     expected = {"task"} if not previous else {"task", "verdicts"}
     fields = {field for _, field, _, _ in Formatter().parse(template) if field}
@@ -172,7 +186,9 @@ def _render_prompt(name: str, task: AuditTask, previous: list[JudgeRound]) -> st
         raise ValueError(f"{name} template fields {fields} do not match {expected}")
     values = {"task": task.model_dump_json(indent=2)}
     if previous:
-        values["verdicts"] = json.dumps([round_.model_dump() for round_ in previous], indent=2)
+        if judge is None:
+            raise ValueError("discussion prompts are rendered for one judge")
+        values["verdicts"] = json.dumps(_from_perspective(previous, judge), indent=2)
     return template.format(**values)
 
 
@@ -238,6 +254,9 @@ class CliJudge:
                                         "check subscription access and model availability")
         payload = json.loads(completed.stdout)
         if self.backend == "opus":
+            if not isinstance(payload, dict) or not (payload.get("structured_output")
+                                                     or isinstance(payload.get("result"), str)):
+                raise ValueError("Claude output has neither structured_output nor a result string")
             payload = payload.get("structured_output") or json.loads(payload["result"])
         return Verdict.model_validate(payload)
 
@@ -339,6 +358,14 @@ def load_tasks(db_path: Path, drug: str | None = None,
                 """, (report_id, "report_doses" if kind == "dose" else "report_effects")).fetchone()[0]
                 if latest is None:
                     continue
+                # Dose/effect runs record the exclusions their prompt actually used (flags may
+                # override the sentiment run's list), so audit against those.
+                step_config = json.loads(conn.execute(
+                    "SELECT config FROM extraction_runs WHERE run_id=?", (latest,)).fetchone()[0] or "{}")
+                step_source = source
+                if step_config.get("excluded_compounds") is not None:
+                    step_source = source.model_copy(
+                        update={"excluded_compounds": list(step_config["excluded_compounds"])})
                 conn.row_factory = sqlite3.Row
                 records = conn.execute(f"SELECT * FROM {table} WHERE report_id=? AND run_id=? ORDER BY ordinal",
                                        (report_id, latest)).fetchall()
@@ -359,9 +386,9 @@ def load_tasks(db_path: Path, drug: str | None = None,
                         value = EffectValue(**{k: record[k] for k in
                                                ("domain", "symptom", "direction", "severity",
                                                 "attribution", "quote", "dose_id")}, linked_dose=linked)
-                    tasks.append(_task(report_id, latest, record[key], source, value))
+                    tasks.append(_task(report_id, latest, record[key], step_source, value))
                 if not records:
-                    tasks.append(_task(report_id, latest, None, source,
+                    tasks.append(_task(report_id, latest, None, step_source,
                                        NoRowValue(kind="no_dose" if kind == "dose" else "no_effect")))
         return tasks
     finally:
@@ -378,27 +405,50 @@ def _agreed(first: Verdict, second: Verdict) -> bool:
     return True
 
 
+REVIEW_ATTEMPTS = 2
+
+
+def _valid_review(judge: Judge, prompt: str, task: AuditTask) -> tuple[Verdict | None, list[str]]:
+    """Retry a malformed reply once so a formatting slip is not stored as a disagreement."""
+    failures: list[str] = []
+    for _ in range(REVIEW_ATTEMPTS):
+        try:
+            return _verify_verdict(judge.review(prompt), task), failures
+        except (ValueError, json.JSONDecodeError) as exc:
+            failures.append(f"{type(exc).__name__}: {exc}")
+    return None, failures
+
+
 def adjudicate(task: AuditTask, opus: Judge, codex: Judge,
                max_rounds: int = 10) -> AuditResult:
     """Independent first pass; exchange prior verdicts only after disagreement."""
     if not 1 <= max_rounds <= 10:
         raise ValueError("max_rounds must be between 1 and 10")
     rounds: list[JudgeRound] = []
+    judges: dict[JudgeName, Judge] = {"opus": opus, "codex": codex}
     for number in range(1, max_rounds + 1):
-        prompt = _render_prompt("initial.txt" if number == 1 else "discussion.txt",
-                                task, rounds)
+        if number == 1:
+            initial = _render_prompt("initial.txt", task, rounds)
+            prompts = {name: initial for name in judges}
+        else:
+            prompts = {name: _render_prompt("discussion.txt", task, rounds, judge=name)
+                       for name in judges}
         with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = {"opus": pool.submit(opus.review, prompt),
-                       "codex": pool.submit(codex.review, prompt)}
+            futures = {name: pool.submit(_valid_review, judge, prompts[name], task)
+                       for name, judge in judges.items()}
             results: dict[str, Verdict] = {}
             errors: list[str] = []
+            retried: list[str] = []
             for name, future in futures.items():
-                try:
-                    results[name] = _verify_verdict(future.result(), task)
-                except (ValueError, json.JSONDecodeError) as exc:
-                    errors.append(f"{name}: {type(exc).__name__}: {exc}")
+                result, failures = future.result()
+                failures = [f"{name}: {failure}" for failure in failures]
+                if result is None:
+                    errors.extend(failures)
+                else:
+                    results[name] = result
+                    retried.extend(failures)
         round_ = JudgeRound(round_number=number, opus=results.get("opus"),
-                            codex=results.get("codex"), errors=errors)
+                            codex=results.get("codex"), errors=errors, retried=retried)
         rounds.append(round_)
         if errors:
             break
