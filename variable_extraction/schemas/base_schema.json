@@ -34,6 +34,11 @@
       "confidence": "medium",
       "notes": "Each dose remains linked to its treatment. Decomposed downstream into dosage_treatment and dosage_value columns."
     },
+    "administration_route": {
+      "description": "How the author explicitly reports a treatment was administered to them, as 'treatment: route' pairs",
+      "confidence": "medium",
+      "notes": "Uses a controlled route vocabulary and is decomposed downstream into administration_route_treatment and administration_route_value columns."
+    },
     "treatment_outcome": {
       "description": "Response to treatments as 'drug: outcome: symptom' triples",
       "confidence": "medium",

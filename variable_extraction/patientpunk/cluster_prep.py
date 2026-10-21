@@ -36,12 +36,14 @@ def read_records(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-# Carry-along columns kept for analysis but NOT clustered: the raw
-# "drug: outcome: symptom" triple (high-cardinality; the bucket lives in
-# treatment_outcome_label) and the decomposed drug / symptom names.
+# Carry-along columns kept for analysis but not clustered: high-cardinality
+# treatment outcome triples and names, dosage pairs and components, and raw
+# administration route pairs and treatment names. administration_route_value
+# remains clusterable because it uses a controlled vocabulary.
 _ANALYSIS_CARRY = {
     "treatment_outcome", "treatment_outcome_drug", "treatment_outcome_symptom",
     "dosage", "dosage_treatment", "dosage_value",
+    "administration_route", "administration_route_treatment",
 }
 
 
