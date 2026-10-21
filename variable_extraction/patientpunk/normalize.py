@@ -24,7 +24,12 @@ from __future__ import annotations
 
 import re
 
-from .treatment_fields import DOSAGE_FIELD, TreatmentValuePair
+from .treatment_fields import (
+    ADMINISTRATION_ROUTE_FIELD,
+    DOSAGE_FIELD,
+    TreatmentValuePair,
+    normalize_administration_route,
+)
 
 # --- cleaning ---------------------------------------------------------------
 
@@ -275,6 +280,12 @@ TREATMENT_OUTCOME_DERIVED = [
 DOSAGE_TREATMENT = "dosage_treatment"
 DOSAGE_VALUE = "dosage_value"
 DOSAGE_DERIVED = [DOSAGE_TREATMENT, DOSAGE_VALUE]
+ADMINISTRATION_ROUTE_TREATMENT = "administration_route_treatment"
+ADMINISTRATION_ROUTE_VALUE = "administration_route_value"
+ADMINISTRATION_ROUTE_DERIVED = [
+    ADMINISTRATION_ROUTE_TREATMENT,
+    ADMINISTRATION_ROUTE_VALUE,
+]
 _OUTCOME_LABELS = {"helped", "no_effect", "worsened", "mixed", "unknown"}
 
 
@@ -339,13 +350,35 @@ def decompose_dosage(cell: str, sep: str = " | ") -> dict[str, str]:
     }
 
 
+def decompose_administration_route(cell: str, sep: str = " | ") -> dict[str, str]:
+    """Split linked, recognized route pairs into aligned derived columns."""
+    treatments: list[str] = []
+    routes: list[str] = []
+    for entry in (cell or "").split(sep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        pair = TreatmentValuePair.from_text(entry)
+        if pair is None:
+            continue
+        route = normalize_administration_route(pair.value)
+        if route is None:
+            continue
+        treatments.append(pair.treatment)
+        routes.append(route.value)
+    return {
+        ADMINISTRATION_ROUTE_TREATMENT: sep.join(treatments),
+        ADMINISTRATION_ROUTE_VALUE: sep.join(routes),
+    }
+
+
 def normalize_records(rows: list[dict], *, sep: str = " | ",
                       drop_fields: set[str] | None = None) -> list[dict]:
     """Return rows with FIELD_VOCAB fields normalized and DROP_FIELDS blanked.
 
     Structured treatment fields are preserved and decomposed into parallel
     columns. ``treatment_outcome`` produces label / drug / symptom columns;
-    ``dosage`` produces treatment / value columns.
+    ``dosage`` and ``administration_route`` produce treatment / value columns.
     """
     drop = DROP_FIELDS if drop_fields is None else drop_fields
     out = []
@@ -355,6 +388,10 @@ def normalize_records(rows: list[dict], *, sep: str = " | ",
             nr.update(decompose_treatment_outcome(nr.get(TREATMENT_OUTCOME_RAW, ""), sep))
         if DOSAGE_FIELD in nr:
             nr.update(decompose_dosage(nr.get(DOSAGE_FIELD, ""), sep))
+        if ADMINISTRATION_ROUTE_FIELD in nr:
+            nr.update(decompose_administration_route(
+                nr.get(ADMINISTRATION_ROUTE_FIELD, ""), sep
+            ))
         for f in FIELD_VOCAB:
             if f == TREATMENT_OUTCOME_RAW:
                 continue  # keep raw triples; bucket lives in treatment_outcome_label

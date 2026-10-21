@@ -288,6 +288,15 @@ class TestBuildFieldRegistryDiscovered:
         assert fields["dosage"]["source"] == "base"
         assert fields["dosage"]["confidence"] == "medium"
 
+    def test_shipped_base_schema_registers_administration_route(self):
+        base_path = Path(__file__).parent.parent / "schemas" / "base_schema.json"
+        base = json.loads(base_path.read_text(encoding="utf-8"))
+        registry = build_field_registry(base, {"extension_fields": {}})
+        fields = {row["field"]: row for row in registry}
+
+        assert fields["administration_route"]["source"] == "base"
+        assert fields["administration_route"]["confidence"] == "medium"
+
     def test_appends_discovered(self):
         ext = {"extension_fields": {}}
         disc = {"extension_fields": {
