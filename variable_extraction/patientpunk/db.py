@@ -116,10 +116,22 @@ def register_run(
 
 # ── ETL: Shaun's pipeline ──────────────────────────────────────────────────────
 
+def _primary_subreddit(row: dict, fallback: str) -> str:
+    """Pick the patient's main community out of a record's ``subreddits`` column.
+    """
+    raw = (row.get("subreddits") or "").strip()
+    if raw:
+        name = raw.split()[0].rsplit(":", 1)[0]
+        if name:
+            return name
+    return fallback
+
+
 def load_extractions(
     conn: sqlite3.Connection,
     csv_path: Path,
     run_id: int | None = None,
+    subreddit: str = "unknown",
 ) -> int:
     """
     Load a CSV with extraction data -> user_profiles + conditions.
@@ -154,7 +166,7 @@ def load_extractions(
         conn.execute(
             "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
             " VALUES (?, ?, ?)",
-            (author_hash, "covidlonghaulers", int(time.time())),
+            (author_hash, _primary_subreddit(row, subreddit), int(time.time())),
         )
 
         # Demographics -> user_profiles
@@ -241,6 +253,7 @@ def load_variables(
     csv_path: Path,
     run_id: int,
     skip_columns: set[str] | None = None,
+    subreddit: str = "unknown",
 ) -> int:
     """Load every extracted variable column from records.csv into the EAV
     ``variables`` table -- one row per non-empty, non-metadata cell.
@@ -272,7 +285,7 @@ def load_variables(
             conn.execute(
                 "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
                 " VALUES (?, ?, ?)",
-                (author_hash, "covidlonghaulers", int(time.time())),
+                (author_hash, _primary_subreddit(row, subreddit), int(time.time())),
             )
             post_id = (row.get("post_id") or "").strip() or None
             for col in value_cols:
