@@ -290,6 +290,22 @@ def test_publish_uploads_verifies_catalogs_and_freezes_the_yaml(tmp_path):
         publish_db.cmd_publish(publish_args(db), s3=s3)
 
 
+def test_uploaded_time_is_taken_before_the_verification_download(tmp_path):
+    db = finalized(tmp_path)
+    s3 = FakeS3({("patientpunk", "INDEX.md"): INDEX})
+    stamps = {}
+    real_download = s3.download
+
+    def slow_download(bucket, key, path):
+        stamps["download"] = publish_db.datetime.now(publish_db.UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")
+        real_download(bucket, key, path)
+
+    s3.download = slow_download
+    publish_db.cmd_publish(publish_args(db), s3=s3)
+    uploaded = yaml.safe_load(publish_db.provenance_path(db).read_text(encoding="utf-8"))["publication"]["uploaded_utc"]
+    assert uploaded <= stamps["download"][:19] + "Z"
+
+
 def test_publish_with_catalog_copy(tmp_path):
     db = finalized(tmp_path)
     s3 = FakeS3({("patientpunk", "INDEX.md"): INDEX})

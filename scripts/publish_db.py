@@ -356,15 +356,16 @@ def cmd_publish(args, s3: S3 | None = None) -> None:
 
     sha = record["output"]["sha256"]
     s3.upload(db, bucket, key, sha)
+    uploaded = datetime.now(UTC)  # before the verification download, which can take as long
     try:
-        publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha)
+        publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha, uploaded)
     except PublishError as e:
         raise PublishError(f"{e}\ns3://{bucket}/{key} is uploaded but publishing is incomplete; finish the "
                            "remaining steps by hand (docs/database-provenance.md) and record them") from e
 
 
 def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
-                     bucket: str, key: str, yaml_key: str, sha: str) -> None:
+                     bucket: str, key: str, yaml_key: str, sha: str, uploaded: datetime) -> None:
     """Everything after the database upload: verify, catalog, then the YAML."""
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / db.name
@@ -372,7 +373,6 @@ def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
         if sha256_file(copy) != sha:
             raise PublishError(f"s3://{bucket}/{key} does not match the local SHA-256; do not use it")
     head = s3.head(bucket, key) or {}
-    uploaded = datetime.now(UTC)
 
     catalog_uri = None
     if args.catalog_copy:
