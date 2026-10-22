@@ -44,6 +44,9 @@ cache/
 **/extraction_metadata_*.json
 **/phase1_candidates.json
 
+# Run-specific database provenance stays beside external data, never in Git.
+**/*_provenance.yaml
+
 # Database files
 *.db
 
