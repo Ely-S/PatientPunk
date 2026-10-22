@@ -21,7 +21,7 @@ Keep credentials, signed URLs, `.env` contents, patient text, identifiers, datab
 
 ## Finalizing the database
 
-SQLite can keep committed writes in a `<stem>.db-wal` file beside the database, so the `.db` alone may be incomplete. After the last writer exits:
+SQLite can keep committed writes in a `<stem>.db-wal` file beside the database, so the `.db` alone may be incomplete. After the last writer exits, run `uv run python scripts/publish_db.py finalize <db>`. It does the following and writes the results into the YAML's `output` section; set `database.status` and `completed_utc` yourself.
 
 1. Run `PRAGMA wal_checkpoint(TRUNCATE);` and close the connection.
 2. Confirm no non-empty `<stem>.db-wal` or `<stem>.db-journal` file remains.
@@ -31,6 +31,8 @@ SQLite can keep committed writes in a `<stem>.db-wal` file beside the database, 
 Do not open the database for writing after hashing; a later write makes a new snapshot.
 
 ## Publishing
+
+Publish only with `uv run python scripts/publish_db.py publish <db> --s3-uri s3://patientpunk/<prefix>/<stem>.db --label <label> [--catalog-copy]`. A Claude Code hook (`.claude/settings.json`) blocks direct `.db` uploads with `aws s3`. Other files upload normally, and a folder upload (`sync`, or `cp --recursive`) is blocked only when the folder holds a `.db` that its `--exclude`/`--include` filters would upload; add `--exclude "*.db"` to send the rest. The script first checks the YAML: completed status, full commit SHA, commands with working directories, finalized output that still matches the file, no machine-local paths, and nothing that looks like a secret. It then does these steps, stopping at the first failure:
 
 1. Choose a new key for the database and confirm it is free: `aws s3api head-object` must report that the object does not exist. Upload the YAML later to the same prefix as `<stem>_provenance.yaml`.
 2. Upload the finalized `.db`, download it again, and compare SHA-256 values. An S3 ETag is not a SHA-256.
@@ -42,15 +44,15 @@ Do not open the database for writing after hashing; a later write makes a new sn
 `s3://patientpunk/INDEX.md` lists every published database. Several agents can update it at the same time, so change it only with a conditional write:
 
 1. Run `aws s3api get-object --bucket patientpunk --key INDEX.md INDEX.md` and note the `ETag` it prints.
-2. Add one row: original S3 URI, catalog-copy URI or `none`, scope label, run date, upload date, bytes, SHA-256, and YAML URI. Update the object and byte totals and the UTC timestamp in the header. If the table lacks a run date, SHA-256, or YAML column, add it and fill older rows with `not recorded`.
+2. Add one row: original S3 URI, catalog-copy URI or `none`, scope label, run date, upload date, bytes, SHA-256, and YAML URI. Refresh the `Listed databases:` totals line above the table (object count, bytes, UTC timestamp). If the table lacks a run date, SHA-256, or YAML column, add it and fill older rows with `not recorded`.
 3. Run `aws s3api put-object --bucket patientpunk --key INDEX.md --body INDEX.md --if-match <ETag>`. If S3 answers `PreconditionFailed`, someone else changed the index first: start again from step 1.
 4. Download the index again, confirm the row, and record the time in `publication.catalog_verified_utc`.
 
-If `INDEX.md` does not exist, build it from a fresh `aws s3 ls s3://patientpunk/ --recursive` inventory and write it with `--if-none-match "*"`. A catalog copy is a second copy of the database under `s3://patientpunk/database_catalog/by-upload-date/uploaded-<YYYY-MM-DD>/<label>/<original key>`, for browsing by upload date and scope; make one only when asked.
+To find gaps, `uv run python scripts/publish_db.py audit [--prefix <prefix>] [--strict]` lists every `.db` in the bucket (catalog copies excluded) and whether it has a provenance YAML beside it and a row in `INDEX.md`. If `INDEX.md` does not exist, build it from a fresh `aws s3 ls s3://patientpunk/ --recursive` inventory and write it with `--if-none-match "*"`. A catalog copy is a second copy of the database under `s3://patientpunk/database_catalog/by-upload-date/uploaded-<YYYY-MM-DD>/<label>/<original key>`, for browsing by upload date and scope; make one only when asked.
 
 ## YAML shape
 
-Use observed values; explain `null` fields and add workflow-specific fields as needed.
+Use observed values; explain `null` fields and add workflow-specific fields as needed. `publish_db.py` rewrites the file and drops YAML `#` comments, so put explanations in values or `comments`. Quote values that end in a colon, such as `'repo:'`.
 
 ```yaml
 schema_version: 1
