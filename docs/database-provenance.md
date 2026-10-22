@@ -52,7 +52,7 @@ To find gaps, `uv run python scripts/publish_db.py audit [--prefix <prefix>] [--
 
 ## YAML shape
 
-Use observed values; explain `null` fields and add workflow-specific fields as needed.
+Use observed values; explain `null` fields and add workflow-specific fields as needed. `publish_db.py` rewrites the file and drops YAML `#` comments, so put explanations in values or `comments`. Quote values that end in a colon, such as `'repo:'`.
 
 ```yaml
 schema_version: 1

@@ -171,6 +171,13 @@ def test_finalize_refuses_while_a_reader_holds_the_wal(tmp_path):
     writer.close()
 
 
+def test_invalid_yaml_is_a_clear_error(tmp_path):
+    db = make_db(tmp_path / "example.db")
+    publish_db.provenance_path(db).write_text("commands:\n- cwd: repo:\n  exit_code: 0\n", encoding="utf-8")
+    with pytest.raises(PublishError, match="not valid YAML"):
+        publish_db.cmd_finalize(Namespace(db=db))
+
+
 def test_finalize_does_not_create_a_missing_database(tmp_path):
     with pytest.raises(PublishError, match="does not exist"):
         publish_db.cmd_finalize(Namespace(db=tmp_path / "missing.db"))

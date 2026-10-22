@@ -63,7 +63,10 @@ def load_record(path: Path) -> dict:
     if not path.exists():
         raise PublishError(f"{path.name} not found beside the database; create it before the run "
                            "(docs/database-provenance.md)")
-    record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        record = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise PublishError(f"{path.name} is not valid YAML (quote values such as 'repo:'): {e}") from e
     if not isinstance(record, dict):
         raise PublishError(f"{path.name} is not a YAML mapping")
     return record
