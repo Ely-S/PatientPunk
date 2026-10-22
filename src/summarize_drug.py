@@ -17,24 +17,28 @@ from pathlib import Path
 IMPROVED = [  # (label, regex on the symptom the author named); first match wins, last is the catch-all
     ("Energy, stamina, less fatigue", r"energy|stamina|endur|tired|fatigue|vo2|afternoon slump|pem|crash|able to work|high functioning|good days"),
     ("Muscle, strength, exercise recovery", r"muscle|strength|stronger|fitness|exercise|workout|walk|physical|recover|repair|atrophy|tone"),
-    ("Brain fog, focus, clarity", r"fog|focus|clarity|cognit|memory|sharp|concentrat|mental|clearly|motivation"),
+    ("Brain fog, focus, memory, motivation", r"fog|focus|clarity|cognit|memory|sharp|concentrat|mental|clearly|motivat|learn|attention|verbal|fluen|word|recall|productiv|drive|alert|awake"),
     ("Appetite, digestion", r"appetite|eating|food|digest"),
     ("Sleep", r"sleep|insomnia|nap|middle of the night"),
     ("Pain, headaches", r"pain|headache"),
     ("Heart rate, HRV", r"hrv|heart rate"),
     ("Twitching, tremor, coordination", r"twitch|tremor|coordination|weakness"),
-    ("Skin, mood", r"skin|mood|anxi|depress|calm|well.?being|happier"),
+    ("Mood, anxiety, wellbeing", r"mood|anxi|depress|calm|well.?being|happier|uplift|euphor|confiden|social|anhedon|outlook|stress|ptsd|rumination"),
+    ("Libido, sexual", r"libido|sexual|erect"),
+    ("Skin, hair", r"skin|hair"),
     ("General, no symptom named", r"."),
 ]
 WORSENED = [
     ("Fatigue, drained, first-days crash", r"tired|fatigue|drained|exhaust|knocked|weak|lethar|energy"),
     ("Sleep disruption, vivid dreams", r"sleep|insomnia|dream"),
     ("Cardiovascular or autonomic", r"heart|palpit|hrv|pots|blood pressure|flush|tachy|bpm"),
-    ("Gastrointestinal", r"stomach|diarr|stool|nausea|gut|bowel"),
-    ("Activation or anxiety", r"anxi|edge|fight|flight|panic|wired|stimul|rage|adrenal|pmdd"),
+    ("Gastrointestinal, appetite", r"stomach|diarr|stool|nausea|gut|bowel|appetite|dry mouth"),
+    ("Activation, irritability, anxiety", r"anxi|edge|fight|flight|panic|wired|stimul|rage|adrenal|pmdd|irritab|jitter|restless|too strong|too much|paranoi|jaw|clench|grind|uninhibit|loopy|manic|agitat|aggress"),
+    ("Tolerance, wears off, crash on stopping", r"toleran|wear|short.?liv|rebound|withdraw|dependen"),
     ("Headache or migraine", r"headache|migraine"),
     ("Cognitive or mood", r"fog|mood|depress|cognit|worse"),
     ("Muscle or joint", r"muscle|joint|pain"),
+    ("Skin, itching, hair", r"itch|skin|hair|rash"),
     ("Dizziness", r"dizz"),
     ("Other", r"."),
 ]
@@ -58,17 +62,19 @@ def load(db: Path, drug: str, label: str) -> dict[str, dict]:
             f"SELECT r.user_id, r.report_id, r.sentiment, p.post_date FROM treatment_reports r "
             f"JOIN posts p ON p.post_id=r.post_id WHERE {eligible}"):
         a = authors.setdefault(user, {"label": label, "reports": 0, "sentiments": [], "improved": [], "worsened": [],
-                                      "no_change": 0, "doses": [], "routes": 0})
+                                      "no_change": 0, "doses": [], "routes": 0, "severities": []})
         a["reports"] += 1
         a["sentiments"].append((date or 0, sentiment))
-        for direction, attribution, symptom in conn.execute(
-                "SELECT direction, attribution, symptom FROM report_effects_latest WHERE report_id=?", (report,)):
+        for direction, attribution, symptom, severity in conn.execute(
+                "SELECT direction, attribution, symptom, severity FROM report_effects_latest WHERE report_id=?", (report,)):
             if attribution != "target":
                 continue
             if direction == "improved":
                 a["improved"].append(symptom)
             elif direction == "worsened":
                 a["worsened"].append(symptom)
+                if severity:
+                    a["severities"].append(severity.lower())
             elif direction == "no_change":
                 a["no_change"] += 1
         for low, unit, route in conn.execute(
@@ -86,11 +92,11 @@ def merge(per_db: list[dict[str, dict]]) -> dict[str, dict]:
     for authors in per_db:
         for user, a in authors.items():
             m = merged.setdefault(user, {"labels": set(), "reports": 0, "sentiments": [], "improved": [],
-                                         "worsened": [], "no_change": 0, "doses": [], "routes": 0})
+                                         "worsened": [], "no_change": 0, "doses": [], "routes": 0, "severities": []})
             m["labels"].add(a["label"])
             for key in ("reports", "no_change", "routes"):
                 m[key] += a[key]
-            for key in ("sentiments", "improved", "worsened", "doses"):
+            for key in ("sentiments", "improved", "worsened", "doses", "severities"):
                 m[key].extend(a[key])
     return merged
 
@@ -126,7 +132,10 @@ def summarize(drug: str, columns: list[tuple[str, dict[str, dict]]]) -> str:
             row("Negative at any point", lambda a: pct(sum(1 for x in a.values() if any(s == "negative" for _, s in x["sentiments"])), len(a))),
             row("Any improvement attributed", lambda a: pct(sum(1 for x in a.values() if x["improved"]), len(a))),
             row("Said it did nothing", lambda a: pct(sum(1 for x in a.values() if x["no_change"]), len(a))),
-            row("Any side effect attributed", lambda a: pct(sum(1 for x in a.values() if x["worsened"]), len(a))), ""]
+            row("Any side effect attributed", lambda a: pct(sum(1 for x in a.values() if x["worsened"]), len(a))),
+            row("Called a side effect severe", lambda a: pct(sum(1 for x in a.values() if any(
+                s in ("severe", "life_threatening") for s in x["severities"])), len(a))),
+            row("Stated any severity", lambda a: pct(sum(1 for x in a.values() if x["severities"]), len(a))), ""]
 
     for title, key, table in (("What it improved", "improved", IMPROVED), ("Side effects", "worsened", WORSENED)):
         out += [f"## {title}", "", head, sep]
