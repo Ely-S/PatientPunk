@@ -1,0 +1,834 @@
+================================================================================
+HANDOFF — studies/psychedelics/
+Raw-text psychedelic pharmacology extraction
+Updated 2026-08-09 (fourth session). Status: FULL PAID RUN EXECUTED AND COMPLETE
+via the `probes` engine. Realized cost $2.07 + 65 billing-uncertain attempts.
+GATE 4 (human quote grounding) WAS BYPASSED AND IS STILL OUTSTANDING — no
+number from this run is item-validated. See §0.
+================================================================================
+
+--------------------------------------------------------------------------------
+0. WHAT CHANGED, MOST RECENT FIRST (READ FIRST)
+--------------------------------------------------------------------------------
+
+FOURTH SESSION — the paid run was executed, on the OTHER pipeline
+...............................................................................
+
+READ THIS BEFORE §9. Most of §9 describes a pilot/finalize sequence for
+`extract_pharmacology.py` that was NOT the path taken and did not happen. The
+run was executed with the newer `probes` engine, governed by
+`docs/psychedelic_probe_runbook.md`. §9 is superseded; see the note there.
+
+What the user decided at the gates:
+  - GATE 2: reasoning effort "high", NOT the "max" the third session pinned.
+    Sent via the OpenAI-compatible surface (`--provider openai --base-url
+    https://openrouter.ai/api`), because the engine refuses --reasoning-effort
+    on --provider openrouter rather than dropping it silently.
+  - GATE 3: approved the full run.
+  - Stage 4 pilot AND GATE 4 (human quote grounding): SKIPPED by user choice,
+    going straight to the full run. GATE 4 is bypassed, NOT satisfied.
+
+Cohort — imported, and this matters for how you read any agreement:
+  `cohort.sql` reads `treatment_reports JOIN treatment`, the drug-sentiment
+  pipeline's output. That pipeline was never run on the full corpus, so every
+  database on disk yields ~0 psychedelic pairs. The authoritative cohort existed
+  only as JSON in the legacy run's `cohort_status.json`. The user chose to
+  import it: `scripts/build_legacy_cohort_db.py` copies its 1,157 pairs into a
+  standalone `cohort_legacy.db` holding only the two columns `cohort.sql` reads.
+  It is standalone on purpose — `treatment_reports` requires post_id/run_id/
+  sentiment, and writing these pairs into `patientpunk.db` would have meant
+  inventing sentiment values inside the real analysis database.
+
+  CONSEQUENCE: GATE 1 returns exactly 1,157 / 1,041 patients / psilocybin 538,
+  ketamine 525, lsd 94 — the expected table — BY CONSTRUCTION. This confirms
+  nothing. The runbook's "do the two derivations agree" check remains
+  UNANSWERED. Say so in any report.
+
+Run identity and result:
+  run_id 710567555e22b68c025d8ceb1c3373564d7f9b01dcc5fe94b02b7c3209ecbc05
+  1,157 cohort pairs | 1,206 units planned | 4,180 windows | 2,182,844 chars
+  1,192 units complete (98.8%) | 14 failed
+  attempts: 1,192 accepted, 179 validation_failed, 68 transport_failed
+  claims 3,982 -> 2,921 included, 1,061 excluded (denominator data, kept)
+  cost: use `usage_json.provider_cost`, the REALIZED provider figure. Do not
+  recompute from list price, and do not count accepted attempts only — failed
+  attempts were billed too. Realized total over the 1,374 attempts carrying
+  usage: $2.0710
+      accepted           n=1,192   $1.6273
+      validation_failed  n=  179   $0.4246   (retries are ~20% of all spend)
+      transport_failed   n=    3   $0.0191
+  tokens 4.54M in / 6.55M out; reasoning = 79.3% of output tokens, which is
+  where effort=high actually went.
+  65 billing_uncertain attempts have NO readable usage and are NOT in that
+  total; they may also have been billed.
+  (An earlier draft of this file said $1.97. That was list price over accepted
+  attempts only — wrong on both counts. $2.07 supersedes it.)
+  cache hits 0 (resumes skip complete units at unit level, so nothing re-billed)
+
+  Windows and total characters match the legacy reference EXACTLY; units are
+  1,206 vs legacy ~1,207 and largest unit 5,998 vs 5,990. That delta is
+  unexplained and is a finding, not a rounding artifact.
+
+THE 60-SECOND TIMEOUT — the most important operational finding
+  `variable_extraction/patientpunk/_utils.py` TIMEOUT had read=60. Under
+  effort=high with max_tokens 32,768 (completed units average ~3,673 output
+  tokens) long-reasoning requests cannot return inside 60s, so they were killed
+  client-side. This is not merely a throughput bug: it preferentially discarded
+  the units the model thought hardest about, biasing the surviving set toward
+  easy units. Throughput had collapsed to 2.2 units/min and 14 units had
+  "permanently" failed.
+  Fix (user's call): read/write 60 -> 90s, and workers 10 -> 30. Throughput went
+  to 27.7 units/min and ALL 14 previously-failed units recovered on resume,
+  confirming they were timeouts and not bad data.
+  Residual: 90s still implies sustaining ~41 tok/s, so the longest tail can
+  still time out — 3 further transport failures occurred after the change.
+  CONSEQUENCE: the early attempt ledger is NOT a clean sample. Nearly all 65
+  billing_uncertain attempts come from the 60s phase.
+
+Extraction quality — the substantive finding for prompt work.
+Of 179 validation_failed attempts:
+    25% (45)  dose/effect/AE attached to events the model ITSELF labelled
+              not-self or not-actual-use
+    22% (39)  cited a source window outside its unit, or source ID/type mismatch
+    12% (22)  quote not grounded in the cited window
+    12% (21)  evidence quote empty
+  The grounding guard is HEALTHY — 22 rejections across 1,206 units is the floor
+  working, not the prompt and guard disagreeing. Do NOT lower the threshold. The
+  top two categories are real prompt/schema disagreements worth fixing.
+  The 14 terminal failures: 8 source-window mismatch, 3 provider null content,
+  2 unparseable JSON, 2 grounding, 2 transport (categories overlap per attempt).
+
+Adverse events, as shares of extractable INCLUDED claims — never incidence:
+    ketamine    n=1,588  reported 181 (11%)  explicit_none 19 (1%)  not_stated 1,388 (87%)
+    psilocybin  n=1,172  reported 127 (11%)  explicit_none 25 (2%)  not_stated 1,020 (87%)
+    lsd         n=  161  reported  29 (18%)  explicit_none  1 (1%)  not_stated   131 (81%)
+  The ~87% not_stated is SILENCE, not absence. Only explicit_none is a denial.
+
+CLUSTERING — a trap for whoever analyses this next:
+  2,921 included claims come from only ~1,041 distinct patients. Claims are NOT
+  independent. A per-claim proportion is pseudo-replication and yields falsely
+  narrow CIs. Compute headline figures per patient; label any event-level figure
+  as clustered. The v1 notebook never faced this because it was patient-level.
+
+THIRD SESSION — the run is now pinned to reasoning effort "max"
+(SUPERSEDED at GATE 2: the executed run used "high". The adapter fix, the
+max_tokens 32,768 change, and the corrected $0.14/$0.28 pricing all still stand.)
+...............................................................................
+
+The user asked for effort max on the same DeepSeek model through OpenRouter.
+This was not a one-line switch; three things had to be fixed first, and the cost
+picture changed substantially. Full detail is in §6; the short version:
+
+  1. No reasoning parameter was reaching the provider at all. The
+     OpenAI-compatible adapter's create() ended in `**_ignored`, so any reasoning
+     kwarg was silently dropped. Adding only a CLI flag would have bought a
+     "max effort" run that actually ran with no reasoning. It now forwards
+     extra_body={"reasoning": {"effort": ...}}.
+  2. max_tokens 4,096 -> 32,768. Effort "max" allocates ~95% of max_tokens to the
+     reasoning trace, so at 4,096 the JSON answer gets ~200 tokens and every call
+     truncates.
+  3. The LLM cache key had to learn about effort, or a max-effort call could be
+     served a stale no-reasoning response. llm_cache.make_key/cached_completion
+     gained an optional `extra`, omitted when empty so older keys stay valid.
+
+Also corrected: the pinned price was wrong. $0.09/$0.18 belongs to the
+-latest/-0731 aliases, not to deepseek/deepseek-v4-flash. Now $0.14/$0.28.
+
+Cost consequence — the full run goes from ~$0.39-0.63 to a best estimate of
+~$2.40, plausibly $1.18-$11.26. The spread is entirely "how much does effort=max
+actually think," which cannot be known before a live call. See the table in §6.
+
+`reasoning_effort` is part of unit identity, run_configuration, and the cache
+key, so run_identity changed. Any earlier artifact is invalid. Dry-run cohort
+numbers in §3 are unchanged and were re-verified after the change.
+
+TWO OPEN CONFIGURATION QUESTIONS THE USER HAS NOT YET RULED ON:
+
+  - OpenRouter routing is NOT pinned to a provider. Endpoint prices for this
+    model span $0.070-0.200/M in and $0.168-0.500/M out, so realized cost is
+    nondeterministic across a ~3x band. That sits badly with this pipeline's
+    immutable-run-identity design. Pinning a provider preference was judged out
+    of scope rather than decided against.
+  - The truncation-escalation path doubles max_tokens to 65,536, which now
+    exceeds max_completion_tokens on some endpoints (DeepInfra 65,536, Venice
+    32,768). If escalation fires there it will error rather than retry cleanly.
+
+SECOND SESSION — the regex identity guards were deleted
+...............................................................................
+
+A design error was found and corrected. The previous implementation used regexes
+to decide WHOSE experience a passage described and WHETHER the use actually
+happened, in two places:
+
+  1. as a post-hoc validator that could reject the model's exposure_quote
+     (ACTUAL_EXPOSURE_RE / NON_EXPOSURE_RE / FIRST_PERSON_RE / THIRD_PARTY_RE);
+  2. as a recall gate in collect_sources() that dropped whole patient-drug pairs
+     before the LLM ever saw them (study._first_person_mention).
+
+The user's ruling, which governs this work from now on:
+
+    "It is a mistake to use Regex to filter beyond basic keywords. User identity
+     must be llm-extracted, in the same llm call."
+
+Both regex layers are GONE. Do not reintroduce them. Identity and exposure
+reality are now model-labelled schema fields. An audit against real dry-run text
+(kept below in §7) is the evidence for why: regexes cannot resolve habitual past
+("I would take 1g"), effect language ("I could feel the fog lift"), or mixed
+sentences ("I haven't tried ECT, but I have tried ketamine infusions"), and the
+first-person gate was silently destroying 208 patient-drug pairs of recall.
+
+Consequences, all reflected in the numbers in §3:
+
+  - ready pairs      861  ->  1,069   (+208, exactly the pairs the gate dropped)
+  - LLM units        950  ->  1,207
+  - source windows 2,666  ->  4,180
+  - characters     1.60M  ->  2.18M   (+37%; the paid run costs ~37% more)
+
+Versions bumped accordingly. Any pre-existing cache/ledger from the old contract
+is INVALID and must not be mixed in:
+
+  SCHEMA_VERSION    pharmacology-exposure-v1 -> pharmacology-exposure-v2
+  PROMPT_VERSION    2026-08-07-v1            -> 2026-08-07-v2
+  VALIDATOR_VERSION (new)                       2026-08-07-v3-mechanical-only
+
+--------------------------------------------------------------------------------
+1. PURPOSE AND SCOPE
+--------------------------------------------------------------------------------
+
+This directory contains two related but deliberately separate pieces of work:
+
+  1. The completed `psychedelics.py` / `psychedelics_analysis.ipynb` study:
+     self-reported helped/worsened/no_effect/mixed outcomes from the existing
+     patient-level JSON extraction.
+
+  2. An IN-PROGRESS raw-text LLM extraction pass for:
+       - drug-specific dose / route / schedule;
+       - reported effect direction and graded 0-10 magnitude;
+       - explicitly stated effect duration;
+       - categorized, source-grounded adverse events.
+
+The new extraction intentionally stops before notebook integration or statistical
+analysis. Do NOT modify `psychedelics_analysis.ipynb` or `build_nb.py` as part of
+completing it. Do NOT overwrite `treatment_outcome`; this creates a separate,
+provenanced pharmacology artifact.
+
+The user requires a cost checkpoint: dry run, then a 25-PAIR paid pilot, manual
+review, actual/projected cost report, and separate approval before the remaining
+paid calls.
+
+--------------------------------------------------------------------------------
+2. NON-NEGOTIABLE RESEARCH AND PRIVACY CONSTRAINTS
+--------------------------------------------------------------------------------
+
+Read `data/full_corpus_2026-07-31/README.md` before making claims from these data.
+
+  - This is a self-selected Reddit reporting cohort, not a clinical cohort.
+  - No efficacy, causal, incidence, or dose-response-over-time claims.
+  - Do not infer chronology from timestamps. Duration must be explicitly stated.
+  - An adverse-event percentage means "share of extractable reports mentioning
+    the event," never incidence. Always state the denominator.
+  - Do not turn silence into "no adverse events." The schema distinguishes:
+      reported / explicit_none / not_stated.
+  - Do not force one dose/effect/duration into one patient-drug summary. A person
+    can describe repeated or contradictory exposures. Extract source-level events.
+  - Do not assign a collective "stack" outcome to a drug unless the source
+    specifically attributes it to that drug.
+  - Quotes plus hashed authors plus Reddit source IDs are potentially
+    re-identifiable. Quote-bearing artifacts must remain in
+    `data/psychedelics_pharmacology/`, which is gitignored through `data/*`.
+    Do not commit them and do not produce a public quote dataset.
+    NOTE: `pilot_review.csv` now embeds raw source text by design (§5). It is
+    private runtime data. Never commit it, never paste it into a report.
+  - The extracted full-corpus README says individual LLM records are unstable:
+    two identical passes agreed on field set only 36.5% of the time and values
+    58.8% of the time. Use this only for cohort aggregates after validation; no
+    per-person stories or paired public quotes.
+
+--------------------------------------------------------------------------------
+3. SOURCE DATA, COHORT, AND CURRENT DRY-RUN EVIDENCE
+--------------------------------------------------------------------------------
+
+Authoritative cohort JSON (read-only):
+  data/full_corpus_2026-07-31/records_covidlonghaulers_v2.json
+
+Raw FTS database (read-only):
+  reddit_2026-06-13.db
+
+Cohort, unchanged and still asserted at runtime by cohort_pairs():
+
+  psilocybin  538 patients
+  ketamine    525 patients
+  lsd          94 patients
+  distinct patients  1,041
+  patient-drug pairs 1,157
+
+CURRENT dry run, executed 2026-08-07 after all changes in this session. These
+supersede every count in the previous handoff:
+
+  cohort pairs:               1,157
+  distinct patients:          1,041
+  ready pairs:                1,069
+  no FTS candidate:              56
+  no keyword match:              32
+  source windows:             4,180
+  deterministic LLM units:    1,207
+  selected source characters: 2,182,844
+  largest unit:               5,990 characters
+
+  units by drug:  psilocybin 528   ketamine 590   lsd 89
+
+  filter stages (FTS -> cohort keyword -> kept):
+                  raw FTS  cohort keyword  kept after botlike
+    psilocybin      5,153        1,678          1,678
+    ketamine        3,447        2,211          2,211
+    lsd               945          222            222
+
+Note that "kept" now equals "cohort keyword" for all three drugs: BOTLIKE_RE
+excluded zero in-cohort sources. Keyword matching plus bot filtering is the ONLY
+remaining pre-LLM filtering, which is the intent.
+
+Accepted checks on this dry run (all verified programmatically):
+
+  - 1,157 pairs / 1,041 patients reconcile; 1,069 + 56 + 32 = 1,157.
+  - every pair carries a source-stage status.
+  - 0 units with duplicate source_window_ids.
+  - 0 cross-unit source_window_id collisions on differing text.
+  - 0 windows over --max-chars; largest unit 5,990 < 6,000.
+  - 0 ready pairs with zero batches; 0 non-ready pairs with batches.
+  - all artifacts land in the gitignored output directory.
+
+Database identity:
+
+  documented authoritative SHA-256:
+    0c2da41b3f0ccde2134ae436c815ee0d6129a63a0ae3d20dcf31a2a05929bfea
+  local physical SHA-256:
+    6641928b5ea4e2971b8018d596ff2cc80f9a55ad98fac687f28e1feb2d5e9c72
+
+The physical hashes still differ. Local logical table counts match the README
+(243,289 posts / 3,602,691 comments), but this is not byte-identical provenance.
+The CLI refuses paid work unless `--allow-db-hash-mismatch` is supplied. Do not
+pass that flag until the user has been shown this discrepancy and explicitly
+approves continued paid processing.
+
+--------------------------------------------------------------------------------
+4. THE EXTRACTION CONTRACT (SCHEMA v2)
+--------------------------------------------------------------------------------
+
+  ExtractionEnvelope:
+    target_drug
+    events[]
+
+  ExposureEvent:
+    source_window_id, source_id, source_type
+    exposure_quote
+    subject                     self | other | unclear          <- MODEL DECIDES
+    subject_quote                                               <- required
+    exposure_status             actual_use | planned_or_considered
+                                | declined_or_never | unclear   <- MODEL DECIDES
+    exposure_status_quote                                       <- required
+    doses[]
+    effects[]
+    adverse_event_status        reported | explicit_none | not_stated
+    adverse_event_status_quote  (required only for explicit_none)
+    adverse_events[]
+
+The model emits an event for EVERY passage discussing the target drug, including
+plans, refusals, and other people's use. Those non-included events are kept
+deliberately: they are the denominator showing what was considered and set aside.
+`ExposureEvent.is_included_exposure` is true only for subject=self AND
+exposure_status=actual_use.
+
+`validate_extraction()` now performs MECHANICAL checks only:
+
+  - JSON/schema validity, unknown keys, enum/range errors, duplicate events;
+  - target_drug matches the requested drug;
+  - source_window_id belongs to the unit, and source type/ID agree with it;
+  - EVERY quote is an exact substring of its own source window;
+  - placeholder strings ("not specified", "unknown", ...) outside quotes;
+  - structural consistency of the model's own labels: a non-included event may
+    not carry doses, effects, or adverse events, and must be not_stated;
+  - adverse-event list/status consistency.
+
+It does NOT judge language. If the model says subject=self, that stands, and the
+pilot measures whether it was right. Effects still keep `direction` separate from
+optional 0-10 `magnitude_0_10`; a severe worsening is not magnitude zero.
+
+Raw text is wrapped as untrusted `<patient_text>` and authored source delimiters
+are neutralized. `prompt_sha` covers the system prompt, Pydantic schema,
+user-prompt template, source-header template, prompt version, and schema version.
+`validator_sha` (new) covers the remaining mechanical guards; it is part of
+`run_identity` but deliberately NOT part of `unit_key`, because a unit is the same
+work regardless of how its output is judged, and the cache key is prompt-based.
+
+--------------------------------------------------------------------------------
+5. §7 PRE-PILOT CHECKLIST — CLOSED, PLUS ONE GAP REOPENED IN SESSION THREE
+--------------------------------------------------------------------------------
+
+  [ ] REOPENED: no test covers the reasoning-effort passthrough. The third
+      session changed the transport, the cache key, and unit identity, and the
+      43 tests still pass without asserting any of it. Worth adding before the
+      pilot: that _OpenAIMessages.create forwards extra_body when
+      reasoning_effort is set and omits it when None; that make_key differs
+      across efforts but is unchanged when `extra` is empty; and that
+      reasoning_effort changes unit_key. None of these need a live call.
+
+  [x] Tests for the newest validation behavior.
+      tests/test_psychedelics_pharmacology.py now covers: outcomes rejected on
+      non-self / non-actual events; adverse status forced to not_stated on those;
+      model-labelled actual_use accepted verbatim for the six sentence types the
+      old regex got wrong; third-party use recorded rather than discarded;
+      explicit_none needing a quote that exists in source; distinct window IDs
+      from one source; response-SHA filtering of stale events; pair-level pilot
+      sampling; billing-uncertain cost accounting; validation-report scoring.
+      43 passed (was 22).
+
+  [x] Token-escalation / immutable-provenance issue.
+      RESOLVED AS OPTION (a): keep the documented per-unit exception, add
+      provenance. Rationale: option (b), deterministically splitting units, is
+      not actually available -- truncation is only discoverable AFTER a live
+      call, so a pre-split would have to be applied speculatively to every long
+      unit, and it would change unit_set_sha256 and thus the whole run identity.
+      Ledger rows now carry `base_max_tokens`, `request_max_tokens`, and
+      `max_tokens_escalated`; the manifest carries a `max_token_escalations`
+      block naming every unit that deviated from the pinned budget.
+
+  [x] Pilot sampler audited and FIXED.
+      select_pilot() now samples patient-drug PAIRS (the protocol's unit) and
+      returns every unit belonging to a selected pair, so a reviewer never codes
+      half of someone's history. Per-drug quota and deterministic seeding kept.
+      NOTE: the quota splits across the three drugs, so a sample_size of 25
+      yields roughly 9/8/8 pairs, and the returned UNIT count exceeds 25.
+
+  [x] Manual-review worksheet improved.
+      pilot_review.csv now carries `pair_key`, `source_window_ids`, and a
+      `source_text` column containing the exact windows the model saw, with their
+      SOURCE headers. This is why the file is quote-bearing and private (§2).
+
+  [x] Use/attribution regexes reviewed against real dry-run examples.
+      CLOSED BY DELETION, per §0. The audit that justified it is in §7.
+
+  [x] Final validation report.
+      New CLI command `validation-report` scores the analyst-coded worksheet:
+      per-field precision/recall (exposure, subject, exposure_status, dose,
+      effect_direction, duration, adverse_event), the same broken out by drug,
+      adverse-status agreement, 0-10 magnitude agreement within a tolerance
+      (default +/-2) plus mean absolute error, and the analyst flag rates.
+      Matching is bag-of-items within a source window, not event-to-event
+      alignment, because model and analyst may legitimately split one window into
+      a different number of events. It writes pilot_validation_report.json,
+      prints the gate table, and exits non-zero unless every gate passes AND
+      every worksheet row is coded. THE MANUAL CODING ITSELF IS NOT DONE -- it
+      cannot be, because no pilot has run.
+
+--------------------------------------------------------------------------------
+6. ARCHITECTURE, LLM, CACHE, LEDGER, AND COST
+--------------------------------------------------------------------------------
+
+`extract_pharmacology.py` commands:
+
+  dry-run            cohort/source reconciliation; never calls an LLM
+  pilot              deterministic paid PAIR sample, guarded by --confirm-paid-run
+  validation-report  score the analyst-coded worksheet against the gates
+  run                resumable paid work for remaining units
+  finalize           rebuild JSON + manifest from append-only ledgers
+
+Paid calls are pinned to:
+
+  provider:  openai adapter over OpenRouter's OpenAI-compatible endpoint
+  base URL:  https://openrouter.ai/api/v1
+  model:     deepseek/deepseek-v4-flash
+  temperature: 0
+  reasoning effort: max          (--reasoning-effort, default "max")
+  initial max tokens: 32,768
+  price snapshot (OpenRouter /models/{id}/endpoints, read 2026-08-07):
+    input $0.14/M tokens, output $0.28/M tokens
+
+CHANGED 2026-08-07 (third session), on user instruction to run at effort max:
+
+  - The OpenAI-compatible adapter previously swallowed unknown kwargs, so no
+    reasoning parameter reached the provider. It now forwards
+    extra_body={"reasoning": {"effort": ...}} (OpenRouter's canonical spelling).
+  - `reasoning_effort` is part of unit identity, run_configuration, and the LLM
+    cache key (llm_cache.make_key/cached_completion gained an optional `extra`
+    argument, omitted when empty so pre-existing keys stay valid). A max-effort
+    answer must never be served from a no-reasoning cache entry. run_identity
+    changed accordingly; any earlier artifact is invalid.
+  - max_tokens 4,096 -> 32,768. Effort "max" allocates ~95% of max_tokens to the
+    reasoning trace, so at 4,096 the JSON answer would get ~200 tokens and every
+    call would truncate. Note the escalation path doubles this to 65,536 on
+    truncation, which exceeds the max_completion_tokens of some endpoints.
+  - Prices corrected. $0.09/$0.18 was not this model's price; it belongs to the
+    -latest/-0731 aliases. Endpoint prices for deepseek/deepseek-v4-flash range
+    $0.070-0.200/M in and $0.168-0.500/M out. The pinned $0.14/$0.28 is the modal
+    endpoint price and what DeepSeek's own endpoint charges. OpenRouter routing
+    is not pinned to a provider, so realized cost can fall anywhere in that band.
+  - Reasoning tokens bill as output tokens. `_usage_values` now breaks out
+    `reasoning_tokens` from completion_tokens_details so the ledger shows how
+    much of the spend was the thinking trace.
+
+Estimated cost at these prices (chars/4 token heuristic; input is 3.354M tokens
+= $0.47 for the full run and is firm, output is the uncertain part):
+
+                        out-tok/unit   pilot (40 units)   full run (1,207)
+  conservative               2,100          $0.04              $1.18
+  moderate                   5,700          $0.08              $2.40
+  budget-saturating         31,929          $0.38             $11.26
+
+The spread is entirely "how much does effort=max actually think," which is not
+knowable before a live call. The pilot's measured reasoning_tokens per unit is
+the number that turns this range into an estimate; re-project before the full
+run rather than trusting the table above.
+
+Uses existing PatientPunk utilities: get_llm_client, check_response,
+response_text, parse_json_response, llm_cache.cached_completion. The shared cache
+is content-addressed; the script precomputes its key and identifies cache hits
+only when caching is enabled. Never call a live provider merely to test a
+configuration; the first pilot unit is the live preflight.
+
+Accounting behavior:
+
+  - Every received provider response is appended to `attempt_ledger.jsonl` BEFORE
+    response validation, so malformed responses, truncations, and a crash before
+    terminal unit logging remain visible.
+  - Provider usage/cost is retained when present; otherwise price-based estimates
+    are derived from tokens.
+  - A transport-level failure with no usage is `billing_uncertain`, not "free."
+  - The pilot cost report separates known costs from uncertain attempts.
+  - Finalization filters events to the response SHA of the latest successful
+    terminal ledger row, preventing orphaned events after crash/retry.
+
+Private runtime artifacts (all under `data/psychedelics_pharmacology/`):
+
+  input_identity.json
+  cohort_status.json / .jsonl
+  source_units.json / .jsonl
+  attempt_ledger.jsonl
+  run_ledger.jsonl
+  pharmacology_extraction.jsonl
+  pharmacology_extraction.json            (included events only)
+  pharmacology_excluded_events.json       (NEW: plans/third-party/unclear)
+  cohort_status_final.json / .jsonl
+  pharmacology_extraction_manifest.json
+  pilot_review.csv                        (NOW CONTAINS RAW SOURCE TEXT)
+  pilot_cost_summary.json
+  pilot_validation_report.json            (NEW)
+
+The output directory has an immutable run identity from input hashes, logical DB
+fingerprint, prompt_sha, validator_sha, configuration, and unit-set hash. If a
+ledger exists for a different identity, preparation fails rather than mixing runs.
+THE EXISTING data/psychedelics_pharmacology/ CONTENTS ARE FROM THE OLD v1
+CONTRACT. There is no ledger there (no paid call was ever made), so preparation
+will simply overwrite them, but do not treat those files as current evidence.
+
+--------------------------------------------------------------------------------
+7. THE EXPOSURE-GUARD AUDIT (EVIDENCE FOR §0; DO NOT REPEAT THIS WORK)
+--------------------------------------------------------------------------------
+
+Kept so nobody re-litigates the regex approach.
+
+Sentence-level audit over the 2,666 windows of the OLD dry run: of 3,033
+first-person sentences naming a target drug, the old guards accepted 823,
+rejected 2,117 for having no recognized use verb, and rejected 93 that had a use
+verb but tripped the non-exposure pattern. Inspection of that last bucket showed
+the guard was wrong in most of them, because bare modals fire anywhere in a
+sentence:
+
+  "I have been microdosing psilocybin for years and the mental health benefits
+   have been much greater than anything I would ever have imagined possible."
+  "Recently started microdosing magic mushrooms and I could feel the cognitive
+   function return."
+  "Every time my body feels like its going to relapse, I do shrooms."
+  "when I used to shroom daily in 2020 at times would take 1g"
+
+Three rounds of narrowing the patterns (restricting modals to adjacency with a
+use verb, splitting intent verbs from use verbs, dropping "will" and "can") moved
+window-level groundability from 795/2,666 (29.8%) to 974/2,666 (36.5%), but each
+round traded one error class for another and never eliminated the irreducible
+case -- a single sentence that denies one drug and affirms the target:
+
+  "while I haven't tried ECT, I have tried ketamine infusions combined with TMS
+   and had amazing results"
+
+That is a parsing problem, not a pattern problem. It is the model's job. The
+whole exercise was discarded; only the lesson is kept.
+
+--------------------------------------------------------------------------------
+8. CURRENT FILE STATE
+--------------------------------------------------------------------------------
+
+Modified in the FOURTH session (the executed run):
+
+  studies/psychedelics/  RESTRUCTURED INTO v1/ AND v2/
+      v1/ holds the frozen legacy study, moved verbatim and unmodified:
+      build_nb.py, extract_pharmacology.py, psychedelics.py,
+      psychedelics_analysis.{ipynb,html,pdf}. Tracked files were moved with
+      `git mv`, so history follows them. Every legacy path elsewhere in this
+      handoff must gain a `v1/` component.
+      v2/ is a rewrite of the study on the probe dataset (doses, effect
+      direction/magnitude/duration, adverse events) rather than the legacy
+      community-scored outcomes. v2 is NOT a like-for-like port: the probe
+      schema has no outcome scoring, so the analyses differ by necessity.
+      _handoff.txt (this file) deliberately stays at the study ROOT, because
+      `docs/psychedelic_probe_runbook.md:9` references it at that path and it
+      governs both versions.
+
+  probes/engine.py
+      Concurrency added: `_process_unit(...)` extracts the per-unit attempt
+      ladder verbatim from the old inline loop; `run_probe(..., workers=1)`
+      dispatches through ThreadPoolExecutor and falls back to the serial path at
+      workers==1; a lock-guarded lazy client is shared across workers so a fully
+      cached invocation still constructs none; `--workers` CLI flag added.
+      `--workers` is DELIBERATELY NOT IN RunConfig — it changes how fast units
+      are sent, never what is sent, so it must not move run_id. DO NOT add it to
+      run identity. This is what made mid-run worker changes safe.
+      ProbeStore needed no changes; it was already thread-safe.
+
+  variable_extraction/patientpunk/_utils.py
+      TIMEOUT read/write 60 -> 90s (connect/pool unchanged). See §0. This
+      constant is shared with the legacy pipeline.
+
+  tests/test_probes_workers.py  (NEW)
+      7 tests: all units complete under concurrency, dispatch genuinely
+      overlaps, serial never overlaps, concurrent result matches serial with
+      run_id unchanged, one failing unit does not poison neighbours, workers<1
+      rejected, client built once. Full suite 59 passed, stable over 8 runs.
+      The user asked that test work stop here; do not expand these.
+
+  scripts/build_legacy_cohort_db.py  (NEW)
+      Imports the legacy JSON cohort's 1,157 pairs into cohort_legacy.db. See §0.
+
+  .gitignore
+      `.env.*` plus `!.env.example` added. `variable_extraction/.env.local_backup`
+      was untracked AND unignored and contains a key line; the pre-existing
+      `.env` pattern does not match `.env.*` suffixes.
+
+Modified in the THIRD session (reasoning effort):
+
+  variable_extraction/patientpunk/_utils.py
+      _OpenAIMessages.create() accepts `reasoning_effort` and forwards it as
+      extra_body={"reasoning": {"effort": ...}}. Previously any such kwarg fell
+      into `**_ignored`.
+
+  variable_extraction/patientpunk/llm_cache.py
+      make_key() and cached_completion() take an optional `extra` dict, folded
+      into the key payload only when non-empty so keys minted before it existed
+      remain valid.
+
+  studies/psychedelics/v1/extract_pharmacology.py
+      DEFAULT_REASONING_EFFORT ("max") and --reasoning-effort added; max_tokens
+      default 4,096 -> 32,768; prices corrected to $0.14/$0.28 with the source
+      changed to the OpenRouter endpoints API; reasoning_effort threaded through
+      build_units unit identity, prepare's run_configuration, configure_paid_llm,
+      run_units, and extract_unit (request + cache key); _usage_values breaks out
+      `reasoning_tokens` from completion_tokens_details.
+
+  tests/test_psychedelics_pharmacology.py
+      Two build_units call sites updated for the new required argument. Still 43
+      tests; NO test covers the reasoning passthrough itself (see §9).
+
+Modified in the SECOND session:
+
+  studies/psychedelics/v1/extract_pharmacology.py
+      Regex identity guards deleted; ExposureSubject/ExposureStatus enums and the
+      four new ExposureEvent fields added; system prompt rewritten to demand the
+      classification; collect_sources first-person gate removed and stage
+      counters renamed; select_pilot samples pairs; write_pilot_review embeds
+      source text; validator_sha/VALIDATOR_VERSION added; token-escalation
+      provenance added; finalize partitions included vs excluded events and
+      reports subject/status breakdowns; validation-report command added.
+
+  tests/test_psychedelics_pharmacology.py
+      22 -> 43 tests, per §5.
+
+  studies/psychedelics/_handoff.txt
+      This file.
+
+Modified in the FIRST session, unchanged since:
+
+  studies/psychedelics/v1/psychedelics.py
+      `mention_pairs(records, require_author_hash=False)`; `mention_cohort()`
+      refactored onto it. NOTE: `study._first_person_mention` is now UNUSED by
+      the extraction path but is still used by the original notebook study. Do
+      not delete it.
+
+  variable_extraction/patientpunk/_utils.py
+      OpenAI-compatible adapter preserves usage and response IDs, including on
+      null-content/no-choice LLMResponseError.
+
+  variable_extraction/tests/test_llm_response_validation.py
+      Adapter usage/response-ID regression coverage.
+
+DO NOT indiscriminately stage or delete other untracked repository files. The
+checkout contains many unrelated untracked documents, generated study outputs,
+scripts, trials, and local environment files. No commit has been made.
+
+Verified after the final edits:
+
+  .venv/bin/python -m pytest tests/test_psychedelics_pharmacology.py \
+    variable_extraction/tests/test_llm_response_validation.py -q
+  => 43 passed
+
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
+    --output-dir <scratch> dry-run
+  => the §3 numbers
+
+--------------------------------------------------------------------------------
+9. WHAT THE NEXT AGENT MUST DO
+--------------------------------------------------------------------------------
+
+*** SUPERSEDED — READ §0 FIRST. ***
+
+Everything from "FIRST, do not run anything paid" down to the `finalize`
+command below describes a pilot/validate/run/finalize sequence for
+`extract_pharmacology.py` (now at `v1/extract_pharmacology.py`). THAT PATH WAS
+NOT TAKEN. The run was executed with the `probes` engine per
+`docs/psychedelic_probe_runbook.md`, the cost checkpoint WAS answered, and the
+paid run is COMPLETE. The commands below would re-spend money on a second,
+parallel extraction. Do not run them. The text is kept only as the record of
+what the third session planned.
+
+WHAT ACTUALLY REMAINS TO BE DONE:
+
+  1. GATE 4 — human quote grounding. STILL OUTSTANDING; it was bypassed, not
+     satisfied. Before any number from this run is used for anything, a human
+     must read a sample of claims against their source windows and confirm each
+     quote actually supports its field. This requires reading private
+     quote-bearing data: do it in a LOCAL, UNCOMMITTED scratch file, never in
+     the repo, a PR, or a report. Report only sample size and pass rate.
+  2. The two configuration questions from §0 third session are now partly
+     answered by events rather than by decision: provider routing was never
+     pinned, so realized cost varied across the run; the 65,536-token
+     escalation ceiling never fired. Both remain unpinned for any future run.
+  3. Prompt work on the two dominant validation-failure categories in §0
+     (data attached to not-self/not-actual-use events; source windows cited
+     outside the unit). Do NOT lower the grounding threshold.
+  4. Nothing has been committed. `probes/engine.py`, `_utils.py`, `.gitignore`,
+     the v1/ moves, and the new scripts/tests are all working-tree changes.
+     `cohort_legacy.db` and `patientpunk.db` are gitignored via `*.db`; never
+     `git add -f` anything under `data/`.
+
+--- historical, superseded, do not execute -------------------------------------
+
+FIRST, do not run anything paid. All of (a)-(c) below were presented to the user
+in the third session; the cost checkpoint has been DELIVERED but NOT yet
+answered. No approval for paid work has been given.
+
+  a) the recall change: 861 -> 1,069 ready pairs and 1.60M -> 2.18M characters,
+     i.e. the paid run is ~37% larger than the previously quoted scope, because
+     the first-person regex gate was removed;
+  b) the DB physical-hash mismatch (§3), which needs its own explicit approval;
+  c) the estimated pilot and full-run cost at the pinned prices: ~$2.40 best
+     estimate for the full run, plausible range $1.18-$11.26 under effort max
+     (§6). The earlier $0.39-0.63 figure was both pre-reasoning and priced off
+     the wrong model alias; do not quote it.
+
+Also still unanswered: the two configuration questions at the end of the third-
+session block in §0 (unpinned provider routing, and the 65,536-token escalation
+ceiling). Neither blocks the pilot, but both should be settled before the full
+run, because the first makes realized cost nondeterministic and the second can
+turn a truncation retry into a hard error.
+
+Then, ONLY with explicit approval for BOTH the paid run and the hash mismatch:
+
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
+    pilot --sample-size 25 --seed 20260807 \
+    --confirm-paid-run --allow-db-hash-mismatch
+
+(reasoning effort max and max_tokens 32,768 are now the defaults; see §6.)
+
+Do not run that command merely because this handoff exists. It spends external
+API money and transmits raw Reddit text to an external provider.
+
+Immediately after the pilot:
+
+  1. Open `pilot_review.csv`. It now contains the source text, so code every
+     selected unit independently: fill `analyst_events_json` with the events you
+     would have extracted, and set grounding_correct / drug_attribution_correct /
+     self_report_correct to y or n.
+  2. Run `validation-report`. It exits non-zero until every row is coded and
+     every gate passes.
+  3. Inspect `pilot_cost_summary.json`. Report known pilot cost, the
+     provider-vs-token-estimate basis, uncertain attempt count, cost per live
+     unit, and projected total. Do not call a token estimate exact billing.
+     THE FIRST THING TO READ IS `reasoning_tokens` PER UNIT. That single number
+     collapses the $1.18-$11.26 full-run range in §6 into an actual estimate;
+     re-project the full run from it rather than reusing the table. Confirm at
+     the same time that reasoning_tokens is non-zero -- a zero would mean the
+     effort parameter is not reaching the provider despite the config, which is
+     exactly the failure mode the adapter fix addressed.
+  4. Check exact-quote/source validation failures, malformed responses,
+     truncations, valid-empty rate, cache hits, and the subject/exposure_status
+     distribution in the excluded-events file -- if almost nothing lands in
+     `planned_or_considered` or `other`, the model is probably not really
+     classifying, and the prompt needs work.
+  5. Repeat a stratified subset under a new retry variant/cache key to assess
+     model instability (the corpus README documents severe instability).
+  6. Gates, enforced by the report command:
+       100% exact quote/source integrity
+       >=95% drug attribution and self-report accuracy
+       >=95% subject and exposure_status precision AND recall
+       >=90% precision for dose, duration, and adverse events
+       recall documented by field and drug
+     If gates fail, revise the prompt/schema and rerun the pilot. Do not scale.
+  7. Report actual and extrapolated cost, then ask the user again for explicit
+     full-run approval.
+
+Only after that second approval:
+
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py \
+    run --confirm-paid-run --allow-db-hash-mismatch
+
+When all source-backed units are terminal:
+
+  .venv/bin/python studies/psychedelics/v1/extract_pharmacology.py finalize
+
+Finalization refuses incomplete unit coverage. Confirm the manifest reconciles
+all 1,157 cohort pairs, source-stage exclusions, unit statuses, terminal pair
+statuses, events JSONL vs finalized JSON, the included/excluded event split,
+provider attempts, cache hits, token totals, known/estimated/uncertain costs, any
+max-token escalations, and all artifact hashes and the run identity.
+
+--------------------------------------------------------------------------------
+10. ORIGINAL STUDY CONTEXT (DO NOT DISTURB)
+--------------------------------------------------------------------------------
+
+The existing notebook's completed within-patient results remain unchanged:
+
+  psilocybin OR 1.84 [1.44, 2.34], p=8.9e-07
+  ketamine   OR 1.22 [0.98, 1.53], p=7.9e-02
+  LSD        OR 0.66 [0.37, 1.17], p=1.5e-01
+
+The original study reports a within-patient comparison of existing extracted
+treatment-outcome triples. The raw-text pharmacology work is supplemental and has
+different units and failure modes. Do not compare its rates directly to other
+PatientPunk sentiment pipelines or present it as causal confirmation.
+
+The existing notebook is generated by `studies/psychedelics/v1/build_nb.py`. Running
+that generator overwrites the executed notebook; it is out of scope here.
+
+--------------------------------------------------------------------------------
+11. SEPARATE, UNSTARTED: THE REPORT OUTLINE
+--------------------------------------------------------------------------------
+
+The user supplied a desired report outline this session. It was mapped against
+the existing notebook but NO work was done on it. Summary of that mapping:
+
+  Already covered by existing sections: prevalence and who uses (2.3, 2.4, 2.6,
+  2.7), sentiment rates (2.1, 2.2), helped/hurt symptoms (4.3, 4.5), within-
+  patient baseline contrast (4.1), dosing/route (4.4, 4.6), claim strength (8.1),
+  and the no-recommendations limits (1.8, 7.2).
+
+  New but feasible on existing data: an introduction with the four mechanistic
+  theories (monoamine reset / neuroplasticity / neuroimmune / autonomic) and
+  their discriminating predictions plus a medical disclaimer; predictors of use
+  (covariates, prior treatments, comorbidities, symptoms, users vs cohort); and
+  response by diagnostic trait (autoimmune/MCAS, depression/anxiety, brain fog,
+  POTS/dysautonomia, energy baseline, PEM, LC vs ME/CFS).
+
+  Blocked on this extraction: 0-10 magnitude, effect duration, and categorized
+  adverse-event counts.
+
+  Flagged: LSD has 94 patients, so most LSD subgroup cells will be
+  uninformative; pre-declare those descriptive rather than testing them.
+
+================================================================================
