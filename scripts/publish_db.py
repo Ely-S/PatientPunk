@@ -10,16 +10,15 @@ Usage:
     # add its row to s3://patientpunk/INDEX.md with a conditional write, then
     # upload the finished YAML beside it.
     uv run python scripts/publish_db.py publish path/to/example.db \
-        --s3-uri s3://patientpunk/<prefix>/example.db --label multi-treatment [--catalog-copy]
+        --s3-uri s3://patientpunk/<prefix>/example.db --label multi-treatment
 
     # List S3 databases with no provenance YAML beside them or no INDEX.md row.
-    uv run python scripts/publish_db.py audit [--prefix scientific_validation/] [--json] [--strict]
+    uv run python scripts/publish_db.py audit [--prefix scientific_validation/] [--strict]
 
 S3 calls use boto3 with the AWS CLI's credentials (~/.aws or AWS_* environment variables).
 """
 import argparse
 import hashlib
-import json
 import re
 import sqlite3
 import sys
@@ -29,12 +28,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+from botocore.exceptions import ClientError
 
+BUCKET = "patientpunk"
 INDEX_KEY = "INDEX.md"
-CATALOG_PREFIX = "database_catalog/"
-NOT_RECORDED = "not recorded"
-# Columns the guide adds to INDEX.md; older rows get NOT_RECORDED.
-NEW_COLUMNS = ["Run date", "SHA-256", "Provenance"]
+CATALOG_PREFIX = "database_catalog/"  # browsing copies of databases listed elsewhere; audit skips them
 TOTALS_PREFIX = "Listed databases:"
 # Machine-local absolute paths: drive letters and home directories.
 LOCAL_PATH = re.compile(r"(?i)(?<![\w:/])[a-z]:[\\/]|(?<![\w.])/(?:Users|home)/")
@@ -176,55 +174,40 @@ class S3:
     """The few S3 operations publishing needs, through boto3 (same credentials as the AWS CLI)."""
 
     def __init__(self):
-        import boto3  # imported here so finalize and the tests run without AWS configured
+        import boto3  # imported here so finalize and the tests never create an AWS client
         self.client = boto3.client("s3")
 
     @staticmethod
-    def _code(e) -> str:
+    def _code(e: ClientError) -> str:
         return str(e.response.get("Error", {}).get("Code", ""))
 
     def head(self, bucket: str, key: str) -> dict | None:
-        from botocore.exceptions import ClientError
         try:
             return self.client.head_object(Bucket=bucket, Key=key)
         except ClientError as e:
             if self._code(e) in ("404", "NoSuchKey", "NotFound"):
                 return None
-            raise PublishError(f"head-object s3://{bucket}/{key} failed: {e}") from e
+            raise
 
     def upload(self, path: Path, bucket: str, key: str, sha256: str) -> None:
-        try:
-            self.client.upload_file(str(path), bucket, key, ExtraArgs={"Metadata": {"sha256": sha256}})
-        except Exception as e:
-            raise PublishError(f"upload to s3://{bucket}/{key} failed: {e}") from e
+        self.client.upload_file(str(path), bucket, key, ExtraArgs={"Metadata": {"sha256": sha256}})
 
     def download(self, bucket: str, key: str, path: Path) -> None:
-        try:
-            self.client.download_file(bucket, key, str(path))
-        except Exception as e:
-            raise PublishError(f"download of s3://{bucket}/{key} failed: {e}") from e
-
-    def copy(self, bucket: str, src_key: str, dst_key: str) -> None:
-        try:
-            self.client.copy({"Bucket": bucket, "Key": src_key}, bucket, dst_key)
-        except Exception as e:
-            raise PublishError(f"copy to s3://{bucket}/{dst_key} failed: {e}") from e
+        self.client.download_file(bucket, key, str(path))
 
     def get_text(self, bucket: str, key: str) -> tuple[str, str] | None:
         """(text, ETag), or None if the object does not exist."""
-        from botocore.exceptions import ClientError
         try:
             obj = self.client.get_object(Bucket=bucket, Key=key)
         except ClientError as e:
             if self._code(e) in ("404", "NoSuchKey"):
                 return None
-            raise PublishError(f"get-object s3://{bucket}/{key} failed: {e}") from e
+            raise
         return obj["Body"].read().decode("utf-8"), obj["ETag"]
 
     def put_text(self, bucket: str, key: str, text: str, *, content_type: str,
                  if_match: str | None = None, if_none_match: bool = False) -> bool:
         """Write a small text object; False if the condition failed (someone else wrote first)."""
-        from botocore.exceptions import ClientError
         data = text.encode("utf-8")
         kwargs = {"Bucket": bucket, "Key": key, "Body": data, "ContentType": content_type,
                   "Metadata": {"sha256": hashlib.sha256(data).hexdigest()}}
@@ -237,7 +220,7 @@ class S3:
         except ClientError as e:
             if self._code(e) in ("PreconditionFailed", "ConditionalRequestConflict", "412", "409"):
                 return False
-            raise PublishError(f"put-object s3://{bucket}/{key} failed: {e}") from e
+            raise
         return True
 
     def list_keys(self, bucket: str, prefix: str = "") -> list[dict]:
@@ -281,18 +264,18 @@ def index_rows(text: str) -> list[dict]:
 
 
 def add_index_row(text: str, row: dict) -> str:
-    """Insert one row in URI order, adding any missing columns and refreshing the totals line."""
+    """Insert one row in URI order and refresh the totals line."""
     lines = text.splitlines()
     start, end = table_bounds(lines)
     header = _cells(lines[start])
     rows = [dict(zip(header, _cells(line))) for line in lines[start + 2:end]]
     if any(r.get("Original S3 object") == row["Original S3 object"] for r in rows):
         raise PublishError(f"INDEX.md already lists {row['Original S3 object']}")
-    header += [c for c in NEW_COLUMNS if c not in header]
+    header += [c for c in row if c not in header]  # older rows leave a new column blank
     rows.append(row)
     rows.sort(key=lambda r: r["Original S3 object"].strip("`"))
     align = ["---:" if c == "Bytes" else "---" for c in header]
-    table = [_row(header), _row(align)] + [_row([r.get(c, NOT_RECORDED) for c in header]) for r in rows]
+    table = [_row(header), _row(align)] + [_row([r.get(c, "") for c in header]) for r in rows]
     total_bytes = sum(int(r["Bytes"]) for r in rows if r.get("Bytes", "").isdigit())
     totals = (f"{TOTALS_PREFIX} {len(rows)} objects, {total_bytes:,} bytes. "
               f"Updated {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')} by `scripts/publish_db.py`.")
@@ -316,9 +299,6 @@ def update_index(s3: S3, bucket: str, row: dict, attempts: int = 5) -> None:
         time.sleep(1)
     else:
         raise PublishError(f"INDEX.md kept changing under us; tried {attempts} times")
-    text, _ = s3.get_text(bucket, INDEX_KEY)
-    if not any(r.get("Original S3 object") == row["Original S3 object"] for r in index_rows(text)):
-        raise PublishError("the INDEX.md row is missing on read-back")
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
@@ -359,14 +339,14 @@ def cmd_publish(args, s3: S3 | None = None) -> None:
     uploaded = datetime.now(UTC)  # before the verification download, which can take as long
     try:
         publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha, uploaded)
-    except PublishError as e:
+    except Exception as e:
         raise PublishError(f"{e}\ns3://{bucket}/{key} is uploaded but publishing is incomplete; finish the "
                            "remaining steps by hand (docs/database-provenance.md) and record them") from e
 
 
 def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
                      bucket: str, key: str, yaml_key: str, sha: str, uploaded: datetime) -> None:
-    """Everything after the database upload: verify, catalog, then the YAML."""
+    """Everything after the database upload: verify, add the INDEX.md row, then upload the YAML."""
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / db.name
         s3.download(bucket, key, copy)
@@ -374,20 +354,9 @@ def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
             raise PublishError(f"s3://{bucket}/{key} does not match the local SHA-256; do not use it")
     head = s3.head(bucket, key) or {}
 
-    catalog_uri = None
-    if args.catalog_copy:
-        copy_key = f"{CATALOG_PREFIX}by-upload-date/uploaded-{uploaded:%Y-%m-%d}/{args.label}/{key}"
-        if s3.head(bucket, copy_key) is not None:
-            raise PublishError(f"s3://{bucket}/{copy_key} already exists")
-        s3.copy(bucket, key, copy_key)
-        copied = s3.head(bucket, copy_key) or {}
-        if copied.get("ContentLength") != db.stat().st_size or copied.get("Metadata", {}).get("sha256") != sha:
-            raise PublishError(f"the catalog copy s3://{bucket}/{copy_key} does not match the original")
-        catalog_uri = f"s3://{bucket}/{copy_key}"
-
     update_index(s3, bucket, {
         "Original S3 object": f"`s3://{bucket}/{key}`",
-        "Catalog copy": f"`{catalog_uri}`" if catalog_uri else "none",
+        "Catalog copy": "none",
         "Label": args.label,
         "Original upload date": f"{uploaded:%Y-%m-%d}",
         "Bytes": str(db.stat().st_size),
@@ -398,30 +367,25 @@ def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
     record["publication"] = {
         **record["publication"], "status": "published", "s3_uri": f"s3://{bucket}/{key}",
         "s3_version_id": head.get("VersionId"), "uploaded_utc": uploaded.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "downloaded_sha256_matches": True, "catalog_copy_uri": catalog_uri,
+        "downloaded_sha256_matches": True, "catalog_copy_uri": None,
         "catalog_verified_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     save_record(yaml_path, record)
     text = yaml_path.read_text(encoding="utf-8")
     if not s3.put_text(bucket, yaml_key, text, content_type="application/yaml", if_none_match=True):
         raise PublishError(f"s3://{bucket}/{yaml_key} appeared during publishing; it was not overwritten")
-    published = s3.get_text(bucket, yaml_key)
-    if published is None or published[0] != text:
-        raise PublishError(f"s3://{bucket}/{yaml_key} does not match the local YAML on read-back")
     print(f"published s3://{bucket}/{key}")
     print(f"provenance s3://{bucket}/{yaml_key}")
-    if catalog_uri:
-        print(f"catalog copy {catalog_uri}")
-    print(f"INDEX.md row added and verified in s3://{bucket}/{INDEX_KEY}")
+    print(f"INDEX.md row added in s3://{bucket}/{INDEX_KEY}")
 
 
-def audit(s3: S3, bucket: str, prefix: str, include_catalog: bool) -> list[dict]:
+def audit(s3: S3, bucket: str, prefix: str) -> list[dict]:
     keys = {o["Key"]: o for o in s3.list_keys(bucket, prefix)}
     index = s3.get_text(bucket, INDEX_KEY)
     listed = {r.get("Original S3 object", "").strip("`") for r in index_rows(index[0])} if index else set()
     report = []
     for key, obj in sorted(keys.items()):
-        if not key.endswith(".db") or (key.startswith(CATALOG_PREFIX) and not include_catalog):
+        if not key.endswith(".db") or key.startswith(CATALOG_PREFIX):
             continue
         yaml_key = key[: -len(".db")] + "_provenance.yaml"
         report.append({"s3_uri": f"s3://{bucket}/{key}", "bytes": obj.get("Size"),
@@ -430,16 +394,13 @@ def audit(s3: S3, bucket: str, prefix: str, include_catalog: bool) -> list[dict]
 
 
 def cmd_audit(args, s3: S3 | None = None) -> int:
-    report = audit(s3 or S3(), args.bucket, args.prefix, args.include_catalog_copies)
-    if args.json:
-        print(json.dumps(report, indent=1))
-    else:
-        for r in report:
-            gaps = [g for g, ok in (("no provenance YAML", r["provenance"]), ("not in INDEX.md", r["in_index"]))
-                    if not ok]
-            print(f"{'ok  ' if not gaps else 'GAP '} {r['s3_uri']}" + (f"  ({'; '.join(gaps)})" if gaps else ""))
-        print(f"{len(report)} databases: {sum(r['provenance'] for r in report)} with provenance YAML, "
-              f"{sum(r['in_index'] for r in report)} in INDEX.md")
+    report = audit(s3 or S3(), BUCKET, args.prefix)
+    for r in report:
+        gaps = [g for g, ok in (("no provenance YAML", r["provenance"]), ("not in INDEX.md", r["in_index"]))
+                if not ok]
+        print(f"{'ok  ' if not gaps else 'GAP '} {r['s3_uri']}" + (f"  ({'; '.join(gaps)})" if gaps else ""))
+    print(f"{len(report)} databases: {sum(r['provenance'] for r in report)} with provenance YAML, "
+          f"{sum(r['in_index'] for r in report)} in INDEX.md")
     complete = all(r["provenance"] and r["in_index"] for r in report)
     return 0 if complete or not args.strict else 1
 
@@ -453,12 +414,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("db", type=Path)
     p.add_argument("--s3-uri", required=True, help="new s3://bucket/key ending with the database filename")
     p.add_argument("--label", required=True, help="scope label for INDEX.md, e.g. multi-treatment or source-corpus")
-    p.add_argument("--catalog-copy", action="store_true", help="also copy it under database_catalog/by-upload-date/")
-    a = sub.add_parser("audit", help="list S3 databases missing a provenance YAML or an INDEX.md row")
-    a.add_argument("--bucket", default="patientpunk")
+    a = sub.add_parser("audit", help=f"list s3://{BUCKET} databases missing a provenance YAML or an INDEX.md row")
     a.add_argument("--prefix", default="")
-    a.add_argument("--include-catalog-copies", action="store_true")
-    a.add_argument("--json", action="store_true")
     a.add_argument("--strict", action="store_true", help="exit 1 if any database has a gap")
     args = ap.parse_args(argv)
     try:
