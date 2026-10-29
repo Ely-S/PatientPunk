@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --no-project -q python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_direct_db_upload.py\""
+            "command": "uv run --no-project -q python \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_direct_db_upload.py\""
           }
         ]
       }

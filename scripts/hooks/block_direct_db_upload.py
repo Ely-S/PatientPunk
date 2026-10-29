@@ -1,4 +1,4 @@
-"""Claude Code PreToolUse hook: stop shell commands that upload a SQLite database to S3.
+"""PreToolUse hook for Claude Code and Codex: stop shell commands that upload a SQLite database to S3.
 
 Databases are published only with scripts/publish_db.py, which checks the provenance
 YAML, verifies the upload by hash and updates s3://patientpunk/INDEX.md (see
@@ -8,8 +8,9 @@ folder and blocks only if a .db file would be uploaded after the command's --exc
 --include filters. When it cannot look (an S3 source, a path with a shell variable, or a
 very large folder), it blocks unless the filters keep every .db out.
 
-Reads the hook event as JSON on stdin; exit code 2 blocks the command and shows the
-message on stderr to the agent. Standard library only, so it runs without the project
+Registered in .claude/settings.json and .codex/hooks.json. Both tools send the hook event as
+JSON on stdin with the command at tool_input.command; exit code 2 blocks the command and
+shows the message on stderr to the agent. Standard library only, so it runs without the project
 environment.
 """
 import fnmatch
