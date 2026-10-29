@@ -43,12 +43,13 @@ uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 # 4. This folds each author's posts and comments into one
 #    synthetic post FIRST. Extraction reads title + body only, so a patient who
 #    only ever commented is skipped otherwise. It also makes it simpler to make sure that
-#    patients who comment a lot only have their opinion counted once. Writes a NEW directory.
-python main.py aggregate --input-dir ../output --out-dir ../output_perpatient --min-items 3
+#    patients who comment a lot only have their opinion counted once. Writes a NEW directory:
+#    with no path flags it reads ../output and writes ../output_perpatient.
+python main.py aggregate --min-items 3
 
-# 5. Full pipeline run (LLM extraction + CSV + codebook).
-#    Defaults to ../output; point it at the aggregated dir if you ran step 4.
-python main.py run --schema schemas/covidlonghaulers_schema.json
+# 5. Full pipeline run (LLM extraction + CSV + codebook) on step 4's output.
+#    Without --input-dir it reads ../output, and every comment is lost.
+python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient
 
 # 6. LLM-only demographics (age / sex / location, deductive + inductive)
 python main.py demographics --input-dir ../output
@@ -308,8 +309,8 @@ keeps the full emergent tail.
 
 ## CLI Reference
 
-Every command below is `python main.py <command>`, run from `variable_extraction/`.
-Full list, in the order you would reach for them:
+Every command below is `python main.py <command>`, run from `variable_extraction/`,
+except the scraper in the first row. Full list, in the order you would reach for them:
 
 | Command | What it does |
 |---|---|
