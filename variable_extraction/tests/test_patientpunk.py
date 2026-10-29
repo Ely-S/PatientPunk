@@ -2155,25 +2155,47 @@ class TestNormalize:
         assert d["treatment_outcome_drug"] == "LDN |  | metoprolol"
         assert d["treatment_outcome_symptom"] == "brain fog |  | "
 
+    def test_dosage_decomposition_keeps_treatment_alignment(self):
+        from patientpunk.normalize import normalize_records
+
+        row = {
+            "author_hash": "a",
+            "dosage": "LDN: 4.5 mg | B12: 250 mcg",
+        }
+        out = normalize_records([row])[0]
+
+        assert out["dosage"] == row["dosage"]
+        assert out["dosage_treatment"] == "LDN | B12"
+        assert out["dosage_value"] == "4.5 mg | 250 mcg"
+
+    def test_pair_decomposition_preserves_bare_legacy_dose_without_attribution(self):
+        from patientpunk.normalize import normalize_records
+
+        out = normalize_records([{"dosage": "5 mg | B12: 250 mcg"}])[0]
+
+        assert out["dosage_treatment"] == " | B12"
+        assert out["dosage_value"] == "5 mg | 250 mcg"
+
     def test_cluster_prep_uses_label_not_raw_triple(self):
         from patientpunk.cluster_prep import _data_fields, DEFAULT_META
         header = ["author_hash", "treatment_outcome", "treatment_outcome_label",
-                  "treatment_outcome_drug", "treatment_outcome_symptom", "conditions"]
+                  "treatment_outcome_drug", "treatment_outcome_symptom",
+                  "dosage", "dosage_treatment", "dosage_value", "conditions"]
         fields = _data_fields(header, DEFAULT_META)
         assert "treatment_outcome_label" in fields      # the bucket is the cluster feature
         assert "treatment_outcome" not in fields         # raw triple excluded from clustering
         assert "treatment_outcome_drug" not in fields
         assert "treatment_outcome_symptom" not in fields
+        assert "dosage" not in fields
+        assert "dosage_treatment" not in fields
+        assert "dosage_value" not in fields
         assert "conditions" in fields
 
 
 class TestLLMExtractNormalizeRecords:
-    """Regression coverage for llm_extract.normalize_records (issue #86): with
-    regex parsing removed, dosage strings pass through untouched by the LLM
-    extraction and must survive wrapping/canonicalization unchanged."""
+    """Treatment-linked dosage extraction coverage."""
 
-    def test_dosage_is_always_requested_and_reaches_csv(self, tmp_path, monkeypatch):
-        """A model-produced dosage must survive validation through CSV export."""
+    def test_linked_dosages_are_requested_and_reach_csv(self, tmp_path, monkeypatch):
         import patientpunk.llm_extract as m
 
         schema = json.loads(EXT_SCHEMA.read_text(encoding="utf-8"))
@@ -2183,7 +2205,9 @@ class TestLLMExtractNormalizeRecords:
         monkeypatch.setattr(
             m,
             "_call_batch_raw",
-            lambda *_args: [{"fields": {"dosage": ["4.5 mg", "250 mcg"]}}],
+            lambda *_args: [{"fields": {
+                "dosage": ["LDN: 4.5 mg", "B12: 250 mcg"],
+            }}],
         )
         records = m._process_batch(
             [("post", {
@@ -2203,14 +2227,45 @@ class TestLLMExtractNormalizeRecords:
         run_export_csv(input_files=[src], output_path=output)
 
         row = next(iter(csv.DictReader(output.open(encoding="utf-8"))))
-        assert row["dosage"] == "4.5 mg | 250 mcg"
+        assert row["dosage"] == "ldn: 4.5 mg | b12: 250 mcg"
 
-    def test_dosage_strings_survive_intact(self):
+    def test_treatment_dose_pairs_stay_matched_and_bare_doses_are_dropped(self):
         from patientpunk.llm_extract import normalize_records
-        dosages = ["5 mg", "250 mcg", "0.5 ml", "1 g", "5000 iu", "2 units", "5"]
+
+        dosages = [
+            "LDN: 5 mg",
+            "B12: 250 mcg",
+            "ketotifen: 0.25-0.5 mg",
+            "unlinked 10 mg",
+        ]
         rec = {"fields": {"dosage": dosages}}
         out = normalize_records([rec])[0]
-        assert out["fields"]["dosage"]["values"] == dosages
+
+        assert out["fields"]["dosage"]["values"] == [
+            "ldn: 5 mg",
+            "b12: 250 mcg",
+            "ketotifen: 0.25-0.5 mg",
+        ]
+
+    def test_unlinked_dosages_clear_confidence(self):
+        from patientpunk.llm_extract import normalize_records
+
+        rec = {"fields": {"dosage": ["5 mg"]}}
+        out = normalize_records([rec])[0]["fields"]
+
+        assert out["dosage"] == {"values": [], "confidence": None}
+
+    def test_prompt_requires_explicit_treatment_dose_linkage(self):
+        from patientpunk.llm_extract import build_field_descriptions, build_system_prompt
+
+        prompt = build_system_prompt(build_field_descriptions(None))
+
+        assert 'Return each explicit link as "treatment: dose"' in prompt
+        assert "they actually took or received" in prompt
+        assert "Never pair values by proximity, order, or guesswork" in prompt
+        assert '"I was prescribed 5 mg naltrexone but never started it" -> null' in prompt
+        assert '"Naltrexone commonly comes in 50 mg tablets" -> null' in prompt
+        assert '"My wife takes 5 mg naltrexone" -> null' in prompt
 
     def test_canonicalization_still_applied(self):
         from patientpunk.llm_extract import normalize_records
@@ -2222,7 +2277,7 @@ class TestLLMExtractNormalizeRecords:
 
     def test_field_entries_carry_schema_declared_confidence(self):
         from patientpunk.llm_extract import normalize_records
-        rec = {"fields": {"dosage": ["5 mg"], "conditions": ["me/cfs"]}}
+        rec = {"fields": {"dosage": ["LDN: 5 mg"], "conditions": ["me/cfs"]}}
         out = normalize_records([rec], confidence_by_field={"dosage": "low"})[0]
         assert out["fields"]["dosage"]["confidence"] == "low"
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
