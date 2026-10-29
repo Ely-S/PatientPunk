@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 DOSAGE_FIELD = "dosage"
 ADMINISTRATION_ROUTE_FIELD = "administration_route"
@@ -53,9 +53,12 @@ _SPECIFIC_ROUTES_BY_BROAD_ROUTE: dict[
 
 
 class TreatmentValuePair(BaseModel):
-    """Validated boundary object for a ``treatment: value`` LLM entry."""
+    """A treatment and one detail about it, written as ``treatment: value``.
 
-    model_config = ConfigDict(frozen=True)
+    The extraction model reports dosages and administration routes this way, for
+    example ``naltrexone: 5mg``, ``vitamin d: 1000iu`` or ``naltrexone: oral``. Both
+    parts are trimmed and must be non-empty.
+    """
 
     treatment: str
     value: str
@@ -87,7 +90,10 @@ class TreatmentValuePair(BaseModel):
 
 
 _ROUTE_CLEANUP = re.compile(r"[\s_-]+")
-_ROUTE_ALIASES: dict[str, AdministrationRoute] = {
+# One lookup for every way a route is written: each route's own name, plus shorthand
+# and a common misspelling the extraction model produces.
+_ROUTE_LOOKUP: dict[str, AdministrationRoute] = {
+    **{route.value: route for route in AdministrationRoute},
     "sublingal": AdministrationRoute.SUBLINGUAL,
     "shot": AdministrationRoute.INJECTION,
     "iv": AdministrationRoute.INTRAVENOUS,
@@ -100,31 +106,17 @@ _ROUTE_ALIASES: dict[str, AdministrationRoute] = {
 
 def normalize_administration_route(value: str) -> AdministrationRoute | None:
     """Map a recognized model-produced route to the controlled vocabulary."""
-    cleaned = _ROUTE_CLEANUP.sub(" ", value.strip().lower())
-    if cleaned in _ROUTE_ALIASES:
-        return _ROUTE_ALIASES[cleaned]
-    try:
-        return AdministrationRoute(cleaned)
-    except ValueError:
-        return None
+    return _ROUTE_LOOKUP.get(_ROUTE_CLEANUP.sub(" ", value.strip().lower()))
 
 
 def normalize_dosage_pairs(values: list[str]) -> list[str]:
-    """Keep normalized dosage entries that identify treatment and dose."""
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for raw in values:
-        pair = TreatmentValuePair.from_text(raw)
-        if pair is None:
-            continue
-        rendered = TreatmentValuePair(
-            treatment=pair.treatment.lower(),
-            value=pair.value.lower(),
-        ).render()
-        if rendered not in seen:
-            seen.add(rendered)
-            normalized.append(rendered)
-    return normalized
+    """Lowercased ``treatment: dose`` entries, each once, in the order first seen."""
+    pairs = (TreatmentValuePair.from_text(raw) for raw in values)
+    # dict.fromkeys drops repeats like a set but keeps order, so output is stable across runs.
+    return list(dict.fromkeys(
+        TreatmentValuePair(treatment=pair.treatment.lower(), value=pair.value.lower()).render()
+        for pair in pairs if pair is not None
+    ))
 
 
 def normalize_administration_route_pairs(values: list[str]) -> list[str]:
@@ -142,17 +134,10 @@ def normalize_administration_route_pairs(values: list[str]) -> list[str]:
         pairs.append((treatment, route))
         routes_by_treatment.setdefault(treatment, set()).add(route)
 
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for treatment, route in pairs:
-        specific_routes = _SPECIFIC_ROUTES_BY_BROAD_ROUTE.get(route, frozenset())
-        if routes_by_treatment[treatment].intersection(specific_routes):
-            continue
-        rendered = TreatmentValuePair(
-            treatment=treatment,
-            value=route.value,
-        ).render()
-        if rendered not in seen:
-            seen.add(rendered)
-            normalized.append(rendered)
-    return normalized
+    # A broad route ("injection") is dropped when the same treatment also has a specific
+    # one ("intravenous"). dict.fromkeys keeps one copy of each, in first-seen order.
+    return list(dict.fromkeys(
+        TreatmentValuePair(treatment=treatment, value=route.value).render()
+        for treatment, route in pairs
+        if not routes_by_treatment[treatment] & _SPECIFIC_ROUTES_BY_BROAD_ROUTE.get(route, frozenset())
+    ))
