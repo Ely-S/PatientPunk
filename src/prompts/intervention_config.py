@@ -163,7 +163,7 @@ REPLY CHAIN: Upstream comment text is context only — use it to understand what
 
 side_effects: list of objects naming side effects the author attributes to {name}
   Each object must have exactly this shape:
-    {{"side_effect": "short lowercase symptom", "severity": null}}
+    {{"effect": "short lowercase symptom", "severity": null}}
   severity must be one of mild | moderate | severe | life_threatening | null.
   Set severity only when the author explicitly describes that side effect's intensity.
   Do not infer severity from the symptom itself. For example, "a mild headache" has
@@ -176,19 +176,19 @@ side_effects: list of objects naming side effects the author attributes to {name
   Collapse obvious duplicates within a single entry. If none reported, use [].
   This applies to positive/negative/mixed entries alike — a positive report can still list
   tolerable side effects ("it helped but caused mild insomnia at first" → positive/strong,
-  side_effects=[{{"side_effect":"insomnia","severity":"mild"}}]).
+  side_effects=[{{"effect":"insomnia","severity":"mild"}}]).
 
   LIST FANOUT: when a symptom description applies to multiple drugs in a list, attribute it to
   EVERY drug in that list, including {name} if it appears.
   e.g. "Effexor, Pristiq, and Cymbalta all made me feel really bad" → if {name} is Cymbalta,
-  side_effects=[{{"side_effect":"felt really bad","severity":null}}]. Do not drop {name}
+  side_effects=[{{"effect":"felt really bad","severity":null}}]. Do not drop {name}
   just because other drugs share the symptom.
 
   GENERIC SIDE-EFFECT REFERENCES: when the author says they experienced side effects from {name}
   but doesn't name a specific symptom, capture the phrase they used.
   e.g. "couldn't tolerate the side effects" →
-  [{{"side_effect":"side effects","severity":null}}], "I had a bad reaction" →
-  [{{"side_effect":"bad reaction","severity":null}}]. Do NOT invent a specific symptom
+  [{{"effect":"side effects","severity":null}}], "I had a bad reaction" →
+  [{{"effect":"bad reaction","severity":null}}]. Do NOT invent a specific symptom
   or severity if none was named.
 
   INTERACTIONS: if a symptom arises only from combining {name} with another drug and {name} alone
@@ -203,4 +203,4 @@ side_effects: list of objects naming side effects the author attributes to {name
   (depression was caused by the deficiency, and vitamin D resolved it — it is not a side effect).
   e.g. "LDN helped my fatigue" → side_effects=[] (fatigue is the condition being treated, not a side effect).
 
-Respond ONLY with JSON: {{"sentiment":"...","signal":"...","personal_use":true,"side_effects":[{{"side_effect":"...","severity":null}}]}}"""
+Respond ONLY with JSON: {{"sentiment":"...","signal":"...","personal_use":true,"side_effects":[{{"effect":"...","severity":null}}]}}"""

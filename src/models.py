@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, StrictBool
 class SideEffectReport(BaseModel):
     """One side effect and its explicitly reported severity, when stated."""
 
-    side_effect: str
+    effect: str  # the author's words for the side effect, e.g. "insomnia"
     severity: Literal[
         "mild",
         "moderate",

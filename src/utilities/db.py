@@ -155,8 +155,8 @@ class ReportWriter:
             (
                 self.run_id, post_id, author, drug_id, sentiment, signal,
                 json.dumps([
-                    side_effect.model_dump(mode="json")
-                    for side_effect in side_effects
+                    report.model_dump(mode="json")
+                    for report in side_effects
                 ]) if side_effects else None,
             ),
         )

@@ -14,7 +14,7 @@ from utilities.db import ReportWriter
 def test_side_effect_report_rejects_unknown_severity() -> None:
     with pytest.raises(ValidationError, match="severity"):
         SideEffectReport.model_validate({
-            "side_effect": "headache", "severity": "extreme",
+            "effect": "headache", "severity": "extreme",
         })
 
 
@@ -23,10 +23,10 @@ def test_classification_side_effects_round_trip_to_database(tmp_path: Path) -> N
         "sentiment": "negative",
         "signal": "strong",
         "side_effects": [
-            {"side_effect": "headache", "severity": "mild"},
-            {"side_effect": "dizziness", "severity": "severe"},
-            {"side_effect": "insomnia", "severity": None},
-            {"side_effect": "nausea"},
+            {"effect": "headache", "severity": "mild"},
+            {"effect": "dizziness", "severity": "severe"},
+            {"effect": "insomnia", "severity": None},
+            {"effect": "nausea"},
         ],
     })
     db_path = tmp_path / "reports.db"
@@ -54,8 +54,8 @@ def test_classification_side_effects_round_trip_to_database(tmp_path: Path) -> N
         ).fetchone()[0]
 
     assert json.loads(stored) == [
-        {"side_effect": "headache", "severity": "mild"},
-        {"side_effect": "dizziness", "severity": "severe"},
-        {"side_effect": "insomnia", "severity": None},
-        {"side_effect": "nausea", "severity": None},
+        {"effect": "headache", "severity": "mild"},
+        {"effect": "dizziness", "severity": "severe"},
+        {"effect": "insomnia", "severity": None},
+        {"effect": "nausea", "severity": None},
     ]

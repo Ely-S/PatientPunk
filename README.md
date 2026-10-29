@@ -337,7 +337,7 @@ Classify reads from `canonicalized_mentions.json` if it exists, otherwise falls 
 |--------|--------|
 | `sentiment` | `positive`, `negative`, `mixed`, `neutral` |
 | `signal_strength` | `strong`, `moderate`, `weak`, `n/a` |
-| `side_effects` | JSON objects with `side_effect` and nullable `severity` |
+| `side_effects` | JSON objects with `effect` and nullable `severity` |
 
 ---
 
