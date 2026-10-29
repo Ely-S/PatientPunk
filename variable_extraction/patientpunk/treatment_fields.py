@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 DOSAGE_FIELD = "dosage"
 
 
 class TreatmentValuePair(BaseModel):
-    """Validated boundary object for a ``treatment: value`` LLM entry."""
+    """A treatment and one detail about it, written as ``treatment: value``.
 
-    model_config = ConfigDict(frozen=True)
+    The extraction model reports dosages this way, for example ``naltrexone: 5mg`` or
+    ``vitamin d: 1000iu``. Both parts are trimmed and must be non-empty.
+    """
 
     treatment: str
     value: str
@@ -42,18 +44,10 @@ class TreatmentValuePair(BaseModel):
 
 
 def normalize_dosage_pairs(values: list[str]) -> list[str]:
-    """Keep normalized dosage entries that identify treatment and dose."""
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for raw in values:
-        pair = TreatmentValuePair.from_text(raw)
-        if pair is None:
-            continue
-        rendered = TreatmentValuePair(
-            treatment=pair.treatment.lower(),
-            value=pair.value.lower(),
-        ).render()
-        if rendered not in seen:
-            seen.add(rendered)
-            normalized.append(rendered)
-    return normalized
+    """Lowercased ``treatment: dose`` entries, each once, in the order first seen."""
+    pairs = (TreatmentValuePair.from_text(raw) for raw in values)
+    # dict.fromkeys drops repeats like a set but keeps order, so output is stable across runs.
+    return list(dict.fromkeys(
+        TreatmentValuePair(treatment=pair.treatment.lower(), value=pair.value.lower()).render()
+        for pair in pairs if pair is not None
+    ))
