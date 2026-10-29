@@ -141,6 +141,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     # slice is indistinguishable from one misaligned by a bug -- only the rate tells
     # them apart. Kept parents are counted in the database after the cleanup, so a
     # re-import, whose rows INSERT OR IGNORE leaves as they were, reports what is stored.
+    comment_ids = list(dict.fromkeys(comment_ids))  # a repeated id is one stored row
     comments = len(comment_ids)
     if comments:
         kept = 0
