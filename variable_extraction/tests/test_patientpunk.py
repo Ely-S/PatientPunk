@@ -2007,15 +2007,18 @@ class TestSubredditProvenance:
             "author_hash,subreddits\n"
             "busiest,cfs:24 covidlonghaulers:11\n"
             "no_column,\n"
-            "already_there,pmdd:3\n", encoding="utf-8")
+            "already_there,pmdd:3\n"
+            "placeholder_first,pmdd:3\n", encoding="utf-8")
 
         conn = db.init_db(tmp_path / "t.db")
+        # A real value stays; a placeholder, as demographics-first loading leaves, is replaced.
         conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at)"
-                     " VALUES ('already_there', 'stale', 0)")
+                     " VALUES ('already_there', 'stale', 0), ('placeholder_first', 'unknown', 0)")
         self.LOADERS[loader](db, conn, path)
 
         assert dict(conn.execute("SELECT user_id, source_subreddit FROM users")) == {
-            "busiest": "cfs", "no_column": "fallback", "already_there": "stale"}
+            "busiest": "cfs", "no_column": "fallback", "already_there": "stale",
+            "placeholder_first": "pmdd"}
 
 
 class TestAggregateByAuthor:
