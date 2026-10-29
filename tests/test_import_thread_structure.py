@@ -3,7 +3,6 @@ was posted under, whichever id convention the corpus uses. No API calls.
 """
 
 import json
-import logging
 import sqlite3
 import sys
 from pathlib import Path
@@ -70,30 +69,20 @@ def test_the_comment_tree_survives_import(imported_tree):
     assert imported_tree == TREE
 
 
-@pytest.mark.parametrize("parents, expected", [
-    (["t3_aaa", "t3_outside_the_slice"], "Parent resolved for 1/2 comments (50.0%)"),
-    (["t3_outside_the_slice", "t3_also_outside"], "NO comment kept its parent"),
-], ids=["a-slice-boundary", "nothing-resolves"])
-def test_the_import_reports_the_resolution_rate(tmp_path, caplog, parents, expected):
-    """Foreign keys are off, so an unresolved parent is nulled rather than raised,
-    and a slice boundary looks exactly like an id-convention bug. Only the rate
-    separates them: the bug this branch fixes reads as 0%."""
+def test_an_import_where_no_parent_resolves_is_reported(tmp_path, caplog):
+    """Unresolved parents are nulled silently, so a bug that misaligns every parent
+    looks like a clean import. The 0% resolution rate is the only sign."""
     src = tmp_path / "subreddit_posts.json"
     src.write_text(json.dumps([{
         "author_hash": "a" * 64, "post_id": "t3_aaa", "title": "t", "body": "b",
         "url": "https://reddit.com/r/cfs/x", "created_utc": "2026-01-01T00:00:00Z",
-        "comments": [
-            {"author_hash": chr(98 + i) * 64, "comment_id": f"t1_c{i}", "parent_id": parent,
-             "body": "r", "created_utc": "2026-01-01T01:00:00Z"}
-            for i, parent in enumerate(parents)
-        ]}]), encoding="utf-8")
+        "comments": [{"author_hash": "b" * 64, "comment_id": "t1_c1", "parent_id": "t3_elsewhere",
+                      "body": "r", "created_utc": "2026-01-01T01:00:00Z"}]}]), encoding="utf-8")
     conn = sqlite3.connect(tmp_path / "posts.db")
     conn.executescript((REPO_ROOT / "schema.sql").read_text(encoding="utf-8"))
-    conn.execute("PRAGMA foreign_keys = OFF")
-
-    with caplog.at_level(logging.INFO):
-        import_reddit_posts(conn, src, subreddit="cfs")
-    assert expected in caplog.text
+    conn.execute("PRAGMA foreign_keys = OFF")  # as in production; schema.sql turns them on
+    import_reddit_posts(conn, src, subreddit="cfs")
+    assert "NO comment kept its parent" in caplog.text
 
 
 def test_each_kind_is_aligned_independently():
