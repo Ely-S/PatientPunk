@@ -116,10 +116,38 @@ def register_run(
 
 # ── ETL: Shaun's pipeline ──────────────────────────────────────────────────────
 
+def _primary_subreddit(row: dict, fallback: str) -> str:
+    """Pick the patient's main community out of a record's ``subreddits`` column.
+    """
+    raw = (row.get("subreddits") or "").strip()
+    if raw:
+        name = raw.split()[0].rsplit(":", 1)[0]
+        if name:
+            return name
+    return fallback
+
+
+def _ensure_user(conn: sqlite3.Connection, user_id: str, row: dict, fallback: str) -> None:
+    """Create the user if needed, with their community or the fallback.
+
+    A community the row names replaces a placeholder stored earlier (``unknown`` or
+    this load's fallback): load_db.py loads demographics first, and those rows name
+    no community. A real stored value is never overwritten.
+    """
+    named = _primary_subreddit(row, "")
+    conn.execute(
+        "INSERT INTO users (user_id, source_subreddit, scraped_at) VALUES (?, ?, ?)"
+        " ON CONFLICT(user_id) DO UPDATE SET source_subreddit = excluded.source_subreddit"
+        " WHERE ? != '' AND users.source_subreddit IN ('unknown', ?)",
+        (user_id, named or fallback, int(time.time()), named, fallback),
+    )
+
+
 def load_extractions(
     conn: sqlite3.Connection,
     csv_path: Path,
     run_id: int | None = None,
+    subreddit: str = "unknown",
 ) -> int:
     """
     Load a CSV with extraction data -> user_profiles + conditions.
@@ -151,11 +179,7 @@ def load_extractions(
             continue
 
         # Ensure the user exists (corpus may not have been loaded yet)
-        conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-            " VALUES (?, ?, ?)",
-            (author_hash, "covidlonghaulers", int(time.time())),
-        )
+        _ensure_user(conn, author_hash, row, subreddit)
 
         # Demographics -> user_profiles
         # Reject multi-value fields (pipe-separated) -- these are noisy
@@ -241,6 +265,7 @@ def load_variables(
     csv_path: Path,
     run_id: int,
     skip_columns: set[str] | None = None,
+    subreddit: str = "unknown",
 ) -> int:
     """Load every extracted variable column from records.csv into the EAV
     ``variables`` table -- one row per non-empty, non-metadata cell.
@@ -269,11 +294,7 @@ def load_variables(
             author_hash = (row.get("author_hash") or "").strip()
             if not author_hash:
                 continue
-            conn.execute(
-                "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at)"
-                " VALUES (?, ?, ?)",
-                (author_hash, "covidlonghaulers", int(time.time())),
-            )
+            _ensure_user(conn, author_hash, row, subreddit)
             post_id = (row.get("post_id") or "").strip() or None
             for col in value_cols:
                 value = (row.get(col) or "").strip()
