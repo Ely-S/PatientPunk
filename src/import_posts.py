@@ -78,6 +78,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
 
     users: list[UserRow] = []
     posts: list[PostRow] = []
+    comment_ids: list[str] = []
     seen_users: set[str] = set()
 
     # Read the id convention off the corpus, per kind. A single flag off post_id
@@ -107,6 +108,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
         for comment in post.get("comments", []):
             c_author = comment["author_hash"]
             add_user(c_author, sub)
+            comment_ids.append(comment["comment_id"])
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
                 parent_id=align_parent_id(comment.get("parent_id"), prefixed),
@@ -126,10 +128,10 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             posts,
         )
         # Clean dangling parent_ids in SQL
-        dropped = conn.execute(
+        conn.execute(
             "UPDATE posts SET parent_id = NULL "
             "WHERE parent_id IS NOT NULL AND parent_id NOT IN (SELECT post_id FROM posts)"
-        ).rowcount
+        )
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
     log.info(f"Imported {len(users)} users, {n} posts/comments.")
@@ -137,11 +139,16 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
     # Foreign keys are off on this connection, so a parent naming no known row is
     # nulled above rather than raised. A comment whose parent post falls outside the
     # slice is indistinguishable from one misaligned by a bug -- only the rate tells
-    # them apart. Counted off `posts` so comments align_parent_id already nulled are
-    # in the denominator: they did not resolve either.
-    comments = sum(len(p.get("comments") or ()) for p in data)
+    # them apart. Kept parents are counted in the database after the cleanup, so a
+    # re-import, whose rows INSERT OR IGNORE leaves as they were, reports what is stored.
+    comments = len(comment_ids)
     if comments:
-        kept = sum(1 for p in posts if p.parent_id is not None) - dropped
+        kept = 0
+        for i in range(0, comments, 500):  # chunks stay under SQLite's limit on query parameters
+            chunk = comment_ids[i:i + 500]
+            kept += conn.execute(
+                "SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL "
+                f"AND post_id IN ({','.join('?' * len(chunk))})", chunk).fetchone()[0]
         log.info(f"Parent resolved for {kept}/{comments} comments "
                  f"({kept / comments * 100:.1f}%).")
         if not kept:
