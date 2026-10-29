@@ -34,10 +34,10 @@ Do not open the database for writing after hashing; a later write makes a new sn
 
 Publish only with `uv run python scripts/publish_db.py publish <db> --s3-uri s3://patientpunk/<prefix>/<stem>.db --label <label>`. A hook for Claude Code and Codex (`scripts/hooks/block_direct_db_upload.py`, registered in `.claude/settings.json` and `.codex/hooks.json`) blocks direct `.db` uploads with `aws s3`. Other files upload normally, and a folder upload (`sync`, or `cp --recursive`) is blocked only when the folder holds a `.db` that its `--exclude`/`--include` filters would upload; add `--exclude "*.db"` to send the rest. The script first checks the YAML: completed status, full commit SHA, commands with working directories, finalized output that still matches the file, no machine-local paths, and nothing that looks like a secret. It then does these steps, stopping at the first failure:
 
-1. Choose a new key for the database and confirm it is free: `aws s3api head-object` must report that the object does not exist. Upload the YAML later to the same prefix as `<stem>_provenance.yaml`.
+1. Choose a new key for the database and confirm it is free: `aws s3api head-object` must report that the object does not exist. Then claim the key: create `<stem>_provenance.yaml` at the same prefix with a one-line placeholder, using `--if-none-match "*"`. If that create fails, someone else is publishing there; stop.
 2. Upload the finalized `.db`, download it again, and compare SHA-256 values. An S3 ETag is not a SHA-256.
 3. Update the catalog as described below.
-4. Fill the `publication` fields and upload the YAML.
+4. Fill the `publication` fields and replace the placeholder with the YAML, using `--if-match` with the placeholder's ETag.
 
 ### Catalog
 
