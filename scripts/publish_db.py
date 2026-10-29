@@ -34,8 +34,10 @@ BUCKET = "patientpunk"
 INDEX_KEY = "INDEX.md"
 CATALOG_PREFIX = "database_catalog/"  # browsing copies of databases listed elsewhere; audit skips them
 TOTALS_PREFIX = "Listed databases:"
-# Machine-local absolute paths: drive letters and home directories.
-LOCAL_PATH = re.compile(r"(?i)(?<![\w:/])[a-z]:[\\/]|(?<![\w.])/(?:Users|home)/")
+NOT_RECORDED = "not recorded"  # an older INDEX.md row's value for a column added later
+# Machine-local absolute paths: drive letters, POSIX home and system directories, UNC shares.
+LOCAL_PATH = re.compile(r"(?i)(?<![\w:/])[a-z]:[\\/]|(?<![\w.])/(?:Users|home|root|tmp|mnt|var|opt|srv)/"
+                        r"|(?<![\w\\])\\\\[\w.$-]+\\")
 SECRET = re.compile(r"sk-or-v1-|sk-ant-|sk-proj-|\bAKIA[0-9A-Z]{16}\b|X-Amz-Signature=")
 
 
@@ -70,9 +72,12 @@ def load_record(path: Path) -> dict:
     return record
 
 
+def dump_record(record: dict) -> str:
+    return yaml.safe_dump(record, sort_keys=False, allow_unicode=True, width=100)
+
+
 def save_record(path: Path, record: dict) -> None:
-    path.write_text(yaml.safe_dump(record, sort_keys=False, allow_unicode=True, width=100),
-                    encoding="utf-8", newline="\n")
+    path.write_text(dump_record(record), encoding="utf-8", newline="\n")
 
 
 def require_database(db: Path) -> None:
@@ -271,11 +276,11 @@ def add_index_row(text: str, row: dict) -> str:
     rows = [dict(zip(header, _cells(line))) for line in lines[start + 2:end]]
     if any(r.get("Original S3 object") == row["Original S3 object"] for r in rows):
         raise PublishError(f"INDEX.md already lists {row['Original S3 object']}")
-    header += [c for c in row if c not in header]  # older rows leave a new column blank
+    header += [c for c in row if c not in header]
     rows.append(row)
     rows.sort(key=lambda r: r["Original S3 object"].strip("`"))
     align = ["---:" if c == "Bytes" else "---" for c in header]
-    table = [_row(header), _row(align)] + [_row([r.get(c, "") for c in header]) for r in rows]
+    table = [_row(header), _row(align)] + [_row([r.get(c, NOT_RECORDED) for c in header]) for r in rows]
     total_bytes = sum(int(r["Bytes"]) for r in rows if r.get("Bytes", "").isdigit())
     totals = (f"{TOTALS_PREFIX} {len(rows)} objects, {total_bytes:,} bytes. "
               f"Updated {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')} by `scripts/publish_db.py`.")
@@ -329,23 +334,32 @@ def cmd_publish(args, s3: S3 | None = None) -> None:
     bucket, key = parse_s3_uri(args.s3_uri)
     if Path(key).name != db.name:
         raise PublishError(f"the S3 key must end with {db.name}")
+    if re.search(r"[|\r\n]", args.label + key):
+        raise PublishError("the label and S3 key cannot contain |, carriage returns or newlines; "
+                           "they would break the INDEX.md table")
     yaml_key = key[: -len(db.name)] + yaml_path.name
     for k in (key, yaml_key):
         if s3.head(bucket, k) is not None:
             raise PublishError(f"s3://{bucket}/{k} already exists; published snapshots are never overwritten")
 
+    # Claim the key before uploading. Only one conditional create of the YAML key can succeed,
+    # so a second publisher to the same key stops here instead of overwriting the database.
+    claim = f"# publish_db.py is publishing s3://{bucket}/{key}; this placeholder is replaced when it finishes\n"
+    if not s3.put_text(bucket, yaml_key, claim, content_type="application/yaml", if_none_match=True):
+        raise PublishError(f"s3://{bucket}/{yaml_key} appeared just now; someone else is publishing to this key")
     sha = record["output"]["sha256"]
-    s3.upload(db, bucket, key, sha)
-    uploaded = datetime.now(UTC)  # before the verification download, which can take as long
     try:
-        publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha, uploaded)
+        s3.upload(db, bucket, key, sha)
+        uploaded = datetime.now(UTC)  # before the verification download, which can take as long
+        publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha, uploaded, claim)
     except Exception as e:
-        raise PublishError(f"{e}\ns3://{bucket}/{key} is uploaded but publishing is incomplete; finish the "
-                           "remaining steps by hand (docs/database-provenance.md) and record them") from e
+        raise PublishError(f"{e}\npublishing s3://{bucket}/{key} is incomplete, and s3://{bucket}/{yaml_key} may "
+                           "still hold the placeholder; finish the remaining steps by hand "
+                           "(docs/database-provenance.md) and record them") from e
 
 
 def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
-                     bucket: str, key: str, yaml_key: str, sha: str, uploaded: datetime) -> None:
+                     bucket: str, key: str, yaml_key: str, sha: str, uploaded: datetime, claim: str) -> None:
     """Everything after the database upload: verify, add the INDEX.md row, then upload the YAML."""
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / db.name
@@ -370,10 +384,13 @@ def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
         "downloaded_sha256_matches": True, "catalog_copy_uri": None,
         "catalog_verified_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    save_record(yaml_path, record)
-    text = yaml_path.read_text(encoding="utf-8")
-    if not s3.put_text(bucket, yaml_key, text, content_type="application/yaml", if_none_match=True):
-        raise PublishError(f"s3://{bucket}/{yaml_key} appeared during publishing; it was not overwritten")
+    # Replace the placeholder only while it is still ours, then freeze the local record.
+    text = dump_record(record)
+    current = s3.get_text(bucket, yaml_key)
+    if (current is None or current[0] != claim
+            or not s3.put_text(bucket, yaml_key, text, content_type="application/yaml", if_match=current[1])):
+        raise PublishError(f"s3://{bucket}/{yaml_key} changed during publishing; it was not overwritten")
+    yaml_path.write_text(text, encoding="utf-8", newline="\n")
     print(f"published s3://{bucket}/{key}")
     print(f"provenance s3://{bucket}/{yaml_key}")
     print(f"INDEX.md row added in s3://{bucket}/{INDEX_KEY}")
