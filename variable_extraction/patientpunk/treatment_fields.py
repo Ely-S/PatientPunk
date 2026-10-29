@@ -90,7 +90,10 @@ class TreatmentValuePair(BaseModel):
 
 
 _ROUTE_CLEANUP = re.compile(r"[\s_-]+")
-_ROUTE_ALIASES: dict[str, AdministrationRoute] = {
+# One lookup for every way a route is written: each route's own name, plus shorthand
+# and a common misspelling the extraction model produces.
+_ROUTE_LOOKUP: dict[str, AdministrationRoute] = {
+    **{route.value: route for route in AdministrationRoute},
     "sublingal": AdministrationRoute.SUBLINGUAL,
     "shot": AdministrationRoute.INJECTION,
     "iv": AdministrationRoute.INTRAVENOUS,
@@ -103,13 +106,7 @@ _ROUTE_ALIASES: dict[str, AdministrationRoute] = {
 
 def normalize_administration_route(value: str) -> AdministrationRoute | None:
     """Map a recognized model-produced route to the controlled vocabulary."""
-    cleaned = _ROUTE_CLEANUP.sub(" ", value.strip().lower())
-    if cleaned in _ROUTE_ALIASES:
-        return _ROUTE_ALIASES[cleaned]
-    try:
-        return AdministrationRoute(cleaned)
-    except ValueError:
-        return None
+    return _ROUTE_LOOKUP.get(_ROUTE_CLEANUP.sub(" ", value.strip().lower()))
 
 
 def normalize_dosage_pairs(values: list[str]) -> list[str]:
