@@ -186,8 +186,8 @@ def command_blocked(command: str, cwd: str | Path | None = None) -> bool:
 
 def main() -> int:
     try:
-        event = json.load(sys.stdin)
-    except json.JSONDecodeError:
+        event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))  # PowerShell pipes add a BOM
+    except ValueError:  # not JSON, or not UTF-8
         return 0
     command = (event.get("tool_input") or {}).get("command")
     if isinstance(command, str) and command_blocked(command, event.get("cwd")):
