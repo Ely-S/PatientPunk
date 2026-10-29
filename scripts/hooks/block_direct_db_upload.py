@@ -37,6 +37,7 @@ VALUE_OPTIONS = {
     "--metadata-directive", "--profile", "--region", "--sse", "--sse-c", "--sse-c-key", "--sse-kms-key-id",
     "--storage-class", "--website-redirect", "--expected-size", "--checksum-algorithm", "--source-region",
     "--output", "--query", "--color", "--cli-read-timeout", "--cli-connect-timeout", "--page-size",
+    "--ca-bundle", "--cli-binary-format",
 }
 SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n]")
 LINE_CONTINUATION = re.compile(r"[\\`]\r?\n")  # bash backslash, PowerShell backtick
@@ -73,11 +74,19 @@ def positionals(tokens: list[str]) -> list[str]:
 
 
 def directory_upload_may_include_db(tokens: list[str]) -> bool:
-    """The cautious rule, used when the folder cannot be inspected."""
-    excluded = any(v.strip("'\"") in ("*", "*.db") for v in option_values(tokens, "--exclude"))
-    included = any(v.strip("'\"").lower().endswith(".db") or v.strip("'\"") == "*"
-                   for v in option_values(tokens, "--include"))
-    return not excluded or included
+    """The cautious rule, used when the folder cannot be inspected.
+
+    Filters apply in order and later ones win, as in uploaded(). An exclude that matches every
+    .db closes the door; an include that could match some .db (one ending in .db or a wildcard,
+    such as reports/*) opens it again.
+    """
+    may = True
+    for kind, pattern in filters(tokens):
+        if kind == "--exclude" and fnmatch.fnmatch("x.db", pattern) and fnmatch.fnmatch("any/dir/x.db", pattern):
+            may = False
+        elif kind == "--include" and (pattern.lower().endswith(".db") or pattern[-1:] in ("*", "?", "]")):
+            may = True
+    return may
 
 
 def filters(tokens: list[str]) -> list[tuple[str, str]]:
@@ -118,10 +127,12 @@ def folder_uploads_db(folder: Path, rules: list[tuple[str, str]]) -> bool | None
     return False
 
 
-def folder_upload_blocked(source: str, tokens: list[str], cwd: Path) -> bool:
-    if source.startswith("s3://") or "$" in source or "%" in source:
-        return directory_upload_may_include_db(tokens)  # cannot look inside
+def folder_upload_blocked(source: str, tokens: list[str], cwd: Path | None) -> bool:
+    """cwd is None after a cd to a shell variable, when relative paths cannot be resolved."""
     path = Path(os.path.expanduser(source))
+    if (source.startswith("s3://") or "$" in source or "%" in source
+            or (cwd is None and not path.is_absolute())):
+        return directory_upload_may_include_db(tokens)  # cannot look inside
     path = path if path.is_absolute() else cwd / path
     if path.is_file():
         return is_db(source)
@@ -131,9 +142,12 @@ def folder_upload_blocked(source: str, tokens: list[str], cwd: Path) -> bool:
     return directory_upload_may_include_db(tokens) if found is None else found
 
 
-def blocks(tokens: list[str], cwd: Path) -> bool:
+def blocks(tokens: list[str], cwd: Path | None) -> bool:
     """True if this one simple command uploads or copies a .db into S3."""
     if any(t.lower() == "write-s3object" for t in tokens):  # AWS Tools for PowerShell
+        folder = next((tokens[i + 1] for i, t in enumerate(tokens[:-1]) if t.lower() == "-folder"), None)
+        if folder is not None:
+            return folder_upload_blocked(folder, [], cwd)  # no include/exclude filters: every file goes
         return any(is_db(t) for t in tokens)
     i = next((i for i, t in enumerate(tokens) if is_aws(t)), None)
     if i is None:
@@ -143,14 +157,15 @@ def blocks(tokens: list[str], cwd: Path) -> bool:
         return False
     service, action, args = rest[0].lower(), rest[1].lower(), rest[2:]
     if service == "s3" and action in ("cp", "mv", "sync"):
-        if len(args) < 2 or not args[1].startswith("s3://"):
-            return False  # a download or a listing
+        if len(args) < 2 or not args[1].startswith("s3://") or "--dryrun" in tokens:
+            return False  # a download, a listing, or a dry run that uploads nothing
         source, dest = args[0], args[1]
         if "--recursive" in tokens or action == "sync":
             return folder_upload_blocked(source, tokens, cwd)
         return is_db(source) or is_db(dest)
     if service == "s3api" and action in ("put-object", "copy-object", "create-multipart-upload", "upload-part"):
-        return any(is_db(v) for v in option_values(tokens, "--key") + option_values(tokens, "--body"))
+        values = sum((option_values(tokens, o) for o in ("--key", "--body", "--copy-source")), [])
+        return any(is_db(v.split("?", 1)[0]) for v in values)  # a copy source may end in ?versionId=
     return False
 
 
@@ -171,14 +186,19 @@ def command_blocked(command: str, cwd: str | Path | None = None) -> bool:
 
     Relative paths resolve against cwd, following any cd earlier in the same line.
     """
-    here = Path(cwd) if cwd else Path.cwd()
+    here: Path | None = Path(cwd) if cwd else Path.cwd()
     for segment in SEGMENT_SPLIT.split(LINE_CONTINUATION.sub(" ", command)):
         tokens = split(segment)
         if not tokens:
             continue
         if tokens[0].lower() in CD_COMMANDS and len(tokens) >= 2:
             target = Path(os.path.expanduser(tokens[-1]))
-            here = target if target.is_absolute() else here / target
+            if "$" in tokens[-1] or "%" in tokens[-1]:
+                here = None  # a shell variable: the directory is unknown from here on
+            elif target.is_absolute():
+                here = target
+            elif here is not None:
+                here = here / target
         elif blocks(tokens, here):
             return True
     return False
@@ -189,8 +209,10 @@ def main() -> int:
         event = json.loads(sys.stdin.buffer.read().decode("utf-8-sig"))  # PowerShell pipes add a BOM
     except ValueError:  # not JSON, or not UTF-8
         return 0
-    command = (event.get("tool_input") or {}).get("command")
-    if isinstance(command, str) and command_blocked(command, event.get("cwd")):
+    if not isinstance(event, dict) or not isinstance(event.get("tool_input"), dict):
+        return 0  # not a shell tool event
+    command, cwd = event["tool_input"].get("command"), event.get("cwd")
+    if isinstance(command, str) and command_blocked(command, cwd if isinstance(cwd, str) else None):
         print(MESSAGE, file=sys.stderr)
         return 2
     return 0
