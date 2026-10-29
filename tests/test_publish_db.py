@@ -57,14 +57,13 @@ def test_finalize_publish_and_audit_one_database(tmp_path):
 
     publish_db.cmd_finalize(Namespace(db=db))
     s3 = FakeS3()
-    publish_db.cmd_publish(Namespace(db=db, s3_uri="s3://patientpunk/runs/example.db", label="test",
-                                     catalog_copy=False), s3=s3)
+    publish_db.cmd_publish(Namespace(db=db, s3_uri="s3://patientpunk/runs/example.db", label="test"), s3=s3)
 
     # The database and its YAML are in S3, the YAML says published, and INDEX.md lists the database.
     assert s3.files["runs/example.db"] == db.read_bytes()
     assert yaml.safe_load(s3.files["runs/example_provenance.yaml"])["publication"]["status"] == "published"
     assert "s3://patientpunk/runs/example.db" in s3.files["INDEX.md"].decode()
     # And audit finds nothing missing.
-    assert publish_db.audit(s3, "patientpunk", "runs/", include_catalog=False) == [
+    assert publish_db.audit(s3, "patientpunk", "runs/") == [
         {"s3_uri": "s3://patientpunk/runs/example.db", "bytes": db.stat().st_size,
          "provenance": True, "in_index": True}]
