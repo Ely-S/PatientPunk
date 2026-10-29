@@ -2363,7 +2363,7 @@ class TestUntrustedTextWrapping:
         monkeypatch.setenv("LLM_MAX_TEXT_CHARS", "1234")
         try:
             assert importlib.reload(m).MAX_TEXT_CHARS == 1234
-            for bad in ("0", "-1", "8k", " "):  # 0 or -1 would silently gut or skip the cap
+            for bad in ("0", "-1", "8k", "²", " "):  # 0 or -1 would silently gut or skip the cap
                 monkeypatch.setenv("LLM_MAX_TEXT_CHARS", bad)
                 if bad.strip():
                     with pytest.raises(ValueError, match="LLM_MAX_TEXT_CHARS"):

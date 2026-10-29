@@ -96,7 +96,7 @@ def _positive_int_env(name: str, default: int) -> int:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
-    if not raw.isdigit() or int(raw) <= 0:
+    if not (raw.isascii() and raw.isdigit()) or int(raw) <= 0:  # isdigit alone accepts '²'
         raise ValueError(f"{name} must be a positive whole number, got {raw!r}")
     return int(raw)
 
