@@ -25,6 +25,8 @@ dependencies = [
     "seaborn>=0.13",
     "statsmodels>=0.14",
     "openai>=2.45.0",
+    "pyyaml>=6.0",
+    "boto3>=1.36",
 ]
 
 # Runtime extras -- installable with pip: `pip install '.[cluster,openai]'`
