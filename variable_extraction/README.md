@@ -36,19 +36,31 @@ uv sync
 # 2. Add your Anthropic API key to the project root .env
 cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 
-# 3. Full pipeline run (LLM extraction + CSV + codebook)
-#    NOTE: raw post extraction uses each post's title + body ONLY (a post record
-#    belongs to the post author). For comment-heavy / subreddit corpora, run
-#    `python main.py aggregate ...` first so commenters are captured as their own
-#    patients -- otherwise comment-only evidence is intentionally skipped.
-python main.py run --schema schemas/covidlonghaulers_schema.json
+# 3. Scrape a corpus. Run it from the repo root.
+#    Writes ../output/subreddit_posts.json, which every step below reads.
+uv run python Scrapers/scrape_corpus.py --months 6 --comments --user-histories
 
-# 4. LLM-only demographics (age / sex / location, deductive + inductive)
+# 4. Fold each author's posts and comments into one post per author.
+#    Run it before step 5: extraction reads only a post's title and body, so a
+#    patient who only commented is skipped, and an author with several posts
+#    becomes several records instead of one. With no path flags it reads
+#    ../output and writes ../output_perpatient.
+python main.py aggregate --min-items 3
+
+# 5. Full pipeline run (LLM extraction + CSV + codebook) on step 4's output.
+#    Without --input-dir it reads ../output, and every comment is lost.
+python main.py run --schema schemas/covidlonghaulers_schema.json --input-dir ../output_perpatient
+
+# 6. LLM-only demographics (age / sex / location, deductive + inductive)
 python main.py demographics --input-dir ../output
 
-# 5. Inspect the schema without running anything
+# 7. Inspect the schema without running anything
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
 ```
+
+Steps 1–3 get you from nothing to a corpus on disk. Step 5 writes `records.csv`, a flat
+file with one row per patient, if you'd rather not use the database. The rest is
+optional; every scraper flag is in [`../Scrapers/SCRAPER_HELP.md`](../Scrapers/SCRAPER_HELP.md).
 
 ---
 
@@ -299,6 +311,26 @@ keeps the full emergent tail.
 ---
 
 ## CLI Reference
+
+Every command below is `python main.py <command>`, run from `variable_extraction/`,
+except the scraper in the first row. Full list, in the order you would reach for them:
+
+| Command | What it does |
+|---|---|
+| `Scrapers/scrape_corpus.py` | Not a `main.py` command; run it from the repo root to produce the corpus everything else reads (see [Quick Start](#quick-start)) |
+| [`corpus`](#corpus--corpus-statistics) | Print corpus statistics |
+| [`inspect`](#inspect--schema-introspection) | Inspect a schema file |
+| [`aggregate`](#aggregate--collapse-postscomments-into-one-synthetic-post-per-author) | Collapse a posts+comments corpus into one synthetic post per author |
+| [`run`](#run--full-pipeline) | Run the full extraction pipeline |
+| [`demographics`](#demographics--llm-only-demographics) | LLM-only demographic coding (deductive, inductive, or both) |
+| [`export`](#export--re-run-export-only-phases-3--4) | Re-run export phases only (Phase 3 + 4) |
+| [`promote`](#promote--merge-discovered-fields-into-a-schema) | Merge discovered fields into a curated schema |
+| [`consolidate`](#consolidate--merge-discovered-schemas-from-multiple-runs) | Merge discovered schemas from multiple runs into one deduped schema |
+| [`normalize`](#normalize--collapse-free-text-fields-to-a-controlled-vocabulary) | Collapse free-text backbone fields to a controlled vocabulary |
+| [`validate`](#validate--score-an-extraction-against-a-reference-per-field) | Score an extraction against a reference, per field (or export a gold template) |
+| [`cluster-prep`](#cluster-prep--build-a-per-patient-clustering-ready-feature-matrix) | Build a per-patient, clustering-ready feature matrix from `records.csv` |
+
+On any corpus with comments, run `aggregate` before `run` (Quick Start, step 4).
 
 ### `run` — full pipeline
 
