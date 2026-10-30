@@ -177,6 +177,9 @@ def resolve_llm_config(env: dict | None = None) -> dict:
 # Sets the Timeout on LLM API Calls
 TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=60)
 
+# Resolved once per process. The model names below, get_llm_client() and
+# llm_config() (llm_provenance.json) all read this snapshot, so the model a run
+# calls, the endpoint it calls and the provenance it records cannot disagree.
 _CFG = resolve_llm_config()
 LLM_PROVIDER = _CFG["provider"]
 MODEL_FAST = _CFG["model_fast"]
@@ -186,10 +189,8 @@ LLM_SERVICE_TIER = _CFG["service_tier"]
 
 
 def llm_config() -> dict:
-    """Active LLM config for logging / provenance (re-read from env; no api_key)."""
-    cfg = resolve_llm_config()
-    cfg.pop("api_key", None)
-    return cfg
+    """The LLM config this process runs with, for logging / provenance (no api_key)."""
+    return {k: v for k, v in _CFG.items() if k != "api_key"}
 
 
 # --- Response validation ------------------------------------------------------
@@ -302,7 +303,7 @@ def get_llm_client():
     endpoint via ``LLM_BASE_URL``).  Key precedence is provider-specific
     (see ``resolve_llm_config``); ``LLM_API_KEY`` always wins when set.
     """
-    cfg = resolve_llm_config()
+    cfg = _CFG
 
     if cfg["provider"] == "openai":
         try:
