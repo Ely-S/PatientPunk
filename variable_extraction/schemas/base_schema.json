@@ -4,7 +4,7 @@
   "_loaded_by": "Read at runtime by Schema.from_file (schema.py), the codebook generator (codebook.py), and per-field confidence lookup. The field list the extractor actually prompts on is BASE_FIELD_DESCRIPTIONS in llm_extract.py — keep the two in step; a field added here but not there is documented and never extracted.",
   "base_fields": {
     "age": {
-      "description": "Patient's current age in years (numeric string)",
+      "description": "The author's own current age in years, as a number. Not a child's, relative's or anyone else's age",
       "confidence": "medium",
       "notes": "Restricted to 16-99 to reduce noise from non-demographic age mentions"
     },
