@@ -375,8 +375,8 @@ def is_transient_failure(exc: BaseException) -> bool:
 
 def is_transient_or_truncated(exc: BaseException) -> bool:
     """Whether ``llm_call`` gave the request up after its retries: a transient failure that outlasted
-    them, or a reply the provider returned empty or still truncated at the largest budget
-    (``LLMResponseError`` and its subclass ``LLMTruncationError``). Anything else is a configuration
+    them, or a reply the provider returned empty, blocked by its content filter, or still truncated at
+    the largest budget (``LLMResponseError`` and its subclasses). Anything else is a configuration
     error (a bad key or model name) or a bug, which a caller must not count as a failed batch."""
     from patientpunk._utils import LLMResponseError
     return is_transient_failure(exc) or isinstance(exc, LLMResponseError)
@@ -391,7 +391,8 @@ def llm_call(
 ) -> str:
     """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
-    from patientpunk._utils import LLMTruncationError, check_response, response_text
+    from patientpunk._utils import (LLMContentFilteredError, LLMTruncationError, check_response,
+                                    response_text)
 
     def _request_once(budget: int) -> str:
         kwargs = {
@@ -402,9 +403,16 @@ def llm_call(
         }
         if system:
             kwargs["system"] = system
-        with client.messages.stream(**kwargs) as stream:
-            message = check_response(stream.get_final_message(), model=model)
-            return response_text(message)
+        try:
+            with client.messages.stream(**kwargs) as stream:
+                message = check_response(stream.get_final_message(), model=model)
+                return response_text(message)
+        except anthropic.APIStatusError as exc:
+            # A content-filter block is one item's problem, so callers skip it. Every other API
+            # error, including a 400 for low credit, still stops the run (#53).
+            if any(t in str(exc).lower() for t in ("content filter", "blocked by content")):
+                raise LLMContentFilteredError(f"{model}: reply blocked by the provider's content filter") from exc
+            raise
 
     def _request_with_transport_retries(budget: int) -> str:
         for attempt, delay in enumerate([0] + RETRY_DELAYS):

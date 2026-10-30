@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from patientpunk import llm_cache
-from patientpunk._utils import LLMResponseError
+from patientpunk._utils import LLMContentFilteredError, LLMResponseError
 
 os.environ["LLM_PROVIDER"] = "anthropic"
 
@@ -24,11 +24,11 @@ def _status(status: int) -> Exception:
     return exc
 
 
-def _in_band(status: int) -> anthropic.APIStatusError:
+def _in_band(status: int, message: str = "provider_unavailable") -> anthropic.APIStatusError:
     # __new__ skips APIStatusError.__init__, which demands real httpx
     # request/response objects; only the message and status_code matter here.
     exc = anthropic.APIStatusError.__new__(anthropic.APIStatusError)
-    Exception.__init__(exc, "provider_unavailable")
+    Exception.__init__(exc, message)
     exc.status_code = status
     return exc
 
@@ -89,3 +89,24 @@ def test_midstream_failure_retries_the_whole_request(
 
     assert stream.call_count == attempts
     assert sleep.call_count == attempts - 1
+
+
+@pytest.mark.parametrize(
+    ("message", "raises"),
+    [
+        ("Output blocked by content filtering policy", LLMContentFilteredError),
+        ("Your credit balance is too low to access the Anthropic API", anthropic.APIStatusError),
+    ],
+    ids=["content-filter-skips-item", "credit-stops-run"],
+)
+def test_only_a_content_filter_block_is_one_items_problem(message, raises):
+    read = Mock(side_effect=_in_band(400, message))
+    client = SimpleNamespace(messages=SimpleNamespace(
+        stream=lambda **_: nullcontext(SimpleNamespace(get_final_message=read)),
+    ))
+
+    with pytest.raises(raises) as caught:
+        llm_call(client, "prompt", max_tokens=10)
+
+    assert isinstance(caught.value, LLMResponseError) is (raises is LLMContentFilteredError)
+    assert read.call_count == 1
