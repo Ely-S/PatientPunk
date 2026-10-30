@@ -184,6 +184,41 @@ Use --no-llm to skip Phase 1, or --start-at N to resume from a specific phase.
     run_parser.add_argument("--no-discovered", action="store_true",
                    help="Exclude llm_discovered fields from the codebook.")
 
+    # Comments
+    run_parser.add_argument("--aggregate", action="store_true",
+                   help="First fold each author's posts and comments into one post per author, "
+                        "as the aggregate command does, written to <input-dir>_perpatient, and run "
+                        "on that. Without it, extraction reads post titles and bodies only.")
+    run_parser.add_argument("--min-items", type=int, default=1,
+                   help="With --aggregate: drop authors with fewer text segments (default: 1).")
+
+
+def _aggregate_for_run(in_dir: Path, min_items: int) -> Path:
+    """Fold each author's posts and comments into one post, as `aggregate` does; return that corpus."""
+    try:
+        posts = read_posts(in_dir)
+    except FileNotFoundError as exc:
+        sys.exit(str(exc))
+    agg, stats = aggregate_corpus_by_author(posts, min_items=min_items)
+    if not agg:
+        sys.exit(f"no patients after aggregation (min_items={min_items}); lower --min-items")
+    out_dir = in_dir.parent / f"{in_dir.name}_perpatient"
+    write_corpus(out_dir, agg)
+    print(f"Aggregated {stats['in_posts']} posts + {stats['in_comments']} comments into "
+          f"{stats['patients_out']} patients: {out_dir}")
+    return out_dir
+
+
+def _warn_if_comments_skipped(in_dir: Path) -> None:
+    """Say how many comments a run without --aggregate will not read (#87)."""
+    try:
+        comments = sum(len(post.get("comments") or ()) for post in read_posts(in_dir))
+    except FileNotFoundError:
+        return  # the pipeline reports a missing corpus itself
+    if comments:
+        print(f"  ! {comments:,} comments in this corpus will not be extracted: extraction reads "
+              f"post titles and bodies only. Add --aggregate to include them.")
+
 
 def _cmd_run(args: argparse.Namespace) -> None:
     schema_path = args.schema if args.schema.is_absolute() else _HERE / args.schema
@@ -196,10 +231,16 @@ def _cmd_run(args: argparse.Namespace) -> None:
     elif args.llm_cache:
         set_cache_enabled(True)
 
+    input_dir = args.input_dir
+    if args.aggregate:
+        input_dir = _aggregate_for_run(input_dir, args.min_items)
+    elif not args.no_llm and args.start_at == 1:
+        _warn_if_comments_skipped(input_dir)
+
     # PipelineConfig forces clean=False when resume=True (single source of truth).
     config = PipelineConfig(
         schema_path=schema_path,
-        input_dir=args.input_dir,
+        input_dir=input_dir,
         temp_dir=args.temp_dir,
         start_at=args.start_at,
         run_llm=not args.no_llm,
