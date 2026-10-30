@@ -63,6 +63,7 @@ from ._utils import (
     get_llm_client,
     parse_json_response,
     response_text,
+    self_reported_age,
     split_retry_batch,
 )
 from .llm_cache import cached_completion
@@ -132,7 +133,7 @@ HEALTH_SUBREDDITS = {
 # A field here but not there is extracted and undocumented; a field there but not
 # here is documented and never extracted. METHODS.md records how the set was chosen.
 BASE_FIELD_DESCRIPTIONS = {
-    "age": "Patient's current age in years (numeric)",
+    "age": "The author's own current age in years, as a number. Not a child's, relative's or anyone else's age",
     "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
     "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
@@ -977,6 +978,15 @@ def normalize_records(
             )
             if not route_data["values"]:
                 route_data["confidence"] = None
+
+    # Age must be a whole number from 16 to 99; anything else is dropped (#85).
+    for rec in records:
+        age_data = rec.get("fields", {}).get("age", {})
+        if age_data.get("values"):
+            age_data["values"] = [str(a) for v in age_data["values"]
+                                  if (a := self_reported_age(v)) is not None]
+            if not age_data["values"]:
+                age_data["confidence"] = None
 
     # Multi-field canonicalization: map LLM vocabulary drift to controlled labels.
     # Each field has a dict of {variant: canonical_form}. Values not in the dict

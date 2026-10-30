@@ -53,6 +53,7 @@ from ._utils import (
     MODEL_FAST,
     parse_json_response,
     response_text,
+    self_reported_age,
     split_retry_batch,
     get_llm_client,
     strip_markdown_fences,
@@ -350,7 +351,7 @@ def process_batch(client, batch: list[tuple], max_chars=MAX_CHARS) -> list[dict]
         result = _make_empty_result(it["author_hash"], it["source_type"])
         if raw is not None and isinstance(raw, dict):
             result.update({
-                "age": raw.get("age"),
+                "age": self_reported_age(raw.get("age")),
                 "sex_gender": raw.get("sex_gender"),
                 "location_country": raw.get("location_country"),
                 "location_state": raw.get("location_state"),
