@@ -16,17 +16,6 @@ Never read, print or quote `.env` or `variable_extraction/.env`. They hold live 
 
 Never show more than a key's last six characters. If a key is exposed, say so at once and recommend rotating every key in that file.
 
-# Data
-
-Corpora, databases and run outputs go in `PatientPunk_data/` beside the checkout, not in the repo. Find it from the repo root, honouring `PATIENTPUNK_DATA` (reference: `studies/tropoflavin_nootropics/build_corpus.py`):
-
-```python
-ROOT = Path(__file__).resolve().parents[2]  # repo root; adjust the level
-DATA = Path(os.environ.get("PATIENTPUNK_DATA") or ROOT.parent / "PatientPunk_data")
-```
-
-No committed file (script, notebook, run manifest) may contain a machine-local absolute path. Do not commit generated outputs: check `git status`, and add a `.gitignore` pattern rather than staging around them.
-
 # When creating Pull Requests
 1. Use detailed commit messages
 2. Every PR Needs a Description that has the following sections
