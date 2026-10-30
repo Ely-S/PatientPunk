@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "notebooks"))
-from build_notebook import build_notebook, execute_and_export
+from build_notebook import RELIABILITY_CODE, build_notebook, execute_and_export
 
 RUNS = (ROOT / "data" / "irr_pilot" / "j5_attribution_runs.json").as_posix()
 F1 = (ROOT / "data" / "irr_pilot" / "f1_treatment_vocab.json").as_posix()
@@ -38,7 +38,9 @@ CODING_PATH = r"{CODING}"
 
 _runs = json.load(open(RUNS_PATH, encoding="utf-8"))
 MANIFEST = _runs["manifest"]
+FAIL = fail_rates(_runs["records"], lambda r: r["model"].split("/")[-1], lambda r: r["parse_failed"])
 rec = pd.DataFrame(_runs["records"])
+rec = rec[rec["model"].map(lambda m: m.split("/")[-1]).isin(scored(FAIL))]
 f1 = json.load(open(F1_PATH, encoding="utf-8"))
 
 # One row per (sample_id, drug, model), columns = the two variants' sentiment.
@@ -76,7 +78,8 @@ POOL = dict(n=len(pairs), rate_A=pairs.A_pos.mean(), rate_B=pairs.B_pos.mean(),
             drop=pairs.A_pos.mean() - pairs.B_pos.mean(), b_lost=_b, c_gained=_c,
             p=(binomtest(_b, _b + _c, 0.5).pvalue if (_b + _c) > 0 else 1.0))
 
-_models = ", ".join(m.split("/")[-1] for m in MANIFEST["models"])
+_models = f"{{len(model_stats)}} scored models"
+display(Markdown(reliability_md(FAIL, what="parseable reply")))
 _sig = int(((model_stats["p"] < 0.05) & (model_stats["drop"] > 0)).sum())
 _alldir = bool((model_stats["drop"] > 0).all())
 _dmin, _dmax = model_stats["drop"].min(), model_stats["drop"].max()
@@ -88,11 +91,11 @@ size that inflation with a **paired A/B prompt swap** on
 **{{len(pairs['sample_id'].unique())}} multi-treatment posts** ({{POOL['n']}} post×drug×model
 pairs) from the IRR frame — everything held constant except that one block, temperature 0,
 across **{{_models}}**. Forcing per-drug attribution (variant B) lowers the positive rate in
-{{'both models' if _alldir else 'some models'}}: per-model drop **{{_dmin:+.1%}} to {{_dmax:+.1%}}**.
+{{'every scored model' if _alldir else 'some scored models'}}: per-model drop **{{_dmin:+.1%}} to {{_dmax:+.1%}}**.
 Of {{_disc}} discordant pairs, **{{POOL['b_lost']}}** lose their positive call and
-**{{POOL['c_gained']}}** gain one — a one-directional signature of stack fan-out. But only
-**{{_sig}} of {{len(model_stats)}}** models reach significance at this sample size: the effect is
-**directionally clean yet underpowered**, sizing the correction without nailing it. A
+**{{POOL['c_gained']}}** gain one: more lost than gained, the signature of stack fan-out. But only
+**{{_sig}} of {{len(model_stats)}}** models reach significance at this sample size, and not every model
+moves the same way: the pooled direction is clear, the per-model effect is underpowered. A
 measurement-validity check for the clustering inputs, not a treatment finding.
 """))
 '''
@@ -122,7 +125,8 @@ order = ["positive","mixed","neutral","negative"]
 comp = (rec[rec.variant=="A_current"]
         .groupby("model")["sentiment"].value_counts(normalize=True)
         .unstack().reindex(columns=order).fillna(0))
-comp.index = [m.split("/")[-1] for m in comp.index]
+_n = rec[rec.variant=="A_current"].groupby("model").size()
+comp.index = [f'{m.split("/")[-1]} (n={_n[m]})' for m in comp.index]
 fig, ax = plt.subplots(figsize=(9, 1.2 + 0.7*len(comp)))
 left = np.zeros(len(comp))
 cmap = {"positive":"#2ecc71","mixed":"#f1c40f","neutral":"#95a5a6","negative":"#e74c3c"}
@@ -158,7 +162,7 @@ for i, (_, r) in enumerate(ms.iterrows()):
         ax.errorbar(i+off, rate, yerr=[[rate-lo],[hi-rate]], fmt="none", ecolor="#333", capsize=4)
     ax.text(i, max(r.rate_A, r.rate_B)+0.04,
             f"Δ={r['drop']:+.0%}\\np={r.p:.2g}", ha="center", va="bottom", fontsize=9)
-ax.set_xticks(xs); ax.set_xticklabels(ms["label"]); ax.set_ylim(0, 1)
+ax.set_xticks(xs); ax.set_xticklabels([f"{l} (n={n})" for l, n in zip(ms["label"], ms["n"])], rotation=45, ha="right"); ax.set_ylim(0, 1)
 ax.set_ylabel("positive rate"); ax.set_title("Positive rate: current vs strict attribution (paired)")
 ax.legend(bbox_to_anchor=(1.01,1), loc="upper left", frameon=False)
 fig.tight_layout(); plt.show()
@@ -171,19 +175,15 @@ _sig = (ms["p"] < 0.05) & (ms["drop"] > 0)
 display(Markdown(
   f"**Verdict:** {int(_sig.sum())} of {len(ms)} models show a **significant positive-rate drop** "
   f"under strict attribution. " +
-  ("Same direction in every model — the inflation is consistent." if (ms['drop']>0).all()
+  ("Same direction in every scored model — the inflation is consistent." if (ms['drop']>0).all()
    else "Direction is **not** uniform across models — see the complication below.")))
 '''
 
-S4 = ("## 4. Counterintuitive findings worth investigating\n\n"
-      "Two results cut against intuition. **(1) The more capable model is the biased one** — the "
-      "inflation is significant in sonnet but absent (slightly reversed) in haiku, so whether "
-      "fan-out bites is a property of the *model*, not just the prompt; the cheaper model is not "
-      "automatically the riskier one. **(2) The effect does not grow with stack size** — an 8-drug "
-      "stack ought to leak more collective credit than a 2-drug one, but the per-post drop is "
-      "flat-to-noisy across sizes. We report the correlation and let it stand rather than invent a "
-      "mechanism for the non-trend. The reverse flips (B-positive where A was not) are the honest "
-      "noise floor of a one-line prompt change.")
+S4 = ("## 4. Does the effect depend on the model, or on stack size?\n\n"
+      "Two things the pooled number hides. Whether fan-out bites varies by *model* (§3's table: some "
+      "show a significant drop, others none or a slight reversal), so it is not a property of the "
+      "prompt alone. And an 8-drug stack ought to leak more collective credit than a 2-drug one, so "
+      "below the per-post drop is plotted against stack size.")
 S4_CODE = '''
 # Effect vs stack size: per-post drop in positive rate against n_treatments.
 per_post = (pairs.groupby(["sample_id","n_treatments"])
@@ -203,7 +203,8 @@ fig.tight_layout(); plt.show()
 _tot = int(POOL["b_lost"] + POOL["c_gained"])
 display(Markdown(
   f"**What this shows:** Spearman ρ = {rho:.2f} (p = {prho:.2g}) between stack size and the "
-  f"positive-rate drop. Of the {_tot} discordant pairs pooled, **{POOL['b_lost']}** lost a positive "
+  f"positive-rate drop: " + ("the drop grows with stack size." if prho < 0.05 and rho > 0 else
+  "no clear trend with stack size at this sample size.") + f" Of the {_tot} discordant pairs pooled, **{POOL['b_lost']}** lost a positive "
   f"call under strict attribution and **{POOL['c_gained']}** gained one — the asymmetry is the "
   f"inflation; the reverse flips ({POOL['c_gained']}) are cases where the strict wording nudged a "
   f"borderline pair the other way, and are the honest noise floor of a one-line prompt change."))
@@ -222,7 +223,7 @@ for i, (_, r) in enumerate(ms.iterrows()):
     ax.plot([r.rate_B, r.rate_A], [i, i], color=col, lw=2)
     ax.scatter([r.rate_A],[i], color="#3498db", zorder=3, label="A current" if i==0 else "")
     ax.scatter([r.rate_B],[i], color="#e67e22", zorder=3, label="B strict" if i==0 else "")
-ax.set_yticks(range(len(ms))); ax.set_yticklabels(ms["label"])
+ax.set_yticks(range(len(ms))); ax.set_yticklabels([f"{l} (n={n})" for l, n in zip(ms["label"], ms["n"])])
 ax.set_xlabel("positive rate"); ax.set_xlim(0,1)
 ax.set_title("Attribution correction per model (green = significant drop)")
 ax.legend(bbox_to_anchor=(1.01,1), loc="upper left", frameon=False)
@@ -272,7 +273,7 @@ except Exception:
 prov = pd.DataFrame({
     "item": ["j5 run generated (UTC)","models","temperature","max_upstream_depth",
              "posts / pairs","fixture","reference DB","DB sha256 (16)","skill version"],
-    "value": [MANIFEST["generated_utc"], ", ".join(MANIFEST["models"]), MANIFEST["temperature"],
+    "value": [MANIFEST["generated_utc"], f'{len(scored(FAIL))} of {len(MANIFEST["models"])} scored: ' + ", ".join(scored(FAIL)), MANIFEST["temperature"],
               MANIFEST["max_upstream_depth"], f'{MANIFEST["n_posts"]} / {len(pairs)} usable',
               MANIFEST["fixture"], "patientpunk.db", _sha, "research-assistant v2"],
 })
@@ -287,6 +288,7 @@ display(HTML('<div style="font-size:1.2em;font-weight:bold;font-style:italic;mar
 def main():
     cells = [
         ("md", RQ),
+        ("code", RELIABILITY_CODE),
         ("code", LOAD),
         ("md", S1),
         ("md", S2), ("code", S2_CODE),

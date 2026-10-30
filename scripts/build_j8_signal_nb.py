@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "notebooks"))
-from build_notebook import build_notebook, execute_and_export
+from build_notebook import RELIABILITY_CODE, build_notebook, execute_and_export
 
 RUNS_JSON = (ROOT / "data" / "validation" / "j78_classify_runs.json").as_posix()
 SCRIPTS = (ROOT / "scripts").as_posix()
@@ -57,6 +57,12 @@ def nsig(v):
     v = str(v).lower().strip() if v else ""
     return ca.SIG_FIX.get(v, v)
 
+# Only a parse failure is a non-answer: n/a is a real rating (the post is not personal use), so it
+# lowers a model's n, shown beside it, without counting against its reliability.
+FAIL = fail_rates([r for r in results if r["run"] == 0], lambda r: short(r["model"]),
+                  lambda r: r["parse_failed"])
+MODELS = [m for m in MODELS if m in scored(FAIL)]
+
 def pivot_alpha(dfr):
     dfr = dfr[dfr.v.isin(ca.SIGNAL_ORDER)]   # ordinal levels only (drop n/a / blank)
     if not len(dfr):
@@ -66,29 +72,33 @@ def pivot_alpha(dfr):
 
 rows = []
 for r in results:
-    if r["run"] == 0 and not r["parse_failed"]:
+    if r["run"] == 0 and not r["parse_failed"] and short(r["model"]) in MODELS:
         rows.append(dict(coder_id=short(r["model"]), sample_id=r["sample_id"], canonical_drug=r["drug"], v=nsig(r["signal"])))
 for p in polina:
     rows.append(dict(coder_id="Polina", sample_id=p["sample_id"], canonical_drug=p["drug"], v=nsig(p["signal"])))
 df = pd.DataFrame(rows); df = df[df.v.isin(ca.SIGNAL_ORDER)]
 mo = df[df.coder_id != "Polina"]
+N = mo.coder_id.value_counts().to_dict()   # usable run-0 items per scored model
+def lab(m): return f"{m} (n={N.get(m, 0)})"
 mmat, _ = ca.pivot_field(mo, "v"); PANEL = ca.krippendorff_alpha_ordinal(mmat) if mmat.size else None
 PAIR = ca.pairwise_alphas(mo, "v", ordinal=True)
 VSP = {md: pivot_alpha(df[df.coder_id.isin([md, "Polina"])]) for md in MODELS}
 WITHIN = {}
-for m0 in CAND:
+for m0 in [c for c in CAND if short(c) in MODELS]:
     rr = [r for r in results if r["model"] == m0 and not r["parse_failed"]]
     w = pd.DataFrame([dict(coder_id="r%d" % r["run"], sample_id=r["sample_id"], canonical_drug=r["drug"], v=nsig(r["signal"])) for r in rr])
     WITHIN[short(m0)] = pivot_alpha(w) if (len(w) and w.coder_id.nunique() >= 2) else None
 
 def _f(x): return f"{x:.2f}" if (x is not None and x == x) else "n/a"
 _vp = pd.Series({k: v for k, v in VSP.items() if v is not None})
+display(Markdown(reliability_md(FAIL, what="parseable reply")))
 display(Markdown(f"""
 **Abstract.** Signal strength (⑧) — how *strong* a report is — is subjective and ordinal, so we measure
 consistency, not accuracy, across **{len(MODELS)} models** on the Polina-labelled pairs (k={K}, temp 0), using
 ordinal Krippendorff's α (a weak-vs-strong miss counts more than weak-vs-moderate). **Within-model** self-
-agreement is high (median α **{_f(pd.Series(WITHIN).median())}**). But **cross-model** agreement is the lowest
-of any judgement in the pipeline: panel α **{_f(PANEL)}** — models genuinely disagree on *how strong* a report
+agreement is high (median α **{_f(pd.Series(WITHIN).median())}**). But **cross-model** agreement is low: panel α
+**{_f(PANEL)}** across {len(MODELS)} scored models, each rated on {min(N.values())}–{max(N.values())} of the
+{MAN['n_pairs']} pairs (signal is n/a where a post is not personal use) — models genuinely disagree on *how strong* a report
 is, even when they agree on its direction. Against **Polina** the median is **{_f(_vp.median())}**. The reading:
 signal is **intrinsically underdetermined** from short posts, which caps how much any downstream weighting by
 signal strength can be trusted — and, as everywhere in the subjective family, agreement here is a diagnostic,
@@ -115,7 +125,7 @@ ax.scatter(w.a, ys, color="#e67e22", s=80, zorder=2)
 for y, v in zip(ys, w.a):
     ax.text(v + 0.01, y, f"{v:.2f}", va="center", fontsize=8)
 ax.axvline(1.0, ls="--", color="#999", lw=1)
-ax.set_yticks(ys); ax.set_yticklabels(w.mshort); ax.set_xlim(min(0, w.a.min()-0.05), 1.08)
+ax.set_yticks(ys); ax.set_yticklabels(w.mshort.map(lab)); ax.set_xlim(min(0, w.a.min()-0.05), 1.08)
 ax.set_xlabel("within-model ordinal α over K repeats (1 = perfectly self-consistent)")
 ax.set_title("Signal: within-model consistency at temperature 0"); fig.tight_layout(); plt.show()
 display(Markdown(
@@ -139,8 +149,8 @@ fig.tight_layout(); plt.show()
 out = {m: 1 - np.nanmean([PAIR.loc[m,o] for o in order if o != m]) for m in order}
 od = pd.Series(out).sort_values(ascending=False)
 display(Markdown(
-  f"**What this shows:** panel ordinal α **{PANEL:.2f}** — the lowest cross-model agreement of any judgement "
-  f"tested. Models concur on a report's *direction* far more than its *strength*. Biggest outlier "
+  f"**What this shows:** panel ordinal α **{PANEL:.2f}** across the {len(MODELS)} scored models — low "
+  f"cross-model agreement. Models concur on a report's *direction* far more than its *strength*. Biggest outlier "
   f"**{od.index[0]}** (1 − mean pairwise {od.iloc[0]:.2f}). Low agreement here isn't a model failure so much as "
   f"a property of the task: weak/moderate/strong is a fuzzy line on a 100–800-char post."))
 '''
@@ -152,7 +162,7 @@ S4_CODE = r'''
 vp = pd.DataFrame({"mshort": MODELS, "a": [VSP.get(m) for m in MODELS]}).dropna().sort_values("a")
 fig, ax = plt.subplots(figsize=(8, 0.32*len(vp)+1))
 colors = ["#e74c3c" if v < vp.a.median()-0.1 else "#e67e22" for v in vp.a]
-ax.barh(vp.mshort, vp.a, color=colors, height=0.68)
+ax.barh(vp.mshort.map(lab), vp.a, color=colors, height=0.68)
 for y,(_,r) in enumerate(vp.iterrows()): ax.text(r.a + 0.005, y, f"{r.a:.2f}", va="center", fontsize=7.5)
 ax.axvline(vp.a.median(), ls="--", color="#999", lw=1, label=f"median {vp.a.median():.2f}")
 ax.set_xlim(min(0, vp.a.min()-0.1), 1.0); ax.set_xlabel("signal ordinal α vs Polina (human)")
@@ -180,17 +190,17 @@ order = MODELS
 rows = []
 for m in order:
     div = 1 - np.nanmean([PAIR.loc[m,o] for o in order if o != m])
-    rows.append(dict(model=m, within=WITHIN.get(m), vs_polina=VSP.get(m), divergence=div,
+    rows.append(dict(model=m, n=N.get(m, 0), within=WITHIN.get(m), vs_polina=VSP.get(m), divergence=div,
                      price=PRICES.get(next(c for c in CAND if c.split('/')[-1]==m), np.nan)))
 SC = pd.DataFrame(rows).sort_values("vs_polina", ascending=False)
 show = SC.copy()
 for c in ["within","vs_polina","divergence"]: show[c] = show[c].round(2)
 show["price"] = show["price"].map(lambda v: f"${v:g}" if pd.notna(v) else "?")
-show.columns = ["model","within-model α","vs Polina α","divergence","$/1M in"]
+show.columns = ["model","usable items","within-model α","vs Polina α","divergence","$/1M in"]
 display(HTML("<b>⑧ signal — consistency scorecard</b>" + show.to_html(index=False)))
 lines = [
   f"- **Within-model is stable at temp 0** (median α {pd.Series(WITHIN).median():.2f}).",
-  f"- **Cross-model agreement is the pipeline's lowest** (panel ordinal α {PANEL:.2f}) — models disagree on "
+  f"- **Cross-model agreement is low** (panel ordinal α {PANEL:.2f}, {len(MODELS)} scored models) — models disagree on "
   f"strength far more than on direction.",
   f"- **vs-Polina is low and a screen** (median {SC.vs_polina.median():.2f}) — even humans are hard to track here.",
   f"- **Signal is an underdetermined axis.** No model fixes that; the actionable move is to coarsen or "
@@ -231,7 +241,7 @@ def main():
     prices = fetch_prices()
     load_cell = LOAD.replace("__PRICES__", repr(prices))
     cells = [
-        ("md", RQ), ("code", load_cell),
+        ("md", RQ), ("code", RELIABILITY_CODE), ("code", load_cell),
         ("md", S1),
         ("md", S2), ("code", S2_CODE),
         ("md", S3), ("code", S3_CODE),

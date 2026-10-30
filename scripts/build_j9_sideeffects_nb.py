@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "notebooks"))
-from build_notebook import build_notebook, execute_and_export
+from build_notebook import RELIABILITY_CODE, build_notebook, execute_and_export
 
 RUNS = (ROOT / "data" / "validation" / "j9_sideeffects_runs.json").as_posix()
 DB = (ROOT / "patientpunk.db").as_posix()
@@ -31,24 +31,33 @@ import json, re
 import numpy as np
 from collections import defaultdict, Counter
 from itertools import combinations
-d=json.load(open(r"__RUNS__")); R=[r for r in d["results"] if not r["parse_failed"]]
-MODELS=sorted(set(r["model"] for r in R)); short=lambda m:m.split("/")[-1]
+d=json.load(open(r"__RUNS__")); short=lambda m:m.split("/")[-1]
+FAIL=fail_rates(d["results"], lambda r: short(r["model"]), lambda r: r["parse_failed"])
+R=[r for r in d["results"] if not r["parse_failed"] and short(r["model"]) in scored(FAIL)]
+MODELS=sorted(set(r["model"] for r in R)); N=Counter(short(r["model"]) for r in R)
 # per (sample, drug): {model: set(side_effects)}
 cell=defaultdict(dict)
 for r in R:
     se=set(str(x).lower().strip() for x in (r.get("side_effects") or []) if str(x).strip())
     cell[(r["sample_id"], r["drug"])][r["model"]]=se
 def jac(a,b): return len(a&b)/len(a|b) if (a|b) else 1.0
-# pairwise model agreement on AE sets (only where BOTH models have a value for that post,drug)
-pair=defaultdict(list)
+# pairwise model agreement on AE sets (only where BOTH models have a value for that post,drug).
+# Two empty sets agree trivially and most extractions are empty, so `named` keeps only the pairs
+# where at least one model named a side-effect: the informative agreement.
+pair=defaultdict(list); named=defaultdict(list)
 for k,mv in cell.items():
     for a,b in combinations(MODELS,2):
-        if a in mv and b in mv: pair[(a,b)].append(jac(mv[a],mv[b]))
-allsims=[s for v in pair.values() for s in v]
+        if a in mv and b in mv:
+            pair[(a,b)].append(jac(mv[a],mv[b]))
+            if mv[a]|mv[b]: named[(a,b)].append(jac(mv[a],mv[b]))
+allsims=[s for v in pair.values() for s in v]; named_sims=[s for v in named.values() for s in v]
 # how often is the AE set EMPTY? (models often report no AEs)
 n_cells=sum(len(mv) for mv in cell.values()); n_empty=sum(1 for mv in cell.values() for s in mv.values() if not s)
-display(Markdown(f"*(loaded — {len(R)} classifications, {len(MODELS)} models; overall mean pairwise AE-set "
- f"agreement {np.mean(allsims):.0%}; {n_empty/n_cells:.0%} of extractions report no side-effects)*"))
+display(Markdown(reliability_md(FAIL)))
+display(Markdown(f"*(loaded — {len(R)} usable classifications from {len(MODELS)} scored models; overall mean "
+ f"pairwise AE-set agreement {np.mean(allsims):.0%}, or {np.mean(named_sims):.0%} where at least one model named a "
+ f"side-effect; {n_empty/n_cells:.0%} of the {n_cells:,} usable extractions "
+ f"report no side-effects)*"))
 '''.replace("__RUNS__", RUNS)
 
 S1 = ("## 1. How much do models agree on the side-effect set?\n\n"
@@ -56,15 +65,17 @@ S1 = ("## 1. How much do models agree on the side-effect set?\n\n"
 S1_CODE = r'''
 per=[]
 for m in MODELS:
-    sims=[s for (a,b),v in pair.items() if m in (a,b) for s in v]
+    sims=[s for (a,b),v in named.items() if m in (a,b) for s in v]
     per.append((short(m), np.mean(sims) if sims else np.nan))
 per.sort(key=lambda x:-x[1])
 fig,ax=plt.subplots(figsize=(8,6))
-ax.barh([p[0] for p in per],[p[1]*100 for p in per],color="#2a78d6")
+ax.barh([f"{p[0]} (n={N[p[0]]})" for p in per],[p[1]*100 for p in per],color="#2a78d6")
 for i,p in enumerate(per): ax.text(p[1]*100+0.5,i,f"{p[1]:.0%}",va="center",fontsize=8)
-ax.invert_yaxis(); ax.set_xlabel("mean AE-set agreement with other models (Jaccard)"); ax.set_xlim(0,max(p[1] for p in per)*115)
+ax.invert_yaxis(); ax.set_xlabel("mean AE-set agreement with other models where a side-effect is named (Jaccard)"); ax.set_xlim(0,max(p[1] for p in per)*115)
 ax.set_title("Side-effect set agreement per model"); fig.tight_layout(); plt.show()
-display(Markdown(f"**Agreement is low ({np.mean(allsims):.0%} overall)** — but AE sets are small and sparse, "
+display(Markdown(f"**Overall agreement is {np.mean(allsims):.0%}, but that is mostly models agreeing on an empty set.** "
+ f"Where at least one model named a side-effect, agreement is **{np.mean(named_sims):.0%}** — "
+ f"AE sets are small and sparse, "
  f"so Jaccard is punishing (one model lists `insomnia`, another `sleep problems`, a third nothing → near-zero "
  f"overlap). Two structural reasons agreement is genuinely hard here: (a) side-effects are only mentioned in "
  f"passing in most posts, so presence is noisy; (b) free-text AE strings aren't normalized. **The takeaway "
@@ -78,7 +89,8 @@ allse=Counter(x for mv in cell.values() for s in mv.values() for x in s)
 top=allse.most_common(15)
 tb=pd.DataFrame(top, columns=["side-effect (verbatim)","times extracted"])
 display(HTML("<b>Most-extracted side-effects (raw strings, unnormalised)</b>"+tb.to_html(index=False)))
-display(Markdown(f"**{n_empty/n_cells:.0%} of extractions report NO side-effect at all** — most posts don't "
+display(Markdown(f"**{n_empty/n_cells:.0%} of the {n_cells:,} usable extractions report NO side-effect at all** "
+ f"(failed extractions are excluded, not counted as empty) — most posts don't "
  f"discuss AEs for the drug in question, so the field is mostly empty and the non-empty entries are a thin, "
  f"noisy signal. The raw strings above also show the normalisation gap (synonyms/spellings uncollapsed), which "
  f"is exactly what drags the Jaccard agreement down and what an ontology pass (MedDRA/UMLS) would fix."))
@@ -104,8 +116,9 @@ cross-community AE *counts* need the fan-out correction and the verbosity check 
 S4 = "## 4. Verdict"
 S4_CODE = r'''
 lines=[
- f"- **Side-effect sets are the least-reliable field** — ~{np.mean(allsims):.0%} mean pairwise agreement, and "
- f"~{n_empty/n_cells:.0%} of extractions are empty. Partly Jaccard punishing sparse sets, partly genuine "
+ f"- **Side-effect sets agree poorly where it matters** — ~{np.mean(named_sims):.0%} mean pairwise agreement where a "
+ f"side-effect is named ({np.mean(allsims):.0%} counting empty-vs-empty pairs), and "
+ f"~{n_empty/n_cells:.0%} of the {n_cells:,} usable extractions are empty. Partly Jaccard punishing sparse sets, partly genuine "
  "presence noise + unnormalised strings.",
  "- **Not a clean pass/fail** — with no gold, this is agreement-only, and the low number is as much a metric "
  "and sparsity artifact as a model failure (same lesson as the variable-coding N×N). A MedDRA/UMLS "
@@ -142,7 +155,7 @@ display(HTML('<div style="font-size:1.15em;font-weight:bold;font-style:italic;ma
 
 def main():
     cells = [
-        ("md", FRAME), ("code", LOAD),
+        ("md", FRAME), ("code", RELIABILITY_CODE), ("code", LOAD),
         ("md", S1), ("code", S1_CODE),
         ("md", S2), ("code", S2_CODE),
         ("md", S3),

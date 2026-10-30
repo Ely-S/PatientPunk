@@ -115,6 +115,40 @@ COLORS = {{
 '''
 
 
+# ── Reliability check shared by the validation notebooks ────────────────────
+# A builder adds this as a code cell before its load cell. The HTML export hides
+# code, so reliability_md() returns markdown for the notebook to display: a caveat
+# left in a code comment never reaches the reader.
+RELIABILITY_CODE = '''
+RELIABLE = 0.25  # a model with no usable answer on more than a quarter of its items is shown, never scored
+
+def fail_rates(items, model_of, failed):
+    """Share of each model's items that produced no usable answer."""
+    by_model = {}
+    for item in items:
+        by_model.setdefault(model_of(item), []).append(bool(failed(item)))
+    return {m: float(np.mean(v)) for m, v in sorted(by_model.items())}
+
+def scored(rates):
+    """The models at or under RELIABLE: the only ones panel numbers, rankings and verdicts use."""
+    return [m for m in rates if rates[m] <= RELIABLE]
+
+def reliability_md(rates, roster=(), what="usable answer"):
+    """One paragraph naming every model left out, and why."""
+    over = [m for m in rates if rates[m] > RELIABLE]
+    absent = [m for m in roster if m not in rates]
+    text = f"**{len(scored(rates))} of {len(set(roster) | set(rates))} models are scored.**"
+    if over:
+        text += (f" Left out for having no {what} on more than {RELIABLE:.0%} of items: "
+                 + ", ".join(f"`{m}` ({rates[m]:.0%})" for m in over) + ".")
+    if absent:
+        text += f" Produced no {what} at all: " + ", ".join(f"`{m}`" for m in absent) + "."
+    if over or absent:
+        text += " Panel numbers, rankings and verdicts below use the scored models only."
+    return text
+'''
+
+
 def build_notebook(cells, db_path="patientpunk.db", db_path_block=None, title=None):
     """Build a valid Jupyter notebook from a list of (type, source) tuples.
 

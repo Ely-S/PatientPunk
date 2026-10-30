@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "notebooks"))
-from build_notebook import build_notebook, execute_and_export
+from build_notebook import RELIABILITY_CODE, build_notebook, execute_and_export
 
 RUNS = (ROOT / "data" / "validation" / "j3_canonicalize_runs.json").as_posix()
 DB = (ROOT / "patientpunk.db").as_posix()
@@ -41,6 +41,9 @@ d=json.load(open(r"__RUNS__")); gold=d["gold"]; canon=d["canon"]; M=d["manifest"
 names=list(gold); short=lambda m:m.split("/")[-1]
 gold_lab=[gold[n] for n in names]
 MODELS=[m for m in canon if canon[m]]
+# One call per model: it either returned a grouping or nothing, so the check here is the roster.
+FAIL={short(m): 0.0 for m in MODELS}; ROSTER=[short(m) for m in M["models"]]
+N_OF=f"{len(MODELS)} of {len(ROSTER)} models"   # the models every number below describes
 def model_labels(m):
     c=canon[m]; return [c.get(n,n) for n in names]   # canonical representative per alias
 def merge_pr(m):
@@ -54,7 +57,9 @@ def merge_pr(m):
     f1=2*prec*rec/(prec+rec) if prec+rec else 0
     return prec,rec,f1
 stats={m:(adjusted_rand_score(gold_lab, model_labels(m)),)+merge_pr(m) for m in MODELS}
-display(Markdown(f"*(loaded — {len(names)} aliases over {M['n_drugs']} drugs, {len(MODELS)} models)*"))
+display(Markdown(reliability_md(FAIL, ROSTER, what="grouping")))
+display(Markdown(f"*(loaded — {len(names)} aliases over {M['n_drugs']} drugs; {N_OF} returned a grouping, each "
+ f"of all {len(names)} aliases)*"))
 '''.replace("__RUNS__", RUNS)
 
 S1 = ("## 1. Canonicalisation accuracy per model\n\n"
@@ -71,7 +76,8 @@ tb=[[short(m), f"{stats[m][0]:.2f}", f"{stats[m][1]:.0%}", f"{stats[m][2]:.0%}",
 display(HTML("<b>Per-model: ARI + pairwise merge precision / recall / F1</b>"+
              pd.DataFrame(tb, columns=["model","ARI","merge precision","merge recall","merge F1"]).to_html(index=False)))
 aris=[stats[m][0] for m in MODELS]; recs=[stats[m][2] for m in MODELS]
-display(Markdown(f"**Median ARI {np.median(aris):.2f}, median merge-recall {np.median(recs):.0%}.** "
+display(Markdown(f"**Median ARI {np.median(aris):.2f}, median merge-recall {np.median(recs):.0%}** "
+ f"(over the {N_OF} that returned a grouping). "
  f"The dominant error mode is under-merging — a model leaves `\"famo\"`, `\"pepcid\"`, `\"famotidine hcl\"` in "
  f"separate groups (recall < precision). Splitting distinct drugs apart (precision) is rarely the problem; "
  f"**collapsing all the surface variants of one drug is the hard part**, and it's where models differ most."))
@@ -83,10 +89,10 @@ pairs=[adjusted_rand_score(model_labels(a),model_labels(b)) for a,b in combinati
 gold_ari=[stats[m][0] for m in MODELS]
 display(Markdown(
  f"**Mean pairwise ARI between models: {np.mean(pairs):.2f}** (vs mean {np.mean(gold_ari):.2f} against the "
- f"gold). Models agree with *each other* about as much as with the truth — canonicalisation is fairly "
- f"determined (there's a right answer and capable models mostly find it), so cross-model divergence here is a "
- f"reliable outlier signal, not underdetermination. A model far below the pack is genuinely worse at merging, "
- f"not just idiosyncratic."))
+ f"gold), across the {N_OF} that returned a grouping. Those models agree with *each other* about as much as "
+ f"with the truth, so for them canonicalisation is fairly determined: there's a right answer and they mostly find "
+ f"it. The {len(ROSTER) - len(MODELS)} that returned nothing are missing from both numbers, and are likely the "
+ f"weakest at this task, so 'determined' describes the models that could do it, not the roster."))
 '''
 
 S3 = "## 3. What gets mis-merged"
@@ -117,12 +123,12 @@ S4 = "## 4. Verdict"
 S4_CODE = r'''
 aris=[stats[m][0] for m in MODELS]
 lines=[
- f"- **Canonicalisation is one of the more accurate judgements** — median ARI {np.median(aris):.2f} vs the true "
- f"drug grouping; the merge decision has a right answer and capable models mostly get it.",
+ f"- **Canonicalisation is accurate for the models that do it** — median ARI {np.median(aris):.2f} vs the true "
+ f"drug grouping over the {N_OF} that returned one; the other {len(ROSTER) - len(MODELS)} produced nothing.",
  f"- **Under-merging is the failure mode** — models leave synonym/typo/dose variants in separate groups "
  f"(recall < precision). Splitting distinct drugs apart is rare.",
- f"- **Cross-model agreement ≈ agreement-with-gold**, so this judgement is *determined* — a model well below "
- f"the pack is a real outlier to drop, not just a different-but-valid style (unlike the subjective judgements).",
+ f"- **Among those {len(MODELS)}, cross-model agreement ≈ agreement-with-gold**, so the judgement is *determined* "
+ f"for them — a model well below the pack is a real outlier to drop, not a different-but-valid style.",
  f"- **Cheap win:** front the LLM merge with deterministic normalisation + RxNorm lookup (covers the "
  f"~38% RxNorm-scoreable names for free); reserve the model for the genuinely ambiguous merges.",
 ]
@@ -143,6 +149,7 @@ PROV = r'''
 prov=pd.DataFrame({"item":["gold","aliases","drugs","models","metric","skill"],
  "value":[M["gold_source"], str(M["n_names"]), str(M["n_drugs"]), str(len(MODELS)),
           "Adjusted Rand Index + pairwise merge P/R/F1", "research-assistant v2"]})
+prov.loc[prov.item == "models", "value"] = f"{N_OF} returned a grouping"
 display(HTML("<b>Provenance</b>"+prov.to_html(index=False)))
 display(HTML('<div style="font-size:1.15em;font-weight:bold;font-style:italic;margin-top:1em">'
              'Measures the correctness of a normalisation step, not treatment effects. Not medical advice.</div>'))
@@ -151,7 +158,7 @@ display(HTML('<div style="font-size:1.15em;font-weight:bold;font-style:italic;ma
 
 def main():
     cells = [
-        ("md", FRAME), ("code", LOAD),
+        ("md", FRAME), ("code", RELIABILITY_CODE), ("code", LOAD),
         ("md", S1), ("code", S1_CODE),
         ("md", S2), ("code", S2_CODE),
         ("md", S3), ("code", S3_CODE),

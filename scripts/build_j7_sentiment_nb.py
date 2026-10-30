@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "notebooks"))
-from build_notebook import build_notebook, execute_and_export
+from build_notebook import RELIABILITY_CODE, build_notebook, execute_and_export
 
 RUNS_JSON = (ROOT / "data" / "validation" / "j78_classify_runs.json").as_posix()
 SCRIPTS = (ROOT / "scripts").as_posix()
@@ -56,6 +56,10 @@ def nsent(v):
     v = str(v).lower().strip() if v else ""
     return ca.SENT_FIX.get(v, v)
 
+FAIL = fail_rates([r for r in results if r["run"] == 0], lambda r: short(r["model"]),
+                  lambda r: r["parse_failed"] or not nsent(r["sentiment"]))
+MODELS = [m for m in MODELS if m in scored(FAIL)]
+
 def pivot_alpha(df):
     df = df[df.v.astype(str).str.len() > 0]
     if not len(df):
@@ -66,17 +70,19 @@ def pivot_alpha(df):
 # cross-model long frame (run 0) + Polina
 rows = []
 for r in results:
-    if r["run"] == 0 and not r["parse_failed"]:
+    if r["run"] == 0 and not r["parse_failed"] and short(r["model"]) in MODELS:
         rows.append(dict(coder_id=short(r["model"]), sample_id=r["sample_id"], canonical_drug=r["drug"], v=nsent(r["sentiment"])))
 for p in polina:
     rows.append(dict(coder_id="Polina", sample_id=p["sample_id"], canonical_drug=p["drug"], v=nsent(p["sentiment"])))
 df = pd.DataFrame(rows); df = df[df.v.astype(str).str.len() > 0]
 mo = df[df.coder_id != "Polina"]
+N = mo.coder_id.value_counts().to_dict()   # usable run-0 items per scored model
+def lab(m): return f"{m} (n={N.get(m, 0)})"
 mmat, _ = ca.pivot_field(mo, "v"); PANEL = ca.krippendorff_alpha_nominal(mmat) if mmat.size else None
 PAIR = ca.pairwise_alphas(mo, "v")
 VSP = {md: pivot_alpha(df[df.coder_id.isin([md, "Polina"])]) for md in MODELS}
 WITHIN = {}
-for m0 in CAND:
+for m0 in [c for c in CAND if short(c) in MODELS]:
     rr = [r for r in results if r["model"] == m0 and not r["parse_failed"]]
     w = pd.DataFrame([dict(coder_id="r%d" % r["run"], sample_id=r["sample_id"], canonical_drug=r["drug"], v=nsent(r["sentiment"])) for r in rr])
     WITHIN[short(m0)] = pivot_alpha(w) if (len(w) and w.coder_id.nunique() >= 2) else None
@@ -87,12 +93,13 @@ comp = (pd.DataFrame([dict(m=short(r["model"]), s=nsent(r["sentiment"])) for r i
 
 def _f(x): return f"{x:.2f}" if (x is not None and x == x) else "n/a"
 _vp = pd.Series({k: v for k, v in VSP.items() if v is not None})
+display(Markdown(reliability_md(FAIL, what="usable sentiment")))
 display(Markdown(f"""
 **Abstract.** Sentiment (⑦) has no clean right answer, so we measure consistency, not accuracy, across
 **{len(MODELS)} models** on the **{MAN['n_pairs']}** Polina-labelled (post, drug) pairs (k={K}, temp 0).
 **Within-model** self-agreement is very high (median nominal α **{_f(pd.Series(WITHIN).median())}**) — at
 temperature 0 the call is near-deterministic, so run-to-run noise is not the issue. The real story is
-**cross-model**: the roster's panel α is **{_f(PANEL)}** — moderate agreement, well short of 1, so models
+**cross-model**: across the {len(MODELS)} scored models the panel α is **{_f(PANEL)}** — moderate agreement, well short of 1, so models
 genuinely diverge on the 4-class call. Against **Polina** the median α is **{_f(_vp.median())}**
 (best {_vp.idxmax()} {_f(_vp.max())}). Read all of it with the caveat that **agreement is diagnostic, never
 validation**: where the roster agrees it may simply share our prompt's bias — and the confirmed ~10–20%
@@ -120,7 +127,7 @@ ax.scatter(w.a, ys, color="#0e6b74", s=80, zorder=2)
 for y, v in zip(ys, w.a):
     ax.text(v + 0.01, y, f"{v:.2f}", va="center", fontsize=8)
 ax.axvline(1.0, ls="--", color="#999", lw=1)
-ax.set_yticks(ys); ax.set_yticklabels(w.mshort); ax.set_xlim(min(0, w.a.min()-0.05), 1.08)
+ax.set_yticks(ys); ax.set_yticklabels(w.mshort.map(lab)); ax.set_xlim(min(0, w.a.min()-0.05), 1.08)
 ax.set_xlabel("within-model nominal α over K repeats (1 = perfectly self-consistent)")
 ax.set_title("Sentiment: within-model consistency at temperature 0"); fig.tight_layout(); plt.show()
 display(Markdown(
@@ -160,7 +167,7 @@ S4_CODE = r'''
 vp = pd.DataFrame({"mshort": MODELS, "a": [VSP.get(m) for m in MODELS]}).dropna().sort_values("a")
 fig, ax = plt.subplots(figsize=(8, 0.32*len(vp)+1))
 colors = ["#e74c3c" if v < vp.a.median()-0.1 else "#0e6b74" for v in vp.a]
-ax.barh(vp.mshort, vp.a, color=colors, height=0.68)
+ax.barh(vp.mshort.map(lab), vp.a, color=colors, height=0.68)
 for y,(_,r) in enumerate(vp.iterrows()): ax.text(r.a + 0.005, y, f"{r.a:.2f}", va="center", fontsize=7.5)
 ax.axvline(vp.a.median(), ls="--", color="#999", lw=1, label=f"median {vp.a.median():.2f}")
 ax.set_xlim(min(0, vp.a.min()-0.05), 1.0); ax.set_xlabel("sentiment α vs Polina (human)")
@@ -188,13 +195,13 @@ order = MODELS
 rows = []
 for m in order:
     div = 1 - np.nanmean([PAIR.loc[m,o] for o in order if o != m])
-    rows.append(dict(model=m, within=WITHIN.get(m), vs_polina=VSP.get(m), divergence=div,
+    rows.append(dict(model=m, n=N.get(m, 0), within=WITHIN.get(m), vs_polina=VSP.get(m), divergence=div,
                      price=PRICES.get(next(c for c in CAND if c.split('/')[-1]==m), np.nan)))
 SC = pd.DataFrame(rows).sort_values("vs_polina", ascending=False)
 show = SC.copy()
 for c in ["within","vs_polina","divergence"]: show[c] = show[c].round(2)
 show["price"] = show["price"].map(lambda v: f"${v:g}" if pd.notna(v) else "?")
-show.columns = ["model","within-model α","vs Polina α","divergence","$/1M in"]
+show.columns = ["model","usable items","within-model α","vs Polina α","divergence","$/1M in"]
 display(HTML("<b>⑦ sentiment — consistency scorecard</b>" + show.to_html(index=False)))
 lines = [
   f"- **Within-model is a non-issue at temp 0** (median α {pd.Series(WITHIN).median():.2f}).",
@@ -239,7 +246,7 @@ def main():
     prices = fetch_prices()
     load_cell = LOAD.replace("__PRICES__", repr(prices))
     cells = [
-        ("md", RQ), ("code", load_cell),
+        ("md", RQ), ("code", RELIABILITY_CODE), ("code", load_cell),
         ("md", S1),
         ("md", S2), ("code", S2_CODE),
         ("md", S3), ("code", S3_CODE),
