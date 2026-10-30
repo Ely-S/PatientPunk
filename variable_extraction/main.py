@@ -210,11 +210,20 @@ def _aggregate_for_run(in_dir: Path, min_items: int) -> Path:
 
 
 def _warn_if_comments_skipped(in_dir: Path) -> None:
-    """Say how many comments a run without --aggregate will not read (#87)."""
-    try:
-        comments = sum(len(post.get("comments") or ()) for post in read_posts(in_dir))
-    except FileNotFoundError:
+    """Say how many comments a run without --aggregate will not read (#87).
+
+    Counts "comment_id" keys in 1 MB chunks rather than parsing the corpus, so a
+    large corpus costs one quick pass over the file and almost no memory.
+    """
+    corpus = in_dir / "subreddit_posts.json"
+    if not corpus.is_file():
         return  # the pipeline reports a missing corpus itself
+    key, comments, tail = b'"comment_id"', 0, b""
+    with corpus.open("rb") as f:
+        while chunk := f.read(1 << 20):
+            buf = tail + chunk
+            comments += buf.count(key)
+            tail = buf[-(len(key) - 1):]  # a key split across two chunks is counted once
     if comments:
         print(f"  ! {comments:,} comments in this corpus will not be extracted: extraction reads "
               f"post titles and bodies only. Add --aggregate to include them.")
@@ -232,9 +241,15 @@ def _cmd_run(args: argparse.Namespace) -> None:
         set_cache_enabled(True)
 
     input_dir = args.input_dir
-    if args.aggregate:
+    extracting = not args.no_llm and args.start_at == 1
+    if args.aggregate and extracting:
         input_dir = _aggregate_for_run(input_dir, args.min_items)
-    elif not args.no_llm and args.start_at == 1:
+    elif args.aggregate:
+        # No extraction this run: reuse the per-author corpus an earlier --aggregate run made.
+        input_dir = input_dir.parent / f"{input_dir.name}_perpatient"
+        if not input_dir.is_dir():
+            sys.exit(f"{input_dir} does not exist; run with --aggregate from Phase 1 first")
+    elif extracting:
         _warn_if_comments_skipped(input_dir)
 
     # PipelineConfig forces clean=False when resume=True (single source of truth).
