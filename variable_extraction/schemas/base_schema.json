@@ -6,7 +6,7 @@
     "age": {
       "description": "The author's own current age in years, as a number. Not a child's, relative's or anyone else's age",
       "confidence": "medium",
-      "notes": "Restricted to 16-99 to reduce noise from non-demographic age mentions"
+      "notes": "Restricted to 10-99 to reduce noise from non-demographic age mentions"
     },
     "sex_gender": {
       "description": "Patient's biological sex or gender identity",

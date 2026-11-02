@@ -979,7 +979,7 @@ def normalize_records(
             if not route_data["values"]:
                 route_data["confidence"] = None
 
-    # Age must be a whole number from 16 to 99; anything else is dropped (#85).
+    # Age must be a whole number from 10 to 99; anything else is dropped (#85).
     for rec in records:
         age_data = rec.get("fields", {}).get("age", {})
         if age_data.get("values"):
