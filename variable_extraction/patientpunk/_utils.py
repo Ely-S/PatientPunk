@@ -208,7 +208,7 @@ class LLMTruncationError(LLMResponseError):
 
 
 class LLMContentFilteredError(LLMResponseError):
-    """The provider's content filter blocked the reply: one item's problem, not the run's."""
+    """The provider's content filter blocked the reply to this prompt"""
 
 
 def response_text(response) -> str:
