@@ -57,7 +57,9 @@ def load(db: Path, drug: str, label: str) -> dict[str, dict]:
     if drug_id is None:
         raise SystemExit(f"{db}: no treatment named {drug!r}")
     authors: dict[str, dict] = {}
-    eligible = f"r.drug_id={drug_id[0]} AND r.sentiment IN {DIRECTIONAL}"
+    # A --reclassify run adds a new report per post and keeps the old one; use each post's newest, as the _latest views do.
+    eligible = (f"r.drug_id={drug_id[0]} AND r.sentiment IN {DIRECTIONAL} AND r.report_id = (SELECT MAX(r2.report_id) "
+                "FROM treatment_reports r2 WHERE r2.post_id = r.post_id AND r2.drug_id = r.drug_id)")
     for user, report, sentiment, date in conn.execute(
             f"SELECT r.user_id, r.report_id, r.sentiment, p.post_date FROM treatment_reports r "
             f"JOIN posts p ON p.post_id=r.post_id WHERE {eligible}"):
@@ -105,7 +107,7 @@ def pct(k: int, n: int) -> str:
     return f"{k} ({k / n:.0%})" if n else "0"
 
 
-def summarize(drug: str, columns: list[tuple[str, dict[str, dict]]]) -> str:
+def summarize(drug: str, columns: list[tuple[str, dict[str, dict]]], dose_cuts: tuple[float, ...] = (600, 1200)) -> str:
     """Markdown report. ``columns`` = [(label, authors)], the first being the merged 'All'."""
     out = [f"# {drug}: author-level summary", ""]
     head = "| | " + " | ".join(f"{label} ({len(a)})" for label, a in columns) + " |"
@@ -147,19 +149,22 @@ def summarize(drug: str, columns: list[tuple[str, dict[str, dict]]]) -> str:
     out += ["## Side effects by stated dose", "", "| Daily amount | Authors | Any side effect | Any improvement | Latest positive |",
             "|---|---:|---:|---:|---:|"]
     merged = columns[0][1]
+    cuts = sorted(dose_cuts)
+    names = ([f"up to {cuts[0]:g} mg"] + [f"over {lo:g} to {hi:g} mg" for lo, hi in zip(cuts, cuts[1:])]
+             + [f"over {cuts[-1]:g} mg"])
     bands = collections.defaultdict(list)
     for a in merged.values():
-        if a["doses"]:
-            mg = min(a["doses"])
-            bands["500 mg" if mg <= 600 else "1000 mg" if mg <= 1200 else "above 1000 mg"].append(a)
-    for band in ("500 mg", "1000 mg", "above 1000 mg"):
+        for i in {next((i for i, cut in enumerate(cuts) if mg <= cut), len(cuts)) for mg in a["doses"]}:
+            bands[names[i]].append(a)
+    for band in names:
         g = bands.get(band, [])
         if g:
             out.append(f"| {band} | {len(g)} | {sum(1 for a in g if a['worsened'])} | "
                        f"{sum(1 for a in g if a['improved'])} | {sum(1 for a in g if latest(a) == 'positive')} |")
     out.append("")
-    out.append("Authors with no stated amount are not placed. Counts are authors; a symptom row is one sentence "
-               "the author wrote, attributed to the drug by the effects step.")
+    out.append("Authors with no stated amount are not placed; one who states amounts in several bands is counted "
+               "in each. Counts are authors; a symptom row is one sentence the author wrote, attributed to the drug "
+               "by the effects step.")
     return "\n".join(out)
 
 
@@ -169,7 +174,13 @@ def main() -> None:
     ap.add_argument("--db", action="append", required=True, metavar="LABEL=PATH",
                     help="a pipeline database with its column label; repeat for several")
     ap.add_argument("--out", type=Path, help="write the markdown here instead of stdout")
+    ap.add_argument("--dose-cuts", default="600,1200", metavar="MG,MG",
+                    help="daily-amount cut points in mg for the dose table (default 600,1200, urolithin A's doses)")
     args = ap.parse_args()
+    try:
+        dose_cuts = tuple(float(c) for c in args.dose_cuts.split(","))
+    except ValueError:
+        ap.error("--dose-cuts takes numbers separated by commas, e.g. 10,25,50")
     per_db = []
     for spec in args.db:
         label, _, path = spec.partition("=")
@@ -177,7 +188,7 @@ def main() -> None:
             ap.error("--db takes LABEL=PATH")
         per_db.append((label, load(Path(path), args.drug, label)))
     columns = [("All", merge([a for _, a in per_db]))] + per_db if len(per_db) > 1 else per_db
-    text = summarize(args.drug, columns)
+    text = summarize(args.drug, columns, dose_cuts)
     if args.out:
         args.out.write_text(text, encoding="utf-8")
     else:

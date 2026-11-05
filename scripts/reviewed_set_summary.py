@@ -54,7 +54,7 @@ def load(db: Path) -> dict:
             a["severities"].append(severity.lower())
     for community, report_id, low, unit, band, route in conn.execute(
             "SELECT community, report_id, low, unit, band, route FROM reviewed_doses "
-            "WHERE review_status LIKE '%confirmed%'"):
+            "WHERE review_status = 'confirmed'"):
         row = reports.get((community, report_id))
         if row is None:
             continue
@@ -83,8 +83,6 @@ def report(data: dict, label: str) -> str:
            f"| Authors stating a route | {sum(1 for v in authors.values() if v['routes'])} |", ""]
     by_category = collections.Counter()
     for a in adverse:
-        for category, _symptom in {(c, s) for c, s in authors[a]["adverse"]}:
-            by_category[category] += 0
         for category in {c for c, _ in authors[a]["adverse"]}:
             by_category[category] += 1
     out += ["## Side-effect categories (authors)", "", "| Category | Authors |", "|---|---:|"]

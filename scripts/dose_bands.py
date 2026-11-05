@@ -38,7 +38,7 @@ def _when(value) -> float:
 
 
 def _bands(cuts: list[float]) -> list[tuple[float, float, str]]:
-    edges = [0.0, *cuts, float("inf")]
+    edges = [0.0, *sorted({c for c in cuts if c > 0}), float("inf")]
     out = []
     for low, high in zip(edges, edges[1:]):
         if high == float("inf"):
@@ -84,7 +84,7 @@ def load(db: Path, drug: str, cuts: list[float], capsule_mg: float | None, cap_m
             mg = low * capsule_mg
         else:
             continue
-        if mg > cap_mg:
+        if mg < 0 or mg > cap_mg:
             continue
         doses.append({"report": report_id, "author": reports[report_id][0], "mg": mg, "route": route,
                       "band": band_of(mg), "quote": quote, "from_capsules": kind in CAPSULES})
