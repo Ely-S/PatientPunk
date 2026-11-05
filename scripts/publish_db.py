@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
-"""Finalize, publish and audit PatientPunk databases (see docs/database-provenance.md).
+"""Publish PatientPunk databases to s3://patientpunk with a provenance record, and audit the bucket.
 
 Usage:
-    # Checkpoint the WAL, check integrity, hash, and write the output fields into
-    # <stem>_provenance.yaml beside the database.
-    uv run python scripts/publish_db.py finalize path/to/example.db
-
-    # Check the YAML, upload the database to a new S3 key, verify it by download,
-    # add its row to s3://patientpunk/INDEX.md with a conditional write, then
-    # upload the finished YAML beside it.
+    # Checkpoint and integrity-check the database, build <stem>_provenance.yaml from its
+    # extraction_runs table, upload the database to a new key and the YAML beside it, then
+    # rebuild INDEX.md. If it stops after the upload, run the same command again to finish.
     uv run python scripts/publish_db.py publish path/to/example.db \
-        --s3-uri s3://patientpunk/<prefix>/example.db --label multi-treatment
+        --s3-uri s3://patientpunk/<prefix>/example.db --label multi-treatment \
+        --purpose "what the database holds" --input "s3://patientpunk/<input>" --command "uv run python src/..."
 
-    # List S3 databases with no provenance YAML beside them or no INDEX.md row.
-    uv run python scripts/publish_db.py audit [--prefix scientific_validation/] [--strict]
+    # Write a retrospective record beside a database already in S3, from a local copy of it.
+    uv run python scripts/publish_db.py publish path/to/copy.db --s3-uri s3://patientpunk/<existing key> \
+        --label multi-treatment --purpose "..." --record-only
 
-S3 calls use boto3 with the AWS CLI's credentials (~/.aws or AWS_* environment variables).
+    # List databases with no published provenance record; --write-index rebuilds INDEX.md.
+    uv run python scripts/publish_db.py audit [--prefix scientific_validation/] [--strict] [--write-index]
+
+Both writing commands need S3 versioning on the bucket, so that a rebuilt INDEX.md never loses the
+previous one. S3 calls use boto3 with the AWS CLI's credentials (~/.aws or AWS_* variables).
 """
 import argparse
 import hashlib
+import json
 import re
 import sqlite3
 import sys
-import tempfile
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -32,12 +33,9 @@ from botocore.exceptions import ClientError
 
 BUCKET = "patientpunk"
 INDEX_KEY = "INDEX.md"
-CATALOG_PREFIX = "database_catalog/"  # browsing copies of databases listed elsewhere; audit skips them
-TOTALS_PREFIX = "Listed databases:"
-NOT_RECORDED = "not recorded"  # an older INDEX.md row's value for a column added later
-# Machine-local absolute paths: drive letters, POSIX home and system directories, UNC shares.
-LOCAL_PATH = re.compile(r"(?i)(?<![\w:/])[a-z]:[\\/]|(?<![\w.])/(?:Users|home|root|tmp|mnt|var|opt|srv)/"
-                        r"|(?<![\w\\])\\\\[\w.$-]+\\")
+REPOSITORY = "https://github.com/Ely-S/PatientPunk"
+# Browsing copies: database_catalog/by-upload-date/uploaded-<date>/<label>/<original key>
+CATALOG_COPY = re.compile(r"database_catalog/by-upload-date/uploaded-[\d-]+/([^/]+)/(.+\.db)")
 SECRET = re.compile(r"sk-or-v1-|sk-ant-|sk-proj-|\bAKIA[0-9A-Z]{16}\b|X-Amz-Signature=")
 
 
@@ -45,7 +43,13 @@ class PublishError(Exception):
     """A check failed; the message says what to fix."""
 
 
-# ── Local database ────────────────────────────────────────────────────────────
+def utc(when) -> str | None:
+    if when is None:
+        return None
+    if not isinstance(when, datetime):
+        when = datetime.fromtimestamp(when, UTC)
+    return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -59,118 +63,76 @@ def provenance_path(db: Path) -> Path:
     return db.with_name(f"{db.stem}_provenance.yaml")
 
 
-def load_record(path: Path) -> dict:
-    if not path.exists():
-        raise PublishError(f"{path.name} not found beside the database; create it before the run "
-                           "(docs/database-provenance.md)")
-    try:
-        record = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as e:
-        raise PublishError(f"{path.name} is not valid YAML (quote values such as 'repo:'): {e}") from e
-    if not isinstance(record, dict):
-        raise PublishError(f"{path.name} is not a YAML mapping")
-    return record
+# ── Local database ────────────────────────────────────────────────────────────
 
-
-def dump_record(record: dict) -> str:
-    return yaml.safe_dump(record, sort_keys=False, allow_unicode=True, width=100)
-
-
-def save_record(path: Path, record: dict) -> None:
-    path.write_text(dump_record(record), encoding="utf-8", newline="\n")
-
-
-def require_database(db: Path) -> None:
+def finalize(db: Path) -> tuple[dict, list[dict]]:
+    """Checkpoint, integrity-check and hash a closed database; return its output fields and runs."""
     if not db.is_file():  # sqlite3.connect would quietly create an empty one
         raise PublishError(f"{db} does not exist")
-
-
-def leftover_journals(db: Path) -> list[str]:
-    """Non-empty -wal or -journal files, which hold writes the .db alone does not."""
-    return [p.name for p in (db.with_name(db.name + "-wal"), db.with_name(db.name + "-journal"))
-            if p.exists() and p.stat().st_size > 0]
-
-
-def finalize_database(db: Path) -> dict:
-    """Checkpoint, integrity-check and hash a closed database; return the output fields."""
     conn = sqlite3.connect(db)
     try:
         busy, _, _ = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
     finally:
         conn.close()
-    if busy:
+    leftover = [p.name for p in (db.with_name(db.name + "-wal"), db.with_name(db.name + "-journal"))
+                if p.exists() and p.stat().st_size > 0]
+    if busy or leftover:
         raise PublishError(f"{db.name} is still open in another process; close every writer and retry")
-    if leftover := leftover_journals(db):
-        raise PublishError(f"{', '.join(leftover)} still holds data after the checkpoint; "
-                           "close every connection and retry")
     conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
     try:
         integrity = [row[0] for row in conn.execute("PRAGMA integrity_check")]
         tables = [r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
         counts = {t: conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables}
-        run_ids = ([r[0] for r in conn.execute("SELECT run_id FROM extraction_runs ORDER BY run_id")]
-                   if "extraction_runs" in tables else [])
+        runs = []
+        if "extraction_runs" in tables:
+            has_finished = "finished_at" in {r[1] for r in conn.execute("PRAGMA table_info(extraction_runs)")}
+            for run_id, run_at, commit, kind, config, finished in conn.execute(
+                    "SELECT run_id, run_at, commit_hash, extraction_type, config, "
+                    f"{'finished_at' if has_finished else 'NULL'} FROM extraction_runs ORDER BY run_id"):
+                try:
+                    config = json.loads(config)
+                except (TypeError, ValueError):
+                    pass  # kept as the stored text
+                runs.append({"run_id": run_id, "extraction_type": kind, "commit_sha": commit,
+                             "started_utc": utc(run_at),
+                             "finished_utc": utc(finished) if has_finished else "not recorded (predates finished_at)",
+                             "config": config})
     finally:
         conn.close()
     if integrity != ["ok"]:
         raise PublishError(f"PRAGMA integrity_check failed for {db.name}: {integrity[:5]}")
-    return {"sha256": sha256_file(db), "bytes": db.stat().st_size, "wal_checkpointed": True,
-            "sqlite_integrity_check": "ok", "table_row_counts": counts, "extraction_run_ids": run_ids}
+    output = {"sha256": sha256_file(db), "bytes": db.stat().st_size, "wal_checkpointed": True,
+              "sqlite_integrity_check": "ok", "table_row_counts": counts,
+              "extraction_run_ids": [r["run_id"] for r in runs]}
+    return output, runs
 
 
-def walk_strings(node, path=""):
-    if isinstance(node, dict):
-        for k, v in node.items():
-            yield from walk_strings(v, f"{path}.{k}" if path else str(k))
-    elif isinstance(node, list):
-        for i, v in enumerate(node):
-            yield from walk_strings(v, f"{path}[{i}]")
-    elif isinstance(node, str):
-        yield path, node
-
-
-def check_record(record: dict, db: Path) -> list[str]:
-    """Problems that stop publication; an empty list means the record is ready."""
-    problems = []
-    get = lambda section: record.get(section) if isinstance(record.get(section), dict) else {}
-    database, code, output, publication = get("database"), get("code"), get("output"), get("publication")
-    if record.get("record_kind") != "database_provenance":
-        problems.append("record_kind must be database_provenance")
-    if database.get("filename") != db.name:
-        problems.append(f"database.filename is {database.get('filename')!r}, expected {db.name!r}")
-    if database.get("status") != "completed":
-        problems.append(f"database.status is {database.get('status')!r}; publish only a completed run")
-    if not database.get("completed_utc"):
-        problems.append("database.completed_utc is missing")
-    if not re.fullmatch(r"[0-9a-f]{40}", str(code.get("commit_sha", ""))):
-        problems.append("code.commit_sha must be the full 40-character SHA")
-    if code.get("working_tree") not in ("clean", "dirty"):
-        problems.append("code.working_tree must be clean or dirty")
-    if not isinstance(record.get("inputs"), list):
-        problems.append("inputs must be a list")
-    commands = record.get("commands")
-    if not isinstance(commands, list) or not commands:
-        problems.append("commands must list the commands that built the database")
-    else:
-        for i, cmd in enumerate(commands):
-            missing = [f for f in ("command", "cwd", "exit_code") if not isinstance(cmd, dict) or f not in cmd]
-            if missing:
-                problems.append(f"commands[{i}] is missing {', '.join(missing)}")
-    if publication.get("status") != "local":
-        problems.append(f"publication.status is {publication.get('status')!r}; a published record is frozen")
-    if output.get("sqlite_integrity_check") != "ok" or output.get("wal_checkpointed") is not True:
-        problems.append("output is not finalized; run `scripts/publish_db.py finalize` first")
-    elif leftover := leftover_journals(db):
-        problems.append(f"{', '.join(leftover)} appeared after finalizing; the database changed")
-    elif output.get("sha256") != sha256_file(db) or output.get("bytes") != db.stat().st_size:
-        problems.append("the database changed after finalizing; finalize it again")
-    for where, text in walk_strings(record):
-        if LOCAL_PATH.search(text):
-            problems.append(f"{where} has a machine-local absolute path; use a repo: or data: root")
-        if SECRET.search(text):
-            problems.append(f"{where} looks like it contains a secret")
-    return problems
+def build_record(db: Path, args, output: dict, runs: list[dict], existing: dict) -> dict:
+    """The provenance record, generated from the database. Sections a person added to a local YAML
+    beforehand (processing, validation, comments...) are kept; the generated ones replace theirs."""
+    dirty = {r["config"].get("git_dirty") for r in runs if isinstance(r["config"], dict)}
+    finished = [r["finished_utc"] for r in runs if (r["finished_utc"] or "").endswith("Z")]
+    record = {
+        "schema_version": 1, "record_kind": "database_provenance",
+        "record_method": "retrospective" if args.record_only else "contemporaneous",
+        "generated_by": "scripts/publish_db.py, from the database's extraction_runs table",
+        "database": {"filename": db.name,
+                     "purpose": args.purpose or (existing.get("database") or {}).get("purpose"),
+                     "status": "completed" if all(r["finished_utc"] is not None for r in runs) else "unfinished runs",
+                     "started_utc": min((r["started_utc"] for r in runs), default=None),
+                     "completed_utc": max(finished, default=None), "supersedes": args.supersedes},
+        "code": {"repository": REPOSITORY, "commit_shas": sorted({r["commit_sha"] for r in runs}),
+                 "working_tree": "dirty" if True in dirty else "clean" if dirty == {False} else "not recorded"},
+        "inputs": args.input or existing.get("inputs") or [],
+        "commands": args.command or existing.get("commands") or [],
+        "extraction_runs": runs, "output": output,
+    }
+    if not record["database"]["purpose"]:
+        raise PublishError("--purpose is required: say what the database holds")
+    if not record["commands"] and not args.record_only:
+        raise PublishError("--command is required: list the commands that built the database, in order")
+    return {**existing, **record}
 
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
@@ -179,273 +141,210 @@ class S3:
     """The few S3 operations publishing needs, through boto3 (same credentials as the AWS CLI)."""
 
     def __init__(self):
-        import boto3  # imported here so finalize and the tests never create an AWS client
+        import boto3  # imported here so the tests never create an AWS client
         self.client = boto3.client("s3")
 
-    @staticmethod
-    def _code(e: ClientError) -> str:
-        return str(e.response.get("Error", {}).get("Code", ""))
+    def versioning_enabled(self) -> bool:
+        return self.client.get_bucket_versioning(Bucket=BUCKET).get("Status") == "Enabled"
 
-    def head(self, bucket: str, key: str) -> dict | None:
+    def head(self, key: str) -> dict | None:
         try:
-            return self.client.head_object(Bucket=bucket, Key=key)
+            return self.client.head_object(Bucket=BUCKET, Key=key)
         except ClientError as e:
-            if self._code(e) in ("404", "NoSuchKey", "NotFound"):
+            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return None
             raise
 
-    def upload(self, path: Path, bucket: str, key: str, sha256: str) -> None:
-        self.client.upload_file(str(path), bucket, key, ExtraArgs={"Metadata": {"sha256": sha256}})
+    def upload(self, path: Path, key: str, sha256: str) -> None:
+        # boto3 sends a checksum with each part and S3 rejects a part that does not match it.
+        self.client.upload_file(str(path), BUCKET, key, ExtraArgs={"Metadata": {"sha256": sha256}})
 
-    def download(self, bucket: str, key: str, path: Path) -> None:
-        self.client.download_file(bucket, key, str(path))
+    def get_text(self, key: str) -> str:
+        return self.client.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode("utf-8")
 
-    def get_text(self, bucket: str, key: str) -> tuple[str, str] | None:
-        """(text, ETag), or None if the object does not exist."""
+    def put_text(self, key: str, text: str, *, if_none_match: bool = False) -> bool:
+        """Write a small text object; False if if_none_match is set and the key already exists."""
+        kwargs = {"Bucket": BUCKET, "Key": key, "Body": text.encode("utf-8"),
+                  "ContentType": "text/markdown" if key.endswith(".md") else "application/yaml"}
         try:
-            obj = self.client.get_object(Bucket=bucket, Key=key)
+            self.client.put_object(**kwargs, **({"IfNoneMatch": "*"} if if_none_match else {}))
         except ClientError as e:
-            if self._code(e) in ("404", "NoSuchKey"):
-                return None
-            raise
-        return obj["Body"].read().decode("utf-8"), obj["ETag"]
-
-    def put_text(self, bucket: str, key: str, text: str, *, content_type: str,
-                 if_match: str | None = None, if_none_match: bool = False) -> bool:
-        """Write a small text object; False if the condition failed (someone else wrote first)."""
-        data = text.encode("utf-8")
-        kwargs = {"Bucket": bucket, "Key": key, "Body": data, "ContentType": content_type,
-                  "Metadata": {"sha256": hashlib.sha256(data).hexdigest()}}
-        if if_match:
-            kwargs["IfMatch"] = if_match
-        if if_none_match:
-            kwargs["IfNoneMatch"] = "*"
-        try:
-            self.client.put_object(**kwargs)
-        except ClientError as e:
-            if self._code(e) in ("PreconditionFailed", "ConditionalRequestConflict", "412", "409"):
+            if e.response.get("Error", {}).get("Code") in ("PreconditionFailed", "ConditionalRequestConflict"):
                 return False
             raise
         return True
 
-    def list_keys(self, bucket: str, prefix: str = "") -> list[dict]:
-        pages = self.client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix)
+    def list_keys(self) -> list[dict]:
+        pages = self.client.get_paginator("list_objects_v2").paginate(Bucket=BUCKET)
         return [obj for page in pages for obj in page.get("Contents", [])]
 
 
-def parse_s3_uri(uri: str) -> tuple[str, str]:
-    m = re.fullmatch(r"s3://([^/]+)/(.+)", uri)
-    if not m:
-        raise PublishError(f"{uri!r} is not an s3://bucket/key URI")
-    return m.group(1), m.group(2)
+def require_versioning(s3: S3) -> None:
+    if not s3.versioning_enabled():
+        raise PublishError(f"S3 versioning is off for s3://{BUCKET}; turn it on before publishing, "
+                           f"so a rebuilt {INDEX_KEY} keeps the previous version")
 
 
-# ── INDEX.md ──────────────────────────────────────────────────────────────────
-
-def _cells(line: str) -> list[str]:
-    return [c.strip() for c in line.strip().strip("|").split("|")]
-
-
-def _row(cells: list[str]) -> str:
-    return "| " + " | ".join(cells) + " |"
-
-
-def table_bounds(lines: list[str]) -> tuple[int, int]:
-    """(header line, one past the last row) of the catalog table."""
-    for i, line in enumerate(lines):
-        if line.startswith("| Original S3 object"):
-            end = i + 2
-            while end < len(lines) and lines[end].startswith("|"):
-                end += 1
-            return i, end
-    raise PublishError("INDEX.md has no table starting with '| Original S3 object'")
-
-
-def index_rows(text: str) -> list[dict]:
-    lines = text.splitlines()
-    start, end = table_bounds(lines)
-    header = _cells(lines[start])
-    return [dict(zip(header, _cells(line))) for line in lines[start + 2:end]]
-
-
-def add_index_row(text: str, row: dict) -> str:
-    """Insert one row in URI order and refresh the totals line."""
-    lines = text.splitlines()
-    start, end = table_bounds(lines)
-    header = _cells(lines[start])
-    rows = [dict(zip(header, _cells(line))) for line in lines[start + 2:end]]
-    if any(r.get("Original S3 object") == row["Original S3 object"] for r in rows):
-        raise PublishError(f"INDEX.md already lists {row['Original S3 object']}")
-    header += [c for c in row if c not in header]
-    rows.append(row)
-    rows.sort(key=lambda r: r["Original S3 object"].strip("`"))
-    align = ["---:" if c == "Bytes" else "---" for c in header]
-    table = [_row(header), _row(align)] + [_row([r.get(c, NOT_RECORDED) for c in header]) for r in rows]
-    total_bytes = sum(int(r["Bytes"]) for r in rows if r.get("Bytes", "").isdigit())
-    totals = (f"{TOTALS_PREFIX} {len(rows)} objects, {total_bytes:,} bytes. "
-              f"Updated {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')} by `scripts/publish_db.py`.")
-    head = [line for line in lines[:start] if not line.startswith(TOTALS_PREFIX)]
-    while head and head[-1] == "":
-        head.pop()
-    return "\n".join(head + ["", totals, ""] + table + lines[end:]) + "\n"
-
-
-def update_index(s3: S3, bucket: str, row: dict, attempts: int = 5) -> None:
-    """Add a row with a conditional write, retrying when another writer got there first."""
-    for _ in range(attempts):
-        current = s3.get_text(bucket, INDEX_KEY)
-        if current is None:
-            raise PublishError(f"s3://{bucket}/{INDEX_KEY} does not exist; build it from an inventory first "
-                               "(docs/database-provenance.md)")
-        text, etag = current
-        if s3.put_text(bucket, INDEX_KEY, add_index_row(text, row),
-                       content_type="text/markdown; charset=utf-8", if_match=etag):
-            break
-        time.sleep(1)
-    else:
-        raise PublishError(f"INDEX.md kept changing under us; tried {attempts} times")
+def s3_key(uri: str) -> str:
+    m = re.fullmatch(rf"s3://{BUCKET}/(.+)", uri)
+    if not m:  # audit only looks at this bucket, so a database anywhere else would never be checked
+        raise PublishError(f"{uri!r} is not in s3://{BUCKET}/; publish only there")
+    return m.group(1)
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
-def cmd_finalize(args) -> None:
-    db = args.db
-    require_database(db)
-    yaml_path = provenance_path(db)
-    record = load_record(yaml_path)
-    if (record.get("publication") or {}).get("status") == "published":
-        raise PublishError(f"{yaml_path.name} is published and frozen; a change is a new snapshot")
-    output = finalize_database(db)
-    record["output"] = {**(record.get("output") or {}), **output}
-    save_record(yaml_path, record)
-    print(f"finalized {db.name}: sha256 {output['sha256']}, {output['bytes']:,} bytes, "
-          f"{len(output['table_row_counts'])} tables, {len(output['extraction_run_ids'])} extraction runs")
-    print(f"wrote the output fields to {yaml_path.name}; set database.status and completed_utc yourself")
-
-
 def cmd_publish(args, s3: S3 | None = None) -> None:
     s3 = s3 or S3()
-    db = args.db
-    require_database(db)
-    yaml_path = provenance_path(db)
-    record = load_record(yaml_path)
-    if problems := check_record(record, db):
-        raise PublishError("not ready to publish:\n  - " + "\n  - ".join(problems))
-    bucket, key = parse_s3_uri(args.s3_uri)
+    db, key = args.db, s3_key(args.s3_uri)
     if Path(key).name != db.name:
         raise PublishError(f"the S3 key must end with {db.name}")
     if re.search(r"[|\r\n]", args.label + key):
-        raise PublishError("the label and S3 key cannot contain |, carriage returns or newlines; "
-                           "they would break the INDEX.md table")
-    yaml_key = key[: -len(db.name)] + yaml_path.name
-    for k in (key, yaml_key):
-        if s3.head(bucket, k) is not None:
-            raise PublishError(f"s3://{bucket}/{k} already exists; published snapshots are never overwritten")
+        raise PublishError("the label and S3 key cannot contain |, carriage returns or newlines (INDEX.md table)")
+    yaml_key = key[: -len(db.name)] + provenance_path(db).name
+    require_versioning(s3)
+    if s3.head(yaml_key) is not None:
+        raise PublishError(f"s3://{BUCKET}/{yaml_key} already exists; a published record is never overwritten")
 
-    # Claim the key before uploading. Only one conditional create of the YAML key can succeed,
-    # so a second publisher to the same key stops here instead of overwriting the database.
-    claim = f"# publish_db.py is publishing s3://{bucket}/{key}; this placeholder is replaced when it finishes\n"
-    if not s3.put_text(bucket, yaml_key, claim, content_type="application/yaml", if_none_match=True):
-        raise PublishError(f"s3://{bucket}/{yaml_key} appeared just now; someone else is publishing to this key")
-    sha = record["output"]["sha256"]
+    output, runs = finalize(db)
+    if not runs:
+        raise PublishError(f"{db.name} has no extraction_runs, so there is nothing to build its record from")
+    unfinished = [r["run_id"] for r in runs if r["finished_utc"] is None]
+    if unfinished and not args.record_only:
+        raise PublishError(f"extraction runs {unfinished} never finished; publish only a completed database")
+    local_yaml = provenance_path(db)
     try:
-        s3.upload(db, bucket, key, sha)
-        uploaded = datetime.now(UTC)  # before the verification download, which can take as long
-        publish_uploaded(s3, args, db, yaml_path, record, bucket, key, yaml_key, sha, uploaded, claim)
-    except Exception as e:
-        raise PublishError(f"{e}\npublishing s3://{bucket}/{key} is incomplete, and s3://{bucket}/{yaml_key} may "
-                           "still hold the placeholder; finish the remaining steps by hand "
-                           "(docs/database-provenance.md) and record them") from e
+        existing = yaml.safe_load(local_yaml.read_text(encoding="utf-8")) if local_yaml.exists() else {}
+    except yaml.YAMLError as e:
+        raise PublishError(f"{local_yaml.name} is not valid YAML (quote values such as 'repo:'): {e}") from e
+    record = build_record(db, args, output, runs, existing if isinstance(existing, dict) else {})
+    if unfinished:
+        record.setdefault("comments", []).append(f"extraction runs {unfinished} have no finished_at")
+
+    obj = s3.head(key)
+    if args.record_only:
+        if obj is None:
+            raise PublishError(f"s3://{BUCKET}/{key} does not exist; --record-only describes a database already there")
+        if obj["ContentLength"] != output["bytes"] or obj.get("Metadata", {}).get("sha256", output["sha256"]) != output["sha256"]:
+            raise PublishError(f"{db.name} is not a copy of s3://{BUCKET}/{key}: the size or SHA-256 differs")
+    elif obj is not None:
+        if obj.get("Metadata", {}).get("sha256") != output["sha256"]:
+            raise PublishError(f"s3://{BUCKET}/{key} already exists; published snapshots are never overwritten")
+        print(f"s3://{BUCKET}/{key} was uploaded by an earlier run with this SHA-256; finishing that publish")
+    else:
+        s3.upload(db, key, output["sha256"])
+        obj = s3.head(key)
+    record["publication"] = {"status": "published", "s3_uri": f"s3://{BUCKET}/{key}", "label": args.label,
+                             "s3_version_id": obj.get("VersionId"), "uploaded_utc": utc(obj["LastModified"]),
+                             "provenance_uri": f"s3://{BUCKET}/{yaml_key}"}
+    text = yaml.safe_dump(record, sort_keys=False, allow_unicode=True, width=100)
+    if SECRET.search(text):
+        raise PublishError("the record looks like it contains a secret; remove it from the run config or arguments")
+    if not s3.put_text(yaml_key, text, if_none_match=True):
+        raise PublishError(f"s3://{BUCKET}/{yaml_key} appeared just now; someone else published this key")
+    local_yaml.write_text(text, encoding="utf-8", newline="\n")
+    write_index(s3, audit(s3))
+    print(f"published s3://{BUCKET}/{key}\nprovenance s3://{BUCKET}/{yaml_key}\nrebuilt s3://{BUCKET}/{INDEX_KEY}")
 
 
-def publish_uploaded(s3: S3, args, db: Path, yaml_path: Path, record: dict,
-                     bucket: str, key: str, yaml_key: str, sha: str, uploaded: datetime, claim: str) -> None:
-    """Everything after the database upload: verify, add the INDEX.md row, then upload the YAML."""
-    with tempfile.TemporaryDirectory() as tmp:
-        copy = Path(tmp) / db.name
-        s3.download(bucket, key, copy)
-        if sha256_file(copy) != sha:
-            raise PublishError(f"s3://{bucket}/{key} does not match the local SHA-256; do not use it")
-    head = s3.head(bucket, key) or {}
-
-    update_index(s3, bucket, {
-        "Original S3 object": f"`s3://{bucket}/{key}`",
-        "Catalog copy": "none",
-        "Label": args.label,
-        "Original upload date": f"{uploaded:%Y-%m-%d}",
-        "Bytes": str(db.stat().st_size),
-        "Run date": str(record["database"]["completed_utc"])[:10],
-        "SHA-256": f"`{sha}`",
-        "Provenance": f"`s3://{bucket}/{yaml_key}`",
-    })
-    record["publication"] = {
-        **record["publication"], "status": "published", "s3_uri": f"s3://{bucket}/{key}",
-        "s3_version_id": head.get("VersionId"), "uploaded_utc": uploaded.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "downloaded_sha256_matches": True, "catalog_copy_uri": None,
-        "catalog_verified_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    # Replace the placeholder only while it is still ours, then freeze the local record.
-    text = dump_record(record)
-    current = s3.get_text(bucket, yaml_key)
-    if (current is None or current[0] != claim
-            or not s3.put_text(bucket, yaml_key, text, content_type="application/yaml", if_match=current[1])):
-        raise PublishError(f"s3://{bucket}/{yaml_key} changed during publishing; it was not overwritten")
-    yaml_path.write_text(text, encoding="utf-8", newline="\n")
-    print(f"published s3://{bucket}/{key}")
-    print(f"provenance s3://{bucket}/{yaml_key}")
-    print(f"INDEX.md row added in s3://{bucket}/{INDEX_KEY}")
-
-
-def audit(s3: S3, bucket: str, prefix: str) -> list[dict]:
-    keys = {o["Key"]: o for o in s3.list_keys(bucket, prefix)}
-    index = s3.get_text(bucket, INDEX_KEY)
-    listed = {r.get("Original S3 object", "").strip("`") for r in index_rows(index[0])} if index else set()
-    report = []
-    for key, obj in sorted(keys.items()):
-        if not key.endswith(".db") or key.startswith(CATALOG_PREFIX):
-            continue
+def audit(s3: S3) -> list[dict]:
+    """One entry per database in the bucket (catalog copies excluded), from the listing and each YAML."""
+    keys = {o["Key"]: o for o in s3.list_keys()}
+    copies = {m.group(2): (m.group(1), k) for k in keys if (m := CATALOG_COPY.fullmatch(k))}
+    databases = sorted(k for k in keys if k.endswith(".db") and not k.startswith("database_catalog/"))
+    records = {}
+    for key in databases:
         yaml_key = key[: -len(".db")] + "_provenance.yaml"
-        report.append({"s3_uri": f"s3://{bucket}/{key}", "bytes": obj.get("Size"),
-                       "provenance": yaml_key in keys, "in_index": f"s3://{bucket}/{key}" in listed})
+        try:
+            record = yaml.safe_load(s3.get_text(yaml_key)) if yaml_key in keys else {}
+        except yaml.YAMLError:
+            record = {}
+        records[key] = record if isinstance(record, dict) else {}
+    superseded = {}  # key -> URI of the snapshot whose YAML says it supersedes that key
+    for key, record in records.items():
+        old = (record.get("database") or {}).get("supersedes")
+        old = old.get("s3_uri") if isinstance(old, dict) else old
+        if isinstance(old, str) and old.startswith(f"s3://{BUCKET}/"):
+            superseded[old[len(f"s3://{BUCKET}/"):]] = f"s3://{BUCKET}/{key}"
+    report = []
+    for key in databases:
+        obj, record = keys[key], records[key]
+        yaml_key = key[: -len(".db")] + "_provenance.yaml"
+        published = (record.get("publication") or {}).get("status") == "published"
+        label, copy = copies.get(key, (None, None))
+        label = (record.get("publication") or {}).get("label") or label
+        if key in superseded:
+            label = f"{label or 'not recorded'}; superseded by `{superseded[key]}`"
+        report.append({
+            "key": key, "bytes": obj["Size"], "uploaded": utc(obj["LastModified"])[:10], "copy": copy,
+            "label": label,
+            "run_date": str((record.get("database") or {}).get("completed_utc") or "")[:10] or None,
+            "sha256": (record.get("output") or {}).get("sha256"),
+            "provenance": yaml_key if published else None,
+            "gap": None if published else "YAML not published" if yaml_key in keys else "no provenance YAML",
+        })
     return report
 
 
-def cmd_audit(args, s3: S3 | None = None) -> int:
-    report = audit(s3 or S3(), BUCKET, args.prefix)
+def write_index(s3: S3, report: list[dict]) -> None:
+    """Rebuild INDEX.md from the audit; it is never edited in place."""
+    rows = ["| Original S3 object | Catalog copy | Label | Original upload date | Bytes | Run date | SHA-256 | Provenance |",
+            "| --- | --- | --- | --- | ---: | --- | --- | --- |"]
+    code = lambda v, prefix="": f"`{prefix}{v}`" if v else "not recorded"
     for r in report:
-        gaps = [g for g, ok in (("no provenance YAML", r["provenance"]), ("not in INDEX.md", r["in_index"]))
-                if not ok]
-        print(f"{'ok  ' if not gaps else 'GAP '} {r['s3_uri']}" + (f"  ({'; '.join(gaps)})" if gaps else ""))
-    print(f"{len(report)} databases: {sum(r['provenance'] for r in report)} with provenance YAML, "
-          f"{sum(r['in_index'] for r in report)} in INDEX.md")
-    complete = all(r["provenance"] and r["in_index"] for r in report)
-    return 0 if complete or not args.strict else 1
+        rows.append(f"| `s3://{BUCKET}/{r['key']}` | {code(r['copy'], f's3://{BUCKET}/') if r['copy'] else 'none'} "
+                    f"| {r['label'] or 'not recorded'} | {r['uploaded']} | {r['bytes']} | {r['run_date'] or 'not recorded'} "
+                    f"| {code(r['sha256'])} | {code(r['provenance'], f's3://{BUCKET}/')} |")
+    text = "\n".join([
+        "# S3 database catalog", "",
+        f"Every SQLite `.db` in `s3://{BUCKET}/` outside `database_catalog/`, rebuilt from the bucket listing and each "
+        "database's provenance YAML by `scripts/publish_db.py`. Do not edit it by hand; it is replaced on every publish. "
+        "A catalog copy's path segment `uploaded-YYYY-MM-DD` is the original object's S3 upload date, not the run date.",
+        "", f"Listed databases: {len(report)} objects, {sum(r['bytes'] for r in report):,} bytes. "
+            f"Rebuilt {utc(datetime.now(UTC))}.", "", *rows]) + "\n"
+    s3.put_text(INDEX_KEY, text)
+
+
+def cmd_audit(args, s3: S3 | None = None) -> int:
+    s3 = s3 or S3()
+    report = audit(s3)
+    shown = [r for r in report if r["key"].startswith(args.prefix)]
+    for r in shown:
+        print(f"{'GAP ' if r['gap'] else 'ok  '} s3://{BUCKET}/{r['key']}" + (f"  ({r['gap']})" if r["gap"] else ""))
+    print(f"{len(shown)} databases: {sum(not r['gap'] for r in shown)} with a published provenance YAML")
+    if args.write_index:
+        require_versioning(s3)
+        write_index(s3, report)
+        print(f"rebuilt s3://{BUCKET}/{INDEX_KEY}")
+    return 1 if args.strict and any(r["gap"] for r in shown) else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
-    f = sub.add_parser("finalize", help="checkpoint, integrity-check and hash a database")
-    f.add_argument("db", type=Path)
-    p = sub.add_parser("publish", help="upload a finalized database, update INDEX.md, upload its YAML")
+    p = sub.add_parser("publish", help="finalize a database, upload it with a generated YAML, rebuild INDEX.md")
     p.add_argument("db", type=Path)
-    p.add_argument("--s3-uri", required=True, help="new s3://bucket/key ending with the database filename")
+    p.add_argument("--s3-uri", required=True, help=f"s3://{BUCKET}/<key> ending with the database filename")
     p.add_argument("--label", required=True, help="scope label for INDEX.md, e.g. multi-treatment or source-corpus")
-    a = sub.add_parser("audit", help=f"list s3://{BUCKET} databases missing a provenance YAML or an INDEX.md row")
+    p.add_argument("--purpose", help="what the database holds (or database.purpose in a local YAML)")
+    p.add_argument("--input", action="append", help="an input snapshot, by S3 URI or data: path; repeat for each")
+    p.add_argument("--command", action="append", help="a command that built the database, in order; repeat for each")
+    p.add_argument("--supersedes", help="S3 URI of the snapshot this one corrects or reruns")
+    p.add_argument("--record-only", action="store_true",
+                   help="write a retrospective record beside a database already at --s3-uri; nothing is uploaded")
+    a = sub.add_parser("audit", help=f"list s3://{BUCKET} databases without a published provenance YAML")
     a.add_argument("--prefix", default="")
-    a.add_argument("--strict", action="store_true", help="exit 1 if any database has a gap")
+    a.add_argument("--strict", action="store_true", help="exit 1 if any listed database has a gap")
+    a.add_argument("--write-index", action="store_true", help=f"rebuild s3://{BUCKET}/{INDEX_KEY} from the listing")
     args = ap.parse_args(argv)
     try:
-        if args.command == "finalize":
-            cmd_finalize(args)
-        elif args.command == "publish":
+        if args.command == "publish":
             cmd_publish(args)
-        else:
-            return cmd_audit(args)
+            return 0
+        return cmd_audit(args)
     except PublishError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    return 0
 
 
 if __name__ == "__main__":
