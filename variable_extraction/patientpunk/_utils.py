@@ -192,6 +192,16 @@ def llm_config() -> dict:
     return cfg
 
 
+def self_reported_age(value) -> int | None:
+    """The author's age as a whole number from 10 to 99, else None.
+
+    Rejects "30s", "early twenties" and ages below 10, which in practice are
+    usually a child's age, not the author's (#85).
+    """
+    text = str(value).strip() if value is not None else ""
+    return int(text) if text.isascii() and text.isdigit() and 10 <= int(text) <= 99 else None
+
+
 # --- Response validation ------------------------------------------------------
 
 class LLMResponseError(RuntimeError):
