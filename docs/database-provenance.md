@@ -2,7 +2,7 @@
 
 Every PatientPunk/Lived Evidence database snapshot gets a `<stem>_provenance.yaml` beside it. A **snapshot** is a `.db` in the state it is handed off: read by a user, notebook, report, or another pipeline, or uploaded to S3. The runs and stages that wrote it are commands in its YAML, not separate snapshots. Databases created by tests, and scratch databases deleted before handoff, need no YAML. Other run outputs (CSV exports, notebooks, HTML reports) are out of scope here, except as outputs of an analysis record (see the end of this guide).
 
-Create the YAML with `status: running` before the first command of a run expected to produce a snapshot. Close it as `completed` once [Finalizing the database](#finalizing-the-database) passes, or as `failed` or `interrupted` with any partial outputs listed. A resumed run keeps its YAML: set `status: running` again, append the new commands, and note the interruption in `comments`. Label backfills `record_method: retrospective` and separate observed from reconstructed facts. Use UTC ISO 8601 times and explain every `null`. Never invent provenance.
+Create the YAML with `status: running` before the first command of a run expected to produce a snapshot. Close it as `completed` once its checks in [Finalizing and publishing](#finalizing-and-publishing) pass, or as `failed` or `interrupted` with any partial outputs listed. A resumed run keeps its YAML: set `status: running` again, append the new commands, and note the interruption in `comments`. Label backfills `record_method: retrospective` and separate observed from reconstructed facts. Use UTC ISO 8601 times and explain every `null`. Never invent provenance.
 
 Publishing is a separate step. Upload a database to private S3 only when the user or the task asks for it; until then `publication.status` is `local`. Once a database and its YAML are uploaded and verified, both are frozen: never overwrite either object or edit the YAML again. A correction or rerun is a new snapshot under a new key, with a YAML whose `supersedes` names the earlier one.
 
@@ -19,38 +19,33 @@ Publishing is a separate step. Upload a database to private S3 only when the use
 
 Keep credentials, signed URLs, `.env` contents, patient text, identifiers, databases, and run YAML out of Git. Store data only in private S3. Preserve existing manifests and hand off the database and provenance locations.
 
-## Finalizing the database
+## Finalizing and publishing
 
-SQLite can keep committed writes in a `<stem>.db-wal` file beside the database, so the `.db` alone may be incomplete. After the last writer exits:
+Publish only with `scripts/publish_db.py publish`. It needs S3 versioning on `s3://patientpunk`:
 
-1. Run `PRAGMA wal_checkpoint(TRUNCATE);` and close the connection.
-2. Confirm no non-empty `<stem>.db-wal` or `<stem>.db-journal` file remains.
-3. Run `PRAGMA integrity_check;` and record the result, which must be `ok`. `quick_check` is not a substitute.
-4. Hash the `.db` with SHA-256 and record its bytes, table counts, and extraction run IDs.
+```bash
+uv run python scripts/publish_db.py publish <db> --s3-uri s3://patientpunk/<prefix>/<stem>.db --label <label>     --purpose "<what the database holds>" --input "<input S3 URI or data: path>" --command "<command that built it>"
+```
 
-Do not open the database for writing after hashing; a later write makes a new snapshot.
+Repeat `--input` and `--command` for each one, in order. After the last writer exits, the script:
 
-## Publishing
+1. Runs `PRAGMA wal_checkpoint(TRUNCATE)`, confirms no non-empty `-wal` or `-journal` file remains, and runs the full `PRAGMA integrity_check`, which must be `ok`.
+2. Refuses a database with no `extraction_runs`, or with a run whose `finished_at` is null.
+3. Builds `<stem>_provenance.yaml` from the database: the commit, working-tree state, and each run's start and finish times and stored config (provider, model, reasoning mode, drug, depth, exclusions, workers), plus the SHA-256, bytes, table counts and run IDs. Sections already in a local YAML beside the database that the script does not generate, such as `processing`, `validation` and `comments`, are kept.
+4. Refuses an S3 key that already holds a different database or any provenance YAML, uploads the database with its SHA-256 in object metadata, then uploads the YAML beside it.
+5. Rebuilds `s3://patientpunk/INDEX.md`.
 
-1. Choose a new key for the database and confirm it is free: `aws s3api head-object` must report that the object does not exist. Upload the YAML later to the same prefix as `<stem>_provenance.yaml`.
-2. Upload the finalized `.db`, download it again, and compare SHA-256 values. An S3 ETag is not a SHA-256.
-3. Update the catalog as described below.
-4. Fill the `publication` fields, upload the YAML, download it again, and compare SHA-256 values.
+If it stops after the upload, run the same command again: a database already at the key with the same SHA-256 is treated as this publish's, and the script finishes it. Do not open the database for writing after publishing; a later write makes a new snapshot.
+
+For a database already in S3 with no record, `publish <local copy> --s3-uri <existing URI> --label <label> --purpose "..." --record-only` writes a retrospective YAML beside it without uploading. The local copy must match the object's size (and its SHA-256, if the object has one in its metadata).
 
 ### Catalog
 
-`s3://patientpunk/INDEX.md` lists every published database. Several agents can update it at the same time, so change it only with a conditional write:
-
-1. Run `aws s3api get-object --bucket patientpunk --key INDEX.md INDEX.md` and note the `ETag` it prints.
-2. Add one row: original S3 URI, catalog-copy URI or `none`, scope label, run date, upload date, bytes, SHA-256, and YAML URI. Update the object and byte totals and the UTC timestamp in the header. If the table lacks a run date, SHA-256, or YAML column, add it and fill older rows with `not recorded`.
-3. Run `aws s3api put-object --bucket patientpunk --key INDEX.md --body INDEX.md --if-match <ETag>`. If S3 answers `PreconditionFailed`, someone else changed the index first: start again from step 1.
-4. Download the index again, confirm the row, and record the time in `publication.catalog_verified_utc`.
-
-If `INDEX.md` does not exist, build it from a fresh `aws s3 ls s3://patientpunk/ --recursive` inventory and write it with `--if-none-match "*"`. A catalog copy is a second copy of the database under `s3://patientpunk/database_catalog/by-upload-date/uploaded-<YYYY-MM-DD>/<label>/<original key>`, for browsing by upload date and scope; make one only when asked.
+`s3://patientpunk/INDEX.md` lists every `.db` in the bucket outside `database_catalog/`. It is rebuilt from the bucket listing and each database's YAML, never edited by hand: on every publish, or with `uv run python scripts/publish_db.py audit --write-index`. A row's label comes from its YAML or its catalog copy's path, and a database whose successor's YAML names it under `database.supersedes` is marked superseded. `audit [--prefix <prefix>] [--strict]` lists each database and whether it has a published provenance YAML. A catalog copy is a second copy of the database under `s3://patientpunk/database_catalog/by-upload-date/uploaded-<YYYY-MM-DD>/<label>/<original key>`, for browsing by upload date and scope; make one only when asked. `publish_db.py` does not make catalog copies.
 
 ## YAML shape
 
-Use observed values; explain `null` fields and add workflow-specific fields as needed.
+Use observed values; explain `null` fields and add workflow-specific fields as needed. `publish_db.py` generates `database`, `code`, `extraction_runs`, `output` and `publication` from the database when it publishes, keeps the other sections, and drops YAML `#` comments, so put explanations in values or `comments`. Quote values that end in a colon, such as `'repo:'`.
 
 ```yaml
 schema_version: 1
