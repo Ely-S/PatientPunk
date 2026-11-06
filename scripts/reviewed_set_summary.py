@@ -83,8 +83,6 @@ def report(data: dict, label: str) -> str:
            f"| Authors stating a route | {sum(1 for v in authors.values() if v['routes'])} |", ""]
     by_category = collections.Counter()
     for a in adverse:
-        for category, _symptom in {(c, s) for c, s in authors[a]["adverse"]}:
-            by_category[category] += 0
         for category in {c for c, _ in authors[a]["adverse"]}:
             by_category[category] += 1
     out += ["## Side-effect categories (authors)", "", "| Category | Authors |", "|---|---:|"]
