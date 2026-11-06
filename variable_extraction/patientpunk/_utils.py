@@ -207,6 +207,10 @@ class LLMTruncationError(LLMResponseError):
     """A response ended because it reached the output-token limit."""
 
 
+class LLMContentFilteredError(LLMResponseError):
+    """The provider's content filter blocked the reply to this prompt"""
+
+
 def response_text(response) -> str:
     """Concatenate text content blocks; skip thinking/tool blocks without ``.text``.
 
