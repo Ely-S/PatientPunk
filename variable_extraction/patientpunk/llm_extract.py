@@ -720,6 +720,28 @@ def _process_batch(
     return output
 
 
+NO_MODEL_STAMP = "(no _model stamp)"
+
+
+def checkpoint_models_other_than(records: list[dict], model: str) -> Counter:
+    """Count checkpoint records whose ``_model`` is not ``model``, by model.
+
+    A resumed run keeps every record it loads, so a checkpoint made by another
+    model puts that model's records in an output whose llm_provenance.json
+    names only the current one (#82). A record with no ``_model`` counts under
+    ``NO_MODEL_STAMP``, since its model can't be checked.
+    """
+    return Counter(
+        rec.get("_model") or NO_MODEL_STAMP
+        for rec in records
+        if rec.get("_model") != model
+    )
+
+
+def _format_models(counts: Counter) -> str:
+    return ", ".join(f"{name} ({n})" for name, n in counts.most_common())
+
+
 def process_corpus(
     client: anthropic.Anthropic,
     input_dir: Path,
@@ -745,6 +767,7 @@ def process_corpus(
     # Resume: load existing records and build a set of already-done keys
     records = []
     done_keys: set[tuple] = set()
+    other_models: Counter = Counter()
     with _dropped_lock:
         _dropped_fields.clear()
 
@@ -755,6 +778,15 @@ def process_corpus(
             meta = rec.get("record_meta", {})
             done_keys.add((meta.get("author_hash"), meta.get("post_id")))
         print(f"  Resuming - {len(records)} records already done, {len(done_keys)} keys loaded.\n")
+        other_models = checkpoint_models_other_than(records, MODEL)
+        if other_models:
+            print(f"  ! Model mismatch: this run calls {MODEL}, but "
+                  f"{sum(other_models.values())} of the {len(records)} records in "
+                  f"{records_file.name} came from: {_format_models(other_models)}.\n"
+                  f"    Resuming keeps them, so the output will hold records from "
+                  f"a model llm_provenance.json doesn't name.\n"
+                  f"    To keep one model, rerun without --resume, or resume with "
+                  f"the model that made the checkpoint.\n")
 
     work_items = []
     if users_dir.exists():
@@ -874,6 +906,10 @@ def process_corpus(
     save_incremental()
 
     print(f"\n  Total: {already_done} resumed + {completed} new, {skipped} skipped, {failed} failed")
+    if other_models:
+        # Repeated here because the warning at resume time has long scrolled away.
+        print(f"  ! Model mismatch: {sum(other_models.values())} resumed record(s) "
+              f"did not come from {MODEL}: {_format_models(other_models)}")
     if failed_records:
         by_reason = Counter(reason for _, reason in failed_records)
         print("  Failed reasons: "
