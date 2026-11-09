@@ -40,6 +40,8 @@ If it stops after the upload, run the same command again: a database already at 
 
 For a database already in S3 with no record, `publish <local copy> --s3-uri <existing URI> --label <label> --purpose "..." --record-only` writes a retrospective YAML beside it without uploading; `--input` and `--command` are optional there, since an old database's may be unknown. The local copy must match the object's size (and its SHA-256, if the object has one in its metadata).
 
+A hook for Claude Code and Codex (`scripts/hooks/block_direct_db_upload.py`, registered in `.claude/settings.json` and `.codex/hooks.json`) blocks a shell command that uploads to S3 when any word on its line ends in `.db`, or when it uploads a folder (`sync`, `--recursive`) without `--exclude "*.db"`. It reads only the command's words, and downloads pass. With versioning on, an upload it misses is unrecorded rather than destructive, and `audit` lists it.
+
 ### Catalog
 
 `s3://patientpunk/INDEX.md` lists every `.db` in the bucket outside `database_catalog/`. It is rebuilt from the bucket listing and each database's YAML, never edited by hand: on every publish, or with `uv run python scripts/publish_db.py audit --write-index`. A row's label comes from its YAML or its catalog copy's path, and a database whose successor's YAML names it under `database.supersedes` is marked superseded. `audit [--prefix <prefix>] [--strict]` lists each database and whether it has a published provenance YAML. A catalog copy is a second copy of the database under `s3://patientpunk/database_catalog/by-upload-date/uploaded-<YYYY-MM-DD>/<label>/<original key>`, for browsing by upload date and scope; make one only when asked. `publish_db.py` does not make catalog copies.

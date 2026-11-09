@@ -1,172 +1,41 @@
 """PreToolUse hook for Claude Code and Codex: stop shell commands that upload a SQLite database to S3.
 
-Databases are published only with scripts/publish_db.py, which checks the provenance
-YAML, verifies the upload by hash and updates s3://patientpunk/INDEX.md (see
-docs/database-provenance.md). Downloads and uploads of other files pass through. For a
-folder upload (sync, or cp/mv --recursive) from a local folder, the hook looks inside the
-folder and blocks only if a .db file would be uploaded after the command's --exclude and
---include filters. When it cannot look (an S3 source, a path with a shell variable, or a
-very large folder), it blocks unless the filters keep every .db out.
+Databases are published only with scripts/publish_db.py, which builds the provenance YAML and
+rebuilds s3://patientpunk/INDEX.md (see docs/database-provenance.md). The hook reads the command's
+words only; it never looks at files or folders. When the command line uploads to S3, it blocks if:
 
-Registered in .claude/settings.json and .codex/hooks.json. Both tools send the hook event as
-JSON on stdin with the command at tool_input.command; exit code 2 blocks the command and
-shows the message on stderr to the agent. Standard library only, so it runs without the project
-environment.
+- any word ends in .db (a file, a key, or a pattern such as --include "*.db"), anywhere on the
+  line, so `cat x.db | aws s3 cp - s3://...` is caught too; or
+- it uploads a folder (sync, --recursive, or Write-S3Object -Folder) without --exclude "*.db".
+
+A command is an upload when it uses cp, mv or sync with an s3:// URI and is not a download, or when
+it is an s3api put/copy call or Write-S3Object. A download has one s3:// URI, as the first word after
+cp, mv or sync that is not an option or a filter pattern; anything else, including a copy between two
+s3:// URIs, counts as an upload, so an option value before a download's source blocks it. With S3
+versioning on, a missed upload is unrecorded rather than destructive, and `publish_db.py audit` lists
+it.
+
+Registered in .claude/settings.json and .codex/hooks.json. Both tools send the hook event as JSON on
+stdin with the command at tool_input.command; exit code 2 blocks the command and shows the message
+on stderr to the agent. Standard library only, so it runs without the project environment.
 """
 import fnmatch
 import json
-import os
 import re
 import shlex
 import sys
-from pathlib import Path
 
 MESSAGE = (
     "Blocked: this command would upload a SQLite database to S3 directly. Publish databases with "
-    "`uv run python scripts/publish_db.py publish <db> --s3-uri s3://<bucket>/<key>.db --label <label>`, "
-    "which checks the provenance YAML, verifies the upload and updates s3://patientpunk/INDEX.md "
-    "(docs/database-provenance.md). To upload the rest of a folder that holds a database, add "
-    "--exclude \"*.db\". Downloads and other files are not blocked."
+    "`uv run python scripts/publish_db.py publish <db> --s3-uri s3://patientpunk/<key>.db --label <label> "
+    "--purpose \"<what it holds>\" --input <input> --command \"<command that built it>\"`, which builds the "
+    "provenance YAML and rebuilds s3://patientpunk/INDEX.md (docs/database-provenance.md). To upload the "
+    "rest of a folder, add --exclude \"*.db\". Downloads are not blocked."
 )
-WALK_LIMIT = 200_000  # files to look at before falling back to the cautious rule
-CD_COMMANDS = {"cd", "pushd", "set-location", "push-location", "sl"}
-# AWS CLI options that take a value, so the value is not mistaken for a path.
-VALUE_OPTIONS = {
-    "--acl", "--cache-control", "--content-disposition", "--content-encoding", "--content-language",
-    "--content-type", "--endpoint-url", "--exclude", "--expires", "--grants", "--include", "--metadata",
-    "--metadata-directive", "--profile", "--region", "--sse", "--sse-c", "--sse-c-key", "--sse-kms-key-id",
-    "--storage-class", "--website-redirect", "--expected-size", "--checksum-algorithm", "--source-region",
-    "--output", "--query", "--color", "--cli-read-timeout", "--cli-connect-timeout", "--page-size",
-    "--ca-bundle", "--cli-binary-format",
-}
+UPLOAD_VERBS = {"cp", "mv", "sync"}
+API_UPLOADS = {"put-object", "copy-object", "create-multipart-upload", "upload-part", "upload-part-copy"}
 SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n]")
 LINE_CONTINUATION = re.compile(r"[\\`]\r?\n")  # bash backslash, PowerShell backtick
-
-
-def is_aws(token: str) -> bool:
-    return token.lower().replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe") == "aws"
-
-
-def is_db(path: str) -> bool:
-    return path.lower().rstrip("/\\").endswith(".db")
-
-
-def option_values(tokens: list[str], name: str) -> list[str]:
-    values = []
-    for i, tok in enumerate(tokens):
-        if tok == name and i + 1 < len(tokens):
-            values.append(tokens[i + 1])
-        elif tok.startswith(name + "="):
-            values.append(tok.split("=", 1)[1])
-    return values
-
-
-def positionals(tokens: list[str]) -> list[str]:
-    out, skip = [], False
-    for tok in tokens:
-        if skip:
-            skip = False
-        elif tok.startswith("-"):
-            skip = tok in VALUE_OPTIONS
-        else:
-            out.append(tok)
-    return out
-
-
-def directory_upload_may_include_db(tokens: list[str]) -> bool:
-    """The cautious rule, used when the folder cannot be inspected.
-
-    Filters apply in order and later ones win, as in uploaded(). An exclude that matches every
-    .db closes the door; an include that could match some .db (one ending in .db or a wildcard,
-    such as reports/*) opens it again.
-    """
-    may = True
-    for kind, pattern in filters(tokens):
-        if kind == "--exclude" and fnmatch.fnmatch("x.db", pattern) and fnmatch.fnmatch("any/dir/x.db", pattern):
-            may = False
-        elif kind == "--include" and (pattern.lower().endswith(".db") or pattern[-1:] in ("*", "?", "]")):
-            may = True
-    return may
-
-
-def filters(tokens: list[str]) -> list[tuple[str, str]]:
-    """--exclude and --include patterns in command order, as the AWS CLI applies them."""
-    rules = []
-    for i, tok in enumerate(tokens):
-        for kind in ("--exclude", "--include"):
-            if tok == kind and i + 1 < len(tokens):
-                rules.append((kind, tokens[i + 1].strip("'\"")))
-            elif tok.startswith(kind + "="):
-                rules.append((kind, tok.split("=", 1)[1].strip("'\"")))
-    return rules
-
-
-def uploaded(relpath: str, rules: list[tuple[str, str]]) -> bool:
-    """Whether the AWS CLI would upload a file at this path relative to the source folder.
-
-    Every file starts included; each matching filter in order decides, so later ones win.
-    The CLI uses fnmatch, where * also matches path separators.
-    """
-    keep = True
-    for kind, pattern in rules:
-        if fnmatch.fnmatch(relpath, pattern):
-            keep = kind == "--include"
-    return keep
-
-
-def folder_uploads_db(folder: Path, rules: list[tuple[str, str]]) -> bool | None:
-    """Whether any .db in the folder survives the filters; None if the folder is too large to check."""
-    seen = 0
-    for root, _, files in os.walk(folder):
-        for name in files:
-            seen += 1
-            if seen > WALK_LIMIT:
-                return None
-            if is_db(name) and uploaded(os.path.relpath(os.path.join(root, name), folder), rules):
-                return True
-    return False
-
-
-def folder_upload_blocked(source: str, tokens: list[str], cwd: Path | None) -> bool:
-    """cwd is None after a cd to a shell variable, when relative paths cannot be resolved."""
-    path = Path(os.path.expanduser(source))
-    if (source.startswith("s3://") or "$" in source or "%" in source
-            or (cwd is None and not path.is_absolute())):
-        return directory_upload_may_include_db(tokens)  # cannot look inside
-    path = path if path.is_absolute() else cwd / path
-    if path.is_file():
-        return is_db(source)
-    if not path.is_dir():
-        return False  # nothing there; the AWS CLI fails on its own
-    found = folder_uploads_db(path, filters(tokens))
-    return directory_upload_may_include_db(tokens) if found is None else found
-
-
-def blocks(tokens: list[str], cwd: Path | None) -> bool:
-    """True if this one simple command uploads or copies a .db into S3."""
-    if any(t.lower() == "write-s3object" for t in tokens):  # AWS Tools for PowerShell
-        folder = next((tokens[i + 1] for i, t in enumerate(tokens[:-1]) if t.lower() == "-folder"), None)
-        if folder is not None:
-            return folder_upload_blocked(folder, [], cwd)  # no include/exclude filters: every file goes
-        return any(is_db(t) for t in tokens)
-    i = next((i for i, t in enumerate(tokens) if is_aws(t)), None)
-    if i is None:
-        return False
-    rest = positionals(tokens[i + 1:])
-    if len(rest) < 2:
-        return False
-    service, action, args = rest[0].lower(), rest[1].lower(), rest[2:]
-    if service == "s3" and action in ("cp", "mv", "sync"):
-        if len(args) < 2 or not args[1].startswith("s3://") or "--dryrun" in tokens:
-            return False  # a download, a listing, or a dry run that uploads nothing
-        source, dest = args[0], args[1]
-        if "--recursive" in tokens or action == "sync":
-            return folder_upload_blocked(source, tokens, cwd)
-        return is_db(source) or is_db(dest)
-    if service == "s3api" and action in ("put-object", "copy-object", "create-multipart-upload", "upload-part"):
-        values = sum((option_values(tokens, o) for o in ("--key", "--body", "--copy-source")), [])
-        return any(is_db(v.split("?", 1)[0]) for v in values)  # a copy source may end in ?versionId=
-    return False
 
 
 def split(segment: str) -> list[str]:
@@ -181,25 +50,58 @@ def split(segment: str) -> list[str]:
         return segment.split()
 
 
-def command_blocked(command: str, cwd: str | Path | None = None) -> bool:
-    """True if any simple command in this shell command line uploads a .db to S3.
+def option_values(words: list[str], name: str) -> list[str]:
+    """Values of --name value and --name=value, in order."""
+    values = []
+    for i, word in enumerate(words):
+        if word.lower() == name and i + 1 < len(words):
+            values.append(words[i + 1])
+        elif word.lower().startswith(name + "="):
+            values.append(word.split("=", 1)[1])
+    return values
 
-    Relative paths resolve against cwd, following any cd earlier in the same line.
-    """
-    here: Path | None = Path(cwd) if cwd else Path.cwd()
-    for segment in SEGMENT_SPLIT.split(LINE_CONTINUATION.sub(" ", command)):
-        tokens = split(segment)
-        if not tokens:
-            continue
-        if tokens[0].lower() in CD_COMMANDS and len(tokens) >= 2:
-            target = Path(os.path.expanduser(tokens[-1]))
-            if "$" in tokens[-1] or "%" in tokens[-1]:
-                here = None  # a shell variable: the directory is unknown from here on
-            elif target.is_absolute():
-                here = target
-            elif here is not None:
-                here = here / target
-        elif blocks(tokens, here):
+
+def is_upload(words: list[str]) -> bool:
+    """An upload or S3-to-S3 copy. Only a download, whose one s3:// URI is its source, is not."""
+    lower = [w.lower() for w in words]
+    if "write-s3object" in lower or ("s3api" in lower and API_UPLOADS & set(lower)):
+        return True
+    if not UPLOAD_VERBS & set(lower):
+        return False
+    uris = [w for w in lower if w.startswith("s3://")]
+    if len(uris) != 1:
+        return len(uris) > 1
+    filter_values = {v.lower() for v in option_values(words, "--exclude") + option_values(words, "--include")}
+    verb = next(i for i, w in enumerate(lower) if w in UPLOAD_VERBS)
+    # Every other word after the verb counts, "-" (stdin or stdout) included. An unknown option's
+    # value can only make a download look like an upload: a false block, never a missed upload.
+    paths = [w for w in lower[verb + 1:] if w == "-" or (not w.startswith("-") and w not in filter_values)]
+    return not paths or paths[0] != uris[0]
+
+
+def excludes_databases(words: list[str]) -> bool:
+    """--exclude covers every .db, and no --include lets one back in."""
+    def matches_db(pattern: str) -> bool:
+        return fnmatch.fnmatch("any/dir/x.db", pattern.strip("'\""))
+    return (any(matches_db(p) for p in option_values(words, "--exclude"))
+            and not any(matches_db(p) for p in option_values(words, "--include")))
+
+
+def command_blocked(command: str) -> bool:
+    """True if this shell command line uploads a .db to S3."""
+    segments = [split(s) for s in SEGMENT_SPLIT.split(LINE_CONTINUATION.sub(" ", command))]
+    uploads = [words for words in segments if words and is_upload(words)]
+    if not uploads:
+        return False
+    excluded = {v for words in uploads for v in option_values(words, "--exclude")}
+    if any(w.lower().split("?", 1)[0].rstrip("/\\").endswith(".db")  # a copy source may end in ?versionId=
+           and w not in excluded and not w.lower().startswith("--exclude=")
+           for words in segments for w in words):
+        return True
+    for words in uploads:
+        lower = [w.lower() for w in words]
+        folder = "sync" in lower or "--recursive" in lower or "-folder" in lower
+        if folder and not excludes_databases(words):
             return True
     return False
 
@@ -211,8 +113,8 @@ def main() -> int:
         return 0
     if not isinstance(event, dict) or not isinstance(event.get("tool_input"), dict):
         return 0  # not a shell tool event
-    command, cwd = event["tool_input"].get("command"), event.get("cwd")
-    if isinstance(command, str) and command_blocked(command, cwd if isinstance(cwd, str) else None):
+    command = event["tool_input"].get("command")
+    if isinstance(command, str) and command_blocked(command):
         print(MESSAGE, file=sys.stderr)
         return 2
     return 0
