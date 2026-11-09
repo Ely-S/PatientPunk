@@ -3044,6 +3044,85 @@ class TestLimitResumeInteraction:
         assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1"}
 
 
+class TestResumeModelCheck:
+    """--resume says when the checkpoint came from another model (#82).
+
+    Resumed records keep their own ``_model``, so resuming with a different
+    model gives one output file two models' extractions while
+    llm_provenance.json names only the current one. The run goes ahead, but
+    says so when the checkpoint loads and again in the closing summary.
+    """
+
+    @staticmethod
+    def _resume(tmp_path, monkeypatch, checkpoint_models, *, resume=True):
+        """Run process_corpus over 3 posts, with p0.. already checkpointed."""
+        import patientpunk.llm_extract as m
+
+        input_dir = TestLimitResumeInteraction._corpus(tmp_path, 3)
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        done = []
+        for i, model in enumerate(checkpoint_models):
+            rec = {"record_meta": {"author_hash": f"a{i}", "post_id": f"p{i}"},
+                   "fields": {"age": ["34"]}}
+            if model is not None:
+                rec["_model"] = model
+            done.append(rec)
+        (temp_dir / "llm_records_base.json").write_text(
+            json.dumps(done), encoding="utf-8")
+
+        monkeypatch.setattr(m, "MODEL", "model-now")
+        monkeypatch.setattr(
+            m, "call_haiku",
+            lambda *a, **kw: '{"fields": {"age": ["34"]}, "suggested_fields": []}',
+        )
+        return m.process_corpus(
+            client=None, input_dir=input_dir, temp_dir=temp_dir,
+            field_descriptions={"age": "Patient age"}, schema=None,
+            workers=1, resume=resume,
+        )
+
+    def test_counts_other_models_and_unstamped_records(self):
+        from patientpunk.llm_extract import NO_MODEL_STAMP, checkpoint_models_other_than
+
+        records = [{"_model": "a"}, {"_model": "b"}, {"_model": "b"}, {}, {"_model": None}]
+        assert checkpoint_models_other_than(records, "a") == {"b": 2, NO_MODEL_STAMP: 2}
+        assert checkpoint_models_other_than([{"_model": "a"}], "a") == {}
+        assert checkpoint_models_other_than([], "a") == {}
+
+    def test_warns_on_load_and_in_summary_when_models_differ(
+            self, tmp_path, monkeypatch, capsys):
+        records = self._resume(tmp_path, monkeypatch, ["model-before", "model-before"])
+        out = capsys.readouterr().out
+
+        assert ("! Model mismatch: this run calls model-now, but 2 of the 2 records "
+                "in llm_records_base.json came from: model-before (2).") in out
+        assert ("! Model mismatch: 2 resumed record(s) did not come from model-now: "
+                "model-before (2)") in out
+        # The warning is the whole change: the run still resumes and keeps both.
+        by_post = {r["record_meta"]["post_id"]: r.get("_model") for r in records}
+        assert by_post == {"p0": "model-before", "p1": "model-before", "p2": "model-now"}
+
+    def test_names_each_model_and_unstamped_records(self, tmp_path, monkeypatch, capsys):
+        self._resume(tmp_path, monkeypatch, ["model-now", "model-before", None])
+        out = capsys.readouterr().out
+
+        assert ("2 of the 3 records in llm_records_base.json came from: "
+                "model-before (1), (no _model stamp) (1).") in out
+
+    def test_silent_when_checkpoint_matches(self, tmp_path, monkeypatch, capsys):
+        self._resume(tmp_path, monkeypatch, ["model-now", "model-now"])
+
+        assert "Model mismatch" not in capsys.readouterr().out
+
+    def test_silent_without_resume(self, tmp_path, monkeypatch, capsys):
+        # Without --resume the checkpoint isn't loaded, so nothing can mix.
+        records = self._resume(tmp_path, monkeypatch, ["model-before"], resume=False)
+
+        assert "Model mismatch" not in capsys.readouterr().out
+        assert {r["_model"] for r in records} == {"model-now"}
+
+
 class TestRunExportCsv:
     def test_writes_csv(self, tmp_path):
         rec = {
