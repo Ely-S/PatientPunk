@@ -84,6 +84,16 @@ def run_pipeline(config: PipelineConfig, *, skip_extract: bool = False, skip_can
     log.info(f"{'═' * 60}\n")
 
 
+def _upstream_depth(value: str) -> int | None:
+    """CLI value for --max-upstream-depth: a non-negative int, or 'unlimited' for no cap (None)."""
+    if value.strip().lower() in ("unlimited", "none", "inf"):
+        return None
+    depth = int(value)
+    if depth < 0:
+        raise argparse.ArgumentTypeError("max upstream depth must be non-negative or 'unlimited'")
+    return depth
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run drug mention database pipeline")
     parser.add_argument("--db", required=True, help="Path to SQLite database (must have posts imported)")
@@ -94,7 +104,7 @@ def main():
     parser.add_argument("--skip-canonicalize", action="store_true", help="Skip canonicalization step")
     parser.add_argument("--skip-prefilter", action="store_true", help="Skip the fast-model prefilter; send all pairs to the strong model")
     parser.add_argument("--max-upstream-chars", type=int, default=None, help="Truncate upstream comment text to N chars (default: unlimited)")
-    parser.add_argument("--max-upstream-depth", type=int, default=None, help="Max upstream hops for drug context (default: unlimited)")
+    parser.add_argument("--max-upstream-depth", type=_upstream_depth, default=1, help="How many reply hops inherit the drug from a parent that names it: 0 = only posts that name it, 1 = also their direct replies (default), or 'unlimited'. Parent text is shown regardless; see --max-upstream-chars.")
     drug_group = parser.add_mutually_exclusive_group()
     drug_group.add_argument("--drug", type=str, default=None, help="Restrict canonicalize + classify to a single target drug and its synonyms. Extract still runs on full corpus.")
     drug_group.add_argument("--drug-file", type=str, default=None, help="Text file of drug + aliases, one per line, first line canonical. Skips the LLM alias lookup.")
