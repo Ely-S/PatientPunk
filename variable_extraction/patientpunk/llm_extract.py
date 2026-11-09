@@ -98,12 +98,22 @@ def _record_dropped_fields(names: list[str]) -> None:
 # Haiku's hard output ceiling is 8192; use it.
 # Override via LLM_MAX_TOKENS for local models (e.g. 1024) so generation
 # cannot burn the full budget when the model fails to stop early.
-MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
+def _positive_int_env(name: str, default: int) -> int:
+    """An environment override that must be a positive whole number, or the default."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    if not (raw.isascii() and raw.isdigit()) or int(raw) <= 0:  # isdigit alone accepts '²'
+        raise ValueError(f"{name} must be a positive whole number, got {raw!r}")
+    return int(raw)
+
+
+MAX_TOKENS = _positive_int_env("LLM_MAX_TOKENS", 8192)
 # A maxed input must leave room for its response inside MAX_TOKENS. At 30_000 a
 # single record's reply overran 8192 output tokens and got truncated mid-JSON.
-# The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
-# comfortable margin.
-MAX_TEXT_CHARS = 8_000
+# Extraction only: discover.py keeps its own 10_000-character cap. Each record
+# stores the values it was made with (_max_text_chars, _max_tokens).
+MAX_TEXT_CHARS = _positive_int_env("LLM_MAX_TEXT_CHARS", 8000)
 RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
@@ -483,6 +493,8 @@ def build_llm_record(
         "_extraction_method": "llm",
         "_model": MODEL,
         "_schema_id": schema_id,
+        "_max_text_chars": MAX_TEXT_CHARS,
+        "_max_tokens": MAX_TOKENS,
         "_extracted_at": datetime.now(timezone.utc).isoformat(),
         "record_meta": {
             "author_hash": author_hash,
