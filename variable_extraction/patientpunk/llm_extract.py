@@ -340,6 +340,12 @@ VALUE FORMAT RULES:
 - Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
+- age:
+  1. Extract only the author's own current age, as a whole number.
+  2. If the author gives different ages over time, use the most recent.
+  3. Do not extract a past age or anyone else's age: a child, partner, parent, or someone in the news. If the author states no current age of their own, return null.
+  Positive examples: "I'm 26" -> "26"; "I (33F)" -> "33"; "I'm 35" in an earlier post and "I just turned 36" in a later one -> "36".
+  Negative examples: "My wife is 36" -> null; "my 11yo son" -> null; "bitten when I was 8" -> null.
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Symptoms belong in the six symptom-domain fields described below, never here.
 - misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.

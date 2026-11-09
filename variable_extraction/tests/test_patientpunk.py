@@ -2419,6 +2419,39 @@ class TestLLMExtractNormalizeRecords:
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
 
 
+class TestSelfReportedAge:
+    """The age rule on #85's examples, with its bounds pinned.
+
+    The floor has already moved once, from 16 to 10, after a manual check
+    found a 14- and a 15-year-old stating their own ages.
+    """
+
+    @pytest.mark.parametrize(("value", "expected"), [
+        # The author's age, in the forms the model returns it.
+        ("34", 34), (34, 34), (" 42 ", 42),
+        # Bounds: 10 and 99 kept, 9 and 100 dropped.
+        ("10", 10), ("99", 99), ("9", None), ("100", None),
+        # 10 to 15 are kept. A third party's 12 (#85's news headline) is the prompt's job.
+        ("12", 12), ("15", 15),
+        # #85: "6" from the author's six-year-old son, "8" from a child.
+        ("6", None), ("8", None),
+        # #85: approximate ages are dropped, not guessed.
+        ("30s", None), ("mid-30s", None), ("early twenties", None), ("almost 30", None),
+        # Not a whole number in ASCII digits, or nothing at all.
+        ("34.5", None), ("-20", None), ("٣٤", None), (None, None), ("", None),
+    ])
+    def test_issue_85_examples(self, value, expected):
+        from patientpunk._utils import self_reported_age
+        assert self_reported_age(value) == expected
+
+    def test_normalize_keeps_valid_ages_and_clears_confidence_when_none_left(self):
+        from patientpunk.llm_extract import normalize_records
+        recs = [{"fields": {"age": ["30s", "34"]}}, {"fields": {"age": ["6"]}}]
+        normalize_records(recs, {"age": "medium"})
+        assert [(r["fields"]["age"]["values"], r["fields"]["age"]["confidence"]) for r in recs] \
+            == [(["34"], "medium"), ([], None)]
+
+
 class TestExtensionFieldCodingRules:
     """Each COVID extension field declares a value format: infection_count a
     bare integer, long_covid_duration_months a count of months, and
