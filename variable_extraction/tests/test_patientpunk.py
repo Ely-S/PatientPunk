@@ -961,6 +961,64 @@ class TestQualitativeStandards:
         assert "FREQUENCY THRESHOLD" in prompt_both
 
 
+def _deductive_demographic_prompts() -> dict[str, str]:
+    """Every prompt that asks for the author's age as a demographic field."""
+    from patientpunk.demographics import build_system_prompt
+    from patientpunk.demographics_deductive import SYSTEM_PROMPT
+    return {
+        "demographics_deductive.SYSTEM_PROMPT": SYSTEM_PROMPT,
+        "demographics deductive": build_system_prompt("deductive"),
+        "demographics both": build_system_prompt("both"),
+    }
+
+
+class TestDemographicAgeRules:
+    """The demographics prompts take age the way the extraction prompt does (#184).
+
+    Each rule is checked in the rendered prompt, so a lost f-string
+    substitution or a reworded rule fails here.
+    """
+
+    @pytest.mark.parametrize("name", list(_deductive_demographic_prompts()))
+    def test_prompt_carries_the_age_rules(self, name):
+        prompt = " ".join(_deductive_demographic_prompts()[name].split())
+        for rule in [
+            "Extract only the author's own current age, as a whole number.",
+            "If the author gives different ages over time, use the most recent.",
+            "A user history lists posts oldest first, so a later post is more recent.",
+            'Do not extract a past age ("when I was 8" is not their age)',
+            "a child, partner, parent, or someone in the news.",
+            "If the author states no current age of their own, return null.",
+            '"I\'m 26" -> 26; "I (33F)" -> 33;',
+            '"I\'m 35" in an earlier post and "I just turned 36" in a later one -> 36.',
+            '"My wife is 36" -> null; "my 11yo son" -> null; "bitten when I was 8" -> null.',
+        ]:
+            assert rule in prompt, f"{name} is missing: {rule!r}"
+
+    @pytest.mark.parametrize("name", list(_deductive_demographic_prompts()))
+    def test_most_explicit_tie_break_is_only_for_sex_and_location(self, name):
+        prompt = " ".join(_deductive_demographic_prompts()[name].split())
+        assert "for sex/gender and location, use the most explicit" in prompt.lower()
+        assert "For age, use the most recent" in prompt
+        # The old rule applied "most explicit/consistent" to every field.
+        assert "demographics. Use the most explicit" not in prompt
+        assert "posts: use the most explicit" not in prompt
+        assert "histories: use the most explicit" not in prompt
+
+    @pytest.mark.parametrize("name", list(_deductive_demographic_prompts()))
+    def test_json_template_renders_with_single_braces(self, name):
+        prompt = _deductive_demographic_prompts()[name]
+        assert '{\n  "age": <integer or null>,' in prompt
+        assert "{{" not in prompt and "}}" not in prompt
+        assert "{DEMOGRAPHIC_AGE_RULES}" not in prompt
+
+    def test_inductive_prompt_has_no_age_rules(self):
+        from patientpunk.demographics import build_system_prompt
+        prompt = build_system_prompt("inductive")
+        assert "Do NOT extract age" in prompt
+        assert "Age rules:" not in prompt
+
+
 # =============================================================================
 # demographics -- codebook aggregation
 # =============================================================================

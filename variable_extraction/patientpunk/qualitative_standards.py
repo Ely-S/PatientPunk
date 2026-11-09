@@ -196,6 +196,28 @@ epidemiological and social-science research.  Apply these rules strictly:
 
 
 # ---------------------------------------------------------------------------
+# DEMOGRAPHIC AGE RULES
+# Injected into the deductive demographics prompts (demographics.py and
+# demographics_deductive.py).  Mirrors the age rules in llm_extract's
+# extraction prompt, with integer examples to match these prompts' JSON.
+# ---------------------------------------------------------------------------
+
+DEMOGRAPHIC_AGE_RULES: str = """
+Age rules:
+1. Extract only the author's own current age, as a whole number.
+2. If the author gives different ages over time, use the most recent. A user
+   history lists posts oldest first, so a later post is more recent.
+3. Do not extract a past age ("when I was 8" is not their age) or anyone
+   else's age: a child, partner, parent, or someone in the news. If the
+   author states no current age of their own, return null.
+Positive examples: "I'm 26" -> 26; "I (33F)" -> 33; "I'm 35" in an earlier
+  post and "I just turned 36" in a later one -> 36.
+Negative examples: "My wife is 36" -> null; "my 11yo son" -> null;
+  "bitten when I was 8" -> null.
+""".strip()
+
+
+# ---------------------------------------------------------------------------
 # INDUCTIVE DEMOGRAPHIC STANDARDS
 # Injected when the model is discovering NEW demographic categories from
 # patient text (inductive coding mode).

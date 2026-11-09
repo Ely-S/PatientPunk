@@ -44,7 +44,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from .qualitative_standards import DEMOGRAPHIC_STANDARDS
+from .qualitative_standards import DEMOGRAPHIC_AGE_RULES, DEMOGRAPHIC_STANDARDS
 from ._utils import (
     LLM_PROVIDER,
     LLMResponseError,
@@ -88,8 +88,11 @@ Rules:
 - If the author explicitly writes "I'm 25M" or "I am a 34-year-old woman" or
   "I live in California" - capture that.
 - For user histories across multiple posts: the author often repeats their
-  demographics. Use the most explicit and consistent statement.
+  demographics. For sex/gender and location, use the most explicit and
+  consistent statement. For age, use the most recent (see the age rules below).
 - Return null for any field you cannot find with reasonable confidence.
+
+{DEMOGRAPHIC_AGE_RULES}
 
 Respond with ONLY valid JSON - no explanation, no markdown fences:
 {{

@@ -53,6 +53,7 @@ from pathlib import Path
 import anthropic
 
 from .qualitative_standards import (
+    DEMOGRAPHIC_AGE_RULES,
     DEMOGRAPHIC_STANDARDS,
     INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
@@ -95,8 +96,12 @@ Rules:
 - Extract ONLY what the author states about THEMSELVES.
 - Ignore all mentions of other people.
 - Do not guess or infer from indirect clues.
-- For user histories across multiple posts: use the most explicit, consistent statement.
+- For user histories across multiple posts: for sex/gender and location, use the
+  most explicit, consistent statement. For age, use the most recent (see the age
+  rules below).
 - Return null for any field you cannot find with reasonable confidence.
+
+{DEMOGRAPHIC_AGE_RULES}
 
 Respond with ONLY valid JSON - no explanation, no markdown fences:
 {{
@@ -154,8 +159,11 @@ Rules (apply to BOTH parts):
 - Extract ONLY what the author states about THEMSELVES.
 - Ignore all mentions of other people.
 - Do not guess or infer from indirect clues.
-- For user histories: use the most explicit, consistent statement.
+- For user histories: for sex/gender and location, use the most explicit,
+  consistent statement. For age, use the most recent (see the age rules below).
 - Return null / empty list when no evidence exists.
+
+{DEMOGRAPHIC_AGE_RULES}
 
 Respond with ONLY valid JSON - no explanation, no markdown fences:
 {{
