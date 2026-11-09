@@ -16,6 +16,11 @@ Never read, print or quote `.env` or `variable_extraction/.env`. They hold live 
 
 Never show more than a key's last six characters. If a key is exposed, say so at once and recommend rotating every key in that file.
 
+# Paid runs and S3
+
+- Before a run that calls a paid model or service, say what it will cost; an estimate is fine. If it is more than a few dollars, ask first.
+- Never overwrite or delete an S3 object without a yes for that action that names each object that will go.
+
 # When creating Pull Requests
 1. Use detailed commit messages
 2. Every PR Needs a Description that has the following sections
