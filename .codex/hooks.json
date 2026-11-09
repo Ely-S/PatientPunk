@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --no-project -q python \"$(git rev-parse --show-toplevel)/scripts/hooks/block_direct_db_upload.py\"; exit $LASTEXITCODE",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
