@@ -114,10 +114,12 @@ def get_git_commit() -> str:
         )
         commit = result.stdout.strip()
         # Also flag dirty working tree so downstream consumers can see if the
-        # build was made from a non-clean checkout.
+        # build was made from a non-clean checkout. Untracked files are ignored,
+        # as in git_is_dirty(), so this warning agrees with the recorded flag.
         try:
             dirty = subprocess.run(
-                ["git", "status", "--porcelain"], capture_output=True, text=True, check=True,
+                ["git", "status", "--porcelain", "--untracked-files=no"],
+                capture_output=True, text=True, check=True,
             ).stdout.strip()
             if dirty:
                 log.warning(
@@ -140,12 +142,18 @@ def get_git_commit() -> str:
 
 
 def git_is_dirty() -> bool | None:
-    """True when the checkout has uncommitted changes, False when clean, None when git is unavailable.
-    Recorded on every run: the commit alone cannot reproduce a run made from a dirty tree."""
+    """True when tracked files have uncommitted changes, staged or not; False when they have none;
+    None when git is unavailable. Recorded on every run: the commit alone cannot reproduce a run
+    made from a dirty tree.
+
+    Untracked files are ignored. Every working checkout holds scratch notebooks and data, so
+    counting them made every run dirty and the flag meant nothing. The cost: a run that imports an
+    untracked script still records False, so such files must be listed in the provenance record."""
     import subprocess
     try:
         return bool(subprocess.run(
-            ["git", "status", "--porcelain"], cwd=_root_env.parent, capture_output=True, text=True, check=True,
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=_root_env.parent, capture_output=True, text=True, check=True,
         ).stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         log.warning(
