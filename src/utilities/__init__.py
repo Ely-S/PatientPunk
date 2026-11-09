@@ -20,6 +20,7 @@ elif _src_env.exists():
 
 import anthropic
 import httpx
+import openai
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -188,6 +189,11 @@ class _ORStream:
                 parts.append(delta.content)
             if chunk.choices[0].finish_reason:
                 finish = chunk.choices[0].finish_reason
+        if finish == "content_filter":
+            # A refusal or a provider's filter ended the reply: the text so far is not an answer.
+            from patientpunk._utils import LLMContentFilteredError
+            raise LLMContentFilteredError(
+                f"{self._kwargs.get('model')}: reply stopped by the provider's content filter")
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
@@ -354,6 +360,29 @@ IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
 # Retry truncated replies with progressively larger output ceilings.
 BUDGET_MULTIPLIERS = (1, 2, 4, 8)
 
+# A content-filter block is one item's problem, so callers skip that item (#53). The Anthropic API
+# says so in a 400's message. OpenRouter says so in error.metadata: a content-policy error_type, or
+# the flagged_input its own moderation adds (https://openrouter.ai/docs/api-reference/errors).
+_ANTHROPIC_FILTER_PHRASES = ("content filter", "blocked by content")
+_OPENROUTER_POLICY_ERROR_TYPES = ("content_policy_violation", "refusal")
+
+
+def is_content_filter_block(exc: BaseException) -> bool:
+    """Whether a provider error says its content filter blocked this one prompt.
+
+    Anything else stops the run, including the Anthropic API's 400 for low credit and OpenRouter's
+    403 for a spent budget, which carries ``limit_source`` in its metadata instead.
+    """
+    if isinstance(exc, anthropic.APIStatusError):
+        return any(t in str(exc).lower() for t in _ANTHROPIC_FILTER_PHRASES)
+    if isinstance(exc, openai.APIError):
+        # The SDK puts OpenRouter's ``error`` object in .body, both for a request it rejects
+        # (HTTP 403) and for a block that arrives mid-stream (HTTP 200, then an error chunk).
+        meta = exc.body.get("metadata") if isinstance(exc.body, dict) else None
+        if isinstance(meta, dict):
+            return meta.get("error_type") in _OPENROUTER_POLICY_ERROR_TYPES or "flagged_input" in meta
+    return False
+
 
 def is_transient_failure(exc: BaseException) -> bool:
     """Return whether retrying the same request may succeed."""
@@ -407,10 +436,9 @@ def llm_call(
             with client.messages.stream(**kwargs) as stream:
                 message = check_response(stream.get_final_message(), model=model)
                 return response_text(message)
-        except anthropic.APIStatusError as exc:
-            # A content-filter block is one item's problem, so callers skip it. Every other API
-            # error, including a 400 for low credit, still stops the run (#53).
-            if any(t in str(exc).lower() for t in ("content filter", "blocked by content")):
+        except (anthropic.APIStatusError, openai.APIError) as exc:
+            # Not retried: the same prompt is blocked again.
+            if is_content_filter_block(exc):
                 raise LLMContentFilteredError(f"{model}: reply blocked by the provider's content filter") from exc
             raise
 
