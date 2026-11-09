@@ -113,15 +113,17 @@ def build_record(db: Path, args, output: dict, runs: list[dict], existing: dict)
     beforehand (processing, validation, comments...) are kept; the generated ones replace theirs."""
     dirty = {r["config"].get("git_dirty") for r in runs if isinstance(r["config"], dict)}
     finished = [r["finished_utc"] for r in runs if (r["finished_utc"] or "").endswith("Z")]
+    local = existing.get("database") or {}
     record = {
         "schema_version": 1, "record_kind": "database_provenance",
         "record_method": "retrospective" if args.record_only else "contemporaneous",
         "generated_by": "scripts/publish_db.py, from the database's extraction_runs table",
         "database": {"filename": db.name,
-                     "purpose": args.purpose or (existing.get("database") or {}).get("purpose"),
+                     "purpose": args.purpose or local.get("purpose"),
                      "status": "completed" if all(r["finished_utc"] is not None for r in runs) else "unfinished runs",
                      "started_utc": min((r["started_utc"] for r in runs), default=None),
-                     "completed_utc": max(finished, default=None), "supersedes": args.supersedes},
+                     "completed_utc": max(finished, default=None),
+                     "supersedes": args.supersedes or local.get("supersedes")},
         "code": {"repository": REPOSITORY, "commit_shas": sorted({r["commit_sha"] for r in runs}),
                  "working_tree": "dirty" if True in dirty else "clean" if dirty == {False} else "not recorded"},
         "inputs": args.input or existing.get("inputs") or [],
@@ -130,6 +132,8 @@ def build_record(db: Path, args, output: dict, runs: list[dict], existing: dict)
     }
     if not record["database"]["purpose"]:
         raise PublishError("--purpose is required: say what the database holds")
+    if not record["inputs"] and not args.record_only:
+        raise PublishError("--input is required: name each input snapshot, by S3 URI or data: path")
     if not record["commands"] and not args.record_only:
         raise PublishError("--command is required: list the commands that built the database, in order")
     return {**existing, **record}
@@ -327,9 +331,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--s3-uri", required=True, help=f"s3://{BUCKET}/<key> ending with the database filename")
     p.add_argument("--label", required=True, help="scope label for INDEX.md, e.g. multi-treatment or source-corpus")
     p.add_argument("--purpose", help="what the database holds (or database.purpose in a local YAML)")
-    p.add_argument("--input", action="append", help="an input snapshot, by S3 URI or data: path; repeat for each")
+    p.add_argument("--input", action="append",
+                   help="an input snapshot, by S3 URI or data: path; repeat for each (at least one unless --record-only)")
     p.add_argument("--command", action="append", help="a command that built the database, in order; repeat for each")
-    p.add_argument("--supersedes", help="S3 URI of the snapshot this one corrects or reruns")
+    p.add_argument("--supersedes",
+                   help="S3 URI of the snapshot this one corrects or reruns (or database.supersedes in a local YAML)")
     p.add_argument("--record-only", action="store_true",
                    help="write a retrospective record beside a database already at --s3-uri; nothing is uploaded")
     a = sub.add_parser("audit", help=f"list s3://{BUCKET} databases without a published provenance YAML")
