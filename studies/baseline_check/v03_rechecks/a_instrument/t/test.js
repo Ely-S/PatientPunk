@@ -73,15 +73,38 @@ pick("q5", "1"); assert.strictEqual(t("s6"), "A little better");
 pick("q5", "none");
 ok("Q5 'No earlier check' shows: " + t("s6"));
 
-// 8. Q3/Q4 chips, unanswered count down to 0
-pick("q3", 4); pick("q4", 60);
-assert.strictEqual(t("s3"), "4 / 10"); assert.strictEqual(t("s4"), "60%");
+// 8. Q3 chips; Q4 is a 0-100 slider in steps of 5 that stays unanswered until it is moved or tapped
+const s = $("q4");
+assert.deepStrictEqual([s.type, s.min, s.max, s.step], ["range", "0", "100", "5"]);
+assert.ok(s.hasAttribute("data-unset")); assert.strictEqual(t("s4"), "–");
+assert.strictEqual(t("q4v"), "Not answered yet"); assert.strictEqual(s.getAttribute("aria-valuetext"), "Not answered yet");
+assert.match(t("unans"), /^3 of 5/); // Q2 (2 groups blank), Q3 and Q4 still open; Q1 and Q5 answered above
+pick("q3", 4);
+s.dispatchEvent(new dom.window.Event("pointerup", { bubbles: true })); // a tap on the untouched slider counts as an answer
+assert.strictEqual(t("s4"), "50%");
+s.value = "65"; ev(s, "input");
+assert.strictEqual(t("s3"), "4 / 10"); assert.strictEqual(t("s4"), "65%"); assert.strictEqual(t("q4v"), "65%");
+assert.strictEqual(s.getAttribute("aria-valuetext"), "65%"); assert.ok(!s.hasAttribute("data-unset"));
 assert.match(t("unans"), /^1 of 5/); // Q2 still has 2 blank groups
 click($("none_2")); click($("none_3"));
 assert.strictEqual(t("unans"), "All 5 questions answered.");
-assert.strictEqual(d.querySelectorAll('#q3 input').length, 11); assert.strictEqual(d.querySelectorAll('#q4 input').length, 11);
-assert.strictEqual(d.querySelectorAll('input[type=range]').length, 0);
-ok("Q3/Q4 chips (11 each, no sliders): " + t("s3") + ", " + t("s4") + " | " + t("unans"));
+assert.strictEqual(d.querySelectorAll('#q3 input').length, 11);
+ok("Q3 chips (11); Q4 slider 0–100 step 5, unanswered until touched, tap → 50%, drag → 65%: " + t("unans"));
+
+// 8b. every Q2 group has an "All of these" button that ticks the whole group and can be undone
+for (let g = 0; g < 4; g++) {
+  const all = $("all_" + g), items = d.querySelectorAll(`#q2 input[data-g="${g}"]`);
+  assert.ok(all, "group " + g + " has no All of these button");
+  click(all);
+  assert.ok([...items].every((x) => x.checked), "All of these ticks group " + g);
+  assert.strictEqual(all.getAttribute("aria-pressed"), "true"); assert.strictEqual($("none_" + g).getAttribute("aria-pressed"), "false");
+}
+assert.strictEqual(t("s2"), "23 / 23"); assert.strictEqual(t("s2b"), "4/4 · 6/6 · 6/6 · 7/7");
+click($("all_3"));
+assert.strictEqual(t("s2"), "16 / 23"); assert.strictEqual(t("s2b"), "4/4 · 6/6 · 6/6 · –/7"); // cleared = unanswered, not 0
+assert.strictEqual(t("s2c"), "1 group blank");
+assert.strictEqual($("all_3").getAttribute("aria-pressed"), "false");
+ok("All of these on each of the 4 groups: 23 / 23; pressing the last again clears it to blank: " + t("s2b"));
 
 // 9. every question is a fieldset with a legend
 assert.strictEqual(d.querySelectorAll("#bc fieldset.q").length, 6);

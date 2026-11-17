@@ -45,9 +45,9 @@ Version 0.3 asks about the past 7 days:
 | Q | Asks | Scored as |
 |---|---|---|
 | Q1 | Days in a crash or flare, whatever set it off (optional trigger list) | 0–7 |
-| Q2 | Activities done **without paying for it later**, counting only those done at least two days before the check so a delayed crash has time to show. 23 items in 4 groups: *Within the home*, *Everyday basics*, *Getting out and keeping up*, *Full days and beyond* | count 0–23 |
+| Q2 | Activities done **without paying for it later**, counting only those done at least two days before the check so a delayed crash has time to show. 23 items in 4 groups: *Within the home*, *Everyday basics*, *Getting out and keeping up*, *Full days and beyond*. Each group has "All of these" and "None of these this week" buttons | count 0–23 |
 | Q3 | Overall symptoms on a typical day | 0–10 |
-| Q4 | Percent of your old self | 0–100 in steps of 10 |
+| Q4 | Percent of your old self, on a slider that counts as unanswered until it is moved or tapped | 0–100 in steps of 5 |
 | Q5 | Change since the last check (with a "No earlier check" choice) | 7-point scale |
 | — | Carer (proxy) mode that rewords every question | — |
 
@@ -168,9 +168,10 @@ to the questionnaire and item 14 was moving this work into the repo.
    session 1 scripts; the results are collected in `d_checks/RESULTS.md`.
 5. **Questionnaire redesign** (items 7–13, `a_instrument/`). The form was rebuilt with nothing filled in by
    default, the two-day rule on Q2, the new *Within the home* group, tap buttons instead of sliders for Q3
-   and Q4, and screen-reader labels. `t/test.js` runs 14 checks in jsdom: 12 on the form, one that the
-   item counts written out in the methodology's scoring rules match the form, and one that every link
-   between the three pages resolves.
+   and Q4, and screen-reader labels. Later, at the study lead's request, Q4 went back to a slider (0–100 in
+   steps of 5, unanswered until touched) and every Q2 group gained an "All of these" button, not just the
+   first. `t/test.js` runs 15 checks in jsdom: 13 on the form, one that the item counts written out in the
+   methodology's scoring rules match the form, and one that every link between the three pages resolves.
 
 ## Findings and where they come from
 
@@ -269,7 +270,7 @@ No `BAD` lines means every quote is verbatim.
 ```sh
 cd $S/v03_rechecks/a_instrument/t && npm ci && node test.js $REPO/docs/baseline_check
 ```
-Expect 14 `PASS` lines and `14 checks passed`.
+Expect 15 `PASS` lines and `15 checks passed`.
 
 ### v0.2 numbers (seconds each)
 
@@ -364,7 +365,7 @@ These append rows. Re-running them duplicates data:
 | `b_matters/chk0.py`, `chk1.py` | `batch_N.txt`, `coded_N.jsonl` | flags quotes not found verbatim or over 25 words |
 | `c_coverage/analyze.py OLD` | `blind_0..1.jsonl`, designer `coded.jsonl` | blind vs designer coverage, κ, per-question share, gaps |
 | `d_checks/delay.py DB` | corpus FTS | delay bins; `delay_precision_sample.json` for hand checking |
-| `a_instrument/t/test.js DIR` | `index.html`, `methodology.html`, `blog.html` in `DIR` | 14 jsdom checks: the form, scoring counts, links between pages |
+| `a_instrument/t/test.js DIR` | `index.html`, `methodology.html`, `blog.html` in `DIR` | 15 jsdom checks: the form, scoring counts, links between pages |
 
 ### Codebooks
 
