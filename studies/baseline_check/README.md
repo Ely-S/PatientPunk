@@ -4,7 +4,8 @@ The evidence behind **Baseline Check**, a short weekly questionnaire for Long CO
 from how patients describe their own health changing on Reddit.
 
 The questionnaire and its rationale are on one page, `docs/baseline_check/index.html` (currently v0.3,
-published as a private claude.ai artifact). This folder holds the analysis scripts behind every number on
+published as a private claude.ai artifact). That page is **not in Git** yet, because it quotes two patient
+posts. Until it is committed, it exists only in the author's local checkout and the artifact. This folder holds the analysis scripts behind every number on
 that page, the codebooks used to code posts, and a record of what was corrected along the way.
 
 **Status:** exploratory. All coding was done by Claude Sonnet agents, not human coders. Nothing here is
@@ -222,6 +223,8 @@ Requirements:
   `data/full_corpus_2026-07-31/records.csv`. Check both hashes in [Inputs](#inputs) first.
 - For anything that reads coded data, the local data files described in
   [Data that is not in Git](#data-that-is-not-in-git).
+- For the form tests, a copy of the page at `docs/baseline_check/index.html` (not in Git; see the top of
+  this README).
 
 All commands start from the repo root. None of them call a paid service.
 
