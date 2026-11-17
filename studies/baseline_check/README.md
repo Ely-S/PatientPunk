@@ -47,7 +47,7 @@ Version 0.3 asks about the past 7 days:
 | Q1 | Days in a crash or flare, whatever set it off (optional trigger list) | 0–7 |
 | Q2 | Activities done **without paying for it later**, counting only those done at least two days before the check so a delayed crash has time to show. 23 items in 4 groups: *Within the home*, *Everyday basics*, *Getting out and keeping up*, *Full days and beyond*. Each group has "All of these" and "None of these this week" buttons | count 0–23 |
 | Q3 | Overall symptoms on a typical day | 0–10 |
-| Q4 | Percent of your old self, on a slider that counts as unanswered until it is moved or tapped | 0–100 in steps of 5 |
+| Q4 | Percent of your old self (**optional**), on a slider that counts as unanswered until it is moved or tapped | 0–100 in steps of 5 |
 | Q5 | Change since the last check (with a "No earlier check" choice) | 7-point scale |
 | — | Carer (proxy) mode that rewords every question | — |
 
@@ -170,7 +170,10 @@ to the questionnaire and item 14 was moving this work into the repo.
    default, the two-day rule on Q2, the new *Within the home* group, tap buttons instead of sliders for Q3
    and Q4, and screen-reader labels. Later, at the study lead's request, Q4 went back to a slider (0–100 in
    steps of 5, unanswered until touched) and every Q2 group gained an "All of these" button, not just the
-   first. `t/test.js` runs 15 checks in jsdom: 13 on the form, one that the item counts written out in the
+   first. A review of which questions add value then made Q4 optional (it is the noisiest item and the one
+   severe patients use least), shortened the Q2 help to three sentences, told people to tick the shorter
+   version of an item when they did the longer one, reworded the "usual responsibilities" item, and renamed
+   the trigger "Don't know" to "No clear reason". `t/test.js` runs 15 checks in jsdom: 13 on the form, one that the item counts written out in the
    methodology's scoring rules match the form, and one that every link between the three pages resolves.
 
 ## Findings and where they come from

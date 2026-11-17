@@ -19,10 +19,15 @@ let n = 0; const ok = (m) => { n++; console.log("PASS", m); };
 // 1. nothing answered
 for (const id of ["s1", "s2", "s3", "s4", "s6"]) assert.strictEqual(t(id), "–", id);
 assert.strictEqual(t("s2b"), "–/4 · –/6 · –/6 · –/7");
-assert.match(t("unans"), /^5 of 5 questions still unanswered/);
+assert.match(t("unans"), /^4 of 4 required questions still unanswered \(Q4 and Q6 are optional\)/);
 assert.strictEqual(d.querySelectorAll('input:checked').length, 0);
 assert.strictEqual(d.querySelectorAll('#q2 input[type=checkbox]').length, 23);
-ok("nothing answered: all dashes, 5 unanswered, nothing pre-checked, 23 items: " + t("s2b") + " | " + t("unans"));
+const help = d.querySelector("#q2").closest("fieldset").querySelector(".help.self").textContent;
+assert.ok(help.includes("tick the shorter one too"), "Q2 help explains nested items");
+assert.ok(help.split(". ").length <= 3, "Q2 help is short");
+assert.ok(t("q2").includes("Keep up all your usual responsibilities, with no days lost"));
+assert.ok($("q4leg").textContent.includes("(optional)"));
+ok("nothing answered: all dashes, 4 required unanswered, nothing pre-checked, 23 items, short Q2 help, Q4 optional: " + t("unans"));
 
 // 2. None on group 1 -> 0
 click($("none_1"));
@@ -65,7 +70,8 @@ assert.strictEqual($("q1t").hidden, true);
 pick("q1", 0); assert.strictEqual($("q1t").hidden, true); assert.strictEqual(t("s1"), "0 / 7");
 pick("q1", 2); assert.strictEqual($("q1t").hidden, false); assert.strictEqual(t("s1"), "2 / 7");
 assert.strictEqual(d.querySelectorAll('#q1tc input').length, 8);
-ok("Q1=0 keeps triggers hidden; Q1=2 reveals 8 triggers: " + t("s1"));
+assert.ok(t("q1tc").includes("No clear reason") && !t("q1tc").includes("Don't know"));
+ok("Q1=0 keeps triggers hidden; Q1=2 reveals 8 triggers, ending 'No clear reason': " + t("s1"));
 
 // 7. Q5 No earlier check -> missing
 pick("q5", "none"); assert.strictEqual(t("s6"), "Missing (first check)");
@@ -78,18 +84,19 @@ const s = $("q4");
 assert.deepStrictEqual([s.type, s.min, s.max, s.step], ["range", "0", "100", "5"]);
 assert.ok(s.hasAttribute("data-unset")); assert.strictEqual(t("s4"), "–");
 assert.strictEqual(t("q4v"), "Not answered yet"); assert.strictEqual(s.getAttribute("aria-valuetext"), "Not answered yet");
-assert.match(t("unans"), /^3 of 5/); // Q2 (2 groups blank), Q3 and Q4 still open; Q1 and Q5 answered above
+assert.match(t("unans"), /^2 of 4/); // Q2 (2 groups blank) and Q3 open; Q1 and Q5 answered above; Q4 optional
 pick("q3", 4);
+assert.match(t("unans"), /^1 of 4/); // Q2 still has 2 blank groups
+click($("none_2")); click($("none_3"));
+assert.strictEqual(t("unans"), "All 4 required questions answered."); // with Q4 still untouched
+assert.strictEqual(t("s4"), "–");
 s.dispatchEvent(new dom.window.Event("pointerup", { bubbles: true })); // a tap on the untouched slider counts as an answer
 assert.strictEqual(t("s4"), "50%");
 s.value = "65"; ev(s, "input");
 assert.strictEqual(t("s3"), "4 / 10"); assert.strictEqual(t("s4"), "65%"); assert.strictEqual(t("q4v"), "65%");
 assert.strictEqual(s.getAttribute("aria-valuetext"), "65%"); assert.ok(!s.hasAttribute("data-unset"));
-assert.match(t("unans"), /^1 of 5/); // Q2 still has 2 blank groups
-click($("none_2")); click($("none_3"));
-assert.strictEqual(t("unans"), "All 5 questions answered.");
 assert.strictEqual(d.querySelectorAll('#q3 input').length, 11);
-ok("Q3 chips (11); Q4 slider 0–100 step 5, unanswered until touched, tap → 50%, drag → 65%: " + t("unans"));
+ok("Q3 chips (11); all required answered with Q4 untouched; Q4 slider 0–100 step 5, tap → 50%, drag → 65%");
 
 // 8b. every Q2 group has an "All of these" button that ticks the whole group and can be undone
 for (let g = 0; g < 4; g++) {
