@@ -1,7 +1,11 @@
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
+const path = require("path");
 const assert = require("assert");
-const html = fs.readFileSync(process.argv[2], "utf8");
+// usage: node test.js DIR, where DIR holds index.html (the quiz), methodology.html and blog.html
+const dir = process.argv[2];
+const read = (f) => fs.readFileSync(path.join(dir, f), "utf8");
+const html = read("index.html");
 const dom = new JSDOM(html, { runScripts: "dangerously" });
 const d = dom.window.document;
 const $ = (id) => d.getElementById(id);
@@ -18,9 +22,7 @@ assert.strictEqual(t("s2b"), "–/4 · –/6 · –/6 · –/7");
 assert.match(t("unans"), /^5 of 5 questions still unanswered/);
 assert.strictEqual(d.querySelectorAll('input:checked').length, 0);
 assert.strictEqual(d.querySelectorAll('#q2 input[type=checkbox]').length, 23);
-assert.strictEqual(d.querySelector('[data-count="total"]').textContent, "23");
-assert.strictEqual(d.querySelector('[data-count="top2"]').textContent, "13");
-ok("nothing answered: all dashes, 5 unanswered, nothing pre-checked, 23 items, counts filled: " + t("s2b") + " | " + t("unans"));
+ok("nothing answered: all dashes, 5 unanswered, nothing pre-checked, 23 items: " + t("s2b") + " | " + t("unans"));
 
 // 2. None on group 1 -> 0
 click($("none_1"));
@@ -86,4 +88,30 @@ assert.strictEqual(d.querySelectorAll("#bc fieldset.q").length, 6);
 for (const f of d.querySelectorAll("#bc fieldset.q")) assert.ok(f.querySelector(":scope > legend"));
 assert.strictEqual(d.querySelectorAll('#q2 [role=group][aria-labelledby]').length, 4);
 ok("6 question fieldsets with legends; 4 labelled Q2 groups");
+
+// 10. the item counts written out in the methodology scoring rules match the quiz
+const groups = [...d.querySelectorAll('#q2 [role=group]')].map((g) =>
+  [g.querySelector(".gname").firstChild.textContent.trim(), g.querySelectorAll("input[type=checkbox]").length]);
+const total = groups.reduce((s, [, k]) => s + k, 0), top2 = groups.slice(-2).reduce((s, [, k]) => s + k, 0);
+const method = new JSDOM(read("methodology.html")).window.document;
+const rules = method.getElementById("scoring").textContent.replace(/\s+/g, " ");
+const ranges = groups.map(([g, k]) => `${g.toLowerCase()} 0–${k}`).join(", ");
+for (const s of [`(0–${total})`, `Report the ${groups.length} Q2 group scores`, `(${ranges})`, `top two groups (${top2} items)`])
+  assert.ok(rules.includes(s), "methodology scoring is missing: " + s);
+ok(`methodology scoring matches the quiz: ${total} items, ${groups.length} groups, top two ${top2}`);
+
+// 11. every link between the three pages points at a page (and anchor) that exists, and each page marks itself in the nav
+const pages = { "index.html": d, "methodology.html": method, "blog.html": new JSDOM(read("blog.html")).window.document };
+let links = 0;
+for (const [name, doc] of Object.entries(pages)) {
+  assert.strictEqual(doc.querySelector('nav a[aria-current="page"]').getAttribute("href"), name, name + " nav");
+  for (const a of doc.querySelectorAll("a[href]")) {
+    const [file, hash] = a.getAttribute("href").split("#");
+    if (/^[a-z]+:/.test(file)) continue;
+    assert.ok(pages[file], `${name} links to missing page ${file}`);
+    if (hash) assert.ok(pages[file].getElementById(hash), `${name} links to missing #${hash} in ${file}`);
+    links++;
+  }
+}
+ok(`${links} links between the 3 pages all resolve; each page marks itself in the nav`);
 console.log(`\n${n} checks passed`);

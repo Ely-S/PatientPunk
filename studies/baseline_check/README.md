@@ -3,10 +3,18 @@
 The evidence behind **Baseline Check**, a short weekly questionnaire for Long COVID and ME/CFS trials, drawn
 from how patients describe their own health changing on Reddit.
 
-The questionnaire and its rationale are on one page, `docs/baseline_check/index.html` (currently v0.3,
-published as a private claude.ai artifact). That page is **not in Git** yet, because it quotes two patient
-posts. Until it is committed, it exists only in the author's local checkout and the artifact. This folder holds the analysis scripts behind every number on
-that page, the codebooks used to code posts, and a record of what was corrected along the way.
+The questionnaire and its rationale are published as a private claude.ai artifact (currently v0.3), made of
+three linked pages in `docs/baseline_check/` that share `style.css`:
+
+| Page | File | For |
+|---|---|---|
+| The Quiz | `index.html` | Patients and carers: the working form, with live scores |
+| Methodology and Data | `methodology.html` | Trialists and reviewers: scoring rules, the evidence, limitations, validation plan |
+| Blog post | `blog.html` | General readers: the story of how the check was built |
+
+These pages are **not in Git** yet, because they quote patient posts. Until they are committed, they exist
+only in the author's local checkout and the artifact. This folder holds the analysis scripts behind every
+number on them, the codebooks used to code posts, and a record of what was corrected along the way.
 
 **Status:** exploratory. All coding was done by Claude Sonnet agents, not human coders. Nothing here is
 validated with patients yet; the page's *Validation plan* section describes what would be.
@@ -160,9 +168,13 @@ to the questionnaire and item 14 was moving this work into the repo.
    session 1 scripts; the results are collected in `d_checks/RESULTS.md`.
 5. **Questionnaire redesign** (items 7–13, `a_instrument/`). The form was rebuilt with nothing filled in by
    default, the two-day rule on Q2, the new *Within the home* group, tap buttons instead of sliders for Q3
-   and Q4, and screen-reader labels. `t/test.js` runs 12 checks on the page in jsdom.
+   and Q4, and screen-reader labels. `t/test.js` runs 14 checks in jsdom: 12 on the form, one that the
+   item counts written out in the methodology's scoring rules match the form, and one that every link
+   between the three pages resolves.
 
 ## Findings and where they come from
+
+Section names in italics are headings on the Methodology and Data page.
 
 | Finding (page section) | Number | Source |
 |---|---|---|
@@ -223,7 +235,7 @@ Requirements:
   `data/full_corpus_2026-07-31/records.csv`. Check both hashes in [Inputs](#inputs) first.
 - For anything that reads coded data, the local data files described in
   [Data that is not in Git](#data-that-is-not-in-git).
-- For the form tests, a copy of the page at `docs/baseline_check/index.html` (not in Git; see the top of
+- For the form tests, a copy of the three pages in `docs/baseline_check/` (not in Git; see the top of
   this README).
 
 All commands start from the repo root. None of them call a paid service.
@@ -255,9 +267,9 @@ cd $S/v03_rechecks/b_matters && uv run python chk0.py && uv run python chk1.py
 No `BAD` lines means every quote is verbatim.
 
 ```sh
-cd $S/v03_rechecks/a_instrument/t && npm ci && node test.js $REPO/docs/baseline_check/index.html
+cd $S/v03_rechecks/a_instrument/t && npm ci && node test.js $REPO/docs/baseline_check
 ```
-Expect 12 `PASS` lines and `12 checks passed`.
+Expect 14 `PASS` lines and `14 checks passed`.
 
 ### v0.2 numbers (seconds each)
 
@@ -352,7 +364,7 @@ These append rows. Re-running them duplicates data:
 | `b_matters/chk0.py`, `chk1.py` | `batch_N.txt`, `coded_N.jsonl` | flags quotes not found verbatim or over 25 words |
 | `c_coverage/analyze.py OLD` | `blind_0..1.jsonl`, designer `coded.jsonl` | blind vs designer coverage, κ, per-question share, gaps |
 | `d_checks/delay.py DB` | corpus FTS | delay bins; `delay_precision_sample.json` for hand checking |
-| `a_instrument/t/test.js PAGE` | an HTML page | 12 jsdom checks of the form |
+| `a_instrument/t/test.js DIR` | `index.html`, `methodology.html`, `blog.html` in `DIR` | 14 jsdom checks: the form, scoring counts, links between pages |
 
 ### Codebooks
 
@@ -382,7 +394,7 @@ copy of this folder (about 24 MB) and has **no backup** yet. Back it up to priva
 | `v03_rechecks/b_matters/batch_*.txt`, `coded_*.jsonl`, `meta.json`, `results.txt` | what-matters posts, coded rows, batch ids |
 | `v03_rechecks/c_coverage/batch_*.txt`, `blind_*.jsonl`, `results.txt` | coverage posts and blind ratings |
 | `v03_rechecks/d_checks/delay_precision_sample.json` | delay match contexts |
-| `v03_rechecks/index_v02_backup.html`, `a_instrument/*.html` | earlier page versions and drafts |
+| `v03_rechecks/index_v02_backup.html`, `index_v03_single_page.html`, `a_instrument/*.html` | earlier page versions (v0.2; v0.3 before the three-page split) and drafts |
 
 The scripts that build the samples and batches ran as inline snippets. Their logic and seeds are recorded in
 [How the work was done](#how-the-work-was-done).
