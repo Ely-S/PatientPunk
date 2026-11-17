@@ -66,3 +66,17 @@ outputs/
 # Kept in gitignored data/ + S3 and distributed to coders privately; never tracked.
 studies/rct_validation/irr_pilot/ai_labels.csv
 studies/rct_validation/irr_pilot/coding_input.csv
+
+# Baseline Check working data: post text, coded posts, page drafts. Kept locally only.
+studies/baseline_check/**/*.json
+studies/baseline_check/**/*.jsonl
+studies/baseline_check/**/*.txt
+studies/baseline_check/**/*.html
+studies/baseline_check/**/node_modules/
+!studies/baseline_check/**/package.json
+!studies/baseline_check/**/package-lock.json
+# Hand-coded rows written as Python; they quote posts.
+studies/baseline_check/v02_analysis/b[0-9].py
+studies/baseline_check/v02_analysis/coded/b[0-9].py
+studies/baseline_check/v02_analysis/quality/c[0-9]*.py
+studies/baseline_check/v02_analysis/coverage/themes.py
