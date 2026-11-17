@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Counting Crashes | Baseline Check v0.3.1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav aria-label="Baseline Check pages"><div class="wrap"><b>Baseline Check</b><a href="index.html">The Quiz</a><a href="methodology.html">Methodology and Data</a><a href="blog.html" aria-current="page">Blog post</a></div></nav>
+
+<div class="wrap">
+<section id="blog">
+  <span class="eyebrow">Blog post · v0.3.1</span>
+  <article class="post">
+    <h1>Counting crashes: a weekly check built from how patients talk about getting better</h1>
+    <p class="byline">PatientPunk · draft for discussion</p>
+
+    <p>What should a weekly check measure when symptoms fluctuate and an activity can feel fine until the next day? Adults testing RECOVER's questionnaires suggested shorter, simpler measures. We looked to patient forums for the kinds of change a short check might capture. <a href="methodology.html#literature">Trial literature</a>.</p>
+
+    <p>So we read what they write. Our corpus holds 3.8 million posts and comments from 15 Long COVID and ME/CFS communities on Reddit, going back to 2009. We searched it for the words people use when they describe getting better or worse, and had AI coders read several hundred of those posts in depth.</p>
+
+    <h3>How the forums describe crashes</h3>
+    <p>In 3,845,980 posts and comments, our searches matched crash-related words in about 104,000 texts, PEM in about 140,000, bedbound or similar terms in about 50,000, and baseline in about 35,000. Searches for SF-36, PROMIS and FUNCAP returned 89, 27 and 364 texts. <a href="methodology.html#vocabulary">Vocabulary search</a>.</p>
+    <p>Of 6,125 texts that matched a crash-delay pattern, 3,500 matched next-day language. Some matches in the timing search described the duration of a crash. The result helped motivate asking about crash days across a week. <a href="methodology.html#delay">Crash-delay search</a>.</p>
+
+    <h3>Capacity is measured by its cost</h3>
+    <p>Doing something and tolerating it afterwards are different experiences. We found 6,140 phrase matches for activities done without post-exertional malaise or a crash across the 3,845,980 posts and comments. This motivated a question about activity and what happened afterwards. <a href="methodology.html#activities">Activity analysis</a>.</p>
+
+    <h3>What matters most is usually a symptom</h3>
+    <p>AI coders judged a specific symptom to be the main change in 104 of 242 selected posts (43%). The course of illness came next, in 56 (23%). Feeling like oneself was the main change in 23 (10%), and activity and crashes each led in 20 (8%). The coders agreed on 12 of 20 posts that were rated twice. <a href="methodology.html#priorities">Coding results</a>.</p>
+    <p>The check keeps an overall symptom score alongside crash days and an activity count. In 41 of the 242 posts (17%), coders saw either symptoms held down by doing less or symptoms worsening after doing more. That is one reason to ask about both symptoms and activities. <a href="methodology.html#priorities">Coding results</a>.</p>
+
+    <h3>The Baseline Check</h3>
+    <p>We turned this into six questions about the past week:</p>
+    <ul>
+      <li><b>Crash days:</b> on how many days were you in a crash or flare, whatever set it off, including one that started a day or two after doing something?</li>
+      <li><b>Activities without cost:</b> which of 23 activities, in four groups from getting to the toilet on your own to keeping up all your usual responsibilities and being as active as before, could you do without paying for it later? You count only what you did at least two days ago, so you know whether it cost you.</li>
+      <li><b>Symptoms:</b> how bad were they overall, from 0 to 10?</li>
+      <li><b>Feeling like yourself:</b> how close were you to your pre-illness self, from 0% to 100%? (Optional.)</li>
+      <li><b>Change:</b> compared with your last check, are you better or worse? (In the first week, "no earlier check".)</li>
+      <li><b>In your own words:</b> what changed, if anything?</li>
+    </ul>
+    <p>The activity list ranges from basic tasks at home to a full day of work or study. The upper groups ask about duration and intensity, including how long someone can walk, work or spend time with friends. We plan to time the check with patients. <a href="methodology.html#activities">Activity analysis</a>.</p>
+    <p>A carer can enter the patient's own answers or give a proxy report based on their observations. Each activity group has an All of these and a None of these this week button. The total appears once all four groups are answered. <a href="methodology.html#scoring">Scoring rules</a>.</p>
+    <p>One candidate trial endpoint gives changes in crash days first priority when the difference reaches one day a week. Below that margin, changes in activities decide the comparison. Patient feedback and weekly data will help test the margin. <a href="methodology.html#scoring">Scoring rules</a>.</p>
+
+    <h3>What we got wrong along the way</h3>
+    <p>Our first draft leaned on a percent-of-pre-illness rating. That language turned up more often in the recovery or improvement sample, so the percent rating is now optional. We also changed the original activity ladder to a checklist because the estimated difficulty of nearby activities often overlapped. <a href="methodology.html#self-ratings">Self-rating analysis</a> · <a href="methodology.html#activities">Activity analysis</a>.</p>
+    <p>In our v0.2 coverage exercise, the designer first screened 190 posts. Blind reviewers then reviewed the 157 posts that passed the screen and identified 114 first-person change narratives. The blind review judged 65 of 114 (57%) fully captured, and the designer judged 79 of the same 114 (69%) fully captured. This exercise helped identify gaps to test in interviews. <a href="methodology.html#coverage">Coverage exercise</a>.</p>
+
+    <h3>What this is not yet</h3>
+    <p>This is a draft built from forum posts. Reddit leans towards people well enough to type, and our posts were coded by AI rather than people. None of the six questions has been tested for reliability or for picking up real change. Its biggest known blind spot is that one overall symptom number can't say which symptom changed. The next steps are interviews with patients across every severity level, a 12-week cohort that compares the check with existing measures and step counts, and then a run inside a real trial.</p>
+
+    <p>Every figure here, with its caveats, is on the <a href="methodology.html">Methodology and Data</a> page.</p>
+
+    <p>If you live with Long COVID or ME/CFS, <a href="index.html">try the quiz</a> and tell us what it misses. If you run trials, we would like to test it alongside your endpoints.</p>
+  </article>
+</section>
+<nav class="pager" aria-label="Previous and next page"><a href="methodology.html">← Methodology and Data</a></nav>
+</div>
+</body>
+</html>

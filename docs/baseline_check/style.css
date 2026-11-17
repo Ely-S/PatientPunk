@@ -1,0 +1,109 @@
+/* Shared by the quiz, methodology and blog pages. Layout: one readable column, sticky page nav; type chosen for legibility under brain fog */
+:root {
+  --bg: #f5f7f9; --card: #ffffff; --fg: #1b2430; --muted: #566273; --line: #dbe1e8;
+  --accent: #2c6a88; --accent-soft: #e3eef4; --crash: #a8521a; --crash-soft: #f7e9df;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11161c; --card: #19212a; --fg: #e5eaf0; --muted: #9ba7b4; --line: #2a343f;
+  --accent: #7fb6d2; --accent-soft: #1d3240; --crash: #e39a66; --crash-soft: #3a261a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11161c; --card: #19212a; --fg: #e5eaf0; --muted: #9ba7b4; --line: #2a343f;
+  --accent: #7fb6d2; --accent-soft: #1d3240; --crash: #e39a66; --crash-soft: #3a261a; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg) }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px }
+nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; gap: 20px; align-items: center; padding-block: 12px; flex-wrap: wrap }
+nav b { font-family: var(--display); font-size: 18px; margin-right: auto }
+nav a { color: var(--muted); text-decoration: none; font-size: 15px }
+nav a:hover, nav a:focus-visible { color: var(--accent) }
+nav a[aria-current="page"] { color: var(--fg); font-weight: 700; box-shadow: inset 0 -2px var(--accent) }
+.pager { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line) }
+.pager a { font-weight: 700; text-decoration: none }
+.pager a:hover, .pager a:focus-visible { text-decoration: underline }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0 }
+h1 { font-size: clamp(32px, 6vw, 46px); }
+h2 { font-size: 28px; margin-top: 8px }
+h3 { font-size: 19px }
+section { padding-top: 48px; display: grid; gap: 18px }
+p { margin: 0; max-width: 66ch }
+.eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700 }
+.lede { font-size: 19px; color: var(--muted) }
+.status { border-left: 3px solid var(--crash); background: var(--crash-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 15px }
+.form { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 26px }
+.q { display: grid; gap: 10px }
+.q .n { font-family: var(--display); color: var(--accent); font-weight: 700; margin-right: 6px }
+.q .stem { font-weight: 700 }
+.q .help { color: var(--muted); font-size: 15px }
+.chips { display: flex; flex-wrap: wrap; gap: 8px }
+.chips label { position: relative }
+.chips input { position: absolute; opacity: 0; inset: 0 }
+.chips span { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; text-align: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-variant-numeric: tabular-nums }
+.chips input:checked + span { background: var(--accent); color: var(--card); border-color: var(--accent) }
+.chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px }
+.crash .chips input:checked + span { background: var(--crash); border-color: var(--crash) }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 8px }
+.checks label { display: flex; gap: 12px; align-items: flex-start; min-height: 56px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer }
+.checks label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft) }
+.checks input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--accent) }
+.checks small { display: block; color: var(--muted); font-size: 13px }
+textarea { width: 100%; min-height: 70px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px }
+.score { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; border-top: 1px solid var(--line); padding-top: 18px }
+.score div { display: grid; gap: 2px }
+.score .k { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em }
+.score .v { font-family: var(--display); font-size: 26px; font-variant-numeric: tabular-nums }
+.score .v.crashv { color: var(--crash) }
+.score .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums }
+#s2b { list-style: none; padding: 0; gap: 2px }
+#s2b li span { white-space: nowrap }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0 }
+fieldset.q > legend { padding: 0; margin-bottom: 10px }
+fieldset.sub { display: grid; gap: 8px; padding-top: 4px }
+fieldset.sub > legend { padding: 0; margin-bottom: 8px }
+fieldset.sub > legend span { font-size: 13px }
+.chips label span { font-variant-numeric: tabular-nums }
+.q2 { display: grid; gap: 18px }
+.grp { display: grid; gap: 8px }
+.ghead { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between }
+.gname { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--accent) }
+.gname span { color: var(--muted); font-weight: 400 }
+.gbtns { display: flex; flex-wrap: wrap; gap: 8px }
+button.gbtn { font: inherit; font-size: 15px; min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer }
+button.gbtn[aria-pressed="true"] { background: var(--fg); color: var(--card); border-color: var(--fg) }
+button.gbtn:focus-visible, .mode select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.score .unans { grid-column: 1 / -1 }
+.mode { display: grid; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--line) }
+.mode label { font-weight: 700 }
+.mode select { width: 100%; max-width: 360px; min-height: 44px; padding: 8px; font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px }
+.note { font-size: 15px; color: var(--muted) }
+.slider { display: grid; gap: 4px; max-width: 560px }
+.slider-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px }
+.slider input[type=range] { width: 100%; height: 48px; margin: 0; accent-color: var(--accent); cursor: pointer }
+.slider input[type=range][data-unset] { opacity: .45 }
+.slider input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px }
+.ticks { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums }
+.sval { font-family: var(--display); font-size: 26px; font-variant-numeric: tabular-nums }
+.sval.unset { font-family: var(--body); font-size: 15px; color: var(--muted); padding-block: 8px }
+.score .v.small { font-size: 18px; padding-top: 6px }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card) }
+table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted) }
+tr:last-child td { border-bottom: 0 }
+td.num { text-align: right; white-space: nowrap }
+.bars { display: grid; gap: 8px }
+.bar { display: grid; grid-template-columns: minmax(120px, 210px) 1fr 52px; gap: 10px; align-items: center; font-size: 15px }
+.bar .track { height: 12px; background: var(--accent-soft); border-radius: 6px; overflow: hidden }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 6px }
+.bar .pct { text-align: right; font-variant-numeric: tabular-nums }
+ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 66ch }
+.post p, .post ul { font-size: 18px }
+.post { display: grid; gap: 18px }
+.byline { color: var(--muted); font-size: 15px }
+a { color: var(--accent) }
+@media (max-width: 480px) { .bar { grid-template-columns: 1fr 44px; } .bar .track { grid-column: 1 / -1; grid-row: 2 } }
+@media (prefers-reduced-motion: no-preference) { .fill { transition: width .3s } }

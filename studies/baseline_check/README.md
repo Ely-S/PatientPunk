@@ -3,8 +3,8 @@
 The evidence behind **Baseline Check**, a short weekly questionnaire for Long COVID and ME/CFS trials, drawn
 from how patients describe their own health changing on Reddit.
 
-The questionnaire and its rationale are published as a private claude.ai artifact (currently v0.3), made of
-three linked pages in `docs/baseline_check/` that share `style.css`:
+The [v0.3.1 questionnaire](../../docs/baseline_check/index.html) and its rationale are maintained in
+`docs/baseline_check/`. The three product pages share `style.css`:
 
 | Page | File | For |
 |---|---|---|
@@ -12,9 +12,8 @@ three linked pages in `docs/baseline_check/` that share `style.css`:
 | Methodology and Data | `methodology.html` | Trialists and reviewers: scoring rules, the evidence, limitations, validation plan |
 | Blog post | `blog.html` | General readers: the story of how the check was built |
 
-These pages are **not in Git** yet, because they quote patient posts. Until they are committed, they exist
-only in the author's local checkout and the artifact. This folder holds the analysis scripts behind every
-number on them, the codebooks used to code posts, and a record of what was corrected along the way.
+The product uses aggregate findings and thematic summaries. The analysis scripts and codebooks are here,
+with the source of each finding identified on the Methodology and Data page.
 
 **Status:** exploratory. All coding was done by Claude Sonnet agents, not human coders. Nothing here is
 validated with patients yet; the page's *Validation plan* section describes what would be.
@@ -40,19 +39,21 @@ validated with patients yet; the page's *Validation plan* section describes what
 
 ## The questionnaire in brief
 
-Version 0.3 asks about the past 7 days:
+Version 0.3.1 asks about the past 7 days.
 
 | Q | Asks | Scored as |
 |---|---|---|
-| Q1 | Days in a crash or flare, whatever set it off (optional trigger list) | 0–7 |
-| Q2 | Activities done **without paying for it later**, counting only those done at least two days before the check so a delayed crash has time to show. 23 items in 4 groups: *Within the home*, *Everyday basics*, *Getting out and keeping up*, *Full days and beyond*. Each group has "All of these" and "None of these this week" buttons | count 0–23 |
+| Q1 | Days in a crash or flare, whatever set it off. Setting Q1 to zero clears the optional trigger list | 0–7 |
+| Q2 | Activities done **without paying for it later**, counting only those done at least two days before the check so a delayed crash has time to show. 23 items in 4 groups: *Within the home*, *Everyday basics*, *Getting out and keeping up*, *Full days and beyond*. Each group has "All of these" and "None of these this week" buttons | Group scores as answered. Total 0–23 once all four groups are answered |
 | Q3 | Overall symptoms on a typical day | 0–10 |
-| Q4 | Percent of your old self (**optional**), on a slider that counts as unanswered until it is moved or tapped | 0–100 in steps of 5 |
+| Q4 | Percent of your old self (**optional**), on a slider with a Clear answer button | 0–100 in steps of 5 |
 | Q5 | Change since the last check (with a "No earlier check" choice) | 7-point scale |
-| — | Carer (proxy) mode that rewords every question | — |
+| Q6 | What changed this week (**optional**) | Free text |
+| — | Patient answering directly, patient answering with help, or carer answering for the patient | Reporter mode |
 
-The proposed primary endpoint is a win-ratio comparison: crash days (Q1) first, then the activity count (Q2).
-There is also a responder definition for clinicians. Both thresholds are provisional.
+The methodology describes a candidate win-ratio endpoint and a responder definition. Both thresholds are
+provisional. When the reporter switches between self-report and proxy, the quiz asks whether to start a
+fresh check. Direct and assisted self-report share the patient wording and answers.
 
 ## Inputs
 
@@ -173,8 +174,7 @@ to the questionnaire and item 14 was moving this work into the repo.
    first. A review of which questions add value then made Q4 optional (it is the noisiest item and the one
    severe patients use least), shortened the Q2 help to three sentences, told people to tick the shorter
    version of an item when they did the longer one, reworded the "usual responsibilities" item, and renamed
-   the trigger "Don't know" to "No clear reason". `t/test.js` runs 15 checks in jsdom: 13 on the form, one that the item counts written out in the
-   methodology's scoring rules match the form, and one that every link between the three pages resolves.
+   the trigger "Don't know" to "No clear reason". The current product is tested directly by `t/test.js`.
 
 ## Findings and where they come from
 
@@ -213,7 +213,7 @@ These are kept here so nobody re-uses a withdrawn number.
 | 54% of posts show a "questionnaire gap" | Coders were asked to find a gap, so they found one | Themes kept as a concept list; the percentage dropped |
 | Smallest detectable change ~30 points compared with orthopaedic MIDs | Pattern-matched ratings include errors; Reddit isn't a stable-patient retest; the comparison mixes different quantities | Reported as an upper bound from natural data only |
 | Coverage 69% fully captured | Judged by the agent that designed the questions | Blind figure (57%) reported, with both rows |
-| 23 quoted milestone phrases | 13 were coder paraphrases, not patients' words | Only the 10 verbatim phrases keep quotation marks |
+| 23 quoted milestone phrases | The product mixed coder paraphrases and verbatim patient phrases | v0.3.1 presents thematic summaries |
 | Chunk-2 coding | The coder's helper filled skipped fields with "not mentioned"/false | Excluding it moves headlines ≤5 points; 20-post recode in `quality/` |
 
 ## Limitations
@@ -239,8 +239,7 @@ Requirements:
   `data/full_corpus_2026-07-31/records.csv`. Check both hashes in [Inputs](#inputs) first.
 - For anything that reads coded data, the local data files described in
   [Data that is not in Git](#data-that-is-not-in-git).
-- For the form tests, a copy of the three pages in `docs/baseline_check/` (not in Git; see the top of
-  this README).
+- Form tests read the current product in `docs/baseline_check/` directly.
 
 All commands start from the repo root. None of them call a paid service.
 
@@ -271,9 +270,9 @@ cd $S/v03_rechecks/b_matters && uv run python chk0.py && uv run python chk1.py
 No `BAD` lines means every quote is verbatim.
 
 ```sh
-cd $S/v03_rechecks/a_instrument/t && npm ci && node test.js $REPO/docs/baseline_check
+cd "$S/v03_rechecks/a_instrument/t" && npm ci && node test.js
 ```
-Expect 15 `PASS` lines and `15 checks passed`.
+Expect 17 `PASS` lines and `17 checks passed`.
 
 ### v0.2 numbers (seconds each)
 
@@ -368,7 +367,7 @@ These append rows. Re-running them duplicates data:
 | `b_matters/chk0.py`, `chk1.py` | `batch_N.txt`, `coded_N.jsonl` | flags quotes not found verbatim or over 25 words |
 | `c_coverage/analyze.py OLD` | `blind_0..1.jsonl`, designer `coded.jsonl` | blind vs designer coverage, κ, per-question share, gaps |
 | `d_checks/delay.py DB` | corpus FTS | delay bins; `delay_precision_sample.json` for hand checking |
-| `a_instrument/t/test.js DIR` | `index.html`, `methodology.html`, `blog.html` in `DIR` | 15 jsdom checks: the form, scoring counts, links between pages |
+| `a_instrument/t/test.js [DIR]` | Product pages in `docs/baseline_check/` by default | 17 jsdom checks covering form behaviour, scoring and local links |
 
 ### Codebooks
 

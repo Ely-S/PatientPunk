@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Baseline Check v0.3.1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav aria-label="Baseline Check pages"><div class="wrap"><b>Baseline Check</b><a href="index.html" aria-current="page">The Quiz</a><a href="methodology.html">Methodology and Data</a><a href="blog.html">Blog post</a></div></nav>
+
+<div class="wrap">
+<section>
+  <span class="eyebrow">Draft patient-reported outcome · Long COVID and ME/CFS · v0.3.1</span>
+  <h1>A short weekly check built from how patients describe getting better and worse</h1>
+  <p class="lede">Six questions, one week of recall. It counts crashes, counts what you could do without paying for it later, and asks whether you feel like yourself. Built from 3.8 million Reddit posts and comments, then checked against the trial literature.</p>
+  <p class="status"><b>Status:</b> research draft. Not validated. The evidence supports what to measure; it does not yet show the questions are reliable or responsive. Read the <a href="methodology.html">methodology and data</a>, including the validation plan, before using it in a study.</p>
+</section>
+
+<section id="quiz">
+  <span class="eyebrow">1 · The quiz</span>
+  <h2>Baseline Check v0.3.1</h2>
+  <p>Answer about <b>the past 7 days</b>. Try the form; the scores update as you go. Nothing is filled in for you, and nothing you enter is saved or sent.</p>
+
+  <form class="form" id="bc" onsubmit="event.preventDefault()">
+    <div class="mode">
+      <label for="reporter">Who is giving the answers?</label>
+      <select id="reporter" name="reporter">
+        <option value="patient">Patient answering directly</option>
+        <option value="assisted">Patient answering with help</option>
+        <option value="proxy">Carer answering for the patient</option>
+      </select>
+      <p class="note" id="assisted-note" hidden>Read the questions aloud if needed and enter the answers the patient gives, including answers given by a gesture.</p>
+      <p class="note proxy" hidden>Give your own observations of the patient's week. Leave a question blank if you cannot answer it.</p>
+    </div>
+
+    <fieldset class="q crash">
+      <legend><span class="n">1</span><span class="stem self">On how many of the past 7 days were you in a crash or flare?</span><span class="stem proxy" hidden>On how many of the past 7 days were they in a crash or flare?</span></legend>
+      <div class="help self">Count every day you were noticeably worse than your usual, whatever set it off: doing something physical, mental, emotional or sensory, an infection, a treatment, your menstrual cycle, or no clear reason. A crash after doing something often starts one to three days later; count those days too.</div>
+      <div class="help proxy" hidden>Count every day they were noticeably worse than their usual, whatever set it off: doing something physical, mental, emotional or sensory, an infection, a treatment, their menstrual cycle, or no clear reason. A crash after doing something often starts one to three days later; count those days too.</div>
+      <div class="chips" id="q1"></div>
+      <fieldset class="sub" id="q1t" hidden disabled>
+        <legend class="help">What set them off? <span>(optional, tick any)</span></legend>
+        <div class="chips" id="q1tc"></div>
+      </fieldset>
+    </fieldset>
+
+    <fieldset class="q">
+      <legend><span class="n">2</span><span class="stem self">Which of these could you do at least once this week <i>without paying for it later</i>?</span><span class="stem proxy" hidden>Which of these could they do at least once this week <i>without paying for it later</i>?</span></legend>
+      <div class="help self">Tick what you managed without it causing a crash. Only count things from at least 2 days ago, so you know whether they cost you. If you did the longer or bigger version of something, tick the shorter one too.</div>
+      <div class="help proxy" hidden>Tick what they managed without it causing a crash. Only count things from at least 2 days ago, so you know whether they cost them. If they did the longer or bigger version of something, tick the shorter one too.</div>
+      <div class="q2" id="q2"></div>
+    </fieldset>
+
+    <fieldset class="q">
+      <legend><span class="n">3</span><span class="stem self">On a typical day this week, how bad were your symptoms overall?</span><span class="stem proxy" hidden>On a typical day this week, how bad were their symptoms overall?</span></legend>
+      <div class="help">0 = no symptoms, 10 = as bad as you can imagine.</div>
+      <div class="chips" id="q3"></div>
+    </fieldset>
+
+    <fieldset class="q">
+      <legend id="q4leg"><span class="n">4</span><span class="stem self">This week, how close did you feel to your pre-illness self?</span><span class="stem proxy" hidden>This week, how close did they seem to their pre-illness self?</span> <span class="help">(optional)</span></legend>
+      <div class="help self">0% = nothing like myself, 100% = fully myself, as before I got sick. The slider moves in steps of 5%.</div>
+      <div class="help proxy" hidden>0% = nothing like their old self, 100% = fully themselves, as before they got sick. The slider moves in steps of 5%.</div>
+      <div class="slider">
+        <div class="slider-status">
+          <output class="sval unset" id="q4v" for="q4">Not answered yet</output>
+          <button type="button" class="gbtn" id="clear-q4" aria-controls="q4">Clear answer</button>
+        </div>
+        <input type="range" id="q4" min="0" max="100" step="5" value="50" data-unset aria-labelledby="q4leg" aria-valuetext="Not answered yet">
+        <div class="ticks" aria-hidden="true"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      </div>
+    </fieldset>
+
+    <fieldset class="q">
+      <legend><span class="n">5</span><span class="stem self">Compared with your last check, overall you are…</span><span class="stem proxy" hidden>Compared with their last check, overall they are…</span></legend>
+      <div class="help self">If this is your first check, choose "No earlier check".</div>
+      <div class="help proxy" hidden>If this is their first check, choose "No earlier check".</div>
+      <div class="chips" id="q5"></div>
+    </fieldset>
+
+    <fieldset class="q">
+      <legend id="q6leg"><span class="n">6</span><span class="stem self">What changed for you this week, if anything?</span><span class="stem proxy" hidden>What changed for them this week, if anything?</span> <span class="help">(optional)</span></legend>
+      <textarea id="q6" aria-labelledby="q6leg"></textarea>
+    </fieldset>
+
+    <div class="score" aria-live="polite">
+      <div><span class="k">Crash days</span><span class="v crashv" id="s1">–</span></div>
+      <div><span class="k">Without cost</span><span class="v" id="s2">–</span><ul class="sub" id="s2b" aria-label="Activity group scores"></ul><span class="sub" id="s2c"></span></div>
+      <div><span class="k">Symptoms</span><span class="v" id="s3">–</span></div>
+      <div><span class="k">Like myself</span><span class="v" id="s4">–</span></div>
+      <div><span class="k">Change</span><span class="v small" id="s6">–</span></div>
+      <div><span class="k">Answered by</span><span class="v small" id="s5">Patient</span></div>
+      <p class="note unans" id="unans"></p>
+    </div>
+  </form>
+  <p class="note">How these scores are used in a study, and the evidence behind each question, are on the <a href="methodology.html">Methodology and Data</a> page.</p>
+</section>
+<nav class="pager" aria-label="Previous and next page"><span></span><a href="methodology.html">Methodology and Data →</a></nav>
+</div>
+
+<script>
+(function () {
+  // Each item: [label, hint, proxyLabel?, proxyHint?]. Every group gets "All of these" and "None of these this week" buttons.
+  const GROUPS = [
+    ["Within the home", [
+      ["Get to the toilet on your own", "walking or with an aid", "Get to the toilet on their own"],
+      ["Brush your teeth or wash your face", "sitting or standing", "Brush their teeth or wash their face"],
+      ["Hold a phone or tablet to read a message", "propped up is fine"],
+      ["Have a 5-minute conversation", "in person or by phone"]]],
+    ["Everyday basics", [
+      ["Sit up for most of the day", "or in a supported chair"],
+      ["Shower or bathe", "standing or seated"],
+      ["Make a simple meal", "e.g. toast, a sandwich"],
+      ["Have a 30-minute conversation", "in person, phone or video"],
+      ["Read or watch something for 30 minutes", "and follow it"],
+      ["Leave the house", "for any reason"]]],
+    ["Getting out and keeping up", [
+      ["Walk for 15 minutes outside", "at your own pace", null, "at their own pace"],
+      ["Stand for 20 minutes", "e.g. queueing, cooking at the stove"],
+      ["Do household chores", "e.g. laundry, cleaning, cooking a full meal"],
+      ["Go grocery shopping or run errands", "in person"],
+      ["See friends or family for an hour or more", "outside your home", null, "outside their home"],
+      ["Work, study or volunteer for half a day", "about 4 hours, any setting"]]],
+    ["Full days and beyond", [
+      ["Do light exercise on purpose", "e.g. gentle swim, yoga, easy bike ride"],
+      ["Walk for 45 minutes or more", "in one go"],
+      ["Do 3 or more hours of focused mental work", "e.g. reading, screens, planning, paperwork"],
+      ["Do a full day of work, study or caring", "about 8 hours of demanding tasks, without needing to lie down"],
+      ["Go out for an evening or an outing of 3+ hours", "e.g. dinner, an event, a day trip, time outdoors"],
+      ["Keep up all your usual responsibilities, with no days lost", "work, study, caring or running a home",
+       "Keep up all their usual responsibilities, with no days lost"],
+      ["Be as physically active as before you got sick", "your old exercise, sport or physical job",
+       "Be as physically active as before they got sick", "their old exercise, sport or physical job"]]]
+  ];
+  const TOTAL = GROUPS.reduce((n, g) => n + g[1].length, 0);
+  const TRIGGERS = ["Physical activity", "Mental effort", "Emotional stress", "Sensory overload", "Infection", "Treatment or procedure", "Menstrual cycle", "No clear reason"];
+  const CHANGE = ["Much worse", "Worse", "A little worse", "About the same", "A little better", "Better", "Much better"];
+  const DASH = "–";
+  const $ = (id) => document.getElementById(id);
+  const both = (s, p) => p ? `<span class="self">${s}</span><span class="proxy" hidden>${p}</span>` : s;
+  const chip = (name, value, text, type = "radio") => `<label><input type="${type}" name="${name}" value="${value}"><span>${text}</span></label>`;
+
+  for (let i = 0; i <= 7; i++) $("q1").insertAdjacentHTML("beforeend", chip("q1", i, i));
+  TRIGGERS.forEach((t, i) => $("q1tc").insertAdjacentHTML("beforeend", chip("q1t", i, t, "checkbox")));
+  for (let i = 0; i <= 10; i++) $("q3").insertAdjacentHTML("beforeend", chip("q3", i, i));
+  CHANGE.forEach((c, i) => $("q5").insertAdjacentHTML("beforeend", chip("q5", i - 3, c)));
+  $("q5").insertAdjacentHTML("beforeend", chip("q5", "none", "No earlier check"));
+
+  const q2 = $("q2");
+  let idx = 0;
+  GROUPS.forEach(([name, items], g) => {
+    const all = `<button type="button" class="gbtn" data-all="${g}" id="all_${g}" aria-pressed="false">All of these</button>`;
+    const rows = items.map(([a, h, pa, ph]) =>
+      `<label><input type="checkbox" id="q2_${idx++}" data-g="${g}"><span>${both(a, pa)}<small>${both(h, ph)}</small></span></label>`).join("");
+    q2.insertAdjacentHTML("beforeend", `<div class="grp" role="group" aria-labelledby="gname_${g}">
+      <div class="ghead"><span class="gname" id="gname_${g}">${name} <span>(${items.length})</span></span>
+      <span class="gbtns">${all}<button type="button" class="gbtn" data-none="${g}" id="none_${g}" aria-pressed="false">None of these this week</button></span></div>
+      <div class="checks">${rows}</div></div>`);
+  });
+
+  const boxes = (g) => [...q2.querySelectorAll(`input[data-g="${g}"]`)];
+  const pressed = (b) => b && b.getAttribute("aria-pressed") === "true";
+  const press = (b, on) => { if (b) b.setAttribute("aria-pressed", on ? "true" : "false"); };
+
+  q2.addEventListener("click", (e) => {
+    const b = e.target.closest("button.gbtn");
+    if (!b) return;
+    const g = b.dataset.none ?? b.dataset.all, on = !pressed(b);
+    if (b.dataset.none !== undefined) {
+      if (on) boxes(g).forEach((x) => { x.checked = false; });
+      press(b, on);
+    } else {
+      boxes(g).forEach((x) => { x.checked = on; });
+      press($("none_" + g), false);
+    }
+    update();
+  });
+  q2.addEventListener("change", (e) => {
+    const x = e.target;
+    if (!x.matches("input[data-g]")) return;
+    if (x.checked) press($("none_" + x.dataset.g), false);
+  });
+
+  const form = $("bc");
+  const reporter = $("reporter");
+  const reporterLabels = {
+    patient: "Patient",
+    assisted: "Patient with help",
+    proxy: "Carer (proxy)"
+  };
+  const triggers = $("q1t");
+  const triggerInputs = triggers.querySelectorAll("input");
+  const groupScores = GROUPS.map(([name]) => {
+    const row = document.createElement("li");
+    const score = document.createElement("span");
+    row.append(name + " ", score);
+    $("s2b").append(row);
+    return score;
+  });
+  let currentReporter = reporter.value;
+
+  reporter.addEventListener("change", () => {
+    const nextReporter = reporter.value;
+    const proxy = nextReporter === "proxy";
+    const switchesSource = proxy !== (currentReporter === "proxy");
+    const hasAnswers = form.querySelector("input:checked, button[data-none][aria-pressed=true]") ||
+      !slider.hasAttribute("data-unset") || $("q6").value.trim();
+
+    if (switchesSource && hasAnswers) {
+      if (!window.confirm("Start a new check with the other person’s answers? Your current answers will be cleared.")) {
+        reporter.value = currentReporter;
+        return;
+      }
+      form.reset();
+      reporter.value = nextReporter;
+      form.querySelectorAll("button[data-none]").forEach((button) => press(button, false));
+      slider.setAttribute("data-unset", "");
+    }
+
+    currentReporter = nextReporter;
+    $("assisted-note").hidden = currentReporter !== "assisted";
+    form.querySelectorAll(".self").forEach((x) => { x.hidden = proxy; });
+    form.querySelectorAll(".proxy").forEach((x) => { x.hidden = !proxy; });
+    update();
+  });
+
+  const val = (n) => { const x = document.querySelector(`input[name="${n}"]:checked`); return x ? x.value : null; };
+
+  // A slider always holds a value, so Q4 counts as answered only once the person moves or taps it.
+  const slider = $("q4");
+  const answer = () => { slider.removeAttribute("data-unset"); update(); };
+  ["input", "change", "pointerup"].forEach((t) => slider.addEventListener(t, answer));
+  $("clear-q4").addEventListener("click", () => {
+    slider.value = slider.defaultValue;
+    slider.setAttribute("data-unset", "");
+    update();
+  });
+
+  function update() {
+    const q1 = val("q1"), q3 = val("q3"), q5 = val("q5");
+    const q4 = slider.hasAttribute("data-unset") ? null : slider.value;
+    $("q4v").textContent = q4 === null ? "Not answered yet" : q4 + "%";
+    $("q4v").classList.toggle("unset", q4 === null);
+    slider.setAttribute("aria-valuetext", q4 === null ? "Not answered yet" : q4 + "%");
+    $("s1").textContent = q1 === null ? DASH : q1 + " / 7";
+    const showTriggers = Number(q1) > 0;
+    triggers.hidden = triggers.disabled = !showTriggers;
+    if (!showTriggers) triggerInputs.forEach((input) => { input.checked = false; });
+
+    let acts = 0, blank = 0;
+    GROUPS.forEach((g, i) => {
+      const n = boxes(i).filter((x) => x.checked).length;
+      press($("all_" + i), n === g[1].length);
+      const answered = n > 0 || pressed($("none_" + i));
+      acts += n;
+      if (!answered) blank++;
+      groupScores[i].textContent = (answered ? n : DASH) + "/" + g[1].length;
+    });
+    const anyAnswered = blank < GROUPS.length;
+    $("s2").textContent = blank === 0 ? acts + " / " + TOTAL : DASH;
+    $("s2c").textContent = anyAnswered && blank ? `${blank} ${blank === 1 ? "group" : "groups"} blank` : "";
+
+    $("s3").textContent = q3 === null ? DASH : q3 + " / 10";
+    $("s4").textContent = q4 === null ? DASH : q4 + "%";
+    $("s6").textContent = q5 === null ? DASH : q5 === "none" ? "Missing (first check)" : CHANGE[Number(q5) + 3];
+    $("s5").textContent = reporterLabels[currentReporter];
+
+    const left = [q1 === null, blank > 0, q3 === null, q5 === null].filter(Boolean).length;
+    $("unans").textContent = left ? `${left} of 4 required questions still unanswered (Q4 and Q6 are optional).` : "All 4 required questions answered.";
+  }
+  form.addEventListener("input", update);
+  form.addEventListener("change", update);
+  update();
+})();
+</script>
+</body>
+</html>
