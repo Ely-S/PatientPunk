@@ -144,3 +144,37 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     resolve_profiles(conn, run(conn))
     names = {n for (n,) in conn.execute("SELECT name FROM sqlite_master")}
     assert {"post_runs", "demographic_claims", "demographic_claims_latest"} <= names
+
+
+@pytest.mark.parametrize("stated, expected", [
+    ("34.0", "30s"), ("mid-30s", "30s"), ("early 40s", "40s"), ("thirty-ish", None), ("1e3", None), ("", None),
+])
+def test_ages_the_model_may_write_never_crash(conn, stated, expected):
+    post(conn, "p1", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age=stated)
+    resolve_profiles(conn, r)
+    assert profile(conn, "a")[0] == expected
+
+
+def test_an_unparseable_age_does_not_hide_an_earlier_one(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="34"), read(conn, r, "p2", age="old enough")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+    assert profile(conn, "a")[0] == "30s"
+
+
+def test_a_decade_and_an_age_in_it_agree(conn):
+    post(conn, "p1", "a", 2026), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="mid-30s"), read(conn, r, "p2", age="34")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+
+
+def test_case_differences_are_not_disagreements(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", sex="Female", country="US", state="Texas"), read(conn, r, "p2", sex="female", country="us")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+    assert profile(conn, "a")[1:] == ("female", "us / Texas")
