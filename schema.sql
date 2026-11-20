@@ -171,6 +171,37 @@ CREATE VIEW IF NOT EXISTS user_profiles_latest AS
         WHERE up2.user_id = up.user_id AND r.extraction_type = 'demographics'
     );
 
+-- A demographics run records here each post it read, including those with no claims, so
+-- demographic_claims_latest takes each post's claims from its newest reading run and a re-read
+-- that finds nothing retracts older claims without deleting them.
+CREATE TABLE post_runs (
+    run_id  INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    post_id TEXT NOT NULL REFERENCES posts(post_id),
+    PRIMARY KEY (run_id, post_id)
+);
+CREATE INDEX idx_pr_post ON post_runs(post_id);
+
+-- One value a post states about its author, with the words it came from. Ages are kept as
+-- stated ("29"), not as decades; src/resolve_demographics.py turns claims into user_profiles rows.
+CREATE TABLE demographic_claims (
+    run_id   INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    post_id  TEXT NOT NULL REFERENCES posts(post_id),
+    user_id  TEXT NOT NULL REFERENCES users(user_id),
+    field    TEXT NOT NULL CHECK (field IN ('age', 'sex', 'country', 'state')),
+    value    TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    PRIMARY KEY (run_id, post_id, field)
+);
+CREATE INDEX idx_dc_user ON demographic_claims(user_id);
+
+-- Each post's claims from its newest demographics run (post_runs); none when that run found nothing.
+CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
+    SELECT c.* FROM demographic_claims c
+    WHERE c.run_id = (
+        SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
+        WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
+    );
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════
