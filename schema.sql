@@ -163,6 +163,14 @@ CREATE VIEW IF NOT EXISTS report_effects_latest AS
         WHERE tr2.post_id = tr.post_id AND tr2.drug_id = tr.drug_id
     );
 
+-- Each user's profile from their newest demographics run; rows from CSV loads never count.
+CREATE VIEW IF NOT EXISTS user_profiles_latest AS
+    SELECT up.* FROM user_profiles up
+    WHERE up.run_id = (
+        SELECT MAX(up2.run_id) FROM user_profiles up2 JOIN extraction_runs r ON r.run_id = up2.run_id
+        WHERE up2.user_id = up.user_id AND r.extraction_type = 'demographics'
+    );
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════
