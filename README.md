@@ -171,13 +171,6 @@ Groups posts by user, sends them to a fast model, and extracts demographics and 
 
 In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
 
-`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and demographic filters (`query_treatment_outcomes`) read it. Rows loaded from CSVs by `load_db.py` never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
-
-```bash
-cp reddit_snapshot.db work.db
-uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
-```
-
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db
 ```
@@ -188,6 +181,13 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 | `--limit N` | Limit to N users (default: all) |
 | `--max-posts N` | Max posts per user sent to LLM (default: 10) |
 | `--max-chars N` | Max characters per post (default: 500) |
+
+`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and demographic filters (`query_treatment_outcomes`) read it. Rows loaded from CSVs by `load_db.py` never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
+
+```bash
+cp reddit_snapshot.db work.db
+uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
+```
 
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
@@ -289,7 +289,8 @@ uv run python load_db.py --posts-db data/posts.db --records output/records.csv \
 `patientpunk.db` (a full copy of `posts.db` plus new tables) holds:
 
 - `user_profiles` / `conditions` — demographics and conditions merged in from the
-  variable-extraction CSVs (demographics values win over records.csv on conflict)
+  variable-extraction CSVs (demographics values win over records.csv on conflict);
+  these CSV-loaded rows never count in `user_profiles_latest`, so demographic filters ignore them
 - `variables` — the canonical EAV table: one row per `author_hash × field × run`,
   including inductively-discovered fields; the source of truth for extracted data
 - `unified` — a derived, wide clustering-ready table (one row per record, one
