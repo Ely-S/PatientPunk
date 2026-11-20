@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from patientpunk.db import init_db, register_run  # noqa: E402
+from import_posts import DELETED_USER_ID  # noqa: E402
 from resolve_demographics import resolve_profiles  # noqa: E402
 
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
@@ -178,3 +179,13 @@ def test_case_differences_are_not_disagreements(conn):
     read(conn, r, "p1", sex="Female", country="US", state="Texas"), read(conn, r, "p2", sex="female", country="us")
     assert resolve_profiles(conn, r)["disagreements"] == {}
     assert profile(conn, "a")[1:] == ("female", "us / Texas")
+
+
+def test_the_deleted_placeholder_never_gets_a_profile(conn):
+    conn.execute("INSERT INTO users VALUES (?, 'cfs', 0)", (DELETED_USER_ID,))
+    post(conn, "p1", DELETED_USER_ID, 2026), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="50", sex="male"), read(conn, r, "p2", sex="female")
+    assert resolve_profiles(conn, r)["profiles_written"] == 1
+    assert profile(conn, DELETED_USER_ID) is None
+    assert profile(conn, "a") == (None, "female", None)

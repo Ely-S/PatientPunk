@@ -8,7 +8,8 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-from patientpunk.db import _bucketize_age, apply_schema
+from import_posts import DELETED_USER_ID
+from patientpunk.db import _bucketize_age, apply_schema, latest_profiles
 
 
 def _years_between(start: int, end: int) -> int:
@@ -56,7 +57,8 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
     """Write a user_profiles row under ``run_id`` (a demographics run) for every user whose posts some
     run has read and whose resolved profile differs from their current one, with empty fields where
-    nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current.
+    nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
+    the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
     The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
         apply_schema(conn)  # a database built before the claim tables; this commits
@@ -70,14 +72,14 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     read = {u for (u,) in conn.execute(
         "SELECT DISTINCT p.user_id FROM post_runs pr JOIN posts p ON p.post_id = pr.post_id "
         "JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics'")}
-    current = {u: tuple(row) for u, *row in conn.execute(
-        "SELECT user_id, age_bucket, sex, location FROM user_profiles_latest")}
+    current = latest_profiles(conn)
 
     disagreements, rows = Counter(), []
-    for user in sorted(read - set(failed_users)):
+    for user in sorted(read - set(failed_users) - {DELETED_USER_ID}):
         profile, disagree = _resolve(claims.get(user, []), reference)
         disagreements.update(disagree)
-        if current.get(user) != profile:
+        p = current.get(user)
+        if p is None or (p["age_bucket"], p["sex"], p["location"]) != tuple(v or "" for v in profile):
             rows.append((user, run_id, *profile))
     with conn:
         conn.executemany(
