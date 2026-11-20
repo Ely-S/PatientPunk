@@ -21,11 +21,6 @@ In-process phase functions (also used by Pipeline)::
     from patientpunk.export_csv import run_export_csv
     from patientpunk.codebook import run_codebook
 
-Standalone demographics (LLM-only, age/sex/location)::
-
-    from patientpunk import run_demographic_coding
-    from patientpunk.demographics_deductive import run_demographics_deductive
-
 Quick-start example::
 
     from pathlib import Path
@@ -42,13 +37,11 @@ Quick-start example::
 """
 
 from .corpus import CorpusLoader, CorpusRecord
-from .demographics import run_demographic_coding
 from .pipeline import Pipeline, PipelineConfig, PipelineResult, PhaseResult
 from .qualitative_standards import (
     FIELD_DESIGN_STANDARDS,
     EXTRACTION_STANDARDS,
     DEMOGRAPHIC_STANDARDS,
-    INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 from .schema import FieldDefinition, Schema
 
@@ -64,13 +57,10 @@ __all__ = [
     "PipelineConfig",
     "PipelineResult",
     "PhaseResult",
-    # Demographic coding
-    "run_demographic_coding",
     # Qualitative coding standards (for use in custom prompts / notebooks)
     "FIELD_DESIGN_STANDARDS",
     "EXTRACTION_STANDARDS",
     "DEMOGRAPHIC_STANDARDS",
-    "INDUCTIVE_DEMOGRAPHIC_STANDARDS",
 ]
 
 __version__ = "0.1.0"

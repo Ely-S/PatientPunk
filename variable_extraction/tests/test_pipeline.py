@@ -34,7 +34,6 @@ from patientpunk.discover import (
     merge_into_schema,
     parse_json_response,
 )
-from patientpunk.demographics_deductive import _default_output_path
 from patientpunk.codebook import build_field_registry
 
 
@@ -315,8 +314,3 @@ class TestBuildFieldRegistryDiscovered:
         shared = [r for r in reg if r["field"] == "shared"]
         assert len(shared) == 1                       # not duplicated
         assert shared[0]["source"] == "extension"     # curated entry wins
-
-
-class TestDemographicsScriptDefaults:
-    def test_output_defaults_next_to_input_dir(self, tmp_path):
-        assert _default_output_path(tmp_path) == tmp_path / "demographics.csv"
