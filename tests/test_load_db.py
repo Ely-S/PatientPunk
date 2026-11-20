@@ -157,10 +157,10 @@ def test_unified_warns_without_direct_profiles(built, capsys):
     conn.close()
 
 
-def _cluster_prep(records: Path, db: Path | None, out: Path) -> dict[str, dict[str, str]]:
+def _cluster_prep(records: Path, db: Path | None, out: Path, key: str = "author_hash") -> dict[str, dict[str, str]]:
     with pytest.raises(SystemExit, match="0"):  # --no-report exits once the matrix is written
         ve_main._cmd_cluster_prep(argparse.Namespace(
-            records=records, db=db, key="author_hash", min_coverage=0.0, encode="multihot",
+            records=records, db=db, key=key, min_coverage=0.0, encode="multihot",
             top_k=8, fields=None, sep=" | ", out=out, no_report=True))
     return {r["patient_id"]: r for r in csv.DictReader(open(out, encoding="utf-8"))}
 
@@ -177,6 +177,17 @@ def test_cluster_prep_without_db_warns_and_runs(built, capsys):
     assert "no --db" in capsys.readouterr().out
     assert set(matrix) == {"u1", "u2"}
     assert not [c for c in matrix["u1"] if c.startswith(("demo_", "age", "sex_gender", "location"))]
+
+
+def test_cluster_prep_warns_when_no_key_matches_a_profile(built, capsys):
+    matrix = _cluster_prep(built.parent / "records.csv", built, built.parent / "m.csv", key="post_id")
+    assert "no --key 'post_id' value matches a user_id" in capsys.readouterr().out
+    assert not [c for c in matrix["p1"] if c.startswith("demo_") and matrix["p1"][c] == "1"]
+
+
+def test_cluster_prep_stays_quiet_when_profiles_match(built, capsys):
+    _cluster_prep(built.parent / "records.csv", built, built.parent / "m.csv")
+    assert "matches a user_id" not in capsys.readouterr().out
 
 
 def test_bucketize_age_handles_missing_and_qualitative_decades():
