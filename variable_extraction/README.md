@@ -14,7 +14,7 @@ conditions, medications, treatment outcomes, etc.) using Claude Haiku LLM calls.
 ## Table of Contents
 
 1. [Quick Start](#quick-start)
-2. [Two Extraction Approaches](#two-extraction-approaches)
+2. [Extraction Pipeline](#extraction-pipeline)
 3. [Pipeline Phases](#pipeline-phases)
 4. [Pipeline Architecture](#pipeline-architecture)
 5. [CLI Reference](#cli-reference)
@@ -43,21 +43,21 @@ cp ../.env.example ../.env && echo "ANTHROPIC_API_KEY=sk-ant-..." >> ../.env
 #    patients -- otherwise comment-only evidence is intentionally skipped.
 python main.py run --schema schemas/covidlonghaulers_schema.json
 
-# 4. LLM-only demographics (age / sex / location, deductive + inductive)
-python main.py demographics --input-dir ../output
-
-# 5. Inspect the schema without running anything
+# 4. Inspect the schema without running anything
 python main.py inspect --schema schemas/covidlonghaulers_schema.json
 ```
 
 ---
 
-## Two Extraction Approaches
+## Extraction Pipeline
 
-Two distinct pipelines. They are complementary — both output records tagged
-with `author_hash` as the join key, and can be run in either order.
+Patient demographics (age, sex, location) for analysis come from the database
+extractor, `src/extract_demographics_conditions.py`, through the
+`user_profiles_latest` view (see the root README, Step 3a). This pipeline's own
+`age` / `sex_gender` / `location_country` columns are not loaded into profiles,
+the `variables` table, `unified` or `cluster-prep` features.
 
-### Approach A — Full Pipeline (LLM extraction)
+### Full Pipeline (LLM extraction)
 
 Extracts **every field** defined in the schema (age, sex/gender, conditions,
 medications, procedures, functional status, etc. — 20 fields for
@@ -75,35 +75,6 @@ python main.py run --schema schemas/covidlonghaulers_schema.json --discover auto
 
 # With discovery (stop for human review in Marimo variable picker)
 python main.py run --schema schemas/covidlonghaulers_schema.json --discover review
-```
-
-### Approach B — LLM-Only Demographics
-
-Extracts demographic fields only. Haiku is given a strict
-self-reference constraint: it only extracts values the author states explicitly
-about themselves. Works especially well with full user posting histories
-(typically 4–5× more coverage than single posts).
-
-Supports two complementary coding modes:
-
-| Mode | What it does |
-|---|---|
-| `deductive` | Extracts predefined fields: `age`, `sex_gender`, `location_country`, `location_state` |
-| `inductive` | Discovers NEW demographic categories from the data: occupation, insurance type, ethnicity, etc. |
-| `both` (default) | Deductive + inductive in a single LLM pass |
-
-```bash
-# Both deductive + inductive (default)
-python main.py demographics --input-dir ../output
-
-# Deductive only
-python main.py demographics --input-dir ../output --mode deductive
-
-# Inductive only (discover new categories)
-python main.py demographics --input-dir ../output --mode inductive
-
-# User histories only (recommended — best coverage)
-python main.py demographics --input-dir ../output --users-only
 ```
 
 ---
@@ -337,20 +308,6 @@ PP_GROUP_GUARD=1 python main.py run --schema schemas/...
 Measured effect: `helped` share ~47% -> ~43% on a 3-arm test. **Recommended for any
 analysis that reports per-drug `helped` rates;** leave off to reproduce pre-fix numbers.
 
-### `demographics` — LLM-only demographics
-
-```
-python main.py demographics --input-dir ../output [options]
-
-  --mode                deductive | inductive | both (default: both)
-  --input-dir PATH      Corpus directory
-  --output-dir PATH     Output directory (default: same as --input-dir)
-  --workers N           Concurrent Haiku workers (default: 10)
-  --posts-only          Only process subreddit_posts.json
-  --users-only          Only process users/*.json histories
-  --max-chars N         Max characters per record sent to LLM (default: 8000)
-```
-
 ### `inspect` — schema introspection
 
 ```
@@ -425,8 +382,9 @@ handled uniformly.
 ### `cluster-prep` — build a per-patient clustering-ready feature matrix
 
 ```
-python main.py cluster-prep --records output/records.csv [options]
+python main.py cluster-prep --records output/records.csv --db patientpunk.db [options]
 
+  --db PATH               Database whose user_profiles_latest supplies age / sex / location
   --key cols              Patient-unit column (default: author_hash)
   --min-coverage F        Drop fields below this patient coverage (default: 0.25)
   --encode MODE           presence | topk | multihot  (default: topk)
@@ -440,6 +398,8 @@ rest with a controlled vocabulary (top-k values/field + an "other" bucket) --
 the biggest clusterability lever. Prints n / p-over-n / density / pairwise
 similarity / silhouette-by-k (needs `pip install 'patientpunk[cluster]'`) so you
 can tell whether the data is appropriate for clustering before you try.
+Demographic features (`demo_age_bucket`, `demo_sex`, `demo_location`) come only
+from `--db`; without it, cluster-prep warns and clusters without them.
 
 ### `aggregate` — collapse posts+comments into one synthetic post per author
 
@@ -481,7 +441,7 @@ install -e .`); `patientpunk` then imports from anywhere for use in notebooks or
 scripts.
 
 ```python
-from patientpunk import CorpusLoader, Pipeline, PipelineConfig, run_demographic_coding
+from patientpunk import CorpusLoader, Pipeline, PipelineConfig
 from pathlib import Path
 
 # Load corpus
@@ -498,13 +458,6 @@ config = PipelineConfig(
 )
 result = Pipeline(config).run()
 print(result.ok, result.summary())
-
-# LLM-only demographics (deductive + inductive)
-run_demographic_coding(
-    input_dir=Path("../output"),
-    mode="both",
-    include_users=True,
-)
 ```
 
 ---
@@ -524,15 +477,6 @@ Key columns:
 
 One row per field: field name, source, description, confidence tier, ICD-10 code,
 observed coverage %, example values.
-
-### `output/demographics_deductive.csv` (LLM-only, deductive)
-
-Columns: `author_hash`, `source_type`, `age`, `sex_gender`, `location_country`,
-`location_state`, `confidence`, `evidence`.
-
-### `output/demographics_inductive.json` + `demographics_codebook.json` (LLM-only, inductive)
-
-Per-record discovered categories and aggregated frequency codebook.
 
 ---
 
@@ -605,9 +549,7 @@ variable_extraction/
 │   ├── llm_extract.py             Phase 1 — run_llm_extract (+ CLI)
 │   ├── discover.py                Phase 2 — run_discovery (+ CLI)
 │   ├── export_csv.py              Phase 3 — run_export_csv (+ CLI)
-│   ├── codebook.py                Phase 4 — run_codebook (+ CLI)
-│   ├── demographics.py            run_demographic_coding (+ CLI)
-│   └── demographics_deductive.py  run_demographics_deductive (+ CLI)
+│   └── codebook.py                Phase 4 — run_codebook (+ CLI)
 │
 └── tests/
     ├── test_patientpunk.py

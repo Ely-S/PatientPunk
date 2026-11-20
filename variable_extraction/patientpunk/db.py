@@ -64,6 +64,12 @@ VARIABLE_META_COLUMNS: set[str] = {
     "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
+# records.csv demographic columns that no longer feed profiles or derived tables;
+# demographics come only from user_profiles_latest.
+LEGACY_DEMOGRAPHIC_COLUMNS: set[str] = {
+    "age", "sex_gender", "location_country", "location_state", "location_us_state",
+}
+
 
 # ── Database setup ─────────────────────────────────────────────────────────────
 
@@ -122,16 +128,10 @@ def load_extractions(
     run_id: int | None = None,
 ) -> int:
     """
-    Load a CSV with extraction data -> user_profiles + conditions.
+    Load the ``conditions`` column of records.csv into the conditions table.
 
-    Supports both formats:
-    - demographics_deductive.csv (columns: author_hash, age, sex_gender,
-      location_country, location_state)
-    - records.csv (columns: author_hash, age, sex_gender, location_country,
-      location_us_state, conditions, ...)
-
-    Loads demographics into user_profiles and conditions (if present)
-    into the conditions table.
+    Demographic columns are ignored: user_profiles is written only by
+    src/extract_demographics_conditions.py.
 
     Returns the run_id used (creates one if not supplied).
     """
@@ -141,7 +141,6 @@ def load_extractions(
     with open(csv_path, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
 
-    conditions_inserted = 0
     # post_ids valid for the conditions FK; per-patient/aggregated records carry
     # synthetic post_ids (e.g. "agg_<hash>") absent from posts -> NULL those.
     valid_posts = {r[0] for r in conn.execute("SELECT post_id FROM posts")}
@@ -157,62 +156,9 @@ def load_extractions(
             (author_hash, "covidlonghaulers", int(time.time())),
         )
 
-        # Demographics -> user_profiles
-        # Reject multi-value fields (pipe-separated) -- these are noisy
-        # extractions from user histories mentioning OTHER people.
-        age_bucket = _bucketize_age(row.get("age", ""))
-        raw_sex = (row.get("sex_gender") or "").strip().lower()
-        # Accept only clean sex/gender values, reject Reddit shorthand
-        # like "22f", "m8", "f3" which are age+gender packed together.
-        _VALID_SEX = {"male", "female", "man", "woman", "non-binary", "nonbinary",
-                      "trans", "transgender", "m", "f"}
-        sex = raw_sex if raw_sex in _VALID_SEX else None
-        # Support both column names: location_state and location_us_state
-        state = row.get("location_state", "") or row.get("location_us_state", "")
-        raw_loc = " / ".join(filter(None, [
-            row.get("location_country", ""),
-            state,
-        ]))
-        location = raw_loc if raw_loc and raw_loc.count("|") == 0 else (raw_loc.split("|")[0].strip() if raw_loc else None)
-
-        # Check if a profile already exists for THIS run (user_profiles is keyed
-        # by (user_id, run_id) -- merge within a run, but give each run its own
-        # row so loading multiple runs into one DB doesn't clobber prior runs).
-        existing = conn.execute(
-            "SELECT age_bucket, sex, location FROM user_profiles"
-            " WHERE user_id = ? AND run_id = ?",
-            (author_hash, run_id),
-        ).fetchone()
-
-        if existing:
-            # Merge: only fill NULLs, never overwrite existing values
-            final_age = existing[0] or age_bucket or None
-            final_sex = existing[1] or sex
-            final_loc = existing[2] or (location or None)
-            conn.execute(
-                "UPDATE user_profiles SET age_bucket=?, sex=?, location=?"
-                " WHERE user_id=? AND run_id=?",
-                (final_age, final_sex, final_loc, author_hash, run_id),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO user_profiles"
-                " (user_id, run_id, age_bucket, sex, location)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (
-                    author_hash,
-                    run_id,
-                    age_bucket or None,
-                    sex,
-                    location or None,
-                ),
-            )
-
-        # Conditions -> conditions table (if column exists).
         # Self/other for conditions is enforced upstream (LLM prompts +
-        # title/body-only collectors). Unlike age/sex, pipe-separated multi
-        # values here are legitimate (one patient, several conditions), so we
-        # do not reject multi-value rows — only skip empty/duplicate tokens.
+        # title/body-only collectors). Pipe-separated multi values are
+        # legitimate (one patient, several conditions); skip empty/duplicate tokens.
         conditions_raw = (row.get("conditions") or "").strip()
         post_id = (row.get("post_id") or "").strip() or None
         if post_id is not None and post_id not in valid_posts:
@@ -230,7 +176,6 @@ def load_extractions(
                     " VALUES (?, ?, ?, ?, ?)",
                     (run_id, author_hash, post_id, "illness", condition_name),
                 )
-                conditions_inserted += 1
 
     conn.commit()
     return run_id
@@ -245,14 +190,14 @@ def load_variables(
     """Load every extracted variable column from records.csv into the EAV
     ``variables`` table -- one row per non-empty, non-metadata cell.
 
-    Unlike :func:`load_extractions` (which maps only a fixed set of demographic
-    and condition columns), this preserves ALL columns -- including the
-    inductively-discovered variables -- so the full wide records.csv is queryable
-    inside the unified database.
+    Unlike :func:`load_extractions` (conditions only), this preserves every
+    column -- including the inductively-discovered variables -- except the
+    legacy demographic columns, so the wide records.csv is queryable inside the
+    unified database.
 
     Returns the number of EAV rows inserted.
     """
-    skip = set(VARIABLE_META_COLUMNS)
+    skip = VARIABLE_META_COLUMNS | LEGACY_DEMOGRAPHIC_COLUMNS
     if skip_columns:
         skip |= set(skip_columns)
 
@@ -317,6 +262,15 @@ def _bucketize_age(raw: str | None) -> str | None:
     if age < 10 or age > 110:
         return None  # implausible age
     return f"{(age // 10) * 10}s"
+
+
+def latest_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+    """Each user's current profile from user_profiles_latest: {user_id: {age_bucket, sex, location}}."""
+    return {
+        user: {"age_bucket": age or "", "sex": sex or "", "location": loc or ""}
+        for user, age, sex, loc in conn.execute(
+            "SELECT user_id, age_bucket, sex, location FROM user_profiles_latest")
+    }
 
 
 # ── Query ──────────────────────────────────────────────────────────────────────

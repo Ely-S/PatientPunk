@@ -36,9 +36,9 @@ EXTRACTION_STANDARDS
     prompt with field-design guidance that isn't relevant here.
 
 DEMOGRAPHIC_STANDARDS
-    For agents doing *demographic-only coding* (standalone demographics
-    extractor).  Minimal -- focused on self-reference, operationalization of
-    demographic concepts, confidence calibration, and evidence citation.
+    For agents doing *demographic-only coding*.  Minimal -- focused on
+    self-reference, operationalization of demographic concepts, confidence
+    calibration, and evidence citation.
 """
 
 from __future__ import annotations
@@ -194,68 +194,3 @@ epidemiological and social-science research.  Apply these rules strictly:
    use the author's exact words.  Maximum 120 characters.
 """.strip()
 
-
-# ---------------------------------------------------------------------------
-# INDUCTIVE DEMOGRAPHIC STANDARDS
-# Injected when the model is discovering NEW demographic categories from
-# patient text (inductive coding mode).
-# ---------------------------------------------------------------------------
-
-INDUCTIVE_DEMOGRAPHIC_STANDARDS: str = """
-INDUCTIVE DEMOGRAPHIC CODING STANDARDS
------------------------------------------
-You are performing INDUCTIVE qualitative coding: identifying demographic
-categories that emerge from the data, rather than applying a predefined list.
-This is a discovery task -- you are building the codebook, not just applying one.
-
-Apply these principles to every demographic category you propose:
-
-SELF-REFERENCE CONSTRAINT (applies to ALL discovered categories):
-   Only extract demographics the AUTHOR states about THEMSELVES.  Ignore all
-   third-party mentions.  If the author's own value is ambiguous, do not
-   propose the category for this record.
-
-1. WHAT COUNTS AS A "DEMOGRAPHIC" CATEGORY:
-   Demographics describe WHO the person IS -- relatively stable characteristics
-   of their identity, social position, or life circumstances.  NOT symptoms,
-   treatments, or clinical events.
-   Good demographics: ethnicity, occupation, education level, disability status,
-     insurance type, household composition, veteran status, income bracket,
-     caregiver role, immigration status, sexual orientation, marital status.
-   NOT demographics: symptom severity, medication list, diagnosis date,
-     treatment outcomes, functional status (these are clinical, not demographic).
-
-2. LEVELS OF MEASUREMENT -- choose the right type:
-   - Nominal (unordered labels): ethnicity, occupation type, insurance type.
-   - Ordinal (ordered): education level (HS < BA < MA < PhD), income bracket.
-   - Avoid interval/ratio: you cannot reliably extract "income = $52,000" from
-     patient text.  Use brackets instead: "low", "middle", "high".
-
-3. OPERATIONALIZATION -- define what counts as evidence:
-   For each category, ask: "Would two independent coders agree on whether this
-   text contains this demographic value?"  If not, the category is too loose.
-   - Bad: "socioeconomic_status" (too vague -- coders will disagree on what counts)
-   - Good: "employment_status" with values (employed / unemployed / disabled /
-     retired / student) -- coders will agree.
-
-4. PARSIMONY -- fewer, cleaner categories beat many overlapping ones:
-   3–7 values per category is ideal.  If you find > 10 values, the category
-   is probably two categories, or the values are not truly distinct.
-   - Bad: 20 different occupation titles.
-   - Good: occupation_sector with 6–8 categories (healthcare, tech, education,
-     service, manual, government, retired, other).
-
-5. AVOID DOUBLE-BARRELED CATEGORIES -- one category, one concept:
-   - Bad: "marital_and_parental_status" (two things).
-   - Good: separate "marital_status" and "has_children" categories.
-
-6. FREQUENCY THRESHOLD -- only propose categories that appear across MULTIPLE
-   records.  A one-off mention is an anecdote, not a pattern.  Look for
-   categories where at least 3–5 distinct authors mention the same type of
-   information about themselves.
-
-7. EXTRACTED VALUE FORMAT:
-   - 1–3 words MAXIMUM.  This is a categorical label, not a narrative.
-   - Good: "registered nurse", "married", "veteran", "uninsured"
-   - Bad: "works as a nurse in the ER and has been there for 10 years"
-""".strip()
