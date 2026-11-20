@@ -165,6 +165,8 @@ uv run python src/import_posts.py \
     --output-db data/posts.db
 ```
 
+Posts and comments with no author (deleted or removed accounts) are stored under the user `deleted`; readers that count or profile patients skip it. The import prints how many rows it skipped.
+
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
@@ -182,12 +184,14 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 | `--max-posts N` | Max posts per user sent to LLM (default: 10) |
 | `--max-chars N` | Max characters per post (default: 500) |
 
-`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and demographic filters (`query_treatment_outcomes`) read it. Rows loaded from CSVs by `load_db.py` never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
+`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. Only Step 3a writes `user_profiles`: this script, and the resolve step in `src/resolve_demographics.py` described below. Rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
 
 ```bash
 cp reddit_snapshot.db work.db
 uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
 ```
+
+Per-post claims (#206, in progress) are stored in `demographic_claims`: one value a post states about its author (`age`, `sex`, `country` or `state`), with the words it came from. `post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. `resolve_profiles` in `src/resolve_demographics.py` turns those claims into `user_profiles` rows under a demographics run, writing a row only when a user's profile changes. The `deleted` placeholder never gets a profile. Nothing writes claims yet; this script will once #206 is finished.
 
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
@@ -260,41 +264,40 @@ for the full CLI. Minimal run:
 ```bash
 cd variable_extraction
 uv run python main.py run --schema schemas/covidlonghaulers_schema.json
-uv run python main.py demographics --input-dir ../output   # optional, LLM-only demographics
 ```
 
-Writes `output/records.csv` (+ `output/demographics_deductive.csv` if you ran
-`demographics`), independent of `data/posts.db`.
+Writes `output/records.csv`, independent of `data/posts.db`. Demographics come
+only from Step 3a (`user_profiles_latest`); `records.csv`'s own `age`, `sex_gender`
+and location columns are not loaded into profiles, `variables`, `unified` or clusters.
 
 ### Step 4 — Build the unified analysis database
 
-Merges `data/posts.db` (corpus + drug sentiment) with the variable-extraction
-CSVs from Step 3c into a single SQLite database, keyed on `author_hash`:
+Merges `data/posts.db` (corpus + drug sentiment, and any Step 3a profiles) with
+`records.csv` from Step 3c into a single SQLite database, keyed on `author_hash`:
 
 ```bash
 uv run python load_db.py
 # or explicitly:
 uv run python load_db.py --posts-db data/posts.db --records output/records.csv \
-    --demographics output/demographics_deductive.csv --db patientpunk.db
+    --db patientpunk.db
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--posts-db` | SQLite DB with corpus + drug sentiment (default: `data/posts.db`) |
 | `--records` | variable-extraction `records.csv` (default: `output/records.csv`) |
-| `--demographics` | deductive demographics CSV, optional (default: `output/demographics_deductive.csv`) |
 | `--db` | output unified database (default: `patientpunk.db`) |
 | `--schema-sql` | schema DDL to apply (default: `schema.sql`) |
 
 `patientpunk.db` (a full copy of `posts.db` plus new tables) holds:
 
-- `user_profiles` / `conditions` — demographics and conditions merged in from the
-  variable-extraction CSVs (demographics values win over records.csv on conflict);
-  these CSV-loaded rows never count in `user_profiles_latest`, so demographic filters ignore them
+- `user_profiles` — copied from `posts.db` as written by Step 3a; `load_db.py` adds none
+- `conditions` — conditions from `records.csv`
 - `variables` — the canonical EAV table: one row per `author_hash × field × run`,
   including inductively-discovered fields; the source of truth for extracted data
 - `unified` — a derived, wide clustering-ready table (one row per record, one
-  column per field, plus per-author drug-sentiment rollups); regenerated from
+  column per field, `demo_*` columns from `user_profiles_latest`, plus per-author
+  drug-sentiment rollups); regenerated from
   `variables` + related tables on every `load_db.py` run, not itself a source of truth
 
 Requires `data/posts.db` (Step 2) and `output/records.csv` (Step 3c) to already exist.

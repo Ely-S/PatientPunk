@@ -6,7 +6,6 @@ Covers:
     patientpunk.corpus
     patientpunk.schema
     patientpunk.llm_extract / discover / export_csv / codebook
-    patientpunk.demographics / demographics_deductive
     patientpunk.pipeline
     patientpunk.qualitative_standards
 
@@ -70,7 +69,6 @@ from patientpunk.qualitative_standards import (
     DEMOGRAPHIC_STANDARDS,
     EXTRACTION_STANDARDS,
     FIELD_DESIGN_STANDARDS,
-    INDUCTIVE_DEMOGRAPHIC_STANDARDS,
 )
 
 
@@ -916,134 +914,12 @@ class TestQualitativeStandards:
         assert "OPERATIONALIZATION" in prompt
         assert "CONSTRUCT VALIDITY" in prompt
 
-    def test_standards_injected_into_demographics(self):
-        """Verify DEMOGRAPHIC_STANDARDS actually appears in the demographics prompt."""
-        from patientpunk.demographics_deductive import SYSTEM_PROMPT
-        assert "SELF-REFERENCE ONLY" in SYSTEM_PROMPT
-        assert "CONFIDENCE CALIBRATION" in SYSTEM_PROMPT
-
     def test_standards_injected_into_discovery(self):
         """Verify FIELD_DESIGN_STANDARDS actually appears in the discovery prompt."""
         from patientpunk.discover import build_discovery_prompt
         prompt = build_discovery_prompt(["age", "sex_gender"])
         assert "PARSIMONY" in prompt
         assert "DOUBLE-BARRELED" in prompt
-
-    def test_inductive_demographic_standards_content(self):
-        """Verify INDUCTIVE_DEMOGRAPHIC_STANDARDS has the expected principles."""
-        for keyword in [
-            "INDUCTIVE",
-            "SELF-REFERENCE CONSTRAINT",
-            "WHAT COUNTS AS A",
-            "LEVELS OF MEASUREMENT",
-            "OPERATIONALIZATION",
-            "PARSIMONY",
-            "DOUBLE-BARRELED",
-            "FREQUENCY THRESHOLD",
-            "EXTRACTED VALUE FORMAT",
-        ]:
-            assert keyword in INDUCTIVE_DEMOGRAPHIC_STANDARDS, f"Missing: {keyword}"
-
-    def test_inductive_standards_injected_into_coder(self):
-        """Verify standards actually appear in the demographic coder prompts."""
-        from patientpunk.demographics import build_system_prompt
-        # Inductive mode should include inductive standards
-        prompt_ind = build_system_prompt("inductive")
-        assert "INDUCTIVE" in prompt_ind
-        assert "FREQUENCY THRESHOLD" in prompt_ind
-        # Deductive mode should include demographic standards
-        prompt_ded = build_system_prompt("deductive")
-        assert "SELF-REFERENCE ONLY" in prompt_ded
-        assert "CONFIDENCE CALIBRATION" in prompt_ded
-        # Both mode should include both
-        prompt_both = build_system_prompt("both")
-        assert "SELF-REFERENCE ONLY" in prompt_both
-        assert "FREQUENCY THRESHOLD" in prompt_both
-
-
-# =============================================================================
-# demographics -- codebook aggregation
-# =============================================================================
-
-class TestCodeDemographicsCodebook:
-    """Test the codebook aggregation logic from demographics.run_demographic_coding."""
-
-    def test_build_codebook_aggregation(self):
-        from patientpunk.demographics import build_codebook
-        results = [
-            {
-                "author_hash": "aaa111",
-                "discovered_demographics": [
-                    {"field_name": "occupation_sector", "value": "healthcare",
-                     "evidence": "I'm a nurse", "confidence": "high"},
-                    {"field_name": "marital_status", "value": "married",
-                     "evidence": "my husband and I", "confidence": "medium"},
-                ]
-            },
-            {
-                "author_hash": "bbb222",
-                "discovered_demographics": [
-                    {"field_name": "occupation_sector", "value": "education",
-                     "evidence": "I teach high school", "confidence": "high"},
-                ]
-            },
-            {
-                "author_hash": "ccc333",
-                "discovered_demographics": [
-                    {"field_name": "occupation_sector", "value": "healthcare",
-                     "evidence": "ER nurse here", "confidence": "high"},
-                    {"field_name": "veteran_status", "value": "veteran",
-                     "evidence": "after my deployment", "confidence": "medium"},
-                ]
-            },
-            {
-                "author_hash": "ddd444",
-                "discovered_demographics": []
-            },
-        ]
-        codebook = build_codebook(results)
-
-        # occupation_sector should be first (3 records)
-        assert "occupation_sector" in codebook
-        assert codebook["occupation_sector"]["record_count"] == 3
-        assert codebook["occupation_sector"]["values"]["healthcare"] == 2
-        assert codebook["occupation_sector"]["values"]["education"] == 1
-        assert codebook["occupation_sector"]["unique_values"] == 2
-
-        # marital_status should have 1 record
-        assert "marital_status" in codebook
-        assert codebook["marital_status"]["record_count"] == 1
-
-        # veteran_status should have 1 record
-        assert "veteran_status" in codebook
-        assert codebook["veteran_status"]["record_count"] == 1
-
-        # examples should be capped at 5
-        assert len(codebook["occupation_sector"]["examples"]) == 3
-
-    def test_build_codebook_empty(self):
-        from patientpunk.demographics import build_codebook
-        assert build_codebook([]) == {}
-        assert build_codebook([{"discovered_demographics": []}]) == {}
-
-    def test_build_codebook_sorted_by_frequency(self):
-        from patientpunk.demographics import build_codebook
-        results = [
-            {"discovered_demographics": [
-                {"field_name": "rare_field", "value": "x", "evidence": "e", "confidence": "low"},
-            ]},
-            {"discovered_demographics": [
-                {"field_name": "common_field", "value": "y", "evidence": "e", "confidence": "high"},
-            ]},
-            {"discovered_demographics": [
-                {"field_name": "common_field", "value": "z", "evidence": "e", "confidence": "high"},
-            ]},
-        ]
-        codebook = build_codebook(results)
-        keys = list(codebook.keys())
-        # common_field (2 records) should sort before rare_field (1 record)
-        assert keys[0] == "common_field"
-        assert keys[1] == "rare_field"
 
 
 # =============================================================================
@@ -3003,14 +2879,6 @@ class TestBatchExtraction:
         assert exc_info.value is error
         assert len(attempts) == 5
         assert sleeps == [2, 5, 15, 30]
-
-    def test_demographics_parse_single_line_fence(self):
-        # Regression: a single-line ```json{...}``` fence (no newline) must parse
-        # on the default single-record demographics path, not blank to None.
-        import patientpunk.demographics_deductive as d
-        assert d._parse_one_object('```json{"age": 34}```') == {"age": 34}
-        assert d._parse_one_object('```{"age": 5}```') == {"age": 5}
-        assert d._parse_one_object('```json\n{"age": 7}\n```') == {"age": 7}
 
 
 # =============================================================================

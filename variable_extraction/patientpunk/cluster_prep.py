@@ -25,6 +25,8 @@ import csv
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from .db import LEGACY_DEMOGRAPHIC_COLUMNS
+
 DEFAULT_META = {
     "author_hash", "source", "source_type", "post_id", "text_count",
     "subreddits", "schema_id", "extraction_method", "extracted_at",
@@ -50,6 +52,7 @@ _ANALYSIS_CARRY = {
 def _data_fields(header: list[str], meta: set[str]) -> list[str]:
     return [c for c in header
             if c not in meta and c not in _ANALYSIS_CARRY
+            and c not in LEGACY_DEMOGRAPHIC_COLUMNS
             and not c.endswith("__confidence")]
 
 
@@ -74,6 +77,15 @@ def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",
                 if v:
                     pat[pid][f].add(v)
     return {pid: dict(d) for pid, d in pat.items()}, fields
+
+
+def add_profiles(patients: dict, fields: list[str], profiles: dict) -> list[str]:
+    """Add each patient's current profile (``db.latest_profiles``) as demo_* fields."""
+    for pid, feats in patients.items():
+        for k, v in profiles.get(pid, {}).items():
+            if v:
+                feats[f"demo_{k}"] = {v.lower()}
+    return fields + ["demo_age_bucket", "demo_sex", "demo_location"]
 
 
 def field_coverage(patients: dict, fields: list[str]) -> dict[str, float]:

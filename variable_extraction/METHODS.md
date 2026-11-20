@@ -9,20 +9,20 @@ extracted number and what you can tune. For *how to run* the pipeline, see
 Recommendations below are the maintainers' suggestions, not enforced defaults —
 where a knob exists, the current default is stated explicitly.
 
-## Two extraction paths
+## Where each output goes
 
 | Path | Command | Method | Output | Feeds analysis? |
 |---|---|---|---|---|
-| **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes — authoritative.** Loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
-| **Demographics** | `main.py demographics` | LLM only (Haiku), deductive + inductive | `demographics.csv` | Optional/supplementary — `load_extractions` also accepts it. |
+| **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes**, except its demographic columns. Conditions and variables are loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
+| **Demographics** | `src/extract_demographics_conditions.py` | LLM, one profile per user, written to `user_profiles` | `user_profiles_latest` | **Yes — the only source of age, sex and location** for filters, `unified` and `cluster-prep --db`. |
 
-Per-drug and per-patient analysis reads `records.csv` from the **main pipeline**
-unless you deliberately load the demographics output.
+`records.csv`'s `age`, `sex_gender`, `location_country` and state columns are
+ignored downstream.
 
 ## Attribution model — only self-reported information
 
 The pipeline extracts **only what the post author states about themselves.** This is
-enforced in every LLM prompt (`llm_extract`, `demographics`, `discover`) and in the
+enforced in every LLM prompt (`llm_extract`, `discover`) and in the
 shared `qualitative_standards` "SELF-REFERENCE ONLY" block — third-party mentions
 ("my mom has POTS") are ignored. Every field is LLM-produced, so every field goes
 through this guard — there is no unguarded regex surface (the old regex first pass
@@ -135,9 +135,5 @@ any patient-record schema carries.
 
 ## Known limitations
 
-- **`db.py`'s "other people" backstop is coarse.** When loading demographics it rejects
-  *multi-valued* age/sex (assuming multiple values imply other people) but not single
-  wrong-person values, and it does not filter conditions at all. It is a backstop, not
-  the primary self/other guard — that lives in the extraction prompt.
 - **`collect_texts_from_post` is duplicated across modules.** The copies must stay
   identical (title + body only); a shared helper would prevent divergence.
