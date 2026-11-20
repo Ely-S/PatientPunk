@@ -1,6 +1,7 @@
 """Posts and comments whose author is gone are kept under DELETED_USER_ID, which is never a patient (#202).
 Made-up data, no API calls.
 """
+import importlib
 import json
 import sqlite3
 import sys
@@ -10,7 +11,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "Scrapers"))
 
+import db_to_corpus  # noqa: E402
 import dose_bands  # noqa: E402
 import extract_demographics_conditions  # noqa: E402
 import summarize_drug  # noqa: E402
@@ -113,9 +116,8 @@ def test_dose_bands_do_not_count_deleted_as_an_author(reports_db):
 @pytest.mark.parametrize("module", ["scrape_corpus", "transform_arctic_shift"])
 @pytest.mark.parametrize("author", [None, "", "[deleted]", "[removed]"])
 def test_scrapers_give_no_author_hash_for_missing_authors(module, author):
-    sys.path.insert(0, str(REPO_ROOT / "Scrapers"))
-    scraper = __import__(module)
+    scraper = importlib.import_module(module)
     raw = {"id": "x", "author": author, "created_utc": 1767225600}
     assert scraper.build_post(raw, [])["author_hash"] is None
     assert scraper.build_comment(raw)["author_hash"] is None
-    assert scraper.build_post({**raw, "author": "someone"}, [])["author_hash"] == scraper.hash_username("someone")
+    assert scraper.build_post({**raw, "author": "someone"}, [])["author_hash"] == db_to_corpus.hash_username("someone")

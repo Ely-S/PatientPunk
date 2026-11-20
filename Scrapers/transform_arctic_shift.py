@@ -22,7 +22,6 @@ and src/run_pipeline.py).
 """
 
 import argparse
-import hashlib
 import io
 import json
 import sys
@@ -31,11 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from db_to_corpus import DELETED, author_hash
-
-
-def hash_username(username: str) -> str:
-    """SHA-256 hash of username for privacy."""
-    return hashlib.sha256(username.encode()).hexdigest()
 
 
 def utc_iso(ts) -> str:
