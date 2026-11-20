@@ -11,6 +11,7 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import dose_bands  # noqa: E402
 import extract_demographics_conditions  # noqa: E402
 import summarize_drug  # noqa: E402
 from import_posts import DELETED_USER_ID, import_reddit_posts  # noqa: E402
@@ -82,16 +83,31 @@ def test_demographics_never_sends_or_profiles_deleted(tmp_path, monkeypatch, lim
     assert not conn.execute("SELECT 1 FROM conditions WHERE user_id = ?", (DELETED_USER_ID,)).fetchone()
 
 
-def test_author_summaries_do_not_count_deleted_as_a_patient(tmp_path):
+@pytest.fixture
+def reports_db(tmp_path) -> Path:
+    """One LDN report with a 4.5 mg dose on each of p1, c2 (deleted) and p2 (REAL)."""
     conn, _ = _db(tmp_path)
     conn.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (1, 0, 'x', 'sentiment', '{}')")
+    conn.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) VALUES (2, 0, 'x', 'report_doses', '{}')")
     conn.execute("INSERT INTO treatment (id, canonical_name) VALUES (1, 'ldn')")
     for i, (post, user) in enumerate([("p1", DELETED_USER_ID), ("c2", DELETED_USER_ID), ("p2", REAL)], 1):
         conn.execute("INSERT INTO treatment_reports (report_id, run_id, post_id, user_id, drug_id, sentiment, signal_strength) "
                      "VALUES (?, 1, ?, ?, 1, 'positive', 'strong')", (i, post, user))
+        conn.execute("INSERT INTO report_runs (run_id, report_id) VALUES (2, ?)", (i,))
+        conn.execute("INSERT INTO report_doses (report_id, run_id, ordinal, low, unit) VALUES (?, 2, 0, 4.5, 'mg')", (i,))
     conn.commit()
     conn.close()
-    assert set(summarize_drug.load(tmp_path / "posts.db", "ldn", "db")) == {REAL}
+    return tmp_path / "posts.db"
+
+
+def test_author_summaries_do_not_count_deleted_as_a_patient(reports_db):
+    assert set(summarize_drug.load(reports_db, "ldn", "db")) == {REAL}
+
+
+def test_dose_bands_do_not_count_deleted_as_an_author(reports_db):
+    data = dose_bands.load(reports_db, "ldn", cuts=[3.0], capsule_mg=None, cap_mg=100.0)
+    assert {author for author, _, _ in data["reports"].values()} == {REAL}
+    assert [d["author"] for d in data["doses"]] == [REAL]
 
 
 @pytest.mark.parametrize("module", ["scrape_corpus", "transform_arctic_shift"])
