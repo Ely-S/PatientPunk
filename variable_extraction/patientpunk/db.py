@@ -73,13 +73,17 @@ def init_db(db_path: Path, schema_sql: Path | None = None) -> sqlite3.Connection
 
     If the tables already exist this is a no-op -- safe to call repeatedly.
     """
-    if schema_sql is None:
-        schema_sql = Path(__file__).parent.parent.parent / "schema.sql"
-
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
+    apply_schema(conn, schema_sql)
+    return conn
 
+
+def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> None:
+    """Apply schema.sql to an open connection, creating only what is missing."""
+    if schema_sql is None:
+        schema_sql = Path(__file__).parent.parent.parent / "schema.sql"
     ddl = schema_sql.read_text(encoding="utf-8")
     # Wrap in IF NOT EXISTS so it's idempotent
     ddl_idempotent = ddl.replace(
@@ -89,7 +93,6 @@ def init_db(db_path: Path, schema_sql: Path | None = None) -> sqlite3.Connection
     )
     conn.executescript(ddl_idempotent)
     conn.commit()
-    return conn
 
 
 def register_run(

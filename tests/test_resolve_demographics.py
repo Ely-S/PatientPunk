@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from patientpunk.db import init_db, register_run  # noqa: E402
-from resolve_demographics import DEMOGRAPHIC_CLAIMS_DDL, resolve_profiles  # noqa: E402
+from resolve_demographics import resolve_profiles  # noqa: E402
 
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 
@@ -138,22 +138,9 @@ def test_an_unchanged_profile_writes_no_row(conn):
     assert resolve_profiles(conn, r2)["profiles_written"] == 0
 
 
-def test_the_ddl_matches_schema_sql(tmp_path):
-    """Resolution creates its tables and views on a database built before them."""
-    old = sqlite3.connect(tmp_path / "old.db")
-    old.executescript("""
-        CREATE TABLE users (user_id TEXT PRIMARY KEY, source_subreddit TEXT NOT NULL, scraped_at INTEGER NOT NULL);
-        CREATE TABLE posts (post_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, body_text TEXT NOT NULL,
-                            post_date INTEGER, scraped_at INTEGER NOT NULL);
-        CREATE TABLE extraction_runs (run_id INTEGER PRIMARY KEY, run_at INTEGER NOT NULL, commit_hash TEXT NOT NULL,
-                                      extraction_type TEXT NOT NULL, config TEXT NOT NULL);
-        CREATE TABLE user_profiles (user_id TEXT NOT NULL, run_id INTEGER NOT NULL, age_bucket TEXT, sex TEXT,
-                                    location TEXT, PRIMARY KEY (user_id, run_id));
-    """)
-    old.executescript(DEMOGRAPHIC_CLAIMS_DDL)
-    fresh = init_db(tmp_path / "new.db", SCHEMA_SQL)
-    def defs(c):
-        return {n: " ".join(s.replace(" IF NOT EXISTS", "").split()) for n, s in c.execute(
-            "SELECT name, sql FROM sqlite_master WHERE name IN "
-            "('post_runs', 'demographic_claims', 'demographic_claims_latest', 'user_profiles_latest')")}
-    assert defs(old) == defs(fresh)
+def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
+    conn = init_db(tmp_path / "old.db", SCHEMA_SQL)
+    conn.executescript("DROP VIEW demographic_claims_latest; DROP TABLE demographic_claims; DROP TABLE post_runs;")
+    resolve_profiles(conn, run(conn))
+    names = {n for (n,) in conn.execute("SELECT name FROM sqlite_master")}
+    assert {"post_runs", "demographic_claims", "demographic_claims_latest"} <= names

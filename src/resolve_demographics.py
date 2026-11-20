@@ -8,40 +8,7 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-from patientpunk.db import _bucketize_age
-
-# Kept identical to schema.sql (with IF NOT EXISTS) so resolution also works on databases created
-# before these existed.
-DEMOGRAPHIC_CLAIMS_DDL = """
-CREATE VIEW IF NOT EXISTS user_profiles_latest AS
-    SELECT up.* FROM user_profiles up
-    WHERE up.run_id = (
-        SELECT MAX(up2.run_id) FROM user_profiles up2 JOIN extraction_runs r ON r.run_id = up2.run_id
-        WHERE up2.user_id = up.user_id AND r.extraction_type = 'demographics'
-    );
-CREATE TABLE IF NOT EXISTS post_runs (
-    run_id  INTEGER NOT NULL REFERENCES extraction_runs(run_id),
-    post_id TEXT NOT NULL REFERENCES posts(post_id),
-    PRIMARY KEY (run_id, post_id)
-);
-CREATE INDEX IF NOT EXISTS idx_pr_post ON post_runs(post_id);
-CREATE TABLE IF NOT EXISTS demographic_claims (
-    run_id   INTEGER NOT NULL REFERENCES extraction_runs(run_id),
-    post_id  TEXT NOT NULL REFERENCES posts(post_id),
-    user_id  TEXT NOT NULL REFERENCES users(user_id),
-    field    TEXT NOT NULL CHECK (field IN ('age', 'sex', 'country', 'state')),
-    value    TEXT NOT NULL,
-    evidence TEXT NOT NULL,
-    PRIMARY KEY (run_id, post_id, field)
-);
-CREATE INDEX IF NOT EXISTS idx_dc_user ON demographic_claims(user_id);
-CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
-    SELECT c.* FROM demographic_claims c
-    WHERE c.run_id = (
-        SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
-        WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
-    );
-"""
+from patientpunk.db import _bucketize_age, apply_schema
 
 
 def _years_between(start: int, end: int) -> int:
@@ -76,7 +43,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     run has read and whose resolved profile differs from their current one, with empty fields where
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current.
     The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
-    conn.executescript(DEMOGRAPHIC_CLAIMS_DDL)
+    apply_schema(conn)  # creates the claim tables and views on a database built before them
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
     claims = defaultdict(list)
     for user, *claim in conn.execute(
