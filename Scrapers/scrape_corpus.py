@@ -66,6 +66,9 @@ def window_start_iso(months: int | None, weeks: int | None) -> tuple[str, str]:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), label
 
 
+NO_AUTHOR = {None, "", "[deleted]", "[removed]"}  # stored as author_hash null
+
+
 def hash_username(username: str) -> str:
     return hashlib.sha256(username.encode()).hexdigest()
 
@@ -177,7 +180,7 @@ def fetch_comments_for_post(post_id: str) -> list[dict]:
 
 def build_comment(c: dict) -> dict:
     author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author not in NO_AUTHOR else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
@@ -192,7 +195,7 @@ def build_comment(c: dict) -> dict:
 
 def build_post(p: dict, comments: list[dict] | None = None) -> dict:
     author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
+    author_hash = hash_username(author) if author not in NO_AUTHOR else None
     comments = comments or []
     return {
         "post_id": f"t3_{p.get('id', '')}",
@@ -484,7 +487,7 @@ def main():
         # Deduplicate: skip if same author has already posted the same title
         author = stub.get("author") or ""
         dedup_key = (author.lower(), (full_post.get("title") or "").strip().lower())
-        if dedup_key in seen_post_keys and author:
+        if dedup_key in seen_post_keys and author not in NO_AUTHOR:
             print(f"    Duplicate post detected (same author + title), skipping.")
             duplicate_posts_skipped += 1
             continue
@@ -495,7 +498,7 @@ def main():
         post_data = build_post(full_post, comments)
         posts.append(post_data)
 
-        if author and author != "[deleted]":
+        if author not in NO_AUTHOR:
             unique_authors[author] = post_data["author_hash"]
         else:
             deleted_post_authors += 1

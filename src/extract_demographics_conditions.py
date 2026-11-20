@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utilities.db import open_db
+from import_posts import DELETED_USER_ID
 from utilities import get_client, get_git_commit, llm_call, log, parse_json_object, MODEL_FAST
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 
@@ -74,9 +75,10 @@ def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_
         # Load posts grouped by user (limit applies to number of distinct users)
         rows = conn.execute(
             "SELECT p.user_id, p.body_text FROM posts p "
-            + ("INNER JOIN (SELECT DISTINCT user_id FROM posts LIMIT ?) u ON p.user_id = u.user_id " if limit else "")
-            + "ORDER BY p.user_id, p.post_date",
-            (limit,) if limit else (),
+            + ("INNER JOIN (SELECT DISTINCT user_id FROM posts WHERE user_id != ? LIMIT ?) u ON p.user_id = u.user_id "
+               if limit else "")
+            + "WHERE p.user_id != ? ORDER BY p.user_id, p.post_date",
+            (DELETED_USER_ID, limit, DELETED_USER_ID) if limit else (DELETED_USER_ID,),
         ).fetchall()
 
         users: dict[str, list[str]] = defaultdict(list)
