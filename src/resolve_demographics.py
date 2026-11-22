@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 from import_posts import DELETED_USER_ID
-from patientpunk.db import _bucketize_age, apply_schema, latest_profiles
+from patientpunk.db import PROFILE_FIELDS, _bucketize_age, apply_schema, latest_profiles
 
 
 def _years_between(start: int, end: int) -> int:
@@ -55,7 +55,7 @@ def _age_now(value: str, date: int | None, reference: int | None) -> tuple[int, 
 
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
     """claims: (post_date, post_id, field, value), oldest first. Returns the profile row
-    (age_bucket, age, sex, location) and the fields whose claims disagree. Text values are compared
+    in PROFILE_FIELDS order and the fields whose claims disagree. Text values are compared
     ignoring case; sex is stored lowercase."""
     by_field = defaultdict(list)
     countries = {}
@@ -71,14 +71,21 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     country = by_field["country"][-1][2] if by_field["country"] else None
     key = country.casefold() if country else None
     states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
-    location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
+    state = states[-1] if states else None
+    # A city counts only from a post that names the resolved country and state, or neither.
+    state_key = state.casefold() if state else None
+    state_of = {p: v.casefold() for _, p, v in by_field["state"]}
+    cities = [v for _, p, v in by_field["city"]
+              if countries.get(p, key) == key and state_of.get(p, state_key) == state_key]
+    city = cities[-1] if cities else None
+    location = " / ".join(x for x in (country, state) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
     # Two different stated numbers disagree; an estimate disagrees only when its decade differs.
     stated = {a for a, estimated in ages if not estimated}
     if len(stated) > 1 or len({_bucketize_age(str(a)) for a, _ in ages}) > 1:
         disagree.add("age")
-    return (age_bucket, age, sex, location), disagree
+    return (age_bucket, age, sex, location, country, state, city), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
@@ -87,10 +94,10 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
     the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
     The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
-    has_age = "age" in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
-    if not has_age or not conn.execute(
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
+    if not set(PROFILE_FIELDS) <= columns or not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
-        apply_schema(conn)  # a database built before the claim tables or the age column; this commits
+        apply_schema(conn)  # a database built before the claim tables or a profile column; this commits
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
     claims = defaultdict(list)
     for user, *claim in conn.execute(
@@ -109,12 +116,12 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
         disagreements.update(disagree)
         p = current.get(user)
         resolved = tuple("" if v is None else str(v) for v in profile)
-        if p is None or (p["age_bucket"], p["age"], p["sex"], p["location"]) != resolved:
+        if p is None or tuple(p[k] for k in PROFILE_FIELDS) != resolved:
             rows.append((user, run_id, *profile))
     with conn:
         conn.executemany(
-            "INSERT INTO user_profiles (user_id, run_id, age_bucket, age, sex, location) VALUES (?, ?, ?, ?, ?, ?)",
-            rows)
+            f"INSERT INTO user_profiles (user_id, run_id, {', '.join(PROFILE_FIELDS)}) "
+            f"VALUES ({', '.join('?' * (len(PROFILE_FIELDS) + 2))})", rows)
         conn.execute("UPDATE extraction_runs SET config = json_set(config, '$.reference_date', ?) WHERE run_id = ?",
                      (reference, run_id))
     return {"profiles_written": len(rows), "reference_date": reference, "disagreements": dict(disagreements)}

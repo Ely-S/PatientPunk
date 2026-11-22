@@ -171,7 +171,7 @@ Posts and comments with no author (deleted or removed accounts) are stored under
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
 
-In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, age in years (a stated number, or the midpoint of a stated range such as "mid-30s"), sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, age in years (a stated number, or the midpoint of a stated range such as "mid-30s"), sex, and location, stored both as one display string (`location`, "country / state") and as separate `country`, `state` and `city` columns; `city` is where the author says they live, not where they travelled for care. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
 
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db

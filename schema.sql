@@ -60,7 +60,10 @@ CREATE TABLE user_profiles (
     age_bucket TEXT,
     age        INTEGER,  -- whole years at the run's reference date; a stated range or decade gives its midpoint ("mid-30s" -> 35)
     sex        TEXT,
-    location   TEXT,
+    location   TEXT,     -- "country / state" for display; the parts are in the three columns below
+    country    TEXT,
+    state      TEXT,
+    city       TEXT,     -- where the author says they live, not where they travelled for care
     PRIMARY KEY (user_id, run_id)
 );
 
@@ -188,7 +191,7 @@ CREATE TABLE demographic_claims (
     run_id   INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     post_id  TEXT NOT NULL REFERENCES posts(post_id),
     user_id  TEXT NOT NULL REFERENCES users(user_id),
-    field    TEXT NOT NULL CHECK (field IN ('age', 'sex', 'country', 'state')),
+    field    TEXT NOT NULL CHECK (field IN ('age', 'sex', 'country', 'state', 'city')),
     value    TEXT NOT NULL,
     evidence TEXT NOT NULL,
     PRIMARY KEY (run_id, post_id, field)
