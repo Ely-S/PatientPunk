@@ -338,6 +338,8 @@ def query_treatment_outcomes(
     sex:        sex/gender value (e.g. "female"). None = all.
     age_bucket: decade bucket (e.g. "30s"). None = all.
 
+    sex and age_bucket match each user's current profile (user_profiles_latest).
+
     Returns
     -------
     list[dict] with keys:
@@ -364,7 +366,7 @@ def query_treatment_outcomes(
     if sex:
         where_clauses.append(
             "EXISTS ("
-            "  SELECT 1 FROM user_profiles up"
+            "  SELECT 1 FROM user_profiles_latest up"
             "  WHERE up.user_id = tr.user_id"
             "  AND LOWER(up.sex) = LOWER(?)"
             ")"
@@ -374,7 +376,7 @@ def query_treatment_outcomes(
     if age_bucket:
         where_clauses.append(
             "EXISTS ("
-            "  SELECT 1 FROM user_profiles up"
+            "  SELECT 1 FROM user_profiles_latest up"
             "  WHERE up.user_id = tr.user_id"
             "  AND up.age_bucket = ?"
             ")"
