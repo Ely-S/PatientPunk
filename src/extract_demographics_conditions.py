@@ -185,9 +185,10 @@ def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> 
     age = result["age"]
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     location = " / ".join(filter(None, (result["country"], result["state"]))) or None
+    # city stays empty: per-post extraction (#206) fills it.
     conn.execute(
-        "INSERT INTO user_profiles (user_id, run_id, age_bucket, sex, location) VALUES (?, ?, ?, ?, ?)",
-        (user_id, run_id, age_bucket, result["sex"], location),
+        "INSERT INTO user_profiles (user_id, run_id, age_bucket, age, sex, location) VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, run_id, age_bucket, age, result["sex"], location),
     )
 
     conditions_written = 0

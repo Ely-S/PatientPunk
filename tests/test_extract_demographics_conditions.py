@@ -105,15 +105,15 @@ def test_caps_input_before_wrapping(db, monkeypatch):
 @pytest.mark.parametrize(
     ("age", "sex", "country", "state", "expected"),
     [
-        (10, "F", "US", "Texas", ("10s", "female", "US / Texas")),
-        ("99", " NONBINARY ", None, "Ohio", ("90s", "non-binary", "Ohio")),
-        (26, "Man", "Trinidad and Tobago", None, ("20s", "male", "Trinidad and Tobago")),
-        (9, ["M"], ["US", "Canada"], "Texas / Ohio", (None, None, None)),
-        (100, "M | F", "US or Canada", ["Ohio"], (None, None, None)),
-        ("30s", "22F", "unknown", "Texas; Ohio", (None, None, None)),
-        ("25-34", "unknown", "", None, (None, None, None)),
-        ("34 | 36", None, None, None, (None, None, None)),
-        (34.5, None, None, None, (None, None, None)),
+        (10, "F", "US", "Texas", ("10s", 10.0, "female", "US / Texas")),
+        ("99", " NONBINARY ", None, "Ohio", ("90s", 99.0, "non-binary", "Ohio")),
+        (26, "Man", "Trinidad and Tobago", None, ("20s", 26.0, "male", "Trinidad and Tobago")),
+        (9, ["M"], ["US", "Canada"], "Texas / Ohio", (None, None, None, None)),
+        (100, "M | F", "US or Canada", ["Ohio"], (None, None, None, None)),
+        ("30s", "22F", "unknown", "Texas; Ohio", (None, None, None, None)),
+        ("25-34", "unknown", "", None, (None, None, None, None)),
+        ("34 | 36", None, None, None, (None, None, None, None)),
+        (34.5, None, None, None, (None, None, None, None)),
     ],
 )
 def test_normalizes_profile_fields(db, monkeypatch, age, sex, country, state, expected):
@@ -124,7 +124,7 @@ def test_normalizes_profile_fields(db, monkeypatch, age, sex, country, state, ex
 
     demographics.run_demographics(path)
 
-    assert conn.execute("SELECT age_bucket, sex, location FROM user_profiles").fetchone() == expected
+    assert conn.execute("SELECT age_bucket, age, sex, location FROM user_profiles").fetchone() == expected
     assert conn.execute("SELECT extraction_type FROM extraction_runs").fetchone() == ("demographics",)
 
 
