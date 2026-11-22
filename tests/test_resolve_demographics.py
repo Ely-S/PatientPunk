@@ -80,12 +80,12 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     assert profile(conn, "a") == ("30s", None, None)
 
 
-@pytest.mark.parametrize("posts, expected", [  # expected: (location, country, state, city)
-    ([{"country": "US", "state": "Texas"}, {"country": "US"}], ("US / Texas", "US", "Texas", None)),
-    ([{"state": "Texas"}, {"country": "US"}], ("US / Texas", "US", "Texas", None)),
-    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("UK", "UK", None, None)),
-    ([{"country": "US", "state": "Texas", "city": "Austin"}, {"country": "US"}], ("US / Texas", "US", "Texas", "Austin")),
-    ([{"state": "Texas", "city": "Austin"}, {"country": "US", "state": "Ohio"}], ("US / Ohio", "US", "Ohio", None)),
+@pytest.mark.parametrize("posts, expected", [  # expected: (location, city)
+    ([{"country": "US", "state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
+    ([{"state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("UK", None)),
+    ([{"country": "US", "state": "Texas", "city": "Austin"}, {"country": "US"}], ("US / Texas", "Austin")),
+    ([{"state": "Texas", "city": "Austin"}, {"country": "US", "state": "Ohio"}], ("US / Ohio", None)),
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
     r = run(conn)
@@ -93,7 +93,7 @@ def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
         post(conn, f"p{i}", "a", 2024 + i)
         read(conn, r, f"p{i}", **claims)
     resolve_profiles(conn, r)
-    assert conn.execute("SELECT location, country, state, city FROM user_profiles_latest WHERE user_id = 'a'"
+    assert conn.execute("SELECT location, city FROM user_profiles_latest WHERE user_id = 'a'"
                         ).fetchone() == expected
 
 

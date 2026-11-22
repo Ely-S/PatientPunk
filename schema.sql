@@ -60,9 +60,7 @@ CREATE TABLE user_profiles (
     age_bucket TEXT,
     age        INTEGER,  -- whole years at the run's reference date; a stated range or decade gives its midpoint ("mid-30s" -> 35)
     sex        TEXT,
-    location   TEXT,     -- "country / state" for display; the parts are in the three columns below
-    country    TEXT,
-    state      TEXT,
+    location   TEXT,
     city       TEXT,     -- where the author says they live, not where they travelled for care
     PRIMARY KEY (user_id, run_id)
 );

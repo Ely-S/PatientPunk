@@ -85,7 +85,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     stated = {a for a, estimated in ages if not estimated}
     if len(stated) > 1 or len({_bucketize_age(str(a)) for a, _ in ages}) > 1:
         disagree.add("age")
-    return (age_bucket, age, sex, location, country, state, city), disagree
+    return (age_bucket, age, sex, location, city), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
