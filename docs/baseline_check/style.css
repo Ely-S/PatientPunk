@@ -6,11 +6,11 @@
   --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #11161c; --card: #19212a; --fg: #e5eaf0; --muted: #9ba7b4; --line: #2a343f;
-  --accent: #7fb6d2; --accent-soft: #1d3240; --crash: #e39a66; --crash-soft: #3a261a; color-scheme: dark } }
+  --bg: #0b0f14; --card: #131b24; --fg: #f5f8fb; --muted: #d0d9e3; --line: #5b6b7d;
+  --accent: #8fcbff; --accent-soft: #17344d; --crash: #ffb47c; --crash-soft: #3d2615; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #11161c; --card: #19212a; --fg: #e5eaf0; --muted: #9ba7b4; --line: #2a343f;
-  --accent: #7fb6d2; --accent-soft: #1d3240; --crash: #e39a66; --crash-soft: #3a261a; color-scheme: dark }
+  --bg: #0b0f14; --card: #131b24; --fg: #f5f8fb; --muted: #d0d9e3; --line: #5b6b7d;
+  --accent: #8fcbff; --accent-soft: #17344d; --crash: #ffb47c; --crash-soft: #3d2615; color-scheme: dark }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 var(--body); }
@@ -107,3 +107,66 @@ ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 66ch }
 a { color: var(--accent) }
 @media (max-width: 480px) { .bar { grid-template-columns: 1fr 44px; } .bar .track { grid-column: 1 / -1; grid-row: 2 } }
 @media (prefers-reduced-motion: no-preference) { .fill { transition: width .3s } }
+
+/* Quiz page: large type, one boxed question at a time, no all-caps labels, thick focus rings */
+.quiz { font-size: 19px; line-height: 1.55 }
+.quiz section { gap: 20px }
+.quiz .intro { display: grid; gap: 6px }
+.quiz h1 { font-size: clamp(30px, 6vw, 38px) }
+.quiz .lede { color: var(--fg); font-size: 21px }
+.quiz .form { background: none; border: 0; padding: 0; gap: 20px }
+.quiz .mode, .quiz .q, .quiz .score { background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 20px }
+.quiz .mode label { font-size: 20px }
+.quiz .mode select { font-size: 19px; min-height: 52px; border-width: 2px }
+.quiz fieldset.q > legend { float: left; width: 100%; margin-bottom: 4px }
+.quiz .q .n { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 10px; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 18px; vertical-align: 2px }
+.quiz .q .stem { font-size: 22px; line-height: 1.35 }
+.quiz .q .help, .quiz .note { color: var(--muted); font-size: 18px }
+.quiz .chips { gap: 10px }
+.quiz .chips span { min-width: 56px; min-height: 56px; font-size: 20px; border-width: 2px; background: var(--bg) }
+.quiz .chips label:hover span { border-color: var(--fg) }
+.quiz .chips input:checked + span { color: var(--bg); font-weight: 700 }
+.quiz fieldset.sub .chips span { font-size: 18px }
+.quiz .checks label { border-width: 2px; background: var(--bg); min-height: 64px }
+.quiz .checks label:hover { border-color: var(--fg) }
+.quiz .checks label:has(input:checked) { border-color: var(--accent) }
+.quiz .checks input { width: 26px; height: 26px }
+.quiz .checks small { color: var(--muted); font-size: 16px }
+.quiz .q2 { gap: 26px }
+.quiz .gname { font-size: 19px; text-transform: none; letter-spacing: 0; color: var(--fg) }
+.quiz button.gbtn { font-size: 17px; min-height: 48px; border-width: 2px; background: var(--bg) }
+.quiz button.gbtn:hover { border-color: var(--fg) }
+.quiz button.gbtn[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700 }
+.quiz .slider { gap: 8px }
+.quiz .slider input[type=range][data-unset] { opacity: 1; accent-color: var(--line) }
+.quiz .ticks { font-size: 16px; color: var(--muted) }
+.quiz .sval.unset { font-size: 18px }
+.quiz textarea { border-width: 2px; min-height: 96px }
+.quiz .score-title { grid-column: 1 / -1; font-size: 22px; margin: 0 }
+.quiz .score .k { font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--muted) }
+.quiz .score .sub { font-size: 15px; color: var(--muted) }
+.quiz .score .unans { font-size: 18px; color: var(--fg) }
+.quiz :is(a, button, select, textarea, input):focus-visible,
+.quiz .chips input:focus-visible + span { outline: 3px solid var(--fg); outline-offset: 3px }
+.quiz nav a { color: var(--muted); font-size: 17px }
+.quiz nav a[aria-current="page"] { color: var(--fg) }
+.quiz .score div { align-content: start }
+.quiz .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--line) }
+.quiz #progress-text { font-size: 18px; font-weight: 700 }
+.quiz .view { display: inline-flex; margin-left: auto; border: 2px solid var(--line); border-radius: 10px; overflow: hidden }
+.quiz .view button { font: inherit; font-size: 16px; min-height: 44px; padding: 8px 14px; border: 0; background: none; color: var(--muted); cursor: pointer }
+.quiz .view button + button { border-left: 2px solid var(--line) }
+.quiz .view button:hover { color: var(--fg) }
+.quiz .view button[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); font-weight: 700 }
+.quiz .form { scroll-margin-top: 80px; gap: 12px }
+.quiz .form > .mode, .quiz .form > .q, .quiz .form > .score { margin-top: 8px }
+.quiz .progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden }
+.quiz #progress-fill { display: block; height: 100%; background: var(--accent) }
+.quiz [tabindex="-1"]:focus { outline: none }
+.quiz .stepper { display: flex; gap: 12px; margin-top: 8px }
+.quiz .pager { margin-top: 72px }
+.quiz .pager a { font-weight: 400; font-size: 17px; color: var(--muted) }
+.quiz .stepper button { font: inherit; font-size: 20px; font-weight: 700; min-height: 60px; padding: 12px 28px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer }
+.quiz .stepper button:hover { border-color: var(--fg) }
+.quiz .stepper #next { margin-left: auto; min-width: 180px; background: var(--accent); border-color: var(--accent); color: var(--bg) }
+.quiz .footnote { margin-top: 20px }

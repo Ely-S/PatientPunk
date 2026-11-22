@@ -1,70 +1,74 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Baseline Check v0.3.1</title>
+<title>Weekly Check v0.3.1</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="quiz">
 
-<nav aria-label="Baseline Check pages"><div class="wrap"><b>Baseline Check</b><a href="index.html" aria-current="page">The Quiz</a><a href="methodology.html">Methodology and Data</a><a href="blog.html">Blog post</a></div></nav>
+<nav aria-label="Weekly Check pages"><div class="wrap"><b>Weekly Check</b><a href="index.html" aria-current="page">The Quiz</a><a href="methodology.html">Methodology and Data</a><a href="blog.html">Blog post</a></div></nav>
 
 <div class="wrap">
-<section>
-  <span class="eyebrow">Draft patient-reported outcome · Long COVID and ME/CFS · v0.3.1</span>
-  <h1>A short weekly check built from how patients describe getting better and worse</h1>
-  <p class="lede">Six questions, one week of recall. It counts crashes, counts what you could do without paying for it later, and asks whether you feel like yourself. Built from 3.8 million Reddit posts and comments, then checked against the trial literature.</p>
-  <p class="status"><b>Status:</b> research draft. Not validated. The evidence supports what to measure; it does not yet show the questions are reliable or responsive. Read the <a href="methodology.html">methodology and data</a>, including the validation plan, before using it in a study.</p>
-</section>
-
 <section id="quiz">
-  <span class="eyebrow">1 · The quiz</span>
-  <h2>Baseline Check v0.3.1</h2>
-  <p>Answer about <b>the past 7 days</b>. Try the form; the scores update as you go. Nothing is filled in for you, and nothing you enter is saved or sent.</p>
+  <div class="intro">
+    <h1>Weekly Check</h1>
+    <p class="lede">6 questions about <b>the past 7 days</b>.</p>
+    <p class="note">Nothing you enter is saved or sent.</p>
+  </div>
+  <div class="toolbar">
+    <p id="progress-text" aria-live="polite"></p>
+    <div class="view" role="group" aria-label="How to show the questions">
+      <button type="button" data-view="one" aria-pressed="true">One at a time</button>
+      <button type="button" data-view="all" aria-pressed="false">All questions</button>
+    </div>
+  </div>
 
   <form class="form" id="bc" onsubmit="event.preventDefault()">
+    <div class="progress" id="progress" aria-hidden="true"><span id="progress-fill"></span></div>
     <div class="mode">
-      <label for="reporter">Who is giving the answers?</label>
+      <label for="reporter">Who is answering?</label>
       <select id="reporter" name="reporter">
-        <option value="patient">Patient answering directly</option>
-        <option value="assisted">Patient answering with help</option>
-        <option value="proxy">Carer answering for the patient</option>
+        <option value="patient">The patient</option>
+        <option value="assisted">The patient, with help</option>
+        <option value="proxy">A carer, for the patient</option>
       </select>
-      <p class="note" id="assisted-note" hidden>Read the questions aloud if needed and enter the answers the patient gives, including answers given by a gesture.</p>
-      <p class="note proxy" hidden>Give your own observations of the patient's week. Leave a question blank if you cannot answer it.</p>
+      <p class="note" id="assisted-note" hidden>Read the questions aloud if it helps. Enter the patient’s answers. Gestures count.</p>
+      <p class="note proxy" hidden>Answer from what you saw. Skip any question you can’t answer.</p>
     </div>
 
     <fieldset class="q crash">
-      <legend><span class="n">1</span><span class="stem self">On how many of the past 7 days were you in a crash or flare?</span><span class="stem proxy" hidden>On how many of the past 7 days were they in a crash or flare?</span></legend>
-      <div class="help self">Count every day you were noticeably worse than your usual, whatever set it off: doing something physical, mental, emotional or sensory, an infection, a treatment, your menstrual cycle, or no clear reason. A crash after doing something often starts one to three days later; count those days too.</div>
-      <div class="help proxy" hidden>Count every day they were noticeably worse than their usual, whatever set it off: doing something physical, mental, emotional or sensory, an infection, a treatment, their menstrual cycle, or no clear reason. A crash after doing something often starts one to three days later; count those days too.</div>
+      <legend><span class="n">1</span><span class="stem self">How many of the past 7 days were you in a crash or flare?</span><span class="stem proxy" hidden>How many of the past 7 days were they in a crash or flare?</span></legend>
+      <div class="help self">Count any day you were clearly worse than usual, for any reason. Include crashes that started 1 to 3 days after doing too much.</div>
+      <div class="help proxy" hidden>Count any day they were clearly worse than usual, for any reason. Include crashes that started 1 to 3 days after doing too much.</div>
       <div class="chips" id="q1"></div>
       <fieldset class="sub" id="q1t" hidden disabled>
-        <legend class="help">What set them off? <span>(optional, tick any)</span></legend>
+        <legend class="help">What seemed to cause them? <span>(optional)</span></legend>
         <div class="chips" id="q1tc"></div>
       </fieldset>
     </fieldset>
 
     <fieldset class="q">
-      <legend><span class="n">2</span><span class="stem self">Which of these could you do at least once this week <i>without paying for it later</i>?</span><span class="stem proxy" hidden>Which of these could they do at least once this week <i>without paying for it later</i>?</span></legend>
-      <div class="help self">Tick what you managed without it causing a crash. Only count things from at least 2 days ago, so you know whether they cost you. If you did the longer or bigger version of something, tick the shorter one too.</div>
-      <div class="help proxy" hidden>Tick what they managed without it causing a crash. Only count things from at least 2 days ago, so you know whether they cost them. If they did the longer or bigger version of something, tick the shorter one too.</div>
+      <legend><span class="n">2</span><span class="stem self">Which of these did you do this week <i>without a crash afterwards</i>?</span><span class="stem proxy" hidden>Which of these did they do this week <i>without a crash afterwards</i>?</span></legend>
+      <div class="help self">Only count things from 2 or more days ago. If you did the longer one, tick the shorter one too.</div>
+      <div class="help proxy" hidden>Only count things from 2 or more days ago. If they did the longer one, tick the shorter one too.</div>
       <div class="q2" id="q2"></div>
     </fieldset>
 
     <fieldset class="q">
-      <legend><span class="n">3</span><span class="stem self">On a typical day this week, how bad were your symptoms overall?</span><span class="stem proxy" hidden>On a typical day this week, how bad were their symptoms overall?</span></legend>
-      <div class="help">0 = no symptoms, 10 = as bad as you can imagine.</div>
+      <legend><span class="n">3</span><span class="stem self">On a typical day this week, how bad were your symptoms?</span><span class="stem proxy" hidden>On a typical day this week, how bad were their symptoms?</span></legend>
+      <div class="help">0 = no symptoms &nbsp;·&nbsp; 10 = the worst you can imagine</div>
       <div class="chips" id="q3"></div>
     </fieldset>
 
     <fieldset class="q">
-      <legend id="q4leg"><span class="n">4</span><span class="stem self">This week, how close did you feel to your pre-illness self?</span><span class="stem proxy" hidden>This week, how close did they seem to their pre-illness self?</span> <span class="help">(optional)</span></legend>
-      <div class="help self">0% = nothing like myself, 100% = fully myself, as before I got sick. The slider moves in steps of 5%.</div>
-      <div class="help proxy" hidden>0% = nothing like their old self, 100% = fully themselves, as before they got sick. The slider moves in steps of 5%.</div>
+      <legend id="q4leg"><span class="n">4</span><span class="stem self">This week, how much did you feel like your old self, before you got sick?</span><span class="stem proxy" hidden>This week, how much did they seem like their old self, before they got sick?</span> <span class="help">(optional)</span></legend>
+      <div class="help self">0% = not at all &nbsp;·&nbsp; 100% = fully myself</div>
+      <div class="help proxy" hidden>0% = not at all &nbsp;·&nbsp; 100% = fully themselves</div>
       <div class="slider">
         <div class="slider-status">
           <output class="sval unset" id="q4v" for="q4">Not answered yet</output>
@@ -76,9 +80,9 @@
     </fieldset>
 
     <fieldset class="q">
-      <legend><span class="n">5</span><span class="stem self">Compared with your last check, overall you are…</span><span class="stem proxy" hidden>Compared with their last check, overall they are…</span></legend>
-      <div class="help self">If this is your first check, choose "No earlier check".</div>
-      <div class="help proxy" hidden>If this is their first check, choose "No earlier check".</div>
+      <legend><span class="n">5</span><span class="stem self">Since your last check, overall you are…</span><span class="stem proxy" hidden>Since their last check, overall they are…</span></legend>
+      <div class="help self">First time? Choose “No earlier check”.</div>
+      <div class="help proxy" hidden>First time? Choose “No earlier check”.</div>
       <div class="chips" id="q5"></div>
     </fieldset>
 
@@ -88,56 +92,61 @@
     </fieldset>
 
     <div class="score" aria-live="polite">
+      <h2 class="score-title">Scores</h2>
       <div><span class="k">Crash days</span><span class="v crashv" id="s1">–</span></div>
-      <div><span class="k">Without cost</span><span class="v" id="s2">–</span><ul class="sub" id="s2b" aria-label="Activity group scores"></ul><span class="sub" id="s2c"></span></div>
+      <div><span class="k">Done without a crash</span><span class="v" id="s2">–</span><ul class="sub" id="s2b" aria-label="Activity group scores"></ul><span class="sub" id="s2c"></span></div>
       <div><span class="k">Symptoms</span><span class="v" id="s3">–</span></div>
-      <div><span class="k">Like myself</span><span class="v" id="s4">–</span></div>
+      <div><span class="k">Like my old self</span><span class="v" id="s4">–</span></div>
       <div><span class="k">Change</span><span class="v small" id="s6">–</span></div>
       <div><span class="k">Answered by</span><span class="v small" id="s5">Patient</span></div>
       <p class="note unans" id="unans"></p>
     </div>
+    <div class="stepper" id="stepper">
+      <button type="button" id="back">← Back</button>
+      <button type="button" id="next">Next →</button>
+    </div>
   </form>
-  <p class="note">How these scores are used in a study, and the evidence behind each question, are on the <a href="methodology.html">Methodology and Data</a> page.</p>
 </section>
 <nav class="pager" aria-label="Previous and next page"><span></span><a href="methodology.html">Methodology and Data →</a></nav>
+<footer class="note footnote">Research draft, not yet validated. <a href="methodology.html">How it was made</a></footer>
 </div>
 
 <script>
 (function () {
-  // Each item: [label, hint, proxyLabel?, proxyHint?]. Every group gets "All of these" and "None of these this week" buttons.
+  // Each item: [label, hint, proxyLabel?, proxyHint?]. Every group gets "All of these" and "None of these" buttons.
   const GROUPS = [
-    ["Within the home", [
+    ["At home", [
       ["Get to the toilet on your own", "walking or with an aid", "Get to the toilet on their own"],
       ["Brush your teeth or wash your face", "sitting or standing", "Brush their teeth or wash their face"],
       ["Hold a phone or tablet to read a message", "propped up is fine"],
-      ["Have a 5-minute conversation", "in person or by phone"]]],
-    ["Everyday basics", [
-      ["Sit up for most of the day", "or in a supported chair"],
+      ["Talk with someone for 5 minutes", "in person or by phone"]]],
+    ["Daily basics", [
+      ["Sit up for most of the day", "a supported chair counts"],
       ["Shower or bathe", "standing or seated"],
-      ["Make a simple meal", "e.g. toast, a sandwich"],
-      ["Have a 30-minute conversation", "in person, phone or video"],
+      ["Make a simple meal", "like toast or a sandwich"],
+      ["Talk with someone for 30 minutes", "in person, by phone or video"],
       ["Read or watch something for 30 minutes", "and follow it"],
       ["Leave the house", "for any reason"]]],
-    ["Getting out and keeping up", [
-      ["Walk for 15 minutes outside", "at your own pace", null, "at their own pace"],
-      ["Stand for 20 minutes", "e.g. queueing, cooking at the stove"],
-      ["Do household chores", "e.g. laundry, cleaning, cooking a full meal"],
-      ["Go grocery shopping or run errands", "in person"],
+    ["Getting out", [
+      ["Walk outside for 15 minutes", "at your own pace", null, "at their own pace"],
+      ["Stand for 20 minutes", "like queueing or cooking"],
+      ["Do household chores", "like laundry, cleaning or cooking a full meal"],
+      ["Go food shopping or run errands", "in person"],
       ["See friends or family for an hour or more", "outside your home", null, "outside their home"],
-      ["Work, study or volunteer for half a day", "about 4 hours, any setting"]]],
-    ["Full days and beyond", [
-      ["Do light exercise on purpose", "e.g. gentle swim, yoga, easy bike ride"],
+      ["Work, study or volunteer for half a day", "about 4 hours, at home or away"]]],
+    ["Full days", [
+      ["Do some gentle exercise", "like a slow swim, yoga or an easy bike ride"],
       ["Walk for 45 minutes or more", "in one go"],
-      ["Do 3 or more hours of focused mental work", "e.g. reading, screens, planning, paperwork"],
-      ["Do a full day of work, study or caring", "about 8 hours of demanding tasks, without needing to lie down"],
-      ["Go out for an evening or an outing of 3+ hours", "e.g. dinner, an event, a day trip, time outdoors"],
-      ["Keep up all your usual responsibilities, with no days lost", "work, study, caring or running a home",
-       "Keep up all their usual responsibilities, with no days lost"],
-      ["Be as physically active as before you got sick", "your old exercise, sport or physical job",
-       "Be as physically active as before they got sick", "their old exercise, sport or physical job"]]]
+      ["Focus on mental tasks for 3 hours or more", "like reading, screens, planning or paperwork"],
+      ["Do a full day of work, study or caring", "about 8 hours, without needing to lie down"],
+      ["Go out for 3 hours or more", "like dinner, an event or a day trip"],
+      ["Keep up all your usual tasks, with no days lost", "work, study, caring or running a home",
+       "Keep up all their usual tasks, with no days lost"],
+      ["Be as active as before you got sick", "your old exercise, sport or physical work",
+       "Be as active as before they got sick", "their old exercise, sport or physical work"]]]
   ];
   const TOTAL = GROUPS.reduce((n, g) => n + g[1].length, 0);
-  const TRIGGERS = ["Physical activity", "Mental effort", "Emotional stress", "Sensory overload", "Infection", "Treatment or procedure", "Menstrual cycle", "No clear reason"];
+  const TRIGGERS = ["Physical activity", "Mental effort", "Emotional stress", "Sensory overload", "Infection", "A treatment or procedure", "Menstrual cycle", "No clear reason"];
   const CHANGE = ["Much worse", "Worse", "A little worse", "About the same", "A little better", "Better", "Much better"];
   const DASH = "–";
   const $ = (id) => document.getElementById(id);
@@ -157,8 +166,8 @@
     const rows = items.map(([a, h, pa, ph]) =>
       `<label><input type="checkbox" id="q2_${idx++}" data-g="${g}"><span>${both(a, pa)}<small>${both(h, ph)}</small></span></label>`).join("");
     q2.insertAdjacentHTML("beforeend", `<div class="grp" role="group" aria-labelledby="gname_${g}">
-      <div class="ghead"><span class="gname" id="gname_${g}">${name} <span>(${items.length})</span></span>
-      <span class="gbtns">${all}<button type="button" class="gbtn" data-none="${g}" id="none_${g}" aria-pressed="false">None of these this week</button></span></div>
+      <div class="ghead"><span class="gname" id="gname_${g}">${name}</span>
+      <span class="gbtns">${all}<button type="button" class="gbtn" data-none="${g}" id="none_${g}" aria-pressed="false">None of these</button></span></div>
       <div class="checks">${rows}</div></div>`);
   });
 
@@ -211,7 +220,7 @@
       !slider.hasAttribute("data-unset") || $("q6").value.trim();
 
     if (switchesSource && hasAnswers) {
-      if (!window.confirm("Start a new check with the other person’s answers? Your current answers will be cleared.")) {
+      if (!window.confirm("Change who is answering? This clears the answers so far.")) {
         reporter.value = currentReporter;
         return;
       }
@@ -262,19 +271,55 @@
     });
     const anyAnswered = blank < GROUPS.length;
     $("s2").textContent = blank === 0 ? acts + " / " + TOTAL : DASH;
-    $("s2c").textContent = anyAnswered && blank ? `${blank} ${blank === 1 ? "group" : "groups"} blank` : "";
+    $("s2c").textContent = anyAnswered && blank ? `${blank} ${blank === 1 ? "group" : "groups"} not answered` : "";
 
     $("s3").textContent = q3 === null ? DASH : q3 + " / 10";
     $("s4").textContent = q4 === null ? DASH : q4 + "%";
-    $("s6").textContent = q5 === null ? DASH : q5 === "none" ? "Missing (first check)" : CHANGE[Number(q5) + 3];
+    $("s6").textContent = q5 === null ? DASH : q5 === "none" ? "First check" : CHANGE[Number(q5) + 3];
     $("s5").textContent = reporterLabels[currentReporter];
 
     const left = [q1 === null, blank > 0, q3 === null, q5 === null].filter(Boolean).length;
-    $("unans").textContent = left ? `${left} of 4 required questions still unanswered (Q4 and Q6 are optional).` : "All 4 required questions answered.";
+    $("unans").textContent = left ? `${left} required ${left === 1 ? "question" : "questions"} left. Questions 4 and 6 are optional.` : "All required questions answered.";
   }
   form.addEventListener("input", update);
   form.addEventListener("change", update);
   update();
+
+  // Quiz mode shows one step at a time, with Q2 split into its four groups. Show-all mode shows the whole form.
+  const grps = [...q2.querySelectorAll(".grp")];
+  const qs = [...form.querySelectorAll("fieldset.q")];
+  const STEPS = [
+    { el: form.querySelector(".mode"), label: "Before you start" },
+    ...qs.flatMap((el, i) => el.contains(q2)
+      ? grps.map((_, g) => ({ el, g, label: `Question ${i + 1} of ${qs.length} · part ${g + 1} of ${grps.length}` }))
+      : [{ el, label: `Question ${i + 1} of ${qs.length}` }]),
+    { el: form.querySelector(".score"), label: "Scores" }
+  ];
+  STEPS.forEach(({ el }) => { el.tabIndex = -1; });
+  let step = 0, view = "one";
+  try { view = localStorage.getItem("wc-view") || view; } catch {}
+
+  function render(moveFocus) {
+    const one = view === "one", s = STEPS[step];
+    document.querySelectorAll("[data-view]").forEach((b) => press(b, b.dataset.view === view));
+    STEPS.forEach(({ el }) => { el.hidden = one && el !== s.el; });
+    grps.forEach((x, g) => { x.hidden = one && s.g !== undefined && g !== s.g; });
+    $("progress").hidden = $("progress-text").hidden = $("stepper").hidden = !one;
+    $("progress-text").textContent = s.label;
+    $("progress-fill").style.width = (100 * (step + 1) / STEPS.length) + "%";
+    $("back").hidden = step === 0;
+    $("next").hidden = step === STEPS.length - 1;
+    $("next").textContent = step === STEPS.length - 2 ? "See scores →" : "Next →";
+    if (moveFocus) { form.scrollIntoView?.({ block: "start" }); s.el.focus({ preventScroll: true }); }
+  }
+  $("back").addEventListener("click", () => { step--; render(true); });
+  $("next").addEventListener("click", () => { step++; render(true); });
+  document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => {
+    view = b.dataset.view;
+    try { localStorage.setItem("wc-view", view); } catch {}
+    render(false);
+  }));
+  render(false);
 })();
 </script>
 </body>

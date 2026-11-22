@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Baseline Check v0.3.1 | Methodology and Data</title>
+<title>Weekly Check v0.3.1 | Methodology and Data</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav aria-label="Baseline Check pages"><div class="wrap"><b>Baseline Check</b><a href="index.html">The Quiz</a><a href="methodology.html" aria-current="page">Methodology and Data</a><a href="blog.html">Blog post</a></div></nav>
+<nav aria-label="Weekly Check pages"><div class="wrap"><b>Weekly Check</b><a href="index.html">The Quiz</a><a href="methodology.html" aria-current="page">Methodology and Data</a><a href="blog.html">Blog post</a></div></nav>
 
 <div class="wrap">
 <section>
@@ -26,10 +26,10 @@
     <li><b>Questions start blank.</b> An unanswered question is missing data. The Q2 total appears once every group has a tick or a button pressed. Q4 and Q6 are optional. Clearing Q4 returns it to missing.</li>
     <li><b>Candidate trial endpoint.</b> The proposed win ratio compares changes in four-week averages for each treated–control pair. A difference of at least 1 crash day per week on Q1 decides the pair. Below that margin, the change in Q2 activities (0–23) decides it. This gives crash days priority at or above the provisional margin and allows an activity gain to decide a pair when the crash-day difference is smaller.</li>
     <li><b>Responder definition for clinicians:</b> a patient counts as improved if their Q2 count rises by 2 or more and their crash days do not rise by 1 or more a week (4-week averages). Both thresholds are provisional until the minimal important difference has been measured.</li>
-    <li><b>Report the 4 Q2 group scores too</b> (within the home 0–4, everyday basics 0–6, getting out and keeping up 0–6, full days and beyond 0–7). They show where on the severity range a change happened. A trial in mild-to-moderate patients could pre-specify the top two groups (13 items) as its primary; that cut is a proposal to test, not a validated threshold.</li>
+    <li><b>Report the 4 Q2 group scores too</b> (at home 0–4, daily basics 0–6, getting out 0–6, full days 0–7). They show where on the severity range a change happened. A trial in mild-to-moderate patients could pre-specify the top two groups (13 items) as its primary; that cut is a proposal to test, not a validated threshold.</li>
     <li><b>Q2 counts only activities done at least 2 days before the check,</b> because crashes often start one to three days later. That leaves the same 5 days of each week, so changes stay comparable.</li>
-    <li><b>"None of these this week" is an answer (0); "All of these" ticks every item in its group; a blank group is missing data.</b> The score shows a dash for a group nobody answered, so a skipped group is never scored as zero.</li>
-    <li><b>Q1 counts crash or flare days, whatever set them off.</b> The optional "What set them off?" list is descriptive and not scored; analysts can separately count weeks whose crashes were set off by doing something (physical activity, mental effort, emotional stress or sensory overload).</li>
+    <li><b>"None of these" is an answer (0); "All of these" ticks every item in its group; a blank group is missing data.</b> The score shows a dash for a group nobody answered, so a skipped group is never scored as zero.</li>
+    <li><b>Q1 counts crash or flare days, whatever set them off.</b> The optional "What seemed to cause them?" list is descriptive and not scored; analysts can separately count weeks whose crashes were set off by doing something (physical activity, mental effort, emotional stress or sensory overload).</li>
     <li><b>"No earlier check" on Q5 is recorded as missing.</b> It is the expected answer in the first week.</li>
     <li><b>Record who supplied the answers.</b> A patient may respond directly or have a carer read the questions and enter the patient's answers. Both are self-reports, with assistance recorded separately. A carer's own answers are proxy reports and should be analysed separately. The quiz starts a new set of answers when the source switches between patient and proxy.</li>
     <li><b>Key secondaries:</b> Q1 crash days, Q3 symptoms, Q4 feeling like yourself (optional). Q5 is the anchor for working out how big a change matters to patients. Q6 is read for content gaps and is not scored.</li>
@@ -104,7 +104,7 @@
   <p>The upper Q2 groups capture how long or intensely an activity was done. The examples below summarise themes from the <code>milestones</code> field in the AI coding of 450 posts, focusing on descriptions of milder illness or recovery. Study sources <code>v02_analysis/code_llm.py</code> and <code>v02_analysis/milestones.py</code>.</p>
   <div class="tablewrap"><table>
     <tr><th>Theme</th><th>What changed</th><th>Q2 item</th></tr>
-    <tr><td>Work</td><td>Hours worked, stamina across a full day, returning to regular duties</td><td>Half day · full day · usual responsibilities</td></tr>
+    <tr><td>Work</td><td>Hours worked, stamina across a full day, returning to regular duties</td><td>Half day · full day · usual tasks</td></tr>
     <tr><td>Household</td><td>Managing meals, laundry and other chores</td><td>Household chores · errands</td></tr>
     <tr><td>Social life</td><td>Seeing people outside the home, staying out longer, going out more often</td><td>See friends · evening or long outing</td></tr>
     <tr><td>Walking</td><td>Walking duration, distance and step count</td><td>Walk 15 min · walk 45+ min</td></tr>
@@ -112,7 +112,7 @@
   </table></div>
   <p>Among authors with an extracted activity statement, 42 of 2,782 in the mild or mostly functional group mentioned being able to work full time, as did 32 of 5,753 in the severe group. Being able to work part time appeared in 38 of 4,156 moderate authors, 23 of 5,753 severe authors, and 8 of 2,782 mild or mostly functional authors. Severity tiers combine posts across time. Study source <code>v02_analysis/milestones.py</code>.</p>
   <p>Coders identified cognitive changes in 73 of 242 change narratives (30%) and upright or orthostatic changes in 26 of 242 (11%). These findings motivated the focused mental work and standing items in v0.2. Study source <code>v02_analysis/analyze_coded.py</code>.</p>
-  <p>The v0.2 coverage notes identified changes in basic activities below the original checklist's lowest item, sitting up for most of the day. The four Within the home items were added in v0.3 to test whether the check can register changes at that level. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
+  <p>The v0.2 coverage notes identified changes in basic activities below the original checklist's lowest item, sitting up for most of the day. The four At home items were added in v0.3 to test whether the check can register changes at that level. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
 
   <h3 id="self-ratings">Percent-of-pre-illness self-ratings</h3>
   <p>The self-rating pattern matched 339 of 5,062 posts in the recovery or improvement frame (6.7%) and 105 of 20,000 in the comparison frame (0.5%). In a separate sample of 150 candidate matches, AI coders found a current self-rating in 93 (62%). Study sources <code>v02_analysis/domains_v2.py</code> and <code>v02_analysis/analyze_coded.py</code>.</p>

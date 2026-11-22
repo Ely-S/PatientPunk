@@ -24,14 +24,14 @@ let n = 0; const ok = (m) => { n++; console.log("PASS", m); };
 // 1. nothing answered
 for (const id of ["s1", "s2", "s3", "s4", "s6"]) assert.strictEqual(t(id), "–", id);
 assert.strictEqual(groupScores(), "–/4 · –/6 · –/6 · –/7");
-assert.ok(t("s2b").includes("Within the home"));
-assert.match(t("unans"), /^4 of 4 required questions still unanswered \(Q4 and Q6 are optional\)/);
+assert.ok(t("s2b").includes("At home"));
+assert.strictEqual(t("unans"), "4 required questions left. Questions 4 and 6 are optional.");
 assert.strictEqual(d.querySelectorAll('input:checked').length, 0);
 assert.strictEqual(d.querySelectorAll('#q2 input[type=checkbox]').length, 23);
 const help = d.querySelector("#q2").closest("fieldset").querySelector(".help.self").textContent;
 assert.ok(help.includes("tick the shorter one too"), "Q2 help explains nested items");
 assert.ok(help.split(". ").length <= 3, "Q2 help is short");
-assert.ok(t("q2").includes("Keep up all your usual responsibilities, with no days lost"));
+assert.ok(t("q2").includes("Keep up all your usual tasks, with no days lost"));
 assert.ok($("q4leg").textContent.includes("(optional)"));
 ok("nothing answered: all dashes, 4 required unanswered, nothing pre-checked, 23 items, short Q2 help, Q4 optional: " + t("unans"));
 
@@ -39,7 +39,7 @@ ok("nothing answered: all dashes, 4 required unanswered, nothing pre-checked, 23
 click($("none_1"));
 assert.strictEqual(groupScores(), "–/4 · 0/6 · –/6 · –/7");
 assert.strictEqual(t("s2"), "–");
-assert.strictEqual(t("s2c"), "3 groups blank");
+assert.strictEqual(t("s2c"), "3 groups not answered");
 ok("One answered group shows a zero group score and a blank Q2 total");
 
 // 3. All on group 0 -> 4/4, total 4
@@ -92,7 +92,7 @@ assert.ok(!$("q1t").disabled && !trigger.checked);
 ok("Returning Q1 to zero clears and disables the trigger list");
 
 // 7. Q5 No earlier check -> missing
-pick("q5", "none"); assert.strictEqual(t("s6"), "Missing (first check)");
+pick("q5", "none"); assert.strictEqual(t("s6"), "First check");
 pick("q5", "1"); assert.strictEqual(t("s6"), "A little better");
 pick("q5", "none");
 ok("Q5 'No earlier check' shows: " + t("s6"));
@@ -102,12 +102,12 @@ const s = $("q4");
 assert.deepStrictEqual([s.type, s.min, s.max, s.step], ["range", "0", "100", "5"]);
 assert.ok(s.hasAttribute("data-unset")); assert.strictEqual(t("s4"), "–");
 assert.strictEqual(t("q4v"), "Not answered yet"); assert.strictEqual(s.getAttribute("aria-valuetext"), "Not answered yet");
-assert.match(t("unans"), /^2 of 4/); // Q2 (2 groups blank) and Q3 open; Q1 and Q5 answered above; Q4 optional
+assert.match(t("unans"), /^2 required questions left/); // Q2 (2 groups blank) and Q3 open; Q1 and Q5 answered above; Q4 optional
 pick("q3", 4);
-assert.match(t("unans"), /^1 of 4/); // Q2 still has 2 blank groups
+assert.match(t("unans"), /^1 required question left/); // Q2 still has 2 blank groups
 click($("none_2")); click($("none_3"));
 assert.strictEqual(t("s2"), "3 / 23");
-assert.strictEqual(t("unans"), "All 4 required questions answered."); // with Q4 still untouched
+assert.strictEqual(t("unans"), "All required questions answered."); // with Q4 still untouched
 assert.strictEqual(t("s4"), "–");
 s.dispatchEvent(new dom.window.Event("pointerup", { bubbles: true })); // a tap on the untouched slider counts as an answer
 assert.strictEqual(t("s4"), "50%");
@@ -122,7 +122,7 @@ assert.ok(s.hasAttribute("data-unset"));
 assert.strictEqual(t("s4"), "–");
 assert.strictEqual(t("q4v"), "Not answered yet");
 assert.strictEqual(s.getAttribute("aria-valuetext"), "Not answered yet");
-assert.strictEqual(t("unans"), "All 4 required questions answered.");
+assert.strictEqual(t("unans"), "All required questions answered.");
 ok("Clearing Q4 restores the unanswered state");
 
 // 8b. every Q2 group has an "All of these" button that ticks the whole group and can be undone
@@ -136,7 +136,7 @@ for (let g = 0; g < 4; g++) {
 assert.strictEqual(t("s2"), "23 / 23"); assert.strictEqual(groupScores(), "4/4 · 6/6 · 6/6 · 7/7");
 click($("all_3"));
 assert.strictEqual(t("s2"), "–"); assert.strictEqual(groupScores(), "4/4 · 6/6 · 6/6 · –/7");
-assert.strictEqual(t("s2c"), "1 group blank");
+assert.strictEqual(t("s2c"), "1 group not answered");
 assert.strictEqual($("all_3").getAttribute("aria-pressed"), "false");
 ok("Completing all groups shows the total. Clearing one group hides it.");
 for (let g = 0; g < 4; g++) click($("none_" + g));
@@ -206,4 +206,26 @@ for (const [name, doc] of Object.entries(pages)) {
   }
 }
 ok(`All ${links} local links resolve across the three v0.3.1 pages`);
+// 12. quiz mode shows one step at a time, with Q2 split into its four groups; show-all mode shows everything
+const shown = () => [...d.querySelectorAll("#bc > .mode, #bc > fieldset.q, #bc > .score")].filter((x) => !x.hidden);
+const grpHidden = () => [...d.querySelectorAll("#q2 .grp")].map((g) => g.hidden);
+click(d.querySelector('[data-view="one"]'));
+assert.strictEqual(shown().length, 1); assert.ok(shown()[0].matches(".mode"));
+assert.strictEqual(t("progress-text"), "Before you start"); assert.ok($("back").hidden);
+click($("next")); click($("next"));
+assert.strictEqual(t("progress-text"), "Question 2 of 6 · part 1 of 4");
+assert.deepStrictEqual(grpHidden(), [false, true, true, true]);
+click($("next"));
+assert.deepStrictEqual(grpHidden(), [true, false, true, true]);
+for (let i = 0; i < 6; i++) click($("next"));
+assert.strictEqual(t("next"), "See scores →");
+click($("next"));
+assert.strictEqual(t("progress-text"), "Scores"); assert.ok($("next").hidden); assert.ok(shown()[0].matches(".score"));
+click($("back"));
+assert.strictEqual(t("progress-text"), "Question 6 of 6");
+click(d.querySelector('[data-view="all"]'));
+assert.strictEqual(shown().length, 8); assert.ok($("stepper").hidden && $("progress").hidden);
+assert.deepStrictEqual(grpHidden(), [false, false, false, false]);
+assert.strictEqual(d.querySelector('[data-view="all"]').getAttribute("aria-pressed"), "true");
+ok("Quiz mode steps through 11 screens (Q2 in 4 parts); show-all mode shows all 8 sections");
 console.log(`\n${n} checks passed`);

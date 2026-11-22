@@ -15,8 +15,9 @@ The [v0.3.1 questionnaire](../../docs/baseline_check/index.html) and its rationa
 The product uses aggregate findings and thematic summaries. The analysis scripts and codebooks are here,
 with the source of each finding identified on the Methodology and Data page.
 
-**Status:** exploratory. All coding was done by Claude Sonnet agents, not human coders. Nothing here is
-validated with patients yet; the page's *Validation plan* section describes what would be.
+Claude Sonnet agents coded the main samples for this exploratory study. Patient validation is pending.
+The [next-version design and validation plan](next_version/README.md) includes a reproducible audit of the current
+evidence and specifies what to test in the next instrument.
 
 ---
 
@@ -33,7 +34,7 @@ validated with patients yet; the page's *Validation plan* section describes what
 9. [Script reference](#script-reference)
 10. [Data that is not in Git](#data-that-is-not-in-git)
 11. [Cost](#cost)
-12. [Open questions](#open-questions)
+12. [Next version](#next-version)
 
 ---
 
@@ -72,8 +73,8 @@ self-rating-by-severity analysis. Authors with more than one tier are skipped.
 
 ## Folder layout
 
-The scripts were written during two exploratory sessions and are kept exactly as they ran. **Each one reads
-and writes files in its own folder**, so run it from there.
+The v0.2 and v0.3 scripts were written during two exploratory sessions and are kept as they ran. Run those
+scripts from their own folders. Run the next-version audit from the repository root.
 
 ```
 baseline_check/
@@ -98,11 +99,12 @@ baseline_check/
 │   ├── page.js              v0.2 form script
 │   ├── quality/             coder agreement: agree.py, rec.py
 │   └── coverage/            first coverage test: add.py, analyze_cov.py
-└── v03_rechecks/            Session 2 (2026-11-17): rechecks for page v0.3
-    ├── b_matters/           item 1: blind "what matters most" recode
-    ├── c_coverage/          item 4: blind coverage regrade
-    ├── d_checks/            items 2, 3, 5, 6: delay.py and RESULTS.md
-    └── a_instrument/        v0.3 form script (page.js) and jsdom tests (t/)
+├── v03_rechecks/            Session 2 (2026-11-17): rechecks for page v0.3
+│   ├── b_matters/           item 1: blind "what matters most" recode
+│   ├── c_coverage/          item 4: blind coverage regrade
+│   ├── d_checks/            items 2, 3, 5, 6: delay.py and RESULTS.md
+│   └── a_instrument/        v0.3 form script (page.js) and jsdom tests (t/)
+└── next_version/            aggregate reanalysis, candidate instrument and validation plan
 ```
 
 Item numbers (1–14) refer to the v0.3 work plan. Items 1–6 were evidence rechecks, items 7–13 were changes
@@ -163,8 +165,8 @@ to the questionnaire and item 14 was moving this work into the repo.
    judged them with `CODEBOOK.md` (the v0.2 questionnaire is written out in it). They found 114 posts
    describing a change. `analyze.py` compares their judgments with the designer's.
 3. **Crash delay** (item 2, `d_checks/delay.py`). This finds sentences where a crash, PEM or flare word
-   appears within 80 characters of a stated delay, then bins the delays. A hand check read 52 random matches
-   (`delay_precision_sample.json`).
+   appears within 80 characters of delay wording, then bins the matches. A hand check read 52 contexts
+   drawn from the first 400 retained matches in each bin (`delay_precision_sample.json`).
 4. **Instrument names, coder agreement, repeat ratings** (items 3, 5, 6). These re-ran or re-read the
    session 1 scripts; the results are collected in `d_checks/RESULTS.md`.
 5. **Questionnaire redesign** (items 7–13, `a_instrument/`). The form was rebuilt with nothing filled in by
@@ -188,13 +190,13 @@ Section names in italics are headings on the Methodology and Data page.
 | Symptoms held down by doing less (*Why these six questions*) | 17% of change posts | `v02_analysis/analyze_coded.py` |
 | Change described with an activity / symptoms / crashes | 58% / 99% / 32% | same |
 | Cost of activity / fluctuation mentioned | 33% / 31% | same |
-| **Crash delay** (*Crashes are delayed…*) | Next day 3,500 texts; ranges 855; 2 days 691; same day 251; 4+ days 156. Hand check: 77% of matches are real delay statements (82% in the next-day bin) | `v03_rechecks/d_checks/delay.py`, `RESULTS.md` |
+| **Crash delay** (*Crashes are delayed…*) | Candidate matches include next day (3,500 texts), ranges (855), 2 days (691), same day (251) and 4+ days (156). Of 52 audited contexts, 40 described a trigger-to-crash delay (23/28 in the next-day bin). | `v03_rechecks/d_checks/delay.py`, `RESULTS.md` |
 | **Instrument names** (*Patients use their own vocabulary…*) | FUNCAP 364, Bell scale 273, Chalder 197, SF-36 89, DePaul 79, PROMIS 27 | `v02_analysis/fts_counts.py` |
-| **Coverage** (*Coverage test…*) | Blind rater: fully 57%, partly 33%, not 10% (n=114). Designer on the same posts: 69% / 28% / 3%. Agreement 64%, κ 0.29 | `v03_rechecks/c_coverage/analyze.py` |
+| **Coverage** (*Coverage test…*) | Blind raters of v0.2: fully 57%, partly 33%, not 10% (n=114). Designer on the same posts: 69% / 28% / 3%. Agreement 64%, κ 0.29. The paired full-coverage difference was 12.3 points (95% author-cluster interval 2.6–21.9). | `v03_rechecks/c_coverage/analyze.py`, `next_version/audit.py` |
 | Share of changes each question helps catch (blind) | Q1 50%, Q2 55%, Q3 88%, Q4 57%, Q5 80% | same |
 | Coverage gaps (rough keyword count of the blind rater's notes) | A specific symptom visible only inside Q3's one number (~58% of changes), mental health (~21%), "did it but paid for it" | blind `missing` field; themes in `coverage/themes.py` (local only) |
 | **Coder agreement** (*Limitations*) | Sonnet vs DeepSeek, 68 posts: κ 0.61–0.84. Sonnet vs Sonnet, 40 posts: κ 0.54–0.87; current severity weakest at 0.54. Chunk-2 recode, 20 posts: current severity 0.57 | `analyze_coded.py`, `quality/agree.py` |
-| **Repeat ratings** (*"Percent of my old self"…*) | 5,919 ratings from 3,099 authors. Pairs 0.5–14 days apart: n=764, r=0.63, 51% identical, SD of change 15.5, so smallest detectable change ≈ 30 points. Pairs ≥90 days apart: r=0.43 | `v02_analysis/longit.py` |
+| **Repeat ratings** (*"Percent of my old self"…*) | 5,919 pattern-derived ratings from 3,099 authors. Pairs 0.5–14 days apart: n=764, r=0.63, 51% identical, SD of change 15.5. Pairs ≥90 days apart: r=0.43. The short pairs were 47% identical with equal author weighting. | `v02_analysis/longit.py`, `next_version/audit.py` |
 | Self-rating accuracy of the strict pattern | 62% of matches are true current self-ratings; the value is within 5 points 91% of the time | `analyze_coded.py` (pct sample) |
 | Self-rating by severity | Median 10 severe, 84 mild, 95 recovered (small n) | `analyze_coded.py`, `pct_vs_tier.py` |
 | **Activity ladder** (*The mild and moderate range…*) | Only about three bands separate: home and self-care, then middle activities, then exercise, full-time work, running | `ladder_ci.py` |
@@ -211,7 +213,7 @@ These are kept here so nobody re-uses a withdrawn number.
 | Activity and symptoms disagree only 3% of the time | Sample chose posts whose titles announce one direction; the trade-off happens within a person over time | Open question |
 | 48% of authors care most about a global state (`review_checks.py`) | A keyword split of a free-text field, not a coding decision | Withdrawn; replaced by the blind recode (10% global) |
 | 54% of posts show a "questionnaire gap" | Coders were asked to find a gap, so they found one | Themes kept as a concept list; the percentage dropped |
-| Smallest detectable change ~30 points compared with orthopaedic MIDs | Pattern-matched ratings include errors; Reddit isn't a stable-patient retest; the comparison mixes different quantities | Reported as an upper bound from natural data only |
+| Smallest detectable change ~30 points compared with orthopaedic MIDs | The calculation assumes stable patients and repeat measurements of the same item. The regex-derived pairs can include true health changes and matching errors. | Withdrawn as a measurement-error estimate. The observed short-pair SD of change was 15.5 points. |
 | Coverage 69% fully captured | Judged by the agent that designed the questions | Blind figure (57%) reported, with both rows |
 | 23 quoted milestone phrases | The product mixed coder paraphrases and verbatim patient phrases | v0.3.1 presents thematic summaries |
 | Chunk-2 coding | The coder's helper filled skipped fields with "not mentioned"/false | Excluding it moves headlines ≤5 points; 20-post recode in `quality/` |
@@ -226,7 +228,8 @@ These are kept here so nobody re-uses a withdrawn number.
 - **Samples are selected by title wording.** The improve/worsen samples favour stories moving in one clear
   direction.
 - **Posts are not weekly reports.** The coverage test asks whether a check *would* register a change
-  described in free text, which is a proxy for real responses.
+  described in free text, which is a proxy for real responses. It used v0.2, and the blind screen received
+  only the 157 posts the designer had already screened in.
 - **The data exists only on one machine.** See [Data that is not in Git](#data-that-is-not-in-git).
 
 ## Reproducing the results
@@ -242,6 +245,17 @@ Requirements:
 - Form tests read the current product in `docs/baseline_check/` directly.
 
 All commands start from the repo root. None of them call a paid service.
+
+### Next-version audit
+
+```sh
+python3 studies/baseline_check/next_version/audit.py reddit_2026-06-13.db
+```
+
+Expect `114/157` eligible posts, `Q3 tagged without Q1/Q2: 19.3 [12.4, 26.5]` and `764 pairs, 318 authors`.
+See [audit methods and inputs](next_version/README.md#reproduce-the-audit).
+
+### Set up paths for the historical analyses
 
 ```sh
 REPO=$(git rev-parse --show-toplevel)
@@ -280,7 +294,7 @@ Expect 17 `PASS` lines and `17 checks passed`.
 cd $S/v02_analysis && uv run python longit.py
 ```
 Expect `ratings (author x text): 5919  authors: 3099`, `pairs 0.5-14 days apart: n=764  r=0.63  SD of change=15.5`,
-`smallest detectable change … ~ 30 points` and `pairs >=90 days apart: n=860  r=0.43`.
+and `pairs >=90 days apart: n=860  r=0.43`. The archived script also prints the withdrawn 30-point estimate.
 
 ```sh
 cd $S/v02_analysis && uv run python analyze_coded.py
@@ -346,7 +360,7 @@ These append rows. Re-running them duplicates data:
 | `ladder.py CSV` | `milestones.jsonl`, records | mean severity tier of authors who can't do each of 20 activities |
 | `ladder_ci.py CSV` | same | same with 95% CIs (**use this one**) |
 | `tradeoff.py DB` | corpus | counts of "fine as long as I rest", "better because I do less" and similar |
-| `longit.py` | `level.jsonl` | rating distribution, severity groups, test-retest pairs, smallest detectable change |
+| `longit.py` | `level.jsonl` | rating distribution, severity groups, adjacent same-author pairs and the withdrawn measurement-error estimate |
 | `sample_change.py DB` | corpus | `sample_change.json` (300 improve + 300 worsen) |
 | `code_llm.py SRC DST [--draws N]` | sample JSON, project LLM config | appends to `DST`; **paid** |
 | `analyze_llm.py` | `out_all.jsonl`, `sample_pct.json` | LLM coding summary (68 posts) |
@@ -410,11 +424,10 @@ The scripts that build the samples and batches ran as inline snippets. Their log
   billing.
 - The scripts in this folder are free to run, except `code_llm.py`.
 
-## Open questions
+## Next version
 
-- **Is Q2 the right primary endpoint?** Only 8% of authors named an activity as the change that mattered
-  most. The case for Q2 is that symptoms can stay flat while life shrinks (17% describe holding symptoms
-  down by doing less). The validation plan compares Q2 with Q3.
-- **Coverage gaps to test in patient interviews:** a three-way answer per activity ("did it, no cost" /
-  "did it and paid for it" / "didn't try"), and an optional worst-symptom item.
-- **Human coding** of a subset, to replace AI-agent agreement figures.
+The blind raters expected Q3 to register a change in 22 of 114 v0.2 stories where they tagged neither Q1
+nor Q2. The [design plan](next_version/README.md) keeps overall symptom severity in the core and tests a separate
+patient-priority symptom item. It also tests dated seven-day activity windows and distinguishes activity cost,
+health limitations and opportunity. The pilot compares the outcomes separately and tests whether patients
+endorse the trade-offs made by the crash-first endpoint before proposing it as a trial primary.
