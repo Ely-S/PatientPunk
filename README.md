@@ -35,7 +35,7 @@ The pipeline reads posts from a SQLite database and produces a sentiment databas
 
 A key design principle: reply chain context is preserved. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both drugs_direct (mentioned in that post/comment) and drugs_context (inherited from upstream comments via the parent chain).
 
-The pipeline also extracts demographic data for each user, including age bucket, sex, and location (in progress). For each user, when available, it extracts their conditions, onset and recovery time, and severity.
+The pipeline also extracts demographics one post at a time (age, sex, country, state and city, each with its quote) and resolves them into one current profile per user (Step 3a). For each user, when available, it extracts their conditions, onset and recovery time, and severity.
 
 ---
 
@@ -173,7 +173,7 @@ Sends each post or comment, title included, to a fast model on its own, and stor
 
 A run reads only the posts no demographics run has read since the newest `--reread` run, so later runs read new posts only, and a post whose read failed is read again next time. Use `--reread` after a prompt change. A reply that is still unreadable after retries at temperature 0.7 and 1.0, or a request that keeps failing in transit, fails that post: the post stays unread, and its author keeps their previous profile until all of their posts are read. `--reread` can't be combined with `--limit`, because a partial reread would make the next run reread everything it skipped. A permanent API error stops the run.
 
-Age claims keep what the author wrote: a number, or a range or decade. Sex claims keep the author's words, every value of a multi-value answer included ("non-binary | female"). The profile's `sex` is normalized from them by a rule: non-binary wins over a binary value, other words are ignored ("female | suspected intersex" is `female`), and anything else ("trans man", "female | male") leaves `sex` empty. The words themselves are in `sex_stated` (#214).
+Age claims keep what the author wrote: a number, or a range or decade. Sex claims keep the author's words, every value of a multi-value answer included ("non-binary | female"). The profile's `sex` is normalized from them by a rule: non-binary wins over a binary value, other words are ignored ("female | suspected intersex" is `female`), and anything else ("trans man", "female | male") leaves `sex` empty. The words themselves are in `sex_stated` (#214). `city` and `sex_stated` are free text that, with age and conditions, can identify a person: keep them, and `unified`'s `demo_city` and `demo_sex_stated`, out of anything shared or published.
 
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db
