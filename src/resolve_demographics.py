@@ -5,7 +5,8 @@ own: a restart, a re-read that retracted claims, or a newer reference date is pi
 call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
 Each row keeps the age in years (a real number), advanced to the reference date, beside its decade.
 When the author gave a range or decade instead of a number, the age is that range's midpoint
-("late 30s" -> 37.5).
+("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
+normalized from it (normalize_sex, #214).
 """
 import math
 import re

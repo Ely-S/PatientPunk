@@ -188,14 +188,75 @@ def _newest_reread(conn) -> int:
     return run_id
 
 
+def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> tuple[list[str], set[str]]:
+    """Read each post that no demographics run has read since the newest --reread run (this run, with
+    --reread), and store its claims. A successful read gets a post_runs row; a failed one doesn't, so
+    the next run reads it again. Returns the users read and those with a failed post."""
+    rows = reader.execute(
+        "SELECT p.user_id, p.post_id, p.title, p.body_text FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
+        "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
+        "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)"
+        " ORDER BY p.user_id, p.post_id",
+        (DELETED_USER_ID, _newest_reread(conn)))
+    read_users, failed_users = [], set()
+
+    def record(post_id: str, claims: dict) -> None:
+        conn.execute("INSERT INTO post_runs (run_id, post_id) VALUES (?, ?)", (run_id, post_id))
+        conn.executemany(
+            "INSERT INTO demographic_claims (run_id, post_id, field, value, evidence) VALUES (?, ?, ?, ?, ?)",
+            [(run_id, post_id, field, value, evidence) for field, (value, evidence) in claims.items()])
+        counts["posts_read"] += 1
+        counts["claims"] += len(claims)
+
+    def jobs():  # consumed on this thread by _in_parallel, so record() may write here
+        for user_id, posts in islice(groupby(rows, key=itemgetter(0)), limit or None):
+            read_users.append(user_id)
+            for _, post_id, title, body in posts:
+                if text := _post_text(title, body):
+                    yield (user_id, post_id), text
+                else:
+                    record(post_id, {})  # nothing to read: recorded as read without a model call
+
+    for n, ((user_id, post_id), claims) in enumerate(_in_parallel(client, jobs(), read_post), start=1):
+        if claims is None:
+            failed_users.add(user_id)
+            counts["posts_failed"] += 1
+        else:
+            record(post_id, claims)
+        if n % COMMIT_EVERY == 0:
+            conn.commit()
+            log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])
+    conn.commit()
+    return read_users, failed_users
+
+
+def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts: dict) -> None:
+    """One conditions call per user in ``users``, over their newest posts up to MAX_USER_CHARS. A failed
+    call writes nothing for that user."""
+    histories = (
+        (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
+        for user_id, posts in groupby(reader.execute(
+            "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
+            "ORDER BY user_id, post_date DESC, post_id", (DELETED_USER_ID,)), key=itemgetter(0))
+        if user_id in users)
+    for user_id, conditions in _in_parallel(client, ((u, t) for u, t in histories if t), read_conditions):
+        if conditions is None:
+            counts["conditions_failed"] += 1
+            continue
+        conn.executemany(
+            "INSERT INTO conditions (run_id, user_id, condition_name, condition_type) VALUES (?, ?, ?, ?)",
+            [(run_id, user_id, name, kind) for name, kind in conditions])
+        counts["conditions"] += len(conditions)
+    conn.commit()
+
+
 def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> dict:
-    """Read every post no demographics run has read since the newest --reread run (all posts with
-    ``reread``), store its claims, extract conditions for the users read, and resolve their profiles.
-    ``limit`` caps the number of users read."""
+    """Read new posts (every post with ``reread``) into claims, extract conditions for the users read,
+    and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts."""
     client = get_client()
+    # Posts stream on a second connection: a long-lived cursor on the writing connection would fail
+    # with SQLITE_BUSY_SNAPSHOT once another process commits.
     with closing(open_db(db_path)) as conn, closing(open_db(db_path)) as reader:
-        # Stream posts on a separate connection: a long-lived cursor on the writing connection would
-        # fail with SQLITE_BUSY_SNAPSHOT once another process commits.
         apply_schema(conn)  # claim tables and columns missing from an older database
         run_id = register_run(conn, "demographics", {
             "provider": LLM_PROVIDER,
@@ -208,66 +269,12 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
             "temperatures": TEMPERATURES,
             "workers": MAX_IN_FLIGHT,
         }, commit_hash=get_git_commit())
-        since = _newest_reread(conn)  # this run, with --reread
         log.info("Extraction run %s%s", run_id, " (rereading every post)" if reread else "")
-
-        rows = reader.execute(
-            "SELECT p.user_id, p.post_id, p.title, p.body_text FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
-            "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
-            "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)"
-            " ORDER BY p.user_id, p.post_id",
-            (DELETED_USER_ID, since))
-        users = islice(groupby(rows, key=itemgetter(0)), limit or None)
-        read_users: list[str] = []
-        failed_users: set[str] = set()
         counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
 
-        def record(post_id: str, claims: dict) -> None:
-            conn.execute("INSERT INTO post_runs (run_id, post_id) VALUES (?, ?)", (run_id, post_id))
-            conn.executemany(
-                "INSERT INTO demographic_claims (run_id, post_id, field, value, evidence) VALUES (?, ?, ?, ?, ?)",
-                [(run_id, post_id, field, value, evidence) for field, (value, evidence) in claims.items()])
-            counts["posts_read"] += 1
-            counts["claims"] += len(claims)
-
-        def post_jobs():  # consumed on this thread by _in_parallel, so record() may write here
-            for user_id, posts in users:
-                read_users.append(user_id)
-                for _, post_id, title, body in posts:
-                    if text := _post_text(title, body):
-                        yield (user_id, post_id), text
-                    else:
-                        record(post_id, {})  # nothing to read: recorded as read without a model call
-
-        for n, ((user_id, post_id), claims) in enumerate(_in_parallel(client, post_jobs(), read_post), start=1):
-            if claims is None:
-                failed_users.add(user_id)
-                counts["posts_failed"] += 1
-            else:
-                record(post_id, claims)
-            if n % COMMIT_EVERY == 0:
-                conn.commit()
-                log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])
-        conn.commit()
-
-        # Conditions: one call per user read this run, over their newest posts up to MAX_USER_CHARS.
-        wanted = set(read_users)
-        histories = (
-            (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
-            for user_id, posts in groupby(reader.execute(
-                "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
-                "ORDER BY user_id, post_date DESC, post_id", (DELETED_USER_ID,)), key=itemgetter(0))
-            if user_id in wanted)
-        for user_id, conditions in _in_parallel(client, ((u, t) for u, t in histories if t), read_conditions):
-            if conditions is None:
-                counts["conditions_failed"] += 1
-                continue
-            conn.executemany(
-                "INSERT INTO conditions (run_id, user_id, condition_name, condition_type) VALUES (?, ?, ?, ?)",
-                [(run_id, user_id, name, kind) for name, kind in conditions])
-            counts["conditions"] += len(conditions)
-        conn.commit()
-
+        read_users, failed_users = _read_posts(client, conn, reader, run_id, limit, counts)
+        _read_conditions(client, conn, reader, run_id, set(read_users), counts)
+        # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
         stats = resolve_profiles(conn, run_id, failed_users)  # commits
         conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), run_id))
         conn.commit()

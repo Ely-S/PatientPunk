@@ -236,9 +236,8 @@ def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, ca
     conn, path = db
     users = ("empty", "filtered", "transient", "unreadable")
     add_posts(conn, [(user, user, 1, None, user) for user in users])
-    first = demographics.run_demographics  # an earlier run gave everyone a 30s profile
     stub(monkeypatch, post=lambda text: {"age": claim(34)})
-    first(path)
+    demographics.run_demographics(path)  # an earlier run gives everyone a 30s profile
     timeout = openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
     replies = {"empty": NOTHING, "filtered": LLMContentFilteredError("filtered"), "transient": timeout,
                "unreadable": unreadable}
@@ -306,11 +305,9 @@ def test_a_reread_that_finds_nothing_retracts_and_a_restart_still_resolves(db, m
 
     # A reread whose claims were committed but that stopped before resolving profiles.
     stub(monkeypatch)
-    monkeypatch.setattr(demographics, "resolve_profiles", lambda *args: (_ for _ in ()).throw(KeyboardInterrupt))
-    with pytest.raises(KeyboardInterrupt):
+    with monkeypatch.context() as m, pytest.raises(KeyboardInterrupt):
+        m.setattr(demographics, "resolve_profiles", lambda *args: (_ for _ in ()).throw(KeyboardInterrupt))
         demographics.run_demographics(path, reread=True)
-    monkeypatch.undo()
-    monkeypatch.setattr(demographics, "get_client", lambda: None)
     calls = stub(monkeypatch)
 
     stats = demographics.run_demographics(path)  # zero unread posts
