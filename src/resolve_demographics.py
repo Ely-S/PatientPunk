@@ -18,15 +18,17 @@ def _years_between(start: int, end: int) -> int:
 
 
 def _age_now(value: str, date: int | None, reference: int | None) -> int | str | None:
-    """A stated age advanced to the reference date. A decade ("mid-30s") can't be advanced, so it is
-    returned as its bucket; anything unparseable or out of range is None and ignored."""
+    """A stated age (10-99, #206) advanced to the reference date. A decade ("mid-30s") can't be
+    advanced, so it is returned as its bucket; anything unparseable or out of range is None and ignored."""
     try:
         age = int(float(value))
     except (ValueError, OverflowError):
         return _bucketize_age(value)
+    if not 10 <= age <= 99:
+        return None
     if date is not None and reference is not None:
         age += _years_between(date, reference)
-    return age if _bucketize_age(str(age)) else None
+    return age
 
 
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
@@ -55,8 +57,11 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     location = " / ".join(x for x in (country, state) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
-    exact = {a for a in ages if isinstance(a, int)}
-    if len(exact) > 1 or len({_bucketize_age(str(a)) for a in ages}) > 1:
+    # Exact ages within a year agree: whole-year advancing can put the same age a year apart.
+    exact = [a for a in ages if isinstance(a, int)]
+    decades = {a for a in ages if isinstance(a, str)}
+    if ((exact and max(exact) - min(exact) > 1) or len(decades) > 1
+            or (decades and exact and not decades <= {_bucketize_age(str(a)) for a in exact})):
         disagree.add("age")
     return (age, sex, location), disagree
 
@@ -69,16 +74,20 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
         apply_schema(conn)  # a database built before the claim tables; this commits
+    run_type = conn.execute("SELECT extraction_type FROM extraction_runs WHERE run_id = ?", (run_id,)).fetchone()
+    if run_type != ("demographics",):
+        raise ValueError(f"run {run_id} is not a demographics run; user_profiles_latest would ignore its rows")
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
     claims = defaultdict(list)
     for user, *claim in conn.execute(
-            "SELECT c.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
+            "SELECT p.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
             "JOIN posts p ON p.post_id = c.post_id "
             "ORDER BY p.post_date IS NOT NULL, p.post_date, c.post_id"):
         claims[user].append(tuple(claim))
     read = {u for (u,) in conn.execute(
-        "SELECT DISTINCT p.user_id FROM post_runs pr JOIN posts p ON p.post_id = pr.post_id "
-        "JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics'")}
+        "SELECT DISTINCT p.user_id FROM posts p WHERE EXISTS (SELECT 1 FROM post_runs pr "
+        "JOIN extraction_runs r ON r.run_id = pr.run_id "
+        "WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics')")}
     current = latest_profiles(conn)
 
     disagreements, rows = Counter(), []

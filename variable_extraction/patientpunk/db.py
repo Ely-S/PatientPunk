@@ -261,7 +261,7 @@ def _bucketize_age(raw: str | None) -> str | None:
     # Plain numeric age: "34", "34.0"
     try:
         age = int(float(raw))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
     if age < 10 or age > 110:
         return None  # implausible age
