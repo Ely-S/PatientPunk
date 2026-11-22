@@ -132,7 +132,8 @@ def extract_demographics(client, text: str) -> dict:
     prompt = DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text)
     for attempt, temperature in enumerate(TEMPERATURES, start=1):
         try:
-            raw = llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature)
+            raw = llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature,
+                           validate=_parse_reply)  # an unreadable reply is never cached
             return _parse_reply(raw)
         except LLMContentFilteredError:
             raise
