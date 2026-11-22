@@ -19,7 +19,7 @@ import extract_demographics_conditions  # noqa: E402
 import summarize_drug  # noqa: E402
 from import_posts import DELETED_USER_ID, import_reddit_posts  # noqa: E402
 
-REAL = "a" * 64
+REAL = "f" * 64  # sorts after "deleted": with limit=1, a missing inner filter would pick "deleted"
 CORPUS = [
     {"author_hash": None, "post_id": "p1", "title": "gone", "body": "post by a deleted account",
      "url": "https://reddit.com/r/cfs/p1", "created_utc": "2026-01-01T00:00:00Z",
@@ -69,7 +69,7 @@ def test_null_comment_body_is_stored_not_dropped(tmp_path):
     assert skipped == 0
 
 
-@pytest.mark.parametrize("limit", [0, 5])
+@pytest.mark.parametrize("limit", [0, 1, 5])
 def test_demographics_never_sends_or_profiles_deleted(tmp_path, monkeypatch, limit):
     conn, _ = _db(tmp_path)
     conn.close()
