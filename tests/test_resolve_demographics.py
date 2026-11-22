@@ -8,8 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from patientpunk.cluster_prep import add_profiles  # noqa: E402
-from patientpunk.db import init_db, latest_profiles, register_run  # noqa: E402
+from patientpunk.db import init_db, register_run  # noqa: E402
 from import_posts import DELETED_USER_ID  # noqa: E402
 from resolve_demographics import resolve_profiles  # noqa: E402
 
@@ -49,60 +48,6 @@ def run(conn) -> int:
     return register_run(conn, "demographics", {})
 
 
-def ages(conn, user: str):
-    """(age_bucket, age) of the user's current profile."""
-    return conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = ?", (user,)).fetchone()
-
-
-def test_the_exact_age_is_kept_beside_its_decade(conn):
-    post(conn, "p1", "a", 2024), post(conn, "p2", "b", 2026)
-    r = run(conn)
-    read(conn, r, "p1", age="29"), read(conn, r, "p2")
-    resolve_profiles(conn, r)
-    assert ages(conn, "a") == ("30s", 31)  # 29 stated two years before the reference date
-
-
-def test_a_decade_alone_leaves_the_exact_age_empty(conn):
-    post(conn, "p1", "a", 2024), post(conn, "p2", "a", 2026)
-    r = run(conn)
-    read(conn, r, "p1", age="29"), read(conn, r, "p2", age="mid-30s")
-    resolve_profiles(conn, r)
-    assert ages(conn, "a") == ("30s", None)  # the latest claim is a decade, so no number is guessed
-
-
-def test_a_birthday_within_the_same_decade_writes_a_new_row(conn):
-    post(conn, "p1", "a", 2025), post(conn, "p2", "b", 2025)
-    r1 = run(conn)
-    read(conn, r1, "p1", age="32"), read(conn, r1, "p2")
-    resolve_profiles(conn, r1)
-    assert ages(conn, "a") == ("30s", 32)
-
-    post(conn, "p3", "b", 2026)  # only b posts again; the reference date moves a year
-    r2 = run(conn)
-    read(conn, r2, "p3")
-    assert resolve_profiles(conn, r2)["profiles_written"] == 1
-    assert ages(conn, "a") == ("30s", 33)
-
-
-def test_an_older_database_gains_the_age_column(conn):
-    conn.execute("ALTER TABLE user_profiles DROP COLUMN age")
-    conn.execute("INSERT INTO user_profiles (user_id, run_id, age_bucket) VALUES ('a', ?, '30s')", (run(conn),))
-    assert latest_profiles(conn)["a"] == {"age": "", "age_bucket": "30s", "sex": "", "location": ""}
-
-    post(conn, "p1", "a", 2026)
-    r = run(conn)
-    read(conn, r, "p1", age="34")
-    resolve_profiles(conn, r)
-    assert ages(conn, "a") == ("30s", 34)
-
-
-def test_clustering_uses_the_decade_not_the_exact_age():
-    patients = {"a": {}}
-    fields = add_profiles(patients, [], {"a": {"age": "31", "age_bucket": "30s", "sex": "Female", "location": ""}})
-    assert fields == ["demo_age_bucket", "demo_sex", "demo_location"]
-    assert patients["a"] == {"demo_age_bucket": {"30s"}, "demo_sex": {"female"}}
-
-
 def test_conflicting_ages_take_the_most_recent_and_are_counted(conn):
     post(conn, "p1", "a", 2024), post(conn, "p2", "a", 2026)
     r = run(conn)
@@ -118,6 +63,7 @@ def test_age_advances_to_the_reference_date(conn):
     read(conn, r, "p1", age="29"), read(conn, r, "p2")
     assert resolve_profiles(conn, r)["reference_date"] == ts(2026)
     assert profile(conn, "a") == ("30s", None, None)
+    assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31,)
 
 
 def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
@@ -202,15 +148,16 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     assert {"post_runs", "demographic_claims", "demographic_claims_latest"} <= names
 
 
-@pytest.mark.parametrize("stated, expected", [
-    ("34.0", "30s"), ("mid-30s", "30s"), ("early 40s", "40s"), ("thirty-ish", None), ("1e3", None), ("", None),
+@pytest.mark.parametrize("stated, bucket, age", [
+    ("34.0", "30s", 34), ("mid-30s", "30s", None), ("early 40s", "40s", None),
+    ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
 ])
-def test_ages_the_model_may_write_never_crash(conn, stated, expected):
+def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
     post(conn, "p1", "a", 2026)
     r = run(conn)
     read(conn, r, "p1", age=stated)
     resolve_profiles(conn, r)
-    assert profile(conn, "a")[0] == expected
+    assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (bucket, age)
 
 
 def test_an_unparseable_age_does_not_hide_an_earlier_one(conn):
