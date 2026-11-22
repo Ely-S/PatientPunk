@@ -183,8 +183,6 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 |------|-------------|
 | `--db` | Path to SQLite database (required) |
 | `--limit N` | Limit to N eligible users (default: all) |
-| `--max-posts N` | Optional maximum number of posts per user |
-| `--max-chars N` | Optional character limit per post, including its title |
 
 `user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. Only Step 3a writes `user_profiles`: this script, and the resolve step in `src/resolve_demographics.py` described below. Rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
 

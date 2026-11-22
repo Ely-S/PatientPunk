@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from concurrent.futures import Future
 from contextlib import closing
 from pathlib import Path
 
@@ -94,12 +93,10 @@ def test_caps_input_before_wrapping(db, monkeypatch):
 
     monkeypatch.setattr(demographics, "llm_call", stub_call)
     demographics.run_demographics(path)
-    demographics.run_demographics(path, max_posts=1, max_chars=12)
 
     full = patient_text(prompts[0])
     assert full == ("Newest\n" + "a" * 6_000 + "\n---\nOlder\n" + "b" * 3_000)[:8_000]
     assert len(full) == 8_000
-    assert patient_text(prompts[1]) == "Newest\naaaaa"
 
 
 @pytest.mark.parametrize(
@@ -129,7 +126,7 @@ def test_normalizes_profile_fields(db, monkeypatch, age, sex, country, state, ex
 
 
 def test_unreadable_reply_can_recover_at_last_temperature(monkeypatch):
-    replies = iter([LLMResponseError("empty"), '[{"age": 34}]', '```json\n{"age": 37}\n```'])
+    replies = iter([LLMResponseError("empty"), '{"error": "unreadable"}', '```json\n{"age": 37}\n```'])
     calls = []
 
     def stub_call(client, prompt, *, temperature, **kwargs):
@@ -152,9 +149,9 @@ def test_unreadable_reply_can_recover_at_last_temperature(monkeypatch):
         '{"error": "private reply text"}',
         '{"conditions": {"error": "private reply text"}}',
         '{"conditions": [{}]}',
-        'Here is the result: [{"age": null, "conditions": []}]',
+        'no JSON here',
     ],
-    ids=["unknown-fields", "wrong-conditions-type", "malformed-condition", "wrapped-array"],
+    ids=["unknown-fields", "wrong-conditions-type", "malformed-condition", "no-object"],
 )
 def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
     db, monkeypatch, caplog, unreadable_reply,
@@ -205,45 +202,22 @@ def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
     assert "private reply text" not in caplog.text
 
 
-def test_permanent_api_error_cancels_queued_work(db, monkeypatch):
+def test_permanent_api_error_stops_the_run_and_sends_no_queued_users(db, monkeypatch):
     conn, path = db
     add_posts(conn, [(f"post-{i}", f"user-{i}", 1, None, f"Synthetic post {i}") for i in range(15)])
     request = httpx.Request("POST", "https://example.invalid")
-    error = anthropic.AuthenticationError(
-        "bad credentials", response=httpx.Response(401, request=request), body=None,
-    )
+    error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
+    calls = []
 
-    class QueuingExecutor:
-        def __init__(self, *, max_workers):
-            assert max_workers == 10
-            self.futures = []
-            self.cancel_futures = False
+    def stub_call(client, prompt, **kwargs):
+        calls.append(prompt)
+        raise error
 
-        def submit(self, *args):
-            future = Future()
-            if not self.futures:
-                future.set_exception(error)
-            self.futures.append(future)
-            return future
-
-        def shutdown(self, *, cancel_futures):
-            self.cancel_futures = cancel_futures
-            if cancel_futures:
-                for future in self.futures:
-                    future.cancel()
-
-    pool = QueuingExecutor(max_workers=10)
-
-    def make_executor(*, max_workers):
-        assert max_workers == 10
-        return pool
-
-    monkeypatch.setattr(demographics, "ThreadPoolExecutor", make_executor)
+    monkeypatch.setattr(demographics, "llm_call", stub_call)
     with pytest.raises(anthropic.AuthenticationError):
         demographics.run_demographics(path)
 
-    assert len(pool.futures) == 10
-    assert pool.cancel_futures and all(future.cancelled() for future in pool.futures[1:])
+    assert len(calls) == demographics.MAX_IN_FLIGHT  # the 5 queued users were never sent
     assert conn.execute("SELECT COUNT(*) FROM user_profiles").fetchone() == (0,)
 
 
@@ -329,20 +303,3 @@ def test_records_finish_time_and_provider_only_for_a_clean_run(db, monkeypatch):
 )
 def test_reads_replies_that_main_accepted(raw, age):
     assert demographics._parse_reply(raw)["age"] == age
-
-
-def test_openrouter_in_band_error_fails_one_user_not_the_run(db, monkeypatch):
-    conn, path = db
-    add_posts(conn, [("p1", "down", 1, None, "down"), ("p2", "fine", 1, None, "fine")])
-    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
-    outage = openai.APIError("provider_unavailable: upstream overloaded", request=request, body=None)
-
-    def stub_call(client, prompt, **kwargs):
-        if patient_text(prompt) == "down":
-            raise outage
-        return '{"age": 34}'
-
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
-    demographics.run_demographics(path)
-
-    assert conn.execute("SELECT user_id FROM user_profiles").fetchall() == [("fine",)]

@@ -2,7 +2,6 @@
 """Extract self-reported demographics and conditions from SQLite posts."""
 
 import argparse
-import json
 import re
 import sys
 import time
@@ -21,10 +20,9 @@ from patientpunk._utils import (
     LLMContentFilteredError,
     LLMResponseError,
     self_reported_age,
-    strip_markdown_fences,
     wrap_untrusted_text,
 )
-from patientpunk.db import _bucketize_age, apply_schema
+from patientpunk.db import _bucketize_age, apply_schema, register_run
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 from utilities import (
     LLM_PROVIDER,
@@ -42,6 +40,7 @@ from utilities import (
 from utilities.db import open_db
 
 MAX_USER_CHARS = 8_000
+SEPARATOR = "\n---\n"
 MAX_IN_FLIGHT = 10
 COMMIT_EVERY = 20
 TEMPERATURES = (0.0, 0.7, 1.0)
@@ -73,30 +72,19 @@ def _post_texts(posts: Iterable[tuple[str, str | None, str]]) -> Iterator[str]:
             yield text
 
 
-def _combine_posts(
-    texts: Iterable[str], *, max_posts: int | None, max_chars: int | None,
-) -> str:
-    separator = "\n---\n"
-    parts = []
-    remaining = MAX_USER_CHARS
-    for text in islice(texts, max_posts):
-        prefix = separator if parts else ""
-        if remaining <= len(prefix):
+def _combine_posts(texts: Iterable[str]) -> str:
+    parts, size = [], 0
+    for text in texts:  # stop reading once the cap is reached
+        parts.append(text)
+        size += len(text) + len(SEPARATOR)
+        if size >= MAX_USER_CHARS:
             break
-        part = prefix + text[:min(max_chars or MAX_USER_CHARS, remaining - len(prefix))]
-        parts.append(part)
-        remaining -= len(part)
-        if not remaining:
-            break
-    return "".join(parts)
+    return SEPARATOR.join(parts)[:MAX_USER_CHARS]
 
 
-def _user_inputs(
-    rows: Iterable[tuple[str, str | None, str]], *, max_posts: int | None, max_chars: int | None,
-) -> Iterator[tuple[str, str]]:
+def _user_inputs(rows: Iterable[tuple[str, str | None, str]]) -> Iterator[tuple[str, str]]:
     for user_id, posts in groupby(rows, key=itemgetter(0)):
-        combined = _combine_posts(_post_texts(posts), max_posts=max_posts, max_chars=max_chars)
-        if combined:
+        if combined := _combine_posts(_post_texts(posts)):
             yield user_id, combined
 
 
@@ -127,11 +115,7 @@ def _condition_name(condition: object) -> str:
 
 
 def _parse_reply(raw: str) -> dict:
-    # Tolerate prose around the object and trailing commas, but not a list of objects.
-    text = strip_markdown_fences(raw)
-    if "[" in text.split("{", 1)[0]:
-        raise LLMParseError("Expected a demographics JSON object, not a list")
-    result = parse_json_object(text)
+    result = parse_json_object(raw)  # tolerates fences, prose around the object and trailing commas
     if RESPONSE_FIELDS.isdisjoint(result):
         raise LLMParseError("Expected a demographics JSON object")
 
@@ -160,13 +144,12 @@ def extract_demographics(client, text: str) -> dict:
 
 
 def _extract_users(client, users: Iterable[tuple[str, str]]) -> Iterator[tuple[str, dict | None]]:
-    pool = ThreadPoolExecutor(max_workers=MAX_IN_FLIGHT)
+    """Yield (user_id, result or None on a per-user failure), with up to MAX_IN_FLIGHT calls running.
+    Users are submitted only as earlier calls finish, so a permanent error leaves the rest unsent."""
     users = iter(users)
-    pending = {}
-    try:
-        for user_id, text in islice(users, MAX_IN_FLIGHT):
-            pending[pool.submit(extract_demographics, client, text)] = user_id
-
+    with ThreadPoolExecutor(max_workers=MAX_IN_FLIGHT) as pool:
+        pending = {pool.submit(extract_demographics, client, text): user_id
+                   for user_id, text in islice(users, MAX_IN_FLIGHT)}
         while pending:
             completed, _ = wait(pending, return_when=FIRST_COMPLETED)
             for future in completed:
@@ -178,15 +161,10 @@ def _extract_users(client, users: Iterable[tuple[str, str]]) -> Iterator[tuple[s
                         log.error("Stopping demographics run: %s failed (%s)", user_id, type(exc).__name__)
                         raise
                     log.warning("Skipping demographics for %s (%s)", user_id, type(exc).__name__)
-                    yield user_id, None
-                else:
-                    yield user_id, result
-
-            # Check all completed requests for fatal errors before scheduling replacements.
+                    result = None
+                yield user_id, result
             for user_id, text in islice(users, len(completed)):
                 pending[pool.submit(extract_demographics, client, text)] = user_id
-    finally:
-        pool.shutdown(cancel_futures=True)
 
 
 def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> int:
@@ -207,43 +185,27 @@ def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> 
         kind = condition.get("condition_type") if isinstance(condition, dict) else None
         kind = kind.strip().lower() if isinstance(kind, str) else None
         conn.execute(
-            "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (run_id, user_id, None, kind if kind in ("illness", "symptom") else "illness", name, None),
+            "INSERT INTO conditions (run_id, user_id, condition_type, condition_name) VALUES (?, ?, ?, ?)",
+            (run_id, user_id, kind if kind in ("illness", "symptom") else "illness", name),
         )
         conditions_written += 1
     return conditions_written
 
 
-def run_demographics(
-    db_path: Path, *, limit: int = 0, max_posts: int | None = None, max_chars: int | None = None,
-):
-    if limit < 0:
-        raise ValueError("limit must be nonnegative")
-    if (max_posts is not None and max_posts < 1) or (max_chars is not None and max_chars < 1):
-        raise ValueError("max_posts and max_chars must be positive when set")
-
+def run_demographics(db_path: Path, *, limit: int = 0):
     client = get_client()
     with closing(open_db(db_path)) as conn:
         apply_schema(conn)  # a database from before user_profiles.age/city or extraction_runs.finished_at
-        run_config = {
+        run_id = register_run(conn, "demographics", {
             "provider": LLM_PROVIDER,
             "reasoning_mode": LLM_REASONING_MODE,
             "git_dirty": git_is_dirty(),
-            "limit": limit,
             "model": MODEL_FAST,
+            "limit": limit,
             "max_user_chars": MAX_USER_CHARS,
-            "max_posts": max_posts,
-            "max_chars": max_chars,
             "temperatures": TEMPERATURES,
             "workers": MAX_IN_FLIGHT,
-        }
-        cursor = conn.execute(
-            "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) VALUES (?, ?, ?, ?)",
-            (int(time.time()), get_git_commit(), "demographics", json.dumps(run_config)),
-        )
-        run_id = cursor.lastrowid
-        conn.commit()
+        }, commit_hash=get_git_commit())
         log.info("Extraction run %s", run_id)
 
         profiles_written = conditions_written = failures = 0
@@ -254,7 +216,7 @@ def run_demographics(
             "ORDER BY user_id, post_date DESC, post_id",
             (DELETED_USER_ID,),
         )) as rows:
-            users = _user_inputs(rows, max_posts=max_posts, max_chars=max_chars)
+            users = _user_inputs(rows)
             with closing(_extract_users(client, islice(users, limit or None))) as results:
                 for processed, (user_id, result) in enumerate(results, start=1):
                     if result is None:
@@ -277,15 +239,10 @@ def main():
     )
     parser.add_argument("--db", required=True, type=Path, help="Path to the corpus SQLite database")
     parser.add_argument("--limit", type=int, default=0, help="Limit to N eligible users (0 = all)")
-    parser.add_argument("--max-posts", type=int, help="Optional limit on posts per user")
-    parser.add_argument("--max-chars", type=int, help="Optional character limit per post, including its title")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be nonnegative")
-    for flag, value in (("--max-posts", args.max_posts), ("--max-chars", args.max_chars)):
-        if value is not None and value < 1:
-            parser.error(f"{flag} must be positive")
-    run_demographics(args.db, limit=args.limit, max_posts=args.max_posts, max_chars=args.max_chars)
+    run_demographics(args.db, limit=args.limit)
 
 
 if __name__ == "__main__":

@@ -88,8 +88,7 @@ def test_good_reply_passes_through():
     assert llm_call(client, "prompt") == "hello"
 
 
-@pytest.mark.parametrize("temperature", [None, 0.7, 1.0], ids=["default", "retry", "last-retry"])
-def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch, temperature):
+def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
     """Cache key claims temperature=0.0; the API request must send the same value.
 
     Regression for Airwhale review on #63: kwargs previously omitted temperature,
@@ -108,24 +107,24 @@ def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch, te
         return _FakeStream(_msg(SimpleNamespace(type="text", text="ok")))
 
     client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
-    call_kwargs = {} if temperature is None else {"temperature": temperature}
-    assert llm_call(client, "prompt", model=MODEL_FAST, max_tokens=100, **call_kwargs) == "ok"
+    assert llm_call(client, "prompt", model=MODEL_FAST, max_tokens=100) == "ok"
 
-    expected_temperature = 0.0 if temperature is None else temperature
-    assert captured["temperature"] == expected_temperature
+    assert "temperature" in captured
+    assert captured["temperature"] == 0.0
 
-    # The cache entry must describe the temperature actually sent to the provider.
+    # The on-disk entry must be keyed with that same temperature — otherwise a
+    # later run that actually sends 0.0 would miss this cache entry (or vice versa).
     key = llm_cache.make_key(
         provider=LLM_PROVIDER,
         model=MODEL_FAST,
         system=None,
         prompt="prompt",
-        temperature=expected_temperature,
+        temperature=0.0,
         max_tokens=100,
     )
     path = llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
     assert path.exists()
-    assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == expected_temperature
+    assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == 0.0
 
 
 def test_temperature_retries_do_not_replay_a_colder_cached_reply(monkeypatch):

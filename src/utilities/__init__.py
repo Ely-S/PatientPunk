@@ -198,10 +198,9 @@ class _ORStream:
             # The provider failed mid-reply; the partial text must not be cached.
             from patientpunk._utils import LLMResponseError
             raise LLMResponseError("OpenRouter stream ended with an error")
-        stop_reason = "max_tokens" if finish == "length" else "end_turn"
-        # A filtered stream can contain text. Preserve the refusal for check_response.
-        if refused or finish == "content_filter":
-            stop_reason = "refusal"
+        # A filtered stream can still carry text; "refusal" makes check_response reject it.
+        stop_reason = ("refusal" if refused or finish == "content_filter"
+                       else "max_tokens" if finish == "length" else "end_turn")
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
