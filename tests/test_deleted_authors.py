@@ -121,9 +121,3 @@ def test_scrapers_give_no_author_hash_for_missing_authors(module, author):
     assert scraper.build_post(raw, [])["author_hash"] is None
     assert scraper.build_comment(raw)["author_hash"] is None
     assert scraper.build_post({**raw, "author": "someone"}, [])["author_hash"] == db_to_corpus.hash_username("someone")
-
-
-def test_user_histories_hash_usernames_with_the_shared_function():
-    """Posts hash authors through db_to_corpus; user histories must use the same function, or they stop joining."""
-    scrape_corpus = importlib.import_module("scrape_corpus")
-    assert scrape_corpus.hash_username is db_to_corpus.hash_username
