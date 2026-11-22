@@ -162,8 +162,10 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
 
 
 def counts(items: list[dict]) -> dict:
-    """Items per stratum and split, and labeled values per field and split."""
-    c = {"items": Counter(), "labeled": Counter(), "fields": Counter(), "others": Counter()}
+    """Items per stratum and split, labeled values per field and split, and labeled values whose
+    evidence is not an exact quote from the item's text (which should be none)."""
+    c = {"items": Counter(), "labeled": Counter(), "fields": Counter(), "others": Counter(),
+         "evidence_not_in_text": Counter()}
     for it in items:
         for s in it["strata"]:
             c["items"][f"{s}/{it['split']}"] += 1
@@ -171,6 +173,8 @@ def counts(items: list[dict]) -> dict:
             c["labeled"][it["split"]] += 1
             c["fields"].update(f"{f}/{it['split']}" for f in FIELDS if label.get(f))
             c["others"].update(f"{f}/{it['split']}" for f, v in (label.get("others") or {}).items() if v)
+            c["evidence_not_in_text"].update(
+                it["post_id"] for f in FIELDS if label.get(f) and label[f]["evidence"] not in it["text"])
     return {k: dict(sorted(v.items())) for k, v in c.items()}
 
 

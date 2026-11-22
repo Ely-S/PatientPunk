@@ -131,3 +131,11 @@ def test_evaluate_runs_read_post_and_writes_the_report(tmp_path, monkeypatch):
     assert report["posts"]["blocked"] == 1 and report["fields"]["age"]["recall"] == 1.0
     assert json.loads((tmp_path / "report_t.json").read_text())["tag"] == "t"
     assert len((tmp_path / "predictions_t.jsonl").read_text().splitlines()) == 2
+
+
+def test_stats_flags_evidence_that_is_not_quoted_from_the_text():
+    good = item("a", "I'm 34", label(age=("34", "I'm 34")))
+    bad = item("b", "I'm 35", label(age=("35", "I am 35")))
+    result = ts.counts([good, bad])
+    assert result["labeled"] == {"dev": 2} and result["fields"] == {"age/dev": 2}
+    assert result["evidence_not_in_text"] == {"b": 1}
