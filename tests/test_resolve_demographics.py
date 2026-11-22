@@ -63,7 +63,7 @@ def test_age_advances_to_the_reference_date(conn):
     read(conn, r, "p1", age="29"), read(conn, r, "p2")
     assert resolve_profiles(conn, r)["reference_date"] == ts(2026)
     assert profile(conn, "a") == ("30s", None, None)
-    assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31,)
+    assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31.0,)
 
 
 def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
@@ -152,7 +152,8 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
 
 
 @pytest.mark.parametrize("stated, bucket, age", [
-    ("34.0", "30s", 34), ("mid-30s", "30s", 35), ("early 40s", "40s", 42), ("25-34", "30s", 30),
+    ("34.0", "30s", 34.0), ("mid-30s", "30s", 35.0), ("early 40s", "40s", 42.5), ("late 30s", "30s", 37.5),
+    ("25-34", "20s", 29.5),
     ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
 ])
 def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):

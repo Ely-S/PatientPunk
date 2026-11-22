@@ -274,7 +274,7 @@ def _bucketize_age(raw: str | None) -> str | None:
 
 # user_profiles' value columns, after user_id and run_id.
 PROFILE_FIELDS = ("age_bucket", "age", "sex", "location", "city")
-_ADDED_PROFILE_COLUMNS = {"age": "INTEGER", "city": "TEXT"}
+_ADDED_PROFILE_COLUMNS = {"age": "REAL", "city": "TEXT"}
 
 
 def latest_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
