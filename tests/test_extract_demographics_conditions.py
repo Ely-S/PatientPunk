@@ -337,7 +337,7 @@ def test_reread_cannot_be_limited(db):
         demographics.run_demographics(path, reread=True, limit=1)
 
 
-def test_a_reread_that_stops_is_resumed_only_by_another_reread(db, monkeypatch, caplog):
+def test_a_stopped_reread_is_not_resumed_and_the_next_reread_starts_over(db, monkeypatch, caplog):
     conn, path = db
     add_posts(conn, [(f"p{i}", f"u{i}", 1, None, f"post {i}") for i in range(12)])
     stub(monkeypatch)
@@ -356,13 +356,50 @@ def test_a_reread_that_stops_is_resumed_only_by_another_reread(db, monkeypatch, 
     assert posts_read(conn, calls) == ["new post"]
     assert "stopped before finishing" in caplog.text
 
-    # The next --reread resumes it, skipping the post the ordinary run read since it started.
+    # The next --reread starts over and reads every post, the new one included.
     calls = stub(monkeypatch)
     demographics.run_demographics(path, reread=True)
-    assert sorted(posts_read(conn, calls)) == sorted(f"post {i}" for i in range(12))
+    assert sorted(posts_read(conn, calls)) == sorted([f"post {i}" for i in range(12)] + ["new post"])
     calls = stub(monkeypatch)
     demographics.run_demographics(path)
     assert posts_read(conn, calls) == []
+
+
+def test_the_conditions_pass_commits_as_it_goes(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [(f"p{i}", f"u{i:02}", 1, None, f"post {i}") for i in range(5)])
+    monkeypatch.setattr(demographics, "COMMIT_EVERY", 2)
+    other = sqlite3.connect(path, timeout=0, check_same_thread=False)
+    seen = []
+
+    def conditions(text):  # what another connection sees of the pass so far
+        seen.append(other.execute("SELECT COUNT(*) FROM conditions").fetchone()[0])
+        return {"conditions": [{"condition_name": "POTS"}]}
+
+    monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
+    stub(monkeypatch, conditions=conditions)
+    demographics.run_demographics(path)
+    other.close()
+
+    assert seen == [0, 0, 2, 2, 4]  # committed after every 2nd user, not once at the end
+
+
+def test_dry_run_reports_what_a_run_would_send_and_sends_nothing(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, "Title", "x" * 400), ("p2", "a", 2, None, "y"), ("p3", "b", 1, None, "z")])
+    calls = stub(monkeypatch)
+
+    plan = demographics.run_demographics(path, dry_run=True)
+    limited = demographics.run_demographics(path, limit=1, dry_run=True)
+
+    assert calls == [] and conn.execute("SELECT COUNT(*) FROM extraction_runs").fetchone() == (0,)
+    assert {k: plan[k] for k in ("posts", "users", "post_calls", "conditions_calls")} == {
+        "posts": 3, "users": 2, "post_calls": 3, "conditions_calls": 2}
+    assert plan["approx_input_tokens"] > 3 * len(POST_DEMOGRAPHICS_PROMPT) // 4
+    assert (limited["posts"], limited["users"]) == (2, 1)
+    demographics.run_demographics(path)
+    assert demographics.run_demographics(path, dry_run=True)["posts"] == 0
+    assert demographics.run_demographics(path, reread=True, dry_run=True)["posts"] == 3
 
 
 def test_a_permanent_error_stops_the_run_and_sends_no_queued_posts(db, monkeypatch):
