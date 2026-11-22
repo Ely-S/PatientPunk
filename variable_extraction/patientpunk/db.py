@@ -99,9 +99,11 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
     conn.executescript(ddl_idempotent)
-    # A column added to a table after databases with that table existed: CREATE TABLE IF NOT EXISTS skips it.
-    if "age" not in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}:
-        conn.execute("ALTER TABLE user_profiles ADD COLUMN age REAL")
+    # Columns added after databases with user_profiles existed: CREATE TABLE IF NOT EXISTS skips them.
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
+    for name, kind in _ADDED_PROFILE_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {name} {kind}")
     conn.commit()
 
 
@@ -271,16 +273,21 @@ def _bucketize_age(raw: str | None) -> str | None:
     return f"{(age // 10) * 10}s"
 
 
+# user_profiles' value columns, after user_id and run_id.
+PROFILE_FIELDS = ("age_bucket", "age", "sex", "location", "city")
+_ADDED_PROFILE_COLUMNS = {"age": "REAL", "city": "TEXT"}
+
+
 def latest_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
-    """Each user's current profile from user_profiles_latest: {user_id: {age, age_bucket, sex, location}},
-    as strings, "" where empty. ``age`` is also "" on a database whose schema predates that column."""
+    """Each user's current profile from user_profiles_latest: {user_id: {field: value}} for every field
+    in PROFILE_FIELDS, as strings, "" where empty, including a column an older schema lacks."""
     cursor = conn.execute("SELECT * FROM user_profiles_latest")
     columns = [d[0] for d in cursor.description]
     profiles = {}
     for values in cursor:
         row = dict(zip(columns, values))
         profiles[row["user_id"]] = {
-            k: "" if row.get(k) is None else str(row[k]) for k in ("age", "age_bucket", "sex", "location")}
+            k: "" if row.get(k) is None else str(row[k]) for k in PROFILE_FIELDS}
     return profiles
 
 

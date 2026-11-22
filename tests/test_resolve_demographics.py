@@ -79,16 +79,20 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     assert profile(conn, "a") == ("30s", None, None)
 
 
-@pytest.mark.parametrize("posts, expected", [
-    ([{"country": "US", "state": "Texas"}, {"country": "US"}], "US / Texas"),
-    ([{"state": "Texas"}, {"country": "US"}], "US / Texas"),
-    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], "UK"),
-    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], "UK"),
-    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], "US / Texas"),
-    ([{"state": "Texas"}], "Texas"),
-    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], "US / Texas"),
-    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], "UK"),
-    ([{"country": "US", "state": "Texas"}, {"country": " "}], "US / Texas"),  # a blank claim states nothing
+@pytest.mark.parametrize("posts, expected", [  # expected: (location, city)
+    ([{"country": "US", "state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
+    ([{"state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("UK", None)),
+    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], ("UK", None)),
+    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], ("US / Texas", None)),
+    ([{"state": "Texas"}], ("Texas", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], ("US / Texas", None)),
+    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], ("UK", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": " "}], ("US / Texas", None)),  # a blank claim states nothing
+    ([{"country": "US", "state": "Texas", "city": "Austin"}, {"country": "US"}], ("US / Texas", "Austin")),
+    ([{"state": "Texas", "city": "Austin"}, {"country": "US", "state": "Ohio"}], ("US / Ohio", None)),
+    ([{"country": "US", "state": "Texas"}, {"city": "Austin"}, {"country": "UK"}], ("UK", None)),
+    ([{"city": "Austin"}, {"country": "US", "state": "Texas"}], ("US / Texas", "Austin")),
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
     r = run(conn)
@@ -96,7 +100,8 @@ def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
         post(conn, f"p{i}", "a", 2024 + i)
         read(conn, r, f"p{i}", **claims)
     resolve_profiles(conn, r)
-    assert profile(conn, "a")[2] == expected
+    assert conn.execute("SELECT location, city FROM user_profiles_latest WHERE user_id = 'a'"
+                        ).fetchone() == expected
 
 
 def test_a_user_with_no_claims_gets_an_empty_row(conn):
