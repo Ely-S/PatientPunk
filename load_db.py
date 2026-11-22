@@ -5,15 +5,15 @@ Combines, keyed on author_hash:
   * the corpus + drug sentiment already in data/posts.db -- users, posts,
     treatment, treatment_reports, written by src/import_posts.py and
     src/run_sentiment_pipeline.py; and
-  * the variable-extraction outputs output/records.csv (demographic/clinical
-    fields + inductively-discovered variables) and
-    output/demographics_deductive.csv,
+  * the variable-extraction output output/records.csv (clinical fields,
+    conditions and inductively-discovered variables),
 
 into a single SQLite database (default: patientpunk.db) holding:
   * the full relational schema -- users/posts/treatment/treatment_reports plus
     user_profiles/conditions/variables; and
   * a wide, clustering-ready `unified` table: one row per record, with every
-    variable column + demo_* demographics + per-author drug-sentiment rollups.
+    variable column + demo_* demographics from user_profiles_latest +
+    per-author drug-sentiment rollups.
 
 This replaces the old bridge that expected Polina's database_creation outputs
 (sentiment_cache.json / canonical_map.json); drug sentiment now lives directly
@@ -22,7 +22,7 @@ in data/posts.db.
 Usage:
     python load_db.py
     python load_db.py --posts-db data/posts.db --records output/records.csv \
-        --demographics output/demographics_deductive.csv --db patientpunk.db
+        --db patientpunk.db
 """
 
 from __future__ import annotations
@@ -39,7 +39,9 @@ sys.path.insert(0, str(HERE / "src"))
 import pandas as pd
 
 from patientpunk.db import (
+    LEGACY_DEMOGRAPHIC_COLUMNS,
     init_db,
+    latest_profiles,
     load_extractions,
     load_variables,
     query_treatment_outcomes,
@@ -70,21 +72,27 @@ def _backup_db(src_db: Path, dst_db: Path) -> None:
             dst.close()
 
 
-def build_unified(conn: sqlite3.Connection, records_csv: Path,
-                  demographics_csv: Path | None) -> int:
+def build_unified(conn: sqlite3.Connection, records_csv: Path) -> int:
     """Build the wide, clustering-ready ``unified`` table (one row per record).
 
-    records.csv  LEFT JOIN  demographics (``demo_*`` prefix)  LEFT JOIN
-    per-author drug-sentiment rollup -- all on ``author_hash``.
+    records.csv (minus its legacy demographic columns)  LEFT JOIN
+    user_profiles_latest (``demo_*`` prefix)  LEFT JOIN  per-author
+    drug-sentiment rollup -- all on ``author_hash``.
     """
     uni = pd.read_csv(records_csv, dtype=str).fillna("")
+    uni = uni.drop(columns=[c for c in uni.columns if c in LEGACY_DEMOGRAPHIC_COLUMNS])
 
-    if demographics_csv and demographics_csv.exists():
-        demo_df = pd.read_csv(demographics_csv, dtype=str).fillna("")
-        demo_df = demo_df.rename(
-            columns={c: f"demo_{c}" for c in demo_df.columns if c != "author_hash"}
-        ).drop_duplicates("author_hash")
-        uni = uni.merge(demo_df, on="author_hash", how="left")
+    profiles = latest_profiles(conn)
+    if not profiles:
+        print("  ! no direct profiles in user_profiles_latest; demo_* columns are empty"
+              " (run src/extract_demographics_conditions.py on this database)")
+    elif not profiles.keys() & set(uni["author_hash"]):
+        print("  ! no records.csv author_hash matches a user in user_profiles_latest; demo_* columns are empty")
+    demo_df = pd.DataFrame(
+        [{"author_hash": user, **{f"demo_{k}": v for k, v in p.items()}} for user, p in profiles.items()],
+        columns=["author_hash", "demo_age_bucket", "demo_sex", "demo_location"],
+    )
+    uni = uni.merge(demo_df, on="author_hash", how="left")
 
     # Per-author drug-sentiment rollup from treatment_reports (already in the DB).
     drug_rows = conn.execute(
@@ -132,9 +140,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="SQLite DB with corpus + drug sentiment (default: data/posts.db).")
     parser.add_argument("--records", type=Path, default=HERE / "output" / "records.csv",
                         help="Variable-extraction records.csv (default: output/records.csv).")
-    parser.add_argument("--demographics", type=Path,
-                        default=HERE / "output" / "demographics_deductive.csv",
-                        help="Deductive demographics CSV (optional).")
     parser.add_argument("--db", type=Path, default=HERE / "patientpunk.db",
                         help="Output unified database (default: patientpunk.db).")
     parser.add_argument("--schema-sql", type=Path, default=HERE / "schema.sql",
@@ -149,9 +154,6 @@ def main(argv: list[str] | None = None) -> int:
                  f"  (run variable_extraction/main.py run first)")
     if not args.schema_sql.exists():
         sys.exit(f"Missing schema: {args.schema_sql}")
-    demographics = args.demographics if args.demographics.exists() else None
-    if demographics is None:
-        print(f"  ! demographics CSV not found ({args.demographics}); skipping demographics layer")
 
     print(f"Posts DB:   {args.posts_db}")
     print(f"Output DB:  {args.db}")
@@ -165,21 +167,18 @@ def main(argv: list[str] | None = None) -> int:
     # 3. Register this enrichment run for provenance.
     run_id = register_run(
         conn, "variable_extraction",
-        {"records": str(args.records), "demographics": str(demographics or "")},
+        {"records": str(args.records)},
         commit_hash=get_git_commit(),
     )
 
-    # 4. Demographics first (clean age/sex/loc), then records (conditions).
-    #    load_extractions merges fill-NULL, so demographics values win.
-    if demographics:
-        load_extractions(conn, demographics, run_id=run_id)
+    # 4. Conditions from records.csv. Demographics come from user_profiles_latest.
     load_extractions(conn, args.records, run_id=run_id)
 
     # 5. Full variable matrix -> EAV table (includes discovered variables).
     n_vars = load_variables(conn, args.records, run_id)
 
     # 6. Wide, clustering-ready table.
-    n_unified = build_unified(conn, args.records, demographics)
+    n_unified = build_unified(conn, args.records)
 
     # 7. Summary.
     def _count(table: str) -> int:

@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """
-PatientPunk -- demographic extraction pipeline entry point.
+PatientPunk -- variable extraction pipeline entry point.
 
 Subcommands
 -----------
 run
     Run the full extraction pipeline (or a subset of phases).
-
-demographics
-    LLM-only extraction of age, sex/gender, and location.
-    Outputs a standalone demographics.csv.
 
 inspect
     Inspect a schema file: print field counts and field names without running
@@ -59,13 +55,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 # Make sure the package is importable when run from this directory.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from patientpunk import Pipeline, PipelineConfig, run_demographic_coding
+from patientpunk import Pipeline, PipelineConfig
 from patientpunk.corpus import CorpusLoader
 from patientpunk.schema import Schema
 from patientpunk._utils import get_schema_id, load_json
@@ -77,6 +75,7 @@ from patientpunk.promote import (
 from patientpunk.consolidate import consolidate_schemas
 from patientpunk.evaluate import export_gold_template, load_records, score_extraction
 from patientpunk.cluster_prep import (
+    add_profiles,
     aggregate_patients,
     build_matrix,
     read_records,
@@ -84,6 +83,7 @@ from patientpunk.cluster_prep import (
     select_fields,
     write_matrix,
 )
+from patientpunk.db import latest_profiles
 from patientpunk.aggregate import aggregate_corpus_by_author, read_posts, write_corpus
 from patientpunk.normalize import (
     ADMINISTRATION_ROUTE_DERIVED,
@@ -217,87 +217,6 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
     result = Pipeline(config).run()
     sys.exit(0 if result.ok else 1)
-
-
-# ---------------------------------------------------------------------------
-# Subcommand: demographics
-# ---------------------------------------------------------------------------
-
-def _add_demographics_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    demo_parser = sub.add_parser(
-        "demographics",
-        help="LLM-only demographic coding (deductive, inductive, or both).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="""
-LLM-only demographic coding using Claude Haiku.
-
-Supports two complementary qualitative coding approaches:
-
-  deductive   Extract predefined fields: age, sex_gender, location_country,
-              location_state.  Top-down -- apply the codebook to the data.
-
-  inductive   Discover NEW demographic categories from the data: occupation,
-              ethnicity, disability status, insurance type, education level,
-              etc.  Bottom-up -- let themes emerge.
-
-  both        Do deductive + inductive in a single LLM pass (default).
-
-Works across both corpus sources:
-  subreddit_posts.json   -- one record per post
-  users/*.json           -- full posting history per user (recommended)
-
-Outputs (depending on mode):
-  demographics_deductive.csv   -- predefined fields
-  demographics_inductive.json  -- per-record discovered categories
-  demographics_codebook.json   -- aggregated category frequencies
-        """,
-    )
-    demo_parser.add_argument(
-        "--input-dir", type=Path,
-        default=_DEFAULT_INPUT_DIR,
-        help=f"Directory containing subreddit_posts.json and/or users/ (default: {_DEFAULT_INPUT_DIR})",
-    )
-    demo_parser.add_argument(
-        "--output-dir", type=Path, default=None,
-        help="Output directory (default: same as --input-dir)",
-    )
-    demo_parser.add_argument(
-        "--mode", choices=["deductive", "inductive", "both"], default="both",
-        help="Coding mode (default: both).",
-    )
-    demo_parser.add_argument(
-        "--workers", type=int, default=10,
-        help="Concurrent Haiku API requests (default: 10).",
-    )
-    source_group = demo_parser.add_mutually_exclusive_group()
-    source_group.add_argument(
-        "--posts-only", action="store_true",
-        help="Only process subreddit_posts.json, skip users/.",
-    )
-    source_group.add_argument(
-        "--users-only", action="store_true",
-        help="Only process users/*.json histories, skip subreddit_posts.json.",
-    )
-    demo_parser.add_argument(
-        "--max-chars", type=int, default=8000,
-        help="Max characters of text sent per record to the LLM (default: 8000).",
-    )
-
-
-def _cmd_demographics(args: argparse.Namespace) -> None:
-    try:
-        run_demographic_coding(
-            input_dir=args.input_dir,
-            output_dir=args.output_dir,
-            mode=args.mode,
-            workers=args.workers,
-            include_posts=not args.users_only,
-            include_users=not args.posts_only,
-            max_chars=args.max_chars,
-        )
-    except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -827,7 +746,10 @@ clustering-ready PER-PATIENT feature matrix:
   controlled vocabulary (top-k values/field + 'other') -> CSV + clusterability
   report (n, p/n, density, pairwise similarity, silhouette by k).
 
-  python main.py cluster-prep --records output/records.csv --min-coverage 0.3 --top-k 8
+  python main.py cluster-prep --records output/records.csv --db patientpunk.db --min-coverage 0.3 --top-k 8
+
+Demographics (age, sex, location) come only from --db's user_profiles_latest;
+records.csv's own age/sex/location columns are ignored.
 
 --encode topk (default) collapses cardinality to the top values per field -- the
 single biggest clusterability lever. Use --encode presence for the most
@@ -836,6 +758,8 @@ aggressive collapse, multihot for none.
     )
     p.add_argument("--records", type=Path, default=_DEFAULT_INPUT_DIR / "records.csv",
                    help=f"Extraction records.csv (default: {_DEFAULT_INPUT_DIR / 'records.csv'}).")
+    p.add_argument("--db", type=Path, default=None,
+                   help="Database whose user_profiles_latest supplies demographic features.")
     p.add_argument("--key", default="author_hash",
                    help="Patient-unit column (default: author_hash).")
     p.add_argument("--min-coverage", type=float, default=0.25,
@@ -862,6 +786,22 @@ def _cmd_cluster_prep(args: argparse.Namespace) -> None:
     patients, all_fields = aggregate_patients(rows, key_col=args.key, sep=args.sep)
     if not patients:
         sys.exit(f"no patients found (is --key '{args.key}' a column in {records.name}?)")
+    if args.db:
+        if not args.db.is_file():
+            sys.exit(f"{args.db}: no such database file")
+        try:
+            with closing(sqlite3.connect(f"{args.db.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+                profiles = latest_profiles(conn)
+            all_fields = add_profiles(patients, all_fields, profiles)
+            if not profiles:
+                print(f"  ! no profiles in user_profiles_latest in {args.db}; demographic features are empty"
+                      " (run src/extract_demographics_conditions.py on this database)")
+            elif not profiles.keys() & patients.keys():
+                print(f"  ! no --key '{args.key}' value matches a user_id in {args.db}; demographic features are empty")
+        except sqlite3.Error as exc:
+            sys.exit(f"{args.db}: {exc} (older database? apply init_db to a writable copy; see README)")
+    else:
+        print("  ! no --db: clustering without demographic features")
     fields = [f.strip() for f in args.fields.split(",") if f.strip()] if args.fields else all_fields
     kept, _cov = select_fields(patients, fields, args.min_coverage)
     if not kept:
@@ -980,7 +920,7 @@ prints the before->after distinct-value collapse. Over-fragmented fields
 (targeted_symptom_domain) are blanked unless --keep-dropped.
 
   python main.py normalize --records output/records.csv
-  python main.py cluster-prep --records output/records_normalized.csv --min-coverage 0.25
+  python main.py cluster-prep --records output/records_normalized.csv --db patientpunk.db --min-coverage 0.25
         """,
     )
     p.add_argument("--records", type=Path, default=_DEFAULT_INPUT_DIR / "records.csv",
@@ -1027,7 +967,7 @@ def _cmd_normalize(args: argparse.Namespace) -> None:
     for fld, (b, a) in sorted(rep.items(), key=lambda x: -(x[1][0] - x[1][1])):
         tag = "   [blanked: too fragmented]" if fld in blanked else ""
         print(f"    {fld:28} {b:4} -> {a:4}{tag}")
-    print(f"\n  next: python main.py cluster-prep --records {out} --min-coverage 0.25")
+    print(f"\n  next: python main.py cluster-prep --records {out} --db patientpunk.db --min-coverage 0.25")
     sys.exit(0)
 
 
@@ -1044,15 +984,13 @@ def main() -> None:
 Examples:
   python main.py run          --schema schemas/covidlonghaulers_schema.json
   python main.py run          --schema schemas/covidlonghaulers_schema.json --limit 10
-  python main.py demographics --input-dir ../reddit_sample_data
-  python main.py demographics --input-dir ../reddit_sample_data --users-only
   python main.py inspect      --schema schemas/covidlonghaulers_schema.json
   python main.py corpus       --input-dir ../output
   python main.py export       --schema schemas/covidlonghaulers_schema.json --codebook-format markdown
   python main.py promote      --schema schemas/covidlonghaulers_schema.json --min-coverage 0.1
   python main.py consolidate  --inputs run1/temp/discovered_*.json run2/temp/discovered_*.json --min-runs 2
   python main.py validate     --reference gold.csv --candidate model_output.csv
-  python main.py cluster-prep --records output/records.csv --min-coverage 0.3 --top-k 8
+  python main.py cluster-prep --records output/records.csv --db patientpunk.db --min-coverage 0.3 --top-k 8
         """,
     )
 
@@ -1060,7 +998,6 @@ Examples:
     sub.required = True
 
     _add_run_parser(sub)
-    _add_demographics_parser(sub)
     _add_inspect_parser(sub)
     _add_corpus_parser(sub)
     _add_export_parser(sub)
@@ -1075,7 +1012,6 @@ Examples:
 
     dispatch = {
         "run":          _cmd_run,
-        "demographics": _cmd_demographics,
         "inspect":      _cmd_inspect,
         "corpus":       _cmd_corpus,
         "export":       _cmd_export,
