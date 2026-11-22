@@ -34,11 +34,6 @@ EXTRACTION_STANDARDS
     construct validity, MEE in value selection, and unit of observation.
     Enough to keep extraction decisions disciplined without overwhelming the
     prompt with field-design guidance that isn't relevant here.
-
-DEMOGRAPHIC_STANDARDS
-    For agents doing *demographic-only coding*.  Minimal -- focused on
-    self-reference, operationalization of demographic concepts, confidence
-    calibration, and evidence citation.
 """
 
 from __future__ import annotations
@@ -153,55 +148,3 @@ summarisation.  Apply these principles to every value you extract:
    situation).  For list fields (conditions, medications), extract one entry
    per distinct item.  Do not merge two separate items into a single value.
 """.strip()
-
-
-# ---------------------------------------------------------------------------
-# DEMOGRAPHIC STANDARDS
-# Injected for demographic-only coding tasks (age / sex / location).
-# ---------------------------------------------------------------------------
-
-DEMOGRAPHIC_AGE_RULES: str = """
-Age rules:
-1. Only the author's own current age at the time of writing: a whole number when they give one,
-   otherwise the range or decade they state ("30s", "25-34").
-2. Ignore past ages ("when I was 8") and ages of other people, including children, partners,
-   relatives, and people in the news.
-Examples: "I'm 26" -> 26. "I (33F)" -> 33. "I'm in my 30s" -> "30s". "My wife is 36",
-"my 11yo son", and "bitten when I was 8" -> null.
-""".strip()
-
-
-DEMOGRAPHIC_STANDARDS: str = """
-DEMOGRAPHIC CODING STANDARDS
------------------------------
-You are performing structured demographic coding at the standard expected in
-epidemiological and social-science research.  Apply these rules strictly:
-
-1. SELF-REFERENCE ONLY -- operationalize "the author" precisely:
-   Extract ONLY information the post author states directly about themselves.
-   Ignore all third-party mentions regardless of how prominent they are.
-   - "my 65-year-old father" → do not extract age.
-   - "she mentioned she's from Texas" → do not extract location.
-   - "25M here" → extract age=25, sex_gender="male".
-   If the author's own demographics are ambiguous, return null.
-
-2. CONSTRUCT VALIDITY -- explicit statement, not inference:
-   Do not infer demographics from indirect signals (username, writing style,
-   pronouns used by other commenters, community norms).  The author must
-   have stated the value explicitly.
-   - "he/him flair" set by someone else → not valid evidence.
-   - "I am a 34-year-old woman living in Ohio" → valid evidence for all four fields.
-
-3. CONFIDENCE CALIBRATION -- use the scale consistently:
-   - high:   Author states the value explicitly and unambiguously in their own words.
-   - medium: Value can be inferred from a clear but indirect self-statement
-             (e.g. "diagnosed post-partum" implies female, but not stated directly).
-   - low:    Only a weak contextual signal exists; another coder might disagree.
-   When in doubt, return a lower confidence level rather than a higher one.
-
-4. EVIDENCE CITATION -- cite the minimal sufficient quote:
-   The evidence field must contain the shortest quote from the source text that
-   a second coder could use to verify your extraction.  Do not paraphrase --
-   use the author's exact words.  Maximum 120 characters.
-""".strip()
-

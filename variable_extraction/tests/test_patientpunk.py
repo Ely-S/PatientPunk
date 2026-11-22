@@ -66,7 +66,6 @@ from patientpunk.export_csv import run_export_csv
 from patientpunk.phase import PhaseResult
 from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult
 from patientpunk.qualitative_standards import (
-    DEMOGRAPHIC_STANDARDS,
     EXTRACTION_STANDARDS,
     FIELD_DESIGN_STANDARDS,
 )
@@ -890,22 +889,11 @@ class TestQualitativeStandards:
         ]:
             assert keyword in EXTRACTION_STANDARDS, f"Missing: {keyword}"
 
-    def test_demographic_standards_contains_core_principles(self):
-        for keyword in [
-            "SELF-REFERENCE ONLY",
-            "CONSTRUCT VALIDITY",
-            "CONFIDENCE CALIBRATION",
-            "EVIDENCE CITATION",
-        ]:
-            assert keyword in DEMOGRAPHIC_STANDARDS, f"Missing: {keyword}"
-
     def test_standards_are_nonempty_strings(self):
         assert isinstance(FIELD_DESIGN_STANDARDS, str)
         assert isinstance(EXTRACTION_STANDARDS, str)
-        assert isinstance(DEMOGRAPHIC_STANDARDS, str)
         assert len(FIELD_DESIGN_STANDARDS) > 500
         assert len(EXTRACTION_STANDARDS) > 300
-        assert len(DEMOGRAPHIC_STANDARDS) > 300
 
     def test_standards_injected_into_llm_extract(self):
         """Verify EXTRACTION_STANDARDS actually appears in the LLM system prompt."""

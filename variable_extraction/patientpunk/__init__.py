@@ -41,7 +41,6 @@ from .pipeline import Pipeline, PipelineConfig, PipelineResult, PhaseResult
 from .qualitative_standards import (
     FIELD_DESIGN_STANDARDS,
     EXTRACTION_STANDARDS,
-    DEMOGRAPHIC_STANDARDS,
 )
 from .schema import FieldDefinition, Schema
 
@@ -60,7 +59,6 @@ __all__ = [
     # Qualitative coding standards (for use in custom prompts / notebooks)
     "FIELD_DESIGN_STANDARDS",
     "EXTRACTION_STANDARDS",
-    "DEMOGRAPHIC_STANDARDS",
 ]
 
 __version__ = "0.1.0"
