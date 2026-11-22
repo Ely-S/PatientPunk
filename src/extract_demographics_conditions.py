@@ -47,6 +47,7 @@ TEMPERATURES = (0.0, 0.7, 1.0)
 REMOVED_BODIES = {"[removed]", "[deleted]"}
 CLAIM_FIELDS = ("age", "sex", "country", "state", "city")
 MULTIPLE_PLACES = re.compile(r"[/|;\r\n]|\s+or\s+", re.IGNORECASE)
+DC = re.compile(r",\s*D\.?\s*C\.?$", re.IGNORECASE)  # "Washington, D.C." is one place
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
 
 
@@ -104,7 +105,7 @@ def _claim_value(field: str, value: object) -> str | None:
     if field == "sex":
         return text  # every stated value kept, "non-binary | female" included (#214)
     # One place. A city may carry its region after a comma ("Austin, TX"); a country or state may not.
-    if MULTIPLE_PLACES.search(text) or (field != "city" and "," in text):
+    if MULTIPLE_PLACES.search(text) or (field != "city" and "," in DC.sub("", text)):
         return None
     return text
 
@@ -190,26 +191,34 @@ def _in_parallel(client, jobs: Iterable[tuple], read: Callable) -> Iterator[tupl
                 pending[pool.submit(read, client, text)] = key
 
 
-def _newest_reread(conn) -> int:
-    (run_id,) = conn.execute(
-        "SELECT COALESCE(MAX(run_id), 0) FROM extraction_runs "
-        "WHERE extraction_type = 'demographics' AND json_extract(config, '$.reread')").fetchone()
-    return run_id
+def _reread_checkpoints(conn) -> tuple[int, int | None]:
+    """(since, unfinished): the run the newest finished --reread read from (0 if none), and, when a newer
+    --reread stopped before finishing, the run it read from. A reread's starting run is its own, or the
+    unfinished reread's it resumed (config.reread_since)."""
+    unfinished = None
+    for run_id, finished, since in conn.execute(
+            "SELECT run_id, finished_at IS NOT NULL, json_extract(config, '$.reread_since') FROM extraction_runs "
+            "WHERE extraction_type = 'demographics' AND json_extract(config, '$.reread') ORDER BY run_id DESC"):
+        since = since or run_id
+        if finished:
+            return since, unfinished
+        unfinished = unfinished or since
+    return 0, unfinished
 
 
-# Posts no demographics run has read since the newest --reread run (this run, with --reread).
+# Posts no demographics run has read since the checkpoint run.
 UNREAD_POSTS = (
     "FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
     "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
     "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)")
 
 
-def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> list[str]:
+def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, counts: dict) -> list[str]:
     """Read each unread post and store its claims. A successful read gets a post_runs row; a failed
     one doesn't, so the next run reads it again. Returns the users read."""
     rows = reader.execute(
         f"SELECT p.user_id, p.post_id, p.title, p.body_text {UNREAD_POSTS} ORDER BY p.user_id, p.post_id",
-        (DELETED_USER_ID, _newest_reread(conn)))
+        (DELETED_USER_ID, since))
     read_users = []
 
     def record(post_id: str, claims: dict) -> None:
@@ -241,10 +250,9 @@ def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> 
     return read_users
 
 
-def _users_with_unread_posts(conn) -> set[str]:
+def _users_with_unread_posts(conn, since: int) -> set[str]:
     """Users whose claims are incomplete: a post failed, or a --limit run hasn't reached it yet."""
-    return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}",
-                                        (DELETED_USER_ID, _newest_reread(conn)))}
+    return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}", (DELETED_USER_ID, since))}
 
 
 def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts: dict) -> None:
@@ -280,6 +288,13 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
     # with SQLITE_BUSY_SNAPSHOT once another process commits.
     with closing(open_db(db_path)) as conn, closing(open_db(db_path)) as reader:
         apply_schema(conn)  # claim tables and columns missing from an older database
+        # Only a finished --reread moves the checkpoint. A reread that stopped (a bad key, Ctrl-C) is
+        # resumed by the next --reread, never by an ordinary run: that would be a paid full-corpus
+        # reread nobody asked for.
+        since, unfinished = _reread_checkpoints(conn)
+        if unfinished and not reread:
+            log.warning("The --reread from run %s stopped before finishing; this run reads only new and "
+                        "failed posts. Run with --reread to finish it.", unfinished)
         run_id = register_run(conn, "demographics", {
             "provider": LLM_PROVIDER,
             "reasoning_mode": LLM_REASONING_MODE,
@@ -291,14 +306,22 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
             "temperatures": TEMPERATURES,
             "workers": MAX_IN_FLIGHT,
         }, commit_hash=get_git_commit())
-        log.info("Extraction run %s%s", run_id, " (rereading every post)" if reread else "")
+        if reread:
+            since = unfinished or run_id
+            conn.execute("UPDATE extraction_runs SET config = json_set(config, '$.reread_since', ?) WHERE run_id = ?",
+                         (since, run_id))
+            conn.commit()
+            log.info("Extraction run %s (rereading every post%s)", run_id,
+                     f", resuming run {unfinished}" if unfinished else "")
+        else:
+            log.info("Extraction run %s", run_id)
         counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
 
-        read_users = _read_posts(client, conn, reader, run_id, limit, counts)
+        read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
         _read_conditions(client, conn, reader, run_id, set(read_users), counts)
         # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
         # Users with unread posts keep their previous profile until all their posts are read.
-        failed_users = _users_with_unread_posts(conn)
+        failed_users = _users_with_unread_posts(conn, since)
         stats = resolve_profiles(conn, run_id, failed_users)  # commits
         conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), run_id))
         conn.commit()

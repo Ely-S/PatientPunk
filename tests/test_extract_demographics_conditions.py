@@ -139,11 +139,12 @@ def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
     ("field", "value", "stored"),
     [
         ("age", 34, "34"), ("age", 34.0, "34"), ("age", "late 30s", "late 30s"), ("age", "25-34", "25-34"),
-        ("age", 9, None), ("age", 100, None), ("age", "34 | 36", None), ("age", True, None),
+        ("age", 9, None), ("age", 100, None), ("age", "34.5", None), ("age", "34 | 36", None), ("age", True, None),
         ("sex", "F", "F"), ("sex", "non-binary | female", "non-binary | female"), ("sex", "trans man", "trans man"),
         ("sex", "unknown", None), ("sex", ["M"], None),
         ("country", "Trinidad and Tobago", "Trinidad and Tobago"), ("country", "US or Canada", None),
-        ("state", "Texas / Ohio", None), ("state", "Texas, Ohio", None), ("city", "Portland", "Portland"),
+        ("state", "Texas / Ohio", None), ("state", "Texas, Ohio", None), ("state", "Washington, D.C.", "Washington, D.C."),
+        ("city", "Portland", "Portland"),
         ("city", "Austin, TX", "Austin, TX"), ("city", "Austin or Dallas", None), ("city", "", None),
     ],
 )
@@ -173,7 +174,8 @@ def test_a_value_without_a_quote_is_not_a_claim(db, monkeypatch):
     ("stated", "sex"),
     [("non-binary | female", "non-binary"), ("female, non-binary", "non-binary"), ("non-binary and female", "non-binary"),
      ("non-binary/female", "non-binary"), ("female | suspected intersex", "female"),
-     ("Man", "male"), ("trans man", None), ("female | male", None)],
+     ("Man", "male"), ("cis woman", "female"), ("cisgender male", "male"), ("cis-female | non-binary", "non-binary"),
+     ("trans man", None), ("female | male", None)],
 )
 def test_multi_value_sex_is_kept_and_normalized_by_rule(db, monkeypatch, stated, sex):
     conn, path = db
@@ -298,6 +300,34 @@ def test_reread_cannot_be_limited(db):
     _, path = db
     with pytest.raises(ValueError, match="--reread"):
         demographics.run_demographics(path, reread=True, limit=1)
+
+
+def test_a_reread_that_stops_is_resumed_only_by_another_reread(db, monkeypatch, caplog):
+    conn, path = db
+    add_posts(conn, [(f"p{i}", f"u{i}", 1, None, f"post {i}") for i in range(12)])
+    stub(monkeypatch)
+    demographics.run_demographics(path)
+    request = httpx.Request("POST", "https://example.invalid")
+    error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
+    stub(monkeypatch, post=lambda text: error)  # a bad key: the reread stops having read nothing
+    with pytest.raises(anthropic.AuthenticationError):
+        demographics.run_demographics(path, reread=True)
+
+    # An ordinary run doesn't pick up the stopped reread: it reads only the new post, and warns.
+    add_posts(conn, [("new", "u0", 2, None, "new post")])
+    calls = stub(monkeypatch)
+    with caplog.at_level("WARNING", logger="pipeline"):
+        demographics.run_demographics(path)
+    assert posts_read(conn, calls) == ["new post"]
+    assert "stopped before finishing" in caplog.text
+
+    # The next --reread resumes it, skipping the post the ordinary run read since it started.
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path, reread=True)
+    assert sorted(posts_read(conn, calls)) == sorted(f"post {i}" for i in range(12))
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)
+    assert posts_read(conn, calls) == []
 
 
 def test_a_permanent_error_stops_the_run_and_sends_no_queued_posts(db, monkeypatch):

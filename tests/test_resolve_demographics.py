@@ -164,6 +164,7 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     ("60s+", None, None),
     ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
     ("inf", None, None), ("1e400", None, None), ("9", None, None), ("100", None, None), ("-5", None, None),
+    ("34.5", None, None),
 ])
 def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
     post(conn, "p1", "a", 2026)

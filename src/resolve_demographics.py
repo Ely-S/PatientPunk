@@ -45,7 +45,8 @@ def _estimate(value: str) -> tuple[float, bool] | None:
     text = _UNITS.sub("", _LEAD.sub("", text)).strip()
     try:
         number = float(text)
-        return (number, False) if math.isfinite(number) else None
+        # A fractional age ("34.5") is not a whole-year statement; "34.0" counts as 34.
+        return (number, False) if math.isfinite(number) and number.is_integer() else None
     except ValueError:
         pass
     if m := _RANGE.fullmatch(text):
@@ -86,14 +87,15 @@ SEX_VALUES = {
 
 # The prompt asks for " | " between values, but a reply may use other separators.
 _SEX_PARTS = re.compile(r"[|/,;&]|\band\b", re.IGNORECASE)
+_CIS = re.compile(r"^cis(?:gender)?[\s-]*", re.IGNORECASE)  # "cis woman" and "cisgender male" name a binary sex
 
 
 def normalize_sex(stated: str) -> str | None:
     """female, male or non-binary from the author's words, which may hold several values (#214):
     non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
-    ignored ("female | suspected intersex" -> female). None when no rule applies ("trans man",
+    ignored ("female | suspected intersex" -> female), and "cis" is dropped ("cis woman" -> female). None when no rule applies ("trans man",
     "female | male"); the words themselves stay in sex_stated."""
-    values = {SEX_VALUES.get(part.strip().casefold()) for part in _SEX_PARTS.split(stated)} - {None}
+    values = {SEX_VALUES.get(_CIS.sub("", part.strip()).casefold()) for part in _SEX_PARTS.split(stated)} - {None}
     if "non-binary" in values:
         return "non-binary"
     return values.pop() if len(values) == 1 else None
