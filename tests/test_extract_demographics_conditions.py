@@ -111,6 +111,9 @@ def test_caps_input_before_wrapping(db, monkeypatch):
         ("25-34", "unknown", "", None, (None, None, None, None)),
         ("34 | 36", None, None, None, (None, None, None, None)),
         (34.5, None, None, None, (None, None, None, None)),
+        (40, None, "Korea, Republic of", None, ("40s", 40.0, None, "Korea, Republic of")),
+        (40, None, "USA", "Washington, D.C.", ("40s", 40.0, None, "USA / Washington, D.C.")),
+        (40, None, "USA, Canada", "Texas, Ohio", ("40s", 40.0, None, None)),
     ],
 )
 def test_normalizes_profile_fields(db, monkeypatch, age, sex, country, state, expected):
@@ -148,10 +151,9 @@ def test_unreadable_reply_can_recover_at_last_temperature(monkeypatch):
     [
         '{"error": "private reply text"}',
         '{"conditions": {"error": "private reply text"}}',
-        '{"conditions": [{}]}',
         'no JSON here',
     ],
-    ids=["unknown-fields", "wrong-conditions-type", "malformed-condition", "no-object"],
+    ids=["unknown-fields", "wrong-conditions-type", "no-object"],
 )
 def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
     db, monkeypatch, caplog, unreadable_reply,
@@ -303,3 +305,10 @@ def test_records_finish_time_and_provider_only_for_a_clean_run(db, monkeypatch):
 )
 def test_reads_replies_that_main_accepted(raw, age):
     assert demographics._parse_reply(raw)["age"] == age
+
+
+def test_drops_unnamed_conditions_and_keeps_the_rest_of_the_reply():
+    raw = '{"age": 34, "conditions": [{"condition_name": "ME/CFS"}, {"condition_name": null}, ""]}'
+    result = demographics._parse_reply(raw)
+    assert result["age"] == 34
+    assert [c["condition_name"] for c in result["conditions"]] == ["ME/CFS"]

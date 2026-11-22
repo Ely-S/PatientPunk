@@ -59,6 +59,11 @@ SEX_VALUES = {
     "non binary": "non-binary",
 }
 MULTIPLE_PLACES = re.compile(r"[,/|;\r\n]|\s+or\s+", re.IGNORECASE)
+# A comma inside one place's name: "Washington, D.C.", "Korea, Republic of", "Congo, Democratic Republic of the"
+ONE_PLACE_COMMA = re.compile(
+    r",\s*(?:D\.?\s*C\.?|(?:the\s+)?(?:[a-z]+\s+)?(?:republic|kingdom|federation|states?)\s+of(?:\s+the)?)\s*$",
+    re.IGNORECASE,
+)
 UNKNOWN_PLACES = {"unknown", "none", "null", "not stated", "n.a."}
 
 
@@ -91,7 +96,7 @@ def _user_inputs(rows: Iterable[tuple[str, str | None, str]]) -> Iterator[tuple[
 def _single_place(value: object) -> str | None:
     if isinstance(value, str):
         value = value.strip()
-        if value and value.casefold() not in UNKNOWN_PLACES and not MULTIPLE_PLACES.search(value):
+        if value and value.casefold() not in UNKNOWN_PLACES and not MULTIPLE_PLACES.search(ONE_PLACE_COMMA.sub("", value)):
             return value
     return None
 
@@ -122,9 +127,10 @@ def _parse_reply(raw: str) -> dict:
     conditions = result.get("conditions")
     if conditions is None:
         conditions = []
-    if not isinstance(conditions, list) or any(not _condition_name(item) for item in conditions):
-        raise LLMParseError("Expected a list of named conditions")
-    return {**_normalize_demographics(result), "conditions": conditions}
+    if not isinstance(conditions, list):
+        raise LLMParseError("Expected a list of conditions")
+    # An entry without a name is dropped, as on main, rather than costing the user's whole reply.
+    return {**_normalize_demographics(result), "conditions": [c for c in conditions if _condition_name(c)]}
 
 
 def extract_demographics(client, text: str) -> dict:

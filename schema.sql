@@ -58,7 +58,8 @@ CREATE TABLE user_profiles (
     user_id    TEXT NOT NULL REFERENCES users(user_id),
     run_id     INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     age_bucket TEXT,
-    age        REAL,     -- years at the run's reference date; a stated range or decade gives its midpoint ("late 30s" -> 37.5)
+    age        REAL,     -- extraction_pipeline runs: years at the run's reference date; a stated range or decade gives its midpoint ("late 30s" -> 37.5).
+                         -- demographics runs: the age as last stated, not advanced (a per-user reply doesn't say which post it came from)
     sex        TEXT,
     location   TEXT,
     city       TEXT,     -- where the author says they live, not where they travelled for care
