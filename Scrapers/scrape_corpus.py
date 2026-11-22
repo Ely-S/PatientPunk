@@ -20,7 +20,6 @@ Base URL: https://arctic-shift.photon-reddit.com
 """
 
 import argparse
-import hashlib
 import json
 import time
 from datetime import datetime, timezone, timedelta
@@ -28,7 +27,7 @@ from pathlib import Path
 
 import requests
 
-from db_to_corpus import DELETED, author_hash
+from db_to_corpus import DELETED, author_hash, hash_username
 
 API_BASE = "https://arctic-shift.photon-reddit.com"
 REDDIT_USER_AGENT = "patientpunk-scraper/0.1 (corpus research)"
@@ -66,10 +65,6 @@ def window_start_iso(months: int | None, weeks: int | None) -> tuple[str, str]:
         dt = datetime.now(timezone.utc) - timedelta(days=30 * (months or 2))
         label = f"{months or 2} month(s)"
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), label
-
-
-def hash_username(username: str) -> str:
-    return hashlib.sha256(username.encode()).hexdigest()
 
 
 def polite_sleep(delay: float = REQUEST_DELAY):
