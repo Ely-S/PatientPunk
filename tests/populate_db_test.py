@@ -246,9 +246,9 @@ class TestPopulateDbEndToEnd:
 
         # User "b" should have the populated demographics via the stub's routing.
         populated = db.conn.execute(
-            "SELECT age_bucket, sex, location FROM user_profiles WHERE user_id = 'b'"
+            "SELECT age_bucket, age, sex, location FROM user_profiles WHERE user_id = 'b'"
         ).fetchone()
-        assert populated == ("30s", "female", "US / Texas")
+        assert populated == ("30s", 34.0, "female", "US / Texas")
 
         # And the condition from user b's extraction should be recorded.
         conditions = db.conn.execute(

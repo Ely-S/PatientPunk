@@ -99,11 +99,12 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
     conn.executescript(ddl_idempotent)
-    # Columns added after databases with user_profiles existed: CREATE TABLE IF NOT EXISTS skips them.
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
-    for name, kind in _ADDED_PROFILE_COLUMNS.items():
-        if name not in existing:
-            conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {name} {kind}")
+    # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
+    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"})):
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, kind in added.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
     conn.commit()
 
 

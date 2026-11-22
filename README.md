@@ -171,7 +171,7 @@ Posts and comments with no author (deleted or removed accounts) are stored under
 
 Sends one history per eligible user to a fast model to extract explicitly self-reported demographics and conditions. Each history includes titles and bodies, newest first, up to 8,000 characters in total. Deleted authors and posts with removed or deleted bodies are excluded.
 
-New `user_profiles` rows store age as a decade (such as `30s`) and as whole years in `age`, normalized sex (`female`, `male` or `non-binary`), and location (`country / state` when both are known). `city` (where the author says they live, not where they travelled for care) stays empty here; the per-post extractor (#206) fills it. Older rows retain their stored values, including age ranges such as `25-34`. The same model call writes reported illnesses and symptoms to `conditions`.
+New `user_profiles` rows store age as a decade (such as `30s`) and as whole years in `age` (the age as last stated, not advanced to a reference date; a stated range or decade is dropped rather than stored as its midpoint), normalized sex (`female`, `male` or `non-binary`), and location (`country / state` when both are known). `city` (where the author says they live, not where they travelled for care) stays empty here; the per-post extractor (#206) fills it. Older rows retain their stored values, including age ranges such as `25-34`. The same model call writes reported illnesses and symptoms to `conditions`.
 
 A valid reply can record an empty profile. A request that still fails after retries, or is blocked by the content filter, leaves the user's previous profile current. A permanent API error stops the run.
 

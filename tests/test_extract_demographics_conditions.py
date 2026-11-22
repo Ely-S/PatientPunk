@@ -279,3 +279,70 @@ def test_extraction_writes_after_another_connection_commits(db, monkeypatch):
 
     assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)
     assert conn.execute("SELECT flair FROM posts WHERE post_id = 'd'").fetchone() == ("updated",)
+
+
+def test_runs_on_a_database_from_before_age_city_and_finished_at(tmp_path, monkeypatch):
+    old_schema = "\n".join(
+        line for line in SCHEMA.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith(("age        REAL", "city       TEXT", "finished_at INTEGER"))
+    ).replace("config  TEXT NOT NULL,", "config  TEXT NOT NULL")
+    path = tmp_path / "old.db"
+    with closing(sqlite3.connect(path)) as conn:
+        conn.executescript(old_schema)
+        assert "age" not in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
+        add_posts(conn, [("post", "patient", 1, None, "I'm 34")])
+    monkeypatch.setattr(demographics, "get_client", lambda: None)
+    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: '{"age": 34}')
+
+    demographics.run_demographics(path)
+
+    with closing(sqlite3.connect(path)) as conn:
+        assert conn.execute("SELECT age_bucket, age, city FROM user_profiles").fetchall() == [("30s", 34.0, None)]
+        assert conn.execute("SELECT finished_at IS NOT NULL FROM extraction_runs").fetchone() == (1,)
+
+
+def test_records_finish_time_and_provider_only_for_a_clean_run(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "a"), ("p2", "b", 1, None, "b")])
+    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: '{"age": 34}')
+    demographics.run_demographics(path)
+
+    request = httpx.Request("POST", "https://example.invalid")
+    error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
+    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: (_ for _ in ()).throw(error))
+    with pytest.raises(anthropic.AuthenticationError):
+        demographics.run_demographics(path)
+
+    runs = conn.execute("SELECT finished_at IS NOT NULL, config FROM extraction_runs ORDER BY run_id").fetchall()
+    assert [finished for finished, _ in runs] == [1, 0]
+    assert {"provider", "reasoning_mode", "git_dirty"} <= json.loads(runs[0][1]).keys()
+
+
+@pytest.mark.parametrize(
+    ("raw", "age"),
+    [
+        ('Here is the JSON:\n{"age": 34, "conditions": []}', 34),
+        ('{"age": 34, "conditions": [],}', 34),
+        ('{"age": 34.0}', 34),
+    ],
+    ids=["prose-before-object", "trailing-comma", "whole-number-float"],
+)
+def test_reads_replies_that_main_accepted(raw, age):
+    assert demographics._parse_reply(raw)["age"] == age
+
+
+def test_openrouter_in_band_error_fails_one_user_not_the_run(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "down", 1, None, "down"), ("p2", "fine", 1, None, "fine")])
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    outage = openai.APIError("provider_unavailable: upstream overloaded", request=request, body=None)
+
+    def stub_call(client, prompt, **kwargs):
+        if patient_text(prompt) == "down":
+            raise outage
+        return '{"age": 34}'
+
+    monkeypatch.setattr(demographics, "llm_call", stub_call)
+    demographics.run_demographics(path)
+
+    assert conn.execute("SELECT user_id FROM user_profiles").fetchall() == [("fine",)]

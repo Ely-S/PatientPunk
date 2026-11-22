@@ -24,16 +24,20 @@ from patientpunk._utils import (
     strip_markdown_fences,
     wrap_untrusted_text,
 )
-from patientpunk.db import _bucketize_age
+from patientpunk.db import _bucketize_age, apply_schema
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
 from utilities import (
+    LLM_PROVIDER,
+    LLM_REASONING_MODE,
     MODEL_FAST,
     LLMParseError,
     get_client,
     get_git_commit,
+    git_is_dirty,
     is_transient_or_truncated,
     llm_call,
     log,
+    parse_json_object,
 )
 from utilities.db import open_db
 
@@ -106,8 +110,11 @@ def _single_place(value: object) -> str | None:
 
 def _normalize_demographics(result: dict) -> dict:
     sex = result.get("sex")
+    age = result.get("age")
+    if isinstance(age, float) and age.is_integer():
+        age = int(age)  # JSON 34.0
     return {
-        "age": self_reported_age(result.get("age")),
+        "age": self_reported_age(age),
         "sex": SEX_VALUES.get(sex.strip().casefold()) if isinstance(sex, str) else None,
         "country": _single_place(result.get("country")),
         "state": _single_place(result.get("state")),
@@ -120,11 +127,12 @@ def _condition_name(condition: object) -> str:
 
 
 def _parse_reply(raw: str) -> dict:
-    try:
-        result = json.loads(strip_markdown_fences(raw))
-    except ValueError as exc:
-        raise LLMParseError("Expected a demographics JSON object") from exc
-    if not isinstance(result, dict) or RESPONSE_FIELDS.isdisjoint(result):
+    # Tolerate prose around the object and trailing commas, but not a list of objects.
+    text = strip_markdown_fences(raw)
+    if "[" in text.split("{", 1)[0]:
+        raise LLMParseError("Expected a demographics JSON object, not a list")
+    result = parse_json_object(text)
+    if RESPONSE_FIELDS.isdisjoint(result):
         raise LLMParseError("Expected a demographics JSON object")
 
     conditions = result.get("conditions")
@@ -182,6 +190,8 @@ def _extract_users(client, users: Iterable[tuple[str, str]]) -> Iterator[tuple[s
 
 
 def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> int:
+    # The age as last stated, not advanced to a reference date: a per-user reply doesn't say which
+    # post it came from. Ranges and decades were rejected in _normalize_demographics.
     age = result["age"]
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     location = " / ".join(filter(None, (result["country"], result["state"]))) or None
@@ -215,7 +225,11 @@ def run_demographics(
 
     client = get_client()
     with closing(open_db(db_path)) as conn:
+        apply_schema(conn)  # a database from before user_profiles.age/city or extraction_runs.finished_at
         run_config = {
+            "provider": LLM_PROVIDER,
+            "reasoning_mode": LLM_REASONING_MODE,
+            "git_dirty": git_is_dirty(),
             "limit": limit,
             "model": MODEL_FAST,
             "max_user_chars": MAX_USER_CHARS,
@@ -251,6 +265,7 @@ def run_demographics(
                     if processed % COMMIT_EVERY == 0:
                         conn.commit()
                         log.info("Processed %d users (%d failures)", processed, failures)
+        conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), run_id))
         conn.commit()
 
     log.info("Done: %d profiles, %d conditions written, %d failures", profiles_written, conditions_written, failures)

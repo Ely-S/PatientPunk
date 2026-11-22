@@ -194,6 +194,10 @@ class _ORStream:
             if choice.finish_reason:
                 finish = choice.finish_reason
 
+        if finish == "error":
+            # The provider failed mid-reply; the partial text must not be cached.
+            from patientpunk._utils import LLMResponseError
+            raise LLMResponseError("OpenRouter stream ended with an error")
         stop_reason = "max_tokens" if finish == "length" else "end_turn"
         # A filtered stream can contain text. Preserve the refusal for check_response.
         if refused or finish == "content_filter":
@@ -376,9 +380,9 @@ def is_transient_failure(exc: BaseException) -> bool:
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):
         return True
-    # The SDK raises in-band provider failures as APIStatusError. Match their body,
-    # but never retry a 4xx request.
-    if isinstance(exc, anthropic.APIStatusError) and not (
+    # In-band provider failures arrive as anthropic.APIStatusError, or over OpenRouter as a
+    # status-less openai.APIError. Match their body, but never retry a 4xx request.
+    if isinstance(exc, (anthropic.APIStatusError, openai.APIError)) and not (
             isinstance(status, int) and 400 <= status < 500):
         return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
     return False
@@ -420,7 +424,7 @@ def llm_call(
             with client.messages.stream(**kwargs) as stream:
                 message = check_response(stream.get_final_message(), model=model)
                 return response_text(message)
-        except anthropic.APIStatusError as exc:
+        except (anthropic.APIStatusError, openai.APIError) as exc:
             # A content-filter block is one item's problem, so callers skip it. Every other API
             # error, including a 400 for low credit, still stops the run (#53).
             if any(t in str(exc).lower() for t in ("content filter", "blocked by content")):
