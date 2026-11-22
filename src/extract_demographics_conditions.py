@@ -20,8 +20,8 @@ from import_posts import DELETED_USER_ID
 from patientpunk._utils import (
     LLMContentFilteredError,
     LLMResponseError,
-    parse_json_response,
     self_reported_age,
+    strip_markdown_fences,
     wrap_untrusted_text,
 )
 from patientpunk.db import _bucketize_age
@@ -114,27 +114,40 @@ def _normalize_demographics(result: dict) -> dict:
     }
 
 
+def _condition_name(condition: object) -> str:
+    name = condition.get("condition_name") if isinstance(condition, dict) else condition
+    return name.strip() if isinstance(name, str) else ""
+
+
+def _parse_reply(raw: str) -> dict:
+    try:
+        result = json.loads(strip_markdown_fences(raw))
+    except ValueError as exc:
+        raise LLMParseError("Expected a demographics JSON object") from exc
+    if not isinstance(result, dict) or RESPONSE_FIELDS.isdisjoint(result):
+        raise LLMParseError("Expected a demographics JSON object")
+
+    conditions = result.get("conditions")
+    if conditions is None:
+        conditions = []
+    if not isinstance(conditions, list) or any(not _condition_name(item) for item in conditions):
+        raise LLMParseError("Expected a list of named conditions")
+    return {**_normalize_demographics(result), "conditions": conditions}
+
+
 def extract_demographics(client, text: str) -> dict:
     """Read demographics and conditions from one author's prepared text."""
     prompt = DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text)
     for attempt, temperature in enumerate(TEMPERATURES, start=1):
         try:
             raw = llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature)
-            result = parse_json_response(raw)
-            if not isinstance(result, dict) or RESPONSE_FIELDS.isdisjoint(result):
-                raise LLMParseError("Expected a demographics JSON object")
+            return _parse_reply(raw)
         except LLMContentFilteredError:
             raise
         except (LLMParseError, LLMResponseError):
             if attempt == len(TEMPERATURES):
                 raise
             log.info("Unreadable demographics reply (%d/%d), retrying", attempt, len(TEMPERATURES))
-        else:
-            conditions = result.get("conditions")
-            return {
-                **_normalize_demographics(result),
-                "conditions": conditions if isinstance(conditions, list) else [],
-            }
     raise AssertionError("Unreachable")
 
 
@@ -179,17 +192,13 @@ def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> 
 
     conditions_written = 0
     for condition in result["conditions"]:
-        if isinstance(condition, dict):
-            name, kind = condition.get("condition_name"), condition.get("condition_type")
-        else:
-            name, kind = condition, None
-        if not isinstance(name, str) or not name.strip():
-            continue
+        name = _condition_name(condition).lower()
+        kind = condition.get("condition_type") if isinstance(condition, dict) else None
         kind = kind.strip().lower() if isinstance(kind, str) else None
         conn.execute(
             "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (run_id, user_id, None, kind if kind in ("illness", "symptom") else "illness", name.strip().lower(), None),
+            (run_id, user_id, None, kind if kind in ("illness", "symptom") else "illness", name, None),
         )
         conditions_written += 1
     return conditions_written

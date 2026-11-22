@@ -145,7 +145,19 @@ def test_unreadable_reply_can_recover_at_last_temperature(monkeypatch):
     assert len({prompt for prompt, _ in calls}) == 1
 
 
-def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(db, monkeypatch, caplog):
+@pytest.mark.parametrize(
+    "unreadable_reply",
+    [
+        '{"error": "private reply text"}',
+        '{"conditions": {"error": "private reply text"}}',
+        '{"conditions": [{}]}',
+        'Here is the result: [{"age": null, "conditions": []}]',
+    ],
+    ids=["unknown-fields", "wrong-conditions-type", "malformed-condition", "wrapped-array"],
+)
+def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
+    db, monkeypatch, caplog, unreadable_reply,
+):
     conn, path = db
     users = ("empty", "filtered", "transient", "unreadable")
     add_posts(conn, [(user, user, 1, None, user) for user in users])
@@ -168,7 +180,7 @@ def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(db
             raise LLMContentFilteredError("filtered")
         if user == "transient":
             raise httpx.ReadTimeout("request timed out")
-        return empty_reply if user == "empty" else '{"error": "private reply text"}'
+        return empty_reply if user == "empty" else unreadable_reply
 
     monkeypatch.setattr(demographics, "llm_call", stub_call)
     with caplog.at_level("INFO", logger="pipeline"):
