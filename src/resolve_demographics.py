@@ -22,17 +22,26 @@ def _years_between(start: int, end: int) -> int:
     return b.year - a.year - ((b.month, b.day) < (a.month, a.day))
 
 
-_DECADE = re.compile(r"\b(early|mid|late)?[\s-]*(\d)0\s*'?s\b")
-_RANGE = re.compile(r"(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})")
+# Dashes and apostrophes as they arrive from phones and pasted text, made plain before matching.
+_PLAIN = str.maketrans({"–": "-", "—": "-", "‐": "-", "‑": "-", "’": "'", "‘": "'"})
+_LEAD = re.compile(r"^(?:i'?m|i am|in my|my|about|around|aged?|~)\s*")
+_UNITS = re.compile(r"(?<=\d)\s*(?:years?\s+old|years?|yrs?|y/?o)\b")
+_RANGE = re.compile(r"(\d{1,3})\s*(?:-|to)\s*(\d{1,3})")
+_DECADE_RANGE = re.compile(r"(\d)0\s*'?s?\s*(?:-|to)\s*(\d)0\s*'?s")  # "20s-30s", "20-30s"
+_DECADE = re.compile(r"(early|mid|late)?[\s-]*(\d)0\s*'?s")
 # Where in its decade each phrase points: early = lower half, late = upper half, mid or none = the centre.
 _DECADE_PART = {"early": 2.5, "mid": 5.0, "late": 7.5}
 
 
 def _estimate(value: str) -> tuple[float, bool] | None:
     """(age in years, estimated) from what the author wrote: a number as given; a range or decade at
-    its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s" -> 37.5).
-    None when there is no age in it."""
-    text = value.strip().lower()
+    its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s" -> 37.5,
+    "20s-30s" -> 30). The whole value must be the age, give or take "in my", "~" or "years old";
+    an open-ended "65+" or "60s+" has no midpoint. None when there is no age in it."""
+    text = value.strip().lower().translate(_PLAIN)
+    if text.endswith("+"):
+        return None
+    text = _UNITS.sub("", _LEAD.sub("", text)).strip()
     try:
         number = float(text)
         return (number, False) if math.isfinite(number) else None
@@ -41,7 +50,10 @@ def _estimate(value: str) -> tuple[float, bool] | None:
     if m := _RANGE.fullmatch(text):
         low, high = int(m[1]), int(m[2])
         return ((low + high) / 2, True) if low <= high else None
-    if m := _DECADE.search(text):
+    if m := _DECADE_RANGE.fullmatch(text):
+        low, high = int(m[1]) * 10, int(m[2]) * 10 + 10  # "20s-30s" spans 20 to 40
+        return ((low + high) / 2, True) if low < high else None
+    if m := _DECADE.fullmatch(text):
         return int(m[2]) * 10 + _DECADE_PART.get(m[1], 5.0), True
     return None
 
