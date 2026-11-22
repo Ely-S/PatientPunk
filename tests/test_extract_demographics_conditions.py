@@ -144,6 +144,7 @@ def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
         ("sex", "unknown", None), ("sex", ["M"], None),
         ("country", "Trinidad and Tobago", "Trinidad and Tobago"), ("country", "US or Canada", None),
         ("state", "Texas / Ohio", None), ("state", "Texas, Ohio", None), ("state", "Washington, D.C.", "Washington, D.C."),
+        ("country", "Korea, Republic of", "Korea, Republic of"), ("country", "USA, Canada", None),
         ("city", "Portland", "Portland"),
         ("city", "Austin, TX", "Austin, TX"), ("city", "Austin or Dallas", None), ("city", "", None),
     ],
@@ -536,3 +537,9 @@ def test_writes_after_another_connection_commits(db, monkeypatch):
     demographics.run_demographics(path)
 
     assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)
+
+
+def test_unnamed_conditions_are_dropped_and_the_rest_kept():
+    raw = '{"conditions": [{"condition_name": "ME/CFS"}, {"condition_name": null}, {}, ""]}'
+    assert demographics.parse_conditions(raw) == [("me/cfs", "illness")]
+
