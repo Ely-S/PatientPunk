@@ -62,6 +62,7 @@ def test_age_advances_to_the_reference_date(conn):
     read(conn, r, "p1", age="29"), read(conn, r, "p2")
     assert resolve_profiles(conn, r)["reference_date"] == ts(2026)
     assert profile(conn, "a") == ("30s", None, None)
+    assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31.0,)
 
 
 def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
@@ -152,16 +153,19 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     assert {"post_runs", "demographic_claims", "demographic_claims_latest"} <= names
 
 
-@pytest.mark.parametrize("stated, expected", [
-    ("34.0", "30s"), ("mid-30s", "30s"), ("early 40s", "40s"), ("thirty-ish", None), ("1e3", None), ("", None),
-    ("inf", None), ("1e400", None), ("9", None), ("100", None), ("-5", None),
+@pytest.mark.parametrize("stated, bucket, age", [
+    ("34.0", "30s", 34.0), ("mid-30s", "30s", 35.0), ("early 40s", "40s", 42.5), ("late 30s", "30s", 37.5),
+    ("25-34", "20s", 29.5), ("20s-30s", "30s", 30.0), ("early–30s", "30s", 32.5), ("34 years old", "30s", 34.0),
+    ("60s+", None, None),
+    ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
+    ("inf", None, None), ("1e400", None, None), ("9", None, None), ("100", None, None), ("-5", None, None),
 ])
-def test_ages_the_model_may_write_never_crash(conn, stated, expected):
+def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
     post(conn, "p1", "a", 2026)
     r = run(conn)
     read(conn, r, "p1", age=stated)
     resolve_profiles(conn, r)
-    assert profile(conn, "a")[0] == expected
+    assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (bucket, age)
 
 
 def test_an_unparseable_age_does_not_hide_an_earlier_one(conn):
@@ -260,3 +264,18 @@ def test_posts_without_a_date_still_resolve(conn):
 def test_only_a_demographics_run_can_hold_profiles(conn):
     with pytest.raises(ValueError, match="not a demographics run"):
         resolve_profiles(conn, register_run(conn, "conditions", {}))
+
+
+def test_a_decade_phrase_advances_from_its_midpoint(conn):
+    post(conn, "p1", "a", 2016), post(conn, "p2", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 in 2026
+    resolve_profiles(conn, r)
+    assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == ("40s", 47.5)
+
+
+def test_a_decade_and_an_exact_age_from_the_same_year_agree_after_advancing(conn):
+    post(conn, "p1", "a", 2016), post(conn, "p2", "a", 2016), post(conn, "p3", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="mid-30s"), read(conn, r, "p2", age="34")
+    assert resolve_profiles(conn, r)["disagreements"] == {}

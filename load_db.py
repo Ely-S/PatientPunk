@@ -90,7 +90,7 @@ def build_unified(conn: sqlite3.Connection, records_csv: Path) -> int:
         print("  ! no records.csv author_hash matches a user in user_profiles_latest; demo_* columns are empty")
     demo_df = pd.DataFrame(
         [{"author_hash": user, **{f"demo_{k}": v for k, v in p.items()}} for user, p in profiles.items()],
-        columns=["author_hash", "demo_age_bucket", "demo_sex", "demo_location"],
+        columns=["author_hash", "demo_age_bucket", "demo_age", "demo_sex", "demo_location"],
     )
     uni = uni.merge(demo_df, on="author_hash", how="left")
 

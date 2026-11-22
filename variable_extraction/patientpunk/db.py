@@ -99,6 +99,9 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
     conn.executescript(ddl_idempotent)
+    # A column added to a table after databases with that table existed: CREATE TABLE IF NOT EXISTS skips it.
+    if "age" not in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}:
+        conn.execute("ALTER TABLE user_profiles ADD COLUMN age REAL")
     conn.commit()
 
 
@@ -269,12 +272,16 @@ def _bucketize_age(raw: str | None) -> str | None:
 
 
 def latest_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
-    """Each user's current profile from user_profiles_latest: {user_id: {age_bucket, sex, location}}."""
-    return {
-        user: {"age_bucket": age or "", "sex": sex or "", "location": loc or ""}
-        for user, age, sex, loc in conn.execute(
-            "SELECT user_id, age_bucket, sex, location FROM user_profiles_latest")
-    }
+    """Each user's current profile from user_profiles_latest: {user_id: {age, age_bucket, sex, location}},
+    as strings, "" where empty. ``age`` is also "" on a database whose schema predates that column."""
+    cursor = conn.execute("SELECT * FROM user_profiles_latest")
+    columns = [d[0] for d in cursor.description]
+    profiles = {}
+    for values in cursor:
+        row = dict(zip(columns, values))
+        profiles[row["user_id"]] = {
+            k: "" if row.get(k) is None else str(row[k]) for k in ("age", "age_bucket", "sex", "location")}
+    return profiles
 
 
 # ── Query ──────────────────────────────────────────────────────────────────────

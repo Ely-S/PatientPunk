@@ -81,11 +81,13 @@ def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",
 
 def add_profiles(patients: dict, fields: list[str], profiles: dict) -> list[str]:
     """Add each patient's current profile (``db.latest_profiles``) as demo_* fields."""
+    demo = ("age_bucket", "sex", "location")
     for pid, feats in patients.items():
-        for k, v in profiles.get(pid, {}).items():
-            if v:
-                feats[f"demo_{k}"] = {v.lower()}
-    return fields + ["demo_age_bucket", "demo_sex", "demo_location"]
+        profile = profiles.get(pid, {})
+        for k in demo:
+            if profile.get(k):
+                feats[f"demo_{k}"] = {profile[k].lower()}
+    return fields + [f"demo_{k}" for k in demo]
 
 
 def field_coverage(patients: dict, fields: list[str]) -> dict[str, float]:
