@@ -131,14 +131,17 @@ def parse_claims(raw: str) -> dict[str, tuple[str, str]]:
     return claims
 
 
-def read_post(client, text: str) -> dict[str, tuple[str, str]]:
+BLOCKED = object()  # a read's result when the content filter blocks the call
+
+
+def read_post(client, text: str) -> dict[str, tuple[str, str]] | object:
     try:
         return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), parse_claims)
     except LLMContentFilteredError:
         # The filter blocks the same post every time, so retrying would leave it unread, and its
-        # author's profile frozen, for good. It is recorded as read with no claims instead.
-        log.warning("Content filter blocked a post; recording it as read with no claims")
-        return {}
+        # author's profile frozen, for good. It is recorded as read, keeping its earlier claims.
+        log.warning("Content filter blocked a post; recording it as read and keeping its earlier claims")
+        return BLOCKED
 
 
 # ── Per-user conditions ──────────────────────────────────────────────────────
@@ -256,6 +259,13 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
     for n, ((user_id, post_id), claims) in enumerate(_in_parallel(client, jobs(), read_post), start=1):
         if claims is None:
             counts["posts_failed"] += 1
+        elif claims is BLOCKED:
+            # A block says nothing about what the post states, so what an earlier read found still
+            # stands: its claims are carried forward under this run (none on a first read).
+            earlier = conn.execute(
+                "SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
+            record(post_id, {field: (value, evidence) for field, value, evidence in earlier})
+            counts["posts_blocked"] += 1
         else:
             record(post_id, claims)
         if n % COMMIT_EVERY == 0:
@@ -335,7 +345,8 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
             since = run_id
         log.info("Extraction run %s%s: %s", run_id, " (rereading every post)" if reread else "",
                  _plan(conn, since, limit))
-        counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
+        counts = {"posts_read": 0, "posts_failed": 0, "posts_blocked": 0, "claims": 0, "conditions": 0,
+                  "conditions_failed": 0}
 
         read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
         _read_conditions(client, conn, reader, run_id, set(read_users), counts)
