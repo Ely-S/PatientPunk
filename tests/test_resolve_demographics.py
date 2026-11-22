@@ -284,3 +284,12 @@ def test_a_decade_and_an_exact_age_from_the_same_year_agree_after_advancing(conn
     r = run(conn)
     read(conn, r, "p1", age="mid-30s"), read(conn, r, "p2", age="34")
     assert resolve_profiles(conn, r)["disagreements"] == {}
+
+
+def test_sex_claims_that_normalize_alike_agree(conn):
+    r = run(conn)
+    post(conn, "p1", "a", 2024)
+    post(conn, "p2", "a", 2025)
+    read(conn, r, "p1", sex="F")
+    read(conn, r, "p2", sex="female")
+    assert resolve_profiles(conn, r)["disagreements"] == {}

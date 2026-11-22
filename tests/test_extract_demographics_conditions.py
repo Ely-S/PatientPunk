@@ -143,7 +143,8 @@ def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
         ("sex", "F", "F"), ("sex", "non-binary | female", "non-binary | female"), ("sex", "trans man", "trans man"),
         ("sex", "unknown", None), ("sex", ["M"], None),
         ("country", "Trinidad and Tobago", "Trinidad and Tobago"), ("country", "US or Canada", None),
-        ("state", "Texas / Ohio", None), ("city", "Portland", "Portland"), ("city", "", None),
+        ("state", "Texas / Ohio", None), ("state", "Texas, Ohio", None), ("city", "Portland", "Portland"),
+        ("city", "Austin, TX", "Austin, TX"), ("city", "Austin or Dallas", None), ("city", "", None),
     ],
 )
 def test_checks_each_claim_before_writing_it(db, monkeypatch, field, value, stored):
@@ -170,7 +171,8 @@ def test_a_value_without_a_quote_is_not_a_claim(db, monkeypatch):
 
 @pytest.mark.parametrize(
     ("stated", "sex"),
-    [("non-binary | female", "non-binary"), ("female | suspected intersex", "female"),
+    [("non-binary | female", "non-binary"), ("female, non-binary", "non-binary"), ("non-binary and female", "non-binary"),
+     ("non-binary/female", "non-binary"), ("female | suspected intersex", "female"),
      ("Man", "male"), ("trans man", None), ("female | male", None)],
 )
 def test_multi_value_sex_is_kept_and_normalized_by_rule(db, monkeypatch, stated, sex):
@@ -247,15 +249,55 @@ def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, ca
         stats = demographics.run_demographics(path, reread=True)
 
     assert [t for kind, text, t in calls if kind == "post" and text == "unreadable"] == [0.0, 0.7, 1.0]
-    assert stats["posts_failed"] == 3 and stats["failed_users"] == 3
+    assert stats["posts_failed"] == 2 and stats["failed_users"] == 2
     assert "private reply text" not in caplog.text
-    # The empty reread retracts the age; the failed users keep theirs, and their posts stay unread.
-    assert profile(conn, "empty")[:2] == (None, None)
-    assert {u: profile(conn, u)[0] for u in users[1:]} == {u: "30s" for u in users[1:]}
+    # An empty reread retracts the age, and so does a filtered one: the filter would block it every
+    # time, so it is read with no claims. The failed users keep theirs, and their posts stay unread.
+    assert {u: profile(conn, u)[0] for u in users} == {
+        "empty": None, "filtered": None, "transient": "30s", "unreadable": "30s"}
     calls = stub(monkeypatch, post=lambda text: {"age": claim(41)})
     demographics.run_demographics(path)
-    assert sorted(posts_read(conn, calls)) == ["filtered", "transient", "unreadable"]
-    assert {u: profile(conn, u)[0] for u in users[1:]} == {u: "40s" for u in users[1:]}
+    assert sorted(posts_read(conn, calls)) == ["transient", "unreadable"]
+    assert {u: profile(conn, u)[0] for u in ("transient", "unreadable")} == {"transient": "40s", "unreadable": "40s"}
+
+
+def test_a_post_the_filter_always_blocks_does_not_freeze_the_profile(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("blocked", "a", 1, None, "graphic text"), ("ok", "a", 2, None, "I'm 34")])
+    replies = {"graphic text": LLMContentFilteredError("blocked"), "I'm 34": {"age": claim(34)}}
+    calls = stub(monkeypatch, post=replies.get)
+
+    demographics.run_demographics(path)
+    demographics.run_demographics(path)
+
+    assert profile(conn, "a")[0] == "30s"
+    assert [text for kind, text, _ in calls if kind == "post"].count("graphic text") == 1
+
+
+def test_a_user_with_an_unread_post_keeps_their_profile_until_it_is_read(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("b1", "b", 1, None, "b"), ("z1", "z", 1, None, "I'm 34")])
+    stub(monkeypatch, post=lambda text: {"age": claim(34)} if text == "I'm 34" else NOTHING)
+    demographics.run_demographics(path)
+    # A reread retracts z1's age while z2 fails, so z keeps 30s with z2 unread.
+    add_posts(conn, [("z2", "z", 2, None, "now 41")])
+    timeout = openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
+    stub(monkeypatch, post=lambda text: timeout if text == "now 41" else NOTHING)
+    demographics.run_demographics(path, reread=True)
+    assert profile(conn, "z")[0] == "30s"
+    add_posts(conn, [("b2", "b", 3, None, "b again")])
+    calls = stub(monkeypatch)
+
+    demographics.run_demographics(path, limit=1)  # reads user b only
+
+    assert posts_read(conn, calls) == ["b again"]
+    assert profile(conn, "z")[0] == "30s"  # not rebuilt from z's incomplete claims
+
+
+def test_reread_cannot_be_limited(db):
+    _, path = db
+    with pytest.raises(ValueError, match="--reread"):
+        demographics.run_demographics(path, reread=True, limit=1)
 
 
 def test_a_permanent_error_stops_the_run_and_sends_no_queued_posts(db, monkeypatch):

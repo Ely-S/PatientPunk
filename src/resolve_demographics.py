@@ -84,12 +84,16 @@ SEX_VALUES = {
 }
 
 
+# The prompt asks for " | " between values, but a reply may use other separators.
+_SEX_PARTS = re.compile(r"[|/,;&]|\band\b", re.IGNORECASE)
+
+
 def normalize_sex(stated: str) -> str | None:
     """female, male or non-binary from the author's words, which may hold several values (#214):
     non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
     ignored ("female | suspected intersex" -> female). None when no rule applies ("trans man",
     "female | male"); the words themselves stay in sex_stated."""
-    values = {SEX_VALUES.get(part.strip().casefold()) for part in stated.split("|")} - {None}
+    values = {SEX_VALUES.get(part.strip().casefold()) for part in _SEX_PARTS.split(stated)} - {None}
     if "non-binary" in values:
         return "non-binary"
     return values.pop() if len(values) == 1 else None
@@ -137,8 +141,10 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
                     city = None
                 place[f] = named[f][post_id]
         city = cities.get(post_id, city)
+    # "F" and "female" agree: sex is compared by its normalized value when it has one.
+    same = {"sex": lambda v: normalize_sex(v) or v.casefold()}
     disagree = {f for f, rows in by_field.items()
-                if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
+                if f != "age" and len({same.get(f, str.casefold)(v) for _, _, v in rows}) > 1}
     # Stated ages within a year agree (whole-year advancing can put the same age a year apart);
     # an estimate from a range or decade disagrees only when its decade differs.
     stated = [a for a, estimated in ages if not estimated]

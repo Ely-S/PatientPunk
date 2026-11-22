@@ -46,7 +46,7 @@ COMMIT_EVERY = 200
 TEMPERATURES = (0.0, 0.7, 1.0)
 REMOVED_BODIES = {"[removed]", "[deleted]"}
 CLAIM_FIELDS = ("age", "sex", "country", "state", "city")
-MULTIPLE_PLACES = re.compile(r"[,/|;\r\n]|\s+or\s+", re.IGNORECASE)
+MULTIPLE_PLACES = re.compile(r"[/|;\r\n]|\s+or\s+", re.IGNORECASE)
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
 
 
@@ -103,7 +103,10 @@ def _claim_value(field: str, value: object) -> str | None:
         return text if stated_age(text) is not None else None  # 10-99, or a range or decade within it
     if field == "sex":
         return text  # every stated value kept, "non-binary | female" included (#214)
-    return None if MULTIPLE_PLACES.search(text) else text  # one country, state or city
+    # One place. A city may carry its region after a comma ("Austin, TX"); a country or state may not.
+    if MULTIPLE_PLACES.search(text) or (field != "city" and "," in text):
+        return None
+    return text
 
 
 def parse_claims(raw: str) -> dict[str, tuple[str, str]]:
@@ -126,7 +129,13 @@ def parse_claims(raw: str) -> dict[str, tuple[str, str]]:
 
 
 def read_post(client, text: str) -> dict[str, tuple[str, str]]:
-    return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), parse_claims)
+    try:
+        return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), parse_claims)
+    except LLMContentFilteredError:
+        # The filter blocks the same post every time, so retrying would leave it unread, and its
+        # author's profile frozen, for good. It is recorded as read with no claims instead.
+        log.warning("Content filter blocked a post; recording it as read with no claims")
+        return {}
 
 
 # ── Per-user conditions ──────────────────────────────────────────────────────
@@ -188,17 +197,20 @@ def _newest_reread(conn) -> int:
     return run_id
 
 
-def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> tuple[list[str], set[str]]:
-    """Read each post that no demographics run has read since the newest --reread run (this run, with
-    --reread), and store its claims. A successful read gets a post_runs row; a failed one doesn't, so
-    the next run reads it again. Returns the users read and those with a failed post."""
+# Posts no demographics run has read since the newest --reread run (this run, with --reread).
+UNREAD_POSTS = (
+    "FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
+    "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
+    "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)")
+
+
+def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> list[str]:
+    """Read each unread post and store its claims. A successful read gets a post_runs row; a failed
+    one doesn't, so the next run reads it again. Returns the users read."""
     rows = reader.execute(
-        "SELECT p.user_id, p.post_id, p.title, p.body_text FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
-        "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
-        "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)"
-        " ORDER BY p.user_id, p.post_id",
+        f"SELECT p.user_id, p.post_id, p.title, p.body_text {UNREAD_POSTS} ORDER BY p.user_id, p.post_id",
         (DELETED_USER_ID, _newest_reread(conn)))
-    read_users, failed_users = [], set()
+    read_users = []
 
     def record(post_id: str, claims: dict) -> None:
         conn.execute("INSERT INTO post_runs (run_id, post_id) VALUES (?, ?)", (run_id, post_id))
@@ -219,7 +231,6 @@ def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> 
 
     for n, ((user_id, post_id), claims) in enumerate(_in_parallel(client, jobs(), read_post), start=1):
         if claims is None:
-            failed_users.add(user_id)
             counts["posts_failed"] += 1
         else:
             record(post_id, claims)
@@ -227,12 +238,19 @@ def _read_posts(client, conn, reader, run_id: int, limit: int, counts: dict) -> 
             conn.commit()
             log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])
     conn.commit()
-    return read_users, failed_users
+    return read_users
+
+
+def _users_with_unread_posts(conn) -> set[str]:
+    """Users whose claims are incomplete: a post failed, or a --limit run hasn't reached it yet."""
+    return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}",
+                                        (DELETED_USER_ID, _newest_reread(conn)))}
 
 
 def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts: dict) -> None:
     """One conditions call per user in ``users``, over their newest posts up to MAX_USER_CHARS. A failed
-    call writes nothing for that user."""
+    call writes nothing for that user, and nothing schedules it again: the next call for that user
+    comes when a run reads one of their posts. (Conditions move per post later, #195.)"""
     histories = (
         (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
         for user_id, posts in groupby(reader.execute(
@@ -253,6 +271,10 @@ def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts:
 def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> dict:
     """Read new posts (every post with ``reread``) into claims, extract conditions for the users read,
     and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts."""
+    if reread and limit:
+        # A limited reread would become the newest reread checkpoint, so the next ordinary run would
+        # reread every post the limit skipped: a paid full-corpus run nobody asked for.
+        raise ValueError("--reread reads every post; it can't be combined with --limit")
     client = get_client()
     # Posts stream on a second connection: a long-lived cursor on the writing connection would fail
     # with SQLITE_BUSY_SNAPSHOT once another process commits.
@@ -272,9 +294,11 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
         log.info("Extraction run %s%s", run_id, " (rereading every post)" if reread else "")
         counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
 
-        read_users, failed_users = _read_posts(client, conn, reader, run_id, limit, counts)
+        read_users = _read_posts(client, conn, reader, run_id, limit, counts)
         _read_conditions(client, conn, reader, run_id, set(read_users), counts)
         # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
+        # Users with unread posts keep their previous profile until all their posts are read.
+        failed_users = _users_with_unread_posts(conn)
         stats = resolve_profiles(conn, run_id, failed_users)  # commits
         conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), run_id))
         conn.commit()
@@ -295,6 +319,8 @@ def main():
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be nonnegative")
+    if args.reread and args.limit:
+        parser.error("--reread reads every post; it can't be combined with --limit")
     run_demographics(args.db, limit=args.limit, reread=args.reread)
 
 
