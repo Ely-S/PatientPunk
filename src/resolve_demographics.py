@@ -59,14 +59,15 @@ def _estimate(value: str) -> tuple[float, bool] | None:
 
 
 def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
-    """(age, estimated) advanced to the reference date; None when unparseable or out of range."""
+    """(age, estimated): a stated age (10-99, #206) advanced to the reference date; a range or decade
+    is advanced from its midpoint. None when unparseable or out of range."""
     stated = _estimate(value)
-    if stated is None:
+    if stated is None or not 10 <= stated[0] <= 99:
         return None
     age, estimated = stated
     if date is not None and reference is not None:
         age += _years_between(date, reference)
-    return (age, estimated) if _bucketize_age(str(age)) else None
+    return age, estimated
 
 
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
@@ -74,25 +75,38 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     (age_bucket, age, sex, location) and the fields whose claims disagree. Text values are compared
     ignoring case; sex is stored lowercase."""
     by_field = defaultdict(list)
-    countries = {}
     for date, post_id, field, value in claims:
         value = value.strip()
+        if not value:
+            continue  # a blank claim states nothing, so it can't replace an earlier value
         by_field[field].append((date, post_id, value.lower() if field == "sex" else value))
-        if field == "country":
-            countries[post_id] = value.casefold()
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = ages[-1][0] if ages else None
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     sex = by_field["sex"][-1][2] if by_field["sex"] else None
+    # The latest country, plus the latest state from that country (#206). A state from a post that
+    # names no country belongs to the nearest country named before it, or else the first named after
+    # it, so US, then "Texas", then UK is "UK": an old state never pairs with a new country.
+    order = {p: i for i, p in enumerate(dict.fromkeys(p for _, p, _, _ in claims))}
+    named = [(order[p], v.casefold()) for _, p, v in by_field["country"]]
     country = by_field["country"][-1][2] if by_field["country"] else None
-    key = country.casefold() if country else None
-    states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
+
+    def state_country(post_id):
+        i = order[post_id]
+        before = [c for j, c in named if j <= i]
+        after = [c for j, c in named if j > i]
+        return before[-1] if before else (after[0] if after else None)
+
+    states = [v for _, p, v in by_field["state"] if state_country(p) in (country and country.casefold(), None)]
     location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
-    # Two different stated numbers disagree; an estimate disagrees only when its decade differs.
-    stated = {a for a, estimated in ages if not estimated}
-    if len(stated) > 1 or len({_bucketize_age(str(a)) for a, _ in ages}) > 1:
+    # Stated ages within a year agree (whole-year advancing can put the same age a year apart);
+    # an estimate from a range or decade disagrees only when its decade differs.
+    stated = [a for a, estimated in ages if not estimated]
+    decades = {_bucketize_age(str(a)) for a, estimated in ages if estimated}
+    if ((stated and max(stated) - min(stated) > 1) or len(decades) > 1
+            or (decades and stated and not decades <= {_bucketize_age(str(a)) for a in stated})):
         disagree.add("age")
     return (age_bucket, age, sex, location), disagree
 
@@ -107,16 +121,20 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     if not has_age or not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
         apply_schema(conn)  # a database built before the claim tables or the age column; this commits
+    run_type = conn.execute("SELECT extraction_type FROM extraction_runs WHERE run_id = ?", (run_id,)).fetchone()
+    if run_type != ("demographics",):
+        raise ValueError(f"run {run_id} is not a demographics run; user_profiles_latest would ignore its rows")
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
     claims = defaultdict(list)
     for user, *claim in conn.execute(
-            "SELECT c.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
+            "SELECT p.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
             "JOIN posts p ON p.post_id = c.post_id "
             "ORDER BY p.post_date IS NOT NULL, p.post_date, c.post_id"):
         claims[user].append(tuple(claim))
     read = {u for (u,) in conn.execute(
-        "SELECT DISTINCT p.user_id FROM post_runs pr JOIN posts p ON p.post_id = pr.post_id "
-        "JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics'")}
+        "SELECT DISTINCT p.user_id FROM posts p WHERE EXISTS (SELECT 1 FROM post_runs pr "
+        "JOIN extraction_runs r ON r.run_id = pr.run_id "
+        "WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics')")}
     current = latest_profiles(conn)
 
     disagreements, rows = Counter(), []

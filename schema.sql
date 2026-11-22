@@ -182,18 +182,16 @@ CREATE TABLE post_runs (
 );
 CREATE INDEX idx_pr_post ON post_runs(post_id);
 
--- One value a post states about its author, with the words it came from. Ages are kept as
--- stated ("29"), not as decades; src/resolve_demographics.py turns claims into user_profiles rows.
+-- One value a post states about its author (posts.user_id), with the words it came from. Ages are
+-- kept as stated ("29"), not as decades; src/resolve_demographics.py turns claims into user_profiles rows.
 CREATE TABLE demographic_claims (
     run_id   INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     post_id  TEXT NOT NULL REFERENCES posts(post_id),
-    user_id  TEXT NOT NULL REFERENCES users(user_id),
     field    TEXT NOT NULL CHECK (field IN ('age', 'sex', 'country', 'state')),
     value    TEXT NOT NULL,
     evidence TEXT NOT NULL,
     PRIMARY KEY (run_id, post_id, field)
 );
-CREATE INDEX idx_dc_user ON demographic_claims(user_id);
 
 -- Each post's claims from its newest demographics run (post_runs); none when that run found nothing.
 CREATE VIEW IF NOT EXISTS demographic_claims_latest AS

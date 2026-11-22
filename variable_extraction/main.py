@@ -787,11 +787,16 @@ def _cmd_cluster_prep(args: argparse.Namespace) -> None:
     if not patients:
         sys.exit(f"no patients found (is --key '{args.key}' a column in {records.name}?)")
     if args.db:
+        if not args.db.is_file():
+            sys.exit(f"{args.db}: no such database file")
         try:
-            with closing(sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)) as conn:
+            with closing(sqlite3.connect(f"{args.db.resolve().as_uri()}?mode=ro", uri=True)) as conn:
                 profiles = latest_profiles(conn)
             all_fields = add_profiles(patients, all_fields, profiles)
-            if not profiles.keys() & patients.keys():
+            if not profiles:
+                print(f"  ! no profiles in user_profiles_latest in {args.db}; demographic features are empty"
+                      " (run src/extract_demographics_conditions.py on this database)")
+            elif not profiles.keys() & patients.keys():
                 print(f"  ! no --key '{args.key}' value matches a user_id in {args.db}; demographic features are empty")
         except sqlite3.Error as exc:
             sys.exit(f"{args.db}: {exc} (older database? apply init_db to a writable copy; see README)")

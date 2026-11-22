@@ -33,10 +33,9 @@ def post(conn, post_id: str, user: str, year: int) -> None:
 
 def read(conn, run_id: int, post_id: str, **claims) -> None:
     """Record that ``run_id`` read ``post_id`` and found ``claims``."""
-    user = conn.execute("SELECT user_id FROM posts WHERE post_id = ?", (post_id,)).fetchone()[0]
     conn.execute("INSERT INTO post_runs VALUES (?, ?)", (run_id, post_id))
-    conn.executemany("INSERT INTO demographic_claims VALUES (?, ?, ?, ?, ?, 'quote')",
-                     [(run_id, post_id, user, field, value) for field, value in claims.items()])
+    conn.executemany("INSERT INTO demographic_claims VALUES (?, ?, ?, ?, 'quote')",
+                     [(run_id, post_id, field, value) for field, value in claims.items()])
 
 
 def profile(conn, user: str):
@@ -84,6 +83,12 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     ([{"country": "US", "state": "Texas"}, {"country": "US"}], "US / Texas"),
     ([{"state": "Texas"}, {"country": "US"}], "US / Texas"),
     ([{"country": "US", "state": "Texas"}, {"country": "UK"}], "UK"),
+    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], "UK"),
+    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], "US / Texas"),
+    ([{"state": "Texas"}], "Texas"),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], "US / Texas"),
+    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], "UK"),
+    ([{"country": "US", "state": "Texas"}, {"country": " "}], "US / Texas"),  # a blank claim states nothing
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
     r = run(conn)
@@ -153,6 +158,7 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     ("25-34", "20s", 29.5), ("20s-30s", "30s", 30.0), ("early–30s", "30s", 32.5), ("34 years old", "30s", 34.0),
     ("60s+", None, None),
     ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
+    ("inf", None, None), ("1e400", None, None), ("9", None, None), ("100", None, None), ("-5", None, None),
 ])
 def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
     post(conn, "p1", "a", 2026)
@@ -177,6 +183,14 @@ def test_a_decade_and_an_age_in_it_agree(conn):
     assert resolve_profiles(conn, r)["disagreements"] == {}
 
 
+def test_a_blank_claim_does_not_replace_an_earlier_value(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", sex="female"), read(conn, r, "p2", sex="")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+    assert profile(conn, "a") == (None, "female", None)
+
+
 def test_case_differences_are_not_disagreements(conn):
     post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
     r = run(conn)
@@ -193,3 +207,75 @@ def test_the_deleted_placeholder_never_gets_a_profile(conn):
     assert resolve_profiles(conn, r)["profiles_written"] == 1
     assert profile(conn, DELETED_USER_ID) is None
     assert profile(conn, "a") == (None, "female", None)
+
+
+def test_a_stated_age_is_checked_before_it_is_advanced(conn):
+    post(conn, "p1", "a", 2016), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="9")  # a child then; 19 now, but 9 is outside 10-99
+    resolve_profiles(conn, r)
+    assert profile(conn, "a") == (None, None, None)
+
+
+def test_the_same_age_a_year_apart_after_advancing_is_not_a_disagreement(conn):
+    for pid, d in [("p1", datetime(2024, 1, 2)), ("p2", datetime(2024, 12, 30)), ("p3", datetime(2026, 6, 1))]:
+        conn.execute("INSERT INTO posts (post_id, user_id, body_text, post_date, scraped_at) VALUES (?, ?, '', ?, 0)",
+                     (pid, "a" if pid != "p3" else "b", int(d.replace(tzinfo=timezone.utc).timestamp())))
+    r = run(conn)
+    read(conn, r, "p1", age="29"), read(conn, r, "p2", age="29")  # advance to 31 and 30
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+
+
+def test_text_fields_that_disagree_are_counted(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", sex="female", country="US", state="Texas"), read(conn, r, "p2", sex="male", country="UK")
+    assert resolve_profiles(conn, r)["disagreements"] == {"sex": 1, "country": 1}
+
+
+def test_the_reference_date_is_recorded_on_the_run(conn):
+    post(conn, "p1", "a", 2024), post(conn, "p2", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="30")
+    resolve_profiles(conn, r)
+    stored = conn.execute("SELECT json_extract(config, '$.reference_date') FROM extraction_runs WHERE run_id = ?",
+                          (r,)).fetchone()[0]
+    assert stored == ts(2026)
+
+
+def test_claims_from_other_run_types_are_ignored(conn):
+    post(conn, "p1", "a", 2026)
+    r1 = run(conn)
+    read(conn, r1, "p1", sex="female")
+    other = register_run(conn, "conditions", {})
+    read(conn, other, "p1", sex="male")  # newer, but not a demographics run
+    resolve_profiles(conn, run(conn))
+    assert profile(conn, "a") == (None, "female", None)
+
+
+def test_posts_without_a_date_still_resolve(conn):
+    conn.execute("INSERT INTO posts (post_id, user_id, body_text, post_date, scraped_at) VALUES ('p1', 'a', '', NULL, 0)")
+    r = run(conn)
+    read(conn, r, "p1", age="34")
+    assert resolve_profiles(conn, r)["reference_date"] is None
+    assert profile(conn, "a") == ("30s", None, None)
+
+
+def test_only_a_demographics_run_can_hold_profiles(conn):
+    with pytest.raises(ValueError, match="not a demographics run"):
+        resolve_profiles(conn, register_run(conn, "conditions", {}))
+
+
+def test_a_decade_phrase_advances_from_its_midpoint(conn):
+    post(conn, "p1", "a", 2016), post(conn, "p2", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 in 2026
+    resolve_profiles(conn, r)
+    assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == ("40s", 47.5)
+
+
+def test_a_decade_and_an_exact_age_from_the_same_year_agree_after_advancing(conn):
+    post(conn, "p1", "a", 2016), post(conn, "p2", "a", 2016), post(conn, "p3", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="mid-30s"), read(conn, r, "p2", age="34")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
