@@ -268,8 +268,9 @@ uv run python main.py run --schema schemas/covidlonghaulers_schema.json
 ```
 
 Writes `output/records.csv`, independent of `data/posts.db`. Demographics come
-only from Step 3a (`user_profiles_latest`); `records.csv`'s own `age`, `sex_gender`
-and location columns are not loaded into profiles, `variables`, `unified` or clusters.
+only from Step 3a (`user_profiles_latest`). This pipeline no longer extracts `age`, `sex_gender` or
+`location_country` (#195); in an older `records.csv` those columns are ignored, and `--resume` drops
+them from an older checkpoint.
 
 ### Step 4 — Build the unified analysis database
 

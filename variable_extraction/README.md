@@ -53,9 +53,10 @@ python main.py inspect --schema schemas/covidlonghaulers_schema.json
 
 Patient demographics (age, sex, location) for analysis come from the database
 extractor, `src/extract_demographics_conditions.py`, through the
-`user_profiles_latest` view (see the root README, Step 3a). This pipeline's own
-`age` / `sex_gender` / `location_country` columns are not loaded into profiles,
-the `variables` table, `unified` or `cluster-prep` features.
+`user_profiles_latest` view (see the root README, Step 3a). This pipeline no longer
+extracts `age`, `sex_gender` or `location_country` (#195). In an older `records.csv` those columns
+are not loaded into profiles, the `variables` table, `unified` or `cluster-prep` features, and
+`--resume` drops them from an older checkpoint, printing which fields it dropped.
 
 ### Full Pipeline (LLM extraction)
 
@@ -471,7 +472,7 @@ One row per user / subreddit post. Multi-value fields joined with `" | "`.
 Key columns:
 - `author_hash` — SHA-256 of the Reddit username (join key with Polina's pipeline)
 - `source_type` — `subreddit_post` or `user_history`
-- One column per schema field (`age`, `sex_gender`, `conditions`, ...)
+- One column per schema field (`conditions`, `medications`, ...)
 
 ### `output/codebook.csv`
 

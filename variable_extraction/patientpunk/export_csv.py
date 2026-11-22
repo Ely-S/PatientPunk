@@ -38,6 +38,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .db import drop_legacy_demographics
 from .phase import PhaseResult
 
 
@@ -179,6 +180,8 @@ def run_export_csv(
             raise FileNotFoundError(f"Input file not found: {path}")
         records = load_records(path)
         print(f"  Loaded {len(records):>5} records from {path.name}")
+        if dropped := drop_legacy_demographics(records):
+            print(f"  Dropped retired demographic fields (#195): {', '.join(sorted(dropped))}")
 
         for rec in records:
             key = record_key(rec)

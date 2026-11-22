@@ -63,10 +63,10 @@ from ._utils import (
     get_llm_client,
     parse_json_response,
     response_text,
-    self_reported_age,
     split_retry_batch,
     wrap_untrusted_text,
 )
+from .db import drop_legacy_demographics
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
 from .treatment_fields import (
@@ -134,9 +134,6 @@ HEALTH_SUBREDDITS = {
 # A field here but not there is extracted and undocumented; a field there but not
 # here is documented and never extracted. METHODS.md records how the set was chosen.
 BASE_FIELD_DESCRIPTIONS = {
-    "age": "The author's own current age in years, as a number. Not a child's, relative's or anyone else's age",
-    "sex_gender": "Biological sex or gender identity (e.g., female, male, non-binary)",
-    "location_country": "Country of residence",
     "conditions": "Medical diagnoses and conditions the patient has",
     "onset_trigger": "What triggered or preceded illness onset (infection, vaccine, surgery, etc.)",
     "illness_duration": "How long the patient has been ill overall",
@@ -341,12 +338,6 @@ VALUE FORMAT RULES:
 - Keep any stated dose or quantity intact: write "5 mg", "250 mcg", "0.5 ml", "5000 IU". If the text states a bare number without a unit, retain the number rather than discarding it; do not invent a missing unit.
 
 FIELD-SPECIFIC RULES:
-- age:
-  1. Extract only the author's own current age, as a whole number.
-  2. If the author gives different ages over time, use the most recent.
-  3. Do not extract a past age or anyone else's age: a child, partner, parent, or someone in the news. If the author states no current age of their own, return null.
-  Positive examples: "I'm 26" -> "26"; "I (33F)" -> "33"; "I'm 35" in an earlier post and "I just turned 36" in a later one -> "36".
-  Negative examples: "My wife is 36" -> null; "my 11yo son" -> null; "bitten when I was 8" -> null.
 - conditions: ONLY diagnosed medical conditions (POTS, ME/CFS, MCAS, long COVID, dysautonomia, depression). Symptoms belong in the six symptom-domain fields described below, never here.
 - misdiagnosis: A condition the patient was diagnosed with and later found to be wrong ("they said it was just anxiety", "diagnosed me with MS first"). Record the INCORRECT label only. A dismissal that names no condition ("doctors said it was in my head") is not a misdiagnosis -- leave it out.
 - dietary_interventions: Diets and food changes tried as treatment (low-histamine, low-oxalate, elimination diet, carnivore, gluten-free, fasting). A supplement is a medication, not a dietary intervention.
@@ -749,6 +740,9 @@ def process_corpus(
             meta = rec.get("record_meta", {})
             done_keys.add((meta.get("author_hash"), meta.get("post_id")))
         print(f"  Resuming - {len(records)} records already done, {len(done_keys)} keys loaded.\n")
+        if dropped := drop_legacy_demographics(records):
+            print(f"  Dropped retired demographic fields from the checkpoint (#195): "
+                  + ", ".join(f"{name} ({n} records)" for name, n in sorted(dropped.items())) + "\n")
 
     work_items = []
     if users_dir.exists():
@@ -971,15 +965,6 @@ def normalize_records(
             )
             if not route_data["values"]:
                 route_data["confidence"] = None
-
-    # Age must be a whole number from 10 to 99; anything else is dropped (#85).
-    for rec in records:
-        age_data = rec.get("fields", {}).get("age", {})
-        if age_data.get("values"):
-            age_data["values"] = [str(a) for v in age_data["values"]
-                                  if (a := self_reported_age(v)) is not None]
-            if not age_data["values"]:
-                age_data["confidence"] = None
 
     # Multi-field canonicalization: map LLM vocabulary drift to controlled labels.
     # Each field has a dict of {variant: canonical_form}. Values not in the dict

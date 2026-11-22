@@ -1,6 +1,14 @@
 """Prompts for per-post demographics (#206) and per-user conditions."""
 
-from patientpunk.qualitative_standards import DEMOGRAPHIC_AGE_RULES
+DEMOGRAPHIC_AGE_RULES = """
+Age rules:
+1. Only the author's own current age at the time of writing: a whole number when they give one,
+   otherwise the range or decade they state ("30s", "25-34").
+2. Ignore past ages ("when I was 8") and ages of other people, including children, partners,
+   relatives, and people in the news.
+Examples: "I'm 26" -> 26. "I (33F)" -> 33. "I'm in my 30s" -> "30s". "My wife is 36",
+"my 11yo son", and "bitten when I was 8" -> null.
+""".strip()
 
 POST_DEMOGRAPHICS_PROMPT = f"""\
 Below is one Reddit post or comment. Report ONLY what its author explicitly states about themselves.
