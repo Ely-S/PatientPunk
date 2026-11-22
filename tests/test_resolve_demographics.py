@@ -83,6 +83,10 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     ([{"country": "US", "state": "Texas"}, {"country": "US"}], "US / Texas"),
     ([{"state": "Texas"}, {"country": "US"}], "US / Texas"),
     ([{"country": "US", "state": "Texas"}, {"country": "UK"}], "UK"),
+    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], "UK"),
+    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], "US / Texas"),
+    ([{"state": "Texas"}], "Texas"),
+    ([{"country": "US", "state": "Texas"}, {"country": " "}], "US / Texas"),  # a blank claim states nothing
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
     r = run(conn)
@@ -171,6 +175,14 @@ def test_a_decade_and_an_age_in_it_agree(conn):
     r = run(conn)
     read(conn, r, "p1", age="mid-30s"), read(conn, r, "p2", age="34")
     assert resolve_profiles(conn, r)["disagreements"] == {}
+
+
+def test_a_blank_claim_does_not_replace_an_earlier_value(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", sex="female"), read(conn, r, "p2", sex="")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+    assert profile(conn, "a") == (None, "female", None)
 
 
 def test_case_differences_are_not_disagreements(conn):

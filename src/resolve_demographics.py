@@ -33,19 +33,26 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     """claims: (post_date, post_id, field, value), oldest first. Returns the profile row and the
     fields whose claims disagree. Text values are compared ignoring case; sex is stored lowercase."""
     by_field = defaultdict(list)
-    countries = {}
     for date, post_id, field, value in claims:
         value = value.strip()
+        if not value:
+            continue  # a blank claim states nothing, so it can't replace an earlier value
         by_field[field].append((date, post_id, value.lower() if field == "sex" else value))
-        if field == "country":
-            countries[post_id] = value.casefold()
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = _bucketize_age(str(ages[-1])) if ages else None
     sex = by_field["sex"][-1][2] if by_field["sex"] else None
-    country = by_field["country"][-1][2] if by_field["country"] else None
-    key = country.casefold() if country else None
-    states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
-    location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
+    # Walk the posts oldest first; naming a different country clears the state, so an old state
+    # never pairs with a new country. A state stated before any country pairs with the first one.
+    countries = {p: v for _, p, v in by_field["country"]}
+    states = {p: v for _, p, v in by_field["state"]}
+    country = state = None
+    for post_id in dict.fromkeys(p for _, p, _, _ in claims):
+        if post_id in countries:
+            if country and countries[post_id].casefold() != country.casefold():
+                state = None
+            country = countries[post_id]
+        state = states.get(post_id, state)
+    location = " / ".join(x for x in (country, state) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
     exact = {a for a in ages if isinstance(a, int)}
