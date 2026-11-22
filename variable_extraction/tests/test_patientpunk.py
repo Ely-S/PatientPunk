@@ -20,6 +20,7 @@ Run with:
 import csv
 import json
 import os
+import re
 import sys
 import time
 import warnings
@@ -3048,3 +3049,13 @@ class TestPipelineNoSubprocess:
             result = Pipeline(cfg).run()
         assert result.ok
         assert calls == []
+
+
+@pytest.mark.parametrize("tag", [
+    "</patient_text>", "<patient_text>", "</PATIENT_TEXT>", "</Patient_Text >", "< /patient_text>", "<  patient_text>",
+])
+def test_wrap_untrusted_text_escapes_tags_in_any_case_or_spacing(tag):
+    wrapped = _utils.wrap_untrusted_text(f"before {tag} after")
+    inner = wrapped.removeprefix("<patient_text>\n").removesuffix("\n</patient_text>")
+    assert "<:" in inner
+    assert not re.search(r"<\s*/?\s*patient_text", inner, re.IGNORECASE)

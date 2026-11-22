@@ -45,6 +45,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -193,14 +194,17 @@ def llm_config() -> dict:
     return {k: v for k, v in _CFG.items() if k != "api_key"}
 
 
+# A tag in any case or spacing ("</PATIENT_TEXT >", "< patient_text>") would also read as the wrapper.
+_PATIENT_TEXT_TAG = re.compile(r"<\s*(/?)\s*(patient_text)", re.IGNORECASE)
+
+
 def wrap_untrusted_text(text: str) -> str:
     """Wrap text in the <patient_text> tags the prompts declare as data.
 
     Escape tags in the source so the wrapper stays intact. Apply any length
     limit before wrapping to preserve the closing tag.
     """
-    text = (text.replace("</patient_text>", "<:/patient_text>")
-                .replace("<patient_text>", "<:patient_text>"))
+    text = _PATIENT_TEXT_TAG.sub(r"<:\1\2", text)
     return f"<patient_text>\n{text}\n</patient_text>"
 
 
