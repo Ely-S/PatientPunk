@@ -73,7 +73,9 @@ def _ask(client, prompt: str, parse: Callable[[str], object]):
     """parse(reply), re-asking at a higher temperature while the reply is unreadable."""
     for attempt, temperature in enumerate(TEMPERATURES, start=1):
         try:
-            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature))
+            # validate keeps an unreadable reply out of the cache, so a later run asks the model again.
+            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature,
+                                  validate=parse))
         except LLMContentFilteredError:
             raise
         except (LLMParseError, LLMResponseError):
@@ -198,19 +200,36 @@ def _in_parallel(client, jobs: Iterable[tuple], read: Callable) -> Iterator[tupl
                 pending[pool.submit(read, client, text)] = key
 
 
-def _reread_checkpoints(conn) -> tuple[int, int | None]:
-    """(since, unfinished): the run the newest finished --reread read from (0 if none), and, when a newer
-    --reread stopped before finishing, the run it read from. A reread's starting run is its own, or the
-    unfinished reread's it resumed (config.reread_since)."""
-    unfinished = None
-    for run_id, finished, since in conn.execute(
-            "SELECT run_id, finished_at IS NOT NULL, json_extract(config, '$.reread_since') FROM extraction_runs "
+def _reread_checkpoint(conn) -> tuple[int, int | None]:
+    """(checkpoint, stopped): the newest finished --reread run (0 if none), and a newer --reread run that
+    stopped before finishing, if any."""
+    stopped = None
+    for run_id, finished in conn.execute(
+            "SELECT run_id, finished_at IS NOT NULL FROM extraction_runs "
             "WHERE extraction_type = 'demographics' AND json_extract(config, '$.reread') ORDER BY run_id DESC"):
-        since = since or run_id
         if finished:
-            return since, unfinished
-        unfinished = unfinished or since
-    return 0, unfinished
+            return run_id, stopped
+        stopped = stopped or run_id
+    return 0, stopped
+
+
+def _plan(conn, since: int, limit: int) -> dict:
+    """What a run would send: unread posts and their users (the first ``limit`` users), conditions
+    checks for those users plus, without ``limit``, users still due from an earlier failed check, and a
+    rough input-token count (4 characters a token, prompts included). Posts with nothing to read are
+    counted, so it is an upper bound."""
+    users = conn.execute(
+        f"SELECT p.user_id, COUNT(*), SUM(LENGTH(COALESCE(p.title, '')) + LENGTH(COALESCE(p.body_text, ''))) "
+        f"{UNREAD_POSTS} GROUP BY p.user_id ORDER BY p.user_id", (DELETED_USER_ID, since)).fetchall()
+    users = users[:limit or None]
+    posts, chars = sum(n for _, n, _ in users), sum(c or 0 for _, _, c in users)
+    checks = {u for u, _, _ in users}
+    if not limit:
+        checks |= {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+    tokens = (chars + posts * len(POST_DEMOGRAPHICS_PROMPT)
+              + len(checks) * (len(CONDITIONS_PROMPT) + MAX_USER_CHARS)) // 4
+    return {"posts": posts, "users": len(users), "post_calls": posts, "conditions_calls": len(checks),
+            "approx_input_tokens": tokens}
 
 
 # Posts no demographics run has read since the checkpoint run.
@@ -273,12 +292,18 @@ CONDITIONS_DUE = (
     "  SELECT 1 FROM condition_runs cr WHERE cr.user_id = p.user_id AND cr.run_id >= pr.run_id)")
 
 
-def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
+def _read_conditions(client, conn, reader, run_id: int, read_users: set[str], limit: int, counts: dict) -> None:
     """One conditions call per due user (CONDITIONS_DUE), over their newest posts up to MAX_USER_CHARS.
-    A checked user gets a condition_runs row; a failed call writes nothing, so the next run checks that
-    user again. A call the content filter blocks would be blocked every time, so it counts as a check that
-    carries the user's current conditions forward. (Conditions move per post later, #195.)"""
-    users = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+    With ``limit``, only users read this run are checked, so a limited test run never picks up a
+    backlog of earlier failures. A checked user gets a condition_runs row; a failed call writes nothing,
+    so a later run checks that user again. A call the content filter blocks would be blocked every
+    time, so it counts as a check that carries the user's current conditions forward. Commits every
+    COMMIT_EVERY users, so the write lock isn't held for the whole pass. (Conditions move per post
+    later, #195.)"""
+    due = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+    users = due & read_users if limit else due
+    log.info("Checking conditions for %d users (%d read this run, %d left for a run without --limit)",
+             len(users), len(users & read_users), len(due - users))
 
     def checked(user_id: str, conditions: list) -> None:
         conn.execute("INSERT INTO condition_runs (run_id, user_id) VALUES (?, ?)", (run_id, user_id))
@@ -301,7 +326,7 @@ def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
             else:
                 checked(user_id, [])  # nothing left to read, so no current conditions
 
-    for user_id, conditions in _in_parallel(client, jobs(), read_conditions):
+    for n, (user_id, conditions) in enumerate(_in_parallel(client, jobs(), read_conditions), start=1):
         if conditions is None:
             counts["conditions_failed"] += 1
         elif conditions is BLOCKED:
@@ -311,28 +336,37 @@ def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
             counts["conditions_blocked"] += 1
         else:
             checked(user_id, conditions)
+        if n % COMMIT_EVERY == 0:
+            conn.commit()
     conn.commit()
 
 
-def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> dict:
+def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry_run: bool = False) -> dict:
     """Read new posts (every post with ``reread``) into claims, check conditions for the users read and
-    those whose earlier check failed, and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts."""
+    those whose earlier check failed, and resolve profiles. ``limit`` caps the number of users read, and
+    then only they get a conditions check. Returns the run's counts, or with ``dry_run`` only what it
+    would send (_plan), with no model call and no run recorded."""
     if reread and limit:
         # A limited reread would become the newest reread checkpoint, so the next ordinary run would
         # reread every post the limit skipped: a paid full-corpus run nobody asked for.
         raise ValueError("--reread reads every post; it can't be combined with --limit")
-    client = get_client()
     # Posts stream on a second connection: a long-lived cursor on the writing connection would fail
     # with SQLITE_BUSY_SNAPSHOT once another process commits.
     with closing(open_db(db_path)) as conn, closing(open_db(db_path)) as reader:
         apply_schema(conn)  # claim tables and columns missing from an older database
-        # Only a finished --reread moves the checkpoint. A reread that stopped (a bad key, Ctrl-C) is
-        # resumed by the next --reread, never by an ordinary run: that would be a paid full-corpus
-        # reread nobody asked for.
-        since, unfinished = _reread_checkpoints(conn)
-        if unfinished and not reread:
-            log.warning("The --reread from run %s stopped before finishing; this run reads only new and "
-                        "failed posts. Run with --reread to finish it.", unfinished)
+        # Only a finished --reread moves the checkpoint. A reread that stopped (a bad key, Ctrl-C) isn't
+        # resumed by an ordinary run, which would make it a paid full-corpus reread nobody asked for. A new
+        # --reread starts over: replies already cached for the same prompt cost nothing, and after a
+        # prompt change every post should be read again anyway.
+        since, stopped = _reread_checkpoint(conn)
+        if stopped and not reread:
+            log.warning("The --reread in run %s stopped before finishing; this run reads only new and failed "
+                        "posts. Run --reread again to reread every post.", stopped)
+        if dry_run:
+            plan = _plan(conn, 1 << 62 if reread else since, limit)  # with --reread, every post is unread
+            log.info("Dry run, nothing sent: %s", plan)
+            return plan
+        client = get_client()
         run_id = register_run(conn, "demographics", {
             "provider": LLM_PROVIDER,
             "reasoning_mode": LLM_REASONING_MODE,
@@ -346,19 +380,14 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
             "checks_conditions": True,
         }, commit_hash=get_git_commit())
         if reread:
-            since = unfinished or run_id
-            conn.execute("UPDATE extraction_runs SET config = json_set(config, '$.reread_since', ?) WHERE run_id = ?",
-                         (since, run_id))
-            conn.commit()
-            log.info("Extraction run %s (rereading every post%s)", run_id,
-                     f", resuming run {unfinished}" if unfinished else "")
-        else:
-            log.info("Extraction run %s", run_id)
+            since = run_id
+        log.info("Extraction run %s%s: %s", run_id, " (rereading every post)" if reread else "",
+                 _plan(conn, since, limit))
         counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0,
                   "conditions_blocked": 0}
 
         read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
-        _read_conditions(client, conn, reader, run_id, counts)
+        _read_conditions(client, conn, reader, run_id, set(read_users), limit, counts)
         # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
         # Users with unread posts keep their previous profile until all their posts are read.
         failed_users = _users_with_unread_posts(conn, since)
@@ -379,12 +408,17 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Read the posts of at most N users (0 = all)")
     parser.add_argument("--reread", action="store_true",
                         help="Read every post again, for example after a prompt change")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print how many posts, model calls and approximate input tokens a run would "
+                             "send, then exit without calling the model")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be nonnegative")
     if args.reread and args.limit:
         parser.error("--reread reads every post; it can't be combined with --limit")
-    run_demographics(args.db, limit=args.limit, reread=args.reread)
+    plan = run_demographics(args.db, limit=args.limit, reread=args.reread, dry_run=args.dry_run)
+    if args.dry_run:
+        print(plan)
 
 
 if __name__ == "__main__":

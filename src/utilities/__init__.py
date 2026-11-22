@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -404,8 +405,10 @@ def llm_call(
     max_tokens: int = 100,
     *,
     temperature: float = 0.0,
+    validate: Callable[[str], object] | None = None,
 ) -> str:
-    """Call an LLM with caching and bounded transport and truncation retries."""
+    """Call an LLM with caching and bounded transport and truncation retries. ``validate(text)``
+    raises for a reply the caller can't use; that reply is raised to the caller and never cached."""
     from patientpunk.llm_cache import cached_completion
     from patientpunk._utils import (LLMContentFilteredError, LLMTruncationError, check_response,
                                     response_text)
@@ -453,6 +456,7 @@ def llm_call(
             temperature=temperature,
             max_tokens=budget,
             call_fn=lambda: _request_with_transport_retries(budget),
+            validate=validate,
         )
 
     budgets = tuple(max_tokens * factor for factor in BUDGET_MULTIPLIERS)

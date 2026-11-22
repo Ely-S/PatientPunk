@@ -185,6 +185,26 @@ def test_a_conditions_call_the_filter_blocks_keeps_conditions_and_is_not_retried
     assert current_conditions(conn, "a") == {"pots"}
 
 
+def test_limit_caps_conditions_checks_after_a_run_stopped_in_the_conditions_pass(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [(f"p{i}", f"u{i:02}", 1, None, f"post {i}") for i in range(30)])
+    request = httpx.Request("POST", "https://example.invalid")
+    error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
+    stub(monkeypatch, conditions=lambda text: error)
+    with pytest.raises(anthropic.AuthenticationError):
+        demographics.run_demographics(path)  # every post read, then the conditions pass stops
+    assert demographics.run_demographics(path, dry_run=True)["conditions_calls"] == 30
+
+    add_posts(conn, [("new", "u00", 2, None, "new post")])
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path, limit=1)
+    assert [kind for kind, _, _ in calls].count("conditions") == 1  # only the user this run read
+
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)  # a run without --limit clears the backlog
+    assert [kind for kind, _, _ in calls].count("conditions") == 29
+
+
 def test_runs_from_before_condition_runs_never_make_users_due(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("p1", "a", 1, None, "I have POTS"), ("p2", "b", 1, None, "hello")])
@@ -330,6 +350,41 @@ def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, ca
     assert {u: profile(conn, u)[0] for u in ("transient", "unreadable")} == {"transient": "40s", "unreadable": "40s"}
 
 
+def test_an_unreadable_reply_is_asked_again_by_the_next_run_through_the_real_cache(db, monkeypatch, tmp_path):
+    """The other tests stub llm_call; this one uses it, with the on-disk cache on and a stub client."""
+    from types import SimpleNamespace
+    from patientpunk import llm_cache
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I'm 34")])
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(llm_cache, "_enabled_override", True)
+    post_replies = iter(["not JSON"] * 3 + [json.dumps({**NOTHING, "age": claim(34)})])
+    sent = []
+
+    class Stream:
+        def __init__(self, prompt):
+            self.prompt = prompt
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def get_final_message(self):
+            post = self.prompt.startswith(POST_DEMOGRAPHICS_PROMPT)
+            sent.append("post" if post else "conditions")
+            text = next(post_replies) if post else NO_CONDITIONS
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn")
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: Stream(kw["messages"][0]["content"])))
+    monkeypatch.setattr(demographics, "get_client", lambda: client)
+
+    assert demographics.run_demographics(path)["posts_failed"] == 1
+    stats = demographics.run_demographics(path)
+
+    assert sent.count("post") == 4  # the second run asked the model, not the cache
+    assert stats["posts_read"] == 1 and stats["posts_failed"] == 0
+    assert profile(conn, "a")[0] == "30s"
+
+
 def test_a_post_the_filter_always_blocks_does_not_freeze_the_profile(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("blocked", "a", 1, None, "graphic text"), ("ok", "a", 2, None, "I'm 34")])
@@ -369,7 +424,7 @@ def test_reread_cannot_be_limited(db):
         demographics.run_demographics(path, reread=True, limit=1)
 
 
-def test_a_reread_that_stops_is_resumed_only_by_another_reread(db, monkeypatch, caplog):
+def test_a_stopped_reread_is_not_resumed_and_the_next_reread_starts_over(db, monkeypatch, caplog):
     conn, path = db
     add_posts(conn, [(f"p{i}", f"u{i}", 1, None, f"post {i}") for i in range(12)])
     stub(monkeypatch)
@@ -388,13 +443,50 @@ def test_a_reread_that_stops_is_resumed_only_by_another_reread(db, monkeypatch, 
     assert posts_read(conn, calls) == ["new post"]
     assert "stopped before finishing" in caplog.text
 
-    # The next --reread resumes it, skipping the post the ordinary run read since it started.
+    # The next --reread starts over and reads every post, the new one included.
     calls = stub(monkeypatch)
     demographics.run_demographics(path, reread=True)
-    assert sorted(posts_read(conn, calls)) == sorted(f"post {i}" for i in range(12))
+    assert sorted(posts_read(conn, calls)) == sorted([f"post {i}" for i in range(12)] + ["new post"])
     calls = stub(monkeypatch)
     demographics.run_demographics(path)
     assert posts_read(conn, calls) == []
+
+
+def test_the_conditions_pass_commits_as_it_goes(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [(f"p{i}", f"u{i:02}", 1, None, f"post {i}") for i in range(5)])
+    monkeypatch.setattr(demographics, "COMMIT_EVERY", 2)
+    other = sqlite3.connect(path, timeout=0, check_same_thread=False)
+    seen = []
+
+    def conditions(text):  # what another connection sees of the pass so far
+        seen.append(other.execute("SELECT COUNT(*) FROM conditions").fetchone()[0])
+        return {"conditions": [{"condition_name": "POTS"}]}
+
+    monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
+    stub(monkeypatch, conditions=conditions)
+    demographics.run_demographics(path)
+    other.close()
+
+    assert seen == [0, 0, 2, 2, 4]  # committed after every 2nd user, not once at the end
+
+
+def test_dry_run_reports_what_a_run_would_send_and_sends_nothing(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, "Title", "x" * 400), ("p2", "a", 2, None, "y"), ("p3", "b", 1, None, "z")])
+    calls = stub(monkeypatch)
+
+    plan = demographics.run_demographics(path, dry_run=True)
+    limited = demographics.run_demographics(path, limit=1, dry_run=True)
+
+    assert calls == [] and conn.execute("SELECT COUNT(*) FROM extraction_runs").fetchone() == (0,)
+    assert {k: plan[k] for k in ("posts", "users", "post_calls", "conditions_calls")} == {
+        "posts": 3, "users": 2, "post_calls": 3, "conditions_calls": 2}
+    assert plan["approx_input_tokens"] > 3 * len(POST_DEMOGRAPHICS_PROMPT) // 4
+    assert (limited["posts"], limited["users"]) == (2, 1)
+    demographics.run_demographics(path)
+    assert demographics.run_demographics(path, dry_run=True)["posts"] == 0
+    assert demographics.run_demographics(path, reread=True, dry_run=True)["posts"] == 3
 
 
 def test_a_permanent_error_stops_the_run_and_sends_no_queued_posts(db, monkeypatch):
