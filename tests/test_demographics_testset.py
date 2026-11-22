@@ -26,13 +26,15 @@ def item(post_id, text, lab, user="u1", date=0, split="dev"):
 @pytest.mark.parametrize("field, a, b", [
     ("age", "34", "34 years old"), ("age", "30s", "mid 30s"), ("country", "USA", "the United States"),
     ("country", "U.K.", "England"), ("state", "TX", "Texas"), ("city", "Austin, TX", "austin"),
-    ("sex", "Female | non-binary", "non-binary|female"),
+    ("sex", "Female | non-binary", "non-binary|female"), ("sex", "mom", "F"), ("sex", "guy", "male"),
+    ("sex", "ladies", "woman"), ("sex", "f | mom", "female"),
 ])
 def test_two_ways_of_writing_one_answer_match(field, a, b):
     assert ts.key(field, a) == ts.key(field, b)
 
 
-@pytest.mark.parametrize("field, a, b", [("age", "34", "35"), ("state", "TX", "Ohio"), ("sex", "female", "trans woman")])
+@pytest.mark.parametrize("field, a, b", [("age", "34", "35"), ("state", "TX", "Ohio"), ("sex", "female", "trans woman"),
+                                           ("sex", "mom", "dad"), ("sex", "non-binary | mom", "female")])
 def test_different_answers_do_not_match(field, a, b):
     assert ts.key(field, a) != ts.key(field, b)
 

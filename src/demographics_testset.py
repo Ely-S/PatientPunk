@@ -189,6 +189,15 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[.'’]", "", text.casefold())).strip().removeprefix("the ")
 
 
+# Everyday words for a binary sex, scored as the word they mean ("31F, mom" and "female" agree).
+# Evaluation only: the pipeline's normalize_sex keeps its own narrower list.
+_FEMALE = ("mom", "mum", "mother", "mama", "wife", "girl", "gal", "lady", "ladies", "women", "girlfriend",
+           "grandmother", "sister", "daughter")
+_MALE = ("dad", "father", "papa", "husband", "guy", "dude", "boy", "gentleman", "men", "boyfriend", "grandfather",
+         "brother", "son")
+SEX_WORDS = {**SEX_VALUES, **dict.fromkeys(_FEMALE, "female"), **dict.fromkeys(_MALE, "male")}
+
+
 def key(field: str, value: str) -> object:
     """A form of the value in which two ways of writing the same answer are equal."""
     if field == "age":
@@ -196,7 +205,7 @@ def key(field: str, value: str) -> object:
         return stated[0] if stated else _plain(value)
     if field == "sex":
         parts = (_plain(v) for v in re.split(r"[|/,;]", value) if v.strip())
-        return frozenset(SEX_VALUES.get(v, v) for v in parts)  # "F" and "female" agree
+        return frozenset(SEX_WORDS.get(v, v) for v in parts)
     text = _plain(value)
     if field == "country":
         return _COUNTRIES.get(text, text)

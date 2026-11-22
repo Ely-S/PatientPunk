@@ -47,10 +47,12 @@ birth year, "I'm a grandmother"). "I'm 18 (19 on the 19th)" is `"18"`. "57m" or 
 author's description of themselves is the age.
 
 **sex.** The author's sex or gender in their own words: `"female"`, `"male"`, `"trans man"`,
-`"non-binary"`. If they state more than one, give each, separated by ` | `: `"non-binary | female"`.
+`"non-binary"`. Give one word per identity: `|` separates distinct identities the author states
+(`"non-binary | female"`), never two words for the same one ("26F single mom" is `"F"`, quoting `26F`).
 Write the words as stated (#214 is still open; the evaluation scores both the words and the
 normalized value). The `F`/`M` in "31F", "male", "woman", "guy", "mom", "boy" count when they describe
-the author. Empty for pronouns, usernames, writing style, and what others call the author.
+the author, and the evaluation scores mom, guy, lady and similar words as the sex they mean.
+Empty for pronouns, usernames, writing style, and what others call the author.
 
 **country, state.** Where the author lives, one place each. "45 male here in Tennessee" is state
 `"Tennessee"` with country empty: label only what is named, never what it implies. Abbreviations are
