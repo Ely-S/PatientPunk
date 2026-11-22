@@ -64,12 +64,26 @@ VARIABLE_META_COLUMNS: set[str] = {
     "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
-# records.csv demographic columns that no longer feed profiles or derived tables, with their
-# --confidence columns; demographics come only from user_profiles_latest.
-_LEGACY_DEMOGRAPHIC_FIELDS = {"age", "sex_gender", "location_country", "location_state", "location_us_state"}
+# Demographic fields the extraction pipeline no longer extracts (#195), including old state aliases.
+# Older records.csv files and --resume checkpoints may still hold them; nothing reads them, since
+# demographics come only from user_profiles_latest.
+LEGACY_DEMOGRAPHIC_FIELDS = {"age", "sex_gender", "location_country", "location_state", "location_us_state"}
 LEGACY_DEMOGRAPHIC_COLUMNS: set[str] = (
-    _LEGACY_DEMOGRAPHIC_FIELDS | {f"{c}__confidence" for c in _LEGACY_DEMOGRAPHIC_FIELDS}
+    LEGACY_DEMOGRAPHIC_FIELDS | {f"{c}__confidence" for c in LEGACY_DEMOGRAPHIC_FIELDS}
 )
+
+
+def drop_legacy_demographics(records: list[dict]) -> dict[str, int]:
+    """Remove fields this pipeline no longer extracts (age, sex_gender, location_country and old state
+    aliases; #195) from records read back from JSON (a --resume checkpoint, or files to export), in place.
+    Every other field is kept, including inductively discovered ones. Returns {field: records}."""
+    dropped: dict[str, int] = {}
+    for rec in records:
+        fields = rec.get("fields", {})
+        for name in LEGACY_DEMOGRAPHIC_FIELDS & fields.keys():
+            del fields[name]
+            dropped[name] = dropped.get(name, 0) + 1
+    return dropped
 
 
 # ── Database setup ─────────────────────────────────────────────────────────────
