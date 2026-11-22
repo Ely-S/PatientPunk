@@ -80,8 +80,7 @@ def aggregate_patients(rows: list[dict], *, key_col: str = "author_hash",
 
 
 def add_profiles(patients: dict, fields: list[str], profiles: dict) -> list[str]:
-    """Add each patient's current profile (``db.latest_profiles``) as demo_* fields. The age in years stays
-    out: as a category, nearly every patient would have their own value; the decade carries age."""
+    """Add each patient's current profile (``db.latest_profiles``) as demo_* fields."""
     demo = ("age_bucket", "sex", "location")
     for pid, feats in patients.items():
         profile = profiles.get(pid, {})

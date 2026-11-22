@@ -3,9 +3,11 @@
 Resolution is recomputed from demographic_claims_latest on every run, so it needs no state of its
 own: a restart, a re-read that retracted claims, or a newer reference date is picked up by the next
 call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
-Each row keeps the age in whole years, advanced to the reference date, beside its decade. When the
-author gave a range or decade instead of a number, the age is that range's midpoint ("mid-30s" -> 35).
+Each row keeps the age in years (a real number), advanced to the reference date, beside its decade.
+When the author gave a range or decade instead of a number, the age is that range's midpoint
+("late 30s" -> 37.5).
 """
+import math
 import re
 import sqlite3
 from collections import Counter, defaultdict
@@ -22,27 +24,29 @@ def _years_between(start: int, end: int) -> int:
 
 _DECADE = re.compile(r"\b(early|mid|late)?[\s-]*(\d)0\s*'?s\b")
 _RANGE = re.compile(r"(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})")
-_DECADE_PART = {"early": 2, "mid": 5, "late": 8}  # midpoints of the decade's first, middle and last thirds
+# Where in its decade each phrase points: early = lower half, late = upper half, mid or none = the centre.
+_DECADE_PART = {"early": 2.5, "mid": 5.0, "late": 7.5}
 
 
-def _estimate(value: str) -> tuple[int, bool] | None:
-    """(age, estimated) from what the author wrote: a number as given; a range or decade at its
-    midpoint ("25-34" -> 30, "30s" or "mid-30s" -> 35, "early 40s" -> 42, "late 20s" -> 28).
+def _estimate(value: str) -> tuple[float, bool] | None:
+    """(age in years, estimated) from what the author wrote: a number as given; a range or decade at
+    its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s" -> 37.5).
     None when there is no age in it."""
     text = value.strip().lower()
     try:
-        return int(float(text)), False
-    except (ValueError, OverflowError):
+        number = float(text)
+        return (number, False) if math.isfinite(number) else None
+    except ValueError:
         pass
     if m := _RANGE.fullmatch(text):
         low, high = int(m[1]), int(m[2])
-        return ((low + high + 1) // 2, True) if low <= high else None
+        return ((low + high) / 2, True) if low <= high else None
     if m := _DECADE.search(text):
-        return int(m[2]) * 10 + _DECADE_PART.get(m[1], 5), True
+        return int(m[2]) * 10 + _DECADE_PART.get(m[1], 5.0), True
     return None
 
 
-def _age_now(value: str, date: int | None, reference: int | None) -> tuple[int, bool] | None:
+def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
     """(age, estimated) advanced to the reference date; None when unparseable or out of range."""
     stated = _estimate(value)
     if stated is None:

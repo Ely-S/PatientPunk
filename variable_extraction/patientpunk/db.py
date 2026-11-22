@@ -100,7 +100,7 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
     conn.executescript(ddl_idempotent)
     # A column added to a table after databases with that table existed: CREATE TABLE IF NOT EXISTS skips it.
     if "age" not in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}:
-        conn.execute("ALTER TABLE user_profiles ADD COLUMN age INTEGER")
+        conn.execute("ALTER TABLE user_profiles ADD COLUMN age REAL")
     conn.commit()
 
 
