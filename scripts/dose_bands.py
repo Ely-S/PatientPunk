@@ -23,6 +23,9 @@ import statistics
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from import_posts import DELETED_USER_ID  # noqa: E402
+
 DIRECTIONAL = ("positive", "negative", "mixed")
 CAPSULES = ("capsule", "capsules", "cap", "caps", "pill", "pills")
 
@@ -60,7 +63,8 @@ def load(db: Path, drug: str, cuts: list[float], capsule_mg: float | None, cap_m
         report_id: (user_id, sentiment, _when(post_date))
         for report_id, user_id, sentiment, post_date in conn.execute(
             "SELECT r.report_id, r.user_id, r.sentiment, p.post_date FROM treatment_reports r "
-            f"JOIN posts p ON p.post_id=r.post_id WHERE r.drug_id=? AND r.sentiment IN {DIRECTIONAL}", (drug_id,))
+            f"JOIN posts p ON p.post_id=r.post_id WHERE r.drug_id=? AND r.sentiment IN {DIRECTIONAL} AND r.user_id != ?",
+            (drug_id, DELETED_USER_ID))
     }
     adverse = collections.Counter()
     for report_id, in conn.execute(

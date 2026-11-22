@@ -26,9 +26,12 @@ class PostRow(NamedTuple):
     post_date: int | None
     scraped_at: int
 
-from utilities.db import open_db
 
 log = logging.getLogger(__name__)
+
+# Posts and comments with no author (deleted or removed accounts) are stored under this user.
+# It is thread context, never a patient: readers that profile or count patients skip it.
+DELETED_USER_ID = "deleted"
 
 
 def to_epoch(ts: str | int | None) -> int | None:
@@ -71,8 +74,8 @@ def extract_subreddit(url: str | None) -> str:
     return None
 
 
-def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> None:
-    """Import subreddit_posts.json into users + posts tables."""
+def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: str | None = None) -> int:
+    """Import subreddit_posts.json into users + posts tables. Returns the number of rows skipped."""
     data = json.loads(input_path.read_text(encoding="utf-8"))
     now = int(datetime.now(timezone.utc).timestamp())
 
@@ -94,7 +97,7 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             users.append(UserRow(author, sub, now))
 
     for post in data:
-        author = post["author_hash"]
+        author = post.get("author_hash") or DELETED_USER_ID
         sub = subreddit or extract_subreddit(post.get("url"))
 
         add_user(author, sub)
@@ -105,13 +108,13 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             scraped_at=now,
         ))
         for comment in post.get("comments", []):
-            c_author = comment["author_hash"]
+            c_author = comment.get("author_hash") or DELETED_USER_ID
             add_user(c_author, sub)
             posts.append(PostRow(
                 post_id=comment["comment_id"], title=None,
                 parent_id=align_parent_id(comment.get("parent_id"), prefixed),
                 user_id=c_author,
-                body_text=comment.get("body", ""), flair=None,
+                body_text=comment.get("body") or "", flair=None,
                 post_date=to_epoch(comment.get("created_utc")), scraped_at=now,
             ))
 
@@ -120,11 +123,12 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
             "INSERT OR IGNORE INTO users (user_id, source_subreddit, scraped_at) VALUES (?, ?, ?)",
             users,
         )
-        conn.executemany(
-            "INSERT OR IGNORE INTO posts (post_id, title, parent_id, user_id, body_text, flair, post_date, scraped_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        # Only a repeated post_id is skipped; any other constraint failure raises instead of dropping the row.
+        inserted = conn.executemany(
+            "INSERT INTO posts (post_id, title, parent_id, user_id, body_text, flair, post_date, scraped_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(post_id) DO NOTHING",
             posts,
-        )
+        ).rowcount
         # Clean dangling parent_ids in SQL
         conn.execute(
             "UPDATE posts SET parent_id = NULL "
@@ -132,7 +136,10 @@ def import_reddit_posts(conn: sqlite3.Connection, input_path: Path, subreddit: s
         )
 
     n = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
-    log.info(f"Imported {len(users)} users, {n} posts/comments.")
+    skipped = len(posts) - inserted
+    log.info(f"Imported {len(users)} users, {n} posts/comments. "
+             f"Skipped {skipped} rows whose post_id was already in the database or repeated in the input.")
+    return skipped
 
 
 def main():
@@ -143,6 +150,7 @@ def main():
     parser.add_argument("--subreddit")
     args = parser.parse_args()
 
+    from utilities.db import open_db  # here, so importing DELETED_USER_ID loads no LLM config
     with closing(open_db(Path(args.output_db))) as conn:
         import_reddit_posts(conn, Path(args.reddit_posts), args.subreddit)
 

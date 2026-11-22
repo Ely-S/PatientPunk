@@ -22,7 +22,6 @@ and src/run_pipeline.py).
 """
 
 import argparse
-import hashlib
 import io
 import json
 import sys
@@ -30,10 +29,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-def hash_username(username: str) -> str:
-    """SHA-256 hash of username for privacy."""
-    return hashlib.sha256(username.encode()).hexdigest()
+from db_to_corpus import DELETED, author_hash
 
 
 def utc_iso(ts) -> str:
@@ -76,12 +72,10 @@ def open_ndjson(path: Path):
 
 def build_comment(c: dict) -> dict:
     """Transform an Arctic Shift comment into our format."""
-    author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
-        "author_hash": author_hash,
+        "author_hash": author_hash(c.get("author")),
         "created_utc": utc_iso(c.get("created_utc", "")),
         "score": c.get("score", 0),
         "parent_id": c.get("parent_id", ""),
@@ -90,13 +84,11 @@ def build_comment(c: dict) -> dict:
 
 def build_post(p: dict, comments: list[dict]) -> dict:
     """Transform an Arctic Shift post into our format."""
-    author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
     return {
         "post_id": f"t3_{p.get('id', '')}",
         "title": p.get("title", ""),
         "body": p.get("selftext", ""),
-        "author_hash": author_hash,
+        "author_hash": author_hash(p.get("author")),
         "created_utc": utc_iso(p.get("created_utc", "")),
         "score": p.get("score", 0),
         "num_comments_api": p.get("num_comments", 0),
@@ -178,7 +170,7 @@ Examples:
         author = (p.get("author") or "").lower()
         title = (p.get("title") or "").strip().lower()
         dedup_key = (author, title)
-        if dedup_key in seen_keys and author:
+        if dedup_key in seen_keys and p.get("author") not in DELETED:
             duplicates += 1
             continue
         seen_keys.add(dedup_key)

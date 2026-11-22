@@ -20,13 +20,14 @@ Base URL: https://arctic-shift.photon-reddit.com
 """
 
 import argparse
-import hashlib
 import json
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
+
+from db_to_corpus import DELETED, author_hash, hash_username
 
 API_BASE = "https://arctic-shift.photon-reddit.com"
 REDDIT_USER_AGENT = "patientpunk-scraper/0.1 (corpus research)"
@@ -64,10 +65,6 @@ def window_start_iso(months: int | None, weeks: int | None) -> tuple[str, str]:
         dt = datetime.now(timezone.utc) - timedelta(days=30 * (months or 2))
         label = f"{months or 2} month(s)"
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), label
-
-
-def hash_username(username: str) -> str:
-    return hashlib.sha256(username.encode()).hexdigest()
 
 
 def polite_sleep(delay: float = REQUEST_DELAY):
@@ -176,12 +173,10 @@ def fetch_comments_for_post(post_id: str) -> list[dict]:
 
 
 def build_comment(c: dict) -> dict:
-    author = c.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
     return {
         "comment_id": f"t1_{c.get('id', '')}",
         "body": c.get("body", ""),
-        "author_hash": author_hash,
+        "author_hash": author_hash(c.get("author")),
         "created_utc": utc_iso(c.get("created_utc", "")),
         "score": c.get("score", 0),
         "parent_id": c.get("parent_id", ""),
@@ -191,14 +186,12 @@ def build_comment(c: dict) -> dict:
 
 
 def build_post(p: dict, comments: list[dict] | None = None) -> dict:
-    author = p.get("author")
-    author_hash = hash_username(author) if author and author != "[deleted]" else None
     comments = comments or []
     return {
         "post_id": f"t3_{p.get('id', '')}",
         "title": p.get("title", ""),
         "body": p.get("selftext", ""),
-        "author_hash": author_hash,
+        "author_hash": author_hash(p.get("author")),
         "created_utc": utc_iso(p.get("created_utc", "")),
         "score": p.get("score", 0),
         # num_comments_api is unreliable — often 0 even when comments exist.
@@ -484,7 +477,7 @@ def main():
         # Deduplicate: skip if same author has already posted the same title
         author = stub.get("author") or ""
         dedup_key = (author.lower(), (full_post.get("title") or "").strip().lower())
-        if dedup_key in seen_post_keys and author:
+        if dedup_key in seen_post_keys and author not in DELETED:
             print(f"    Duplicate post detected (same author + title), skipping.")
             duplicate_posts_skipped += 1
             continue
@@ -495,7 +488,7 @@ def main():
         post_data = build_post(full_post, comments)
         posts.append(post_data)
 
-        if author and author != "[deleted]":
+        if author not in DELETED:
             unique_authors[author] = post_data["author_hash"]
         else:
             deleted_post_authors += 1

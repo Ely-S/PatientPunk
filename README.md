@@ -165,6 +165,8 @@ uv run python src/import_posts.py \
     --output-db data/posts.db
 ```
 
+Posts and comments with no author (deleted or removed accounts) are stored under the user `deleted`; readers that count or profile patients skip it. The import prints how many rows it skipped.
+
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
