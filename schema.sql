@@ -58,6 +58,7 @@ CREATE TABLE user_profiles (
     user_id    TEXT NOT NULL REFERENCES users(user_id),
     run_id     INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     age_bucket TEXT,
+    age        INTEGER,  -- whole years at the run's reference date, when a number was stated; NULL when only a decade was
     sex        TEXT,
     location   TEXT,
     PRIMARY KEY (user_id, run_id)

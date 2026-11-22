@@ -88,7 +88,7 @@ def build_unified(conn: sqlite3.Connection, records_csv: Path) -> int:
               " (run src/extract_demographics_conditions.py on this database)")
     demo_df = pd.DataFrame(
         [{"author_hash": user, **{f"demo_{k}": v for k, v in p.items()}} for user, p in profiles.items()],
-        columns=["author_hash", "demo_age_bucket", "demo_sex", "demo_location"],
+        columns=["author_hash", "demo_age_bucket", "demo_age", "demo_sex", "demo_location"],
     )
     uni = uni.merge(demo_df, on="author_hash", how="left")
 

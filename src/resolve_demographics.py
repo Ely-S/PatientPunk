@@ -3,6 +3,8 @@
 Resolution is recomputed from demographic_claims_latest on every run, so it needs no state of its
 own: a restart, a re-read that retracted claims, or a newer reference date is picked up by the next
 call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
+Each row keeps the exact age, advanced to the reference date, beside its decade; the age is empty when
+the latest usable age claim was only a decade ("mid-30s").
 """
 import sqlite3
 from collections import Counter, defaultdict
@@ -30,8 +32,9 @@ def _age_now(value: str, date: int | None, reference: int | None) -> int | str |
 
 
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
-    """claims: (post_date, post_id, field, value), oldest first. Returns the profile row and the
-    fields whose claims disagree. Text values are compared ignoring case; sex is stored lowercase."""
+    """claims: (post_date, post_id, field, value), oldest first. Returns the profile row
+    (age_bucket, age, sex, location) and the fields whose claims disagree. Text values are compared
+    ignoring case; sex is stored lowercase."""
     by_field = defaultdict(list)
     countries = {}
     for date, post_id, field, value in claims:
@@ -40,8 +43,10 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
         if field == "country":
             countries[post_id] = value.casefold()
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
-    age = _bucketize_age(str(ages[-1])) if ages else None
-    sex = by_field["sex"][-1][2] if by_field["sex"] else None
+    latest_age = ages[-1] if ages else None
+    age_bucket = _bucketize_age(str(latest_age)) if latest_age is not None else None
+    exact_age = latest_age if isinstance(latest_age, int) else None
+    sex =by_field["sex"][-1][2] if by_field["sex"] else None
     country = by_field["country"][-1][2] if by_field["country"] else None
     key = country.casefold() if country else None
     states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
@@ -51,7 +56,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     exact = {a for a in ages if isinstance(a, int)}
     if len(exact) > 1 or len({_bucketize_age(str(a)) for a in ages}) > 1:
         disagree.add("age")
-    return (age, sex, location), disagree
+    return (age_bucket, exact_age, sex, location), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
@@ -60,8 +65,10 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
     the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
     The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
-        apply_schema(conn)  # a database built before the claim tables; this commits
+    has_age = "age" in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
+    if not has_age or not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
+        apply_schema(conn)  # a database built before the claim tables or the age column; this commits
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
     claims = defaultdict(list)
     for user, *claim in conn.execute(
@@ -79,11 +86,13 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
         profile, disagree = _resolve(claims.get(user, []), reference)
         disagreements.update(disagree)
         p = current.get(user)
-        if p is None or (p["age_bucket"], p["sex"], p["location"]) != tuple(v or "" for v in profile):
+        resolved = tuple("" if v is None else str(v) for v in profile)
+        if p is None or (p["age_bucket"], p["age"], p["sex"], p["location"]) != resolved:
             rows.append((user, run_id, *profile))
     with conn:
         conn.executemany(
-            "INSERT INTO user_profiles (user_id, run_id, age_bucket, sex, location) VALUES (?, ?, ?, ?, ?)", rows)
+            "INSERT INTO user_profiles (user_id, run_id, age_bucket, age, sex, location) VALUES (?, ?, ?, ?, ?, ?)",
+            rows)
         conn.execute("UPDATE extraction_runs SET config = json_set(config, '$.reference_date', ?) WHERE run_id = ?",
                      (reference, run_id))
     return {"profiles_written": len(rows), "reference_date": reference, "disagreements": dict(disagreements)}

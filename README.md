@@ -171,7 +171,7 @@ Posts and comments with no author (deleted or removed accounts) are stored under
 
 Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
 
-In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, exact age (when a number was stated), sex, and location. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
 
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db
@@ -191,7 +191,7 @@ cp reddit_snapshot.db work.db
 uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
 ```
 
-Per-post claims (#206, in progress) are stored in `demographic_claims`: one value a post states about its author (`age`, `sex`, `country` or `state`), with the words it came from. `post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. `resolve_profiles` in `src/resolve_demographics.py` turns those claims into `user_profiles` rows under a demographics run, writing a row only when a user's profile changes. The `deleted` placeholder never gets a profile. Nothing writes claims yet; this script will once #206 is finished.
+Per-post claims (#206, in progress) are stored in `demographic_claims`: one value a post states about its author (`age`, `sex`, `country` or `state`), with the words it came from. `post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. `resolve_profiles` in `src/resolve_demographics.py` turns those claims into `user_profiles` rows under a demographics run, writing a row only when a user's profile changes. Each row keeps the exact `age`, moved forward to the run's reference date (the newest `post_date`), beside its `age_bucket`; `age` is empty when the latest age claim was only a decade, such as "mid-30s". `cluster-prep` uses the decade, and `unified` carries both as `demo_age_bucket` and `demo_age`. The `deleted` placeholder never gets a profile. Nothing writes claims yet; this script will once #206 is finished.
 
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
