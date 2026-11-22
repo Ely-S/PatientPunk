@@ -85,6 +85,8 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], "UK"),
     ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], "US / Texas"),
     ([{"state": "Texas"}], "Texas"),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], "US / Texas"),
+    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], "UK"),
     ([{"country": "US", "state": "Texas"}, {"country": " "}], "US / Texas"),  # a blank claim states nothing
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):

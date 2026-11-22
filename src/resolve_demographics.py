@@ -43,18 +43,21 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = _bucketize_age(str(ages[-1])) if ages else None
     sex = by_field["sex"][-1][2] if by_field["sex"] else None
-    # Walk the posts oldest first; naming a different country clears the state, so an old state
-    # never pairs with a new country. A state stated before any country pairs with the first one.
-    countries = {p: v for _, p, v in by_field["country"]}
-    states = {p: v for _, p, v in by_field["state"]}
-    country = state = None
-    for post_id in dict.fromkeys(p for _, p, _, _ in claims):
-        if post_id in countries:
-            if country and countries[post_id].casefold() != country.casefold():
-                state = None
-            country = countries[post_id]
-        state = states.get(post_id, state)
-    location = " / ".join(x for x in (country, state) if x) or None
+    # The latest country, plus the latest state from that country (#206). A state from a post that
+    # names no country belongs to the nearest country named before it, or else the first named after
+    # it, so US, then "Texas", then UK is "UK": an old state never pairs with a new country.
+    order = {p: i for i, p in enumerate(dict.fromkeys(p for _, p, _, _ in claims))}
+    named = [(order[p], v.casefold()) for _, p, v in by_field["country"]]
+    country = by_field["country"][-1][2] if by_field["country"] else None
+
+    def state_country(post_id):
+        i = order[post_id]
+        before = [c for j, c in named if j <= i]
+        after = [c for j, c in named if j > i]
+        return before[-1] if before else (after[0] if after else None)
+
+    states = [v for _, p, v in by_field["state"] if state_country(p) in (country and country.casefold(), None)]
+    location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
     # Exact ages within a year agree: whole-year advancing can put the same age a year apart.
