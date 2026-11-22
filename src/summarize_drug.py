@@ -14,6 +14,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from import_posts import DELETED_USER_ID
+
 IMPROVED = [  # (label, regex on the symptom the author named); first match wins, last is the catch-all
     ("Energy, stamina, less fatigue", r"energy|stamina|endur|tired|fatigue|vo2|afternoon slump|pem|crash|able to work|high functioning|good days"),
     ("Muscle, strength, exercise recovery", r"muscle|strength|stronger|fitness|exercise|workout|walk|physical|recover|repair|atrophy|tone"),
@@ -61,7 +63,7 @@ def load(db: Path, drug: str, label: str) -> dict[str, dict]:
                 "FROM treatment_reports r2 WHERE r2.post_id = r.post_id AND r2.drug_id = r.drug_id)")
     for user, report, sentiment, date in conn.execute(
             f"SELECT r.user_id, r.report_id, r.sentiment, p.post_date FROM treatment_reports r "
-            f"JOIN posts p ON p.post_id=r.post_id WHERE {eligible}"):
+            f"JOIN posts p ON p.post_id=r.post_id WHERE {eligible} AND r.user_id != ?", (DELETED_USER_ID,)):
         a = authors.setdefault(user, {"label": label, "reports": 0, "sentiments": [], "improved": [], "worsened": [],
                                       "no_change": 0, "doses": [], "routes": 0, "severities": []})
         a["reports"] += 1
