@@ -8,6 +8,7 @@ from pathlib import Path
 
 import anthropic
 import httpx
+import openai
 import pytest
 
 import extract_demographics_conditions as demographics
@@ -172,6 +173,7 @@ def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
     conn.commit()
     calls = {user: [] for user in users}
     empty_reply = '{"age": null, "sex": null, "country": null, "state": null, "conditions": []}'
+    timeout = openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
 
     def stub_call(client, prompt, *, temperature, **kwargs):
         user = patient_text(prompt)
@@ -179,7 +181,7 @@ def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
         if user == "filtered":
             raise LLMContentFilteredError("filtered")
         if user == "transient":
-            raise httpx.ReadTimeout("request timed out")
+            raise timeout
         return empty_reply if user == "empty" else unreadable_reply
 
     monkeypatch.setattr(demographics, "llm_call", stub_call)
@@ -258,3 +260,22 @@ def test_commits_multiple_batches_while_streaming_users(db, monkeypatch):
     assert conn.execute(
         "SELECT COUNT(*) FROM conditions WHERE condition_name = 'headache' AND condition_type = 'symptom'",
     ).fetchone() == (25,)
+
+
+def test_extraction_writes_after_another_connection_commits(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [(user, user, 1, None, user) for user in ("a", "b", "c", "d")])
+    monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
+
+    def stub_call(client, prompt, **kwargs):
+        if patient_text(prompt) == "a":
+            # The post stream has started and still has unread rows at this point.
+            with closing(sqlite3.connect(path)) as other, other:
+                other.execute("UPDATE posts SET flair = 'updated' WHERE post_id = 'd'")
+        return '{"age": 34}'
+
+    monkeypatch.setattr(demographics, "llm_call", stub_call)
+    demographics.run_demographics(path)
+
+    assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)
+    assert conn.execute("SELECT flair FROM posts WHERE post_id = 'd'").fetchone() == ("updated",)

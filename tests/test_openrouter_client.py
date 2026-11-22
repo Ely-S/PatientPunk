@@ -4,8 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import openai
+import pytest
 
 import utilities
+from patientpunk import llm_cache
+from patientpunk._utils import LLMContentFilteredError
 
 
 def test_get_client_uses_openrouter_openai_endpoint(monkeypatch):
@@ -57,3 +60,27 @@ def test_openrouter_adapter_contract(monkeypatch):
     )
     assert message.content[0].text == "ok"
     assert message.stop_reason == "max_tokens"
+
+
+@pytest.mark.parametrize(
+    ("content", "finish_reason", "refusal"),
+    [
+        ('{"age": null, "conditions": []}', "content_filter", None),
+        (None, "content_filter", None),
+        (None, "stop", "Request refused"),
+    ],
+    ids=["filtered-json", "filtered-empty", "refusal-delta"],
+)
+def test_openrouter_refusals_raise_before_caching(monkeypatch, content, finish_reason, refusal):
+    monkeypatch.setenv("LLM_CACHE", "1")
+    backend = Mock()
+    backend.chat.completions.create.return_value = iter([
+        SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=content, refusal=refusal), finish_reason=finish_reason,
+        )]),
+    ])
+
+    with pytest.raises(LLMContentFilteredError):
+        utilities.llm_call(utilities._ORClient(backend), "Synthetic demographics prompt")
+
+    assert not list(llm_cache.cache_root().rglob("*.json"))

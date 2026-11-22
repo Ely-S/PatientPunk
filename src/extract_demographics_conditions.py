@@ -232,7 +232,9 @@ def run_demographics(
         log.info("Extraction run %s", run_id)
 
         profiles_written = conditions_written = failures = 0
-        with closing(conn.execute(
+        # Stream posts on a separate connection. If another writer commits while
+        # this cursor is open, upgrading its WAL read snapshot would fail with SQLITE_BUSY_SNAPSHOT.
+        with closing(open_db(db_path)) as reader, closing(reader.execute(
             "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
             "ORDER BY user_id, post_date DESC, post_id",
             (DELETED_USER_ID,),

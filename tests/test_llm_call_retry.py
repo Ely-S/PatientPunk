@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import anthropic
 import httpx
+import openai
 import pytest
 
 from patientpunk import llm_cache
@@ -62,9 +63,11 @@ def _disable_cache():
     [
         (httpx.RemoteProtocolError("peer closed connection"), 2, False, 3),
         (httpx.RemoteProtocolError("peer closed connection"), 5, True, 5),
+        (openai.APIConnectionError(request=httpx.Request("POST", "https://example.invalid")), 2, False, 3),
+        (openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid")), 5, True, 5),
         (_status(402), 1, True, 1),
     ],
-    ids=["recovers", "bounded", "fails-fast"],
+    ids=["recovers", "bounded", "openrouter-connection-recovers", "openrouter-timeout-bounded", "fails-fast"],
 )
 def test_midstream_failure_retries_the_whole_request(
     monkeypatch, failure, drops, raises, attempts,

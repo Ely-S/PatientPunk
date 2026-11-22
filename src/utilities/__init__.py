@@ -20,6 +20,7 @@ elif _src_env.exists():
 
 import anthropic
 import httpx
+import openai
 
 # ── Output file names ────────────────────────────────────────────────────────
 TAGGED_MENTIONS = "tagged_mentions.json"
@@ -180,18 +181,27 @@ class _ORStream:
     def get_final_message(self):
         parts: list[str] = []
         finish = None
+        refused = False
         for chunk in self._stream:
             if not chunk.choices:
                 continue
-            delta = chunk.choices[0].delta
+            choice = chunk.choices[0]
+            delta = choice.delta
             if getattr(delta, "content", None):
                 parts.append(delta.content)
-            if chunk.choices[0].finish_reason:
-                finish = chunk.choices[0].finish_reason
+            if getattr(delta, "refusal", None):
+                refused = True
+            if choice.finish_reason:
+                finish = choice.finish_reason
+
+        stop_reason = "max_tokens" if finish == "length" else "end_turn"
+        # A filtered stream can contain text. Preserve the refusal for check_response.
+        if refused or finish == "content_filter":
+            stop_reason = "refusal"
         from types import SimpleNamespace
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text="".join(parts))],
-            stop_reason="max_tokens" if finish == "length" else "end_turn",
+            stop_reason=stop_reason,
         )
 
 
@@ -245,7 +255,6 @@ def get_client() -> anthropic.Anthropic:
 
     if LLM_PROVIDER == "openrouter":
         # Deliberately the OpenAI surface by defult so we have access to reasoning settings
-        import openai
         return _ORClient(openai.OpenAI(
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
@@ -360,7 +369,9 @@ def is_transient_failure(exc: BaseException) -> bool:
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
                         anthropic.RateLimitError, anthropic.InternalServerError)):
         return True
-    if isinstance(exc, httpx.TransportError):
+    # OpenRouter's OpenAI SDK wraps transport failures, including timeouts,
+    # in APIConnectionError. Exhausted retries should fail only the current item.
+    if isinstance(exc, (httpx.TransportError, openai.APIConnectionError)):
         return True
     status = getattr(exc, "status_code", None)
     if status == 429 or (isinstance(status, int) and 500 <= status < 600):

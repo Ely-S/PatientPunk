@@ -217,11 +217,10 @@ def self_reported_age(value) -> int | None:
 # --- Response validation ------------------------------------------------------
 
 class LLMResponseError(RuntimeError):
-    """A provider returned a 200 whose body is unusable (empty / truncated).
+    """A provider response is empty, truncated, or blocked by a content filter.
 
-    Raised rather than returned so callers can retry (hotter temperature /
-    split_retry_batch) and the response cache -- which only stores successful
-    returns -- never persists it.
+    Raising keeps the response out of the cache and lets callers handle the
+    error according to its type.
     """
 
 
@@ -248,13 +247,16 @@ def response_text(response) -> str:
 
 
 def check_response(response, model: str = ""):
-    """Raise LLMResponseError if a 200-OK response is empty or truncated.
+    """Raise LLMResponseError if a 200-OK response is refused, empty, or truncated.
 
     ``stop_reason == "max_tokens"`` means the reply was cut off mid-generation:
     for the JSON callers here that reply is unparseable, and caching it would
     make the loss permanent across re-runs.
     """
-    if getattr(response, "stop_reason", None) == "max_tokens":
+    stop_reason = getattr(response, "stop_reason", None)
+    if stop_reason == "refusal":
+        raise LLMContentFilteredError(f"{model}: reply blocked by the provider's content filter")
+    if stop_reason == "max_tokens":
         raise LLMTruncationError(
             f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
             f"or shrink the batch)"
