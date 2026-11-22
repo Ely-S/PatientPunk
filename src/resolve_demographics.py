@@ -76,7 +76,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     key = country.casefold() if country else None
     states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
     state = states[-1] if states else None
-    # A city counts only from a post that names the resolved country and state, or neither.
+    # A city counts only from a post whose country and state, where it names them, match the resolved ones.
     state_key = state.casefold() if state else None
     state_of = {p: v.casefold() for _, p, v in by_field["state"]}
     cities = [v for _, p, v in by_field["city"]
