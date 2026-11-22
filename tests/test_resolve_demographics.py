@@ -153,7 +153,8 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
 
 @pytest.mark.parametrize("stated, bucket, age", [
     ("34.0", "30s", 34.0), ("mid-30s", "30s", 35.0), ("early 40s", "40s", 42.5), ("late 30s", "30s", 37.5),
-    ("25-34", "20s", 29.5),
+    ("25-34", "20s", 29.5), ("20s-30s", "30s", 30.0), ("early–30s", "30s", 32.5), ("34 years old", "30s", 34.0),
+    ("60s+", None, None),
     ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
 ])
 def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
