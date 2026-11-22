@@ -170,6 +170,21 @@ def test_conditions_are_replaced_by_each_check_and_a_failed_check_is_retried(db,
     assert calls == []
 
 
+def test_a_conditions_call_the_filter_blocks_keeps_conditions_and_is_not_retried(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I have POTS")])
+    stub(monkeypatch, conditions=conditions_reply("POTS"))
+    demographics.run_demographics(path)
+    add_posts(conn, [("p2", "a", 2, None, "graphic text")])
+    calls = stub(monkeypatch, conditions=lambda text: LLMContentFilteredError("blocked"))
+
+    assert demographics.run_demographics(path)["conditions_blocked"] == 1
+    demographics.run_demographics(path)
+
+    assert [kind for kind, _, _ in calls] == ["post", "conditions"]  # the blocked call is sent once
+    assert current_conditions(conn, "a") == {"pots"}
+
+
 def test_runs_from_before_condition_runs_never_make_users_due(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("p1", "a", 1, None, "I have POTS"), ("p2", "b", 1, None, "hello")])

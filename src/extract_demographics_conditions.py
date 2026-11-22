@@ -161,8 +161,15 @@ def parse_conditions(raw: str) -> list[tuple[str, str]]:
     return parsed
 
 
-def read_conditions(client, text: str) -> list[tuple[str, str]]:
-    return _ask(client, CONDITIONS_PROMPT + wrap_untrusted_text(text), parse_conditions)
+BLOCKED = object()  # read_conditions' result when the content filter blocks the call
+
+
+def read_conditions(client, text: str) -> list[tuple[str, str]] | object:
+    try:
+        return _ask(client, CONDITIONS_PROMPT + wrap_untrusted_text(text), parse_conditions)
+    except LLMContentFilteredError:
+        log.warning("Content filter blocked a conditions call; keeping that user's current conditions")
+        return BLOCKED
 
 
 # ── Running ──────────────────────────────────────────────────────────────────
@@ -269,7 +276,8 @@ CONDITIONS_DUE = (
 def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
     """One conditions call per due user (CONDITIONS_DUE), over their newest posts up to MAX_USER_CHARS.
     A checked user gets a condition_runs row; a failed call writes nothing, so the next run checks that
-    user again. (Conditions move per post later, #195.)"""
+    user again. A call the content filter blocks would be blocked every time, so it counts as a check that
+    carries the user's current conditions forward. (Conditions move per post later, #195.)"""
     users = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
 
     def checked(user_id: str, conditions: list) -> None:
@@ -296,6 +304,11 @@ def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
     for user_id, conditions in _in_parallel(client, jobs(), read_conditions):
         if conditions is None:
             counts["conditions_failed"] += 1
+        elif conditions is BLOCKED:
+            current = conn.execute("SELECT condition_name, condition_type FROM conditions_latest WHERE user_id = ?",
+                                   (user_id,)).fetchall()
+            checked(user_id, current)
+            counts["conditions_blocked"] += 1
         else:
             checked(user_id, conditions)
     conn.commit()
@@ -341,7 +354,8 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
                      f", resuming run {unfinished}" if unfinished else "")
         else:
             log.info("Extraction run %s", run_id)
-        counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
+        counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0,
+                  "conditions_blocked": 0}
 
         read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
         _read_conditions(client, conn, reader, run_id, counts)
