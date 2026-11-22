@@ -340,10 +340,12 @@ def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, ca
     assert [t for kind, text, t in calls if kind == "post" and text == "unreadable"] == [0.0, 0.7, 1.0]
     assert stats["posts_failed"] == 2 and stats["failed_users"] == 2
     assert "private reply text" not in caplog.text
-    # An empty reread retracts the age, and so does a filtered one: the filter would block it every
-    # time, so it is read with no claims. The failed users keep theirs, and their posts stay unread.
+    # An empty reread retracts the age. A filtered one is read but keeps its earlier claim: the filter
+    # would block it every time, and says nothing about what the post states. The failed users keep
+    # theirs, and their posts stay unread.
     assert {u: profile(conn, u)[0] for u in users} == {
-        "empty": None, "filtered": None, "transient": "30s", "unreadable": "30s"}
+        "empty": None, "filtered": "30s", "transient": "30s", "unreadable": "30s"}
+    assert stats["posts_blocked"] == 1
     calls = stub(monkeypatch, post=lambda text: {"age": claim(41)})
     demographics.run_demographics(path)
     assert sorted(posts_read(conn, calls)) == ["transient", "unreadable"]
