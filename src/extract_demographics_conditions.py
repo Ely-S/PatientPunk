@@ -47,7 +47,11 @@ TEMPERATURES = (0.0, 0.7, 1.0)
 REMOVED_BODIES = {"[removed]", "[deleted]"}
 CLAIM_FIELDS = ("age", "sex", "country", "state", "city")
 MULTIPLE_PLACES = re.compile(r"[/|;\r\n]|\s+or\s+", re.IGNORECASE)
-DC = re.compile(r",\s*D\.?\s*C\.?$", re.IGNORECASE)  # "Washington, D.C." is one place
+# A comma inside one place's name: "Washington, D.C.", "Korea, Republic of", "Congo, Democratic Republic of the"
+ONE_PLACE_COMMA = re.compile(
+    r",\s*(?:D\.?\s*C\.?|(?:the\s+)?(?:[a-z]+\s+)?(?:republic|kingdom|federation|states?)\s+of(?:\s+the)?)\s*$",
+    re.IGNORECASE,
+)
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
 
 
@@ -107,7 +111,7 @@ def _claim_value(field: str, value: object) -> str | None:
     if field == "sex":
         return text  # every stated value kept, "non-binary | female" included (#214)
     # One place. A city may carry its region after a comma ("Austin, TX"); a country or state may not.
-    if MULTIPLE_PLACES.search(text) or (field != "city" and "," in DC.sub("", text)):
+    if MULTIPLE_PLACES.search(text) or (field != "city" and "," in ONE_PLACE_COMMA.sub("", text)):
         return None
     return text
 
@@ -156,10 +160,10 @@ def parse_conditions(raw: str) -> list[tuple[str, str]]:
     conditions = parse_json_object(raw).get("conditions")
     if conditions is None:
         return []
-    if not isinstance(conditions, list) or any(not _condition_name(item) for item in conditions):
-        raise LLMParseError("Expected a list of named conditions")
+    if not isinstance(conditions, list):
+        raise LLMParseError("Expected a list of conditions")
     parsed = []
-    for condition in conditions:
+    for condition in filter(_condition_name, conditions):  # an entry without a name is dropped, as on main
         kind = condition.get("condition_type") if isinstance(condition, dict) else None
         kind = kind.strip().lower() if isinstance(kind, str) else None
         parsed.append((_condition_name(condition).lower(), kind if kind in ("illness", "symptom") else "illness"))

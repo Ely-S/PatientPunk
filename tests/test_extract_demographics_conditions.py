@@ -231,6 +231,7 @@ def test_runs_from_before_condition_runs_never_make_users_due(db, monkeypatch):
         ("sex", "unknown", None), ("sex", ["M"], None),
         ("country", "Trinidad and Tobago", "Trinidad and Tobago"), ("country", "US or Canada", None),
         ("state", "Texas / Ohio", None), ("state", "Texas, Ohio", None), ("state", "Washington, D.C.", "Washington, D.C."),
+        ("country", "Korea, Republic of", "Korea, Republic of"), ("country", "USA, Canada", None),
         ("city", "Portland", "Portland"),
         ("city", "Austin, TX", "Austin, TX"), ("city", "Austin or Dallas", None), ("city", "", None),
     ],
@@ -262,7 +263,8 @@ def test_a_value_without_a_quote_is_not_a_claim(db, monkeypatch):
     [("non-binary | female", "non-binary"), ("female, non-binary", "non-binary"), ("non-binary and female", "non-binary"),
      ("non-binary/female", "non-binary"), ("female | suspected intersex", "female"),
      ("Man", "male"), ("cis woman", "female"), ("cisgender male", "male"), ("cis-female | non-binary", "non-binary"),
-     ("trans man", None), ("female | male", None)],
+     ("trans man", None), ("female | male", None), ("trans woman | female", None), ("trans man | male", None),
+     ("woman, trans", None), ("female | transgender", None), ("trans | non-binary", "non-binary")],
 )
 def test_multi_value_sex_is_kept_and_normalized_by_rule(db, monkeypatch, stated, sex):
     conn, path = db
@@ -623,3 +625,13 @@ def test_writes_after_another_connection_commits(db, monkeypatch):
     demographics.run_demographics(path)
 
     assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)
+
+
+def test_unnamed_conditions_are_dropped_and_the_rest_kept():
+    raw = '{"conditions": [{"condition_name": "ME/CFS"}, {"condition_name": null}, {}, ""]}'
+    assert demographics.parse_conditions(raw) == [("me/cfs", "illness")]
+
+
+@pytest.mark.parametrize("value", ["1e1", "3e1", "inf", "nan"])
+def test_age_must_be_written_as_a_number(value):
+    assert demographics._claim_value("age", value) is None
