@@ -3,9 +3,10 @@
 Resolution is recomputed from demographic_claims_latest on every run, so it needs no state of its
 own: a restart, a re-read that retracted claims, or a newer reference date is picked up by the next
 call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
-Each row keeps the exact age, advanced to the reference date, beside its decade; the age is empty when
-the latest usable age claim was only a decade ("mid-30s").
+Each row keeps the age in whole years, advanced to the reference date, beside its decade. When the
+author gave a range or decade instead of a number, the age is that range's midpoint ("mid-30s" -> 35).
 """
+import re
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -19,16 +20,37 @@ def _years_between(start: int, end: int) -> int:
     return b.year - a.year - ((b.month, b.day) < (a.month, a.day))
 
 
-def _age_now(value: str, date: int | None, reference: int | None) -> int | str | None:
-    """A stated age advanced to the reference date. A decade ("mid-30s") can't be advanced, so it is
-    returned as its bucket; anything unparseable or out of range is None and ignored."""
+_DECADE = re.compile(r"\b(early|mid|late)?[\s-]*(\d)0\s*'?s\b")
+_RANGE = re.compile(r"(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})")
+_DECADE_PART = {"early": 2, "mid": 5, "late": 8}  # midpoints of the decade's first, middle and last thirds
+
+
+def _estimate(value: str) -> tuple[int, bool] | None:
+    """(age, estimated) from what the author wrote: a number as given; a range or decade at its
+    midpoint ("25-34" -> 30, "30s" or "mid-30s" -> 35, "early 40s" -> 42, "late 20s" -> 28).
+    None when there is no age in it."""
+    text = value.strip().lower()
     try:
-        age = int(float(value))
+        return int(float(text)), False
     except (ValueError, OverflowError):
-        return _bucketize_age(value)
+        pass
+    if m := _RANGE.fullmatch(text):
+        low, high = int(m[1]), int(m[2])
+        return ((low + high + 1) // 2, True) if low <= high else None
+    if m := _DECADE.search(text):
+        return int(m[2]) * 10 + _DECADE_PART.get(m[1], 5), True
+    return None
+
+
+def _age_now(value: str, date: int | None, reference: int | None) -> tuple[int, bool] | None:
+    """(age, estimated) advanced to the reference date; None when unparseable or out of range."""
+    stated = _estimate(value)
+    if stated is None:
+        return None
+    age, estimated = stated
     if date is not None and reference is not None:
         age += _years_between(date, reference)
-    return age if _bucketize_age(str(age)) else None
+    return (age, estimated) if _bucketize_age(str(age)) else None
 
 
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
@@ -43,20 +65,20 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
         if field == "country":
             countries[post_id] = value.casefold()
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
-    latest_age = ages[-1] if ages else None
-    age_bucket = _bucketize_age(str(latest_age)) if latest_age is not None else None
-    exact_age = latest_age if isinstance(latest_age, int) else None
-    sex =by_field["sex"][-1][2] if by_field["sex"] else None
+    age = ages[-1][0] if ages else None
+    age_bucket = _bucketize_age(str(age)) if age is not None else None
+    sex = by_field["sex"][-1][2] if by_field["sex"] else None
     country = by_field["country"][-1][2] if by_field["country"] else None
     key = country.casefold() if country else None
     states = [v for _, p, v in by_field["state"] if countries.get(p, key) == key]
     location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
     disagree = {f for f, rows in by_field.items()
                 if f != "age" and len({v.casefold() for _, _, v in rows}) > 1}
-    exact = {a for a in ages if isinstance(a, int)}
-    if len(exact) > 1 or len({_bucketize_age(str(a)) for a in ages}) > 1:
+    # Two different stated numbers disagree; an estimate disagrees only when its decade differs.
+    stated = {a for a, estimated in ages if not estimated}
+    if len(stated) > 1 or len({_bucketize_age(str(a)) for a, _ in ages}) > 1:
         disagree.add("age")
-    return (age_bucket, exact_age, sex, location), disagree
+    return (age_bucket, age, sex, location), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
