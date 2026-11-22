@@ -73,7 +73,9 @@ def _ask(client, prompt: str, parse: Callable[[str], object]):
     """parse(reply), re-asking at a higher temperature while the reply is unreadable."""
     for attempt, temperature in enumerate(TEMPERATURES, start=1):
         try:
-            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature))
+            # validate keeps an unreadable reply out of the cache, so a later run asks the model again.
+            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature,
+                                  validate=parse))
         except LLMContentFilteredError:
             raise
         except (LLMParseError, LLMResponseError):

@@ -235,13 +235,19 @@ def cached_completion(
     temperature: float,
     max_tokens: int,
     call_fn: Callable[[], str],
+    validate: Callable[[str], object] | None = None,
 ) -> str:
     """Return a cached response when enabled+hit; otherwise call ``call_fn`` and store.
 
-    Exceptions from ``call_fn`` are never cached.
+    Exceptions from ``call_fn`` are never cached. ``validate(text)`` raises for a reply the caller
+    can't use (for example, one that won't parse): such a reply is never stored, and a cached one is
+    treated as a miss, so a retry asks the model again instead of replaying it.
     """
     if not cache_enabled():
-        return call_fn()
+        text = call_fn()
+        if validate:
+            validate(text)
+        return text
 
     key = make_key(
         provider=provider,
@@ -254,11 +260,18 @@ def cached_completion(
     path = cache_path(provider, model, key)
     hit = get(path)
     if hit is not None:
-        _elog("H", key)
-        return hit
+        try:
+            if validate:
+                validate(hit)
+            _elog("H", key)
+            return hit
+        except Exception:
+            pass  # a reply stored before the caller validated it; ask again
 
     _elog("M", key)
     text = call_fn()
+    if validate:
+        validate(text)  # raises before put, so an unusable reply is never stored
     put(
         path,
         key=key,

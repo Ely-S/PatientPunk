@@ -263,6 +263,41 @@ def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, ca
     assert {u: profile(conn, u)[0] for u in ("transient", "unreadable")} == {"transient": "40s", "unreadable": "40s"}
 
 
+def test_an_unreadable_reply_is_asked_again_by_the_next_run_through_the_real_cache(db, monkeypatch, tmp_path):
+    """The other tests stub llm_call; this one uses it, with the on-disk cache on and a stub client."""
+    from types import SimpleNamespace
+    from patientpunk import llm_cache
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I'm 34")])
+    monkeypatch.setenv("LLM_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(llm_cache, "_enabled_override", True)
+    post_replies = iter(["not JSON"] * 3 + [json.dumps({**NOTHING, "age": claim(34)})])
+    sent = []
+
+    class Stream:
+        def __init__(self, prompt):
+            self.prompt = prompt
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def get_final_message(self):
+            post = self.prompt.startswith(POST_DEMOGRAPHICS_PROMPT)
+            sent.append("post" if post else "conditions")
+            text = next(post_replies) if post else NO_CONDITIONS
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn")
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: Stream(kw["messages"][0]["content"])))
+    monkeypatch.setattr(demographics, "get_client", lambda: client)
+
+    assert demographics.run_demographics(path)["posts_failed"] == 1
+    stats = demographics.run_demographics(path)
+
+    assert sent.count("post") == 4  # the second run asked the model, not the cache
+    assert stats["posts_read"] == 1 and stats["posts_failed"] == 0
+    assert profile(conn, "a")[0] == "30s"
+
+
 def test_a_post_the_filter_always_blocks_does_not_freeze_the_profile(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("blocked", "a", 1, None, "graphic text"), ("ok", "a", 2, None, "I'm 34")])
