@@ -87,6 +87,8 @@ def build_unified(conn: sqlite3.Connection, records_csv: Path) -> int:
     if not profiles:
         print("  ! no direct profiles in user_profiles_latest; demo_* columns are empty"
               " (run src/extract_demographics_conditions.py on this database)")
+    elif not profiles.keys() & set(uni["author_hash"]):
+        print("  ! no records.csv author_hash matches a user in user_profiles_latest; demo_* columns are empty")
     demo_df = pd.DataFrame(
         [{"author_hash": user, **{f"demo_{k}": v for k, v in p.items()}} for user, p in profiles.items()],
         columns=["author_hash", *(f"demo_{k}" for k in PROFILE_FIELDS)],

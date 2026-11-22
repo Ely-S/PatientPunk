@@ -157,6 +157,34 @@ def test_unified_warns_without_direct_profiles(built, capsys):
     conn.close()
 
 
+def test_unified_warns_when_no_profile_matches_an_author(built, capsys):
+    conn = sqlite3.connect(built)
+    conn.execute("INSERT INTO users (user_id, source_subreddit, scraped_at) VALUES ('u9','x',0)")
+    conn.execute("UPDATE user_profiles SET user_id = 'u9'")
+    load_db.build_unified(conn, built.parent / "records.csv")
+    assert "no records.csv author_hash matches" in capsys.readouterr().out
+    conn.close()
+
+
+def test_legacy_demographic_confidence_columns_are_dropped(tmp_path):
+    posts_db = tmp_path / "posts.db"
+    _make_posts_db(posts_db)
+    records = tmp_path / "records.csv"
+    _write_csv(records,
+               ["author_hash", "source", "post_id", "age", "age__confidence", "sex_gender__confidence",
+                "conditions", "conditions__confidence"],
+               [["u1", "subreddit_post", "p1", "25", "high", "low", "pots", "high"]])
+    out_db = tmp_path / "patientpunk.db"
+    assert load_db.main(["--posts-db", str(posts_db), "--records", str(records), "--db", str(out_db),
+                         "--schema-sql", str(SCHEMA_SQL)]) == 0
+    conn = sqlite3.connect(out_db)
+    assert {r[0] for r in conn.execute("SELECT DISTINCT field FROM variables")} <= {"conditions", "conditions__confidence"}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(unified)")}
+    assert "conditions__confidence" in cols
+    assert not cols & {"age", "age__confidence", "sex_gender__confidence"}
+    conn.close()
+
+
 def _cluster_prep(records: Path, db: Path | None, out: Path, key: str = "author_hash") -> dict[str, dict[str, str]]:
     with pytest.raises(SystemExit, match="0"):  # --no-report exits once the matrix is written
         ve_main._cmd_cluster_prep(argparse.Namespace(
@@ -188,6 +216,35 @@ def test_cluster_prep_warns_when_no_key_matches_a_profile(built, capsys):
 def test_cluster_prep_stays_quiet_when_profiles_match(built, capsys):
     _cluster_prep(built.parent / "records.csv", built, built.parent / "m.csv")
     assert "matches a user_id" not in capsys.readouterr().out
+
+
+def test_cluster_prep_reads_a_db_whose_path_has_a_hash(built, tmp_path):
+    odd = tmp_path / "dir#hash" / "full.db"
+    odd.parent.mkdir()
+    odd.write_bytes(built.read_bytes())
+    matrix = _cluster_prep(built.parent / "records.csv", odd, tmp_path / "m.csv")
+    assert matrix["u1"]["demo_age_bucket=40s"] == "1"
+    assert not (tmp_path / "dir").exists()                # no stray file at a truncated path
+
+
+def test_cluster_prep_rejects_a_missing_db(built, tmp_path):
+    missing = tmp_path / "nope.db"
+    with pytest.raises(SystemExit, match="no such database file"):
+        ve_main._cmd_cluster_prep(argparse.Namespace(
+            records=built.parent / "records.csv", db=missing, key="author_hash", min_coverage=0.0,
+            encode="multihot", top_k=8, fields=None, sep=" | ", out=tmp_path / "m.csv", no_report=True))
+    assert not missing.exists()
+
+
+def test_cluster_prep_warns_when_db_has_no_profiles(built, capsys):
+    conn = sqlite3.connect(built)
+    conn.execute("DELETE FROM user_profiles")
+    conn.commit()
+    conn.close()
+    _cluster_prep(built.parent / "records.csv", built, built.parent / "m.csv")
+    out = capsys.readouterr().out
+    assert "no profiles in user_profiles_latest" in out
+    assert "matches a user_id" not in out
 
 
 def test_bucketize_age_handles_missing_and_qualitative_decades():

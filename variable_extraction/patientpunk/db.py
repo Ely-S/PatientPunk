@@ -64,11 +64,12 @@ VARIABLE_META_COLUMNS: set[str] = {
     "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
-# records.csv demographic columns that no longer feed profiles or derived tables;
-# demographics come only from user_profiles_latest.
-LEGACY_DEMOGRAPHIC_COLUMNS: set[str] = {
-    "age", "sex_gender", "location_country", "location_state", "location_us_state",
-}
+# records.csv demographic columns that no longer feed profiles or derived tables, with their
+# --confidence columns; demographics come only from user_profiles_latest.
+_LEGACY_DEMOGRAPHIC_FIELDS = {"age", "sex_gender", "location_country", "location_state", "location_us_state"}
+LEGACY_DEMOGRAPHIC_COLUMNS: set[str] = (
+    _LEGACY_DEMOGRAPHIC_FIELDS | {f"{c}__confidence" for c in _LEGACY_DEMOGRAPHIC_FIELDS}
+)
 
 
 # ── Database setup ─────────────────────────────────────────────────────────────
@@ -265,7 +266,7 @@ def _bucketize_age(raw: str | None) -> str | None:
     # Plain numeric age: "34", "34.0"
     try:
         age = int(float(raw))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
     if age < 10 or age > 110:
         return None  # implausible age
