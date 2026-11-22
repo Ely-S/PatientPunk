@@ -176,7 +176,8 @@ def test_a_value_without_a_quote_is_not_a_claim(db, monkeypatch):
     [("non-binary | female", "non-binary"), ("female, non-binary", "non-binary"), ("non-binary and female", "non-binary"),
      ("non-binary/female", "non-binary"), ("female | suspected intersex", "female"),
      ("Man", "male"), ("cis woman", "female"), ("cisgender male", "male"), ("cis-female | non-binary", "non-binary"),
-     ("trans man", None), ("female | male", None)],
+     ("trans man", None), ("female | male", None), ("trans woman | female", None), ("trans man | male", None),
+     ("woman, trans", None), ("female | transgender", None), ("trans | non-binary", "non-binary")],
 )
 def test_multi_value_sex_is_kept_and_normalized_by_rule(db, monkeypatch, stated, sex):
     conn, path = db
@@ -543,3 +544,7 @@ def test_unnamed_conditions_are_dropped_and_the_rest_kept():
     raw = '{"conditions": [{"condition_name": "ME/CFS"}, {"condition_name": null}, {}, ""]}'
     assert demographics.parse_conditions(raw) == [("me/cfs", "illness")]
 
+
+@pytest.mark.parametrize("value", ["1e1", "3e1", "inf", "nan"])
+def test_age_must_be_written_as_a_number(value):
+    assert demographics._claim_value("age", value) is None

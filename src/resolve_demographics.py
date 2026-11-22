@@ -8,7 +8,6 @@ When the author gave a range or decade instead of a number, the age is that rang
 ("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
 normalized from it (normalize_sex, #214).
 """
-import math
 import re
 import sqlite3
 from collections import Counter, defaultdict
@@ -34,6 +33,9 @@ _DECADE = re.compile(r"(early|mid|late)?[\s-]*(\d)0\s*'?s")
 _DECADE_PART = {"early": 2.5, "mid": 5.0, "late": 7.5}
 
 
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
 def _estimate(value: str) -> tuple[float, bool] | None:
     """(age in years, estimated) from what the author wrote: a number as given; a range or decade at
     its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s" -> 37.5,
@@ -43,12 +45,10 @@ def _estimate(value: str) -> tuple[float, bool] | None:
     if text.endswith("+"):
         return None
     text = _UNITS.sub("", _LEAD.sub("", text)).strip()
-    try:
+    if _NUMBER.fullmatch(text):  # digits only: float() alone would take "1e1" or "inf"
         number = float(text)
         # A fractional age ("34.5") is not a whole-year statement; "34.0" counts as 34.
-        return (number, False) if math.isfinite(number) and number.is_integer() else None
-    except ValueError:
-        pass
+        return (number, False) if number.is_integer() else None
     if m := _RANGE.fullmatch(text):
         low, high = int(m[1]), int(m[2])
         return ((low + high) / 2, True) if low <= high else None
@@ -87,6 +87,7 @@ SEX_VALUES = {
 
 # The prompt asks for " | " between values, but a reply may use other separators.
 _SEX_PARTS = re.compile(r"[|/,;&]|\band\b", re.IGNORECASE)
+_TRANS = re.compile(r"\btrans", re.IGNORECASE)  # trans, transgender, trans woman, transfem...
 _CIS = re.compile(r"^cis(?:gender)?[\s-]*", re.IGNORECASE)  # "cis woman" and "cisgender male" name a binary sex
 
 
@@ -94,10 +95,12 @@ def normalize_sex(stated: str) -> str | None:
     """female, male or non-binary from the author's words, which may hold several values (#214):
     non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
     ignored ("female | suspected intersex" -> female), and "cis" is dropped ("cis woman" -> female). None when no rule applies ("trans man",
-    "female | male"); the words themselves stay in sex_stated."""
+    "trans woman | female", "female | male"); the words themselves stay in sex_stated."""
     values = {SEX_VALUES.get(_CIS.sub("", part.strip()).casefold()) for part in _SEX_PARTS.split(stated)} - {None}
     if "non-binary" in values:
         return "non-binary"
+    if _TRANS.search(stated):
+        return None  # a trans answer is never mapped to a binary sex (#214): "trans woman | female" -> None
     return values.pop() if len(values) == 1 else None
 
 
