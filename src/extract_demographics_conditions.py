@@ -1,155 +1,264 @@
 #!/usr/bin/env python3
-"""
-run_demographics.py — Extract demographics and conditions from user posts.
+"""Extract self-reported demographics and conditions from SQLite posts."""
 
-Reads from the posts table, groups by user, sends to a fast model for extraction,
-and writes to user_profiles and conditions tables.
-
-In user_profiles, we store demographic data that is inferred from the user's posts.
-In the conditions table, we store the conditions that are inferred from the user's posts, 
-along with the type of condition (illness or symptom), the severity of the condition, 
-and the date of diagnosis and resolution.
-Both of these may have empty values if the model fails to extract any information.
-Usage:
-    python src/run_demographics.py --db data/posts.db
-    python src/run_demographics.py --db data/posts.db --limit 50
-"""
 import argparse
 import json
+import re
 import sys
 import time
-from collections import defaultdict
+from collections.abc import Iterable, Iterator
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import closing
+from itertools import groupby, islice
+from operator import itemgetter
 from pathlib import Path
+from sqlite3 import Connection
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utilities.db import open_db
 from import_posts import DELETED_USER_ID
-from utilities import get_client, get_git_commit, llm_call, log, parse_json_object, MODEL_FAST
+from patientpunk._utils import (
+    LLMContentFilteredError,
+    LLMResponseError,
+    parse_json_response,
+    self_reported_age,
+    wrap_untrusted_text,
+)
+from patientpunk.db import _bucketize_age
 from prompts.demographic_prompt import DEMOGRAPHICS_PROMPT
+from utilities import (
+    MODEL_FAST,
+    LLMParseError,
+    get_client,
+    get_git_commit,
+    is_transient_or_truncated,
+    llm_call,
+    log,
+)
+from utilities.db import open_db
+
+MAX_USER_CHARS = 8_000
+MAX_IN_FLIGHT = 10
+COMMIT_EVERY = 20
+TEMPERATURES = (0.0, 0.7, 1.0)
+REMOVED_BODIES = {"[removed]", "[deleted]"}
+RESPONSE_FIELDS = {"age", "sex", "country", "state", "conditions"}
+SEX_VALUES = {
+    "f": "female",
+    "female": "female",
+    "woman": "female",
+    "m": "male",
+    "male": "male",
+    "man": "male",
+    "nb": "non-binary",
+    "nonbinary": "non-binary",
+    "non-binary": "non-binary",
+    "non binary": "non-binary",
+}
+MULTIPLE_PLACES = re.compile(r"[,/|;\r\n]|\s+or\s+", re.IGNORECASE)
+UNKNOWN_PLACES = {"unknown", "none", "null", "not stated", "n.a."}
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# LLM extraction
-# ═════════════════════════════════════════════════════════════════════════════
+def _post_texts(posts: Iterable[tuple[str, str | None, str]]) -> Iterator[str]:
+    for _, title, body in posts:
+        body = body.strip()
+        if body.casefold() in REMOVED_BODIES:
+            continue
+        text = "\n".join(part for part in ((title or "").strip(), body) if part)
+        if text:
+            yield text
 
-def extract_demographics(client, texts: list[str], *, max_posts: int = 10, max_chars: int = 500) -> dict:
-    """Call MODEL_FAST to extract demographics from a user's posts."""
-    combined = "\n---\n".join(t[:max_chars] for t in texts[:max_posts])
-    raw = llm_call(client, DEMOGRAPHICS_PROMPT + combined, model=MODEL_FAST, max_tokens=300)
-    try:
-        result = parse_json_object(raw)
-    except Exception as e:
-        log.error(f"Failed to parse demographics: {raw}: {e}")
-        return {"age_bucket": None, "sex": None, "location": None, "conditions": []}
-    raw_conditions = result.get("conditions")
-    conditions = raw_conditions if isinstance(raw_conditions, list) else []
+
+def _combine_posts(
+    texts: Iterable[str], *, max_posts: int | None, max_chars: int | None,
+) -> str:
+    separator = "\n---\n"
+    parts = []
+    remaining = MAX_USER_CHARS
+    for text in islice(texts, max_posts):
+        prefix = separator if parts else ""
+        if remaining <= len(prefix):
+            break
+        part = prefix + text[:min(max_chars or MAX_USER_CHARS, remaining - len(prefix))]
+        parts.append(part)
+        remaining -= len(part)
+        if not remaining:
+            break
+    return "".join(parts)
+
+
+def _user_inputs(
+    rows: Iterable[tuple[str, str | None, str]], *, max_posts: int | None, max_chars: int | None,
+) -> Iterator[tuple[str, str]]:
+    for user_id, posts in groupby(rows, key=itemgetter(0)):
+        combined = _combine_posts(_post_texts(posts), max_posts=max_posts, max_chars=max_chars)
+        if combined:
+            yield user_id, combined
+
+
+def _single_place(value: object) -> str | None:
+    if isinstance(value, str):
+        value = value.strip()
+        if value and value.casefold() not in UNKNOWN_PLACES and not MULTIPLE_PLACES.search(value):
+            return value
+    return None
+
+
+def _normalize_demographics(result: dict) -> dict:
+    sex = result.get("sex")
     return {
-        "age_bucket": result.get("age_bucket"),
-        "sex": result.get("sex"),
-        "location": result.get("location"),
-        "conditions": conditions,
+        "age": self_reported_age(result.get("age")),
+        "sex": SEX_VALUES.get(sex.strip().casefold()) if isinstance(sex, str) else None,
+        "country": _single_place(result.get("country")),
+        "state": _single_place(result.get("state")),
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Main
-# ═════════════════════════════════════════════════════════════════════════════
+def extract_demographics(client, text: str) -> dict:
+    """Read demographics and conditions from one author's prepared text."""
+    prompt = DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text)
+    for attempt, temperature in enumerate(TEMPERATURES, start=1):
+        try:
+            raw = llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature)
+            result = parse_json_response(raw)
+            if not isinstance(result, dict) or RESPONSE_FIELDS.isdisjoint(result):
+                raise LLMParseError("Expected a demographics JSON object")
+        except LLMContentFilteredError:
+            raise
+        except (LLMParseError, LLMResponseError):
+            if attempt == len(TEMPERATURES):
+                raise
+            log.info("Unreadable demographics reply (%d/%d), retrying", attempt, len(TEMPERATURES))
+        else:
+            conditions = result.get("conditions")
+            return {
+                **_normalize_demographics(result),
+                "conditions": conditions if isinstance(conditions, list) else [],
+            }
+    raise AssertionError("Unreachable")
 
 
-def run_demographics(db_path: Path, *, limit: int = 0, max_posts: int = 10, max_chars: int = 500):
+def _extract_users(client, users: Iterable[tuple[str, str]]) -> Iterator[tuple[str, dict | None]]:
+    pool = ThreadPoolExecutor(max_workers=MAX_IN_FLIGHT)
+    users = iter(users)
+    pending = {}
+    try:
+        for user_id, text in islice(users, MAX_IN_FLIGHT):
+            pending[pool.submit(extract_demographics, client, text)] = user_id
+
+        while pending:
+            completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in completed:
+                user_id = pending.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    if not isinstance(exc, LLMParseError) and not is_transient_or_truncated(exc):
+                        log.error("Stopping demographics run: %s failed (%s)", user_id, type(exc).__name__)
+                        raise
+                    log.warning("Skipping demographics for %s (%s)", user_id, type(exc).__name__)
+                    yield user_id, None
+                else:
+                    yield user_id, result
+
+            # Check all completed requests for fatal errors before scheduling replacements.
+            for user_id, text in islice(users, len(completed)):
+                pending[pool.submit(extract_demographics, client, text)] = user_id
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
+def _write_result(conn: Connection, run_id: int, user_id: str, result: dict) -> int:
+    age = result["age"]
+    age_bucket = _bucketize_age(str(age)) if age is not None else None
+    location = " / ".join(filter(None, (result["country"], result["state"]))) or None
+    conn.execute(
+        "INSERT INTO user_profiles (user_id, run_id, age_bucket, sex, location) VALUES (?, ?, ?, ?, ?)",
+        (user_id, run_id, age_bucket, result["sex"], location),
+    )
+
+    conditions_written = 0
+    for condition in result["conditions"]:
+        if isinstance(condition, dict):
+            name, kind = condition.get("condition_name"), condition.get("condition_type")
+        else:
+            name, kind = condition, None
+        if not isinstance(name, str) or not name.strip():
+            continue
+        kind = kind.strip().lower() if isinstance(kind, str) else None
+        conn.execute(
+            "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (run_id, user_id, None, kind if kind in ("illness", "symptom") else "illness", name.strip().lower(), None),
+        )
+        conditions_written += 1
+    return conditions_written
+
+
+def run_demographics(
+    db_path: Path, *, limit: int = 0, max_posts: int | None = None, max_chars: int | None = None,
+):
+    if limit < 0:
+        raise ValueError("limit must be nonnegative")
+    if (max_posts is not None and max_posts < 1) or (max_chars is not None and max_chars < 1):
+        raise ValueError("max_posts and max_chars must be positive when set")
+
     client = get_client()
-
     with closing(open_db(db_path)) as conn:
-        # Create extraction run
-        run_config = {"limit": limit, "model": MODEL_FAST, "max_posts": max_posts, "max_chars": max_chars}
+        run_config = {
+            "limit": limit,
+            "model": MODEL_FAST,
+            "max_user_chars": MAX_USER_CHARS,
+            "max_posts": max_posts,
+            "max_chars": max_chars,
+            "temperatures": TEMPERATURES,
+            "workers": MAX_IN_FLIGHT,
+        }
         cursor = conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) VALUES (?, ?, ?, ?)",
             (int(time.time()), get_git_commit(), "demographics", json.dumps(run_config)),
         )
         run_id = cursor.lastrowid
         conn.commit()
-        log.info(f"Extraction run {run_id}")
+        log.info("Extraction run %s", run_id)
 
-        # Load posts grouped by user (limit applies to number of distinct users)
-        rows = conn.execute(
-            "SELECT p.user_id, p.body_text FROM posts p "
-            + ("INNER JOIN (SELECT DISTINCT user_id FROM posts WHERE user_id != ? LIMIT ?) u ON p.user_id = u.user_id "
-               if limit else "")
-            + "WHERE p.user_id != ? ORDER BY p.user_id, p.post_date",
-            (DELETED_USER_ID, limit, DELETED_USER_ID) if limit else (DELETED_USER_ID,),
-        ).fetchall()
-
-        users: dict[str, list[str]] = defaultdict(list)
-        for user_id, body in rows:
-            users[user_id].append(body)
-
-        log.info(f"Processing {len(users)} users ({len(rows)} posts)")
-
-        profiles_written = 0
-        conditions_written = 0
-        failures = 0
-        COMMIT_EVERY = 20
-
-        for i, (user_id, texts) in enumerate(users.items()):
-            try:
-                result = extract_demographics(client, texts, max_posts=max_posts, max_chars=max_chars)
-            except Exception as e:
-                log.error(f"  Failed {user_id}: {e}")
-                failures += 1
-                conn.execute(
-                    "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (user_id, run_id, None, None, None),
-                )
-                continue
-
-            age_bucket, sex, location = result["age_bucket"], result["sex"], result["location"]
-            conn.execute(
-                "INSERT OR REPLACE INTO user_profiles (user_id, run_id, age_bucket, sex, location) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (user_id, run_id, age_bucket, sex, location),
-            )
-            profiles_written += 1
-
-            for cond in result.get("conditions", []):
-                if isinstance(cond, dict):
-                    name = (cond.get("condition_name") or "").strip().lower()
-                    ctype = (cond.get("condition_type") or "illness").strip().lower()
-                elif isinstance(cond, str):
-                    name = cond.strip().lower()
-                    ctype = "illness"
-                else:
-                    continue
-                if ctype not in ("illness", "symptom"):
-                    ctype = "illness"
-                if name:
-                    conn.execute(
-                        "INSERT INTO conditions (run_id, user_id, post_id, condition_type, condition_name, severity) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                        (run_id, user_id, None, ctype, name, None),
-                    )
-                    conditions_written += 1
-
-            if (i + 1) % COMMIT_EVERY == 0:
-                conn.commit()
-                log.info(f"  ... {i + 1}/{len(users)} users")
-
+        profiles_written = conditions_written = failures = 0
+        with closing(conn.execute(
+            "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
+            "ORDER BY user_id, post_date DESC, post_id",
+            (DELETED_USER_ID,),
+        )) as rows:
+            users = _user_inputs(rows, max_posts=max_posts, max_chars=max_chars)
+            with closing(_extract_users(client, islice(users, limit or None))) as results:
+                for processed, (user_id, result) in enumerate(results, start=1):
+                    if result is None:
+                        failures += 1
+                    else:
+                        conditions_written += _write_result(conn, run_id, user_id, result)
+                        profiles_written += 1
+                    if processed % COMMIT_EVERY == 0:
+                        conn.commit()
+                        log.info("Processed %d users (%d failures)", processed, failures)
         conn.commit()
 
-    log.info(f"Done: {profiles_written} profiles, {conditions_written} conditions written, {failures} failures")
+    log.info("Done: %d profiles, %d conditions written, %d failures", profiles_written, conditions_written, failures)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract demographics and conditions from user posts")
-    parser.add_argument("--db", required=True, help="Path to SQLite database")
-    parser.add_argument("--limit", type=int, default=0, help="Limit to N users (0 = all)")
-    parser.add_argument("--max-posts", type=int, default=10, help="Max posts per user to send to LLM")
-    parser.add_argument("--max-chars", type=int, default=500, help="Max characters per post to send to LLM")
+    parser = argparse.ArgumentParser(
+        description=f"Extract demographics and conditions from up to {MAX_USER_CHARS:,} characters per user."
+    )
+    parser.add_argument("--db", required=True, type=Path, help="Path to the corpus SQLite database")
+    parser.add_argument("--limit", type=int, default=0, help="Limit to N eligible users (0 = all)")
+    parser.add_argument("--max-posts", type=int, help="Optional limit on posts per user")
+    parser.add_argument("--max-chars", type=int, help="Optional character limit per post, including its title")
     args = parser.parse_args()
-
-    run_demographics(Path(args.db), limit=args.limit, max_posts=args.max_posts, max_chars=args.max_chars)
+    if args.limit < 0:
+        parser.error("--limit must be nonnegative")
+    for flag, value in (("--max-posts", args.max_posts), ("--max-chars", args.max_chars)):
+        if value is not None and value < 1:
+            parser.error(f"{flag} must be positive")
+    run_demographics(args.db, limit=args.limit, max_posts=args.max_posts, max_chars=args.max_chars)
 
 
 if __name__ == "__main__":

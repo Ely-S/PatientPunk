@@ -193,6 +193,17 @@ def llm_config() -> dict:
     return {k: v for k, v in _CFG.items() if k != "api_key"}
 
 
+def wrap_untrusted_text(text: str) -> str:
+    """Wrap text in the <patient_text> tags the prompts declare as data.
+
+    Escape tags in the source so the wrapper stays intact. Apply any length
+    limit before wrapping to preserve the closing tag.
+    """
+    text = (text.replace("</patient_text>", "<:/patient_text>")
+                .replace("<patient_text>", "<:patient_text>"))
+    return f"<patient_text>\n{text}\n</patient_text>"
+
+
 def self_reported_age(value) -> int | None:
     """The author's age as a whole number from 10 to 99, else None.
 

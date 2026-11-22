@@ -65,6 +65,7 @@ from ._utils import (
     response_text,
     self_reported_age,
     split_retry_batch,
+    wrap_untrusted_text,
 )
 from .llm_cache import cached_completion
 from .llm_schema import LLMExtraction, parse_extraction
@@ -409,20 +410,6 @@ RESPONSE FORMAT - valid JSON only:
 }}
 
 Include ALL schema fields. Use null when no evidence exists."""
-
-
-def wrap_untrusted_text(text: str) -> str:
-    """Wrap text in the <patient_text> tags the prompts declare as data.
-
-    A tag written inside the text is neutralised, so a post cannot close the
-    block early and have its remainder read as an instruction.
-
-    Truncate the text before passing it in; truncating the wrapped result
-    would cut through the closing tag.
-    """
-    text = (text.replace("</patient_text>", "<:/patient_text>")
-                .replace("<patient_text>", "<:patient_text>"))
-    return f"<patient_text>\n{text}\n</patient_text>"
 
 
 def build_user_message(texts: list[str]) -> str:

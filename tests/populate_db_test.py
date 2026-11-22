@@ -45,17 +45,19 @@ def _stub_response(messages, system):
     if "Given these Reddit posts by a single user" in prompt:
         if "I love it so much" in prompt:
             return json.dumps({
-                "age_bucket": "25-34",
+                "age": 34,
                 "sex": "F",
-                "location": "US",
+                "country": "US",
+                "state": "Texas",
                 "conditions": [
                     {"condition_name": "fibromyalgia", "condition_type": "illness"}
                 ],
             })
         return json.dumps({
-            "age_bucket": None,
+            "age": None,
             "sex": None,
-            "location": None,
+            "country": None,
+            "state": None,
             "conditions": [],
         })
 
@@ -246,7 +248,7 @@ class TestPopulateDbEndToEnd:
         populated = db.conn.execute(
             "SELECT age_bucket, sex, location FROM user_profiles WHERE user_id = 'b'"
         ).fetchone()
-        assert populated == ("25-34", "F", "US")
+        assert populated == ("30s", "female", "US / Texas")
 
         # And the condition from user b's extraction should be recorded.
         conditions = db.conn.execute(

@@ -88,7 +88,8 @@ def test_good_reply_passes_through():
     assert llm_call(client, "prompt") == "hello"
 
 
-def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
+@pytest.mark.parametrize("temperature", [None, 0.7, 1.0], ids=["default", "retry", "last-retry"])
+def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch, temperature):
     """Cache key claims temperature=0.0; the API request must send the same value.
 
     Regression for Airwhale review on #63: kwargs previously omitted temperature,
@@ -107,21 +108,39 @@ def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
         return _FakeStream(_msg(SimpleNamespace(type="text", text="ok")))
 
     client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
-    assert llm_call(client, "prompt", model=MODEL_FAST, max_tokens=100) == "ok"
+    call_kwargs = {} if temperature is None else {"temperature": temperature}
+    assert llm_call(client, "prompt", model=MODEL_FAST, max_tokens=100, **call_kwargs) == "ok"
 
-    assert "temperature" in captured
-    assert captured["temperature"] == 0.0
+    expected_temperature = 0.0 if temperature is None else temperature
+    assert captured["temperature"] == expected_temperature
 
-    # The on-disk entry must be keyed with that same temperature — otherwise a
-    # later run that actually sends 0.0 would miss this cache entry (or vice versa).
+    # The cache entry must describe the temperature actually sent to the provider.
     key = llm_cache.make_key(
         provider=LLM_PROVIDER,
         model=MODEL_FAST,
         system=None,
         prompt="prompt",
-        temperature=0.0,
+        temperature=expected_temperature,
         max_tokens=100,
     )
     path = llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
     assert path.exists()
-    assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == 0.0
+    assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == expected_temperature
+
+
+def test_temperature_retries_do_not_replay_a_colder_cached_reply(monkeypatch):
+    from patientpunk import llm_cache
+
+    llm_cache.set_cache_enabled(True)
+    temperatures = []
+
+    def stream(*, temperature, **_):
+        temperatures.append(temperature)
+        text = "unreadable" if temperature == 0.0 else "readable"
+        return _FakeStream(_msg(SimpleNamespace(text=text)))
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
+    assert llm_call(client, "same prompt") == "unreadable"
+    assert llm_call(client, "same prompt", temperature=0.7) == "readable"
+    assert llm_call(client, "same prompt", temperature=0.7) == "readable"
+    assert temperatures == [0.0, 0.7]

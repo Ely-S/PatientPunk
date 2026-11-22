@@ -169,9 +169,11 @@ Posts and comments with no author (deleted or removed accounts) are stored under
 
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
-Groups posts by user, sends them to a fast model, and extracts demographics and conditions.
+Sends one history per eligible user to a fast model to extract explicitly self-reported demographics and conditions. Each history includes titles and bodies, newest first, up to 8,000 characters in total. Deleted authors and posts with removed or deleted bodies are excluded.
 
-In `user_profiles`, we store demographic data that is inferred from the user's posts: age bucket, age in years (a stated number, or the midpoint of a stated range: "late 30s" is 37.5), sex, location ("country / state") and city; `city` is where the author says they live, not where they travelled for care. In the `conditions` table, we store the conditions that are inferred from the user's posts, along with the type of condition (illness or symptom), the severity of the condition, and the date of diagnosis and resolution. Both of these may have empty values if the model fails to extract any information.
+New `user_profiles` rows store age as a decade (such as `30s`) and as whole years in `age`, normalized sex (`female`, `male` or `non-binary`), and location (`country / state` when both are known). `city` (where the author says they live, not where they travelled for care) stays empty here; the per-post extractor (#206) fills it. Older rows retain their stored values, including age ranges such as `25-34`. The same model call writes reported illnesses and symptoms to `conditions`.
+
+A valid reply can record an empty profile. A request that still fails after retries, or is blocked by the content filter, leaves the user's previous profile current. A permanent API error stops the run.
 
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db
@@ -180,9 +182,9 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 | Flag | Description |
 |------|-------------|
 | `--db` | Path to SQLite database (required) |
-| `--limit N` | Limit to N users (default: all) |
-| `--max-posts N` | Max posts per user sent to LLM (default: 10) |
-| `--max-chars N` | Max characters per post (default: 500) |
+| `--limit N` | Limit to N eligible users (default: all) |
+| `--max-posts N` | Optional maximum number of posts per user |
+| `--max-chars N` | Optional character limit per post, including its title |
 
 `user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. Only Step 3a writes `user_profiles`: this script, and the resolve step in `src/resolve_demographics.py` described below. Rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
 

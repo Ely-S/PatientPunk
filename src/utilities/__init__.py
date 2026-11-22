@@ -388,6 +388,8 @@ def llm_call(
     model: str = MODEL_FAST,
     system: str | None = None,
     max_tokens: int = 100,
+    *,
+    temperature: float = 0.0,
 ) -> str:
     """Call an LLM with caching and bounded transport and truncation retries."""
     from patientpunk.llm_cache import cached_completion
@@ -398,7 +400,7 @@ def llm_call(
         kwargs = {
             "model": model,
             "max_tokens": budget,
-            "temperature": 0.0,
+            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
@@ -434,7 +436,7 @@ def llm_call(
             model=model,
             system=system,
             prompt=prompt,
-            temperature=0.0,
+            temperature=temperature,
             max_tokens=budget,
             call_fn=lambda: _request_with_transport_retries(budget),
         )
