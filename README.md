@@ -184,12 +184,14 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 | `--max-posts N` | Max posts per user sent to LLM (default: 10) |
 | `--max-chars N` | Max characters per post (default: 500) |
 
-`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. This script is the only writer of `user_profiles`; rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
+`user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. Only Step 3a writes `user_profiles`: this script, and the resolve step in `src/resolve_demographics.py` described below. Rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
 
 ```bash
 cp reddit_snapshot.db work.db
 uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
 ```
+
+Per-post claims (#206, in progress) are stored in `demographic_claims`: one value a post states about its author (`age`, `sex`, `country` or `state`), with the words it came from. `post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. `resolve_profiles` in `src/resolve_demographics.py` turns those claims into `user_profiles` rows under a demographics run, writing a row only when a user's profile changes. The `deleted` placeholder never gets a profile. Nothing writes claims yet; this script will once #206 is finished.
 
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*
