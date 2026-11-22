@@ -58,11 +58,17 @@ def _estimate(value: str) -> tuple[float, bool] | None:
     return None
 
 
-def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
-    """(age, estimated): a stated age (10-99, #206) advanced to the reference date; a range or decade
-    is advanced from its midpoint. None when unparseable or out of range."""
+def stated_age(value: str) -> tuple[float, bool] | None:
+    """(age, estimated) as stated, when it is from 10 to 99 (#206); a range or decade gives its midpoint."""
     stated = _estimate(value)
-    if stated is None or not 10 <= stated[0] <= 99:
+    return stated if stated is not None and 10 <= stated[0] <= 99 else None
+
+
+def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
+    """(age, estimated): a stated age advanced to the reference date; a range or decade is advanced
+    from its midpoint. None when unparseable or out of range."""
+    stated = stated_age(value)
+    if stated is None:
         return None
     age, estimated = stated
     if date is not None and reference is not None:
@@ -70,20 +76,39 @@ def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float
     return age, estimated
 
 
+SEX_VALUES = {
+    "f": "female", "female": "female", "woman": "female",
+    "m": "male", "male": "male", "man": "male",
+    "nb": "non-binary", "nonbinary": "non-binary", "non-binary": "non-binary", "non binary": "non-binary",
+}
+
+
+def normalize_sex(stated: str) -> str | None:
+    """female, male or non-binary from the author's words, which may hold several values (#214):
+    non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
+    ignored ("female | suspected intersex" -> female). None when no rule applies ("trans man",
+    "female | male"); the words themselves stay in sex_stated."""
+    values = {SEX_VALUES.get(part.strip().casefold()) for part in stated.split("|")} - {None}
+    if "non-binary" in values:
+        return "non-binary"
+    return values.pop() if len(values) == 1 else None
+
+
 def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str]]:
     """claims: (post_date, post_id, field, value), oldest first. Returns the profile row
     in PROFILE_FIELDS order and the fields whose claims disagree. Text values are compared
-    ignoring case; sex is stored lowercase."""
+    ignoring case. sex_stated is the newest sex claim as written, and sex its normalized value."""
     by_field = defaultdict(list)
     for date, post_id, field, value in claims:
         value = value.strip()
         if not value:
             continue  # a blank claim states nothing, so it can't replace an earlier value
-        by_field[field].append((date, post_id, value.lower() if field == "sex" else value))
+        by_field[field].append((date, post_id, value))
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = ages[-1][0] if ages else None
     age_bucket = _bucketize_age(str(age)) if age is not None else None
-    sex = by_field["sex"][-1][2] if by_field["sex"] else None
+    sex_stated = by_field["sex"][-1][2] if by_field["sex"] else None
+    sex = normalize_sex(sex_stated) if sex_stated else None
     # The latest country, plus the latest state from that country (#206). A state from a post that
     # names no country belongs to the nearest country named before it, or else the first named after
     # it, so US, then "Texas", then UK is "UK": an old state never pairs with a new country.
@@ -120,7 +145,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     if ((stated and max(stated) - min(stated) > 1) or len(decades) > 1
             or (decades and stated and not decades <= {_bucketize_age(str(a)) for a in stated})):
         disagree.add("age")
-    return (age_bucket, age, sex, location, city), disagree
+    return (age_bucket, age, sex, sex_stated, location, city), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:

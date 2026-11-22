@@ -169,11 +169,11 @@ Posts and comments with no author (deleted or removed accounts) are stored under
 
 ### Step 3a — Demographic extraction *(who are the patients?)*
 
-Sends one history per eligible user to a fast model to extract explicitly self-reported demographics and conditions. Each history includes titles and bodies, newest first, up to 8,000 characters in total. Deleted authors and posts with removed or deleted bodies are excluded.
+Sends each post or comment, title included, to a fast model on its own, and stores what its author explicitly says about themselves as claims in `demographic_claims`: `age`, `sex`, `country`, `state` and `city` (where they live, not where they travelled for care), each with the quote it came from. Posts by deleted authors are never sent; posts with removed, deleted or empty bodies are recorded as read without a model call. Code then resolves each user's claims into one `user_profiles` row (below). Conditions keep one call per user, over that user's newest posts up to 8,000 characters, for every user whose posts the run read.
 
-New `user_profiles` rows store age as a decade (such as `30s`) and as whole years in `age` (the age as last stated, not advanced to a reference date; a stated range or decade is dropped rather than stored as its midpoint), normalized sex (`female`, `male` or `non-binary`), and location (`country / state` when both are known). `city` (where the author says they live, not where they travelled for care) stays empty here; the per-post extractor (#206) fills it. Older rows retain their stored values, including age ranges such as `25-34`. The same model call writes reported illnesses and symptoms to `conditions`.
+A run reads only the posts no demographics run has read since the newest `--reread` run, so later runs read new posts only, and a post whose read failed is read again next time. Use `--reread` after a prompt change. A reply that is still unreadable after retries at temperature 0.7 and 1.0, or that the content filter blocks, fails that post: the post stays unread and its author keeps their previous profile. A permanent API error stops the run.
 
-A valid reply can record an empty profile. A request that still fails after retries, or is blocked by the content filter, leaves the user's previous profile current. A permanent API error stops the run.
+Age claims keep what the author wrote: a number, or a range or decade. Sex claims keep the author's words, every value of a multi-value answer included ("non-binary | female"). The profile's `sex` is normalized from them by a rule: non-binary wins over a binary value, other words are ignored ("female | suspected intersex" is `female`), and anything else ("trans man", "female | male") leaves `sex` empty. The words themselves are in `sex_stated` (#214).
 
 ```bash
 uv run python src/extract_demographics_conditions.py --db data/posts.db
@@ -182,7 +182,8 @@ uv run python src/extract_demographics_conditions.py --db data/posts.db
 | Flag | Description |
 |------|-------------|
 | `--db` | Path to SQLite database (required) |
-| `--limit N` | Limit to N eligible users (default: all) |
+| `--limit N` | Read the posts of at most N users (default: all) |
+| `--reread` | Read every post again, for example after a prompt change |
 
 `user_profiles` keeps every run's row for a user. The view `user_profiles_latest` holds each user's row from their newest run of this script, and every demographics reader uses it: the filters in `query_treatment_outcomes`, `load_db.py`'s `unified` table and `cluster-prep --db`. Only Step 3a writes `user_profiles`: this script, and the resolve step in `src/resolve_demographics.py` described below. Rows that older versions of `load_db.py` loaded from CSVs never count as current. To use demographic filters on a database built before this view existed, apply the schema to a writable copy first, never to a published snapshot itself:
 
@@ -191,7 +192,7 @@ cp reddit_snapshot.db work.db
 uv run python -c "from pathlib import Path; from patientpunk.db import init_db; init_db(Path('work.db')).close()"
 ```
 
-Per-post claims (#206, in progress) are stored in `demographic_claims`: one value a post states about its author (`age`, `sex`, `country`, `state` or `city`), with the words it came from. `post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. `resolve_profiles` in `src/resolve_demographics.py` turns those claims into `user_profiles` rows under a demographics run, writing a row only when a user's profile changes. Each row keeps `age` in years, moved forward to the run's reference date (the newest `post_date`), beside its `age_bucket`; when the author gave a range or decade instead of a number, `age` is its midpoint, a real number ("30s" and "mid-30s" are 35, "early 40s" 42.5, "late 30s" 37.5, "25-34" 29.5). `cluster-prep` uses the decade, and `unified` carries both as `demo_age_bucket` and `demo_age`. The `deleted` placeholder never gets a profile. Nothing writes claims yet; this script will once #206 is finished.
+`post_runs` records every post a demographics run read, and the view `demographic_claims_latest` keeps each post's claims from its newest reading run, so a re-read replaces or retracts older claims. At the end of each run, `resolve_profiles` in `src/resolve_demographics.py` turns every read user's claims into a `user_profiles` row under the run, writing a row only when a user's profile changes, so a run that stopped before this step is finished by the next one. Each row keeps `age` in years, moved forward to the run's reference date (the newest `post_date`), beside its `age_bucket`; when the author gave a range or decade instead of a number, `age` is its midpoint, a real number ("30s" and "mid-30s" are 35, "early 40s" 42.5, "late 30s" 37.5, "25-34" 29.5). Sex is the newest statement, country the newest country, and state the newest state from that country; city is the newest city, cleared when a later post names a different country or state. Disagreeing claims are counted in the end-of-run summary. `cluster-prep` uses the decade, and `unified` carries both as `demo_age_bucket` and `demo_age`. The `deleted` placeholder never gets a profile.
 
 
 ### Step 3b — Drug sentiment *(what do they say about treatments?)*

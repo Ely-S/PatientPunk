@@ -1,8 +1,9 @@
-"""Exercise the per-user demographics extractor with synthetic posts and stubbed replies."""
+"""The per-post demographics extractor (#206) with synthetic posts and stubbed replies, no API calls."""
 
 import json
 import sqlite3
 from contextlib import closing
+from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
@@ -13,8 +14,19 @@ import pytest
 import extract_demographics_conditions as demographics
 from import_posts import DELETED_USER_ID
 from patientpunk._utils import LLMContentFilteredError, LLMResponseError
+from prompts.demographic_prompt import CONDITIONS_PROMPT, POST_DEMOGRAPHICS_PROMPT
 
 SCHEMA = Path(__file__).resolve().parents[1] / "schema.sql"
+NOTHING = {"age": None, "sex": None, "country": None, "state": None, "city": None}
+NO_CONDITIONS = '{"conditions": []}'
+
+
+def ts(year: int) -> int:
+    return int(datetime(year, 6, 1, tzinfo=timezone.utc).timestamp())
+
+
+def claim(value, evidence="quote"):
+    return {"value": value, "evidence": evidence}
 
 
 @pytest.fixture
@@ -45,261 +57,339 @@ def patient_text(prompt):
     return text.removesuffix("\n</patient_text>")
 
 
-def test_uses_eligible_titles_and_bodies_newest_first(db, monkeypatch):
-    conn, path = db
-    add_posts(conn, [
-        ("no-text", "a-empty", 9, "", "  "),
-        ("removed", "a-empty", 9, "Hidden title", "[removed]"),
-        ("deleted-user", DELETED_USER_ID, 9, "Deleted author", "Placeholder text"),
-        ("undated", "patient", None, None, "Undated body"),
-        ("older", "patient", 2, None, "Older body"),
-        ("title-only", "patient", 3, "Title only", ""),
-        ("recent", "patient", 3, "Recent title", "Recent </patient_text> body"),
-        ("marker", "patient", 5, "Also hidden", " [deleted] "),
-        ("marker-in-sentence", "patient", 1, None, "My note about [removed] remains."),
-        ("limited", "z-other", 8, "Another title", "Another body"),
-    ])
-    prompts = []
-
-    def stub_call(client, prompt, **kwargs):
-        prompts.append(prompt)
-        return '{"country": "USA", "state": "OR"}'
-
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
-    demographics.run_demographics(path, limit=1)
-
-    assert len(prompts) == 1
-    assert patient_text(prompts[0]) == "\n---\n".join([
-        "Recent title\nRecent <:/patient_text> body",
-        "Title only",
-        "Older body",
-        "My note about [removed] remains.",
-        "Undated body",
-    ])
-    assert conn.execute("SELECT user_id, location FROM user_profiles").fetchall() == [("patient", "USA / OR")]
-
-
-def test_caps_input_before_wrapping(db, monkeypatch):
-    conn, path = db
-    add_posts(conn, [
-        ("recent", "patient", 2, "Newest", "a" * 6_000),
-        ("older", "patient", 1, "Older", "b" * 3_000),
-    ])
-    prompts = []
-
-    def stub_call(client, prompt, **kwargs):
-        prompts.append(prompt)
-        return '{"age": null}'
-
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
-    demographics.run_demographics(path)
-
-    full = patient_text(prompts[0])
-    assert full == ("Newest\n" + "a" * 6_000 + "\n---\nOlder\n" + "b" * 3_000)[:8_000]
-    assert len(full) == 8_000
-
-
-@pytest.mark.parametrize(
-    ("age", "sex", "country", "state", "expected"),
-    [
-        (10, "F", "US", "Texas", ("10s", 10.0, "female", "US / Texas")),
-        ("99", " NONBINARY ", None, "Ohio", ("90s", 99.0, "non-binary", "Ohio")),
-        (26, "Man", "Trinidad and Tobago", None, ("20s", 26.0, "male", "Trinidad and Tobago")),
-        (9, ["M"], ["US", "Canada"], "Texas / Ohio", (None, None, None, None)),
-        (100, "M | F", "US or Canada", ["Ohio"], (None, None, None, None)),
-        ("30s", "22F", "unknown", "Texas; Ohio", (None, None, None, None)),
-        ("25-34", "unknown", "", None, (None, None, None, None)),
-        ("34 | 36", None, None, None, (None, None, None, None)),
-        (34.5, None, None, None, (None, None, None, None)),
-    ],
-)
-def test_normalizes_profile_fields(db, monkeypatch, age, sex, country, state, expected):
-    conn, path = db
-    add_posts(conn, [("post", "patient", 1, None, "A synthetic post")])
-    result = {"age": age, "sex": sex, "country": country, "state": state}
-    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: json.dumps(result))
-
-    demographics.run_demographics(path)
-
-    assert conn.execute("SELECT age_bucket, age, sex, location FROM user_profiles").fetchone() == expected
-    assert conn.execute("SELECT extraction_type FROM extraction_runs").fetchone() == ("demographics",)
-
-
-def test_unreadable_reply_can_recover_at_last_temperature(monkeypatch):
-    replies = iter([LLMResponseError("empty"), '{"error": "unreadable"}', '```json\n{"age": 37}\n```'])
+def stub(monkeypatch, post=lambda text: NOTHING, conditions=lambda text: NO_CONDITIONS):
+    """Route each call by prompt; ``post`` and ``conditions`` map the wrapped text to a reply (a dict
+    is sent as JSON, an exception is raised). Returns the calls as (kind, text, temperature)."""
     calls = []
 
-    def stub_call(client, prompt, *, temperature, **kwargs):
-        calls.append((prompt, temperature))
-        reply = next(replies)
+    def llm_call(client, prompt, *, temperature=0.0, **kwargs):
+        kind = "post" if prompt.startswith(POST_DEMOGRAPHICS_PROMPT) else "conditions"
+        assert kind == "post" or prompt.startswith(CONDITIONS_PROMPT)
+        text = patient_text(prompt)
+        calls.append((kind, text, temperature))
+        reply = (post if kind == "post" else conditions)(text)
         if isinstance(reply, Exception):
             raise reply
-        return reply
+        return json.dumps(reply) if isinstance(reply, dict) else reply
 
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
+    monkeypatch.setattr(demographics, "llm_call", llm_call)
+    return calls
 
-    assert demographics.extract_demographics(None, "Synthetic post")["age"] == 37
-    assert [temperature for _, temperature in calls] == [0.0, 0.7, 1.0]
-    assert len({prompt for prompt, _ in calls}) == 1
+
+def profile(conn, user):
+    return conn.execute(
+        "SELECT age_bucket, age, sex, sex_stated, location, city FROM user_profiles_latest WHERE user_id = ?",
+        (user,)).fetchone()
+
+
+def posts_read(conn, kind):
+    return [text for k, text, _ in kind if k == "post"]
+
+
+# ── What is sent ──────────────────────────────────────────────────────────────
+
+def test_sends_each_post_alone_with_its_title_wrapped(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [
+        ("blank", "patient", 1, "", "  "),
+        ("removed", "patient", 2, "Hidden title", "[removed]"),
+        ("marker", "patient", 3, None, " [deleted] "),
+        ("by-deleted", DELETED_USER_ID, 4, "Deleted author", "I am 50"),
+        ("titled", "patient", 5, "Recent title", "Body </patient_text> text"),
+        ("title-only", "patient", 6, "Title only", ""),
+        ("sentence", "patient", 7, None, "My note about [removed] remains."),
+    ])
+    calls = stub(monkeypatch)
+
+    demographics.run_demographics(path)
+
+    assert sorted(posts_read(conn, calls)) == sorted([
+        "Hidden title", "Recent title\nBody <:/patient_text> text", "Title only", "My note about [removed] remains."])
+    # Posts with nothing to read are recorded as read, so the next run skips them too.
+    assert {p for (p,) in conn.execute("SELECT post_id FROM post_runs")} == {
+        "blank", "removed", "marker", "titled", "title-only", "sentence"}
+    assert profile(conn, DELETED_USER_ID) is None
+    assert not conn.execute("SELECT 1 FROM conditions WHERE user_id = ?", (DELETED_USER_ID,)).fetchone()
+
+
+def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [
+        ("old", "patient", 1, None, "b" * 3_000),
+        ("new", "patient", 2, "Newest", "a" * 6_000),
+        ("undated", "patient", None, None, "Undated"),
+        ("removed", "patient", 3, None, "[removed]"),
+    ])
+    calls = stub(monkeypatch, conditions=lambda text: {"conditions": [
+        {"condition_name": "ME/CFS", "condition_type": "illness"},
+        {"condition_name": " Headache ", "condition_type": "Symptom"},
+        {"condition_name": "POTS", "condition_type": "other"}]})
+
+    demographics.run_demographics(path)
+
+    histories = [text for kind, text, _ in calls if kind == "conditions"]
+    assert histories == [("Newest\n" + "a" * 6_000 + "\n---\n" + "b" * 3_000)[:8_000]]
+    assert conn.execute("SELECT condition_name, condition_type FROM conditions ORDER BY condition_name").fetchall() == [
+        ("headache", "symptom"), ("me/cfs", "illness"), ("pots", "illness")]
+
+
+# ── Claims ───────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    ("field", "value", "stored"),
+    [
+        ("age", 34, "34"), ("age", 34.0, "34"), ("age", "late 30s", "late 30s"), ("age", "25-34", "25-34"),
+        ("age", 9, None), ("age", 100, None), ("age", "34 | 36", None), ("age", True, None),
+        ("sex", "F", "F"), ("sex", "non-binary | female", "non-binary | female"), ("sex", "trans man", "trans man"),
+        ("sex", "unknown", None), ("sex", ["M"], None),
+        ("country", "Trinidad and Tobago", "Trinidad and Tobago"), ("country", "US or Canada", None),
+        ("state", "Texas / Ohio", None), ("city", "Portland", "Portland"), ("city", "", None),
+    ],
+)
+def test_checks_each_claim_before_writing_it(db, monkeypatch, field, value, stored):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "A post")])
+    stub(monkeypatch, post=lambda text: {field: claim(value, " I said so ")})
+
+    demographics.run_demographics(path)
+
+    expected = [(field, stored, "I said so")] if stored else []
+    assert conn.execute("SELECT field, value, evidence FROM demographic_claims").fetchall() == expected
+    assert conn.execute("SELECT post_id FROM post_runs").fetchall() == [("post",)]
+
+
+def test_a_value_without_a_quote_is_not_a_claim(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "A post")])
+    stub(monkeypatch, post=lambda text: {"age": {"value": 34}, "sex": claim("female", "  ")})
+
+    demographics.run_demographics(path)
+
+    assert conn.execute("SELECT COUNT(*) FROM demographic_claims").fetchone() == (0,)
 
 
 @pytest.mark.parametrize(
-    "unreadable_reply",
-    [
-        '{"error": "private reply text"}',
-        '{"conditions": {"error": "private reply text"}}',
-        '{"conditions": [{}]}',
-        'no JSON here',
-    ],
-    ids=["unknown-fields", "wrong-conditions-type", "malformed-condition", "no-object"],
+    ("stated", "sex"),
+    [("non-binary | female", "non-binary"), ("female | suspected intersex", "female"),
+     ("Man", "male"), ("trans man", None), ("female | male", None)],
 )
-def test_failed_users_keep_previous_profiles_and_valid_empty_reply_is_written(
-    db, monkeypatch, caplog, unreadable_reply,
-):
+def test_multi_value_sex_is_kept_and_normalized_by_rule(db, monkeypatch, stated, sex):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "A post")])
+    stub(monkeypatch, post=lambda text: {"sex": claim(stated)})
+
+    demographics.run_demographics(path)
+
+    assert profile(conn, "patient")[2:4] == (sex, stated)
+
+
+def test_resolves_claims_from_several_posts_into_one_profile(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [
+        ("p2024", "patient", ts(2024), None, "29, US"),
+        ("p2025", "patient", ts(2025), None, "Texas, Austin"),
+        ("p2026", "patient", ts(2026), None, "I'm 35 now"),
+    ])
+    replies = {
+        "29, US": {"age": claim(29), "country": claim("US")},
+        "Texas, Austin": {"state": claim("Texas"), "city": claim("Austin")},
+        "I'm 35 now": {"age": claim(35)},
+    }
+    stub(monkeypatch, post=replies.get)
+
+    stats = demographics.run_demographics(path)
+
+    assert profile(conn, "patient") == ("30s", 35.0, None, None, "US / Texas", "Austin")
+    assert stats["disagreements"] == {"age": 1}
+
+
+# ── Replies ──────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    "raw",
+    ['Here is the JSON:\n{"age": {"value": 34, "evidence": "34"}}', '{"age": {"value": 34, "evidence": "34"},}',
+     '```json\n{"age": {"value": 34, "evidence": "34"}}\n```'],
+    ids=["prose-before-object", "trailing-comma", "fenced"],
+)
+def test_reads_replies_with_text_around_the_object(raw):
+    assert demographics.parse_claims(raw) == {"age": ("34", "34")}
+
+
+def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "I'm 34")])
+    replies = iter([LLMResponseError("empty"), '{"age": "34"}', {"age": claim(34)}])
+    calls = stub(monkeypatch, post=lambda text: next(replies))
+
+    demographics.run_demographics(path)
+
+    assert [t for kind, _, t in calls if kind == "post"] == [0.0, 0.7, 1.0]
+    assert conn.execute("SELECT value FROM demographic_claims").fetchall() == [("34",)]
+
+
+@pytest.mark.parametrize(
+    "unreadable",
+    ['{"error": "private reply text"}', '{"age": "34"}', "no JSON here"],
+    ids=["unknown-fields", "claim-not-an-object", "no-object"],
+)
+def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, caplog, unreadable):
     conn, path = db
     users = ("empty", "filtered", "transient", "unreadable")
     add_posts(conn, [(user, user, 1, None, user) for user in users])
-    conn.execute(
-        "INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) "
-        "VALUES (1, 0, 'test', 'demographics', '{}')",
-    )
-    conn.executemany(
-        "INSERT INTO user_profiles (user_id, run_id, age_bucket) VALUES (?, 1, '30s')",
-        [(user,) for user in users],
-    )
-    conn.commit()
-    calls = {user: [] for user in users}
-    empty_reply = '{"age": null, "sex": null, "country": null, "state": null, "conditions": []}'
+    first = demographics.run_demographics  # an earlier run gave everyone a 30s profile
+    stub(monkeypatch, post=lambda text: {"age": claim(34)})
+    first(path)
     timeout = openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
+    replies = {"empty": NOTHING, "filtered": LLMContentFilteredError("filtered"), "transient": timeout,
+               "unreadable": unreadable}
+    calls = stub(monkeypatch, post=replies.get)
 
-    def stub_call(client, prompt, *, temperature, **kwargs):
-        user = patient_text(prompt)
-        calls[user].append(temperature)
-        if user == "filtered":
-            raise LLMContentFilteredError("filtered")
-        if user == "transient":
-            raise timeout
-        return empty_reply if user == "empty" else unreadable_reply
-
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
     with caplog.at_level("INFO", logger="pipeline"):
-        demographics.run_demographics(path)
+        stats = demographics.run_demographics(path, reread=True)
 
-    assert calls == {
-        "empty": [0.0],
-        "filtered": [0.0],
-        "transient": [0.0],
-        "unreadable": [0.0, 0.7, 1.0],
-    }
-    assert conn.execute(
-        "SELECT user_id, age_bucket, sex, location FROM user_profiles WHERE run_id = 2",
-    ).fetchall() == [("empty", None, None, None)]
-    assert conn.execute(
-        "SELECT user_id, age_bucket FROM user_profiles WHERE run_id = 1 ORDER BY user_id",
-    ).fetchall() == [(user, "30s") for user in users]
-    assert conn.execute("SELECT COUNT(*) FROM conditions WHERE run_id = 2").fetchone() == (0,)
-    assert "3 failures" in caplog.text
+    assert [t for kind, text, t in calls if kind == "post" and text == "unreadable"] == [0.0, 0.7, 1.0]
+    assert stats["posts_failed"] == 3 and stats["failed_users"] == 3
     assert "private reply text" not in caplog.text
+    # The empty reread retracts the age; the failed users keep theirs, and their posts stay unread.
+    assert profile(conn, "empty")[:2] == (None, None)
+    assert {u: profile(conn, u)[0] for u in users[1:]} == {u: "30s" for u in users[1:]}
+    calls = stub(monkeypatch, post=lambda text: {"age": claim(41)})
+    demographics.run_demographics(path)
+    assert sorted(posts_read(conn, calls)) == ["filtered", "transient", "unreadable"]
+    assert {u: profile(conn, u)[0] for u in users[1:]} == {u: "40s" for u in users[1:]}
 
 
-def test_permanent_api_error_stops_the_run_and_sends_no_queued_users(db, monkeypatch):
+def test_a_permanent_error_stops_the_run_and_sends_no_queued_posts(db, monkeypatch):
     conn, path = db
     add_posts(conn, [(f"post-{i}", f"user-{i}", 1, None, f"Synthetic post {i}") for i in range(15)])
     request = httpx.Request("POST", "https://example.invalid")
     error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
-    calls = []
+    calls = stub(monkeypatch, post=lambda text: error)
 
-    def stub_call(client, prompt, **kwargs):
-        calls.append(prompt)
-        raise error
-
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
     with pytest.raises(anthropic.AuthenticationError):
         demographics.run_demographics(path)
 
-    assert len(calls) == demographics.MAX_IN_FLIGHT  # the 5 queued users were never sent
-    assert conn.execute("SELECT COUNT(*) FROM user_profiles").fetchone() == (0,)
+    assert len(calls) == demographics.MAX_IN_FLIGHT  # the 5 queued posts were never sent
+    assert conn.execute("SELECT COUNT(*) FROM post_runs").fetchone() == (0,)
+    assert conn.execute("SELECT finished_at FROM extraction_runs").fetchone() == (None,)
 
 
-def test_commits_multiple_batches_while_streaming_users(db, monkeypatch):
+# ── Runs, checkpoints and rereads ────────────────────────────────────────────
+
+def test_the_next_run_reads_only_unread_posts_and_reread_reads_all(db, monkeypatch):
     conn, path = db
-    users = [f"user-{i}" for i in range(25)]
-    add_posts(conn, [(user, user, 1, None, "Synthetic post") for user in users])
-    result = {"age": 34, "conditions": [{"condition_name": "Headache", "condition_type": "Symptom"}]}
-    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: json.dumps(result))
+    add_posts(conn, [("p1", "a", 1, None, "first"), ("p2", "b", 1, None, "second")])
+    stub(monkeypatch)
+    demographics.run_demographics(path)  # finds nothing; both posts are still checkpointed
 
+    add_posts(conn, [("p3", "a", 2, None, "third")])
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)
+    assert posts_read(conn, calls) == ["third"]
+    # Only the user read this run gets a conditions call, over all of their posts.
+    assert [text for kind, text, _ in calls if kind == "conditions"] == ["third\n---\nfirst"]
+
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path, reread=True)
+    assert sorted(posts_read(conn, calls)) == ["first", "second", "third"]
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)
+    assert posts_read(conn, calls) == []
+
+
+def test_a_reread_that_finds_nothing_retracts_and_a_restart_still_resolves(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I'm 34")])
+    stub(monkeypatch, post=lambda text: {"age": claim(34)})
+    demographics.run_demographics(path)
+    assert profile(conn, "a")[0] == "30s"
+
+    # A reread whose claims were committed but that stopped before resolving profiles.
+    stub(monkeypatch)
+    monkeypatch.setattr(demographics, "resolve_profiles", lambda *args: (_ for _ in ()).throw(KeyboardInterrupt))
+    with pytest.raises(KeyboardInterrupt):
+        demographics.run_demographics(path, reread=True)
+    monkeypatch.undo()
+    monkeypatch.setattr(demographics, "get_client", lambda: None)
+    calls = stub(monkeypatch)
+
+    stats = demographics.run_demographics(path)  # zero unread posts
+
+    assert posts_read(conn, calls) == []
+    assert stats["profiles_written"] == 1
+    assert profile(conn, "a") == (None, None, None, None, None, None)
+
+
+def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("a-2024", "a", ts(2024), None, "I'm 29"), ("b-2024", "b", ts(2024), None, "hi")])
+    stub(monkeypatch, post=lambda text: {"age": claim(29)} if text == "I'm 29" else NOTHING)
+    demographics.run_demographics(path)
+    assert profile(conn, "a")[:2] == ("20s", 29.0)
+
+    add_posts(conn, [("b-2026", "b", ts(2026), None, "hello again")])
+    calls = stub(monkeypatch)
     demographics.run_demographics(path)
 
-    assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (25,)
-    assert conn.execute(
-        "SELECT COUNT(*) FROM conditions WHERE condition_name = 'headache' AND condition_type = 'symptom'",
-    ).fetchone() == (25,)
+    assert posts_read(conn, calls) == ["hello again"]
+    assert profile(conn, "a")[:2] == ("30s", 31.0)
 
 
-def test_extraction_writes_after_another_connection_commits(db, monkeypatch):
+def test_limit_caps_the_users_read(db, monkeypatch):
     conn, path = db
-    add_posts(conn, [(user, user, 1, None, user) for user in ("a", "b", "c", "d")])
-    monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
+    add_posts(conn, [("p1", "a", 1, None, "a1"), ("p2", "a", 2, None, "a2"), ("p3", "b", 1, None, "b1")])
+    calls = stub(monkeypatch)
 
-    def stub_call(client, prompt, **kwargs):
-        if patient_text(prompt) == "a":
-            # The post stream has started and still has unread rows at this point.
-            with closing(sqlite3.connect(path)) as other, other:
-                other.execute("UPDATE posts SET flair = 'updated' WHERE post_id = 'd'")
-        return '{"age": 34}'
+    assert demographics.run_demographics(path, limit=1)["users"] == 1
 
-    monkeypatch.setattr(demographics, "llm_call", stub_call)
-    demographics.run_demographics(path)
-
-    assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)
-    assert conn.execute("SELECT flair FROM posts WHERE post_id = 'd'").fetchone() == ("updated",)
+    assert sorted(posts_read(conn, calls)) == ["a1", "a2"]
 
 
-def test_runs_on_a_database_from_before_age_city_and_finished_at(tmp_path, monkeypatch):
+def test_records_finish_time_and_provider_for_a_clean_run(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "a")])
+    stub(monkeypatch)
+    demographics.run_demographics(path, reread=True)
+
+    finished, config = conn.execute("SELECT finished_at, config FROM extraction_runs").fetchone()
+    assert finished is not None
+    config = json.loads(config)
+    assert {"provider", "reasoning_mode", "git_dirty"} <= config.keys() and config["reread"] is True
+
+
+def test_runs_on_a_database_from_before_the_claim_tables(tmp_path, monkeypatch):
+    old_schema = SCHEMA.read_text(encoding="utf-8")
+    old_schema = old_schema[:old_schema.index("-- A demographics run records here")]
     old_schema = "\n".join(
-        line for line in SCHEMA.read_text(encoding="utf-8").splitlines()
-        if not line.lstrip().startswith(("age        REAL", "city       TEXT", "finished_at INTEGER"))
+        line for line in old_schema.splitlines()
+        if not line.lstrip().startswith(("age        REAL", "sex_stated TEXT", "city       TEXT", "finished_at INTEGER"))
     ).replace("config  TEXT NOT NULL,", "config  TEXT NOT NULL")
     path = tmp_path / "old.db"
     with closing(sqlite3.connect(path)) as conn:
         conn.executescript(old_schema)
-        assert "age" not in {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
+        assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims'").fetchone()
         add_posts(conn, [("post", "patient", 1, None, "I'm 34")])
     monkeypatch.setattr(demographics, "get_client", lambda: None)
-    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: '{"age": 34}')
+    stub(monkeypatch, post=lambda text: {"age": claim(34), "sex": claim("female")})
 
     demographics.run_demographics(path)
 
     with closing(sqlite3.connect(path)) as conn:
-        assert conn.execute("SELECT age_bucket, age, city FROM user_profiles").fetchall() == [("30s", 34.0, None)]
-        assert conn.execute("SELECT finished_at IS NOT NULL FROM extraction_runs").fetchone() == (1,)
+        assert profile(conn, "patient") == ("30s", 34.0, "female", "female", None, None)
 
 
-def test_records_finish_time_and_provider_only_for_a_clean_run(db, monkeypatch):
+def test_writes_after_another_connection_commits(db, monkeypatch):
     conn, path = db
-    add_posts(conn, [("p1", "a", 1, None, "a"), ("p2", "b", 1, None, "b")])
-    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: '{"age": 34}')
+    add_posts(conn, [(user, user, 1, None, user) for user in ("a", "b", "c", "d")])
+    monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
+
+    def reply(text):
+        if text == "a":  # the post stream has started and still has unread rows
+            with closing(sqlite3.connect(path)) as other, other:
+                other.execute("UPDATE posts SET flair = 'updated' WHERE post_id = 'd'")
+        return {"age": claim(34)}
+
+    stub(monkeypatch, post=reply)
     demographics.run_demographics(path)
 
-    request = httpx.Request("POST", "https://example.invalid")
-    error = anthropic.AuthenticationError("bad key", response=httpx.Response(401, request=request), body=None)
-    monkeypatch.setattr(demographics, "llm_call", lambda *args, **kwargs: (_ for _ in ()).throw(error))
-    with pytest.raises(anthropic.AuthenticationError):
-        demographics.run_demographics(path)
-
-    runs = conn.execute("SELECT finished_at IS NOT NULL, config FROM extraction_runs ORDER BY run_id").fetchall()
-    assert [finished for finished, _ in runs] == [1, 0]
-    assert {"provider", "reasoning_mode", "git_dirty"} <= json.loads(runs[0][1]).keys()
-
-
-@pytest.mark.parametrize(
-    ("raw", "age"),
-    [
-        ('Here is the JSON:\n{"age": 34, "conditions": []}', 34),
-        ('{"age": 34, "conditions": [],}', 34),
-        ('{"age": 34.0}', 34),
-    ],
-    ids=["prose-before-object", "trailing-comma", "whole-number-float"],
-)
-def test_reads_replies_that_main_accepted(raw, age):
-    assert demographics._parse_reply(raw)["age"] == age
+    assert conn.execute("SELECT COUNT(*) FROM user_profiles WHERE age_bucket = '30s'").fetchone() == (4,)

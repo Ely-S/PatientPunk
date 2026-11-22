@@ -59,7 +59,8 @@ CREATE TABLE user_profiles (
     run_id     INTEGER NOT NULL REFERENCES extraction_runs(run_id),
     age_bucket TEXT,
     age        REAL,     -- years at the run's reference date; a stated range or decade gives its midpoint ("late 30s" -> 37.5)
-    sex        TEXT,
+    sex        TEXT,     -- female, male or non-binary, normalized from sex_stated
+    sex_stated TEXT,     -- the author's own words, every value of a multi-value answer kept (#214)
     location   TEXT,
     city       TEXT,     -- where the author says they live, not where they travelled for care
     PRIMARY KEY (user_id, run_id)

@@ -162,13 +162,12 @@ summarisation.  Apply these principles to every value you extract:
 
 DEMOGRAPHIC_AGE_RULES: str = """
 Age rules:
-1. Extract only the author's own current age at the time of writing, as a whole number.
-2. If the author states different current ages over time, use the most recent statement.
-3. Ignore past ages ("when I was 8") and ages of other people, including children,
-   partners, relatives, and people in the news. If the author states no current age, return null.
-Examples: "I'm 26" -> 26. "I (33F)" -> 33. "I'm 35" in an older post and
-"I just turned 36" in a newer post -> 36. "My wife is 36", "my 11yo son", and
-"bitten when I was 8" -> null.
+1. Only the author's own current age at the time of writing: a whole number when they give one,
+   otherwise the range or decade they state ("30s", "25-34").
+2. Ignore past ages ("when I was 8") and ages of other people, including children, partners,
+   relatives, and people in the news.
+Examples: "I'm 26" -> 26. "I (33F)" -> 33. "I'm in my 30s" -> "30s". "My wife is 36",
+"my 11yo son", and "bitten when I was 8" -> null.
 """.strip()
 
 
