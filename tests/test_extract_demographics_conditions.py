@@ -133,6 +133,58 @@ def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
         ("headache", "symptom"), ("me/cfs", "illness"), ("pots", "illness")]
 
 
+def current_conditions(conn, user):
+    return {n for (n,) in conn.execute("SELECT condition_name FROM conditions_latest WHERE user_id = ?", (user,))}
+
+
+def conditions_reply(*names):
+    return lambda text: {"conditions": [{"condition_name": n, "condition_type": "illness"} for n in names]}
+
+
+def test_conditions_are_replaced_by_each_check_and_a_failed_check_is_retried(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I have POTS")])
+    stub(monkeypatch, conditions=conditions_reply("POTS"))
+    demographics.run_demographics(path)
+
+    # The same condition again leaves one current row.
+    add_posts(conn, [("p2", "a", 2, None, "still POTS")])
+    stub(monkeypatch, conditions=conditions_reply("POTS"))
+    demographics.run_demographics(path)
+    assert conn.execute("SELECT COUNT(*) FROM conditions_latest").fetchone() == (1,)
+
+    # A failed check keeps the previous conditions, and the next run checks the user again with no new posts.
+    add_posts(conn, [("p3", "a", 3, None, "it was my mom who has MS")])
+    timeout = openai.APITimeoutError(request=httpx.Request("POST", "https://example.invalid"))
+    stub(monkeypatch, conditions=lambda text: timeout)
+    assert demographics.run_demographics(path)["conditions_failed"] == 1
+    assert current_conditions(conn, "a") == {"pots"}
+    calls = stub(monkeypatch, conditions=conditions_reply())
+    demographics.run_demographics(path)
+    assert [kind for kind, _, _ in calls] == ["conditions"]
+
+    # That check found nothing, so it retracts the user's conditions; the next run has nothing to do.
+    assert current_conditions(conn, "a") == set()
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)
+    assert calls == []
+
+
+def test_runs_from_before_condition_runs_never_make_users_due(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I have POTS"), ("p2", "b", 1, None, "hello")])
+    stub(monkeypatch, conditions=conditions_reply("POTS"))
+    demographics.run_demographics(path)
+    # Make it look like a run from before #220: no condition_runs rows, no checks_conditions in config.
+    conn.executescript("DELETE FROM condition_runs; UPDATE extraction_runs SET config = json_remove(config, '$.checks_conditions');")
+    calls = stub(monkeypatch)
+
+    demographics.run_demographics(path)
+
+    assert calls == []
+    assert current_conditions(conn, "a") == {"pots"}  # the older run's rows stay current
+
+
 # ── Claims ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize(

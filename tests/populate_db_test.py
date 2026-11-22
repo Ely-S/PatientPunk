@@ -187,6 +187,7 @@ class TestPopulateDbEndToEnd:
             )
         }
         assert tables == {
+            "condition_runs",
             "conditions",
             "demographic_claims",
             "extraction_runs",

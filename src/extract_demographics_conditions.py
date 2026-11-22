@@ -255,30 +255,55 @@ def _users_with_unread_posts(conn, since: int) -> set[str]:
     return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}", (DELETED_USER_ID, since))}
 
 
-def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts: dict) -> None:
-    """One conditions call per user in ``users``, over their newest posts up to MAX_USER_CHARS. A failed
-    call writes nothing for that user, and nothing schedules it again: the next call for that user
-    comes when a run reads one of their posts. (Conditions move per post later, #195.)"""
+# Users with a post read by a run that checks conditions, and no conditions check since: users read
+# this run, and users whose conditions call failed in an earlier run. Runs from before condition_runs
+# (no config.checks_conditions) never make a user due, so upgrading doesn't recheck everyone.
+CONDITIONS_DUE = (
+    "SELECT DISTINCT p.user_id FROM post_runs pr JOIN posts p ON p.post_id = pr.post_id "
+    "JOIN extraction_runs r ON r.run_id = pr.run_id "
+    "WHERE r.extraction_type = 'demographics' AND json_extract(r.config, '$.checks_conditions') "
+    "AND p.user_id != ? AND NOT EXISTS ("
+    "  SELECT 1 FROM condition_runs cr WHERE cr.user_id = p.user_id AND cr.run_id >= pr.run_id)")
+
+
+def _read_conditions(client, conn, reader, run_id: int, counts: dict) -> None:
+    """One conditions call per due user (CONDITIONS_DUE), over their newest posts up to MAX_USER_CHARS.
+    A checked user gets a condition_runs row; a failed call writes nothing, so the next run checks that
+    user again. (Conditions move per post later, #195.)"""
+    users = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+
+    def checked(user_id: str, conditions: list) -> None:
+        conn.execute("INSERT INTO condition_runs (run_id, user_id) VALUES (?, ?)", (run_id, user_id))
+        conn.executemany(
+            "INSERT INTO conditions (run_id, user_id, condition_name, condition_type) VALUES (?, ?, ?, ?)",
+            [(run_id, user_id, name, kind) for name, kind in conditions])
+        counts["conditions"] += len(conditions)
+
     histories = (
         (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
         for user_id, posts in groupby(reader.execute(
             "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
             "ORDER BY user_id, post_date DESC, post_id", (DELETED_USER_ID,)), key=itemgetter(0))
         if user_id in users)
-    for user_id, conditions in _in_parallel(client, ((u, t) for u, t in histories if t), read_conditions):
+
+    def jobs():  # consumed on this thread by _in_parallel, so checked() may write here
+        for user_id, text in histories:
+            if text:
+                yield user_id, text
+            else:
+                checked(user_id, [])  # nothing left to read, so no current conditions
+
+    for user_id, conditions in _in_parallel(client, jobs(), read_conditions):
         if conditions is None:
             counts["conditions_failed"] += 1
-            continue
-        conn.executemany(
-            "INSERT INTO conditions (run_id, user_id, condition_name, condition_type) VALUES (?, ?, ?, ?)",
-            [(run_id, user_id, name, kind) for name, kind in conditions])
-        counts["conditions"] += len(conditions)
+        else:
+            checked(user_id, conditions)
     conn.commit()
 
 
 def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> dict:
-    """Read new posts (every post with ``reread``) into claims, extract conditions for the users read,
-    and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts."""
+    """Read new posts (every post with ``reread``) into claims, check conditions for the users read and
+    those whose earlier check failed, and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts."""
     if reread and limit:
         # A limited reread would become the newest reread checkpoint, so the next ordinary run would
         # reread every post the limit skipped: a paid full-corpus run nobody asked for.
@@ -305,6 +330,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
             "max_user_chars": MAX_USER_CHARS,
             "temperatures": TEMPERATURES,
             "workers": MAX_IN_FLIGHT,
+            "checks_conditions": True,
         }, commit_hash=get_git_commit())
         if reread:
             since = unfinished or run_id
@@ -318,7 +344,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False) -> 
         counts = {"posts_read": 0, "posts_failed": 0, "claims": 0, "conditions": 0, "conditions_failed": 0}
 
         read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
-        _read_conditions(client, conn, reader, run_id, set(read_users), counts)
+        _read_conditions(client, conn, reader, run_id, counts)
         # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
         # Users with unread posts keep their previous profile until all their posts are read.
         failed_users = _users_with_unread_posts(conn, since)

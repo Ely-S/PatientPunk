@@ -203,6 +203,26 @@ CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
         WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
     );
 
+-- A demographics run records here each user whose conditions it checked, including users it found none
+-- for; a failed call writes no row, so a later run checks that user again (#220).
+CREATE TABLE condition_runs (
+    run_id  INTEGER NOT NULL REFERENCES extraction_runs(run_id),
+    user_id TEXT NOT NULL REFERENCES users(user_id),
+    PRIMARY KEY (run_id, user_id)
+);
+CREATE INDEX idx_cr_user ON condition_runs(user_id, run_id);
+
+-- Each user's conditions from their newest check in condition_runs, so a check that finds nothing
+-- retracts older rows without deleting them. A user checked only before condition_runs existed keeps
+-- the rows of their newest demographics run. Rows from CSV loads never count.
+CREATE VIEW IF NOT EXISTS conditions_latest AS
+    SELECT c.* FROM conditions c
+    WHERE c.run_id = COALESCE(
+        (SELECT MAX(cr.run_id) FROM condition_runs cr WHERE cr.user_id = c.user_id),
+        (SELECT MAX(c2.run_id) FROM conditions c2 JOIN extraction_runs r ON r.run_id = c2.run_id
+         WHERE c2.user_id = c.user_id AND r.extraction_type = 'demographics')
+    );
+
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
 -- ══════════════════════════════════════════════════════

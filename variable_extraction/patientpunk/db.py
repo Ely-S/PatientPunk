@@ -343,7 +343,7 @@ def query_treatment_outcomes(
     if condition:
         where_clauses.append(
             "EXISTS ("
-            "  SELECT 1 FROM conditions c"
+            "  SELECT 1 FROM conditions_latest c"
             "  WHERE c.user_id = tr.user_id"
             "  AND LOWER(c.condition_name) LIKE LOWER(?)"
             ")"
