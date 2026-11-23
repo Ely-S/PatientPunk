@@ -51,12 +51,14 @@ author's description of themselves is the age.
 (`"non-binary | female"`), never two words for the same one ("26F single mom" is `"F"`, quoting `26F`).
 Write the words as stated (#214 is still open; the evaluation scores both the words and the
 normalized value). The `F`/`M` in "31F", "male", "woman", "guy", "mom", "boy" count when they describe
-the author, and the evaluation scores mom, guy, lady and similar words as the sex they mean.
+the author. The evaluation scores mom, guy, lady and similar words as the sex they mean, by the
+pipeline's own rule (`normalize_sex` in `src/resolve_demographics.py`, the one list of these words).
 Empty for pronouns, usernames, writing style, and what others call the author.
 
 **country, state.** Where the author lives, one place each. "45 male here in Tennessee" is state
 `"Tennessee"` with country empty: label only what is named, never what it implies. Abbreviations are
-fine (`"TX"`, `"UK"`); the evaluation treats them as the full name. Empty for places they visited,
+fine (`"TX"`, `"UK"`); the evaluation treats them as the full name, as the pipeline stores them
+(`canonical_place` in `src/resolve_demographics.py`). Empty for places they visited,
 were treated in, or are comparing ("doctors in Germany prescribe..."), and for unnamed places ("a
 third world country"). Two places they live between ("I split time between Ohio and Florida") is
 empty, as the extractor refuses two places.
@@ -95,7 +97,7 @@ the merged resolve rules (`src/resolve_demographics.py`) should produce from tho
   ("late 30s" is 37.5, "30s" is 35). `age_bucket` is its decade (`"30s"`).
 - **sex_stated**: the most recent sex claim as written; **sex**: female, male or non-binary from it
   (non-binary wins over a binary value; a trans answer is null; null when no rule applies).
-- **location**: `"country / state"`, each as the posts wrote it (`US` and `United States` agree): the latest country, plus the latest state from a post that names
+- **location**: `"country / state"`, one spelling per country and US state (`US`, `USA` and `United States` are one country): the latest country, plus the latest state from a post that names
   that country or no country, the latter tied to the nearest country named before it. Either alone
   when only one is known.
 - **city**: the latest city, cleared when a later post names a different country or state.

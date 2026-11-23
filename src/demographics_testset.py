@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "Scrapers"))
 from db_to_corpus import author_hash
 
 import extract_demographics_conditions as extractor
-from resolve_demographics import SEX_VALUES, _resolve, normalize_sex, stated_age
+from resolve_demographics import _resolve, canonical_place, normalize_sex, stated_age
 
 FIELDS = extractor.CLAIM_FIELDS
 PROFILE = ("age_bucket", "age", "sex", "sex_stated", "location", "city")  # _resolve's order
@@ -180,26 +180,8 @@ def counts(items: list[dict]) -> dict:
 
 # ── Matching ─────────────────────────────────────────────────────────────────
 
-_US_STATES = dict(pair.split(":") for pair in ["al:alabama", "ak:alaska", "az:arizona", "ar:arkansas", "ca:california", "co:colorado", "ct:connecticut", "de:delaware", "fl:florida", "ga:georgia", "hi:hawaii", "id:idaho", "il:illinois", "in:indiana", "ia:iowa", "ks:kansas", "ky:kentucky", "la:louisiana", "me:maine", "md:maryland", "ma:massachusetts", "mi:michigan", "mn:minnesota", "ms:mississippi", "mo:missouri", "mt:montana", "ne:nebraska", "nv:nevada", "nh:new_hampshire", "nj:new_jersey", "nm:new_mexico", "ny:new_york", "nc:north_carolina", "nd:north_dakota", "oh:ohio", "ok:oklahoma", "or:oregon", "pa:pennsylvania", "ri:rhode_island", "sc:south_carolina", "sd:south_dakota", "tn:tennessee", "tx:texas", "ut:utah", "vt:vermont", "va:virginia", "wa:washington", "wv:west_virginia", "wi:wisconsin", "wy:wyoming", "dc:district_of_columbia"])
-_US_STATES = {k: v.replace("_", " ") for k, v in _US_STATES.items()}
-_COUNTRIES = {"us": "united states", "usa": "united states", "united states of america": "united states",
-              "america": "united states", "uk": "united kingdom", "britain": "united kingdom",
-              "great britain": "united kingdom", "england": "united kingdom", "scotland": "united kingdom",
-              "wales": "united kingdom", "northern ireland": "united kingdom", "nz": "new zealand",
-              "holland": "netherlands", "the netherlands": "netherlands", "deutschland": "germany"}
-
-
 def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[.'’]", "", text.casefold())).strip().removeprefix("the ")
-
-
-# Everyday words for a binary sex, scored as the word they mean ("31F, mom" and "female" agree).
-# Evaluation only: the pipeline's normalize_sex keeps its own narrower list.
-_FEMALE = ("mom", "mum", "mother", "mama", "wife", "girl", "gal", "lady", "ladies", "women", "girlfriend",
-           "grandmother", "sister", "daughter")
-_MALE = ("dad", "father", "papa", "husband", "guy", "dude", "boy", "gentleman", "men", "boyfriend", "grandfather",
-         "brother", "son")
-SEX_WORDS = {**SEX_VALUES, **dict.fromkeys(_FEMALE, "female"), **dict.fromkeys(_MALE, "male")}
 
 
 def key(field: str, value: str) -> object:
@@ -207,15 +189,12 @@ def key(field: str, value: str) -> object:
     if field == "age":
         stated = stated_age(value)
         return stated[0] if stated else _plain(value)
-    if field == "sex":
+    if field == "sex":  # each identity by the pipeline's rule ("guy" is male), else its words
         parts = (_plain(v) for v in re.split(r"[|/,;]", value) if v.strip())
-        return frozenset(SEX_WORDS.get(v, v) for v in parts)
-    text = _plain(value)
-    if field == "country":
-        return _COUNTRIES.get(text, text)
-    if field == "state":
-        return _US_STATES.get(text, text)
-    return text.split(",")[0].strip()  # city: "Austin, TX" is Austin
+        return frozenset(normalize_sex(v) or v for v in parts)
+    if field in ("country", "state"):
+        return _plain(canonical_place(field, value))  # the pipeline's spelling: "US" is United States
+    return _plain(value).split(",")[0].strip()  # city: "Austin, TX" is Austin
 
 
 def _overlaps(a: str, b: str) -> bool:

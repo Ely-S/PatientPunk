@@ -27,7 +27,8 @@ def item(post_id, text, lab, user="u1", date=0, split="dev"):
     ("age", "34", "34 years old"), ("age", "30s", "mid 30s"), ("country", "USA", "the United States"),
     ("country", "U.K.", "England"), ("state", "TX", "Texas"), ("city", "Austin, TX", "austin"),
     ("sex", "Female | non-binary", "non-binary|female"), ("sex", "mom", "F"), ("sex", "guy", "male"),
-    ("sex", "ladies", "woman"), ("sex", "f | mom", "female"),
+    ("sex", "ladies", "woman"), ("sex", "f | mom", "female"), ("country", "the States", "US"),
+    ("country", "Aus", "Australia"),
 ])
 def test_two_ways_of_writing_one_answer_match(field, a, b):
     assert ts.key(field, a) == ts.key(field, b)
@@ -77,6 +78,20 @@ def test_profiles_from_labels_predictions_and_expected():
     assert result["labels_vs_expected"] == {f"{f}/agree": 1 for f in ts.PROFILE}
     assert result["pred_vs_labels"]["age/differ"] == 1 and result["pred_vs_labels"]["location/differ"] == 1
     assert result["pred_vs_expected"]["sex/agree"] == 1
+
+
+def test_profiles_keep_a_state_across_spellings_of_its_country():
+    # US, then Texas, then USA: the resolve step keeps the state (#225 review), so the profile from the
+    # predictions agrees with the one the labeler expected.
+    items = [item("p1", "in the US", label(country=("US", "in the US")), date=1),
+             item("p2", "in Texas", label(state=("Texas", "in Texas")), date=2),
+             item("p3", "USA here", label(country=("USA", "USA")), date=3)]
+    authors = [{"user_id": "u1", "split": "dev", "post_ids": ["p1", "p2", "p3"],
+                "expected_profile": {"age": None, "age_bucket": None, "sex": None, "sex_stated": None,
+                                     "location": "United States / Texas", "city": None}}]
+    predictions = {"p1": {"country": ("US", "US")}, "p2": {"state": ("TX", "Texas")}, "p3": {"country": ("USA", "USA")}}
+    result = ts.score_profiles(items, authors, predictions)
+    assert result["pred_vs_expected"] == result["labels_vs_expected"] == {f"{f}/agree": 1 for f in ts.PROFILE}
 
 
 def scrape_db(path):
