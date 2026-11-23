@@ -292,7 +292,7 @@ def test_resolves_claims_from_several_posts_into_one_profile(db, monkeypatch):
 
     stats = demographics.run_demographics(path)
 
-    assert profile(conn, "patient") == ("30s", 35.0, None, None, "US / Texas", "Austin")
+    assert profile(conn, "patient") == ("30s", 35.0, None, None, "United States / Texas", "Austin")
     assert stats["disagreements"] == {"age": 1}
 
 

@@ -6,7 +6,8 @@ call. A user gets a new row only when their resolved profile differs from user_p
 Each row keeps the age in years (a real number), advanced to the reference date, beside its decade.
 When the author gave a range or decade instead of a number, the age is that range's midpoint
 ("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
-normalized from it (normalize_sex, #214).
+normalized from it (normalize_sex, #214). Countries and US states are compared and stored in one
+spelling (canonical_place), so "US" then "USA" keeps the state named between them.
 """
 import re
 import sqlite3
@@ -78,9 +79,50 @@ def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float
     return age, estimated
 
 
+_US_STATES = (
+    "Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho "
+    "Illinois Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota "
+    "Mississippi Missouri Montana Nebraska Nevada New_Hampshire New_Jersey New_Mexico New_York "
+    "North_Carolina North_Dakota Ohio Oklahoma Oregon Pennsylvania Rhode_Island South_Carolina South_Dakota "
+    "Tennessee Texas Utah Vermont Virginia Washington West_Virginia Wisconsin Wyoming District_of_Columbia"
+)
+_US_STATES = [s.replace("_", " ") for s in _US_STATES.split()]
+_US_STATE_CODES = [  # same order as _US_STATES; zip(strict=True) checks the count
+    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id", "il", "in", "ia", "ks", "ky", "la",
+    "me", "md", "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok",
+    "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "dc"]
+_COUNTRY_ALIASES = {
+    "United States": ("us", "usa", "united states of america", "america", "states", "us of a"),
+    "United Kingdom": ("uk", "britain", "great britain", "england", "scotland", "wales", "northern ireland"),
+    "Australia": ("aus", "oz"),
+    "New Zealand": ("nz",),
+    "Netherlands": ("holland",),
+    "Germany": ("deutschland",),
+}
+_PLACES = {
+    "country": {alias: name for name, aliases in _COUNTRY_ALIASES.items() for alias in (name.casefold(), *aliases)},
+    "state": {**dict(zip(_US_STATE_CODES, _US_STATES, strict=True)), **{s.casefold(): s for s in _US_STATES}},
+}
+
+
+def _plain_place(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[.'’]", "", text.casefold())).strip().removeprefix("the ")
+
+
+def canonical_place(field: str, value: str) -> str:
+    """One spelling for a country or US state ("US", "U.S." and "the States" are "United States"; "TX" is
+    "Texas"), so the same place is one value in user_profiles.location. Other places are kept as written."""
+    return _PLACES.get(field, {}).get(_plain_place(value), value.strip())
+
+
+# Everyday words for a binary sex, as authors describe themselves in their own words ("31F, mom").
+_FEMALE = ("mom", "mum", "mother", "mama", "wife", "girl", "gal", "lady", "ladies", "women", "girlfriend",
+           "grandmother", "sister", "daughter")
+_MALE = ("dad", "father", "papa", "husband", "guy", "dude", "boy", "gentleman", "men", "boyfriend", "grandfather",
+         "brother", "son")
 SEX_VALUES = {
-    "f": "female", "female": "female", "woman": "female",
-    "m": "male", "male": "male", "man": "male",
+    "f": "female", "female": "female", "woman": "female", **dict.fromkeys(_FEMALE, "female"),
+    "m": "male", "male": "male", "man": "male", **dict.fromkeys(_MALE, "male"),
     "nb": "non-binary", "nonbinary": "non-binary", "non-binary": "non-binary", "non binary": "non-binary",
 }
 
@@ -113,6 +155,8 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
         value = value.strip()
         if not value:
             continue  # a blank claim states nothing, so it can't replace an earlier value
+        if field in ("country", "state"):
+            value = canonical_place(field, value)  # "US" and "USA" are one country when pairing states
         by_field[field].append((date, post_id, value))
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = ages[-1][0] if ages else None

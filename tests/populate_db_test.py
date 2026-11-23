@@ -246,7 +246,7 @@ class TestPopulateDbEndToEnd:
         populated = db.conn.execute(
             "SELECT age_bucket, age, sex, sex_stated, location FROM user_profiles WHERE user_id = 'b'"
         ).fetchone()
-        assert populated == ("30s", 34.0, "female", "F", "US / Texas")
+        assert populated == ("30s", 34.0, "female", "F", "United States / Texas")
 
         # And the condition from user b's extraction should be recorded.
         conditions = db.conn.execute(
