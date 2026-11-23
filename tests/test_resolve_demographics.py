@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from patientpunk.db import init_db, register_run  # noqa: E402
 from import_posts import DELETED_USER_ID  # noqa: E402
-from resolve_demographics import resolve_profiles  # noqa: E402
+from resolve_demographics import canonical_place, normalize_sex, resolve_profiles  # noqa: E402
 
 SCHEMA_SQL = Path(__file__).parent.parent / "schema.sql"
 
@@ -80,19 +80,23 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
 
 
 @pytest.mark.parametrize("posts, expected", [  # expected: (location, city)
-    ([{"country": "US", "state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
-    ([{"state": "Texas"}, {"country": "US"}], ("US / Texas", None)),
-    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("UK", None)),
-    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], ("UK", None)),
-    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], ("US / Texas", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": "US"}], ("United States / Texas", None)),
+    ([{"state": "Texas"}, {"country": "US"}], ("United States / Texas", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("United Kingdom", None)),
+    ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], ("United Kingdom", None)),
+    ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], ("United States / Texas", None)),
     ([{"state": "Texas"}], ("Texas", None)),
-    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], ("US / Texas", None)),
-    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], ("UK", None)),
-    ([{"country": "US", "state": "Texas"}, {"country": " "}], ("US / Texas", None)),  # a blank claim states nothing
-    ([{"country": "US", "state": "Texas", "city": "Austin"}, {"country": "US"}], ("US / Texas", "Austin")),
-    ([{"state": "Texas", "city": "Austin"}, {"country": "US", "state": "Ohio"}], ("US / Ohio", None)),
-    ([{"country": "US", "state": "Texas"}, {"city": "Austin"}, {"country": "UK"}], ("UK", None)),
-    ([{"city": "Austin"}, {"country": "US", "state": "Texas"}], ("US / Texas", "Austin")),
+    ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], ("United States / Texas", None)),
+    ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], ("United Kingdom", None)),
+    ([{"country": "US", "state": "Texas"}, {"country": " "}], ("United States / Texas", None)),  # a blank claim states nothing
+    ([{"country": "US", "state": "Texas", "city": "Austin"}, {"country": "US"}], ("United States / Texas", "Austin")),
+    ([{"state": "Texas", "city": "Austin"}, {"country": "US", "state": "Ohio"}], ("United States / Ohio", None)),
+    ([{"country": "US", "state": "Texas"}, {"city": "Austin"}, {"country": "UK"}], ("United Kingdom", None)),
+    ([{"city": "Austin"}, {"country": "US", "state": "Texas"}], ("United States / Texas", "Austin")),
+    # Two spellings of one country keep its state and city (#225 review)
+    ([{"country": "US", "state": "Texas"}, {"city": "Austin"}, {"country": "USA"}], ("United States / Texas", "Austin")),
+    ([{"country": "U.S.", "state": "TX"}, {"country": "the States"}], ("United States / Texas", None)),
+    ([{"country": "slovenia"}], ("slovenia", None)),  # a place not in the list is kept as written
 ])
 def test_location_pairs_a_state_only_with_its_country(conn, posts, expected):
     r = run(conn)
@@ -202,7 +206,7 @@ def test_case_differences_are_not_disagreements(conn):
     r = run(conn)
     read(conn, r, "p1", sex="Female", country="US", state="Texas"), read(conn, r, "p2", sex="female", country="us")
     assert resolve_profiles(conn, r)["disagreements"] == {}
-    assert profile(conn, "a")[1:] == ("female", "us / Texas")
+    assert profile(conn, "a")[1:] == ("female", "United States / Texas")
 
 
 def test_the_deleted_placeholder_never_gets_a_profile(conn):
@@ -294,3 +298,30 @@ def test_sex_claims_that_normalize_alike_agree(conn):
     read(conn, r, "p1", sex="F")
     read(conn, r, "p2", sex="female")
     assert resolve_profiles(conn, r)["disagreements"] == {}
+
+
+@pytest.mark.parametrize("field, value, canonical", [
+    ("country", "US", "United States"), ("country", "U.S.", "United States"), ("country", "the States", "United States"),
+    ("country", "America", "United States"), ("country", "England", "United Kingdom"), ("country", "Aus", "Australia"),
+    ("country", "united states", "United States"), ("country", "Brazil", "Brazil"), ("country", " Slovenia ", "Slovenia"),
+    ("state", "TX", "Texas"), ("state", "texas", "Texas"), ("state", "D.C.", "District of Columbia"),
+    ("state", "Quebec", "Quebec"),
+])
+def test_canonical_place(field, value, canonical):
+    assert canonical_place(field, value) == canonical
+
+
+def test_spellings_of_one_place_are_not_disagreements(conn):
+    post(conn, "p1", "a", 2025), post(conn, "p2", "a", 2026)
+    r = run(conn)
+    read(conn, r, "p1", country="US", state="TX"), read(conn, r, "p2", country="USA", state="Texas")
+    assert resolve_profiles(conn, r)["disagreements"] == {}
+    assert profile(conn, "a")[2] == "United States / Texas"
+
+
+@pytest.mark.parametrize("stated, sex", [
+    ("guy", "male"), ("dude", "male"), ("dad", "male"), ("Lady", "female"), ("mom", "female"), ("f | mom", "female"),
+    ("mom | dad", None), ("trans woman | mom", None), ("non-binary | mom", "non-binary"),
+])
+def test_everyday_sex_words(stated, sex):
+    assert normalize_sex(stated) == sex
