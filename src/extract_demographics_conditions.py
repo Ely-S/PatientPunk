@@ -288,7 +288,7 @@ def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts:
     """One conditions call per user in ``users``, over their newest posts up to MAX_USER_CHARS. A failed
     call writes nothing for that user, and nothing schedules it again: the next call for that user
     comes when a run reads one of their posts. Commits every COMMIT_EVERY users, so the write lock isn't
-    held for the whole pass. (Conditions move per post later, #195.)"""
+    held for the whole pass."""
     histories = (
         (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
         for user_id, posts in groupby(reader.execute(
