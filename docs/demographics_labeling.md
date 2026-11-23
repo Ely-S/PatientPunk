@@ -90,7 +90,7 @@ the merged resolve rules (`src/resolve_demographics.py`) should produce from tho
 
 ```json
 {"age": 37.5, "age_bucket": "30s", "sex": "female", "sex_stated": "female",
- "location": "US / Texas", "city": null}
+ "location": "United States / Texas", "city": null}
 ```
 
 - **age**: the most recent stated age, not advanced to today; a range or decade is its midpoint
