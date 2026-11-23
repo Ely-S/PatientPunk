@@ -313,8 +313,7 @@ def _read_conditions(client, conn, reader, run_id: int, read_users: set[str], li
     backlog of earlier failures. A checked user gets a condition_runs row; a failed call writes nothing,
     so a later run checks that user again. A call the content filter blocks would be blocked every
     time, so it counts as a check that carries the user's current conditions forward. Commits every
-    COMMIT_EVERY users, so the write lock isn't held for the whole pass. (Conditions move per post
-    later, #195.)"""
+    COMMIT_EVERY users, so the write lock isn't held for the whole pass."""
     due = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
     users = due & read_users if limit else due
     log.info("Checking conditions for %d users (%d read this run, %d left for a run without --limit)",
