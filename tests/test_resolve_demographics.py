@@ -56,16 +56,16 @@ def test_conflicting_ages_take_the_most_recent_and_are_counted(conn):
     assert stats["disagreements"] == {"age": 1}
 
 
-def test_age_advances_to_the_reference_date(conn):
-    post(conn, "p1", "a", 2024), post(conn, "p2", "b", 2026)
+def test_age_advances_to_the_users_own_newest_post(conn):
+    post(conn, "p1", "a", 2024), post(conn, "p2", "a", 2026), post(conn, "p3", "b", 2028)
     r = run(conn)
-    read(conn, r, "p1", age="29"), read(conn, r, "p2")
-    assert resolve_profiles(conn, r)["reference_date"] == ts(2026)
+    read(conn, r, "p1", age="29"), read(conn, r, "p2"), read(conn, r, "p3")
+    assert resolve_profiles(conn, r)["reference_date"] == ts(2028)  # b's post doesn't age a
     assert profile(conn, "a") == ("30s", None, None)
     assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31.0,)
 
 
-def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
+def test_another_users_newer_post_leaves_an_age_unchanged(conn):
     post(conn, "p1", "a", 2025), post(conn, "p2", "b", 2025)
     r1 = run(conn)
     read(conn, r1, "p1", age="29"), read(conn, r1, "p2")
@@ -76,7 +76,7 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     r2 = run(conn)
     read(conn, r2, "p3")
     resolve_profiles(conn, r2)
-    assert profile(conn, "a") == ("30s", None, None)
+    assert profile(conn, "a") == ("20s", None, None)
 
 
 @pytest.mark.parametrize("posts, expected", [  # expected: (location, city)
@@ -277,9 +277,9 @@ def test_only_a_demographics_run_can_hold_profiles(conn):
 
 
 def test_a_decade_phrase_advances_from_its_midpoint(conn):
-    post(conn, "p1", "a", 2016), post(conn, "p2", "b", 2026)
+    post(conn, "p1", "a", 2016), post(conn, "p2", "a", 2026)
     r = run(conn)
-    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 in 2026
+    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 at a's 2026 post
     resolve_profiles(conn, r)
     assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == ("40s", 47.5)
 

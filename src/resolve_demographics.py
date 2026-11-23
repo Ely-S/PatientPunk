@@ -1,9 +1,9 @@
 """Turn per-post demographic claims into one user_profiles row per user, in code (#206).
 
 Resolution is recomputed from demographic_claims_latest on every run, so it needs no state of its
-own: a restart, a re-read that retracted claims, or a newer reference date is picked up by the next
+own: a restart, a re-read that retracted claims, or a user's newer post is picked up by the next
 call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
-Each row keeps the age in years (a real number), advanced to the reference date, beside its decade.
+Each row keeps the age in years (a real number) at the user's own newest post, beside its decade.
 When the author gave a range or decade instead of a number, the age is that range's midpoint
 ("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
 normalized from it (normalize_sex, #214). Countries and US states are compared and stored in one
@@ -68,8 +68,8 @@ def stated_age(value: str) -> tuple[float, bool] | None:
 
 
 def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
-    """(age, estimated): a stated age advanced to the reference date; a range or decade is advanced
-    from its midpoint. None when unparseable or out of range."""
+    """(age, estimated): a stated age advanced to ``reference``, the user's newest post; a range or
+    decade is advanced from its midpoint. None when unparseable or out of range."""
     stated = stated_age(value)
     if stated is None:
         return None
@@ -209,7 +209,8 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     run has read and whose resolved profile differs from their current one, with empty fields where
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
     the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
-    The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
+    Each age is advanced to that user's own newest post, so it stops changing once they stop posting.
+    The database's newest post_date is recorded in the run's config as reference_date. Commits; returns counts."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
     if not set(PROFILE_FIELDS) <= columns or not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
@@ -218,6 +219,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     if run_type != ("demographics",):
         raise ValueError(f"run {run_id} is not a demographics run; user_profiles_latest would ignore its rows")
     reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
+    newest = dict(conn.execute("SELECT user_id, MAX(post_date) FROM posts GROUP BY user_id"))
     claims = defaultdict(list)
     for user, *claim in conn.execute(
             "SELECT p.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
@@ -232,7 +234,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
 
     disagreements, rows = Counter(), []
     for user in sorted(read - set(failed_users) - {DELETED_USER_ID}):
-        profile, disagree = _resolve(claims.get(user, []), reference)
+        profile, disagree = _resolve(claims.get(user, []), newest.get(user))
         disagreements.update(disagree)
         p = current.get(user)
         resolved = tuple("" if v is None else str(v) for v in profile)

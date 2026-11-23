@@ -465,7 +465,7 @@ def test_a_reread_that_finds_nothing_retracts_and_a_restart_still_resolves(db, m
     assert profile(conn, "a") == (None, None, None, None, None, None)
 
 
-def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkeypatch):
+def test_another_users_new_post_leaves_an_age_unchanged(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("a-2024", "a", ts(2024), None, "I'm 29"), ("b-2024", "b", ts(2024), None, "hi")])
     stub(monkeypatch, post=lambda text: {"age": claim(29)} if text == "I'm 29" else NOTHING)
@@ -477,7 +477,7 @@ def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkey
     demographics.run_demographics(path)
 
     assert posts_read(conn, calls) == ["hello again"]
-    assert profile(conn, "a")[:2] == ("30s", 31.0)
+    assert profile(conn, "a")[:2] == ("20s", 29.0)
 
 
 def test_limit_caps_the_users_read(db, monkeypatch):
