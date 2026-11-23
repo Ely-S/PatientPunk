@@ -219,17 +219,16 @@ def _reread_checkpoint(conn) -> tuple[int, int | None]:
 
 def _plan(conn, since: int, limit: int) -> dict:
     """What a run would send: unread posts and their users (the first ``limit`` users), conditions
-    checks for those users plus, without ``limit``, users still due from an earlier failed check, and a
-    rough input-token count (4 characters a token, prompts included). Posts with nothing to read are
-    counted, so it is an upper bound."""
+    checks for those of them with a post no run has read yet or a check still due, plus, without
+    ``limit``, every user still due (CONDITIONS_DUE), and a rough input-token count (4 characters a
+    token, prompts included). Posts with nothing to read are counted, so it is an upper bound."""
     users = conn.execute(
         f"SELECT p.user_id, COUNT(*), SUM(LENGTH(COALESCE(p.title, '')) + LENGTH(COALESCE(p.body_text, ''))) "
         f"{UNREAD_POSTS} GROUP BY p.user_id ORDER BY p.user_id", (DELETED_USER_ID, since)).fetchall()
     users = users[:limit or None]
     posts, chars = sum(n for _, n, _ in users), sum(c or 0 for _, _, c in users)
-    checks = {u for u, _, _ in users}
-    if not limit:
-        checks |= {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+    due = {u for (u,) in conn.execute(CONDITIONS_DUE, (DELETED_USER_ID,))}
+    checks = {u for u, _, _ in users} & (_users_with_unread_posts(conn, 0) | due) | (set() if limit else due)
     tokens = (chars + posts * len(POST_DEMOGRAPHICS_PROMPT)
               + len(checks) * (len(CONDITIONS_PROMPT) + MAX_USER_CHARS)) // 4
     return {"posts": posts, "users": len(users), "post_calls": posts, "conditions_calls": len(checks),
@@ -292,15 +291,20 @@ def _users_with_unread_posts(conn, since: int) -> set[str]:
     return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}", (DELETED_USER_ID, since))}
 
 
-# Users with a post read by a run that checks conditions, and no conditions check since: users read
-# this run, and users whose conditions call failed in an earlier run. Runs from before condition_runs
-# (no config.checks_conditions) never make a user due, so upgrading doesn't recheck everyone.
+# Users with new text since their last conditions check: a post first read (by any demographics run)
+# in a run that checks conditions, with no check since. That is users with new posts this run, and
+# users whose conditions call failed in an earlier run. A --reread reads no post for the first time,
+# so it never makes a user due, finished or not. Runs from before condition_runs (no
+# config.checks_conditions) never make a user due either, so upgrading doesn't recheck everyone.
 CONDITIONS_DUE = (
-    "SELECT DISTINCT p.user_id FROM post_runs pr JOIN posts p ON p.post_id = pr.post_id "
-    "JOIN extraction_runs r ON r.run_id = pr.run_id "
-    "WHERE r.extraction_type = 'demographics' AND json_extract(r.config, '$.checks_conditions') "
-    "AND p.user_id != ? AND NOT EXISTS ("
-    "  SELECT 1 FROM condition_runs cr WHERE cr.user_id = p.user_id AND cr.run_id >= pr.run_id)")
+    "WITH first_read AS ("
+    "  SELECT pr.post_id, MIN(pr.run_id) AS run_id FROM post_runs pr"
+    "  JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics'"
+    "  GROUP BY pr.post_id) "
+    "SELECT DISTINCT p.user_id FROM first_read f JOIN posts p ON p.post_id = f.post_id "
+    "JOIN extraction_runs r ON r.run_id = f.run_id "
+    "WHERE json_extract(r.config, '$.checks_conditions') AND p.user_id != ? AND NOT EXISTS ("
+    "  SELECT 1 FROM condition_runs cr WHERE cr.user_id = p.user_id AND cr.run_id >= f.run_id)")
 
 
 def _read_conditions(client, conn, reader, run_id: int, read_users: set[str], limit: int, counts: dict) -> None:

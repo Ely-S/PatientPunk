@@ -205,6 +205,34 @@ def test_limit_caps_conditions_checks_after_a_run_stopped_in_the_conditions_pass
     assert [kind for kind, _, _ in calls].count("conditions") == 29
 
 
+def test_a_reread_finished_or_stopped_never_rechecks_conditions(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "I have POTS"), ("p2", "b", 1, None, "hello")])
+    stub(monkeypatch, conditions=conditions_reply("POTS"))
+    demographics.run_demographics(path)
+
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path, reread=True)  # finished: every post read again, none for the first time
+    assert [kind for kind, _, _ in calls].count("conditions") == 0
+
+    def stop(*args, **kwargs):
+        raise KeyboardInterrupt
+    read_conditions = demographics._read_conditions
+    monkeypatch.setattr(demographics, "_read_conditions", stop)
+    with pytest.raises(KeyboardInterrupt):
+        demographics.run_demographics(path, reread=True)  # stopped after its posts pass
+    monkeypatch.setattr(demographics, "_read_conditions", read_conditions)
+    assert demographics.run_demographics(path, dry_run=True)["conditions_calls"] == 0
+    assert demographics.run_demographics(path, reread=True, dry_run=True)["conditions_calls"] == 0
+
+    add_posts(conn, [("p3", "b", 2, None, "new post")])  # only b has new text
+    assert demographics.run_demographics(path, dry_run=True)["conditions_calls"] == 1
+    calls = stub(monkeypatch)
+    demographics.run_demographics(path)
+    assert [kind for kind, _, _ in calls].count("conditions") == 1
+    assert current_conditions(conn, "a") == {"pots"}
+
+
 def test_runs_from_before_condition_runs_never_make_users_due(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("p1", "a", 1, None, "I have POTS"), ("p2", "b", 1, None, "hello")])
