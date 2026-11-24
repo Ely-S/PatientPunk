@@ -206,15 +206,15 @@ def test_curate_and_add_curated_keep_picks_outside_the_pooled_set(tmp_path):
     pick = candidates[0]["post_id"]
     curation = out / "curation.jsonl"
     curation.write_text(json.dumps({"post_id": pick, "case": "son_age", "rationale": "x", "picked_by": "test"}) + "\n")
-    assert ts.add_curated(out, curation, cases_path=cases)["items"] == 1
+    assert ts.add_curated(out, curation)["items"] == 1
     added = [json.loads(line) for line in (out / "testset.jsonl").read_text().splitlines()][-1]
     assert (added["post_id"], added["strata"], added["case"], added["label"]) == (pick, ["curated"], ["son_age"], None)
     assert "match" not in added and "rationale" not in added
     with pytest.raises(ValueError, match="already in the set"):
-        ts.add_curated(out, curation, cases_path=cases)
+        ts.add_curated(out, curation)
     curation.write_text(json.dumps({"post_id": "t1_nope", "case": "son_age", "rationale": "", "picked_by": "t"}) + "\n")
     with pytest.raises(ValueError, match="not a candidate"):
-        ts.add_curated(out, curation, cases_path=cases)
+        ts.add_curated(out, curation)
 
 
 def test_evaluate_leaves_curated_and_synthetic_items_out_of_the_pooled_metrics(tmp_path, monkeypatch):
@@ -322,6 +322,8 @@ def test_kappa_and_agreement_between_two_labelers():
     assert report["country"]["agree"] == 0.5 and report["country"]["stated_second"] == 0
     assert report["conditions"]["agree"] == 1.0  # names compared through canonical_condition
     assert [(d["post_id"], d["field"]) for d in diffs] == [("b", "country")]
+    only_conditions, _ = ts.agreement(items, {k: {"conditions": v["conditions"]} for k, v in second.items()})
+    assert only_conditions["age"]["n"] == 0 and only_conditions["conditions"]["n"] == 2
 
 
 def test_excluded_items_are_dropped_by_load_and_counted_by_stats(tmp_path):

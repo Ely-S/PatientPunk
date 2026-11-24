@@ -1,5 +1,5 @@
 {
-  "_about": "Hand-picked cases for the curated stratum of the #207 test set. `curate` writes each case's regex matches, in seeded order, as candidates; Claude picks `n` per case (60% dev, 40% test by split_of) and records why in curation.jsonl. A regex only finds candidates: the pick decides. `ignore_case` is false where capitals carry the meaning. `conditions` marks a case whose items are also labeled for conditions. `fields` are the claims the case targets: an item whose label has one is a positive, else a near miss.",
+  "_about": "Hand-picked cases for the curated stratum of the #207 test set. `curate` writes each case's regex matches, in seeded order, as candidates; Claude picks `n` per case (60% dev, 40% test by split_of) and records why in curation.jsonl. A regex only finds candidates: the pick decides. `ignore_case` is false where capitals carry the meaning. `conditions` marks a case whose items are also labeled for conditions. `fields` are the claims the case targets: an item whose label has one is a positive, else a near miss; with `severities`, only a condition of one of those severities counts.",
   "gender_identity": {
     "n": 30, "fields": ["sex"], "why": "#214: trans, non-binary and intersex answers; no current label has one",
     "pattern": "\\b(?:i'?m|i am|as an?|identify as)\\s+(?:a\\s+)?(?:trans(?:gender)?\\b|non-?binary|enby|intersex|genderqueer|gender ?fluid|agender|ftm|mtf|transmasc|transfem)|\\b\\d{2}\\s*(?:nb|ftm|mtf|tm|tf)\\b|\\b(?:my|since my|after my)\\s+(?:medical\\s+)?transition\\b"
@@ -42,11 +42,11 @@
     "pattern": "\\b(?:here in|i live in|living in|based in)\\s+(?:portland|springfield|birmingham|london|cambridge|richmond|columbus|kansas city|georgia|washington|paris|perth|victoria|vancouver|manchester|newcastle)\\b"
   },
   "condition_resolved": {
-    "n": 15, "fields": ["conditions"], "why": "#229: resolved, recovered and returning conditions", "conditions": true,
+    "n": 15, "fields": ["conditions"], "severities": ["resolved"], "why": "#229: resolved, recovered and returning conditions", "conditions": true,
     "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b"
   },
   "condition_severity": {
-    "n": 10, "fields": ["conditions"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
+    "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
     "pattern": "\\b(?:mild|moderate|severe|very severe)(?:\\s+to\\s+(?:mild|moderate|severe))?\\s+(?:me/cfs|me|cfs|pots|long covid|mcas|eds|fibro\\w*)\\b|\\b(?:bedbound|housebound)\\b"
   }
 }

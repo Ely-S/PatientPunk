@@ -99,6 +99,13 @@ of the illnesses and symptoms the author says they have or had, each
   post doesn't say. A phrase naming several levels takes the worst ("moderate to severe" is `"severe"`).
 - Not the author's: someone else's condition ("my mom has MS"), one they only ask or wonder about
   ("could this be POTS?"), and a covid infection itself (long covid is a condition).
+- Only a named diagnosis or a named symptom is a condition. A vague self-assessment is not: "I feel
+  like I have some permanent damage done to my nerves", "something is wrong with my gut", "I cannot
+  use my brain as I did before" and "needing more naps" are no condition.
+- A mood or state word is a symptom under its everyday name: "i'm also getting depressed" is symptom
+  `"depression"`, "I am sensitive to magnesium" is symptom `"magnesium sensitivity"`, as written.
+- Spelling is not a disagreement: "PEM" and "post-exertional malaise" are one condition, merged by
+  `canonical_condition` when labels are scored or compared.
 
 ## Hard cases
 
@@ -222,27 +229,30 @@ cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAP
 
 ## Label noise
 
-Every label outside the curated stratum is one model's draft. To measure the noise, a seeded,
-stratified 10% of the random and keyword items (44: random 13 dev / 7 test, keyword 14 / 10) was
-labeled a second time by Claude Opus 5.5 (Claude Code on the subscription), blind to the first
-label. `agree` compares them per field: `agree` (both empty, or the same answer by `key()`) with its
-Wilson interval, and Cohen's kappa on whether the field is stated:
+Every label outside the curated stratum is one model's draft (gpt-6.2-sol). Two second labelings by
+Claude Opus 5.5 (Claude Code on the subscription), each blind to the first label, measure the noise.
+The first covers a seeded, stratified 10% of the random and keyword items, all fields (44: random 13
+dev / 7 test, keyword 14 / 10). The second covers conditions on all 225 items labeled for them.
+`agree` compares them per field: `agree` (both empty, or the same answer by `key()`; conditions as
+sets of `canonical_condition` names) with its Wilson interval, and Cohen's kappa on whether the
+field is stated. A field the second labeling didn't cover isn't compared.
 
 ```bash
 uv run python src/demographics_testset.py agree --testset data/demographics_testset \
-  --second data/demographics_testset/labeling/second/second_labels.jsonl
+  --second data/demographics_testset/labeling/second_conditions/second_labels.jsonl
 ```
 
-| field | n | agree (95% CI) | kappa, stated | stated, first / second |
-| --- | --- | --- | --- | --- |
-| age | 44 | 1.00 (0.92-1.00) | 1.00 | 15 / 15 |
-| sex | 44 | 1.00 (0.92-1.00) | 1.00 | 6 / 6 |
-| country | 44 | 1.00 (0.92-1.00) | 1.00 | 1 / 1 |
-| state | 44 | 1.00 (0.92-1.00) | 1.00 | 1 / 1 |
-| city | 44 | 0.98 (0.88-1.00) | 1.00 | 1 / 1 |
-| conditions | 20 | 0.85 (0.64-0.95) | 0.83 | 3 / 4 |
+| field | n | agree (95% CI) | kappa, stated |
+| --- | --- | --- | --- |
+| age | 44 | 1.00 (0.92-1.00) | 1.00 |
+| sex | 44 | 1.00 (0.92-1.00) | 1.00 |
+| country | 44 | 1.00 (0.92-1.00) | 1.00 |
+| state | 44 | 1.00 (0.92-1.00) | 1.00 |
+| city | 44 | 0.98 (0.88-1.00) | 1.00 |
+| conditions | 225 | 0.83 (0.77-0.87) | 0.96 |
 
-The four disagreements are in `review/second_label_disagreements.md`.
+Conditions were compared with #229's `canonical_condition`. The disagreements are in
+`review/second_label_disagreements_<folder>.md`.
 
 ## Content-filter blocks
 
@@ -251,12 +261,14 @@ under `posts.blocked` and scores them as empty, so the loss shows in recall.
 
 ## Known gaps
 
-- **Conditions labels are noisy.** Second-label agreement on the set of condition names is 0.85, and
-  its 95% interval reaches down to 0.64, under the 0.8 bar. Two of the three condition
-  disagreements are spellings ("PEM" vs "post-exertional malaise") that #229's `canonical_condition`
-  merges; until #229 merges, the evaluator compares names as written. The other two are real
-  judgment calls (whether "getting depressed" from a supplement is depression; whether "I feel like I
-  have some permanent damage done to my nerves" states a condition).
+- **Conditions labels are noisy.** Agreement on the set of condition names is 0.83 (95% CI
+  0.77-0.87) over 225 items; whether any condition is stated agrees almost always (kappa 0.96). Of
+  the 39 disagreements, about 15 are wordings of one symptom that `canonical_condition` doesn't
+  merge ("headache" / "headaches", "crash" / "crashes", "sleep disturbance" / "trouble sleeping",
+  "muscle cramps" / "cramping"). The rest are coverage: one labeler lists a symptom the other
+  leaves out (difficulty concentrating, suicidal ideation, bedbound, a missed ME/CFS). Both kinds
+  depress condition recall and precision measured against these labels; read condition metrics as
+  approximate.
 - **Location agreement says little.** The 44 doubly labeled items state country, state and city
   once each, so their kappa rests on one positive. Location noise is unmeasured outside the curated
   items, which a person reviews.

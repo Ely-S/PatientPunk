@@ -179,9 +179,8 @@ def load_cases(path: Path = CASES) -> dict[str, dict]:
 
 
 def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: Path = CASES) -> dict:
-    """Write candidates/<case>.jsonl: up to ``factor`` times each case's quota per split of the items
-    its regex matches, in seeded order, leaving out items already in the set. The pick is made from
-    these and recorded in curation.jsonl, which add-curated reads."""
+    """candidates/<case>.jsonl: per split, ``factor`` times the case's quota of its regex matches not
+    already in the set, in seeded order."""
     cases = load_cases(cases_path)
     regex = {c: re.compile(v["pattern"], re.IGNORECASE if v.get("ignore_case", True) else 0) for c, v in cases.items()}
     have = {it["post_id"] for it in load(testset, "all")[0]}
@@ -191,11 +190,10 @@ def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: P
         for kind, (table, cols) in _SOURCE.items():
             for row in conn.execute(f"SELECT {cols} FROM {table} WHERE author IS NOT NULL"):
                 raw = f"{row['title'] or ''}\n{row['selftext'] or ''}" if kind == "post" else row["body"] or ""
-                hits = [c for c, r in regex.items() if r.search(raw)]
+                hits = {c: m.group() for c, r in regex.items() if (m := r.search(raw))}
                 if hits and (it := _item(row, kind)) and it["post_id"] not in have:
-                    for c in hits:
-                        if m := regex[c].search(it["text"]):
-                            found[c].append({**it, "match": m.group()})
+                    for c, match in hits.items():
+                        found[c].append({**it, "match": match})
     rng = random.Random(seed)
     out = testset / "candidates"
     out.mkdir(exist_ok=True)
@@ -203,7 +201,8 @@ def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: P
     for c, spec in cases.items():
         rows = sorted(found[c], key=lambda it: it["post_id"])
         rng.shuffle(rows)
-        quota = split_quota(spec["n"])
+        test = round(spec["n"] * TEST_SHARE)
+        quota = {"dev": spec["n"] - test, "test": test}
         keep = [it for split in ("dev", "test") for it in [r for r in rows if r["split"] == split][:factor * quota[split]]]
         (out / f"{c}.jsonl").write_text("".join(json.dumps(it, ensure_ascii=False) + "\n" for it in keep))
         pools[c] = {"matches": len(rows), "candidates": len(keep), "quota": quota}
@@ -213,17 +212,9 @@ def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: P
     return summary
 
 
-def split_quota(n: int) -> dict[str, int]:
-    test = round(n * TEST_SHARE)
-    return {"dev": n - test, "test": test}
-
-
-def add_curated(testset: Path, curation: Path, cases_path: Path = CASES) -> dict:
-    """Add each item curation.jsonl picks ({post_id, case, rationale, picked_by}) to testset.jsonl in
-    the curated stratum, label null, with its cases under ``case``. The rationale stays in
-    curation.jsonl, out of the labeler's sight. Refuses an item that isn't a candidate for its case
-    or is already in the set."""
-    cases = load_cases(cases_path)
+def add_curated(testset: Path, curation: Path) -> dict:
+    """Append curation.jsonl's picks ({post_id, case, rationale, picked_by}) unlabeled, in the curated
+    stratum; the rationale stays out of the labeler's sight."""
     picks = [json.loads(line) for line in curation.read_text().splitlines() if line.strip()]
     candidates = {c: {it["post_id"]: it for it in map(json.loads, (testset / "candidates" / f"{c}.jsonl").read_text().splitlines())}
                   for c in {p["case"] for p in picks}}
@@ -231,7 +222,7 @@ def add_curated(testset: Path, curation: Path, cases_path: Path = CASES) -> dict
     have = {it["post_id"] for it in items}
     new: dict[str, dict] = {}
     for p in picks:
-        if p["case"] not in cases or p["post_id"] not in candidates[p["case"]]:
+        if p["post_id"] not in candidates[p["case"]]:
             raise ValueError(f"{p['post_id']} is not a candidate for {p['case']}")
         if p["post_id"] in have:
             raise ValueError(f"{p['post_id']} is already in the set")
@@ -273,7 +264,9 @@ def counts(items: list[dict]) -> dict:
 
 
 def is_positive(it: dict, case: dict) -> bool:
-    """The label has a claim the case targets (a non-empty list for conditions); else it's a near miss."""
+    """The label states what the case targets (for conditions, one of its ``severities`` if it lists them)."""
+    if "severities" in case:
+        return any(c["severity"] in case["severities"] for c in it["label"].get("conditions") or [])
     return any(it["label"].get(f) for f in case["fields"])
 
 
@@ -442,17 +435,16 @@ def kappa(pairs: list[tuple[bool, bool]]) -> float | None:
 
 
 def agreement(items: list[dict], second: dict[str, dict]) -> tuple[dict, list[dict]]:
-    """Per field, how often a second, independent label agrees with the first: ``agree`` (both empty,
-    or the same answer by key()), with its Wilson interval, and Cohen's kappa on whether the field is
-    stated at all. Conditions compare the sets of canonical names, on items both labeled for them.
-    Also returns the disagreements, one per item and field."""
+    """Per field, the share of items where a second label agrees with the first (both empty, or equal by
+    key(); conditions as sets of canonical names) and Cohen's kappa on whether it's stated; and the
+    disagreements."""
     report, diffs = {}, []
     for f in (*FIELDS, "conditions"):
         pairs, agree = [], 0
         for it in items:
             a, b = it["label"], second.get(it["post_id"])
-            if b is None or (f == "conditions" and (a.get(f) is None or b.get(f) is None)):
-                continue
+            if b is None or f not in b or (f == "conditions" and a.get(f) is None):
+                continue  # a field the second labeling didn't cover isn't compared
             if f == "conditions":
                 va, vb = ({canonical_condition(x["name"]) for x in lab[f]} for lab in (a, b))
                 same = va == vb
@@ -470,13 +462,14 @@ def agreement(items: list[dict], second: dict[str, dict]) -> tuple[dict, list[di
 
 
 def write_agreement(testset: Path, second_path: Path) -> dict:
-    """agreement() for a second label file ({post_id, label} per line), its report in
-    second_label_agreement.json and its disagreements, with text, in review/second_label_disagreements.md."""
+    """agreement() with a second label file, written to second_label_agreement_<its folder>.json and,
+    with the text, review/second_label_disagreements_<its folder>.md."""
     second = {r["post_id"]: r["label"] for r in map(json.loads, second_path.read_text().splitlines()) if r}
     items = [it for it in load(testset, "all")[0] if it["post_id"] in second]
     report, diffs = agreement(items, second)
     report = {"items": len(items), "second_labels": str(second_path), "fields": report}
-    (testset / "second_label_agreement.json").write_text(json.dumps(report, indent=2) + "\n")
+    name = second_path.parent.name
+    (testset / f"second_label_agreement_{name}.json").write_text(json.dumps(report, indent=2) + "\n")
     text = {it["post_id"]: it["text"] for it in items}
     show = lambda v: "—" if not v else (", ".join(sorted({x["name"] for x in v})) if isinstance(v, list)
                                         else f"{v['value']} (`{v['evidence']}`)")
@@ -486,7 +479,7 @@ def write_agreement(testset: Path, second_path: Path) -> dict:
         lines += [f"## {d['post_id']}: {d['field']}", "", "> " + text[d["post_id"]].replace("\n", "\n> "), "",
                   f"- first: {show(d['first'])}", f"- second: {show(d['second'])}", "- [ ] first  - [ ] second  - [ ] neither:", ""]
     (testset / "review").mkdir(exist_ok=True)
-    (testset / "review" / "second_label_disagreements.md").write_text("\n".join(lines))
+    (testset / "review" / f"second_label_disagreements_{name}.md").write_text("\n".join(lines))
     return report
 
 
@@ -536,23 +529,21 @@ def load(testset: Path, split: str) -> tuple[list[dict], list[dict]]:
         path = testset / name
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] \
             if path.exists() else []
-    excluded = set(excluded_ids(testset))
+    excluded = excluded_ids(testset)
     keep = lambda r: split == "all" or r["split"] == split
     items = [it for it in read("testset.jsonl") if keep(it) and it["post_id"] not in excluded]
     authors = [{**a, "post_ids": [p for p in a["post_ids"] if p not in excluded]} for a in read("authors.jsonl") if keep(a)]
     return items, authors
 
 
-def excluded_ids(testset: Path) -> dict[str, dict]:
-    """manifest.json's ``excluded`` list ({post_id, reason, decided_by}) by post_id: items too ambiguous
-    for two careful readers to agree on. load() drops them; stats counts them."""
+def excluded_ids(testset: Path) -> set[str]:
+    """post_ids in manifest.json's ``excluded`` list ({post_id, reason, decided_by})."""
     manifest = testset / "manifest.json"
-    rows = json.loads(manifest.read_text()).get("excluded", []) if manifest.exists() else []
-    return {r["post_id"]: r for r in rows}
+    return {r["post_id"] for r in json.loads(manifest.read_text()).get("excluded", [])} if manifest.exists() else set()
 
 
-def load_synthetic(path: Path = SYNTHETIC) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+def load_synthetic() -> list[dict]:
+    return [json.loads(line) for line in SYNTHETIC.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def predict(items: list[dict]) -> tuple[dict[str, dict | str | None], dict[str, list | None] | None]:
