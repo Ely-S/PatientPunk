@@ -4,17 +4,19 @@
     python -I tier2_analyse.py --drug ldn --run-dir <folder with users_page_NN.json>
 
 Joins to tier2_author_list.json (group, drugs, reports, sentiments), tier1/tier1_authors.csv (tier1_score,
-dominant_sentiment) and derives first/last corpus tweet dates from the treatment_wise_tweets corpus
-(read-only, untrusted data: json only). Writes tier2_<drug>_users.csv and tier2_<drug>_summary.md.
+dominant_sentiment) and derives first/last corpus tweet dates from treatment_wise_tweets/*.json, read
+straight from twitter_data/source_corpus/twitter_dataset.zip (no unzip step; restore it with
+twitter_data_news_blog/download_data.py, or give --corpus-zip / $TWITTER_DATASET_ZIP; read-only,
+untrusted data: json only). Needs Python 3.11+. Writes tier2_<drug>_users.csv and tier2_<drug>_summary.md.
 """
-import argparse, csv, datetime, glob, json, os, pathlib, re, statistics, sys
+import argparse, csv, datetime, json, os, pathlib, re, statistics, sys, zipfile
 
 PROJECT = pathlib.Path(__file__).resolve().parent.parent
 AUTHOR_LIST = PROJECT / "tier2_author_list.json"
 TIER1_CSV = PROJECT / "tier1" / "tier1_authors.csv"
-# The treatment_wise_tweets corpus folder: --corpus, else $TREATMENT_WISE_TWEETS, else beside this project.
-CORPUS_DIR = os.environ.get("TREATMENT_WISE_TWEETS", str(PROJECT / "treatment_wise_tweets"))
-CORPUS = str(pathlib.Path(CORPUS_DIR) / "*.json")
+# The corpus archive, where twitter_data_news_blog/download_data.py restores it; --corpus-zip or
+# $TWITTER_DATASET_ZIP overrides. Its tweets are treatment_wise_tweets/*.json inside the zip.
+DATASET_ZIP = pathlib.Path(os.environ.get("TWITTER_DATASET_ZIP", PROJECT.parent / "source_corpus" / "twitter_dataset.zip"))
 PRICE_PER_ID = 0.01
 BIO_RE = re.compile(r"long ?covid|longcovid|#LC\b|ME/?CFS|pwME|chronic illness|patient|spoonie|disabled|POTS|dysautonomia|MCAS", re.I)
 FLAGS = ["suspended_or_not_found", "created_within_30d_of_first_tweet", "followers_lt_10", "default_profile_image",
@@ -26,14 +28,22 @@ def ts(s):
     return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-def corpus_dates(author_ids: set) -> dict:
+def corpus_files(zip_path: pathlib.Path):
+    """Each treatment_wise_tweets/*.json in the archive, parsed, in name order; unreadable ones skipped."""
+    with zipfile.ZipFile(zip_path) as z:
+        for name in sorted(z.namelist()):
+            folder, _, file = name.partition("/")
+            if folder == "treatment_wise_tweets" and file.endswith(".json") and "/" not in file:
+                try:
+                    yield json.loads(z.read(name).decode("utf-8"))
+                except ValueError:
+                    continue
+
+
+def corpus_dates(author_ids: set, zip_path: pathlib.Path) -> dict:
     """author -> (first, last) corpus tweet datetimes, deduped on tweet_id like tier1_run.py."""
     seen, out = set(), {}
-    for f in sorted(glob.glob(CORPUS)):
-        try:
-            d = json.load(open(f, encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
+    for d in corpus_files(zip_path):
         if not isinstance(d, dict) or not isinstance(d.get("tweets"), list):
             continue
         for t in d["tweets"]:
@@ -64,10 +74,13 @@ def med(vals):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drug", required=True); ap.add_argument("--run-dir", required=True)
-    ap.add_argument("--corpus", default=CORPUS_DIR, help="treatment_wise_tweets folder (*.json)")
-    args = ap.parse_args(); run = pathlib.Path(args.run_dir); drug = args.drug
-    global CORPUS
-    CORPUS = str(pathlib.Path(args.corpus) / "*.json")
+    ap.add_argument("--corpus-zip", type=pathlib.Path, default=DATASET_ZIP,
+                    help="twitter_dataset.zip (default: where download_data.py restores it)")
+    args = ap.parse_args(); run = pathlib.Path(args.run_dir); drug = args.drug; corpus = args.corpus_zip
+    for need in (corpus, AUTHOR_LIST, TIER1_CSV, run / "request_log.json"):
+        if not need.exists():
+            sys.exit(f"Missing input: {need}. Run twitter_data_news_blog/download_data.py to restore it"
+                     + (", or pass --corpus-zip / set TWITTER_DATASET_ZIP." if need == corpus else "."))
     now = datetime.datetime.now(datetime.UTC)
 
     # ---- inputs
@@ -89,7 +102,7 @@ def main():
         for u in b.get("data", []): users[str(u["id"])] = u
         for e in b.get("errors", []): errors[str(e.get("resource_id") or e.get("value"))] = e
     for r in json.loads((run / "request_log.json").read_text()): sent += r["ids"]
-    dates = corpus_dates(set(meta))
+    dates = corpus_dates(set(meta), corpus)
 
     # ---- per author rows
     rows = []

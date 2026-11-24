@@ -11,6 +11,9 @@ import step1_search as s
 
 # The first pass's run folder (qualifying_authors.json): $REVERSE_ROUTE_PRIOR, else the one beside this script.
 PRIOR = pathlib.Path(os.environ.get("REVERSE_ROUTE_PRIOR", HERE / "run_reverse_route_20261118T030628Z"))
+if not (PRIOR/"qualifying_authors.json").exists():
+    sys.exit(f"Missing input: {PRIOR/'qualifying_authors.json'}. Run twitter_data_news_blog/download_data.py "
+             "to restore it, or set REVERSE_ROUTE_PRIOR.")
 out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 START = int(sys.argv[2]) if len(sys.argv) > 2 else 450      # batch 19 begins here
 CAP = int(sys.argv[3]) if len(sys.argv) > 3 else 1200

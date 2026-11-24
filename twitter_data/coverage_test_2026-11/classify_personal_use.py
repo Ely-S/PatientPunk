@@ -9,8 +9,8 @@ import json, os, re, sys, time, urllib.request, collections, zipfile, pathlib
 # The reverse-route run folder: $REVERSE_ROUTE_RUN, else the one beside this script.
 HERE = pathlib.Path(__file__).resolve().parent
 RUN = pathlib.Path(os.environ.get("REVERSE_ROUTE_RUN", HERE / "run_reverse_route_20261118T030628Z"))
-# The treatment_wise_tweets archive: $TWITTER_DATASET_ZIP, else twitter_dataset.zip in twitter_data/.
-DATASET_ZIP = pathlib.Path(os.environ.get("TWITTER_DATASET_ZIP", HERE.parent / "twitter_dataset.zip"))
+# The corpus archive, where twitter_data_news_blog/download_data.py restores it; $TWITTER_DATASET_ZIP overrides.
+DATASET_ZIP = pathlib.Path(os.environ.get("TWITTER_DATASET_ZIP", HERE.parent / "source_corpus" / "twitter_dataset.zip"))
 OUT = RUN/"personal_use_labels.json"
 MODEL = "deepseek/deepseek-v4.1-flash"
 BATCH = 25
@@ -56,6 +56,10 @@ def ask(batch, k):
             time.sleep(2 * (attempt + 1))
 
 def main():
+    for need in (RUN / "ldn_posts.json", DATASET_ZIP):
+        if not need.exists():
+            sys.exit(f"Missing input: {need}. Run twitter_data_news_blog/download_data.py to restore it, "
+                     "or set REVERSE_ROUTE_RUN / TWITTER_DATASET_ZIP.")
     posts = [p for p in json.load(open(RUN/"ldn_posts.json"))["posts"] if isinstance(p, dict)]
     # corpus LDN posts and authors
     ids, auths = set(), set()
