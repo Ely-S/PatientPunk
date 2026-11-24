@@ -63,7 +63,7 @@ CREATE TABLE user_profiles (
     sex_stated TEXT,     -- the author's own words, every value of a multi-value answer kept (#214)
     location   TEXT,     -- "country / state", one spelling per country and US state ("United States / Texas")
     city       TEXT,     -- where the author says they live, not where they travelled for care
-    ever_minor INTEGER,  -- 1 if any age claim was under 18 when written, 0 if none, NULL without an age claim
+    ever_minor INTEGER,  -- 1 if any age claim was under 18 when written (a range by its youngest age), 0 if none, NULL without an age claim
     PRIMARY KEY (user_id, run_id)
 );
 
