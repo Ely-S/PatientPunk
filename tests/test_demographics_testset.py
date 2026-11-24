@@ -28,7 +28,9 @@ def item(post_id, text, lab, user="u1", date=0, split="dev"):
     ("country", "U.K.", "England"), ("state", "TX", "Texas"), ("city", "Austin, TX", "austin"),
     ("sex", "Female | non-binary", "non-binary|female"), ("sex", "mom", "F"), ("sex", "guy", "male"),
     ("sex", "ladies", "woman"), ("sex", "f | mom", "female"), ("country", "the States", "US"),
-    ("country", "Aus", "Australia"),
+    ("country", "Aus", "Australia"), ("city", "the Boston area", "Boston"), ("city", "Bay Area", "San Francisco"),
+    ("city", "the SF Bay Area", "san francisco"), ("city", "Greater Manchester", "Manchester"),
+    ("city", "Atlanta metro area", "Atlanta"), ("city", "NYC", "New York City"),
 ])
 def test_two_ways_of_writing_one_answer_match(field, a, b):
     assert ts.key(field, a) == ts.key(field, b)
@@ -55,7 +57,7 @@ def test_different_identities_do_not_match(a, b):
     assert ts.key("sex", a) != ts.key("sex", b)
 
 
-@pytest.mark.parametrize("field, a, b", [("age", "34", "35"), ("state", "TX", "Ohio"), ("sex", "female", "trans woman"),
+@pytest.mark.parametrize("field, a, b", [("age", "34", "35"), ("state", "TX", "Ohio"), ("city", "Boston area", "Cambridge"), ("sex", "female", "trans woman"),
                                            ("sex", "mom", "dad"), ("sex", "non-binary | mom", "female")])
 def test_different_answers_do_not_match(field, a, b):
     assert ts.key(field, a) != ts.key(field, b)
@@ -272,3 +274,61 @@ def test_stats_flags_evidence_that_is_not_quoted_from_the_text():
     result = ts.counts([good, bad])
     assert result["labeled"] == {"dev": 2} and result["fields"] == {"age/dev": 2}
     assert result["evidence_not_in_text"] == {"b": 1}
+
+
+def test_wilson_interval_matches_a_known_value():
+    assert ts.wilson(8, 10) == [0.49, 0.943]
+    assert ts.wilson(0, 0) is None and ts.wilson(0, 5)[0] == 0.0
+    r = ts.rates(8, 2, 0)
+    assert (r["precision_n"], r["precision_ci"], r["recall_n"], r["recall_ci"]) == (10, [0.49, 0.943], 8, ts.wilson(8, 8))
+
+
+def test_case_mix_counts_positives_and_near_misses():
+    pos = {**item("a", "I'm 16", label(age=("16", "I'm 16"))), "strata": ["curated"], "case": ["minor_self"]}
+    miss = {**item("b", "15 sessions in", label()), "strata": ["curated"], "case": ["minor_self"]}
+    assert ts.counts([pos, miss])["case_mix"] == {"minor_self/dev/near_miss": 1, "minor_self/dev/positive": 1}
+    report = ts.score_by("case", [pos, miss], {"a": {}, "b": {}})
+    assert report["minor_self"]["mix"] == {"positives": 1, "near_miss": 1}
+
+
+def test_a_report_names_its_labels_and_a_test_run_is_logged(tmp_path, monkeypatch):
+    items = [{**item("a", "I'm 34", label(age=("34", "I'm 34")), split="test"), "labeled_by": "Eli"}]
+    (tmp_path / "testset.jsonl").write_text("".join(json.dumps(it) + "\n" for it in items))
+    monkeypatch.setattr(extractor, "get_client", lambda: None)
+    monkeypatch.setattr(extractor, "llm_call", lambda client, prompt, **kw: json.dumps({"age": None}))
+    plan = ts.evaluate(tmp_path, "test", "t", dry_run=True)
+    assert set(plan["testset_sha256"]) == {"testset.jsonl", "synthetic"} and plan["labels_by"]["Eli"] == 1
+    assert not (tmp_path / "test_runs.jsonl").exists()  # a dry run isn't a look at the test split
+    ts.evaluate(tmp_path, "test", "t1")
+    ts.evaluate(tmp_path, "dev", "d1")
+    runs = [json.loads(line) for line in (tmp_path / "test_runs.jsonl").read_text().splitlines()]
+    assert [r["tag"] for r in runs] == ["t1"] and runs[0]["testset_sha256"] == plan["testset_sha256"]
+    (tmp_path / "testset.jsonl").write_text(json.dumps({**items[0], "labeled_by": "other"}) + "\n")
+    assert ts.evaluate(tmp_path, "test", "t", dry_run=True)["testset_sha256"] != plan["testset_sha256"]
+
+
+def test_kappa_and_agreement_between_two_labelers():
+    assert ts.kappa([(True, True), (False, False)]) == 1.0
+    assert ts.kappa([(True, False), (False, True)]) == -1.0
+    assert ts.kappa([(True, True), (True, True)]) is None  # chance agreement is total
+    assert ts.kappa([(True, True), (True, False), (False, False), (False, False)]) == 0.5
+    items = [item("a", "I'm 34, MtF", {**label(age=("34", "I'm 34"), sex=("MtF", "MtF")), "conditions": []}),
+             item("b", "in the US", {**label(country=("US", "in the US")), "conditions": [
+                 {"name": "POTS", "type": "illness", "severity": None, "evidence": "x"}]})]
+    second = {"a": {**label(age=("34", "I'm 34"), sex=("trans woman", "MtF")), "conditions": []},
+              "b": {**label(), "conditions": [{"name": "pots", "type": "illness", "severity": None, "evidence": "x"}]}}
+    report, diffs = ts.agreement(items, second)
+    assert report["age"]["agree"] == report["sex"]["agree"] == 1.0
+    assert report["country"]["agree"] == 0.5 and report["country"]["stated_second"] == 0
+    assert report["conditions"]["agree"] == 1.0  # names compared through canonical_condition
+    assert [(d["post_id"], d["field"]) for d in diffs] == [("b", "country")]
+
+
+def test_excluded_items_are_dropped_by_load_and_counted_by_stats(tmp_path):
+    items = [item("a", "I'm 34", label(age=("34", "I'm 34"))), item("b", "unclear", label())]
+    (tmp_path / "testset.jsonl").write_text("".join(json.dumps(it) + "\n" for it in items))
+    (tmp_path / "authors.jsonl").write_text(json.dumps({"user_id": "u1", "split": "dev", "post_ids": ["a", "b"]}) + "\n")
+    (tmp_path / "manifest.json").write_text(json.dumps({"excluded": [{"post_id": "b", "reason": "x", "decided_by": "Eli"}]}))
+    loaded, authors = ts.load(tmp_path, "all")
+    assert [it["post_id"] for it in loaded] == ["a"] and authors[0]["post_ids"] == ["a"]
+    assert ts.evaluate(tmp_path, "dev", "t", dry_run=True)["labeled_items"] == 1 + len(ts.load_synthetic())

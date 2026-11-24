@@ -18,6 +18,7 @@ src/demographics_testset_cases.json); tests/fixtures/demographics_synthetic.json
 import argparse
 import hashlib
 import json
+import math
 import random
 import re
 import sqlite3
@@ -255,7 +256,8 @@ def counts(items: list[dict]) -> dict:
     """Items per stratum and split, labeled values per field and split, and labeled values whose
     evidence is not an exact quote from the item's text (which should be none)."""
     c = {"items": Counter(), "labeled": Counter(), "fields": Counter(), "others": Counter(),
-         "evidence_not_in_text": Counter()}
+         "case_mix": Counter(), "evidence_not_in_text": Counter()}
+    cases = load_cases()
     for it in items:
         for s in it["strata"] + [f"case:{k}" for k in it.get("case", [])]:
             c["items"][f"{s}/{it['split']}"] += 1
@@ -265,7 +267,14 @@ def counts(items: list[dict]) -> dict:
             c["others"].update(f"{f}/{it['split']}" for f, v in (label.get("others") or {}).items() if v)
             c["evidence_not_in_text"].update(
                 it["post_id"] for f in FIELDS if label.get(f) and label[f]["evidence"] not in it["text"])
+            for k in it.get("case", []):
+                c["case_mix"][f"{k}/{it['split']}/{'positive' if is_positive(it, cases[k]) else 'near_miss'}"] += 1
     return {k: dict(sorted(v.items())) for k, v in c.items()}
+
+
+def is_positive(it: dict, case: dict) -> bool:
+    """The label has a claim the case targets (a non-empty list for conditions); else it's a near miss."""
+    return any(it["label"].get(f) for f in case["fields"])
 
 
 # ── Matching ─────────────────────────────────────────────────────────────────
@@ -284,6 +293,11 @@ _IDENTITY = {
 }
 
 
+# Metro areas named without their city, once "the", "greater" and "area" are dropped.
+_METRO = dict.fromkeys(("bay", "sf bay", "san francisco bay", "sf"), "san francisco") | {"nyc": "new york",
+                                                                                       "new york city": "new york"}
+
+
 def key(field: str, value: str) -> object:
     """A form of the value in which two ways of writing the same answer are equal."""
     if field == "age":
@@ -294,7 +308,9 @@ def key(field: str, value: str) -> object:
         return frozenset(normalize_sex(v) or _IDENTITY.get(re.sub(r"[\s-]+", " ", v), v) for v in parts)
     if field in ("country", "state"):
         return _plain(canonical_place(field, value))  # the pipeline's spelling: "US" is United States
-    return _plain(value).split(",")[0].strip()  # city: "Austin, TX" is Austin
+    city = _plain(value).split(",")[0].strip()  # "Austin, TX" is Austin
+    city = re.sub(r"\s+(?:metro(?:politan)?\s+)?area$|\s+metro$", "", re.sub(r"^(?:the\s+)?(?:greater\s+)?", "", city))
+    return _METRO.get(city, city)  # a metro area is its city: "the Boston area" is Boston
 
 
 def _overlaps(a: str, b: str) -> bool:
@@ -358,9 +374,25 @@ def score(items: list[dict], predictions: dict[str, dict | None], conditions: di
         tp, fp, fn = c["tp"], c["fp"], c["fn"]
         for k in ("tp", "fp", "fn", "wrong_person", "claims"):
             c.setdefault(k, 0)  # zeros shown
-        report["fields"][f] = {**c, "precision": round(tp / (tp + fp), 3) if tp + fp else None,
-                               "recall": round(tp / (tp + fn), 3) if tp + fn else None}
+        report["fields"][f] = {**c, **rates(tp, fp, fn)}
     return report
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
+    """Wilson score 95% interval for k successes in n trials, or None when n is 0."""
+    if not n:
+        return None
+    p, d = k / n, 1 + z * z / n
+    centre, half = (p + z * z / (2 * n)) / d, z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return [round(centre - half, 3), round(centre + half, 3)]
+
+
+def rates(tp: int, fp: int, fn: int) -> dict:
+    """Precision and recall, each with its denominator and Wilson 95% interval."""
+    return {"precision": round(tp / (tp + fp), 3) if tp + fp else None, "precision_n": tp + fp,
+            "precision_ci": wilson(tp, tp + fp),
+            "recall": round(tp / (tp + fn), 3) if tp + fn else None, "recall_n": tp + fn,
+            "recall_ci": wilson(tp, tp + fn)}
 
 
 def score_conditions(items: list[dict], predictions: dict, conditions: dict) -> dict | None:
@@ -380,17 +412,82 @@ def score_conditions(items: list[dict], predictions: dict, conditions: dict) -> 
     if not c["posts"]:
         return None
     tp, fp, fn = c["tp"], c["fp"], c["fn"]
-    return {**{k: c[k] for k in ("posts", "tp", "fp", "fn", "severity_agree")},
-            "precision": round(tp / (tp + fp), 3) if tp + fp else None,
-            "recall": round(tp / (tp + fn), 3) if tp + fn else None,
-            "severity_agreement": round(c["severity_agree"] / tp, 3) if tp else None}
+    return {**{k: c[k] for k in ("posts", "tp", "fp", "fn", "severity_agree")}, **rates(tp, fp, fn),
+            "severity_agreement": round(c["severity_agree"] / tp, 3) if tp else None,
+            "severity_agreement_ci": wilson(c["severity_agree"], tp)}
 
 
 def score_by(key: str, items: list[dict], predictions: dict, conditions: dict | None = None) -> dict:
     """score() for each value of an item's ``key`` list ("strata" or "case") on its own: recall on the
     random stratum, wrong-person errors on other_person. An item with two values counts in both."""
     values = sorted({v for it in items for v in it.get(key, [])})
-    return {v: score([it for it in items if v in it.get(key, [])], predictions, conditions) for v in values}
+    report = {v: score([it for it in items if v in it.get(key, [])], predictions, conditions) for v in values}
+    if key == "case":  # near misses can only add false positives: show the mix beside the metrics
+        cases = load_cases()
+        for v in values:
+            mix = Counter(is_positive(it, cases[v]) for it in items if v in it.get(key, []))
+            report[v]["mix"] = {"positives": mix[True], "near_miss": mix[False]}
+    return report
+
+
+def kappa(pairs: list[tuple[bool, bool]]) -> float | None:
+    """Cohen's kappa for two labelers' yes/no calls; None when chance agreement is total."""
+    n = len(pairs)
+    if not n:
+        return None
+    observed = sum(a == b for a, b in pairs) / n
+    pa, pb = sum(a for a, _ in pairs) / n, sum(b for _, b in pairs) / n
+    chance = pa * pb + (1 - pa) * (1 - pb)
+    return None if chance == 1 else round((observed - chance) / (1 - chance), 3)
+
+
+def agreement(items: list[dict], second: dict[str, dict]) -> tuple[dict, list[dict]]:
+    """Per field, how often a second, independent label agrees with the first: ``agree`` (both empty,
+    or the same answer by key()), with its Wilson interval, and Cohen's kappa on whether the field is
+    stated at all. Conditions compare the sets of canonical names, on items both labeled for them.
+    Also returns the disagreements, one per item and field."""
+    report, diffs = {}, []
+    for f in (*FIELDS, "conditions"):
+        pairs, agree = [], 0
+        for it in items:
+            a, b = it["label"], second.get(it["post_id"])
+            if b is None or (f == "conditions" and (a.get(f) is None or b.get(f) is None)):
+                continue
+            if f == "conditions":
+                va, vb = ({canonical_condition(x["name"]) for x in lab[f]} for lab in (a, b))
+                same = va == vb
+            else:
+                va, vb = (lab.get(f) and lab[f]["value"] for lab in (a, b))
+                same = (not va and not vb) or bool(va and vb and key(f, va) == key(f, vb))
+            pairs.append((bool(va), bool(vb)))
+            agree += same
+            if not same:
+                diffs.append({"post_id": it["post_id"], "field": f, "first": a.get(f), "second": b.get(f)})
+        report[f] = {"n": len(pairs), "agree": round(agree / len(pairs), 3) if pairs else None,
+                     "agree_ci": wilson(agree, len(pairs)), "kappa_stated": kappa(pairs),
+                     "stated_first": sum(x for x, _ in pairs), "stated_second": sum(y for _, y in pairs)}
+    return report, diffs
+
+
+def write_agreement(testset: Path, second_path: Path) -> dict:
+    """agreement() for a second label file ({post_id, label} per line), its report in
+    second_label_agreement.json and its disagreements, with text, in review/second_label_disagreements.md."""
+    second = {r["post_id"]: r["label"] for r in map(json.loads, second_path.read_text().splitlines()) if r}
+    items = [it for it in load(testset, "all")[0] if it["post_id"] in second]
+    report, diffs = agreement(items, second)
+    report = {"items": len(items), "second_labels": str(second_path), "fields": report}
+    (testset / "second_label_agreement.json").write_text(json.dumps(report, indent=2) + "\n")
+    text = {it["post_id"]: it["text"] for it in items}
+    show = lambda v: "—" if not v else (", ".join(sorted({x["name"] for x in v})) if isinstance(v, list)
+                                        else f"{v['value']} (`{v['evidence']}`)")
+    lines = ["# Second-label disagreements (#207)", "", (f"{len(diffs)} disagreements on {len(items)} items. First: the "
+             "existing label. Second: an independent label. Say which is right, or neither."), ""]
+    for d in sorted(diffs, key=lambda d: (d["field"], d["post_id"])):
+        lines += [f"## {d['post_id']}: {d['field']}", "", "> " + text[d["post_id"]].replace("\n", "\n> "), "",
+                  f"- first: {show(d['first'])}", f"- second: {show(d['second'])}", "- [ ] first  - [ ] second  - [ ] neither:", ""]
+    (testset / "review").mkdir(exist_ok=True)
+    (testset / "review" / "second_label_disagreements.md").write_text("\n".join(lines))
+    return report
 
 
 def score_profiles(items: list[dict], authors: list[dict], predictions: dict) -> dict:
@@ -439,8 +536,19 @@ def load(testset: Path, split: str) -> tuple[list[dict], list[dict]]:
         path = testset / name
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] \
             if path.exists() else []
+    excluded = set(excluded_ids(testset))
     keep = lambda r: split == "all" or r["split"] == split
-    return [it for it in read("testset.jsonl") if keep(it)], [a for a in read("authors.jsonl") if keep(a)]
+    items = [it for it in read("testset.jsonl") if keep(it) and it["post_id"] not in excluded]
+    authors = [{**a, "post_ids": [p for p in a["post_ids"] if p not in excluded]} for a in read("authors.jsonl") if keep(a)]
+    return items, authors
+
+
+def excluded_ids(testset: Path) -> dict[str, dict]:
+    """manifest.json's ``excluded`` list ({post_id, reason, decided_by}) by post_id: items too ambiguous
+    for two careful readers to agree on. load() drops them; stats counts them."""
+    manifest = testset / "manifest.json"
+    rows = json.loads(manifest.read_text()).get("excluded", []) if manifest.exists() else []
+    return {r["post_id"]: r for r in rows}
 
 
 def load_synthetic(path: Path = SYNTHETIC) -> list[dict]:
@@ -467,7 +575,14 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
     tokens = sum(len(prompt) + len(it["text"]) for it in items) // 4
     plan = {"split": split, "labeled_items": len(items), "calls": len(items), "approx_input_tokens": tokens,
             "model": extractor.MODEL_FAST, "provider": extractor.LLM_PROVIDER,
-            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:12], "prompt_tokens": len(prompt) // 4}
+            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:12], "prompt_tokens": len(prompt) // 4,
+            # Which labels this was scored against: they change with every review, so compare reports only
+            # when these agree.
+            "testset_sha256": {name: hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+                               for name, path in (("testset.jsonl", testset / "testset.jsonl"),
+                                                  ("authors.jsonl", testset / "authors.jsonl"),
+                                                  ("synthetic", SYNTHETIC)) if path.exists()},
+            "labels_by": dict(Counter(it.get("labeled_by") or "unknown" for it in items).most_common())}
     if dry_run or not items:
         return plan
     predictions, conditions = predict(items)
@@ -481,6 +596,10 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
               "by_case": score_by("case", items, predictions, conditions),
               "profiles": score_profiles(items, authors, predictions)}
     (testset / f"report_{tag}.json").write_text(json.dumps(report, indent=2) + "\n")
+    if split in ("test", "all"):  # the test split is for final comparisons: keep a record of every look
+        with open(testset / "test_runs.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({k: report[k] for k in ("tag", "created_at", "split", "prompt_sha256", "model",
+                                                       "code_commit", "testset_sha256")}) + "\n")
     return report
 
 
@@ -505,6 +624,9 @@ def main():
     r = sub.add_parser("add-curated", help="Add the picks in curation.jsonl to testset.jsonl, unlabeled")
     r.add_argument("--testset", required=True, type=Path)
     r.add_argument("--curation", type=Path, help="Default: <testset>/curation.jsonl")
+    g = sub.add_parser("agree", help="Agreement between the labels and a second, independent labeling")
+    g.add_argument("--testset", required=True, type=Path)
+    g.add_argument("--second", required=True, type=Path, help="JSON Lines of {post_id, label}")
     t = sub.add_parser("stats", help="Item and label counts by stratum, field and split")
     t.add_argument("--testset", required=True, type=Path)
     e = sub.add_parser("evaluate", help="Run read_post on the labeled items and score its claims (paid)")
@@ -523,8 +645,10 @@ def main():
         result = curate(a.db, a.testset, seed=a.seed, factor=a.factor)
     elif a.command == "add-curated":
         result = add_curated(a.testset, a.curation or a.testset / "curation.jsonl")
+    elif a.command == "agree":
+        result = write_agreement(a.testset, a.second)
     elif a.command == "stats":
-        result = counts(load(a.testset, "all")[0])
+        result = {**counts(load(a.testset, "all")[0]), "excluded": len(excluded_ids(a.testset))}
     else:
         if a.prompt_file:
             extractor.POST_DEMOGRAPHICS_PROMPT = a.prompt_file.read_text(encoding="utf-8")  # read_post reads it

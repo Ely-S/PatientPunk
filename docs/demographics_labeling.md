@@ -84,6 +84,8 @@ empty, as the extractor refuses two places.
 
 **city.** The city or town where the author lives, not one they travelled to or were treated in
 ("saw a specialist in Boston" is `others`). A region after a comma stays with it (`"Austin, TX"`).
+A metro area counts as its city: "the Boston area" is `"Boston"`, "the Bay Area" or "SF Bay Area" is
+`"San Francisco"`; the evaluation matches them the same way.
 
 **conditions.** Labeled only on the `random` stratum and the curated condition cases; elsewhere the
 key is absent, and the item isn't scored for conditions. A list, `[]` when the author states none,
@@ -121,7 +123,12 @@ of the illnesses and symptoms the author says they have or had, each
 | A quoted or pasted text written by someone else | label only the author's own words |
 
 When a case isn't covered, decide, write the reason in `notes`, and add the rule to this file so the
-next labeler decides the same way. Still open: whether a metro area ("the Boston area") is a city.
+next labeler decides the same way.
+
+**Excluded items.** An item too ambiguous for two careful readers to agree on is excluded, not
+guessed: `manifest.json`'s `excluded` list holds its `post_id`, the reason and who decided. `load`
+drops excluded items everywhere (evaluate, stats, authors' posts) and `stats` counts them. Their
+labels stay in `testset.jsonl` untouched.
 
 ## Expected profiles
 
@@ -197,7 +204,63 @@ the post appended. It must be the rendered prompt, not the template in
 cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT as p; print(p, end='')" > ../candidate.txt
 ```
 
+## Reading a report
+
+- **Which labels.** Labels change with each review, so the plan and report carry `testset_sha256`
+  (of `testset.jsonl`, `authors.jsonl` and the synthetic fixture) and `labels_by`, the count of items
+  per labeler. Compare two reports only when their `testset_sha256` agree.
+- **Uncertainty.** Every precision and recall has its denominator (`precision_n`, `recall_n`) and a
+  Wilson 95% interval (`precision_ci`, `recall_ci`). Most cases have 5 to 30 items and state and city
+  have few labels, so read the interval before the point value.
+- **Positives and near misses.** Each curated case mixes items that state the targeted field
+  (`positives`) with near misses that don't. `stats` reports the mix per case and split under
+  `case_mix`, and `by_case` reports it under `mix`. Near misses can only add false positives, so a
+  case's recall comes from its positives alone.
+- **The test split is for final comparisons only.** Tune prompts (#208) on `dev`. Every evaluation
+  of `--split test` or `all` (not a dry run) appends its tag, time, prompt hash, model, commit and
+  `testset_sha256` to `test_runs.jsonl`, so the number of looks at the test split is on record.
+
+## Label noise
+
+Every label outside the curated stratum is one model's draft. To measure the noise, a seeded,
+stratified 10% of the random and keyword items (44: random 13 dev / 7 test, keyword 14 / 10) was
+labeled a second time by Claude Opus 5.5 (Claude Code on the subscription), blind to the first
+label. `agree` compares them per field: `agree` (both empty, or the same answer by `key()`) with its
+Wilson interval, and Cohen's kappa on whether the field is stated:
+
+```bash
+uv run python src/demographics_testset.py agree --testset data/demographics_testset \
+  --second data/demographics_testset/labeling/second/second_labels.jsonl
+```
+
+| field | n | agree (95% CI) | kappa, stated | stated, first / second |
+| --- | --- | --- | --- | --- |
+| age | 44 | 1.00 (0.92-1.00) | 1.00 | 15 / 15 |
+| sex | 44 | 1.00 (0.92-1.00) | 1.00 | 6 / 6 |
+| country | 44 | 1.00 (0.92-1.00) | 1.00 | 1 / 1 |
+| state | 44 | 1.00 (0.92-1.00) | 1.00 | 1 / 1 |
+| city | 44 | 0.98 (0.88-1.00) | 1.00 | 1 / 1 |
+| conditions | 20 | 0.85 (0.64-0.95) | 0.83 | 3 / 4 |
+
+The four disagreements are in `review/second_label_disagreements.md`.
+
 ## Content-filter blocks
 
 A post the provider's content filter blocks is recorded with no claims. `evaluate` counts blocks
 under `posts.blocked` and scores them as empty, so the loss shows in recall.
+
+## Known gaps
+
+- **Conditions labels are noisy.** Second-label agreement on the set of condition names is 0.85, and
+  its 95% interval reaches down to 0.64, under the 0.8 bar. Two of the three condition
+  disagreements are spellings ("PEM" vs "post-exertional malaise") that #229's `canonical_condition`
+  merges; until #229 merges, the evaluator compares names as written. The other two are real
+  judgment calls (whether "getting depressed" from a supplement is depression; whether "I feel like I
+  have some permanent damage done to my nerves" states a condition).
+- **Location agreement says little.** The 44 doubly labeled items state country, state and city
+  once each, so their kappa rests on one positive. Location noise is unmeasured outside the curated
+  items, which a person reviews.
+- **Sampled labels are single drafts.** Only the curated labels get a person's review; the rest are
+  one model's draft, checked by the 10% second label above.
+- **`sex_normalized` is blind to trans answers**, by the pipeline's design (#214); read `sex` for
+  the gender identity case.
