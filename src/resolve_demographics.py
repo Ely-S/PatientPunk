@@ -1,9 +1,10 @@
 """Turn per-post demographic claims into one user_profiles row per user, in code (#206).
 
 Resolution is recomputed from demographic_claims_latest on every run, so it needs no state of its
-own: a restart, a re-read that retracted claims, or a newer reference date is picked up by the next
-call. A user gets a new row only when their resolved profile differs from user_profiles_latest.
-Each row keeps the age in years (a real number), advanced to the reference date, beside its decade.
+own: a restart or a re-read that retracted claims is picked up by the next call. A user gets a new
+row only when their resolved profile differs from user_profiles_latest. Each row keeps the age in
+years (a real number), advanced to the user's own newest post, beside its decade, so it stops
+changing once they stop posting; ever_minor is set when any age claim was under 18 when written.
 When the author gave a range or decade instead of a number, the age is that range's midpoint
 ("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
 normalized from it (normalize_sex, #214). Countries and US states are compared and stored in one
@@ -68,7 +69,7 @@ def stated_age(value: str) -> tuple[float, bool] | None:
 
 
 def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
-    """(age, estimated): a stated age advanced to the reference date; a range or decade is advanced
+    """(age, estimated): a stated age advanced to ``reference``, the user's newest post; a range or decade is advanced
     from its midpoint. None when unparseable or out of range."""
     stated = stated_age(value)
     if stated is None:
@@ -129,7 +130,9 @@ SEX_VALUES = {
 
 # The prompt asks for " | " between values, but a reply may use other separators.
 _SEX_PARTS = re.compile(r"[|/,;&]|\band\b", re.IGNORECASE)
-_TRANS = re.compile(r"\btrans", re.IGNORECASE)  # trans, transgender, trans woman, transfem...
+# trans, transgender, transwoman, transmasculine, MTF, FtM; not transplant, transverse myelitis or transient
+_TRANS = re.compile(r"\b(?:trans(?!plant|verse|ient|fusion|fer|it\b|ition|port|late|form|cript|mission|action|parent)\w*"
+                    r"|mtf|ftm|m2f|f2m)\b", re.IGNORECASE)
 _CIS = re.compile(r"^cis(?:gender)?[\s-]*", re.IGNORECASE)  # "cis woman" and "cisgender male" name a binary sex
 
 
@@ -151,6 +154,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     in PROFILE_FIELDS order and the fields whose claims disagree. Text values are compared
     ignoring case. sex_stated is the newest sex claim as written, and sex its normalized value."""
     by_field = defaultdict(list)
+    countries = {post_id for _, post_id, field, value in claims if field == "country" and value.strip()}
     for date, post_id, field, value in claims:
         value = value.strip()
         if not value:
@@ -158,8 +162,14 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
         if field in ("country", "state"):
             value = canonical_place(field, value)  # "US" and "USA" are one country when pairing states
         by_field[field].append((date, post_id, value))
+        if field == "state" and value in _US_STATES and post_id not in countries:
+            # A US state names its country too, so "Texas" alone is "United States / Texas".
+            by_field["country"].append((date, post_id, "United States"))
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
     age = ages[-1][0] if ages else None
+    # Age as written, not advanced: a minor when they wrote it stays flagged, for exclusion.
+    written = [a[0] for a in (stated_age(v) for _, _, v in by_field["age"]) if a is not None]
+    ever_minor = int(min(written) < 18) if written else None
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     sex_stated = by_field["sex"][-1][2] if by_field["sex"] else None
     sex = normalize_sex(sex_stated) if sex_stated else None
@@ -201,7 +211,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     if ((stated and max(stated) - min(stated) > 1) or len(decades) > 1
             or (decades and stated and not decades <= {_bucketize_age(str(a)) for a in stated})):
         disagree.add("age")
-    return (age_bucket, age, sex, sex_stated, location, city), disagree
+    return (age_bucket, age, sex, sex_stated, location, city, ever_minor), disagree
 
 
 def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozenset()) -> dict:
@@ -209,7 +219,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     run has read and whose resolved profile differs from their current one, with empty fields where
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
     the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
-    The reference date (the newest post_date) is recorded in the run's config. Commits; returns counts."""
+    Commits; returns counts."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
     if not set(PROFILE_FIELDS) <= columns or not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
@@ -217,7 +227,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     run_type = conn.execute("SELECT extraction_type FROM extraction_runs WHERE run_id = ?", (run_id,)).fetchone()
     if run_type != ("demographics",):
         raise ValueError(f"run {run_id} is not a demographics run; user_profiles_latest would ignore its rows")
-    reference = conn.execute("SELECT MAX(post_date) FROM posts").fetchone()[0]
+    newest_post = dict(conn.execute("SELECT user_id, MAX(post_date) FROM posts GROUP BY user_id"))
     claims = defaultdict(list)
     for user, *claim in conn.execute(
             "SELECT p.user_id, p.post_date, c.post_id, c.field, c.value FROM demographic_claims_latest c "
@@ -232,7 +242,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
 
     disagreements, rows = Counter(), []
     for user in sorted(read - set(failed_users) - {DELETED_USER_ID}):
-        profile, disagree = _resolve(claims.get(user, []), reference)
+        profile, disagree = _resolve(claims.get(user, []), newest_post.get(user))
         disagreements.update(disagree)
         p = current.get(user)
         resolved = tuple("" if v is None else str(v) for v in profile)
@@ -242,6 +252,4 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
         conn.executemany(
             f"INSERT INTO user_profiles (user_id, run_id, {', '.join(PROFILE_FIELDS)}) "
             f"VALUES ({', '.join('?' * (len(PROFILE_FIELDS) + 2))})", rows)
-        conn.execute("UPDATE extraction_runs SET config = json_set(config, '$.reference_date', ?) WHERE run_id = ?",
-                     (reference, run_id))
-    return {"profiles_written": len(rows), "reference_date": reference, "disagreements": dict(disagreements)}
+    return {"profiles_written": len(rows), "disagreements": dict(disagreements)}

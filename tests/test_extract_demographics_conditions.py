@@ -224,7 +224,7 @@ def test_reads_replies_with_text_around_the_object(raw):
 def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("post", "patient", 1, None, "I'm 34")])
-    replies = iter([LLMResponseError("empty"), '{"age": "34"}', {"age": claim(34)}])
+    replies = iter([LLMResponseError("empty"), "no JSON here", {"age": claim(34)}])
     calls = stub(monkeypatch, post=lambda text: next(replies))
 
     demographics.run_demographics(path)
@@ -235,8 +235,8 @@ def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypa
 
 @pytest.mark.parametrize(
     "unreadable",
-    ['{"error": "private reply text"}', '{"age": "34"}', "no JSON here"],
-    ids=["unknown-fields", "claim-not-an-object", "no-object"],
+    ['{"error": "private reply text"}', "no JSON here"],
+    ids=["unknown-fields", "no-object"],
 )
 def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, caplog, unreadable):
     conn, path = db
@@ -465,7 +465,7 @@ def test_a_reread_that_finds_nothing_retracts_and_a_restart_still_resolves(db, m
     assert profile(conn, "a") == (None, None, None, None, None, None)
 
 
-def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkeypatch):
+def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("a-2024", "a", ts(2024), None, "I'm 29"), ("b-2024", "b", ts(2024), None, "hi")])
     stub(monkeypatch, post=lambda text: {"age": claim(29)} if text == "I'm 29" else NOTHING)
@@ -475,9 +475,24 @@ def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkey
     add_posts(conn, [("b-2026", "b", ts(2026), None, "hello again")])
     calls = stub(monkeypatch)
     demographics.run_demographics(path)
-
     assert posts_read(conn, calls) == ["hello again"]
+    assert profile(conn, "a")[:2] == ("20s", 29.0)
+
+    add_posts(conn, [("a-2026", "a", ts(2026), None, "still here")])
+    demographics.run_demographics(path)
     assert profile(conn, "a")[:2] == ("30s", 31.0)
+
+
+def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "I'm 34 and Transgender, in Texas")])
+    calls = stub(monkeypatch, post=lambda text: {"age": claim(34), "sex": "transgender", "state": "Ohio"})
+
+    demographics.run_demographics(path)
+
+    assert [t for kind, _, t in calls if kind == "post"] == [0.0]  # read at once, not retried
+    assert conn.execute("SELECT field, value, evidence FROM demographic_claims ORDER BY field").fetchall() == [
+        ("age", "34", "quote"), ("sex", "transgender", "transgender")]  # Ohio isn't in the post
 
 
 def test_limit_caps_the_users_read(db, monkeypatch):

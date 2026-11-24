@@ -56,27 +56,40 @@ def test_conflicting_ages_take_the_most_recent_and_are_counted(conn):
     assert stats["disagreements"] == {"age": 1}
 
 
-def test_age_advances_to_the_reference_date(conn):
-    post(conn, "p1", "a", 2024), post(conn, "p2", "b", 2026)
+def test_age_advances_to_the_users_newest_post(conn):
+    post(conn, "p1", "a", 2024), post(conn, "p2", "a", 2026), post(conn, "p3", "b", 2030)
     r = run(conn)
-    read(conn, r, "p1", age="29"), read(conn, r, "p2")
-    assert resolve_profiles(conn, r)["reference_date"] == ts(2026)
+    read(conn, r, "p1", age="29"), read(conn, r, "p2"), read(conn, r, "p3")
+    resolve_profiles(conn, r)
     assert profile(conn, "a") == ("30s", None, None)
     assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (31.0,)
 
 
-def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
+def test_another_users_newer_post_leaves_an_age_alone(conn):
     post(conn, "p1", "a", 2025), post(conn, "p2", "b", 2025)
     r1 = run(conn)
     read(conn, r1, "p1", age="29"), read(conn, r1, "p2")
     resolve_profiles(conn, r1)
-    assert profile(conn, "a") == ("20s", None, None)
 
-    post(conn, "p3", "b", 2026)  # only b posts again
+    post(conn, "p3", "b", 2030)  # only b posts again
     r2 = run(conn)
     read(conn, r2, "p3")
-    resolve_profiles(conn, r2)
-    assert profile(conn, "a") == ("30s", None, None)
+    assert resolve_profiles(conn, r2)["profiles_written"] == 0
+    assert profile(conn, "a") == ("20s", None, None)
+
+
+@pytest.mark.parametrize("ages, ever_minor", [
+    ([(2020, "16"), (2024, None)], 1),  # 20 by their newest post, but a minor when they wrote it
+    ([(2020, "15-17")], 1), ([(2020, "17"), (2023, "20")], 1),
+    ([(2020, "30")], 0), ([(2020, "18")], 0), ([(2020, None)], None),
+])
+def test_ever_minor_is_set_by_any_age_claim_under_18_when_written(conn, ages, ever_minor):
+    r = run(conn)
+    for i, (year, age) in enumerate(ages):
+        post(conn, f"p{i}", "a", year)
+        read(conn, r, f"p{i}", **({"age": age} if age else {}))
+    resolve_profiles(conn, r)
+    assert conn.execute("SELECT ever_minor FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (ever_minor,)
 
 
 @pytest.mark.parametrize("posts, expected", [  # expected: (location, city)
@@ -85,7 +98,9 @@ def test_a_newer_reference_date_refreshes_a_user_without_new_posts(conn):
     ([{"country": "US", "state": "Texas"}, {"country": "UK"}], ("United Kingdom", None)),
     ([{"country": "US"}, {"state": "Texas"}, {"country": "UK"}], ("United Kingdom", None)),
     ([{"country": "UK"}, {"country": "US"}, {"state": "Texas"}], ("United States / Texas", None)),
-    ([{"state": "Texas"}], ("Texas", None)),
+    ([{"state": "Texas"}], ("United States / Texas", None)),  # a US state names its country
+    ([{"state": "TX"}, {"country": "UK"}], ("United Kingdom", None)),
+    ([{"state": "Ontario"}], ("Ontario", None)),  # only US states do
     ([{"country": "US", "state": "Texas"}, {"country": "UK"}, {"country": "US"}], ("United States / Texas", None)),
     ([{"state": "Texas"}, {"country": "US"}, {"country": "UK"}], ("United Kingdom", None)),
     ([{"country": "US", "state": "Texas"}, {"country": " "}], ("United States / Texas", None)),  # a blank claim states nothing
@@ -243,16 +258,6 @@ def test_text_fields_that_disagree_are_counted(conn):
     assert resolve_profiles(conn, r)["disagreements"] == {"sex": 1, "country": 1}
 
 
-def test_the_reference_date_is_recorded_on_the_run(conn):
-    post(conn, "p1", "a", 2024), post(conn, "p2", "b", 2026)
-    r = run(conn)
-    read(conn, r, "p1", age="30")
-    resolve_profiles(conn, r)
-    stored = conn.execute("SELECT json_extract(config, '$.reference_date') FROM extraction_runs WHERE run_id = ?",
-                          (r,)).fetchone()[0]
-    assert stored == ts(2026)
-
-
 def test_claims_from_other_run_types_are_ignored(conn):
     post(conn, "p1", "a", 2026)
     r1 = run(conn)
@@ -267,7 +272,7 @@ def test_posts_without_a_date_still_resolve(conn):
     conn.execute("INSERT INTO posts (post_id, user_id, body_text, post_date, scraped_at) VALUES ('p1', 'a', '', NULL, 0)")
     r = run(conn)
     read(conn, r, "p1", age="34")
-    assert resolve_profiles(conn, r)["reference_date"] is None
+    resolve_profiles(conn, r)
     assert profile(conn, "a") == ("30s", None, None)
 
 
@@ -277,9 +282,9 @@ def test_only_a_demographics_run_can_hold_profiles(conn):
 
 
 def test_a_decade_phrase_advances_from_its_midpoint(conn):
-    post(conn, "p1", "a", 2016), post(conn, "p2", "b", 2026)
+    post(conn, "p1", "a", 2016), post(conn, "p2", "a", 2026)
     r = run(conn)
-    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 in 2026
+    read(conn, r, "p1", age="late 30s")  # 37.5 in 2016 is 47.5 by their 2026 post
     resolve_profiles(conn, r)
     assert conn.execute("SELECT age_bucket, age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == ("40s", 47.5)
 
@@ -322,6 +327,9 @@ def test_spellings_of_one_place_are_not_disagreements(conn):
 @pytest.mark.parametrize("stated, sex", [
     ("guy", "male"), ("dude", "male"), ("dad", "male"), ("Lady", "female"), ("mom", "female"), ("f | mom", "female"),
     ("mom | dad", None), ("trans woman | mom", None), ("non-binary | mom", "non-binary"),
+    # Trans words leave sex empty; medical words that start with "trans" don't
+    ("MTF | female", None), ("FtM", None), ("transmasculine | male", None), ("transfeminine | female", None),
+    ("female | kidney transplant", "female"), ("male | transverse myelitis", "male"), ("female | transient", "female"),
 ])
 def test_everyday_sex_words(stated, sex):
     assert normalize_sex(stated) == sex
