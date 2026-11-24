@@ -45,6 +45,12 @@ _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 def _parse_age(value: str) -> tuple[float, bool, float] | None:
+    """_age_parts(value) when its age is from 10 to 99 (#206): the one place that range is checked."""
+    parsed = _age_parts(value)
+    return parsed if parsed is not None and 10 <= parsed[0] <= 99 else None
+
+
+def _age_parts(value: str) -> tuple[float, bool, float] | None:
     """(age in years, estimated, youngest) from what the author wrote: a number as given; a range or
     decade at its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s"
     -> 37.5, "20s-30s" -> 30), with the youngest age it allows ("16-20" -> 16, "30s" -> 30, "late 30s"
@@ -74,9 +80,7 @@ def _parse_age(value: str) -> tuple[float, bool, float] | None:
 def stated_age(value: str) -> tuple[float, bool] | None:
     """(age, estimated) as stated, when it is from 10 to 99 (#206); a range or decade gives its midpoint."""
     stated = _parse_age(value)
-    return stated[:2] if stated is not None and 10 <= stated[0] <= 99 else None
-
-
+    return stated[:2] if stated is not None else None
 
 
 _US_STATES = (
@@ -171,7 +175,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
             # A US state names its country too, so "Texas" alone is "United States / Texas".
             by_field["country"].append((date, post_id, "United States"))
     # Each age claim parsed once: (date, (age, estimated, youngest)), kept when it states 10 to 99.
-    parsed = [(d, a) for d, _, v in by_field["age"] if (a := _parse_age(v)) and 10 <= a[0] <= 99]
+    parsed = [(d, a) for d, _, v in by_field["age"] if (a := _parse_age(v))]
     # Advanced to the user's newest post; a range or decade from its midpoint.
     ages = [(age + (_years_between(d, reference) if d is not None and reference is not None else 0), estimated)
             for d, (age, estimated, _) in parsed]
