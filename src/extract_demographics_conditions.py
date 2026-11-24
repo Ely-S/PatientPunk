@@ -327,9 +327,12 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
         counts["claims"] += len(claims)
         counts["conditions"] += len(conditions)
 
-    def earlier_conditions(post_id: str) -> list:
-        return conn.execute("SELECT condition_name, condition_type, severity, evidence FROM condition_observations "
-                            "WHERE post_id = ?", (post_id,)).fetchall()
+    def earlier(post_id: str) -> tuple[dict, list]:
+        """The claims and conditions the post's newest earlier read found."""
+        claims = conn.execute("SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
+        conditions = conn.execute("SELECT condition_name, condition_type, severity, evidence FROM condition_observations "
+                                  "WHERE post_id = ?", (post_id,)).fetchall()
+        return {field: (value, evidence) for field, value, evidence in claims}, conditions
 
     def jobs():  # consumed on this thread by _in_parallel, so record() may write here
         for user_id, posts in islice(groupby(rows, key=itemgetter(0)), limit or None):
@@ -346,15 +349,12 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
         elif reply is BLOCKED:
             # A block says nothing about what the post states, so what an earlier read found still
             # stands: its claims and conditions are carried forward under this run (none on a first read).
-            claims = conn.execute(
-                "SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
-            record(user_id, post_id, {field: (value, evidence) for field, value, evidence in claims},
-                   earlier_conditions(post_id))
+            record(user_id, post_id, *earlier(post_id))
             counts["posts_blocked"] += 1
         else:
             claims, conditions = reply
             # No conditions list says nothing about the post either: keep its earlier conditions.
-            record(user_id, post_id, claims, earlier_conditions(post_id) if conditions is None else conditions)
+            record(user_id, post_id, claims, earlier(post_id)[1] if conditions is None else conditions)
         if n % COMMIT_EVERY == 0:
             conn.commit()
             log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])
