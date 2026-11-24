@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "Scrapers"))
 from db_to_corpus import author_hash
 
 import extract_demographics_conditions as extractor
+from resolve_demographics import _plain_place as _plain
 from resolve_demographics import _resolve, canonical_place, normalize_sex, stated_age
 
 FIELDS = extractor.CLAIM_FIELDS
@@ -70,9 +71,13 @@ def _item(row: sqlite3.Row, kind: str) -> dict | None:
             "text": text}
 
 
+# The scrape's table and columns for each kind of item.
+_SOURCE = {"post": ("posts", "id, subreddit, created_utc, title, selftext, author"),
+           "comment": ("comments", "id, subreddit, created_utc, body, author")}
+
+
 def _fetch(conn, kind: str, rowids: list[int]) -> list[dict]:
-    table, cols = ("posts", "id, subreddit, created_utc, title, selftext, author") if kind == "post" else \
-                  ("comments", "id, subreddit, created_utc, body, author")
+    table, cols = _SOURCE[kind]
     items = []
     for i in range(0, len(rowids), 500):
         chunk = rowids[i:i + 500]
@@ -90,8 +95,7 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
     rng = random.Random(seed)
     with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as conn:
         conn.row_factory = sqlite3.Row
-        sizes = {k: conn.execute(f"SELECT MAX(rowid) FROM {t}").fetchone()[0] for k, t in
-                 (("post", "posts"), ("comment", "comments"))}
+        sizes = {k: conn.execute(f"SELECT MAX(rowid) FROM {t}").fetchone()[0] for k, (t, _) in _SOURCE.items()}
         # One uniform draw over all rows of both tables, in draw order, so every stratum is a seeded
         # random sample of the eligible items in it.
         draws = rng.sample(range(sizes["post"] + sizes["comment"]), pool)
@@ -117,8 +121,7 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
         rng.shuffle(candidates)
         candidates = set(candidates[:n_authors * 10])
         history = defaultdict(list)
-        for kind, table, cols in (("post", "posts", "id, subreddit, created_utc, title, selftext, author"),
-                                  ("comment", "comments", "id, subreddit, created_utc, body, author")):
+        for kind, (table, cols) in _SOURCE.items():
             for row in conn.execute(f"SELECT {cols} FROM {table} WHERE author IS NOT NULL"):
                 if author_hash(row["author"]) in candidates and (it := _item(row, kind)):
                     history[it["user_id"]].append(it)
@@ -179,10 +182,6 @@ def counts(items: list[dict]) -> dict:
 
 
 # ── Matching ─────────────────────────────────────────────────────────────────
-
-def _plain(text: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[.'’]", "", text.casefold())).strip().removeprefix("the ")
-
 
 def key(field: str, value: str) -> object:
     """A form of the value in which two ways of writing the same answer are equal."""
