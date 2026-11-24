@@ -439,6 +439,7 @@ def predict(items: list[dict]) -> tuple[dict[str, dict | str | None], dict[str, 
     predictions, conditions = {}, {}
     for post_id, result in extractor._in_parallel(extractor.get_client(), ((it["post_id"], it["text"]) for it in items),
                                                   extractor.read_post):
+        # read_post returns (claims, conditions) once #229 merges; then drop this check and unpack it.
         if isinstance(result, tuple):
             result, conditions[post_id] = result
         predictions[post_id] = "blocked" if result is extractor.BLOCKED else result
@@ -496,7 +497,8 @@ def main():
     e.add_argument("--testset", required=True, type=Path)
     e.add_argument("--split", choices=("dev", "test", "all"), required=True)
     e.add_argument("--tag", default="baseline", help="Names predictions_<tag>.jsonl and report_<tag>.json")
-    e.add_argument("--prompt-file", type=Path, help="Evaluate this per-post prompt instead of the merged one")
+    e.add_argument("--prompt-file", type=Path, help="Evaluate this per-post prompt instead of the merged one. Give the rendered "
+                   "text, not the f-string template in src/prompts/demographic_prompt.py")
     e.add_argument("--dry-run", action="store_true", help="Print the calls and approximate tokens, send nothing")
     a = ap.parse_args()
     if a.command == "sample":

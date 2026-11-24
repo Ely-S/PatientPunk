@@ -176,6 +176,17 @@ Every curated label is reviewed by a person before it counts.
 written to the rules above, one per hard case, with no patient text, so it lives in Git. `evaluate`
 always includes them, in every split.
 
+## Evaluating a candidate prompt
+
+`evaluate --prompt-file candidate.txt` sends the file's text as the prompt, exactly as written, with
+the post appended. It must be the rendered prompt, not the template in
+`src/prompts/demographic_prompt.py`: that is an f-string, so a copy of its source has doubled braces
+(`{{"value": ...}}`) and a literal `{DEMOGRAPHIC_AGE_RULES}`. Start from the rendered text:
+
+```bash
+cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT as p; print(p, end='')" > ../candidate.txt
+```
+
 ## Content-filter blocks
 
 A post the provider's content filter blocks is recorded with no claims. `evaluate` counts blocks
