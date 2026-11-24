@@ -49,7 +49,7 @@ PATS = {k: re.compile(v) for k, v in DRUGS.items()}
 
 
 def day(ts):
-    return dt.datetime.fromtimestamp(ts, dt.UTC).strftime("%Y-%m-%d")
+    return dt.datetime.fromtimestamp(ts, dt.timezone.utc).strftime("%Y-%m-%d")
 
 
 def twitter():
