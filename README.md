@@ -35,7 +35,7 @@ The pipeline reads posts from a SQLite database and produces a sentiment databas
 
 A key design principle: reply chain context is preserved. A short reply like "same, it really helped me" is correctly attributed to the drug being discussed in the parent post. Each entry carries both drugs_direct (mentioned in that post/comment) and drugs_context (inherited from upstream comments via the parent chain).
 
-The pipeline also extracts demographics one post at a time (age, sex, country, state and city, each with its quote) and resolves them into one current profile per user (Step 3a). For each user, when available, it extracts their conditions, onset and recovery time, and severity.
+The pipeline also extracts demographics one post at a time (age, sex, country, state and city, each with its quote) and resolves them into one current profile per user (Step 3a). For each user, it extracts the conditions they say they have, each marked as an illness or a symptom.
 
 ---
 

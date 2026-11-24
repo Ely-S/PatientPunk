@@ -73,10 +73,7 @@ CREATE TABLE conditions (
     user_id        TEXT NOT NULL REFERENCES users(user_id),
     post_id        TEXT REFERENCES posts(post_id),
     condition_type TEXT NOT NULL CHECK (condition_type IN ('illness', 'symptom')),
-    condition_name TEXT NOT NULL,
-    diagnosed_at   TEXT,
-    resolved_at    TEXT,
-    severity       TEXT
+    condition_name TEXT NOT NULL
 );
 
 CREATE INDEX idx_cond_user ON conditions(user_id);
