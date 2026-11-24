@@ -82,6 +82,8 @@ def test_another_users_newer_post_leaves_an_age_alone(conn):
     ([(2020, "16"), (2024, None)], 1),  # 20 by their newest post, but a minor when they wrote it
     ([(2020, "15-17")], 1), ([(2020, "17"), (2023, "20")], 1),
     ([(2020, "30")], 0), ([(2020, "18")], 0), ([(2020, None)], None),
+    ([(2020, "16-20")], 1),  # a range crossing 18 counts by its youngest age, not its midpoint
+    ([(2020, "late teens")], None), ([(2020, "20s")], 0),
 ])
 def test_ever_minor_is_set_by_any_age_claim_under_18_when_written(conn, ages, ever_minor):
     r = run(conn)
@@ -184,6 +186,8 @@ def test_resolution_creates_its_tables_on_an_older_database(tmp_path):
     ("thirty-ish", None, None), ("1e3", None, None), ("", None, None),
     ("inf", None, None), ("1e400", None, None), ("9", None, None), ("100", None, None), ("-5", None, None),
     ("34.5", None, None),
+    ("mid thirties", "30s", 35.0), ("early twenties", "20s", 22.5), ("low 60s", "60s", 62.5),
+    ("in my late forties", "40s", 47.5),
 ])
 def test_ages_the_model_may_write_never_crash(conn, stated, bucket, age):
     post(conn, "p1", "a", 2026)
@@ -310,7 +314,8 @@ def test_sex_claims_that_normalize_alike_agree(conn):
     ("country", "America", "United States"), ("country", "England", "United Kingdom"), ("country", "Aus", "Australia"),
     ("country", "united states", "United States"), ("country", "Brazil", "Brazil"), ("country", " Slovenia ", "Slovenia"),
     ("state", "TX", "Texas"), ("state", "texas", "Texas"), ("state", "D.C.", "District of Columbia"),
-    ("state", "Quebec", "Quebec"),
+    ("state", "Quebec", "Quebec"), ("state", "Washington DC", "District of Columbia"),
+    ("state", "Washington, D.C.", "District of Columbia"),
 ])
 def test_canonical_place(field, value, canonical):
     assert canonical_place(field, value) == canonical
@@ -335,3 +340,13 @@ def test_spellings_of_one_place_are_not_disagreements(conn):
 ])
 def test_everyday_sex_words(stated, sex):
     assert normalize_sex(stated) == sex
+
+
+def test_a_vaguer_newer_age_keeps_an_exact_age_it_agrees_with(conn):
+    post(conn, "p1", "a", 2026), post(conn, "p2", "a", 2026), post(conn, "p3", "b", 2026), post(conn, "p4", "b", 2026)
+    r = run(conn)
+    read(conn, r, "p1", age="34"), read(conn, r, "p2", age="30s")  # agrees: stays 34
+    read(conn, r, "p3", age="34"), read(conn, r, "p4", age="40s")  # a different decade: the newer claim wins
+    resolve_profiles(conn, r)
+    ages = dict(conn.execute("SELECT user_id, age FROM user_profiles_latest"))
+    assert ages == {"a": 34.0, "b": 45.0}

@@ -7,7 +7,8 @@ Age rules:
 2. Ignore past ages ("when I was 8") and ages of other people, including children, partners,
    relatives, and people in the news.
 Examples: "I'm 26" -> 26. "I (33F)" -> 33. "I'm in my 30s" -> "30s". "My wife is 36",
-"my 11yo son", and "bitten when I was 8" -> null.
+"my 11yo son", "bitten when I was 8", "I was 35 when I got sick", and "I had just turned 30
+when I caught it" -> null.
 """.strip()
 
 POST_DEMOGRAPHICS_PROMPT = f"""\
