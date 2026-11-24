@@ -10,6 +10,10 @@ docs/demographics_labeling.md.
     uv run python src/demographics_testset.py sample --db reddit_2026-06-13.db --out data/demographics_testset
     uv run python src/demographics_testset.py stats --testset data/demographics_testset
     uv run python src/demographics_testset.py evaluate --testset data/demographics_testset --split dev
+
+``curate`` and ``add-curated`` add the hand-picked ``curated`` stratum (cases in
+src/demographics_testset_cases.json); tests/fixtures/demographics_synthetic.jsonl holds the
+``synthetic`` stratum, written posts with no patient text, which ``evaluate`` always includes.
 """
 import argparse
 import hashlib
@@ -35,6 +39,11 @@ from resolve_demographics import _resolve, canonical_place, normalize_sex, state
 FIELDS = extractor.CLAIM_FIELDS
 PROFILE = ("age_bucket", "age", "sex", "sex_stated", "location", "city", "ever_minor")  # _resolve's order
 TEST_SHARE = 0.4  # of authors, by a hash of user_id, so the split never depends on what was sampled
+CASES = Path(__file__).with_name("demographics_testset_cases.json")
+SYNTHETIC = Path(__file__).parents[1] / "tests" / "fixtures" / "demographics_synthetic.jsonl"
+EXTRA_STRATA = {"curated", "synthetic"}  # chosen for what they contain, so left out of the pooled metrics
+# The pipeline's condition names once #229 is merged; until then, the name as written.
+canonical_condition = getattr(extractor, "canonical_condition", lambda name: name.casefold().strip())
 
 # Sampling only: a post matching these is likelier to state a demographic. Recall is measured on the
 # random stratum, which these don't touch.
@@ -164,17 +173,95 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
     return manifest
 
 
+def load_cases(path: Path = CASES) -> dict[str, dict]:
+    return {k: v for k, v in json.loads(path.read_text()).items() if not k.startswith("_")}
+
+
+def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: Path = CASES) -> dict:
+    """Write candidates/<case>.jsonl: up to ``factor`` times each case's quota per split of the items
+    its regex matches, in seeded order, leaving out items already in the set. The pick is made from
+    these and recorded in curation.jsonl, which add-curated reads."""
+    cases = load_cases(cases_path)
+    regex = {c: re.compile(v["pattern"], re.IGNORECASE if v.get("ignore_case", True) else 0) for c, v in cases.items()}
+    have = {it["post_id"] for it in load(testset, "all")[0]}
+    found = defaultdict(list)
+    with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as conn:
+        conn.row_factory = sqlite3.Row
+        for kind, (table, cols) in _SOURCE.items():
+            for row in conn.execute(f"SELECT {cols} FROM {table} WHERE author IS NOT NULL"):
+                raw = f"{row['title'] or ''}\n{row['selftext'] or ''}" if kind == "post" else row["body"] or ""
+                hits = [c for c, r in regex.items() if r.search(raw)]
+                if hits and (it := _item(row, kind)) and it["post_id"] not in have:
+                    for c in hits:
+                        if m := regex[c].search(it["text"]):
+                            found[c].append({**it, "match": m.group()})
+    rng = random.Random(seed)
+    out = testset / "candidates"
+    out.mkdir(exist_ok=True)
+    pools = {}
+    for c, spec in cases.items():
+        rows = sorted(found[c], key=lambda it: it["post_id"])
+        rng.shuffle(rows)
+        quota = split_quota(spec["n"])
+        keep = [it for split in ("dev", "test") for it in [r for r in rows if r["split"] == split][:factor * quota[split]]]
+        (out / f"{c}.jsonl").write_text("".join(json.dumps(it, ensure_ascii=False) + "\n" for it in keep))
+        pools[c] = {"matches": len(rows), "candidates": len(keep), "quota": quota}
+    summary = {"seed": seed, "factor": factor, "source_db": str(db), "cases": pools,
+               "code_commit": extractor.get_git_commit()}
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    return summary
+
+
+def split_quota(n: int) -> dict[str, int]:
+    test = round(n * TEST_SHARE)
+    return {"dev": n - test, "test": test}
+
+
+def add_curated(testset: Path, curation: Path, cases_path: Path = CASES) -> dict:
+    """Add each item curation.jsonl picks ({post_id, case, rationale, picked_by}) to testset.jsonl in
+    the curated stratum, label null, with its cases under ``case``. The rationale stays in
+    curation.jsonl, out of the labeler's sight. Refuses an item that isn't a candidate for its case
+    or is already in the set."""
+    cases = load_cases(cases_path)
+    picks = [json.loads(line) for line in curation.read_text().splitlines() if line.strip()]
+    candidates = {c: {it["post_id"]: it for it in map(json.loads, (testset / "candidates" / f"{c}.jsonl").read_text().splitlines())}
+                  for c in {p["case"] for p in picks}}
+    items = [json.loads(line) for line in (testset / "testset.jsonl").read_text().splitlines()]
+    have = {it["post_id"] for it in items}
+    new: dict[str, dict] = {}
+    for p in picks:
+        if p["case"] not in cases or p["post_id"] not in candidates[p["case"]]:
+            raise ValueError(f"{p['post_id']} is not a candidate for {p['case']}")
+        if p["post_id"] in have:
+            raise ValueError(f"{p['post_id']} is already in the set")
+        it = {k: v for k, v in candidates[p["case"]][p["post_id"]].items() if k != "match"}
+        new.setdefault(p["post_id"], {**it, "strata": ["curated"], "case": [], "label": None})["case"].append(p["case"])
+    with open(testset / "testset.jsonl", "a", encoding="utf-8") as f:
+        f.writelines(json.dumps(it, ensure_ascii=False) + "\n" for it in new.values())
+    manifest_path = testset / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    summary = json.loads((testset / "candidates" / "summary.json").read_text())
+    picked = Counter(f"{c}/{it['split']}" for it in new.values() for c in it["case"])
+    manifest["curated"] = {**summary, "picked": dict(sorted(picked.items())), "items": len(new),
+                           "picked_by": sorted({p["picked_by"] for p in picks}),
+                           "selection": "Each case's regex matches in seeded order (candidates/), quota per split "
+                                        "by split_of; picks and a rationale for each in curation.jsonl."}
+    manifest["counts"] = counts(items + list(new.values()))
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest["curated"]
+
+
 def counts(items: list[dict]) -> dict:
     """Items per stratum and split, labeled values per field and split, and labeled values whose
     evidence is not an exact quote from the item's text (which should be none)."""
     c = {"items": Counter(), "labeled": Counter(), "fields": Counter(), "others": Counter(),
          "evidence_not_in_text": Counter()}
     for it in items:
-        for s in it["strata"]:
+        for s in it["strata"] + [f"case:{k}" for k in it.get("case", [])]:
             c["items"][f"{s}/{it['split']}"] += 1
         if (label := it.get("label")) is not None:
             c["labeled"][it["split"]] += 1
-            c["fields"].update(f"{f}/{it['split']}" for f in FIELDS if label.get(f))
+            c["fields"].update(f"{f}/{it['split']}" for f in (*FIELDS, "conditions") if label.get(f))
             c["others"].update(f"{f}/{it['split']}" for f, v in (label.get("others") or {}).items() if v)
             c["evidence_not_in_text"].update(
                 it["post_id"] for f in FIELDS if label.get(f) and label[f]["evidence"] not in it["text"])
@@ -203,13 +290,17 @@ def _overlaps(a: str, b: str) -> bool:
 
 # ── Evaluation ───────────────────────────────────────────────────────────────
 
-def score(items: list[dict], predictions: dict[str, dict | None]) -> dict:
+def score(items: list[dict], predictions: dict[str, dict | None], conditions: dict | None = None) -> dict:
     """Per-field precision, recall, wrong-person errors and evidence checks.
 
     ``predictions`` maps post_id to {field: (value, evidence)}, "blocked", or None (the read failed).
     A failed read is left out of the scores; a blocked one counts as no claims, so it shows in recall.
     A wrong value is both a false positive and a false negative. A false positive whose value matches
     one the label lists under ``others`` (someone else's, or a past age) is a wrong-person error.
+
+    ``conditions`` maps post_id to read_post's conditions [(name, type, severity, evidence)], or None.
+    Items whose label has a ``conditions`` list are scored on them: names matched through
+    canonical_condition, and severity agreement over the matched names.
     """
     fields = (*FIELDS, "sex_normalized")
     m = {f: Counter() for f in fields}
@@ -247,6 +338,8 @@ def score(items: list[dict], predictions: dict[str, dict | None]) -> dict:
                 m[f]["evidence_in_post"] += claims[f][1] in it["text"]
                 m[f]["claims"] += 1
     report = {"posts": dict(posts), "fields": {}}
+    if conditions is not None and (scored := score_conditions(items, predictions, conditions)):
+        report["conditions"] = scored
     for f, c in m.items():
         tp, fp, fn = c["tp"], c["fp"], c["fn"]
         for k in ("tp", "fp", "fn", "wrong_person", "claims"):
@@ -256,11 +349,34 @@ def score(items: list[dict], predictions: dict[str, dict | None]) -> dict:
     return report
 
 
-def score_by_stratum(items: list[dict], predictions: dict) -> dict:
-    """score() for each stratum on its own: recall on the random stratum, wrong-person errors on
-    other_person. An item drawn by two strata counts in both."""
-    strata = sorted({s for it in items for s in it["strata"]})
-    return {s: score([it for it in items if s in it["strata"]], predictions) for s in strata}
+def score_conditions(items: list[dict], predictions: dict, conditions: dict) -> dict | None:
+    c = Counter()
+    for it in items:
+        gold = (it["label"] or {}).get("conditions")
+        pred = predictions.get(it["post_id"])
+        if gold is None or pred is None or (pred != "blocked" and conditions.get(it["post_id"]) is None):
+            continue  # not labeled for conditions, or the read failed
+        c["posts"] += 1
+        g = {canonical_condition(x["name"]): x["severity"] for x in gold}
+        p = {} if pred == "blocked" else {canonical_condition(n): sev for n, _, sev, _ in conditions[it["post_id"]]}
+        c["tp"] += len(g.keys() & p.keys())
+        c["fp"] += len(p.keys() - g.keys())
+        c["fn"] += len(g.keys() - p.keys())
+        c["severity_agree"] += sum(g[n] == p[n] for n in g.keys() & p.keys())
+    if not c["posts"]:
+        return None
+    tp, fp, fn = c["tp"], c["fp"], c["fn"]
+    return {**{k: c[k] for k in ("posts", "tp", "fp", "fn", "severity_agree")},
+            "precision": round(tp / (tp + fp), 3) if tp + fp else None,
+            "recall": round(tp / (tp + fn), 3) if tp + fn else None,
+            "severity_agreement": round(c["severity_agree"] / tp, 3) if tp else None}
+
+
+def score_by(key: str, items: list[dict], predictions: dict, conditions: dict | None = None) -> dict:
+    """score() for each value of an item's ``key`` list ("strata" or "case") on its own: recall on the
+    random stratum, wrong-person errors on other_person. An item with two values counts in both."""
+    values = sorted({v for it in items for v in it.get(key, [])})
+    return {v: score([it for it in items if v in it.get(key, [])], predictions, conditions) for v in values}
 
 
 def score_profiles(items: list[dict], authors: list[dict], predictions: dict) -> dict:
@@ -313,20 +429,25 @@ def load(testset: Path, split: str) -> tuple[list[dict], list[dict]]:
     return [it for it in read("testset.jsonl") if keep(it)], [a for a in read("authors.jsonl") if keep(a)]
 
 
-def predict(items: list[dict]) -> dict[str, dict | str | None]:
-    """read_post on each item, with the extractor's parallelism, retries and failure handling."""
-    predictions = {}
+def load_synthetic(path: Path = SYNTHETIC) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def predict(items: list[dict]) -> tuple[dict[str, dict | str | None], dict[str, list | None] | None]:
+    """read_post on each item, with the extractor's parallelism, retries and failure handling: claims
+    per post, and conditions per post once read_post returns (claims, conditions) (#229), else None."""
+    predictions, conditions = {}, {}
     for post_id, result in extractor._in_parallel(extractor.get_client(), ((it["post_id"], it["text"]) for it in items),
                                                   extractor.read_post):
-        if isinstance(result, tuple):  # (claims, conditions) once conditions are read per post (#229)
-            result = result[0]
+        if isinstance(result, tuple):
+            result, conditions[post_id] = result
         predictions[post_id] = "blocked" if result is extractor.BLOCKED else result
-    return predictions
+    return predictions, conditions or None
 
 
 def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> dict:
     items, authors = load(testset, split)
-    items = [it for it in items if it["label"] is not None]
+    items = [it for it in items + load_synthetic() if it["label"] is not None]
     prompt = extractor.POST_DEMOGRAPHICS_PROMPT
     tokens = sum(len(prompt) + len(it["text"]) for it in items) // 4
     plan = {"split": split, "labeled_items": len(items), "calls": len(items), "approx_input_tokens": tokens,
@@ -334,12 +455,15 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:12], "prompt_tokens": len(prompt) // 4}
     if dry_run or not items:
         return plan
-    predictions = predict(items)
+    predictions, conditions = predict(items)
     with open(testset / f"predictions_{tag}.jsonl", "w", encoding="utf-8") as f:
-        f.writelines(json.dumps({"post_id": post_id, "claims": claims}, ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
+        f.writelines(json.dumps({"post_id": post_id, "claims": claims, "conditions": (conditions or {}).get(post_id)},
+                                ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
+    pooled = [it for it in items if not set(it["strata"]) <= EXTRA_STRATA]
     report = {**plan, "tag": tag, "code_commit": extractor.get_git_commit(), "git_dirty": extractor.git_is_dirty(),
               "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
-              **score(items, predictions), "by_stratum": score_by_stratum(items, predictions),
+              **score(pooled, predictions, conditions), "by_stratum": score_by("strata", items, predictions, conditions),
+              "by_case": score_by("case", items, predictions, conditions),
               "profiles": score_profiles(items, authors, predictions)}
     (testset / f"report_{tag}.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -358,6 +482,14 @@ def main():
     s.add_argument("--other-person", type=int, default=75)
     s.add_argument("--authors", type=int, default=25)
     s.add_argument("--max-author-posts", type=int, default=8)
+    c = sub.add_parser("curate", help="Write each curated case's candidates from a scraped Reddit database")
+    c.add_argument("--db", required=True, type=Path)
+    c.add_argument("--testset", required=True, type=Path)
+    c.add_argument("--seed", type=int, default=207)
+    c.add_argument("--factor", type=int, default=3, help="Candidates per case, as a multiple of its quota")
+    r = sub.add_parser("add-curated", help="Add the picks in curation.jsonl to testset.jsonl, unlabeled")
+    r.add_argument("--testset", required=True, type=Path)
+    r.add_argument("--curation", type=Path, help="Default: <testset>/curation.jsonl")
     t = sub.add_parser("stats", help="Item and label counts by stratum, field and split")
     t.add_argument("--testset", required=True, type=Path)
     e = sub.add_parser("evaluate", help="Run read_post on the labeled items and score its claims (paid)")
@@ -370,6 +502,10 @@ def main():
     if a.command == "sample":
         result = sample(a.db, a.out, seed=a.seed, pool=a.pool, n_random=a.random, n_keyword=a.keyword,
                         n_other=a.other_person, n_authors=a.authors, max_author_posts=a.max_author_posts)
+    elif a.command == "curate":
+        result = curate(a.db, a.testset, seed=a.seed, factor=a.factor)
+    elif a.command == "add-curated":
+        result = add_curated(a.testset, a.curation or a.testset / "curation.jsonl")
     elif a.command == "stats":
         result = counts(load(a.testset, "all")[0])
     else:

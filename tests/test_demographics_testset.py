@@ -67,14 +67,14 @@ def test_score_counts_hits_misses_wrong_person_blocks_and_failures():
     assert (country["fp"], country["evidence_in_post"], country["recall"]) == (1, 0, None)
 
 
-def test_score_by_stratum_scores_each_stratum_alone():
+def test_score_by_scores_each_stratum_alone():
     items = [item("a", "I'm 33", label(age=("33", "I'm 33"))),
              item("b", "My son is 11", label(others={"age": ["11"]})),
              item("c", "I'm 40", label(age=("40", "I'm 40")))]
     items[1]["strata"] = ["other_person"]
     items[2]["strata"] = ["random", "keyword"]
     predictions = {"a": {"age": ("33", "I'm 33")}, "b": {"age": ("11", "My son is 11")}, "c": None}
-    report = ts.score_by_stratum(items, predictions)
+    report = ts.score_by("strata", items, predictions)
     assert set(report) == {"keyword", "other_person", "random"}
     assert report["random"]["posts"]["failed"] == 1 and report["random"]["fields"]["age"]["recall"] == 1.0
     assert report["other_person"]["fields"]["age"]["wrong_person"] == 1
@@ -113,7 +113,41 @@ def test_predict_takes_the_claims_from_a_reply_with_conditions(monkeypatch):
     # Once conditions are read per post (#229), read_post returns (claims, conditions).
     monkeypatch.setattr(ts.extractor, "get_client", lambda: None)
     monkeypatch.setattr(ts.extractor, "read_post", lambda client, text: ({"age": ("30", "30")}, []))
-    assert ts.predict([{"post_id": "p1", "text": "30"}]) == {"p1": {"age": ("30", "30")}}
+    cond = [("POTS", "illness", None, "POTS")]
+    monkeypatch.setattr(ts.extractor, "read_post", lambda client, text: ({"age": ("30", "30")}, cond))
+    assert ts.predict([{"post_id": "p1", "text": "30"}]) == ({"p1": {"age": ("30", "30")}}, {"p1": cond})
+
+
+def test_conditions_match_by_canonical_name_with_severity_scored_apart(monkeypatch):
+    monkeypatch.setattr(ts, "canonical_condition", lambda n: {"long-haul covid": "long covid"}.get(n.lower(), n.lower()))
+    gold = lambda *c: [dict(zip(("name", "type", "severity", "evidence"), x)) for x in c]
+    a = item("a", "x", {**label(), "conditions": gold(("long covid", "illness", "severe", "x"), ("POTS", "illness", None, "x"))})
+    b = item("b", "y", {**label(), "conditions": []})
+    c = item("c", "z", label())  # not labeled for conditions: not scored on them
+    predictions = {"a": {}, "b": {}, "c": {}}
+    conditions = {"a": [("long-haul covid", "illness", "moderate", "x")], "b": [("fatigue", "symptom", None, "y")],
+                  "c": [("MS", "illness", None, "z")]}
+    report = ts.score([a, b, c], predictions, conditions)["conditions"]
+    assert (report["posts"], report["tp"], report["fp"], report["fn"]) == (2, 1, 1, 1)
+    assert (report["precision"], report["recall"], report["severity_agreement"]) == (0.5, 0.5, 0.0)
+    assert "conditions" not in ts.score([c], predictions, conditions)
+
+
+def test_synthetic_items_follow_the_rules_and_score_perfectly_against_themselves():
+    items = ts.load_synthetic()
+    assert len(items) >= 20 and all(it["strata"] == ["synthetic"] and it["case"] for it in items)
+    assert {it["case"][0] for it in items} <= set(ts.load_cases())
+    assert ts.counts(items)["evidence_not_in_text"] == {}
+    for it in items:
+        assert all(c["evidence"] in it["text"] for c in it["label"].get("conditions") or [])
+    predictions = {it["post_id"]: {f: (it["label"][f]["value"], it["label"][f]["evidence"])
+                                   for f in ts.FIELDS if it["label"].get(f)} for it in items}
+    conditions = {it["post_id"]: [(c["name"], c["type"], c["severity"], c["evidence"]) for c in it["label"].get("conditions") or []]
+                  for it in items}
+    report = ts.score(items, predictions, conditions)
+    assert all(m["fp"] == m["fn"] == 0 for m in report["fields"].values())
+    assert report["conditions"]["fp"] == report["conditions"]["fn"] == 0
+    assert report["conditions"]["severity_agreement"] == 1.0
 
 
 def scrape_db(path):
@@ -130,6 +164,47 @@ def scrape_db(path):
                          [(f"c{i}", "cfs", 100 + i, "my son is 11" if i % 3 == 0 else "same here", f"user{i % 5}")
                           for i in range(60)])
         conn.commit()
+
+
+def test_curate_and_add_curated_keep_picks_outside_the_pooled_set(tmp_path):
+    db = tmp_path / "scrape.db"
+    scrape_db(db)
+    out = tmp_path / "set"
+    ts.sample(db, out, seed=1, pool=101, n_random=3, n_keyword=0, n_other=0, n_authors=0, max_author_posts=1)
+    cases = tmp_path / "cases.json"
+    cases.write_text(json.dumps({"_about": "x", "son_age": {"n": 5, "why": "x", "pattern": r"my son is \d+"},
+                                 "female": {"n": 2, "why": "x", "pattern": "female"}}))
+    summary = ts.curate(db, out, seed=1, factor=2, cases_path=cases)
+    assert summary["cases"]["son_age"]["quota"] == {"dev": 3, "test": 2}
+    candidates = [json.loads(line) for line in (out / "candidates" / "son_age.jsonl").read_text().splitlines()]
+    have = {json.loads(line)["post_id"] for line in (out / "testset.jsonl").read_text().splitlines()}
+    assert candidates and not {c["post_id"] for c in candidates} & have
+    assert all(c["match"].startswith("my son is") and c["split"] == ts.split_of(c["user_id"]) for c in candidates)
+    pick = candidates[0]["post_id"]
+    curation = out / "curation.jsonl"
+    curation.write_text(json.dumps({"post_id": pick, "case": "son_age", "rationale": "x", "picked_by": "test"}) + "\n")
+    assert ts.add_curated(out, curation, cases_path=cases)["items"] == 1
+    added = [json.loads(line) for line in (out / "testset.jsonl").read_text().splitlines()][-1]
+    assert (added["post_id"], added["strata"], added["case"], added["label"]) == (pick, ["curated"], ["son_age"], None)
+    assert "match" not in added and "rationale" not in added
+    with pytest.raises(ValueError, match="already in the set"):
+        ts.add_curated(out, curation, cases_path=cases)
+    curation.write_text(json.dumps({"post_id": "t1_nope", "case": "son_age", "rationale": "", "picked_by": "t"}) + "\n")
+    with pytest.raises(ValueError, match="not a candidate"):
+        ts.add_curated(out, curation, cases_path=cases)
+
+
+def test_evaluate_leaves_curated_and_synthetic_items_out_of_the_pooled_metrics(tmp_path, monkeypatch):
+    items = [item("a", "I'm 34", label(age=("34", "I'm 34"))),
+             {**item("b", "I'm 50", label(age=("50", "I'm 50"))), "strata": ["curated"], "case": ["decade_age"]}]
+    (tmp_path / "testset.jsonl").write_text("".join(json.dumps(it) + "\n" for it in items))
+    monkeypatch.setattr(extractor, "get_client", lambda: None)
+    monkeypatch.setattr(extractor, "llm_call", lambda client, prompt, **kw: json.dumps({"age": None}))
+    report = ts.evaluate(tmp_path, "dev", "t")
+    assert report["posts"]["scored"] == 1
+    assert report["by_stratum"]["curated"]["posts"]["scored"] == 1
+    assert report["by_stratum"]["synthetic"]["posts"]["scored"] == len(ts.load_synthetic())
+    assert {"decade_age", "gender_identity"} <= set(report["by_case"])
 
 
 def test_sample_reads_items_as_the_extractor_does(tmp_path):
@@ -163,11 +238,11 @@ def test_evaluate_runs_read_post_and_writes_the_report(tmp_path, monkeypatch):
         return json.dumps({"age": {"value": 34, "evidence": "I'm 34"}})
 
     monkeypatch.setattr(extractor, "llm_call", llm_call)
-    assert ts.evaluate(tmp_path, "dev", "t", dry_run=True)["calls"] == 2
+    assert ts.evaluate(tmp_path, "dev", "t", dry_run=True)["calls"] == 2 + len(ts.load_synthetic())
     report = ts.evaluate(tmp_path, "dev", "t")
     assert report["posts"]["blocked"] == 1 and report["fields"]["age"]["recall"] == 1.0
     assert json.loads((tmp_path / "report_t.json").read_text())["tag"] == "t"
-    assert len((tmp_path / "predictions_t.jsonl").read_text().splitlines()) == 2
+    assert len((tmp_path / "predictions_t.jsonl").read_text().splitlines()) == 2 + len(ts.load_synthetic())
 
 
 def test_stats_flags_evidence_that_is_not_quoted_from_the_text():
