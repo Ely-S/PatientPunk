@@ -20,6 +20,7 @@ Run with:
 import csv
 import json
 import os
+import re
 import sys
 import time
 import warnings
@@ -66,7 +67,6 @@ from patientpunk.export_csv import run_export_csv
 from patientpunk.phase import PhaseResult
 from patientpunk.pipeline import Pipeline, PipelineConfig, PipelineResult
 from patientpunk.qualitative_standards import (
-    DEMOGRAPHIC_STANDARDS,
     EXTRACTION_STANDARDS,
     FIELD_DESIGN_STANDARDS,
 )
@@ -890,22 +890,11 @@ class TestQualitativeStandards:
         ]:
             assert keyword in EXTRACTION_STANDARDS, f"Missing: {keyword}"
 
-    def test_demographic_standards_contains_core_principles(self):
-        for keyword in [
-            "SELF-REFERENCE ONLY",
-            "CONSTRUCT VALIDITY",
-            "CONFIDENCE CALIBRATION",
-            "EVIDENCE CITATION",
-        ]:
-            assert keyword in DEMOGRAPHIC_STANDARDS, f"Missing: {keyword}"
-
     def test_standards_are_nonempty_strings(self):
         assert isinstance(FIELD_DESIGN_STANDARDS, str)
         assert isinstance(EXTRACTION_STANDARDS, str)
-        assert isinstance(DEMOGRAPHIC_STANDARDS, str)
         assert len(FIELD_DESIGN_STANDARDS) > 500
         assert len(EXTRACTION_STANDARDS) > 300
-        assert len(DEMOGRAPHIC_STANDARDS) > 300
 
     def test_standards_injected_into_llm_extract(self):
         """Verify EXTRACTION_STANDARDS actually appears in the LLM system prompt."""
@@ -2295,37 +2284,31 @@ class TestLLMExtractNormalizeRecords:
         assert out["fields"]["conditions"]["confidence"] == "medium"  # default
 
 
-class TestSelfReportedAge:
-    """The age rule on #85's examples, with its bounds pinned.
+class TestRetiredDemographicFields:
+    """age, sex_gender and location_country are no longer extracted here (#195): demographics come
+    only from src/extract_demographics_conditions.py, through user_profiles_latest."""
 
-    The floor has already moved once, from 16 to 10, after a manual check
-    found a 14- and a 15-year-old stating their own ages.
-    """
+    RETIRED = {"age", "sex_gender", "location_country"}
 
-    @pytest.mark.parametrize(("value", "expected"), [
-        # The author's age, in the forms the model returns it.
-        ("34", 34), (34, 34), (" 42 ", 42),
-        # Bounds: 10 and 99 kept, 9 and 100 dropped.
-        ("10", 10), ("99", 99), ("9", None), ("100", None),
-        # 10 to 15 are kept. A third party's 12 (#85's news headline) is the prompt's job.
-        ("12", 12), ("15", 15),
-        # #85: "6" from the author's six-year-old son, "8" from a child.
-        ("6", None), ("8", None),
-        # #85: approximate ages are dropped, not guessed.
-        ("30s", None), ("mid-30s", None), ("early twenties", None), ("almost 30", None),
-        # Not a whole number in ASCII digits, or nothing at all.
-        ("34.5", None), ("-20", None), ("٣٤", None), (None, None), ("", None),
-    ])
-    def test_issue_85_examples(self, value, expected):
-        from patientpunk._utils import self_reported_age
-        assert self_reported_age(value) == expected
+    def test_not_in_the_prompt_descriptions_or_base_schema(self):
+        from patientpunk.llm_extract import BASE_FIELD_DESCRIPTIONS, build_system_prompt
+        schema = json.loads(BASE_SCHEMA.read_text(encoding="utf-8"))
+        assert not self.RETIRED & BASE_FIELD_DESCRIPTIONS.keys()
+        assert not self.RETIRED & schema["base_fields"].keys()
+        prompt = build_system_prompt(BASE_FIELD_DESCRIPTIONS)
+        assert "- age:" not in prompt and "sex_gender" not in prompt and "location_country" not in prompt
 
-    def test_normalize_keeps_valid_ages_and_clears_confidence_when_none_left(self):
-        from patientpunk.llm_extract import normalize_records
-        recs = [{"fields": {"age": ["30s", "34"]}}, {"fields": {"age": ["6"]}}]
-        normalize_records(recs, {"age": "medium"})
-        assert [(r["fields"]["age"]["values"], r["fields"]["age"]["confidence"]) for r in recs] \
-            == [(["34"], "medium"), ([], None)]
+    def test_dropped_from_checkpoints_keeping_every_other_field(self):
+        from patientpunk.db import drop_legacy_demographics
+        records = [
+            {"fields": {"age": ["34"], "sex_gender": ["female"], "location_us_state": ["Ohio"],
+                        "conditions": ["POTS"], "discovered_brain_fog": ["severe"]}},
+            {"fields": {"age": ["40"], "conditions": ["ME/CFS"]}},
+            {"fields": {}},
+        ]
+        assert drop_legacy_demographics(records) == {"age": 2, "sex_gender": 1, "location_us_state": 1}
+        assert [r["fields"] for r in records] == [
+            {"conditions": ["POTS"], "discovered_brain_fog": ["severe"]}, {"conditions": ["ME/CFS"]}, {}]
 
 
 class TestExtensionFieldCodingRules:
@@ -2944,6 +2927,26 @@ class TestLimitResumeInteraction:
         assert len(records) == 2
         assert {r["record_meta"]["post_id"] for r in records} == {"p0", "p1"}
 
+    def test_resume_drops_retired_demographics_and_reports_them(self, tmp_path, monkeypatch, capsys):
+        import patientpunk.llm_extract as m
+
+        input_dir = self._corpus(tmp_path, 1)
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
+        done = [{"record_meta": {"author_hash": "a0", "post_id": "p0"},
+                 "fields": {"age": ["34"], "sex_gender": ["female"], "conditions": ["POTS"]},
+                 "suggested_fields": []}]
+        (temp_dir / "llm_records_base.json").write_text(json.dumps(done), encoding="utf-8")
+        monkeypatch.setattr(m, "call_haiku", lambda *a, **kw: pytest.fail("nothing left to extract"))
+
+        records = m.process_corpus(client=None, input_dir=input_dir, temp_dir=temp_dir,
+                                   field_descriptions={"conditions": "Diagnoses"}, schema=None,
+                                   workers=1, resume=True)
+
+        assert records[0]["fields"] == {"conditions": ["POTS"]}
+        assert "Dropped retired demographic fields from the checkpoint (#195): age (1 records), " \
+               "sex_gender (1 records)" in capsys.readouterr().out
+
 
 class TestRunExportCsv:
     def test_writes_csv(self, tmp_path):
@@ -2952,7 +2955,8 @@ class TestRunExportCsv:
             "_extracted_at": "2020-01-01",
             "record_meta": {"author_hash": "a", "source": "subreddit_post",
                             "post_id": "p1", "text_count": 1},
-            "fields": {"age": {"values": ["34"], "confidence": "medium"}}
+            "fields": {"conditions": {"values": ["POTS"], "confidence": "high"},
+                       "age": {"values": ["34"], "confidence": "medium"}}
         }
         src = tmp_path / "records.json"
         src.write_text(json.dumps([rec]), encoding="utf-8")
@@ -2960,8 +2964,9 @@ class TestRunExportCsv:
         out = run_export_csv(input_files=[src], output_path=dest)
         assert dest.exists()
         assert out.stats["rows"] == 1
-        body = dest.read_text(encoding="utf-8")
-        assert "age" in body and "34" in body
+        header, row = list(csv.DictReader(dest.open(encoding="utf-8")))[0].keys(), dest.read_text(encoding="utf-8")
+        assert "conditions" in header and "POTS" in row
+        assert "age" not in header  # retired by #195; an older records file's age is dropped
 
     def test_empty_input_raises(self):
         with pytest.raises(ValueError):
@@ -2979,7 +2984,7 @@ class TestRunExportCsv:
             "_extraction_method": "llm",
             "record_meta": {"author_hash": "a", "source": "user_history",
                             "post_id": "p1", "text_count": 1},
-            "fields": {"age": ["34"], "conditions": None, "medications": ["LDN"]}
+            "fields": {"illness_duration": ["34 months"], "conditions": None, "medications": ["LDN"]}
         }
         src = tmp_path / "llm_records_base.json"
         src.write_text(json.dumps([rec]), encoding="utf-8")
@@ -2990,7 +2995,7 @@ class TestRunExportCsv:
 
         assert out.stats["rows"] == 1
         row = next(iter(csv.DictReader(dest.open(encoding="utf-8"))))
-        assert row["age"] == "34"
+        assert row["illness_duration"] == "34 months"
         assert row["medications"] == "LDN"
         assert row["conditions"] == ""      # null field -> blank cell, not a crash
 
@@ -2998,11 +3003,11 @@ class TestRunExportCsv:
         """Gap-filling semantics must survive the shape normalisation."""
         populated = {
             "record_meta": {"author_hash": "a", "post_id": "p1"},
-            "fields": {"age": {"values": ["34"], "confidence": "high"}}
+            "fields": {"illness_duration": {"values": ["34 months"], "confidence": "high"}}
         }
         bare = {
             "record_meta": {"author_hash": "a", "post_id": "p1"},
-            "fields": {"age": ["99"], "conditions": ["POTS"]}
+            "fields": {"illness_duration": ["99 months"], "conditions": ["POTS"]}
         }
         first = tmp_path / "a.json"
         second = tmp_path / "b.json"
@@ -3013,7 +3018,7 @@ class TestRunExportCsv:
         run_export_csv(input_files=[first, second], output_path=dest)
 
         row = next(iter(csv.DictReader(dest.open(encoding="utf-8"))))
-        assert row["age"] == "34"           # first file wins; not clobbered
+        assert row["illness_duration"] == "34 months"  # first file wins; not clobbered
         assert row["conditions"] == "POTS"  # gap still filled from the second
 
 
@@ -3048,3 +3053,13 @@ class TestPipelineNoSubprocess:
             result = Pipeline(cfg).run()
         assert result.ok
         assert calls == []
+
+
+@pytest.mark.parametrize("tag", [
+    "</patient_text>", "<patient_text>", "</PATIENT_TEXT>", "</Patient_Text >", "< /patient_text>", "<  patient_text>",
+])
+def test_wrap_untrusted_text_escapes_tags_in_any_case_or_spacing(tag):
+    wrapped = _utils.wrap_untrusted_text(f"before {tag} after")
+    inner = wrapped.removeprefix("<patient_text>\n").removesuffix("\n</patient_text>")
+    assert "<:" in inner
+    assert not re.search(r"<\s*/?\s*patient_text", inner, re.IGNORECASE)

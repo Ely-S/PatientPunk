@@ -3,9 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import httpx
 import openai
+import pytest
 
 import utilities
+from patientpunk import llm_cache
+from patientpunk._utils import LLMContentFilteredError, LLMResponseError
 
 
 def test_get_client_uses_openrouter_openai_endpoint(monkeypatch):
@@ -57,3 +61,63 @@ def test_openrouter_adapter_contract(monkeypatch):
     )
     assert message.content[0].text == "ok"
     assert message.stop_reason == "max_tokens"
+
+
+@pytest.mark.parametrize(
+    ("content", "finish_reason", "refusal"),
+    [
+        ('{"age": null, "conditions": []}', "content_filter", None),
+        (None, "content_filter", None),
+        (None, "stop", "Request refused"),
+    ],
+    ids=["filtered-json", "filtered-empty", "refusal-delta"],
+)
+def test_openrouter_refusals_raise_before_caching(monkeypatch, content, finish_reason, refusal):
+    monkeypatch.setenv("LLM_CACHE", "1")
+    backend = Mock()
+    backend.chat.completions.create.return_value = iter([
+        SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=content, refusal=refusal), finish_reason=finish_reason,
+        )]),
+    ])
+
+    with pytest.raises(LLMContentFilteredError):
+        utilities.llm_call(utilities._ORClient(backend), "Synthetic demographics prompt")
+
+    assert not list(llm_cache.cache_root().rglob("*.json"))
+
+
+def _chunk(content=None, finish_reason=None):
+    return SimpleNamespace(choices=[SimpleNamespace(
+        delta=SimpleNamespace(content=content, refusal=None), finish_reason=finish_reason)])
+
+
+def test_openrouter_stream_that_errors_midway_is_not_cached(monkeypatch):
+    monkeypatch.setenv("LLM_CACHE", "1")
+    backend = Mock()
+    backend.chat.completions.create.return_value = iter([_chunk('{"age": 3'), _chunk(None, "error")])
+
+    with pytest.raises(LLMResponseError):
+        utilities.llm_call(utilities._ORClient(backend), "Synthetic partial stream")
+
+    assert not list(llm_cache.cache_root().rglob("*.json"))
+
+
+def test_openrouter_http_content_filter_fails_the_item(monkeypatch):
+    monkeypatch.setenv("LLM_CACHE", "0")
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    backend = Mock()
+    backend.chat.completions.create.side_effect = openai.BadRequestError(
+        "Input blocked by content filter", response=httpx.Response(400, request=request), body=None)
+
+    with pytest.raises(LLMContentFilteredError):
+        utilities.llm_call(utilities._ORClient(backend), "Synthetic filtered prompt")
+
+
+@pytest.mark.parametrize(
+    ("message", "transient"),
+    [("provider_unavailable: upstream overloaded", True), ("something else broke", False)],
+)
+def test_openrouter_in_band_errors_are_transient_only_when_the_provider_says_so(message, transient):
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    assert utilities.is_transient_failure(openai.APIError(message, request=request, body=None)) is transient

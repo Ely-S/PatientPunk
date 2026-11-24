@@ -39,25 +39,24 @@ from utilities import PipelineConfig
 def _stub_response(messages, system):
     prompt = messages[0]["content"] if messages else ""
 
-    # Demographics: fingerprint from DEMOGRAPHICS_PROMPT.
-    # Route by post body content so user "b" (who posts "I love it so much!!!")
-    # gets a populated profile + condition, exercising the non-null path.
-    if "Given these Reddit posts by a single user" in prompt:
+    # Demographics, one post at a time (POST_DEMOGRAPHICS_PROMPT). Route by post body so user "b"
+    # (who posts "I love it so much!!!") gets a populated profile, exercising the non-null path.
+    if "Below is one Reddit post or comment" in prompt:
         if "I love it so much" in prompt:
             return json.dumps({
-                "age_bucket": "25-34",
-                "sex": "F",
-                "location": "US",
-                "conditions": [
-                    {"condition_name": "fibromyalgia", "condition_type": "illness"}
-                ],
+                "age": {"value": 34, "evidence": "34"},
+                "sex": {"value": "F", "evidence": "F"},
+                "country": {"value": "US", "evidence": "US"},
+                "state": {"value": "Texas", "evidence": "Texas"},
+                "city": None,
             })
-        return json.dumps({
-            "age_bucket": None,
-            "sex": None,
-            "location": None,
-            "conditions": [],
-        })
+        return json.dumps({"age": None, "sex": None, "country": None, "state": None, "city": None})
+
+    # Conditions, one call per user (CONDITIONS_PROMPT).
+    if "Given these Reddit posts by a single user" in prompt:
+        if "I love it so much" in prompt:
+            return json.dumps({"conditions": [{"condition_name": "fibromyalgia", "condition_type": "illness"}]})
+        return json.dumps({"conditions": []})
 
     # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
     if "identify true synonyms" in prompt:
@@ -244,9 +243,9 @@ class TestPopulateDbEndToEnd:
 
         # User "b" should have the populated demographics via the stub's routing.
         populated = db.conn.execute(
-            "SELECT age_bucket, sex, location FROM user_profiles WHERE user_id = 'b'"
+            "SELECT age_bucket, age, sex, sex_stated, location FROM user_profiles WHERE user_id = 'b'"
         ).fetchone()
-        assert populated == ("25-34", "F", "US")
+        assert populated == ("30s", 34.0, "female", "F", "United States / Texas")
 
         # And the condition from user b's extraction should be recorded.
         conditions = db.conn.execute(

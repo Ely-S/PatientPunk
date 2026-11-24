@@ -156,11 +156,10 @@ being stamped onto each record.
 
 ### Layer 1 — Base fields (always extracted)
 
-25 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
+23 fields defined in `BASE_FIELD_DESCRIPTIONS` (`patientpunk/llm_extract.py`). These are extracted on every run regardless of whether a `--schema` is passed. They cover the core signals useful to any disease researcher:
 
 | Category | Fields |
 |---|---|
-| Demographics | `age`, `sex_gender`, `location_country` |
 | Conditions | `conditions`, `onset_trigger`, `misdiagnosis`, `prior_infections` |
 | Illness course | `illness_duration`, `illness_trajectory` |
 | Symptom domains | `fatigue_pem`, `cognitive_neurological`, `cardiovascular_autonomic`, `pain`, `sleep`, `other_symptoms` |
@@ -407,7 +406,7 @@ Expected output should include `long_covid_duration_months` (extension) and `fun
 ### 3. Full corpus run
 
 After scraping with `scrape_corpus.py`, run the extractor on the real corpus and check:
-- `records_base.json` — every record has all 25 base fields (null where not found)
+- `records_base.json` — every record has all 23 base fields (null where not found)
 - `extraction_metadata_base.json` — `field_hit_counts` shows reasonable hit rates
 - No Python exceptions
 

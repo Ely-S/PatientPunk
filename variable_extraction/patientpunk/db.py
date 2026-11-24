@@ -64,12 +64,26 @@ VARIABLE_META_COLUMNS: set[str] = {
     "subreddits", "schema_id", "extraction_method", "extracted_at",
 }
 
-# records.csv demographic columns that no longer feed profiles or derived tables, with their
-# --confidence columns; demographics come only from user_profiles_latest.
-_LEGACY_DEMOGRAPHIC_FIELDS = {"age", "sex_gender", "location_country", "location_state", "location_us_state"}
+# Demographic fields the extraction pipeline no longer extracts (#195), including old state aliases.
+# Older records.csv files and --resume checkpoints may still hold them; nothing reads them, since
+# demographics come only from user_profiles_latest.
+LEGACY_DEMOGRAPHIC_FIELDS = {"age", "sex_gender", "location_country", "location_state", "location_us_state"}
 LEGACY_DEMOGRAPHIC_COLUMNS: set[str] = (
-    _LEGACY_DEMOGRAPHIC_FIELDS | {f"{c}__confidence" for c in _LEGACY_DEMOGRAPHIC_FIELDS}
+    LEGACY_DEMOGRAPHIC_FIELDS | {f"{c}__confidence" for c in LEGACY_DEMOGRAPHIC_FIELDS}
 )
+
+
+def drop_legacy_demographics(records: list[dict]) -> dict[str, int]:
+    """Remove fields this pipeline no longer extracts (age, sex_gender, location_country and old state
+    aliases; #195) from records read back from JSON (a --resume checkpoint, or files to export), in place.
+    Every other field is kept, including inductively discovered ones. Returns {field: records}."""
+    dropped: dict[str, int] = {}
+    for rec in records:
+        fields = rec.get("fields", {})
+        for name in LEGACY_DEMOGRAPHIC_FIELDS & fields.keys():
+            del fields[name]
+            dropped[name] = dropped.get(name, 0) + 1
+    return dropped
 
 
 # ── Database setup ─────────────────────────────────────────────────────────────
@@ -99,11 +113,12 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
     conn.executescript(ddl_idempotent)
-    # Columns added after databases with user_profiles existed: CREATE TABLE IF NOT EXISTS skips them.
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
-    for name, kind in _ADDED_PROFILE_COLUMNS.items():
-        if name not in existing:
-            conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {name} {kind}")
+    # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
+    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"})):
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, kind in added.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
     conn.commit()
 
 
@@ -274,8 +289,8 @@ def _bucketize_age(raw: str | None) -> str | None:
 
 
 # user_profiles' value columns, after user_id and run_id.
-PROFILE_FIELDS = ("age_bucket", "age", "sex", "location", "city")
-_ADDED_PROFILE_COLUMNS = {"age": "REAL", "city": "TEXT"}
+PROFILE_FIELDS = ("age_bucket", "age", "sex", "sex_stated", "location", "city", "ever_minor")
+_ADDED_PROFILE_COLUMNS = {"age": "REAL", "sex_stated": "TEXT", "city": "TEXT", "ever_minor": "INTEGER"}
 
 
 def latest_profiles(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:

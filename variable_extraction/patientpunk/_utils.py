@@ -45,6 +45,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -193,24 +194,27 @@ def llm_config() -> dict:
     return {k: v for k, v in _CFG.items() if k != "api_key"}
 
 
-def self_reported_age(value) -> int | None:
-    """The author's age as a whole number from 10 to 99, else None.
+# A tag in any case or spacing ("</PATIENT_TEXT >", "< patient_text>") would also read as the wrapper.
+_PATIENT_TEXT_TAG = re.compile(r"<\s*(/?)\s*(patient_text)", re.IGNORECASE)
 
-    Rejects "30s", "early twenties" and ages below 10, which in practice are
-    usually a child's age, not the author's (#85).
+
+def wrap_untrusted_text(text: str) -> str:
+    """Wrap text in the <patient_text> tags the prompts declare as data.
+
+    Escape tags in the source so the wrapper stays intact. Apply any length
+    limit before wrapping to preserve the closing tag.
     """
-    text = str(value).strip() if value is not None else ""
-    return int(text) if text.isascii() and text.isdigit() and 10 <= int(text) <= 99 else None
+    text = _PATIENT_TEXT_TAG.sub(r"<:\1\2", text)
+    return f"<patient_text>\n{text}\n</patient_text>"
 
 
 # --- Response validation ------------------------------------------------------
 
 class LLMResponseError(RuntimeError):
-    """A provider returned a 200 whose body is unusable (empty / truncated).
+    """A provider response is empty, truncated, or blocked by a content filter.
 
-    Raised rather than returned so callers can retry (hotter temperature /
-    split_retry_batch) and the response cache -- which only stores successful
-    returns -- never persists it.
+    Raising keeps the response out of the cache and lets callers handle the
+    error according to its type.
     """
 
 
@@ -237,13 +241,16 @@ def response_text(response) -> str:
 
 
 def check_response(response, model: str = ""):
-    """Raise LLMResponseError if a 200-OK response is empty or truncated.
+    """Raise LLMResponseError if a 200-OK response is refused, empty, or truncated.
 
     ``stop_reason == "max_tokens"`` means the reply was cut off mid-generation:
     for the JSON callers here that reply is unparseable, and caching it would
     make the loss permanent across re-runs.
     """
-    if getattr(response, "stop_reason", None) == "max_tokens":
+    stop_reason = getattr(response, "stop_reason", None)
+    if stop_reason == "refusal":
+        raise LLMContentFilteredError(f"{model}: reply blocked by the provider's content filter")
+    if stop_reason == "max_tokens":
         raise LLMTruncationError(
             f"{model}: response truncated at max_tokens (raise LLM_MAX_TOKENS "
             f"or shrink the batch)"

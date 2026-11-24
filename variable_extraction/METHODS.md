@@ -14,10 +14,11 @@ where a knob exists, the current default is stated explicitly.
 | Path | Command | Method | Output | Feeds analysis? |
 |---|---|---|---|---|
 | **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes**, except its demographic columns. Conditions and variables are loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
-| **Demographics** | `src/extract_demographics_conditions.py` | LLM, one profile per user, written to `user_profiles` | `user_profiles_latest` | **Yes — the only source of age, sex and location** for filters, `unified` and `cluster-prep --db`. |
+| **Demographics** | `src/extract_demographics_conditions.py` | LLM, one call per post; claims resolved into `user_profiles` | `user_profiles_latest` | **Yes — the only source of age, sex and location** for filters, `unified` and `cluster-prep --db`. |
 
-`records.csv`'s `age`, `sex_gender`, `location_country` and state columns are
-ignored downstream.
+This pipeline no longer extracts `age`, `sex_gender` or `location_country` (#195).
+An older `records.csv` may still have them, with state columns; they are ignored downstream, and
+`--resume` drops them from an older checkpoint.
 
 ## Attribution model — only self-reported information
 
@@ -82,9 +83,6 @@ below records where a field is grounded, it did not decide anything.
 
 | Field | Fill rate | Frameworks |
 |---|---|---|
-| `age` | 22.7% | demographic standard |
-| `sex_gender` | 20.5% | demographic standard |
-| `location_country` | — | demographic standard |
 | `conditions` | 52.3% | RECOVER, PC-COS |
 | `onset_trigger` | 35.3% | RECOVER |
 | `medications` | 44.4% | clinical standard |
@@ -103,7 +101,9 @@ below records where a field is grounded, it did not decide anything.
 | `illness_duration` | 18.3% | RECOVER |
 | `illness_trajectory` | 17.2% | RECOVER |
 
-`location_country`, `dosage`, and `administration_route` were not measured separately.
+`dosage` and `administration_route` were not measured separately. The table first held `age`
+(22.7%), `sex_gender` (20.5%) and `location_country`, which #195 removed: demographics now come from
+the database extractor, one post at a time.
 
 Dosage is stored as `treatment: dose` pairs so a multi-treatment post cannot
 detach a dose from the intervention it describes. The normalized CSV also

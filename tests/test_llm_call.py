@@ -125,3 +125,61 @@ def test_llm_call_sends_temperature_matching_cache_key(tmp_path, monkeypatch):
     path = llm_cache.cache_path(LLM_PROVIDER, MODEL_FAST, key)
     assert path.exists()
     assert json.loads(path.read_text(encoding="utf-8"))["temperature"] == 0.0
+
+
+def test_temperature_retries_do_not_replay_a_colder_cached_reply(monkeypatch):
+    from patientpunk import llm_cache
+
+    llm_cache.set_cache_enabled(True)
+    temperatures = []
+
+    def stream(*, temperature, **_):
+        temperatures.append(temperature)
+        text = "unreadable" if temperature == 0.0 else "readable"
+        return _FakeStream(_msg(SimpleNamespace(text=text)))
+
+    client = SimpleNamespace(messages=SimpleNamespace(stream=stream))
+    assert llm_call(client, "same prompt") == "unreadable"
+    assert llm_call(client, "same prompt", temperature=0.7) == "readable"
+    assert llm_call(client, "same prompt", temperature=0.7) == "readable"
+    assert temperatures == [0.0, 0.7]
+
+
+def _text(text):
+    return _msg(SimpleNamespace(type="text", text=text))
+
+
+def _replying(*texts):
+    """A client whose replies come from ``texts`` in order; ``sent`` counts the requests."""
+    replies = iter(texts)
+    client = SimpleNamespace(sent=0)
+
+    def stream(**_):
+        client.sent += 1
+        return _FakeStream(_text(next(replies)))
+
+    client.messages = SimpleNamespace(stream=stream)
+    return client
+
+
+def _must_be_json(text):
+    json.loads(text)
+
+
+def test_a_reply_that_fails_validation_is_raised_and_not_cached():
+    client = _replying("not json", '{"ok": true}')
+
+    with pytest.raises(json.JSONDecodeError):
+        llm_call(client, "p", validate=_must_be_json)
+    assert llm_call(client, "p", validate=_must_be_json) == '{"ok": true}'  # asked again, not replayed
+
+    assert client.sent == 2
+    assert llm_call(client, "p", validate=_must_be_json) == '{"ok": true}' and client.sent == 2  # now a hit
+
+
+def test_a_cached_reply_that_fails_validation_is_asked_again():
+    llm_call(_replying("not json"), "p")  # cached before any caller validated it
+    client = _replying('{"ok": true}')
+
+    assert llm_call(client, "p", validate=_must_be_json) == '{"ok": true}'
+    assert client.sent == 1
