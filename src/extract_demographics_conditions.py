@@ -54,7 +54,9 @@ ONE_PLACE_COMMA = re.compile(
 )
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
 SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming several takes the first: "moderate to severe" is severe
-NEGATION = re.compile(r"\b(?:not|no|never|isn'?t|wasn'?t)\b", re.IGNORECASE)  # "not severe" states no level
+# A negated level states none: "not severe", "no longer mild"; "severe, no improvement" is still severe.
+NEGATION = re.compile(r"\b(?:not|never|no longer|isn'?t|wasn'?t)\s+(?:very\s+|that\s+|so\s+)?"
+                      r"(?:severe|moderate|mild|resolved)\b", re.IGNORECASE)
 MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
 # One name for the conditions most often written several ways, so conditions_latest keeps one row for
 # each. Other names are kept as the model wrote them, in lower case. The author's words stay in evidence.

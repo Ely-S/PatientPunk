@@ -556,6 +556,8 @@ def test_a_bare_condition_counts_only_when_the_post_names_it_in_that_case(bare, 
 @pytest.mark.parametrize("stated, severity", [
     ("Severe", "severe"), ("moderate to severe", "severe"), ("mild-moderate", "moderate"), ("mostly resolved", "resolved"),
     ("awful", None), ("", None), (3, None), ("not severe", None), ("no longer severe", None), ("isn't mild", None),
+    ("not that severe", None), ("severe, no improvement", "severe"), ("resolved, no symptoms", "resolved"),
+    ("mild (no flares lately)", "mild"),
 ])
 def test_severity_takes_the_worst_level_a_phrase_names(stated, severity):
     assert demographics.parse_conditions({"conditions": [condition("POTS", severity=stated)]})[0][2] == severity
