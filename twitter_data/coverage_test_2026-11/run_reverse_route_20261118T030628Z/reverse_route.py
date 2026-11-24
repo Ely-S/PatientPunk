@@ -1,5 +1,5 @@
 import sys,json,pathlib,time,calendar,collections,re,html
-sys.path.insert(0,'/Users/personal/s3_runs/twitter_week_test')
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent.parent))  # step1_search.py
 import step1_search as s
 out=pathlib.Path(sys.argv[1]); s.REQUEST_CAP=200; tok=s.token(); clog=[]
 Q='("my long covid" OR "I have long covid" OR "I\'ve had long covid" OR "I got long covid" OR "living with long covid" OR "long covid since" OR "months of long covid" OR "years of long covid" OR "I\'m a long hauler" OR "long hauler here" OR "fellow long hauler" OR "my long hauler") -is:retweet'

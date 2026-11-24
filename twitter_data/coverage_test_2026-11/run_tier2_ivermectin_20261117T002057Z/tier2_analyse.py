@@ -7,12 +7,14 @@ Joins to tier2_author_list.json (group, drugs, reports, sentiments), tier1/tier1
 dominant_sentiment) and derives first/last corpus tweet dates from the treatment_wise_tweets corpus
 (read-only, untrusted data: json only). Writes tier2_<drug>_users.csv and tier2_<drug>_summary.md.
 """
-import argparse, csv, datetime, glob, json, pathlib, re, statistics, sys
+import argparse, csv, datetime, glob, json, os, pathlib, re, statistics, sys
 
 PROJECT = pathlib.Path(__file__).resolve().parent.parent
 AUTHOR_LIST = PROJECT / "tier2_author_list.json"
 TIER1_CSV = PROJECT / "tier1" / "tier1_authors.csv"
-CORPUS = "/private/tmp/claude-501/-Users-personal/193d019f-7c82-4c56-99bc-2bb94a093681/scratchpad/twzip/treatment_wise_tweets/*.json"
+# The treatment_wise_tweets corpus folder: --corpus, else $TREATMENT_WISE_TWEETS, else beside this project.
+CORPUS_DIR = os.environ.get("TREATMENT_WISE_TWEETS", str(PROJECT / "treatment_wise_tweets"))
+CORPUS = str(pathlib.Path(CORPUS_DIR) / "*.json")
 PRICE_PER_ID = 0.01
 BIO_RE = re.compile(r"long ?covid|longcovid|#LC\b|ME/?CFS|pwME|chronic illness|patient|spoonie|disabled|POTS|dysautonomia|MCAS", re.I)
 FLAGS = ["suspended_or_not_found", "created_within_30d_of_first_tweet", "followers_lt_10", "default_profile_image",
@@ -62,7 +64,10 @@ def med(vals):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drug", required=True); ap.add_argument("--run-dir", required=True)
+    ap.add_argument("--corpus", default=CORPUS_DIR, help="treatment_wise_tweets folder (*.json)")
     args = ap.parse_args(); run = pathlib.Path(args.run_dir); drug = args.drug
+    global CORPUS
+    CORPUS = str(pathlib.Path(args.corpus) / "*.json")
     now = datetime.datetime.now(datetime.UTC)
 
     # ---- inputs

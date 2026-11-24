@@ -4,11 +4,13 @@ Reuses the qualifying_authors.json already paid for, so no sampling is repeated.
 Starts at author index START (batch 19, the one the old cap cut mid-pagination) and
 runs to the end of the list under a larger cap. Writes to its own run dir.
 """
-import sys, json, pathlib, time
-sys.path.insert(0, '/Users/personal/s3_runs/twitter_week_test')
+import sys, json, os, pathlib, time
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))  # step1_search.py
 import step1_search as s
 
-PRIOR = pathlib.Path.home()/"s3_runs/twitter_week_test/run_reverse_route_20261118T030628Z"
+# The first pass's run folder (qualifying_authors.json): $REVERSE_ROUTE_PRIOR, else the one beside this script.
+PRIOR = pathlib.Path(os.environ.get("REVERSE_ROUTE_PRIOR", HERE / "run_reverse_route_20261118T030628Z"))
 out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 START = int(sys.argv[2]) if len(sys.argv) > 2 else 450      # batch 19 begins here
 CAP = int(sys.argv[3]) if len(sys.argv) > 3 else 1200

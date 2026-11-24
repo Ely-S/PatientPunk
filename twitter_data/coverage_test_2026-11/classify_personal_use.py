@@ -6,13 +6,20 @@ own use of the drug. Writes personal_use_labels.json and prints the comparison.
 """
 import json, os, re, sys, time, urllib.request, collections, zipfile, pathlib
 
-RUN = pathlib.Path.home()/"s3_runs/twitter_week_test/run_reverse_route_20261118T030628Z"
+# The reverse-route run folder: $REVERSE_ROUTE_RUN, else the one beside this script.
+HERE = pathlib.Path(__file__).resolve().parent
+RUN = pathlib.Path(os.environ.get("REVERSE_ROUTE_RUN", HERE / "run_reverse_route_20261118T030628Z"))
+# The treatment_wise_tweets archive: $TWITTER_DATASET_ZIP, else twitter_dataset.zip in twitter_data/.
+DATASET_ZIP = pathlib.Path(os.environ.get("TWITTER_DATASET_ZIP", HERE.parent / "twitter_dataset.zip"))
 OUT = RUN/"personal_use_labels.json"
 MODEL = "deepseek/deepseek-v4.1-flash"
 BATCH = 25
 
 def key():
-    for line in (pathlib.Path.home()/"PatientPunk/.env").read_text().splitlines():
+    """$OPENROUTER_API_KEY, else the repository's .env."""
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return os.environ["OPENROUTER_API_KEY"]
+    for line in (HERE.parents[1] / ".env").read_text().splitlines():
         if line.startswith("OPENROUTER_API_KEY="):
             return line.split("=", 1)[1].strip()
     sys.exit("no key")
@@ -52,7 +59,7 @@ def main():
     posts = [p for p in json.load(open(RUN/"ldn_posts.json"))["posts"] if isinstance(p, dict)]
     # corpus LDN posts and authors
     ids, auths = set(), set()
-    z = zipfile.ZipFile(pathlib.Path.home()/"Downloads/twitter_dataset.zip")
+    z = zipfile.ZipFile(DATASET_ZIP)
     DRUG = re.compile(r'\b(ldn|low[- ]dose naltrexone|naltrexone)\b', re.I)
     for n in z.namelist():
         if n.endswith(".json") and re.search(r"ldn|naltrex", n, re.I) and "__MACOSX" not in n:
