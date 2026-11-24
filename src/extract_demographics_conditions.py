@@ -4,8 +4,8 @@
 Each post goes to the model alone and its checked answers are stored with the words they came from:
 demographic claims in demographic_claims, and each condition the author states, with its severity,
 as an observation in conditions (#220). post_runs records every post a run read. resolve_profiles
-then turns each user's claims into one user_profiles row in code (#206); conditions_latest holds
-each user's newest observation of each condition.
+then turns each user's claims into one user_profiles row in code (#206); conditions_latest has one
+row per user and condition (see schema.sql).
 """
 
 import argparse
@@ -217,7 +217,7 @@ def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str |
     return list(parsed.values())
 
 
-def parse_post(raw: str, text: str = "") -> tuple[dict, list]:
+def parse_post(raw: str, text: str = "") -> tuple[dict, list | None]:
     """(claims, conditions) from a per-post reply. Only a reply that isn't one of these objects
     raises LLMParseError."""
     result = parse_json_object(raw)
@@ -229,7 +229,7 @@ def parse_post(raw: str, text: str = "") -> tuple[dict, list]:
 BLOCKED = object()  # a read's result when the content filter blocks the call
 
 
-def read_post(client, text: str) -> tuple[dict, list] | object:
+def read_post(client, text: str) -> tuple[dict, list | None] | object:
     try:
         return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), lambda raw: parse_post(raw, text))
     except LLMContentFilteredError:
