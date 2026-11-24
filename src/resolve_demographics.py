@@ -141,7 +141,11 @@ def normalize_sex(stated: str) -> str | None:
     non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
     ignored ("female | suspected intersex" -> female), and "cis" is dropped ("cis woman" -> female). None when no rule applies ("trans man",
     "trans woman | female", "female | male"); the words themselves stay in sex_stated."""
-    values = {SEX_VALUES.get(_CIS.sub("", part.strip()).casefold()) for part in _SEX_PARTS.split(stated)} - {None}
+    # Parenthesized asides and trailing punctuation aren't part of the answer: "female (she/her)" and
+    # "female." are female. The trans check below still reads the full answer, asides included.
+    plain = re.sub(r"\([^)]*\)", " ", stated)
+    values = {SEX_VALUES.get(_CIS.sub("", part.strip(" .!?:'\"")).casefold())
+              for part in _SEX_PARTS.split(plain)} - {None}
     if "non-binary" in values:
         return "non-binary"
     if _TRANS.search(stated):
