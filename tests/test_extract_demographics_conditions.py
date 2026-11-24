@@ -662,6 +662,18 @@ def test_unnamed_conditions_are_dropped_and_the_rest_kept():
     ("Myalgic Encephalomyelitis", "me/cfs"), ("Postural Orthostatic Tachycardia Syndrome", "pots"),
     ("Brain  fog.", "brain fog"), ("Hashimoto’s", "hashimoto's"), ("Long-haul COVID", "long covid"),
     ("Long COVID (LC)", "long covid"), ("POTS syndrome", "pots"),
+    ("headaches", "headache"), ("Head pain", "headache"), ("migraines", "migraine"), ("crashes", "pem"),
+    ("crash", "pem"), ("PEM crashes", "pem"), ("post-exertional malaise", "pem"), ("trouble sleeping", "insomnia"),
+    ("sleep disturbance", "insomnia"), ("can’t sleep", "insomnia"), ("sleep issues", "insomnia"),
+    ("muscle cramps", "muscle cramp"), ("cramping", "muscle cramp"), ("heart palpitations", "palpitation"),
+    ("palpitations", "palpitation"), ("lack of concentration", "difficulty concentrating"),
+    ("cranio-cervical instability", "craniocervical instability"), ("post concussion syndrome", "post-concussion syndrome"),
+    ("hot flashes", "hot flash"), ("rashes", "rash"),
+    # not plurals, so not folded
+    ("POTS", "pots"), ("MS", "ms"), ("lupus", "lupus"), ("diabetes", "diabetes"), ("shingles", "shingles"),
+    ("herpes", "herpes"), ("mitosis", "mitosis"), ("arthritis", "arthritis"), ("chills", "chills"),
+    # distinct conditions stay apart
+    ("fatigue", "fatigue"), ("numbness", "numbness"), ("tumor", "tumor"), ("migraine", "migraine"),
 ])
 def test_canonical_condition(name, canonical):
     assert demographics.canonical_condition(name) == canonical
