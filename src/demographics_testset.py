@@ -256,6 +256,13 @@ def score(items: list[dict], predictions: dict[str, dict | None]) -> dict:
     return report
 
 
+def score_by_stratum(items: list[dict], predictions: dict) -> dict:
+    """score() for each stratum on its own: recall on the random stratum, wrong-person errors on
+    other_person. An item drawn by two strata counts in both."""
+    strata = sorted({s for it in items for s in it["strata"]})
+    return {s: score([it for it in items if s in it["strata"]], predictions) for s in strata}
+
+
 def score_profiles(items: list[dict], authors: list[dict], predictions: dict) -> dict:
     """For each author, the profile resolved from the labels and from the predictions, per field:
     whether they agree, and, when the labeler wrote an expected_profile, whether each agrees with it.
@@ -332,7 +339,8 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
         f.writelines(json.dumps({"post_id": post_id, "claims": claims}, ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
     report = {**plan, "tag": tag, "code_commit": extractor.get_git_commit(), "git_dirty": extractor.git_is_dirty(),
               "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
-              **score(items, predictions), "profiles": score_profiles(items, authors, predictions)}
+              **score(items, predictions), "by_stratum": score_by_stratum(items, predictions),
+              "profiles": score_profiles(items, authors, predictions)}
     (testset / f"report_{tag}.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
 

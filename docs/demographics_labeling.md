@@ -108,6 +108,10 @@ the merged resolve rules (`src/resolve_demographics.py`) should produce from tho
 `evaluate` compares these with the profile resolved from the labels (does the code follow the
 rules?) and from the model's claims (end to end).
 
+The report's top-level `posts` and `fields` pool every item in the split. `by_stratum` repeats them
+for each stratum alone: read recall from `random`, which is drawn uniformly, and wrong-person errors
+from `other_person`. An item drawn by two strata counts in both.
+
 ## Content-filter blocks
 
 A post the provider's content filter blocks is recorded with no claims. `evaluate` counts blocks

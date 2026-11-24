@@ -67,6 +67,20 @@ def test_score_counts_hits_misses_wrong_person_blocks_and_failures():
     assert (country["fp"], country["evidence_in_post"], country["recall"]) == (1, 0, None)
 
 
+def test_score_by_stratum_scores_each_stratum_alone():
+    items = [item("a", "I'm 33", label(age=("33", "I'm 33"))),
+             item("b", "My son is 11", label(others={"age": ["11"]})),
+             item("c", "I'm 40", label(age=("40", "I'm 40")))]
+    items[1]["strata"] = ["other_person"]
+    items[2]["strata"] = ["random", "keyword"]
+    predictions = {"a": {"age": ("33", "I'm 33")}, "b": {"age": ("11", "My son is 11")}, "c": None}
+    report = ts.score_by_stratum(items, predictions)
+    assert set(report) == {"keyword", "other_person", "random"}
+    assert report["random"]["posts"]["failed"] == 1 and report["random"]["fields"]["age"]["recall"] == 1.0
+    assert report["other_person"]["fields"]["age"]["wrong_person"] == 1
+    assert report["keyword"]["posts"] == {"failed": 1}
+
+
 def test_profiles_from_labels_predictions_and_expected():
     items = [item("p1", "I'm 30, in the US", label(age=("30", "I'm 30"), country=("US", "in the US")), date=1),
              item("p2", "Now 31 and in Texas", label(age=("31", "Now 31"), state=("Texas", "in Texas")), date=2)]
