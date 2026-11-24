@@ -44,6 +44,19 @@ def test_a_condition_mentioned_after_it_resolved_is_back(conn, severities, lates
     assert conn.execute("SELECT severity, n_posts FROM conditions_latest").fetchall() == [(latest, 2)]
 
 
+@pytest.mark.parametrize("dates, latest", [
+    ((None, 2), None),  # resolved in an undated post, then mentioned in a dated one: back
+    ((2, None), "resolved"),  # an undated mention can't be placed after a dated resolution
+    ((None, None), "resolved"),  # nothing dated: the stated resolution stands
+])
+def test_an_undated_resolution_is_superseded_by_a_dated_mention(conn, dates, latest):
+    conn.execute("UPDATE posts SET post_date = ? WHERE post_id = 'a1'", (dates[0],))
+    conn.execute("UPDATE posts SET post_date = ? WHERE post_id = 'a2'", (dates[1],))
+    r = register_run(conn, "demographics", {})
+    observe(conn, r, "a1", "a", "pots", "resolved"), observe(conn, r, "a2", "a", "pots")
+    assert conn.execute("SELECT severity, n_posts FROM conditions_latest").fetchall() == [(latest, 2)]
+
+
 def test_only_each_posts_newest_demographics_read_counts(conn):
     r1 = register_run(conn, "demographics", {})
     observe(conn, r1, "a1", "a", "ms")  # a misread, gone on the reread

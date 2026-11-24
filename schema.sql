@@ -218,10 +218,11 @@ CREATE VIEW IF NOT EXISTS condition_observations AS
 -- One row per user and condition: its type from the newest observation, the newest severity a post
 -- stated (so "resolved" shows a condition that has gone), when it was first and last mentioned, and
 -- in how many posts. A condition mentioned again after it was resolved is back, with its severity
--- unknown (NULL). Conditions change, so analysis can weigh last_seen and severity.
+-- unknown (NULL). An undated post sorts before every dated one, so a dated mention after a "resolved"
+-- in an undated post is back too. Conditions change, so analysis can weigh last_seen and severity.
 CREATE VIEW IF NOT EXISTS conditions_latest AS
     SELECT user_id, condition_name, condition_type,
-           CASE WHEN severity = 'resolved' AND last_seen > stated_at THEN NULL ELSE severity END AS severity,
+           CASE WHEN severity = 'resolved' AND last_seen > COALESCE(stated_at, -1) THEN NULL ELSE severity END AS severity,
            first_seen, last_seen, n_posts FROM (
         SELECT user_id, condition_name,
             FIRST_VALUE(condition_type) OVER newest AS condition_type,
