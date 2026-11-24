@@ -137,3 +137,35 @@ def test_health_first_text_survives_the_8000_character_cut():
                       {"subreddit": "cfs", "title": "LDN helped my brain fog", "body": ""}]}
     message = llm_extract.build_user_message(collect_texts_from_user(user, first=llm_extract.HEALTH_SUBREDDITS))
     assert "LDN helped my brain fog" in message and "[TRUNCATED]" in message
+
+
+def test_removed_markers_match_in_any_case():
+    # The demographics extractor casefolded the markers and the rest didn't; now one rule does.
+    from extract_demographics_conditions import _post_text
+
+    from patientpunk._utils import clean_text
+    assert clean_text(" [Removed] ") == "" and clean_text("[DELETED]") == ""
+    assert _post_text("[deleted]", "[Removed]") == "" and _post_text(" Title ", "[DELETED]") == "Title"
+
+
+_RECORD = '{"fields": {}}'
+
+
+@pytest.mark.parametrize(("reply", "parsed"), [
+    (f"```json\n[{_RECORD}, {_RECORD}]\n```", True),
+    (f"Here you go:\n```\n[{_RECORD}, {_RECORD},]\n```", True),
+    (f"[{_RECORD}, {_RECORD}", False),   # truncated
+    (_RECORD, False),                    # an object, not an array
+])
+def test_batch_reply_parses_or_splits(monkeypatch, reply, parsed):
+    from patientpunk._utils import split_retry_batch
+    calls = []
+
+    def fake(client, system, message, temperature=None, label="?"):
+        calls.append(message)
+        return reply if len(calls) == 1 else _RECORD  # the split falls back to one record per call
+    monkeypatch.setattr(llm_extract, "call_haiku", fake)
+    items = [{"user_message": "a", "post_id": "p1"}, {"user_message": "b", "post_id": "p2"}]
+    out = split_retry_batch(lambda batch: llm_extract._call_batch_raw(None, "sys", batch), items)
+    assert out == [{"fields": {}}, {"fields": {}}]
+    assert len(calls) == (1 if parsed else 3)

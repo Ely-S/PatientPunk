@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from import_posts import DELETED_USER_ID
-from patientpunk._utils import REMOVED_MARKERS, LLMContentFilteredError, LLMResponseError, wrap_untrusted_text
+from patientpunk._utils import LLMContentFilteredError, clean_text, LLMResponseError, wrap_untrusted_text
 from patientpunk.db import apply_schema, register_run
 from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
@@ -93,10 +93,7 @@ _CONDITIONS = {alias: name for name, aliases in _CONDITION_ALIASES.items() for a
 
 def _post_text(title: str | None, body: str) -> str:
     """Title and body, or "" for a post with nothing to read."""
-    body = body.strip()
-    if body.casefold() in REMOVED_MARKERS:
-        body = ""
-    return "\n".join(part for part in ((title or "").strip(), body) if part)
+    return "\n".join(part for part in map(clean_text, (title, body)) if part)
 
 
 def _ask(client, prompt: str, parse: Callable[[str], object]):

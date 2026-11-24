@@ -621,9 +621,9 @@ def csv_fill_rate(csv_path: Path) -> dict:
 
 
 def clean_text(text: object) -> str:
-    """``text`` without surrounding space, or "" when it is empty, removed or deleted."""
+    """``text`` without surrounding space, or "" when it is empty, removed or deleted (in any case)."""
     kept = text.strip() if isinstance(text, str) else ""
-    return "" if kept in REMOVED_MARKERS else kept
+    return "" if kept.casefold() in REMOVED_MARKERS else kept
 
 
 def collect_texts_from_post(post: dict, include_comments: bool = False) -> list[str]:

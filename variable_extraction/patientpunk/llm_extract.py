@@ -508,25 +508,12 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         msg += f"--- Record {i} ---\n{text}\n\n"
 
     label = f"batch[{items[0].get('post_id') or '?'}+{len(items) - 1}]"
-    raw = call_haiku(client, system_prompt, msg, label=label).strip()
-
-    # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
-    # leading prose line or trailing content after the array ("Extra data")
-    # doesn't break json.loads. A genuinely truncated reply still raises
-    # JSONDecodeError, which split_retry_batch handles by splitting smaller.
-    if raw.startswith("```"):
-        nl = raw.find("\n")                 # find() not index(): a single-line
-        if nl != -1:                        # fence (```json[...]```) has no newline
-            raw = raw[nl + 1:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    start, end = raw.find("["), raw.rfind("]")
-    if start != -1 and end > start:
-        raw = raw[start:end + 1]
-
-    results = json.loads(raw)
-    if not isinstance(results, list):
-        raise ValueError(f"Expected JSON array, got {type(results).__name__}")
+    raw = call_haiku(client, system_prompt, msg, label=label)
+    # A reply with no readable array (truncated, or not a list) raises ValueError, which
+    # split_retry_batch handles by splitting smaller.
+    results = parse_json_response(raw, list)
+    if results is None:
+        raise ValueError(f"No JSON array in batch response: {raw[:200]}")
     if len(results) != len(items):
         raise ValueError(f"Expected {len(items)} results, got {len(results)}")
     # Raise rather than record a malformed element as empty: split_retry_batch
