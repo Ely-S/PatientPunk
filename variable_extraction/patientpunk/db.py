@@ -114,7 +114,8 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
     )
     conn.executescript(ddl_idempotent)
     # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
-    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"})):
+    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"}),
+                         ("conditions", {"evidence": "TEXT"})):
         existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         for name, kind in added.items():
             if name not in existing:
@@ -325,7 +326,9 @@ def query_treatment_outcomes(
     sex:        sex/gender value (e.g. "female"). None = all.
     age_bucket: decade bucket (e.g. "30s"). None = all.
 
-    sex and age_bucket match each user's current profile (user_profiles_latest).
+    sex and age_bucket match each user's current profile (user_profiles_latest). condition matches
+    a condition any of the user's posts states as of its newest read (condition_observations), resolved
+    ones included; CSV-loaded and older per-user rows don't count.
 
     Returns
     -------
@@ -343,7 +346,7 @@ def query_treatment_outcomes(
     if condition:
         where_clauses.append(
             "EXISTS ("
-            "  SELECT 1 FROM conditions c"
+            "  SELECT 1 FROM condition_observations c"
             "  WHERE c.user_id = tr.user_id"
             "  AND LOWER(c.condition_name) LIKE LOWER(?)"
             ")"

@@ -79,7 +79,7 @@ def test_demographics_never_sends_or_profiles_deleted(tmp_path, monkeypatch, lim
                         lambda client, prompt, **_: prompts.append(prompt) or '{"age": null, "conditions": []}')
     extract_demographics_conditions.run_demographics(tmp_path / "posts.db", limit=limit)
 
-    assert len(prompts) == 3  # REAL's two posts, then REAL's conditions call
+    assert len(prompts) == 2  # REAL's two posts
     assert any("I am 34" in p for p in prompts)
     assert not any("I am 50" in p or "deleted account" in p for p in prompts)
     conn = sqlite3.connect(tmp_path / "posts.db")

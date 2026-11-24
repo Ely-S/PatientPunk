@@ -73,15 +73,17 @@ CREATE TABLE conditions (
     user_id        TEXT NOT NULL REFERENCES users(user_id),
     post_id        TEXT REFERENCES posts(post_id),
     condition_type TEXT NOT NULL CHECK (condition_type IN ('illness', 'symptom')),
-    condition_name TEXT NOT NULL,
+    condition_name TEXT NOT NULL,  -- lower case; one name for common aliases ("LC" -> "long covid")
     diagnosed_at   TEXT,
     resolved_at    TEXT,
-    severity       TEXT
+    severity       TEXT,           -- mild, moderate, severe or resolved, as the post states it; NULL if it doesn't
+    evidence       TEXT            -- the author's words, for observations read from one post (#220)
 );
 
 CREATE INDEX idx_cond_user ON conditions(user_id);
 CREATE INDEX idx_cond_name ON conditions(condition_name COLLATE NOCASE);
 CREATE INDEX idx_cond_run  ON conditions(run_id);
+CREATE INDEX idx_cond_post ON conditions(post_id);
 
 CREATE TABLE treatment_reports (
     report_id       INTEGER PRIMARY KEY,
@@ -203,6 +205,33 @@ CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
         SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
         WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
     );
+
+-- Each post's conditions from its newest demographics read (post_runs), so a re-read that no longer
+-- finds a condition retracts it. Rows without a post (older per-user runs, CSV loads) never count (#220).
+CREATE VIEW IF NOT EXISTS condition_observations AS
+    SELECT c.*, p.post_date FROM conditions c JOIN posts p ON p.post_id = c.post_id
+    WHERE c.run_id = (
+        SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
+        WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
+    );
+
+-- One row per user and condition: its type from the newest observation, the newest severity a post
+-- stated (so "resolved" shows a condition that has gone), when it was first and last mentioned, and
+-- in how many posts. Conditions change, so analysis can weigh last_seen and severity.
+CREATE VIEW IF NOT EXISTS conditions_latest AS
+    SELECT user_id, condition_name, condition_type, severity, first_seen, last_seen, n_posts FROM (
+        SELECT user_id, condition_name,
+            FIRST_VALUE(condition_type) OVER newest AS condition_type,
+            FIRST_VALUE(severity) OVER (PARTITION BY user_id, condition_name
+                                        ORDER BY severity IS NULL, post_date DESC, post_id DESC) AS severity,
+            MIN(post_date) OVER mentions AS first_seen,
+            MAX(post_date) OVER mentions AS last_seen,
+            COUNT(*) OVER mentions AS n_posts,
+            ROW_NUMBER() OVER newest AS n
+        FROM condition_observations
+        WINDOW mentions AS (PARTITION BY user_id, condition_name),
+               newest AS (PARTITION BY user_id, condition_name ORDER BY post_date DESC, post_id DESC)
+    ) WHERE n = 1;
 
 -- ══════════════════════════════════════════════════════
 -- Extracted variables (EAV)
