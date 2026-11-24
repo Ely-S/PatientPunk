@@ -198,12 +198,17 @@ CREATE TABLE demographic_claims (
     PRIMARY KEY (run_id, post_id, field)
 );
 
+-- The posts each demographics run read: the rule behind "a post's newest demographics read" below and
+-- in src/extract_demographics_conditions.py and src/resolve_demographics.py.
+CREATE VIEW IF NOT EXISTS demographics_post_runs AS
+    SELECT pr.run_id, pr.post_id FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
+    WHERE r.extraction_type = 'demographics';
+
 -- Each post's claims from its newest demographics run (post_runs); none when that run found nothing.
 CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
     SELECT c.* FROM demographic_claims c
     WHERE c.run_id = (
-        SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
-        WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
+        SELECT MAX(run_id) FROM demographics_post_runs WHERE post_id = c.post_id
     );
 
 -- Each post's conditions from its newest demographics read (post_runs), so a re-read that no longer
@@ -211,8 +216,7 @@ CREATE VIEW IF NOT EXISTS demographic_claims_latest AS
 CREATE VIEW IF NOT EXISTS condition_observations AS
     SELECT c.*, p.post_date FROM conditions c JOIN posts p ON p.post_id = c.post_id
     WHERE c.run_id = (
-        SELECT MAX(pr.run_id) FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id
-        WHERE pr.post_id = c.post_id AND r.extraction_type = 'demographics'
+        SELECT MAX(run_id) FROM demographics_post_runs WHERE post_id = c.post_id
     );
 
 -- One row per user and condition: its type from the newest observation, the newest severity a post

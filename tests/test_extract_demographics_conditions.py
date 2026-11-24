@@ -451,7 +451,7 @@ def test_dry_run_reports_what_a_run_would_send_and_sends_nothing(db, monkeypatch
     limited = demographics.run_demographics(path, limit=1, dry_run=True)
 
     assert calls == [] and conn.execute("SELECT COUNT(*) FROM extraction_runs").fetchone() == (0,)
-    assert {k: plan[k] for k in ("posts", "users", "post_calls")} == {"posts": 3, "users": 2, "post_calls": 3}
+    assert {k: plan[k] for k in ("posts", "users")} == {"posts": 3, "users": 2}
     assert plan["approx_input_tokens"] > 3 * len(POST_DEMOGRAPHICS_PROMPT) // 4
     assert (limited["posts"], limited["users"]) == (2, 1)
     demographics.run_demographics(path)

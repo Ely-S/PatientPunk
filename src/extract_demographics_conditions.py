@@ -113,7 +113,6 @@ def _ask(client, prompt: str, parse: Callable[[str], object]):
             if attempt == len(TEMPERATURES):
                 raise
             log.info("Unreadable reply (%d/%d), retrying", attempt, len(TEMPERATURES))
-    raise AssertionError("Unreachable")
 
 
 # ── Per-post claims ──────────────────────────────────────────────────────────
@@ -307,23 +306,21 @@ def _plan(conn, since: int, limit: int) -> dict:
     users = users[:limit or None]
     posts, chars = sum(n for n, _ in users), sum(c or 0 for _, c in users)
     tokens = (chars + posts * len(POST_DEMOGRAPHICS_PROMPT)) // 4
-    return {"posts": posts, "users": len(users), "post_calls": posts, "approx_input_tokens": tokens}
+    return {"posts": posts, "users": len(users), "approx_input_tokens": tokens}
 
 
 # Posts whose newest demographics read is from before conditions were read per post (#220), so
 # conditions_latest has nothing from them until a --reread.
 READ_WITHOUT_CONDITIONS = (
-    "SELECT COUNT(*) FROM (SELECT pr.post_id, MAX(pr.run_id) AS run_id FROM post_runs pr "
-    "  JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics' "
-    "  GROUP BY pr.post_id) newest JOIN extraction_runs r ON r.run_id = newest.run_id "
+    "SELECT COUNT(*) FROM (SELECT post_id, MAX(run_id) AS run_id FROM demographics_post_runs GROUP BY post_id) newest "
+    "JOIN extraction_runs r ON r.run_id = newest.run_id "
     "WHERE NOT IFNULL(json_extract(r.config, '$.reads_conditions'), 0)")
 
 
 # Posts no demographics run has read since the checkpoint run.
 UNREAD_POSTS = (
     "FROM posts p WHERE p.user_id != ? AND NOT EXISTS ("
-    "  SELECT 1 FROM post_runs pr JOIN extraction_runs r ON r.run_id = pr.run_id"
-    "  WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics' AND pr.run_id >= ?)")
+    "  SELECT 1 FROM demographics_post_runs pr WHERE pr.post_id = p.post_id AND pr.run_id >= ?)")
 
 
 def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, counts: dict) -> list[str]:
@@ -455,7 +452,7 @@ def main():
     parser.add_argument("--reread", action="store_true",
                         help="Read every post again, for example after a prompt change")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Print how many posts, model calls and approximate input tokens a run would "
+                        help="Print how many posts (one model call each), users and approximate input tokens a run would "
                              "send, then exit without calling the model")
     args = parser.parse_args()
     if args.limit < 0:
