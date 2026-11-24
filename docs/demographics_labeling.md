@@ -90,11 +90,14 @@ the merged resolve rules (`src/resolve_demographics.py`) should produce from tho
 
 ```json
 {"age": 37.5, "age_bucket": "30s", "sex": "female", "sex_stated": "female",
- "location": "United States / Texas", "city": null}
+ "location": "United States / Texas", "city": null, "ever_minor": 0}
 ```
 
 - **age**: the most recent stated age, not advanced to today; a range or decade is its midpoint
-  ("late 30s" is 37.5, "30s" is 35). `age_bucket` is its decade (`"30s"`).
+  ("late 30s" is 37.5, "30s" is 35), except that a newer range or decade doesn't replace an exact
+  age in the same decade ("34", then "30s", stays 34). `age_bucket` is its decade (`"30s"`).
+- **ever_minor**: 1 when any age claim is under 18, counting a range or decade by its youngest age
+  ("16-20" is 1); 0 when none is; null without an age. Leave it out to skip scoring it.
 - **sex_stated**: the most recent sex claim as written; **sex**: female, male or non-binary from it
   (non-binary wins over a binary value; a trans answer is null; null when no rule applies).
 - **location**: `"country / state"`, one spelling per country and US state (`US`, `USA` and `United States` are one country): the latest country, plus the latest state from a post that names

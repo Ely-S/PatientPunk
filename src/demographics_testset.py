@@ -32,7 +32,7 @@ import extract_demographics_conditions as extractor
 from resolve_demographics import _resolve, canonical_place, normalize_sex, stated_age
 
 FIELDS = extractor.CLAIM_FIELDS
-PROFILE = ("age_bucket", "age", "sex", "sex_stated", "location", "city")  # _resolve's order
+PROFILE = ("age_bucket", "age", "sex", "sex_stated", "location", "city", "ever_minor")  # _resolve's order
 TEST_SHARE = 0.4  # of authors, by a hash of user_id, so the split never depends on what was sampled
 
 # Sampling only: a post matching these is likelier to state a demographic. Recall is measured on the
@@ -276,8 +276,8 @@ def score_profiles(items: list[dict], authors: list[dict], predictions: dict) ->
         expected = a.get("expected_profile")
         for f in PROFILE:
             agree["pred_vs_labels"][f"{f}/{'agree' if _same(f, pred[f], gold[f]) else 'differ'}"] += 1
-            if expected is not None:
-                e = expected.get(f)
+            if expected is not None and f in expected:  # a field the labeler didn't write isn't scored
+                e = expected[f]
                 agree["labels_vs_expected"][f"{f}/{'agree' if _same(f, gold[f], e) else 'differ'}"] += 1
                 agree["pred_vs_expected"][f"{f}/{'agree' if _same(f, pred[f], e) else 'differ'}"] += 1
     return {k: dict(sorted(v.items())) for k, v in agree.items()}
@@ -310,9 +310,11 @@ def load(testset: Path, split: str) -> tuple[list[dict], list[dict]]:
 def predict(items: list[dict]) -> dict[str, dict | str | None]:
     """read_post on each item, with the extractor's parallelism, retries and failure handling."""
     predictions = {}
-    for post_id, claims in extractor._in_parallel(extractor.get_client(), ((it["post_id"], it["text"]) for it in items),
+    for post_id, result in extractor._in_parallel(extractor.get_client(), ((it["post_id"], it["text"]) for it in items),
                                                   extractor.read_post):
-        predictions[post_id] = "blocked" if claims is extractor.BLOCKED else claims
+        if isinstance(result, tuple):  # (claims, conditions) once conditions are read per post (#229)
+            result = result[0]
+        predictions[post_id] = "blocked" if result is extractor.BLOCKED else result
     return predictions
 
 

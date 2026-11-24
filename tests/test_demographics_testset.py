@@ -72,7 +72,7 @@ def test_profiles_from_labels_predictions_and_expected():
              item("p2", "Now 31 and in Texas", label(age=("31", "Now 31"), state=("Texas", "in Texas")), date=2)]
     authors = [{"user_id": "u1", "split": "dev", "post_ids": ["p1", "p2"],
                 "expected_profile": {"age": 31, "age_bucket": "30s", "sex": None, "sex_stated": None,
-                                     "location": "United States / TX", "city": None}}]
+                                     "location": "United States / TX", "city": None, "ever_minor": 0}}]
     predictions = {"p1": {"age": ("30", "I'm 30"), "country": ("USA", "US")}, "p2": {}}
     result = ts.score_profiles(items, authors, predictions)
     assert result["labels_vs_expected"] == {f"{f}/agree": 1 for f in ts.PROFILE}
@@ -88,10 +88,18 @@ def test_profiles_keep_a_state_across_spellings_of_its_country():
              item("p3", "USA here", label(country=("USA", "USA")), date=3)]
     authors = [{"user_id": "u1", "split": "dev", "post_ids": ["p1", "p2", "p3"],
                 "expected_profile": {"age": None, "age_bucket": None, "sex": None, "sex_stated": None,
-                                     "location": "United States / Texas", "city": None}}]
+                                     "location": "United States / Texas", "city": None, "ever_minor": None}}]
     predictions = {"p1": {"country": ("US", "US")}, "p2": {"state": ("TX", "Texas")}, "p3": {"country": ("USA", "USA")}}
     result = ts.score_profiles(items, authors, predictions)
     assert result["pred_vs_expected"] == result["labels_vs_expected"] == {f"{f}/agree": 1 for f in ts.PROFILE}
+
+
+
+def test_predict_takes_the_claims_from_a_reply_with_conditions(monkeypatch):
+    # Once conditions are read per post (#229), read_post returns (claims, conditions).
+    monkeypatch.setattr(ts.extractor, "get_client", lambda: None)
+    monkeypatch.setattr(ts.extractor, "read_post", lambda client, text: ({"age": ("30", "30")}, []))
+    assert ts.predict([{"post_id": "p1", "text": "30"}]) == {"p1": {"age": ("30", "30")}}
 
 
 def scrape_db(path):
