@@ -104,6 +104,8 @@ of the illnesses and symptoms the author says they have or had, each
   use my brain as I did before" and "needing more naps" are no condition.
 - A mood or state word is a symptom under its everyday name: "i'm also getting depressed" is symptom
   `"depression"`, "I am sensitive to magnesium" is symptom `"magnesium sensitivity"`, as written.
+- A "crash" is a symptom, and `canonical_condition` names it post-exertional malaise (`pem`).
+- Bedbound and housebound are functional levels, not conditions: never labeled.
 - Spelling is not a disagreement: "PEM" and "post-exertional malaise" are one condition, merged by
   `canonical_condition` when labels are scored or compared.
 
@@ -249,10 +251,18 @@ uv run python src/demographics_testset.py agree --testset data/demographics_test
 | country | 44 | 1.00 (0.92-1.00) | 1.00 |
 | state | 44 | 1.00 (0.92-1.00) | 1.00 |
 | city | 44 | 0.98 (0.88-1.00) | 1.00 |
-| conditions | 225 | 0.83 (0.77-0.87) | 0.96 |
+| conditions | 225 | 0.88 (0.83-0.92) | 0.96 |
 
-Conditions were compared with #229's `canonical_condition`. The disagreements are in
+Conditions were compared with #229's `canonical_condition`, which merges plurals and common wording
+variants ("headaches", "trouble sleeping", "crashes"). The disagreements are in
 `review/second_label_disagreements_<folder>.md`.
+
+**Adjudicated conditions.** For each of the 27 items where the two labelings still disagreed, a
+third, blind pass (Claude Opus 5.5, on the subscription) saw the text, these rules and both lists in
+random order, unmarked as to who wrote which, and chose the final list. That list is now the gold
+label (`labeled_by` says "conditions adjudicated"). It kept the first labeler's list 13 times, the
+second's 12 times, and mixed them twice. Every decision is in `review/conditions_adjudication.md`
+for a person to check, and each change is in `corrections.jsonl`.
 
 ## Content-filter blocks
 
@@ -261,14 +271,10 @@ under `posts.blocked` and scores them as empty, so the loss shows in recall.
 
 ## Known gaps
 
-- **Conditions labels are noisy.** Agreement on the set of condition names is 0.83 (95% CI
-  0.77-0.87) over 225 items; whether any condition is stated agrees almost always (kappa 0.96). Of
-  the 39 disagreements, about 15 are wordings of one symptom that `canonical_condition` doesn't
-  merge ("headache" / "headaches", "crash" / "crashes", "sleep disturbance" / "trouble sleeping",
-  "muscle cramps" / "cramping"). The rest are coverage: one labeler lists a symptom the other
-  leaves out (difficulty concentrating, suicidal ideation, bedbound, a missed ME/CFS). Both kinds
-  depress condition recall and precision measured against these labels; read condition metrics as
-  approximate.
+- **Conditions labels were noisy before adjudication.** Two blind labelings agreed on 0.88 (95% CI
+  0.83-0.92) of 225 items after `canonical_condition`. The 27 disagreements were coverage (one lists
+  a symptom the other leaves out) or a borderline name, and were adjudicated as above. The
+  adjudicated labels are a third model's call, not a person's, until reviewed.
 - **Location agreement says little.** The 44 doubly labeled items state country, state and city
   once each, so their kappa rests on one positive. Location noise is unmeasured outside the curated
   items, which a person reviews.
