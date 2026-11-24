@@ -1,6 +1,7 @@
 """The per-post demographics extractor (#206) with synthetic posts and stubbed replies, no API calls."""
 
 import json
+import re
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
@@ -224,7 +225,7 @@ def test_reads_replies_with_text_around_the_object(raw):
 def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("post", "patient", 1, None, "I'm 34")])
-    replies = iter([LLMResponseError("empty"), '{"age": "34"}', {"age": claim(34)}])
+    replies = iter([LLMResponseError("empty"), "no JSON here", {"age": claim(34)}])
     calls = stub(monkeypatch, post=lambda text: next(replies))
 
     demographics.run_demographics(path)
@@ -235,8 +236,8 @@ def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypa
 
 @pytest.mark.parametrize(
     "unreadable",
-    ['{"error": "private reply text"}', '{"age": "34"}', "no JSON here"],
-    ids=["unknown-fields", "claim-not-an-object", "no-object"],
+    ['{"error": "private reply text"}', "no JSON here"],
+    ids=["unknown-fields", "no-object"],
 )
 def test_failed_posts_stay_unread_and_keep_previous_profiles(db, monkeypatch, caplog, unreadable):
     conn, path = db
@@ -465,7 +466,7 @@ def test_a_reread_that_finds_nothing_retracts_and_a_restart_still_resolves(db, m
     assert profile(conn, "a") == (None, None, None, None, None, None)
 
 
-def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkeypatch):
+def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("a-2024", "a", ts(2024), None, "I'm 29"), ("b-2024", "b", ts(2024), None, "hi")])
     stub(monkeypatch, post=lambda text: {"age": claim(29)} if text == "I'm 29" else NOTHING)
@@ -475,9 +476,44 @@ def test_a_newer_reference_date_refreshes_a_user_without_a_model_call(db, monkey
     add_posts(conn, [("b-2026", "b", ts(2026), None, "hello again")])
     calls = stub(monkeypatch)
     demographics.run_demographics(path)
-
     assert posts_read(conn, calls) == ["hello again"]
+    assert profile(conn, "a")[:2] == ("20s", 29.0)
+
+    add_posts(conn, [("a-2026", "a", ts(2026), None, "still here")])
+    demographics.run_demographics(path)
     assert profile(conn, "a")[:2] == ("30s", 31.0)
+
+
+@pytest.mark.parametrize("reply, text", [
+    ({"sex": "M"}, "I'm 34"), ({"sex": "male"}, "I am female"), ({"age": "34"}, "I take 340 mg"),
+    ({"state": "Ohio"}, "my Ohioan friend"),
+    ({"age": 17}, "I'm 34 and have been ill for 17 months"),  # a bare age is never kept: a number isn't a quote
+    ({"age": "34"}, "I'm 34"),
+])
+def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
+    assert demographics.parse_claims(json.dumps(reply), text) == {}
+
+
+def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("post", "patient", 1, None, "I'm 34 and Transgender, in Texas")])
+    calls = stub(monkeypatch, post=lambda text: {"age": claim(34), "sex": "transgender", "state": "Ohio"})
+
+    demographics.run_demographics(path)
+
+    assert [t for kind, _, t in calls if kind == "post"] == [0.0]  # read at once, not retried
+    assert conn.execute("SELECT field, value, evidence FROM demographic_claims ORDER BY field").fetchall() == [
+        ("age", "34", "quote"), ("sex", "transgender", "transgender")]  # Ohio isn't in the post
+
+
+def test_a_limited_run_counts_only_users_it_read_as_failed(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "a1"), ("p2", "b", 1, None, "b1"), ("p3", "c", 1, None, "c1")])
+    stub(monkeypatch)
+
+    counts = demographics.run_demographics(path, limit=1)
+
+    assert (counts["users"], counts["posts_failed"], counts["failed_users"]) == (1, 0, 0)
 
 
 def test_limit_caps_the_users_read(db, monkeypatch):
@@ -548,3 +584,15 @@ def test_unnamed_conditions_are_dropped_and_the_rest_kept():
 @pytest.mark.parametrize("value", ["1e1", "3e1", "inf", "nan"])
 def test_age_must_be_written_as_a_number(value):
     assert demographics._claim_value("age", value) is None
+
+
+@pytest.mark.parametrize("evidence, kept", [
+    ("I was 35 when I got sick", False), ("I had just turned 30 too when i got it", False),
+    ("I was 16 when I got sick", False),
+    ("I'm 35", True), ("I just turned 30", True), ("38m, and I was just thinking I don't feel 38", True),
+    ("I was 34 last month and now I'm 35", True),
+])
+def test_a_past_age_is_not_kept_as_the_current_age(evidence, kept):
+    value = re.findall(r"\d+", evidence)[-1]
+    reply = json.dumps({"age": {"value": value, "evidence": evidence}})
+    assert ("age" in demographics.parse_claims(reply, evidence)) is kept
