@@ -270,14 +270,28 @@ def counts(items: list[dict]) -> dict:
 
 # ── Matching ─────────────────────────────────────────────────────────────────
 
+# Spellings of one identity, which normalize_sex leaves alone by design (#214: a trans answer maps to
+# no binary sex). Evaluation only: "MtF" and "trans woman" are one answer. Bare "trans" says neither.
+_IDENTITY = {
+    **dict.fromkeys(("mtf", "m2f", "tf", "transfem", "trans fem", "transfeminine", "trans feminine", "trans woman",
+                     "transwoman", "trans female", "trans girl"), "trans woman"),
+    **dict.fromkeys(("ftm", "f2m", "tm", "transman", "trans masc", "transmasc", "transmasculine", "trans masculine",
+                     "trans male", "trans man", "trans guy"), "trans man"),
+    **dict.fromkeys(("genderfluid", "gender fluid"), "genderfluid"),
+    **dict.fromkeys(("afab", "assigned female at birth", "born female", "born a female"), "afab"),
+    **dict.fromkeys(("amab", "assigned male at birth", "born male", "born a male", "born in a male body"), "amab"),
+    "enby": "non-binary",
+}
+
+
 def key(field: str, value: str) -> object:
     """A form of the value in which two ways of writing the same answer are equal."""
     if field == "age":
         stated = stated_age(value)
         return stated[0] if stated else _plain(value)
-    if field == "sex":  # each identity by the pipeline's rule ("guy" is male), else its words
-        parts = (_plain(v) for v in re.split(r"[|/,;]", value) if v.strip())
-        return frozenset(normalize_sex(v) or v for v in parts)
+    if field == "sex":  # each identity by the pipeline's rule ("guy" is male), else by _IDENTITY, else its words
+        parts = (re.sub(r"^\d{1,2}\s*", "", _plain(v)) for v in re.split(r"[|/,;]", value) if v.strip())
+        return frozenset(normalize_sex(v) or _IDENTITY.get(re.sub(r"[\s-]+", " ", v), v) for v in parts)
     if field in ("country", "state"):
         return _plain(canonical_place(field, value))  # the pipeline's spelling: "US" is United States
     return _plain(value).split(",")[0].strip()  # city: "Austin, TX" is Austin
@@ -495,7 +509,8 @@ def main():
     t.add_argument("--testset", required=True, type=Path)
     e = sub.add_parser("evaluate", help="Run read_post on the labeled items and score its claims (paid)")
     e.add_argument("--testset", required=True, type=Path)
-    e.add_argument("--split", choices=("dev", "test", "all"), required=True)
+    e.add_argument("--split", choices=("dev", "test", "all"), required=True,
+                   help="Sampled and curated items in this split; the synthetic items are always included")
     e.add_argument("--tag", default="baseline", help="Names predictions_<tag>.jsonl and report_<tag>.json")
     e.add_argument("--prompt-file", type=Path, help="Evaluate this per-post prompt instead of the merged one. Give the rendered "
                    "text, not the f-string template in src/prompts/demographic_prompt.py")

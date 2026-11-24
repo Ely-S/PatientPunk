@@ -34,6 +34,27 @@ def test_two_ways_of_writing_one_answer_match(field, a, b):
     assert ts.key(field, a) == ts.key(field, b)
 
 
+@pytest.mark.parametrize("a, b", [
+    ("MtF", "trans woman"), ("m2f", "trans woman"), ("tf", "trans woman"), ("30tf", "trans woman"),
+    ("transfem", "trans woman"), ("transfeminine", "trans woman"), ("transwoman", "trans woman"),
+    ("trans female", "trans woman"), ("39MtF", "trans woman"), ("FtM", "trans man"), ("f2m", "trans man"),
+    ("transman", "trans man"), ("trans masc", "trans man"), ("transmasc", "trans man"),
+    ("transmasculine", "trans man"), ("trans male", "trans man"), ("21 FtM", "trans man"),
+    ("genderfluid", "gender fluid"), ("gender-fluid", "genderfluid"), ("enby", "non-binary"), ("nb", "non binary"),
+    ("trans masc | afab", "FtM | AFAB"), ("trans masc | born female", "trans man | assigned female at birth"),
+    ("nonbinary | AMAB", "non-binary | born in a male body"),
+])
+def test_spellings_of_one_identity_match(a, b):
+    assert ts.key("sex", a) == ts.key("sex", b)
+
+
+@pytest.mark.parametrize("a, b", [("trans woman", "trans man"), ("trans", "trans woman"), ("trans", "trans man"),
+                                  ("MtF", "FtM"), ("genderfluid", "non-binary"), ("trans man | afab", "trans man"),
+                                  ("afab", "amab"), ("nonbinary | female presenting", "nonbinary | afab")])
+def test_different_identities_do_not_match(a, b):
+    assert ts.key("sex", a) != ts.key("sex", b)
+
+
 @pytest.mark.parametrize("field, a, b", [("age", "34", "35"), ("state", "TX", "Ohio"), ("sex", "female", "trans woman"),
                                            ("sex", "mom", "dad"), ("sex", "non-binary | mom", "female")])
 def test_different_answers_do_not_match(field, a, b):

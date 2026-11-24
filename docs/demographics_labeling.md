@@ -65,7 +65,11 @@ pipeline's own rule (`normalize_sex` in `src/resolve_demographics.py`, the one l
 Self-referring role and kinship words count ("as a mom", "I'm a dad", "speaking as a wife").
 Empty for pronouns, usernames, writing style, and what others call the author. Words about other
 people never count ("my husband", "my daughter"); their sex goes in `others` only when it's written
-as a value a model could grab, as in "my daughter (16F)" (`others` sex `["F"]`).
+as a value a model could grab, as in "my daughter (16F)" (`others` sex `["F"]`). The author's own sex at birth or
+presentation is part of their sex value, joined with ` | ` in their words: "trans masc person who was
+born female" is `"trans masc | born female"`, "nonbinary (afab)" is `"nonbinary | afab"`, "nonbinary
+but very female presenting" is `"nonbinary | female presenting"`. It never goes in `others`, which is
+for other people and for traps such as what others call the author.
 
 **country, state.** Where the author lives, one place each. "45 male here in Tennessee" is state
 `"Tennessee"` with country empty: label only what is named, never what it implies. Living there
@@ -102,6 +106,7 @@ of the illnesses and symptoms the author says they have or had, each
 | "I'm over 60" / "almost 20" | all null, others age `["over 60"]` / `["almost 20"]` |
 | "I'm in my late 30s" | age `"late 30s"` |
 | "As a mom of two" | sex `"mom"` |
+| "I'm nonbinary (afab)" | sex `"nonbinary | afab"` |
 | "my husband is 40" | all null, others age `["40"]` (no sex: it isn't written as a value) |
 | "I'm Canadian" / "I'm from Ohio originally" | all null, others country `["Canada"]` / state `["Ohio"]` |
 | "I'm British, living in Spain" | country `"Spain"`, others country `["United Kingdom"]` |
@@ -174,7 +179,12 @@ Every curated label is reviewed by a person before it counts.
 
 `tests/fixtures/demographics_synthetic.jsonl` holds the `synthetic` stratum: about 20 short posts
 written to the rules above, one per hard case, with no patient text, so it lives in Git. `evaluate`
-always includes them, in every split.
+always includes them, whatever `--split` says: they are rule regressions, not a sample, and they are
+left out of the pooled metrics, so including them in both splits leaks nothing into test scores.
+The evaluator matches spellings of one identity ("MtF" and "trans woman", "FtM" and "trans masc",
+"afab" and "assigned female at birth"); bare "trans" matches only itself. `sex_normalized` uses the
+pipeline's `normalize_sex`, which gives no value for a trans answer (#214), so on the gender identity
+case read `sex`, not `sex_normalized`.
 
 ## Evaluating a candidate prompt
 
