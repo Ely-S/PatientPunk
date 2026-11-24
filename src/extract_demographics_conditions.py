@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from import_posts import DELETED_USER_ID
-from patientpunk._utils import LLMContentFilteredError, LLMResponseError, wrap_untrusted_text
+from patientpunk._utils import REMOVED_MARKERS, LLMContentFilteredError, LLMResponseError, wrap_untrusted_text
 from patientpunk.db import apply_schema, register_run
 from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
@@ -44,7 +44,6 @@ from utilities.db import open_db
 MAX_IN_FLIGHT = 10
 COMMIT_EVERY = 200
 TEMPERATURES = (0.0, 0.7, 1.0)
-REMOVED_BODIES = {"[removed]", "[deleted]"}
 CLAIM_FIELDS = ("age", "sex", "country", "state", "city")
 MULTIPLE_PLACES = re.compile(r"[/|;\r\n]|\s+or\s+", re.IGNORECASE)
 # A comma inside one place's name: "Washington, D.C.", "Korea, Republic of", "Congo, Democratic Republic of the"
@@ -95,7 +94,7 @@ _CONDITIONS = {alias: name for name, aliases in _CONDITION_ALIASES.items() for a
 def _post_text(title: str | None, body: str) -> str:
     """Title and body, or "" for a post with nothing to read."""
     body = body.strip()
-    if body.casefold() in REMOVED_BODIES:
+    if body.casefold() in REMOVED_MARKERS:
         body = ""
     return "\n".join(part for part in ((title or "").strip(), body) if part)
 

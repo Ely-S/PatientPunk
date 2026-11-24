@@ -56,6 +56,9 @@ import httpx
 # repeating Path(__file__).parent.parent... chains.
 PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 
+# Bodies Reddit shows for removed or deleted text (#199); not the missing-author rule (#198).
+REMOVED_MARKERS = frozenset({"[removed]", "[deleted]"})
+
 
 def load_env() -> None:
     """Load .env from the repo root and variable_extraction/, if present.
