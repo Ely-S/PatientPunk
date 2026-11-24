@@ -54,6 +54,7 @@ ONE_PLACE_COMMA = re.compile(
 )
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
 SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming several takes the first: "moderate to severe" is severe
+NEGATION = re.compile(r"\b(?:not|no|never|isn'?t|wasn'?t)\b", re.IGNORECASE)  # "not severe" states no level
 MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
 # One name for the conditions most often written several ways, so conditions_latest keeps one row for
 # each. Other names are kept as the model wrote them, in lower case. The author's words stay in evidence.
@@ -161,16 +162,16 @@ def canonical_condition(name: str) -> str:
     return _CONDITIONS.get(plain, plain)
 
 
-def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str | None, str]]:
+def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str | None, str]] | None:
     """[(name, "illness" | "symptom", severity or None, evidence)] from a per-post reply, one per
     condition. An entry needs a name and a quote; a bare name is kept only when the post says it
-    as whole words. A condition listed twice keeps the entry that states a severity. A missing or
-    badly shaped list is no conditions."""
+    as whole words. A condition listed twice keeps the entry that states a severity. None when the
+    list is missing or isn't a list: unlike [], that says nothing about the post, so a reread keeps
+    what an earlier read found."""
     entries = result.get("conditions")
     if not isinstance(entries, list):
-        if entries is not None:
-            log.info("Dropping conditions that aren't a list")
-        return []
+        log.info("No conditions list in the reply; keeping the post's earlier conditions")
+        return None
     parsed = {}
     for entry in entries:
         if not isinstance(entry, dict):
@@ -183,7 +184,8 @@ def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str |
             continue
         kind = str(entry.get("type") or "").strip().lower()
         stated = str(entry.get("severity") or "").lower()
-        severity = next((s for s in SEVERITIES if re.search(rf"\b{s}\b", stated)), None)
+        severity = None if NEGATION.search(stated) else next(
+            (s for s in SEVERITIES if re.search(rf"\b{s}\b", stated)), None)
         name = canonical_condition(name)
         observation = (name, kind if kind in ("illness", "symptom") else "illness",
                        severity, evidence.strip())
@@ -302,6 +304,10 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
         counts["claims"] += len(claims)
         counts["conditions"] += len(conditions)
 
+    def earlier_conditions(post_id: str) -> list:
+        return conn.execute("SELECT condition_name, condition_type, severity, evidence FROM condition_observations "
+                            "WHERE post_id = ?", (post_id,)).fetchall()
+
     def jobs():  # consumed on this thread by _in_parallel, so record() may write here
         for user_id, posts in islice(groupby(rows, key=itemgetter(0)), limit or None):
             read_users.append(user_id)
@@ -319,13 +325,13 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
             # stands: its claims and conditions are carried forward under this run (none on a first read).
             claims = conn.execute(
                 "SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
-            conditions = conn.execute(
-                "SELECT condition_name, condition_type, severity, evidence FROM condition_observations "
-                "WHERE post_id = ?", (post_id,)).fetchall()
-            record(user_id, post_id, {field: (value, evidence) for field, value, evidence in claims}, conditions)
+            record(user_id, post_id, {field: (value, evidence) for field, value, evidence in claims},
+                   earlier_conditions(post_id))
             counts["posts_blocked"] += 1
         else:
-            record(user_id, post_id, *reply)
+            claims, conditions = reply
+            # No conditions list says nothing about the post either: keep its earlier conditions.
+            record(user_id, post_id, claims, earlier_conditions(post_id) if conditions is None else conditions)
         if n % COMMIT_EVERY == 0:
             conn.commit()
             log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])

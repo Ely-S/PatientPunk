@@ -217,19 +217,23 @@ CREATE VIEW IF NOT EXISTS condition_observations AS
 
 -- One row per user and condition: its type from the newest observation, the newest severity a post
 -- stated (so "resolved" shows a condition that has gone), when it was first and last mentioned, and
--- in how many posts. Conditions change, so analysis can weigh last_seen and severity.
+-- in how many posts. A condition mentioned again after it was resolved is back, with its severity
+-- unknown (NULL). Conditions change, so analysis can weigh last_seen and severity.
 CREATE VIEW IF NOT EXISTS conditions_latest AS
-    SELECT user_id, condition_name, condition_type, severity, first_seen, last_seen, n_posts FROM (
+    SELECT user_id, condition_name, condition_type,
+           CASE WHEN severity = 'resolved' AND last_seen > stated_at THEN NULL ELSE severity END AS severity,
+           first_seen, last_seen, n_posts FROM (
         SELECT user_id, condition_name,
             FIRST_VALUE(condition_type) OVER newest AS condition_type,
-            FIRST_VALUE(severity) OVER (PARTITION BY user_id, condition_name
-                                        ORDER BY severity IS NULL, post_date DESC, post_id DESC) AS severity,
+            FIRST_VALUE(severity) OVER stated AS severity,
+            FIRST_VALUE(post_date) OVER stated AS stated_at,
             MIN(post_date) OVER mentions AS first_seen,
             MAX(post_date) OVER mentions AS last_seen,
             COUNT(*) OVER mentions AS n_posts,
             ROW_NUMBER() OVER newest AS n
         FROM condition_observations
         WINDOW mentions AS (PARTITION BY user_id, condition_name),
+               stated AS (PARTITION BY user_id, condition_name ORDER BY severity IS NULL, post_date DESC, post_id DESC),
                newest AS (PARTITION BY user_id, condition_name ORDER BY post_date DESC, post_id DESC)
     ) WHERE n = 1;
 

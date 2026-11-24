@@ -31,6 +31,19 @@ def test_latest_keeps_the_newest_stated_severity_and_when_it_was_mentioned(conn)
                         "FROM conditions_latest").fetchall() == [("a", "pots", "severe", 1, 2, 2)]
 
 
+@pytest.mark.parametrize("severities, latest", [
+    (("resolved", None), None),  # gone, then mentioned again: back, severity unknown
+    ((None, "resolved"), "resolved"),  # resolved in the newest mention
+    (("resolved", "severe"), "severe"),  # back and stated
+    (("severe", None), "severe"),
+])
+def test_a_condition_mentioned_after_it_resolved_is_back(conn, severities, latest):
+    r = register_run(conn, "demographics", {})
+    for post_id, severity in zip(("a1", "a2"), severities):
+        observe(conn, r, post_id, "a", "pots", severity)
+    assert conn.execute("SELECT severity, n_posts FROM conditions_latest").fetchall() == [(latest, 2)]
+
+
 def test_only_each_posts_newest_demographics_read_counts(conn):
     r1 = register_run(conn, "demographics", {})
     observe(conn, r1, "a1", "a", "ms")  # a misread, gone on the reread

@@ -149,6 +149,26 @@ def test_badly_shaped_conditions_are_none_and_keep_the_claims(db, monkeypatch, c
     assert conn.execute("SELECT value FROM demographic_claims").fetchall() == [("34",)]
 
 
+@pytest.mark.parametrize("reread", [{"age": None}, {"age": None, "conditions": "POTS"},
+                                    {"age": None, "conditions": None}, {"age": None, "conditions": {"name": "POTS"}}],
+                         ids=["missing", "string", "null", "object"])
+def test_a_reread_without_a_conditions_list_keeps_the_earlier_conditions(db, monkeypatch, reread):
+    conn, path = db
+    add_posts(conn, [("p1", "a", ts(2024), None, "I'm 34 and my POTS is severe")])
+    stub(monkeypatch, post=lambda text: {"conditions": [condition("POTS", severity="severe")]})
+    demographics.run_demographics(path)
+
+    stub(monkeypatch, post=lambda text: {**reread, "age": claim(34)})
+    demographics.run_demographics(path, reread=True)
+
+    assert conn.execute("SELECT condition_name, severity FROM conditions_latest").fetchall() == [("pots", "severe")]
+    assert conn.execute("SELECT field, value FROM demographic_claims_latest").fetchall() == [("age", "34")]
+
+    stub(monkeypatch, post=lambda text: {"age": claim(34), "conditions": []})  # an explicit [] retracts
+    demographics.run_demographics(path, reread=True)
+    assert conn.execute("SELECT COUNT(*) FROM condition_observations").fetchone() == (0,)
+
+
 def test_a_reread_retracts_a_condition_and_newer_posts_update_it(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("p1", "a", ts(2024), None, "my POTS is severe"), ("p2", "a", ts(2025), None, "POTS gone")])
@@ -251,7 +271,7 @@ def test_resolves_claims_from_several_posts_into_one_profile(db, monkeypatch):
     ids=["prose-before-object", "trailing-comma", "fenced"],
 )
 def test_reads_replies_with_text_around_the_object(raw):
-    assert demographics.parse_post(raw) == ({"age": ("34", "34")}, [])
+    assert demographics.parse_post(raw) == ({"age": ("34", "34")}, None)  # no conditions list: None, not []
 
 
 def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypatch):
@@ -518,7 +538,7 @@ def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     ({"state": "Ohio"}, "my Ohioan friend"),
 ])
 def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
-    assert demographics.parse_post(json.dumps(reply), text) == ({}, [])
+    assert demographics.parse_post(json.dumps(reply), text) == ({}, None)
 
 
 @pytest.mark.parametrize("bare, text, name", [
@@ -532,7 +552,7 @@ def test_a_bare_condition_counts_only_when_the_post_names_it_in_that_case(bare, 
 
 @pytest.mark.parametrize("stated, severity", [
     ("Severe", "severe"), ("moderate to severe", "severe"), ("mild-moderate", "moderate"), ("mostly resolved", "resolved"),
-    ("awful", None), ("", None), (3, None),
+    ("awful", None), ("", None), (3, None), ("not severe", None), ("no longer severe", None), ("isn't mild", None),
 ])
 def test_severity_takes_the_worst_level_a_phrase_names(stated, severity):
     assert demographics.parse_conditions({"conditions": [condition("POTS", severity=stated)]})[0][2] == severity
