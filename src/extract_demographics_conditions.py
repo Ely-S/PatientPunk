@@ -53,15 +53,16 @@ ONE_PLACE_COMMA = re.compile(
     re.IGNORECASE,
 )
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
-SEVERITIES = {"mild", "moderate", "severe", "resolved"}
+SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming several takes the first: "moderate to severe" is severe
 MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
 # One name for the conditions most often written several ways, so conditions_latest keeps one row for
 # each. Other names are kept as the model wrote them, in lower case. The author's words stay in evidence.
 _CONDITION_ALIASES = {
-    "long covid": ("long-covid", "longcovid", "lc", "long hauler", "long haul covid", "pasc", "post covid",
-                   "post-covid", "post covid syndrome", "post-covid syndrome", "post-covid condition"),
+    "long covid": ("long-covid", "longcovid", "lc", "long covid (lc)", "long hauler", "long haul covid",
+                   "long-haul covid", "long haul", "pasc", "post covid", "post-covid", "post covid syndrome",
+                   "post-covid syndrome", "post-covid condition", "post covid condition"),
     "me/cfs": ("me", "cfs", "mecfs", "me cfs", "me / cfs", "chronic fatigue syndrome", "myalgic encephalomyelitis"),
-    "pots": ("postural orthostatic tachycardia syndrome", "postural tachycardia syndrome"),
+    "pots": ("pots syndrome", "postural orthostatic tachycardia syndrome", "postural tachycardia syndrome"),
     "mcas": ("mast cell activation syndrome",),
     "pem": ("post-exertional malaise", "post exertional malaise"),
     "small fiber neuropathy": ("sfn", "small fibre neuropathy"),
@@ -121,16 +122,22 @@ def _claim_value(field: str, value: object) -> str | None:
     return text
 
 
-def _bare(item: object, text: str) -> str | None:
-    """A value given without its {value, evidence} wrapper, kept only when the post says it word for word."""
+def _says(text: str, phrase: str, ignore_case: bool = True) -> bool:
+    """Whether ``text`` contains ``phrase`` as whole words: "M" isn't in "I'm 34"."""
+    flags = re.IGNORECASE if ignore_case else 0
+    return re.search(rf"(?<![\w'’]){re.escape(phrase)}(?![\w'’])", text, flags) is not None
+
+
+def _bare(item: object, text: str, ignore_case: bool = True) -> str | None:
+    """A value given without its {value, evidence} wrapper, kept only when the post says it as whole words."""
     bare = _words(item)
-    return bare if bare and bare.casefold() in text.casefold() else None
+    return bare if bare and _says(text, bare, ignore_case) else None
 
 
 def parse_claims(result: dict, text: str = "") -> dict[str, tuple[str, str]]:
     """{field: (value, evidence)} from a per-post reply. A field the post doesn't state, or a value
     without a quote, is left out. A field given as a bare value instead of {value, evidence} is kept
-    when the value appears word for word in ``text``, the post, which is then its quote, and left out
+    when the value appears as whole words in ``text``, the post, which is then its quote, and left out
     otherwise, so one badly shaped field doesn't lose the others."""
     claims = {}
     for field in CLAIM_FIELDS:
@@ -157,7 +164,8 @@ def canonical_condition(name: str) -> str:
 def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str | None, str]]:
     """[(name, "illness" | "symptom", severity or None, evidence)] from a per-post reply, one per
     condition. An entry needs a name and a quote; a bare name is kept only when the post says it
-    word for word. A missing or badly shaped list is no conditions."""
+    as whole words. A condition listed twice keeps the entry that states a severity. A missing or
+    badly shaped list is no conditions."""
     entries = result.get("conditions")
     if not isinstance(entries, list):
         if entries is not None:
@@ -166,17 +174,21 @@ def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str |
     parsed = {}
     for entry in entries:
         if not isinstance(entry, dict):
-            bare = _bare(entry, text) if isinstance(entry, str) else None
+            # Case counts for a bare name: "ME" and "POTS" aren't "help me" or "pots and pans".
+            bare = _bare(entry, text, ignore_case=False) if isinstance(entry, str) else None
             entry = {"name": bare, "evidence": bare} if bare else {}
         name, evidence = entry.get("name"), entry.get("evidence")
         name = _words(name) if isinstance(name, str) else None
         if not name or not isinstance(evidence, str) or not evidence.strip():
             continue
         kind = str(entry.get("type") or "").strip().lower()
-        severity = str(entry.get("severity") or "").strip().lower()
+        stated = str(entry.get("severity") or "").lower()
+        severity = next((s for s in SEVERITIES if re.search(rf"\b{s}\b", stated)), None)
         name = canonical_condition(name)
-        parsed.setdefault(name, (name, kind if kind in ("illness", "symptom") else "illness",
-                                 severity if severity in SEVERITIES else None, evidence.strip()))
+        observation = (name, kind if kind in ("illness", "symptom") else "illness",
+                       severity, evidence.strip())
+        if name not in parsed or (parsed[name][2] is None and observation[2]):  # keep a stated severity
+            parsed[name] = observation
     return list(parsed.values())
 
 

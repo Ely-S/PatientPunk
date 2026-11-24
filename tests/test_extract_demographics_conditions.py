@@ -513,6 +513,36 @@ def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     assert profile(conn, "a")[:2] == ("30s", 31.0)
 
 
+@pytest.mark.parametrize("reply, text", [
+    ({"sex": "M"}, "I'm 34"), ({"sex": "male"}, "I am female"), ({"age": "34"}, "I take 340 mg"),
+    ({"state": "Ohio"}, "my Ohioan friend"),
+])
+def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
+    assert demographics.parse_post(json.dumps(reply), text) == ({}, [])
+
+
+@pytest.mark.parametrize("bare, text, name", [
+    ("ME", "Can someone help me", None), ("POTS", "pots and pans", None), ("POTS", "POTSy", None),
+    ("ME", "I have ME", "me/cfs"), ("POTS", "my POTS flared", "pots"),
+])
+def test_a_bare_condition_counts_only_when_the_post_names_it_in_that_case(bare, text, name):
+    parsed = demographics.parse_conditions({"conditions": [bare]}, text)
+    assert parsed == ([(name, "illness", None, bare)] if name else [])
+
+
+@pytest.mark.parametrize("stated, severity", [
+    ("Severe", "severe"), ("moderate to severe", "severe"), ("mild-moderate", "moderate"), ("mostly resolved", "resolved"),
+    ("awful", None), ("", None), (3, None),
+])
+def test_severity_takes_the_worst_level_a_phrase_names(stated, severity):
+    assert demographics.parse_conditions({"conditions": [condition("POTS", severity=stated)]})[0][2] == severity
+
+
+def test_a_condition_listed_twice_keeps_its_stated_severity():
+    reply = {"conditions": [condition("POTS"), condition("pots", severity="severe")]}
+    assert demographics.parse_conditions(reply) == [("pots", "illness", "severe", "quote")]
+
+
 def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("post", "patient", 1, None, "I'm 34 and Transgender, in Texas")])
@@ -595,7 +625,8 @@ def test_unnamed_conditions_are_dropped_and_the_rest_kept():
 @pytest.mark.parametrize("name, canonical", [
     ("LC", "long covid"), ("Long-COVID", "long covid"), ("PASC", "long covid"), ("CFS", "me/cfs"),
     ("Myalgic Encephalomyelitis", "me/cfs"), ("Postural Orthostatic Tachycardia Syndrome", "pots"),
-    ("Brain  fog.", "brain fog"), ("Hashimoto’s", "hashimoto's"),
+    ("Brain  fog.", "brain fog"), ("Hashimoto’s", "hashimoto's"), ("Long-haul COVID", "long covid"),
+    ("Long COVID (LC)", "long covid"), ("POTS syndrome", "pots"),
 ])
 def test_canonical_condition(name, canonical):
     assert demographics.canonical_condition(name) == canonical

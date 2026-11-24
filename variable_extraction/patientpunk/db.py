@@ -23,7 +23,12 @@ Usage:
     conn = init_db(Path("patientpunk.db"))            # over a copy of posts.db
     run_id = load_extractions(conn, Path("output/records.csv"))
     load_variables(conn, Path("output/records.csv"), run_id)
-    rows = query_treatment_outcomes(conn, drug="ldn", condition="POTS")
+    rows = query_treatment_outcomes(conn, drug="ldn", sex="female")
+
+The condition filter (``condition="POTS"``) reads only conditions that
+src/extract_demographics_conditions.py read from each post
+(condition_observations), so it needs that script's run on the database;
+conditions loaded from records.csv never count (#220).
 
 Drug sentiment (treatment / treatment_reports, with TEXT sentiment values) is
 written directly to the database by src/run_sentiment_pipeline.py; this module
@@ -112,6 +117,9 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
     ).replace(
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
+    # Views are created IF NOT EXISTS, so one whose definition changed is dropped first: a database built
+    # from #224's branch has a different conditions_latest.
+    conn.executescript("DROP VIEW IF EXISTS conditions_latest; DROP VIEW IF EXISTS condition_observations;")
     conn.executescript(ddl_idempotent)
     # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
     for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"}),

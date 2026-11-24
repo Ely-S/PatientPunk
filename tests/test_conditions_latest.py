@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from patientpunk.db import init_db, query_treatment_outcomes, register_run
+from patientpunk.db import apply_schema, init_db, query_treatment_outcomes, register_run
 
 SCHEMA = Path(__file__).resolve().parents[1] / "schema.sql"
 
@@ -39,6 +39,13 @@ def test_only_each_posts_newest_demographics_read_counts(conn):
     other = register_run(conn, "sentiment", {})
     conn.execute("INSERT INTO post_runs VALUES (?, 'a1')", (other,))  # not a demographics run
     assert conn.execute("SELECT COUNT(*) FROM conditions_latest").fetchone() == (0,)
+
+
+def test_an_older_conditions_latest_view_is_replaced(conn):
+    conn.executescript("DROP VIEW conditions_latest; CREATE VIEW conditions_latest AS SELECT * FROM conditions;")
+    apply_schema(conn, SCHEMA)
+    columns = [d[0] for d in conn.execute("SELECT * FROM conditions_latest").description]
+    assert columns == ["user_id", "condition_name", "condition_type", "severity", "first_seen", "last_seen", "n_posts"]
 
 
 def test_the_condition_filter_reads_current_observations_only(conn):

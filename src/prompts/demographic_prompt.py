@@ -26,8 +26,9 @@ Reply with only a JSON object with these fields. Each of age, sex, country, stat
 - conditions: a list, [] when there are none, of the illnesses and symptoms the author says they
   have or had, each {{"name": ..., "type": "illness" or "symptom", "severity": ..., "evidence": "<quote>"}}.
   Use the common name ("long covid", "ME/CFS", "POTS", "brain fog"). severity is "mild", "moderate"
-  or "severe" as the post describes it now, "resolved" when the author says it is gone, or null
-  when the post doesn't say.
+  or "severe" as the post describes it now; "resolved" when the author says it is gone or describes
+  it only in the past ("I had shingles in 2019"); or null when the post doesn't say. A covid
+  infection itself is not a condition; long covid is.
 
 Ignore other people and indirect clues such as usernames, writing style, or pronouns others use.
 A condition of someone else ("my mom has MS"), or one the author only asks or wonders about
