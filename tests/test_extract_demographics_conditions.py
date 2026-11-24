@@ -483,6 +483,14 @@ def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     assert profile(conn, "a")[:2] == ("30s", 31.0)
 
 
+@pytest.mark.parametrize("reply, text", [
+    ({"sex": "M"}, "I'm 34"), ({"sex": "male"}, "I am female"), ({"age": "34"}, "I take 340 mg"),
+    ({"state": "Ohio"}, "my Ohioan friend"),
+])
+def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
+    assert demographics.parse_claims(json.dumps(reply), text) == {}
+
+
 def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monkeypatch):
     conn, path = db
     add_posts(conn, [("post", "patient", 1, None, "I'm 34 and Transgender, in Texas")])

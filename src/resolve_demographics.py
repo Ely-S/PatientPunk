@@ -130,8 +130,9 @@ SEX_VALUES = {
 
 # The prompt asks for " | " between values, but a reply may use other separators.
 _SEX_PARTS = re.compile(r"[|/,;&]|\band\b", re.IGNORECASE)
-# trans, transgender, transwoman, transmasculine, MTF, FtM; not transplant, transverse myelitis or transient
-_TRANS = re.compile(r"\b(?:trans(?!plant|verse|ient|fusion|fer|it\b|ition|port|late|form|cript|mission|action|parent)\w*"
+# trans, transgender, transwoman, transmasculine, transitioned, MTF, FtM; not transplant, transverse
+# myelitis, transient or transit
+_TRANS = re.compile(r"\b(?:trans(?!plant|verse|ient|fusion|fer|it\b|port|late|form|cript|mission|action|parent)\w*"
                     r"|mtf|ftm|m2f|f2m)\b", re.IGNORECASE)
 _CIS = re.compile(r"^cis(?:gender)?[\s-]*", re.IGNORECASE)  # "cis woman" and "cisgender male" name a binary sex
 
@@ -143,7 +144,7 @@ def normalize_sex(stated: str) -> str | None:
     "trans woman | female", "female | male"); the words themselves stay in sex_stated."""
     # Parenthesized asides and trailing punctuation aren't part of the answer: "female (she/her)" and
     # "female." are female. The trans check below still reads the full answer, asides included.
-    plain = re.sub(r"\([^)]*\)", " ", stated)
+    plain = re.sub(r"\([^)]*(?:\)|$)", " ", stated)  # an aside left open ("female (she/her") too
     values = {SEX_VALUES.get(_CIS.sub("", part.strip(" .!?:'\"")).casefold())
               for part in _SEX_PARTS.split(plain)} - {None}
     if "non-binary" in values:

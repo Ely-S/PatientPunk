@@ -116,6 +116,11 @@ def _claim_value(field: str, value: object) -> str | None:
     return text
 
 
+def _says(text: str, phrase: str) -> bool:
+    """Whether ``text`` contains ``phrase`` as whole words, ignoring case: "M" isn't in "I'm 34"."""
+    return re.search(rf"(?<![\w'’]){re.escape(phrase)}(?![\w'’])", text, re.IGNORECASE) is not None
+
+
 def parse_claims(raw: str, text: str = "") -> dict[str, tuple[str, str]]:
     """{field: (value, evidence)} from a per-post reply. A field the post doesn't state, or a value
     without a quote, is left out. A field given as a bare value instead of {value, evidence} is kept
@@ -132,7 +137,7 @@ def parse_claims(raw: str, text: str = "") -> dict[str, tuple[str, str]]:
             continue
         if not isinstance(item, dict):
             bare = _words(item)
-            item = {"value": bare, "evidence": bare} if bare and bare.casefold() in text.casefold() else {}
+            item = {"value": bare, "evidence": bare} if bare and _says(text, bare) else {}
             if not item:
                 log.info("Dropping a %s claim not in {value, evidence} form", field)
         value, evidence = _claim_value(field, item.get("value")), item.get("evidence")

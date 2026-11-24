@@ -326,7 +326,8 @@ def test_spellings_of_one_place_are_not_disagreements(conn):
 
 @pytest.mark.parametrize("stated, sex", [
     ("guy", "male"), ("dude", "male"), ("dad", "male"), ("Lady", "female"), ("mom", "female"), ("f | mom", "female"),
-    ("female (she/her)", "female"), ("Female.", "female"), ("female (trans woman)", None),
+    ("female (she/her)", "female"), ("Female.", "female"), ("female (trans woman)", None), ("female (she/her", "female"),
+    ("female | transitioned", None), ("woman (transitioning)", None), ("male | in transit", "male"),
     ("mom | dad", None), ("trans woman | mom", None), ("non-binary | mom", "non-binary"),
     # Trans words leave sex empty; medical words that start with "trans" don't
     ("MTF | female", None), ("FtM", None), ("transmasculine | male", None), ("transfeminine | female", None),
