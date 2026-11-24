@@ -112,6 +112,17 @@ The report's top-level `posts` and `fields` pool every item in the split. `by_st
 for each stratum alone: read recall from `random`, which is drawn uniformly, and wrong-person errors
 from `other_person`. An item drawn by two strata counts in both.
 
+## Evaluating a candidate prompt
+
+`evaluate --prompt-file candidate.txt` sends the file's text as the prompt, exactly as written, with
+the post appended. It must be the rendered prompt, not the template in
+`src/prompts/demographic_prompt.py`: that is an f-string, so a copy of its source has doubled braces
+(`{{"value": ...}}`) and a literal `{DEMOGRAPHIC_AGE_RULES}`. Start from the rendered text:
+
+```bash
+cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT as p; print(p, end='')" > ../candidate.txt
+```
+
 ## Content-filter blocks
 
 A post the provider's content filter blocks is recorded with no claims. `evaluate` counts blocks
