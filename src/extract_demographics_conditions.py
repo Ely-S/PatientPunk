@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from import_posts import DELETED_USER_ID
-from patientpunk._utils import LLMContentFilteredError, clean_text, LLMResponseError, wrap_untrusted_text
+from patientpunk._utils import LLMContentFilteredError, LLMResponseError, clean_text, wrap_untrusted_text
 from patientpunk.db import apply_schema, register_run
 from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
