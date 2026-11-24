@@ -4,7 +4,8 @@ Resolution is recomputed from demographic_claims_latest on every run, so it need
 own: a restart or a re-read that retracted claims is picked up by the next call. A user gets a new
 row only when their resolved profile differs from user_profiles_latest. Each row keeps the age in
 years (a real number), advanced to the user's own newest post, beside its decade, so it stops
-changing once they stop posting; ever_minor is set when any age claim was under 18 when written.
+changing once they stop posting; ever_minor is set when any age claim was under 18 when written
+(a range by its youngest age).
 When the author gave a range or decade instead of a number, the age is that range's midpoint
 ("late 30s" -> 37.5). sex_stated keeps the newest sex claim as the author wrote it, and sex is
 normalized from it (normalize_sex, #214). Countries and US states are compared and stored in one
@@ -33,39 +34,52 @@ _DECADE_RANGE = re.compile(r"(\d)0\s*'?s?\s*(?:-|to)\s*(\d)0\s*'?s")  # "20s-30s
 _DECADE = re.compile(r"(early|mid|late)?[\s-]*(\d)0\s*'?s")
 # Where in its decade each phrase points: early = lower half, late = upper half, mid or none = the centre.
 _DECADE_PART = {"early": 2.5, "mid": 5.0, "late": 7.5}
+# Decades written as words ("mid thirties", "low 60s") read as "mid-30s" and "early 60s".
+_WORD_FORMS = {"twenties": "20s", "thirties": "30s", "forties": "40s", "fifties": "50s", "sixties": "60s",
+               "seventies": "70s", "eighties": "80s", "nineties": "90s",
+               "low": "early", "lower": "early", "high": "late", "upper": "late"}
+_WORDS = re.compile(rf"\b(?:{'|'.join(_WORD_FORMS)})\b")
 
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
-def _estimate(value: str) -> tuple[float, bool] | None:
-    """(age in years, estimated) from what the author wrote: a number as given; a range or decade at
-    its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s" -> 37.5,
-    "20s-30s" -> 30). The whole value must be the age, give or take "in my", "~" or "years old";
-    an open-ended "65+" or "60s+" has no midpoint. None when there is no age in it."""
+def _parse_age(value: str) -> tuple[float, bool, float] | None:
+    """(age in years, estimated, youngest) from what the author wrote: a number as given; a range or
+    decade at its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s"
+    -> 37.5, "20s-30s" -> 30), with the youngest age it allows ("16-20" -> 16, "30s" -> 30, "late 30s"
+    -> 35). The whole value must be the age, give or take "in my", "~" or "years old"; an open-ended
+    "65+" or "60s+" has no midpoint. None when there is no age in it."""
     text = value.strip().lower().translate(_PLAIN)
     if text.endswith("+"):
         return None
     text = _UNITS.sub("", _LEAD.sub("", text)).strip()
+    text = _WORDS.sub(lambda m: _WORD_FORMS[m[0]], text)
     if _NUMBER.fullmatch(text):  # digits only: float() alone would take "1e1" or "inf"
         number = float(text)
         # A fractional age ("34.5") is not a whole-year statement; "34.0" counts as 34.
-        return (number, False) if number.is_integer() else None
+        return (number, False, number) if number.is_integer() else None
     if m := _RANGE.fullmatch(text):
         low, high = int(m[1]), int(m[2])
-        return ((low + high) / 2, True) if low <= high else None
+        return ((low + high) / 2, True, low) if low <= high else None
     if m := _DECADE_RANGE.fullmatch(text):
         low, high = int(m[1]) * 10, int(m[2]) * 10 + 10  # "20s-30s" spans 20 to 40
-        return ((low + high) / 2, True) if low < high else None
+        return ((low + high) / 2, True, low) if low < high else None
     if m := _DECADE.fullmatch(text):
-        return int(m[2]) * 10 + _DECADE_PART.get(m[1], 5.0), True
+        age = int(m[2]) * 10 + _DECADE_PART.get(m[1], 5.0)
+        return age, True, age - 2.5 if m[1] else int(m[2]) * 10  # early, mid and late each span 5 years
     return None
 
 
 def stated_age(value: str) -> tuple[float, bool] | None:
     """(age, estimated) as stated, when it is from 10 to 99 (#206); a range or decade gives its midpoint."""
-    stated = _estimate(value)
-    return stated if stated is not None and 10 <= stated[0] <= 99 else None
+    stated = _parse_age(value)
+    return stated[:2] if stated is not None and 10 <= stated[0] <= 99 else None
+
+
+def youngest_age(value: str) -> float | None:
+    """The youngest age a stated age allows, as written: "16-20" -> 16, so a range crossing 18 may be a minor."""
+    return _parse_age(value)[2] if stated_age(value) else None
 
 
 def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
@@ -102,7 +116,8 @@ _COUNTRY_ALIASES = {
 }
 _PLACES = {
     "country": {alias: name for name, aliases in _COUNTRY_ALIASES.items() for alias in (name.casefold(), *aliases)},
-    "state": {**dict(zip(_US_STATE_CODES, _US_STATES, strict=True)), **{s.casefold(): s for s in _US_STATES}},
+    "state": {**dict(zip(_US_STATE_CODES, _US_STATES, strict=True)), **{s.casefold(): s for s in _US_STATES},
+              "washington dc": "District of Columbia", "washington, dc": "District of Columbia"},
 }
 
 
@@ -171,9 +186,16 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
             # A US state names its country too, so "Texas" alone is "United States / Texas".
             by_field["country"].append((date, post_id, "United States"))
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
-    age = ages[-1][0] if ages else None
-    # Age as written, not advanced: a minor when they wrote it stays flagged, for exclusion.
-    written = [a[0] for a in (stated_age(v) for _, _, v in by_field["age"]) if a is not None]
+    newest = ages[-1] if ages else None
+    if newest and newest[1]:
+        # A vaguer newer claim doesn't replace an exact age it agrees with: "34", then "30s", stays 34.
+        decade = _bucketize_age(str(newest[0]))
+        exact = [a for a, estimated in ages if not estimated and _bucketize_age(str(a)) == decade]
+        newest = (exact[-1], False) if exact else newest
+    age = newest[0] if newest else None
+    # Age as written, not advanced: a minor when they wrote it stays flagged, for exclusion. A range
+    # counts by its youngest age, so "16-20" may be a minor.
+    written = [a for a in (youngest_age(v) for _, _, v in by_field["age"]) if a is not None]
     ever_minor = int(min(written) < 18) if written else None
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     sex_stated = by_field["sex"][-1][2] if by_field["sex"] else None

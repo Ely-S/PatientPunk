@@ -1,6 +1,7 @@
 """The per-post demographics and conditions extractor (#206, #220) with synthetic posts and stubbed replies, no API calls."""
 
 import json
+import re
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
@@ -536,6 +537,8 @@ def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
 @pytest.mark.parametrize("reply, text", [
     ({"sex": "M"}, "I'm 34"), ({"sex": "male"}, "I am female"), ({"age": "34"}, "I take 340 mg"),
     ({"state": "Ohio"}, "my Ohioan friend"),
+    ({"age": 17}, "I'm 34 and have been ill for 17 months"),  # a bare age is never kept: a number isn't a quote
+    ({"age": "34"}, "I'm 34"),
 ])
 def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
     assert demographics.parse_post(json.dumps(reply), text) == ({}, None)
@@ -573,6 +576,16 @@ def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monke
     assert [t for kind, _, t in calls if kind == "post"] == [0.0]  # read at once, not retried
     assert conn.execute("SELECT field, value, evidence FROM demographic_claims ORDER BY field").fetchall() == [
         ("age", "34", "quote"), ("sex", "transgender", "transgender")]  # Ohio isn't in the post
+
+
+def test_a_limited_run_counts_only_users_it_read_as_failed(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "a1"), ("p2", "b", 1, None, "b1"), ("p3", "c", 1, None, "c1")])
+    stub(monkeypatch)
+
+    counts = demographics.run_demographics(path, limit=1)
+
+    assert (counts["users"], counts["posts_failed"], counts["failed_users"]) == (1, 0, 0)
 
 
 def test_limit_caps_the_users_read(db, monkeypatch):
@@ -671,3 +684,15 @@ def test_warns_about_posts_read_before_conditions_were_read_per_post(db, monkeyp
 @pytest.mark.parametrize("value", ["1e1", "3e1", "inf", "nan"])
 def test_age_must_be_written_as_a_number(value):
     assert demographics._claim_value("age", value) is None
+
+
+@pytest.mark.parametrize("evidence, kept", [
+    ("I was 35 when I got sick", False), ("I had just turned 30 too when i got it", False),
+    ("I was 16 when I got sick", False),
+    ("I'm 35", True), ("I just turned 30", True), ("38m, and I was just thinking I don't feel 38", True),
+    ("I was 34 last month and now I'm 35", True),
+])
+def test_a_past_age_is_not_kept_as_the_current_age(evidence, kept):
+    value = re.findall(r"\d+", evidence)[-1]
+    reply = {"age": {"value": value, "evidence": evidence}}
+    assert ("age" in demographics.parse_claims(reply, evidence)) is kept

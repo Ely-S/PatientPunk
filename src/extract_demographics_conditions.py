@@ -135,23 +135,44 @@ def _bare(item: object, text: str, ignore_case: bool = True) -> str | None:
     return bare if bare and _says(text, bare, ignore_case) else None
 
 
+_PAST = re.compile(r"\b(?:was|were|had\s+(?:just\s+)?turned)\b", re.IGNORECASE)
+_PRESENT_OR_BREAK = re.compile(r"[.,;!?\n]|\b(?:i'?m|i am|now)\b", re.IGNORECASE)
+
+
+def _past_age(value: str, evidence: str) -> bool:
+    """Whether the quote gives the age in the past tense: its number follows "was", "were" or "had
+    (just) turned" in the same clause ("I was 35", "I had just turned 30 when I got it"), with no
+    "I'm" or "now" in between ("I was diagnosed and I'm 35" is current)."""
+    number = re.search(r"\d+", value)
+    at = number and re.search(rf"(?<!\d){number[0]}(?!\d)", evidence)
+    if not at:
+        return False
+    cues = list(_PAST.finditer(evidence, 0, at.start()))
+    between = evidence[cues[-1].end():at.start()] if cues else ""
+    return bool(cues) and len(between) <= 30 and not _PRESENT_OR_BREAK.search(between)
+
+
 def parse_claims(result: dict, text: str = "") -> dict[str, tuple[str, str]]:
-    """{field: (value, evidence)} from a per-post reply. A field the post doesn't state, or a value
-    without a quote, is left out. A field given as a bare value instead of {value, evidence} is kept
-    when the value appears as whole words in ``text``, the post, which is then its quote, and left out
-    otherwise, so one badly shaped field doesn't lose the others."""
+    """{field: (value, evidence)} from a per-post reply. A field the post doesn't state, a value
+    without a quote, or an age whose quote gives it in the past tense, is left out. A sex or place
+    given as a bare value instead of {value, evidence} is kept when the value appears as whole words in
+    ``text``, the post, which is then its quote, and left out otherwise, so one badly shaped field
+    doesn't lose the others. A bare age is always left out: a number alone isn't evidence of an age
+    ("ill for 17 months")."""
     claims = {}
     for field in CLAIM_FIELDS:
         item = result.get(field)
         if item is None:
             continue
         if not isinstance(item, dict):
-            bare = _bare(item, text)
+            bare = _bare(item, text) if field != "age" else None
             item = {"value": bare, "evidence": bare} if bare else {}
             if not item:
                 log.info("Dropping a %s claim not in {value, evidence} form", field)
         value, evidence = _claim_value(field, item.get("value")), item.get("evidence")
         if value and isinstance(evidence, str) and evidence.strip():
+            if field == "age" and _past_age(value, evidence):
+                continue  # the prompt says to ignore past ages, but "I was 35 when I got sick" gets through
             claims[field] = (value, evidence.strip())
     return claims
 
@@ -398,7 +419,8 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
         conn.execute("UPDATE extraction_runs SET finished_at = ? WHERE run_id = ?", (int(time.time()), run_id))
         conn.commit()
 
-    counts.update(users=len(read_users), failed_users=len(failed_users), **stats)
+    # Users this run read whose posts aren't all read yet; users a --limit run didn't reach aren't failures.
+    counts.update(users=len(read_users), failed_users=len(failed_users & set(read_users)), **stats)
     log.info("Done: %s", counts)
     return counts
 
