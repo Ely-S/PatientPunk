@@ -1,0 +1,4142 @@
+{
+ "window": [
+  "2020-08-01",
+  "2025-11-11"
+ ],
+ "sizes": {
+  "reddit_posts_total": 1853579,
+  "ldn_census_total": 5131,
+  "ldn_corpus_posts": 4067,
+  "ldn_reddit_posts": 20926,
+  "ldn_reddit_authordays": 17119
+ },
+ "ldn_events": [
+  {
+   "start": "2024-05-06",
+   "peak": "2024-05-07",
+   "peak_posts": 50,
+   "peak_baseline": 3.0,
+   "peak_ratio": 16.666666666666668,
+   "x_3d": 93,
+   "x_3d_ratio": 10.333333333333334,
+   "x_3d_pct": 99.32537623248572,
+   "reddit_3d_authors": 39,
+   "reddit_3d_ratio": 0.8666666666666667,
+   "reddit_posts_3d_ratio": 0.7288135593220338,
+   "reddit_3d_pct": 31.551634665282823,
+   "terms": [
+    "abc",
+    "university",
+    "griffith",
+    "researchers",
+    "trial",
+    "patients"
+   ],
+   "corpus_tweets": 69
+  },
+  {
+   "start": "2022-10-18",
+   "peak": "2022-10-18",
+   "peak_posts": 51,
+   "peak_baseline": 4.5,
+   "peak_ratio": 11.333333333333334,
+   "x_3d": 101,
+   "x_3d_ratio": 6.9655172413793105,
+   "x_3d_pct": 96.93824597820446,
+   "reddit_3d_authors": 39,
+   "reddit_3d_ratio": 1.3220338983050848,
+   "reddit_posts_3d_ratio": 1.492063492063492,
+   "reddit_3d_pct": 74.72755578619616,
+   "terms": [
+    "lifting",
+    "promise",
+    "addiction",
+    "shows",
+    "fog",
+    "drug"
+   ],
+   "corpus_tweets": 109
+  },
+  {
+   "start": "2023-05-18",
+   "peak": "2023-05-18",
+   "peak_posts": 34,
+   "peak_baseline": 3.0,
+   "peak_ratio": 11.333333333333334,
+   "x_3d": 60,
+   "x_3d_ratio": 6.315789473684211,
+   "x_3d_pct": 96.62688116242865,
+   "reddit_3d_authors": 41,
+   "reddit_3d_ratio": 1.1714285714285715,
+   "reddit_posts_3d_ratio": 1.3636363636363635,
+   "reddit_3d_pct": 62.99948105864037,
+   "terms": [
+    "few",
+    "use",
+    "brain",
+    "low-dose",
+    "used",
+    "pain"
+   ],
+   "corpus_tweets": 46
+  },
+  {
+   "start": "2023-03-22",
+   "peak": "2023-03-22",
+   "peak_posts": 27,
+   "peak_baseline": 4.0,
+   "peak_ratio": 6.75,
+   "x_3d": 58,
+   "x_3d_ratio": 4.833333333333333,
+   "x_3d_pct": 95.07005708354956,
+   "reddit_3d_authors": 38,
+   "reddit_3d_ratio": 1.2666666666666666,
+   "reddit_posts_3d_ratio": 1.1904761904761905,
+   "reddit_3d_pct": 71.09496626881162,
+   "terms": [
+    "treat",
+    "longcovid"
+   ],
+   "corpus_tweets": 58
+  },
+  {
+   "start": "2024-07-27",
+   "peak": "2024-07-27",
+   "peak_posts": 23,
+   "peak_baseline": 6.5,
+   "peak_ratio": 3.5384615384615383,
+   "x_3d": 50,
+   "x_3d_ratio": 2.7777777777777777,
+   "x_3d_pct": 90.34769071094966,
+   "reddit_3d_authors": 35,
+   "reddit_3d_ratio": 0.9722222222222222,
+   "reddit_posts_3d_ratio": 1.0,
+   "reddit_3d_pct": 42.086144265697975,
+   "terms": [],
+   "corpus_tweets": 0
+  },
+  {
+   "start": "2022-07-05",
+   "peak": "2022-07-05",
+   "peak_posts": 19,
+   "peak_baseline": 3.0,
+   "peak_ratio": 6.333333333333333,
+   "x_3d": 29,
+   "x_3d_ratio": 3.0526315789473686,
+   "x_3d_pct": 91.74883238194084,
+   "reddit_3d_authors": 14,
+   "reddit_3d_ratio": 1.1666666666666667,
+   "reddit_posts_3d_ratio": 1.2592592592592593,
+   "reddit_3d_pct": 61.96159833938765,
+   "terms": [
+    "clotting",
+    "off",
+    "treatment",
+    "used",
+    "pain",
+    "longcovid"
+   ],
+   "corpus_tweets": 24
+  },
+  {
+   "start": "2025-05-16",
+   "peak": "2025-05-16",
+   "peak_posts": 21,
+   "peak_baseline": 5.0,
+   "peak_ratio": 4.2,
+   "x_3d": 41,
+   "x_3d_ratio": 2.484848484848485,
+   "x_3d_pct": 88.42760768033212,
+   "reddit_3d_authors": 43,
+   "reddit_3d_ratio": 0.9772727272727273,
+   "reddit_posts_3d_ratio": 0.9803921568627451,
+   "reddit_3d_pct": 42.44940321743643,
+   "terms": [
+    "calcium",
+    "trpm",
+    "ion",
+    "channel",
+    "function",
+    "low-dose"
+   ],
+   "corpus_tweets": 24
+  },
+  {
+   "start": "2023-10-31",
+   "peak": "2023-10-31",
+   "peak_posts": 19,
+   "peak_baseline": 3.0,
+   "peak_ratio": 6.333333333333333,
+   "x_3d": 34,
+   "x_3d_ratio": 3.7777777777777777,
+   "x_3d_pct": 93.51323300467047,
+   "reddit_3d_authors": 34,
+   "reddit_3d_ratio": 1.4782608695652173,
+   "reddit_posts_3d_ratio": 1.75,
+   "reddit_3d_pct": 83.18629994810587,
+   "terms": [
+    "used",
+    "brain"
+   ],
+   "corpus_tweets": 32
+  }
+ ],
+ "reuters_month": {
+  "x_census": [
+   2.7386530843237127,
+   2.3072246816757693,
+   3.2497708244349366
+  ],
+  "x_corpus_posts": [
+   3.0154165047285924,
+   2.5213485060531067,
+   3.6065359714120797
+  ],
+  "reddit_posts": [
+   1.598014888337469,
+   1.4011291838121922,
+   1.8201850351465898
+  ],
+  "reddit_authors": [
+   1.5026541445487955,
+   1.296764280507699,
+   1.7381078920614663
+  ],
+  "reddit_all_activity": [
+   1.1314840578408751,
+   1.118586069643429,
+   1.1445141232416607
+  ]
+ },
+ "reuters_weeks": {
+  "x_census": {
+   "pre_week": 19.0,
+   "weeks": [
+    158.0,
+    59.0,
+    27.0
+   ],
+   "lift": [
+    8.31578947368421,
+    3.1052631578947367,
+    1.4210526315789473
+   ]
+  },
+  "x_corpus_posts": {
+   "pre_week": 15.75,
+   "weeks": [
+    160.0,
+    55.0,
+    30.0
+   ],
+   "lift": [
+    10.158730158730158,
+    3.492063492063492,
+    1.9047619047619047
+   ]
+  },
+  "x_corpus_authors": {
+   "pre_week": 15.0,
+   "weeks": [
+    144.0,
+    54.0,
+    28.0
+   ],
+   "lift": [
+    9.6,
+    3.6,
+    1.8666666666666667
+   ]
+  },
+  "x_corpus_texts": {
+   "pre_week": 14.0,
+   "weeks": [
+    146.0,
+    53.0,
+    29.0
+   ],
+   "lift": [
+    10.428571428571429,
+    3.7857142857142856,
+    2.0714285714285716
+   ]
+  },
+  "x_reports": {
+   "pre_week": 4.0,
+   "weeks": [
+    13.0,
+    13.0,
+    9.0
+   ],
+   "lift": [
+    3.25,
+    3.25,
+    2.25
+   ]
+  },
+  "reddit_authors": {
+   "pre_week": 40.75,
+   "weeks": [
+    86.0,
+    94.0,
+    80.0
+   ],
+   "lift": [
+    2.1104294478527605,
+    2.3067484662576687,
+    1.9631901840490797
+   ]
+  },
+  "reddit_posts": {
+   "pre_week": 46.75,
+   "weeks": [
+    106.0,
+    131.0,
+    96.0
+   ],
+   "lift": [
+    2.267379679144385,
+    2.802139037433155,
+    2.053475935828877
+   ]
+  },
+  "reddit_reports": {
+   "pre_week": 25.5,
+   "weeks": [
+    56.0,
+    63.0,
+    37.0
+   ],
+   "lift": [
+    2.196078431372549,
+    2.4705882352941178,
+    1.4509803921568627
+   ]
+  },
+  "reddit_reporters": {
+   "pre_week": 23.75,
+   "weeks": [
+    46.0,
+    47.0,
+    32.0
+   ],
+   "lift": [
+    1.936842105263158,
+    1.9789473684210526,
+    1.3473684210526315
+   ]
+  },
+  "reddit_all_activity": {
+   "pre_week": 8736.75,
+   "weeks": [
+    9757.0,
+    10135.0,
+    9671.0
+   ],
+   "lift": [
+    1.1167768334907144,
+    1.1600423498440495,
+    1.1069333562251409
+   ]
+  },
+  "census_day0": 51,
+  "census_week_before": 19
+ },
+ "reuters_monthly_per_day": {
+  "months": [
+   "2022-04",
+   "2022-05",
+   "2022-06",
+   "2022-07",
+   "2022-08",
+   "2022-09",
+   "2022-10",
+   "2022-11",
+   "2022-12",
+   "2023-01",
+   "2023-02",
+   "2023-03"
+  ],
+  "x_census": [
+   1.8,
+   2.03,
+   2.1,
+   3.84,
+   2.29,
+   3.17,
+   8.48,
+   3.77,
+   3.9,
+   2.29,
+   4.11,
+   6.45
+  ],
+  "reddit_authors": [
+   5.4,
+   5.13,
+   5.0,
+   6.03,
+   5.03,
+   7.0,
+   9.03,
+   9.9,
+   9.29,
+   7.65,
+   8.68,
+   11.55
+  ],
+  "reddit_reports": [
+   3.8,
+   3.55,
+   3.27,
+   3.84,
+   2.84,
+   4.6,
+   5.87,
+   5.6,
+   6.65,
+   5.0,
+   5.61,
+   7.65
+  ]
+ },
+ "reuters_syndication": {
+  "day_posts": 64,
+  "largest_identical_cluster": 12,
+  "cluster_authors": 12,
+  "day_distinct_texts": 51
+ },
+ "dated_events": [
+  {
+   "name": "FDA social post",
+   "drug": "Ivermectin",
+   "date": "2021-08-21",
+   "twitter_authors": {
+    "wk1": 1.1056179775280899,
+    "pct": 66.64907651715039,
+    "wks2to4": 0.946816479400749
+   },
+   "reddit_authors": {
+    "wk1": 1.6388888888888888,
+    "pct": 84.5910290237467,
+    "wks2to4": 1.0925925925925926
+   },
+   "twitter_posts": {
+    "wk1": 1.1873684210526316,
+    "pct": 72.29551451187335,
+    "wks2to4": 0.9628070175438596
+   }
+  },
+  {
+   "name": "TOGETHER results",
+   "drug": "Ivermectin",
+   "date": "2022-03-30",
+   "twitter_authors": {
+    "wk1": 0.861878453038674,
+    "pct": 40.31662269129288,
+    "wks2to4": 0.847145488029466
+   },
+   "reddit_authors": {
+    "wk1": 0.967741935483871,
+    "pct": 50.3957783641161,
+    "wks2to4": 1.3548387096774193
+   },
+   "twitter_posts": {
+    "wk1": 0.8497409326424871,
+    "pct": 40.949868073878626,
+    "wks2to4": 1.0224525043177894
+   }
+  },
+  {
+   "name": "Reuters feature",
+   "drug": "LDN",
+   "date": "2022-10-18",
+   "twitter_authors": {
+    "wk1": 9.6,
+    "pct": 99.15567282321899,
+    "wks2to4": 2.3777777777777778
+   },
+   "reddit_authors": {
+    "wk1": 2.1104294478527605,
+    "pct": 94.1952506596306,
+    "wks2to4": 1.9877300613496933
+   },
+   "twitter_posts": {
+    "wk1": 10.158730158730158,
+    "pct": 99.26121372031662,
+    "wks2to4": 2.3703703703703707
+   }
+  },
+  {
+   "name": "ACTIV-6 results",
+   "drug": "Ivermectin",
+   "date": "2022-10-21",
+   "twitter_authors": {
+    "wk1": 1.2789115646258504,
+    "pct": 76.99208443271768,
+    "wks2to4": 0.9251700680272109
+   },
+   "reddit_authors": {
+    "wk1": 1.1636363636363636,
+    "pct": 63.852242744063325,
+    "wks2to4": 0.5818181818181818
+   },
+   "twitter_posts": {
+    "wk1": 1.0,
+    "pct": 56.41160949868074,
+    "wks2to4": 0.6851851851851852
+   }
+  },
+  {
+   "name": "VA prevention study",
+   "drug": "Paxlovid",
+   "date": "2022-11-06",
+   "twitter_authors": {
+    "wk1": 8.625235404896422,
+    "pct": 98.84196185286103,
+    "wks2to4": 1.7602008788449466
+   },
+   "reddit_authors": {
+    "wk1": 1.3448275862068966,
+    "pct": 76.4665286404417,
+    "wks2to4": 1.5172413793103448
+   },
+   "twitter_posts": {
+    "wk1": 8.752542372881356,
+    "pct": 98.63760217983652,
+    "wks2to4": 1.7129943502824858
+   }
+  },
+  {
+   "name": "NIH RECOVER launch",
+   "drug": "Paxlovid",
+   "date": "2023-07-31",
+   "twitter_authors": {
+    "wk1": 3.2059925093632957,
+    "pct": 94.82288828337875,
+    "wks2to4": 1.9725343320848938
+   },
+   "reddit_authors": {
+    "wk1": 1.1908396946564885,
+    "pct": 66.80469289164941,
+    "wks2to4": 1.7404580152671756
+   },
+   "twitter_posts": {
+    "wk1": 3.2081911262798637,
+    "pct": 94.48228882833789,
+    "wks2to4": 1.970420932878271
+   }
+  },
+  {
+   "name": "Griffith trial (ABC)",
+   "drug": "LDN",
+   "date": "2024-05-06",
+   "twitter_authors": {
+    "wk1": 4.256410256410256,
+    "pct": 97.99472295514512,
+    "wks2to4": 0.9059829059829061
+   },
+   "reddit_authors": {
+    "wk1": 1.1359223300970873,
+    "pct": 66.91292875989447,
+    "wks2to4": 1.174757281553398
+   },
+   "twitter_posts": {
+    "wk1": 4.626506024096385,
+    "pct": 97.94195250659631,
+    "wks2to4": 0.8995983935742973
+   }
+  },
+  {
+   "name": "STOP-PASC results",
+   "drug": "Paxlovid",
+   "date": "2024-06-07",
+   "twitter_authors": {
+    "wk1": 9.066666666666666,
+    "pct": 99.11444141689373,
+    "wks2to4": 1.4464646464646465
+   },
+   "reddit_authors": {
+    "wk1": 1.3786407766990292,
+    "pct": 78.60593512767426,
+    "wks2to4": 0.7961165048543689
+   },
+   "twitter_posts": {
+    "wk1": 9.55056179775281,
+    "pct": 98.84196185286103,
+    "wks2to4": 1.4756554307116105
+   }
+  },
+  {
+   "name": "PAX LC results",
+   "drug": "Paxlovid",
+   "date": "2025-04-03",
+   "twitter_authors": {
+    "wk1": 4.294117647058823,
+    "pct": 97.20708446866485,
+    "wks2to4": 1.411764705882353
+   },
+   "reddit_authors": {
+    "wk1": 1.4054054054054055,
+    "pct": 80.0552104899931,
+    "wks2to4": 0.7207207207207207
+   },
+   "twitter_posts": {
+    "wk1": 1.5411255411255411,
+    "pct": 84.60490463215258,
+    "wks2to4": 0.4675324675324675
+   }
+  }
+ ],
+ "peak_audit": [
+  {
+   "drug": "LDN",
+   "week": "2022-10-17",
+   "posts": 160,
+   "authors": 135,
+   "max_one_author": 12,
+   "cues": {
+    "\u201cReuters\u201d or its headline": 19
+   }
+  },
+  {
+   "drug": "LDN",
+   "week": "2024-05-06",
+   "posts": 96,
+   "authors": 75,
+   "max_one_author": 5,
+   "cues": {
+    "\u201cGriffith\u201d": 29
+   }
+  },
+  {
+   "drug": "Ivermectin",
+   "week": "2024-05-06",
+   "posts": 409,
+   "authors": 315,
+   "max_one_author": 32,
+   "cues": {
+    "\u201cCuomo\u201d": 192
+   }
+  },
+  {
+   "drug": "Ivermectin",
+   "week": "2021-05-31",
+   "posts": 189,
+   "authors": 70,
+   "max_one_author": 107,
+   "cues": {
+    "the opening \u201canother study on ivermectin\u201d": 107
+   }
+  },
+  {
+   "drug": "Paxlovid",
+   "week": "2022-11-07",
+   "posts": 1138,
+   "authors": 925,
+   "max_one_author": 12,
+   "cues": {
+    "\u201cVA study\u201d": 120,
+    "\u201crisk of long COVID\u201d": 391
+   }
+  },
+  {
+   "drug": "Paxlovid",
+   "week": "2022-04-18",
+   "posts": 610,
+   "authors": 496,
+   "max_one_author": 7,
+   "cues": {
+    "the Reuters headline \u201cthe case for testing\u201d": 149
+   }
+  }
+ ],
+ "excluded_small": [
+  "Azithromycin",
+  "Evusheld",
+  "Remdesivir"
+ ],
+ "cross_drug": {
+  "authors": {
+   "n": 24,
+   "twitter_higher": 18,
+   "median_ratio": 1.6249551616952984,
+   "median_ratio_ci": [
+    1.2028597012431768,
+    2.6197277744826475
+   ],
+   "wilcoxon_p": 0.006516098976135254,
+   "sign_p": 0.022655844688415527
+  },
+  "posts": {
+   "n": 24,
+   "twitter_higher": 18,
+   "median_ratio": 1.9099602955325943,
+   "median_ratio_ci": [
+    1.4385871624951863,
+    2.6020407298870496
+   ],
+   "wilcoxon_p": 0.00014960765838623047,
+   "sign_p": 0.022655844688415527
+  },
+  "tw_posts_vs_rd_threads": {
+   "n": 24,
+   "twitter_higher": 24,
+   "median_ratio": 11.084828115346543,
+   "median_ratio_ci": [
+    7.925852200178741,
+    20.387562258561413
+   ],
+   "wilcoxon_p": 1.1920928955078125e-07,
+   "sign_p": 1.1920928955078125e-07
+  },
+  "authors_sov": {
+   "n": 24,
+   "twitter_higher": 19,
+   "median_ratio": 1.6794382047443799,
+   "median_ratio_ci": [
+    1.248063562204676,
+    2.8416924605564615
+   ],
+   "wilcoxon_p": 0.002814650535583496,
+   "sign_p": 0.006610751152038574
+  },
+  "spike_share_authors": {
+   "n": 24,
+   "twitter_higher": 18,
+   "median_ratio": 1.6504342925631832,
+   "median_ratio_ci": [
+    1.120007345959711,
+    2.4718758408939254
+   ],
+   "wilcoxon_p": 0.0035042762756347656,
+   "sign_p": 0.022655844688415527
+  },
+  "cv_ratio_authors": 1.2747372912468273,
+  "median_alpha": {
+   "twitter_authors_alpha": 0.45376986841456124,
+   "reddit_authors_alpha": 0.2216052850776924,
+   "twitter_posts_alpha": 0.8701578197013426,
+   "reddit_posts_alpha": 0.3487676400986433,
+   "reddit_threads_alpha": 0.06295320779189127
+  },
+  "median_spike_share": {
+   "twitter_authors_spike_share": 0.08072176546564924,
+   "reddit_authors_spike_share": 0.04122584913877682
+  }
+ },
+ "table_drugs": [
+  {
+   "drug": "Aspirin",
+   "twitter_authors_n": 1918,
+   "reddit_authors_n": 6616,
+   "twitter_authors_alpha": 0.138,
+   "twitter_authors_alpha_lo": 0.0686,
+   "twitter_authors_alpha_hi": 0.2124,
+   "reddit_authors_alpha": 0.1999,
+   "reddit_authors_alpha_lo": 0.1612,
+   "reddit_authors_alpha_hi": 0.2445,
+   "twitter_authors_spike_share": 0.0312,
+   "reddit_authors_spike_share": 0.0427,
+   "twitter_posts_alpha": 7.4246,
+   "reddit_posts_alpha": 0.3383,
+   "reddit_threads_alpha": 0.0731
+  },
+  {
+   "drug": "CoQ10",
+   "twitter_authors_n": 554,
+   "reddit_authors_n": 3468,
+   "twitter_authors_alpha": 0.3588,
+   "twitter_authors_alpha_lo": 0.0873,
+   "twitter_authors_alpha_hi": 0.7064,
+   "reddit_authors_alpha": 0.2433,
+   "reddit_authors_alpha_lo": 0.1863,
+   "reddit_authors_alpha_hi": 0.2941,
+   "twitter_authors_spike_share": 0.0993,
+   "reddit_authors_spike_share": 0.0402,
+   "twitter_posts_alpha": 0.6858,
+   "reddit_posts_alpha": 0.3507,
+   "reddit_threads_alpha": 0.0384
+  },
+  {
+   "drug": "Famotidine",
+   "twitter_authors_n": 877,
+   "reddit_authors_n": 8249,
+   "twitter_authors_alpha": 0.1813,
+   "twitter_authors_alpha_lo": 0.0685,
+   "twitter_authors_alpha_hi": 0.3456,
+   "reddit_authors_alpha": 0.1163,
+   "reddit_authors_alpha_lo": 0.0918,
+   "reddit_authors_alpha_hi": 0.1432,
+   "twitter_authors_spike_share": 0.0483,
+   "reddit_authors_spike_share": 0.0193,
+   "twitter_posts_alpha": 0.328,
+   "reddit_posts_alpha": 0.1979,
+   "reddit_threads_alpha": 0.0295
+  },
+  {
+   "drug": "Fluvoxamine",
+   "twitter_authors_n": 1115,
+   "reddit_authors_n": 2108,
+   "twitter_authors_alpha": 0.749,
+   "twitter_authors_alpha_lo": 0.222,
+   "twitter_authors_alpha_hi": 1.4327,
+   "reddit_authors_alpha": 0.1397,
+   "reddit_authors_alpha_lo": 0.0729,
+   "reddit_authors_alpha_hi": 0.2277,
+   "twitter_authors_spike_share": 0.1265,
+   "reddit_authors_spike_share": 0.0335,
+   "twitter_posts_alpha": 1.0694,
+   "reddit_posts_alpha": 0.415,
+   "reddit_threads_alpha": 0.1085
+  },
+  {
+   "drug": "H1 antihistamines",
+   "twitter_authors_n": 1815,
+   "reddit_authors_n": 23055,
+   "twitter_authors_alpha": 0.1943,
+   "twitter_authors_alpha_lo": 0.0537,
+   "twitter_authors_alpha_hi": 0.359,
+   "reddit_authors_alpha": 0.0815,
+   "reddit_authors_alpha_lo": 0.0668,
+   "reddit_authors_alpha_hi": 0.1019,
+   "twitter_authors_spike_share": 0.0351,
+   "reddit_authors_spike_share": 0.0059,
+   "twitter_posts_alpha": 0.287,
+   "reddit_posts_alpha": 0.1312,
+   "reddit_threads_alpha": 0.0141
+  },
+  {
+   "drug": "HBOT",
+   "twitter_authors_n": 2568,
+   "reddit_authors_n": 3081,
+   "twitter_authors_alpha": 1.7331,
+   "twitter_authors_alpha_lo": 0.2962,
+   "twitter_authors_alpha_hi": 3.1316,
+   "reddit_authors_alpha": 0.409,
+   "reddit_authors_alpha_lo": 0.2594,
+   "reddit_authors_alpha_hi": 0.6023,
+   "twitter_authors_spike_share": 0.122,
+   "reddit_authors_spike_share": 0.0793,
+   "twitter_posts_alpha": 1.6897,
+   "reddit_posts_alpha": 0.6488,
+   "reddit_threads_alpha": 0.046
+  },
+  {
+   "drug": "Hydroxychloroquine",
+   "twitter_authors_n": 1503,
+   "reddit_authors_n": 838,
+   "twitter_authors_alpha": 0.817,
+   "twitter_authors_alpha_lo": 0.205,
+   "twitter_authors_alpha_hi": 1.2542,
+   "reddit_authors_alpha": 1.1988,
+   "reddit_authors_alpha_lo": 0.7045,
+   "reddit_authors_alpha_hi": 1.6531,
+   "twitter_authors_spike_share": 0.1074,
+   "reddit_authors_spike_share": 0.1663,
+   "twitter_posts_alpha": 1.7537,
+   "reddit_posts_alpha": 1.9553,
+   "reddit_threads_alpha": 0.3075
+  },
+  {
+   "drug": "IVIG",
+   "twitter_authors_n": 1291,
+   "reddit_authors_n": 2868,
+   "twitter_authors_alpha": 0.6225,
+   "twitter_authors_alpha_lo": 0.4554,
+   "twitter_authors_alpha_hi": 0.7912,
+   "reddit_authors_alpha": 0.5198,
+   "reddit_authors_alpha_lo": 0.3719,
+   "reddit_authors_alpha_hi": 0.6924,
+   "twitter_authors_spike_share": 0.0906,
+   "reddit_authors_spike_share": 0.1185,
+   "twitter_posts_alpha": 0.9647,
+   "reddit_posts_alpha": 0.9697,
+   "reddit_threads_alpha": 0.1483
+  },
+  {
+   "drug": "Interferon",
+   "twitter_authors_n": 783,
+   "reddit_authors_n": 383,
+   "twitter_authors_alpha": 1.5039,
+   "twitter_authors_alpha_lo": 0.6118,
+   "twitter_authors_alpha_hi": 1.9664,
+   "reddit_authors_alpha": 1.2503,
+   "reddit_authors_alpha_lo": 0.4485,
+   "reddit_authors_alpha_hi": 2.3619,
+   "twitter_authors_spike_share": 0.186,
+   "reddit_authors_spike_share": 0.1661,
+   "twitter_posts_alpha": 2.0003,
+   "reddit_posts_alpha": 2.6494,
+   "reddit_threads_alpha": 0.0201
+  },
+  {
+   "drug": "Ivermectin",
+   "twitter_authors_n": 10963,
+   "reddit_authors_n": 4457,
+   "twitter_authors_alpha": 0.4354,
+   "twitter_authors_alpha_lo": 0.1141,
+   "twitter_authors_alpha_hi": 0.9352,
+   "reddit_authors_alpha": 0.4486,
+   "reddit_authors_alpha_lo": 0.3077,
+   "reddit_authors_alpha_hi": 0.6653,
+   "twitter_authors_spike_share": 0.0674,
+   "reddit_authors_spike_share": 0.1018,
+   "twitter_posts_alpha": 0.6586,
+   "reddit_posts_alpha": 0.9187,
+   "reddit_threads_alpha": 0.1132
+  },
+  {
+   "drug": "LDN",
+   "twitter_authors_n": 3741,
+   "reddit_authors_n": 17119,
+   "twitter_authors_alpha": 0.7257,
+   "twitter_authors_alpha_lo": 0.2667,
+   "twitter_authors_alpha_hi": 1.2104,
+   "reddit_authors_alpha": 0.0921,
+   "reddit_authors_alpha_lo": 0.0754,
+   "reddit_authors_alpha_hi": 0.11,
+   "twitter_authors_spike_share": 0.1105,
+   "reddit_authors_spike_share": 0.0071,
+   "twitter_posts_alpha": 0.8655,
+   "reddit_posts_alpha": 0.1509,
+   "reddit_threads_alpha": 0.0086
+  },
+  {
+   "drug": "Lumbrokinase",
+   "twitter_authors_n": 339,
+   "reddit_authors_n": 1446,
+   "twitter_authors_alpha": 0.4721,
+   "twitter_authors_alpha_lo": 0.0493,
+   "twitter_authors_alpha_hi": 1.1894,
+   "reddit_authors_alpha": 0.2786,
+   "reddit_authors_alpha_lo": 0.1757,
+   "reddit_authors_alpha_hi": 0.3943,
+   "twitter_authors_spike_share": 0.1293,
+   "reddit_authors_spike_share": 0.0423,
+   "twitter_posts_alpha": 1.5944,
+   "reddit_posts_alpha": 0.8547,
+   "reddit_threads_alpha": 0.4439
+  },
+  {
+   "drug": "Maraviroc",
+   "twitter_authors_n": 1153,
+   "reddit_authors_n": 2388,
+   "twitter_authors_alpha": 0.7492,
+   "twitter_authors_alpha_lo": 0.4282,
+   "twitter_authors_alpha_hi": 1.1428,
+   "reddit_authors_alpha": 0.3404,
+   "reddit_authors_alpha_lo": 0.2426,
+   "reddit_authors_alpha_hi": 0.4336,
+   "twitter_authors_spike_share": 0.1224,
+   "reddit_authors_spike_share": 0.0558,
+   "twitter_posts_alpha": 1.1116,
+   "reddit_posts_alpha": 0.7077,
+   "reddit_threads_alpha": 0.1152
+  },
+  {
+   "drug": "Melatonin",
+   "twitter_authors_n": 1872,
+   "reddit_authors_n": 6346,
+   "twitter_authors_alpha": 0.3182,
+   "twitter_authors_alpha_lo": 0.0935,
+   "twitter_authors_alpha_hi": 0.6127,
+   "reddit_authors_alpha": 0.2571,
+   "reddit_authors_alpha_lo": 0.1983,
+   "reddit_authors_alpha_hi": 0.3193,
+   "twitter_authors_spike_share": 0.0495,
+   "reddit_authors_spike_share": 0.0583,
+   "twitter_posts_alpha": 0.5241,
+   "reddit_posts_alpha": 0.3417,
+   "reddit_threads_alpha": 0.0475
+  },
+  {
+   "drug": "Metformin",
+   "twitter_authors_n": 6225,
+   "reddit_authors_n": 2636,
+   "twitter_authors_alpha": 1.7633,
+   "twitter_authors_alpha_lo": 0.4776,
+   "twitter_authors_alpha_hi": 2.6749,
+   "reddit_authors_alpha": 0.5646,
+   "reddit_authors_alpha_lo": 0.4601,
+   "reddit_authors_alpha_hi": 0.6816,
+   "twitter_authors_spike_share": 0.2478,
+   "reddit_authors_spike_share": 0.1252,
+   "twitter_posts_alpha": 2.0898,
+   "reddit_posts_alpha": 0.7346,
+   "reddit_threads_alpha": 0.0549
+  },
+  {
+   "drug": "Nattokinase",
+   "twitter_authors_n": 2464,
+   "reddit_authors_n": 5635,
+   "twitter_authors_alpha": 0.1554,
+   "twitter_authors_alpha_lo": 0.091,
+   "twitter_authors_alpha_hi": 0.2364,
+   "reddit_authors_alpha": 0.1254,
+   "reddit_authors_alpha_lo": 0.0884,
+   "reddit_authors_alpha_hi": 0.1685,
+   "twitter_authors_spike_share": 0.0463,
+   "reddit_authors_spike_share": 0.0335,
+   "twitter_posts_alpha": 0.2317,
+   "reddit_posts_alpha": 0.2331,
+   "reddit_threads_alpha": 0.064
+  },
+  {
+   "drug": "Omega-3",
+   "twitter_authors_n": 419,
+   "reddit_authors_n": 3417,
+   "twitter_authors_alpha": 0.4784,
+   "twitter_authors_alpha_lo": 0.0514,
+   "twitter_authors_alpha_hi": 0.9969,
+   "reddit_authors_alpha": 0.1363,
+   "reddit_authors_alpha_lo": 0.0798,
+   "reddit_authors_alpha_hi": 0.1996,
+   "twitter_authors_spike_share": 0.0796,
+   "reddit_authors_spike_share": 0.0291,
+   "twitter_posts_alpha": 0.7662,
+   "reddit_posts_alpha": 0.2712,
+   "reddit_threads_alpha": 0.09
+  },
+  {
+   "drug": "Paxlovid",
+   "twitter_authors_n": 18404,
+   "reddit_authors_n": 7842,
+   "twitter_authors_alpha": 0.8221,
+   "twitter_authors_alpha_lo": 0.3084,
+   "twitter_authors_alpha_hi": 1.195,
+   "reddit_authors_alpha": 0.2918,
+   "reddit_authors_alpha_lo": 0.2398,
+   "reddit_authors_alpha_hi": 0.3602,
+   "twitter_authors_spike_share": 0.1384,
+   "reddit_authors_spike_share": 0.0785,
+   "twitter_posts_alpha": 0.9017,
+   "reddit_posts_alpha": 0.3831,
+   "reddit_threads_alpha": 0.0586
+  },
+  {
+   "drug": "Quercetin",
+   "twitter_authors_n": 1261,
+   "reddit_authors_n": 4577,
+   "twitter_authors_alpha": 0.1118,
+   "twitter_authors_alpha_lo": 0.0368,
+   "twitter_authors_alpha_hi": 0.2087,
+   "reddit_authors_alpha": 0.1466,
+   "reddit_authors_alpha_lo": 0.0981,
+   "reddit_authors_alpha_hi": 0.1987,
+   "twitter_authors_spike_share": 0.0263,
+   "reddit_authors_spike_share": 0.0238,
+   "twitter_posts_alpha": 1.0794,
+   "reddit_posts_alpha": 0.2552,
+   "reddit_threads_alpha": 0.0619
+  },
+  {
+   "drug": "Serrapeptase",
+   "twitter_authors_n": 657,
+   "reddit_authors_n": 1624,
+   "twitter_authors_alpha": 0.0919,
+   "twitter_authors_alpha_lo": -0.0574,
+   "twitter_authors_alpha_hi": 0.2601,
+   "reddit_authors_alpha": 0.1638,
+   "reddit_authors_alpha_lo": 0.1029,
+   "reddit_authors_alpha_hi": 0.2364,
+   "twitter_authors_spike_share": 0.048,
+   "reddit_authors_spike_share": 0.0269,
+   "twitter_posts_alpha": 0.2146,
+   "reddit_posts_alpha": 0.3468,
+   "reddit_threads_alpha": 0.0948
+  },
+  {
+   "drug": "Statins",
+   "twitter_authors_n": 1228,
+   "reddit_authors_n": 2841,
+   "twitter_authors_alpha": 0.5965,
+   "twitter_authors_alpha_lo": 0.3257,
+   "twitter_authors_alpha_hi": 0.9391,
+   "reddit_authors_alpha": 0.2921,
+   "reddit_authors_alpha_lo": 0.2086,
+   "reddit_authors_alpha_hi": 0.3903,
+   "twitter_authors_spike_share": 0.0819,
+   "reddit_authors_spike_share": 0.053,
+   "twitter_posts_alpha": 0.872,
+   "reddit_posts_alpha": 0.6062,
+   "reddit_threads_alpha": 0.0903
+  },
+  {
+   "drug": "Vitamin C",
+   "twitter_authors_n": 1358,
+   "reddit_authors_n": 4649,
+   "twitter_authors_alpha": 0.3501,
+   "twitter_authors_alpha_lo": 0.1358,
+   "twitter_authors_alpha_hi": 0.6108,
+   "reddit_authors_alpha": 0.0671,
+   "reddit_authors_alpha_lo": 0.0391,
+   "reddit_authors_alpha_hi": 0.099,
+   "twitter_authors_spike_share": 0.0468,
+   "reddit_authors_spike_share": 0.0111,
+   "twitter_posts_alpha": 0.8683,
+   "reddit_posts_alpha": 0.1489,
+   "reddit_threads_alpha": 0.0048
+  },
+  {
+   "drug": "Vitamin D",
+   "twitter_authors_n": 3982,
+   "reddit_authors_n": 10574,
+   "twitter_authors_alpha": 0.3861,
+   "twitter_authors_alpha_lo": 0.0651,
+   "twitter_authors_alpha_hi": 0.697,
+   "reddit_authors_alpha": 0.1474,
+   "reddit_authors_alpha_lo": 0.1122,
+   "reddit_authors_alpha_hi": 0.1864,
+   "twitter_authors_spike_share": 0.0536,
+   "reddit_authors_spike_share": 0.0362,
+   "twitter_posts_alpha": 0.6186,
+   "reddit_posts_alpha": 0.2354,
+   "reddit_threads_alpha": 0.0144
+  },
+  {
+   "drug": "Zinc",
+   "twitter_authors_n": 2473,
+   "reddit_authors_n": 5146,
+   "twitter_authors_alpha": 0.0257,
+   "twitter_authors_alpha_lo": -0.033,
+   "twitter_authors_alpha_hi": 0.0903,
+   "reddit_authors_alpha": 0.1401,
+   "reddit_authors_alpha_lo": 0.0863,
+   "reddit_authors_alpha_hi": 0.2015,
+   "twitter_authors_spike_share": 0.0097,
+   "reddit_authors_spike_share": 0.0312,
+   "twitter_posts_alpha": 0.3198,
+   "reddit_posts_alpha": 0.2671,
+   "reddit_threads_alpha": 0.0647
+  }
+ ],
+ "epoch": {
+  "twitter": {
+   "events": 222,
+   "drugs": 24,
+   "twitter_day0": 6.727955852999882,
+   "reddit_day0": 1.2999788000847998,
+   "twitter_day0_ci": [
+    5.4095374489334,
+    8.286830006668822
+   ],
+   "reddit_day0_ci": [
+    1.1756521278830785,
+    1.4451289082041177
+   ],
+   "twitter_days0to2": 3.922038276388399,
+   "reddit_days0to2": 1.1697830542011167,
+   "twitter_days7to14": 1.0575613478924504,
+   "reddit_days7to14": 1.0294466822132713,
+   "twitter_pre": 0.9988650150679034,
+   "reddit_pre": 1.0336513320613385
+  },
+  "reddit": {
+   "events": 370,
+   "drugs": 24,
+   "twitter_day0": 1.6203531422061899,
+   "reddit_day0": 4.133978465312797,
+   "twitter_day0_ci": [
+    1.0588148236009718,
+    2.50730237749297
+   ],
+   "reddit_day0_ci": [
+    3.949043617011766,
+    4.331835558442433
+   ],
+   "twitter_days0to2": 1.4509461426491999,
+   "reddit_days0to2": 2.20230793694062,
+   "twitter_days7to14": 1.0139168407062846,
+   "reddit_days7to14": 0.9562150742810411,
+   "twitter_pre": 1.139598759572179,
+   "reddit_pre": 0.9480259870064965
+  }
+ },
+ "ldn_xcorr": {
+  "-5": -0.054584764261499726,
+  "-4": -0.053704701847845336,
+  "-3": -0.04354154179234004,
+  "-2": -0.05746020879038478,
+  "-1": 0.0009947486806577998,
+  "0": 0.056176728633375306,
+  "1": 0.05845894869952018,
+  "2": 0.03032485529889575,
+  "3": 0.0184758174331728,
+  "4": 0.06371672035484556,
+  "5": 0.041566938129989676
+ },
+ "composition": {
+  "ldn": {
+   "posts_spike": 667,
+   "posts_control": 2580,
+   "spike_days": 54,
+   "first_time_author": {
+    "control": [
+     0.45852713178294574,
+     0.43694853356320046,
+     0.47747475296966047
+    ],
+    "spike": [
+     0.52023988005997,
+     0.4383555145434223,
+     0.5958369652945924
+    ],
+    "n": [
+     667,
+     2580
+    ],
+    "diff": 0.061712748277024276,
+    "diff_ci": [
+     -0.023287965260968706,
+     0.1421279696504092
+    ]
+   },
+   "report_yield": {
+    "control": [
+     0.2810077519379845,
+     0.26206057214229317,
+     0.3002828306273187
+    ],
+    "spike": [
+     0.1664167916041979,
+     0.13157632627385196,
+     0.20817792351249412
+    ],
+    "n": [
+     667,
+     2580
+    ],
+    "diff": -0.1145909603337866,
+    "diff_ci": [
+     -0.15381665477753367,
+     -0.06791667882016071
+    ]
+   },
+   "positive_among_reports": {
+    "control": [
+     0.7779310344827586,
+     0.7466261778612956,
+     0.8071946936209701
+    ],
+    "spike": [
+     0.7027027027027027,
+     0.6225996652465002,
+     0.7802318295739348
+    ],
+    "n": [
+     111,
+     725
+    ],
+    "diff": -0.07522833178005583,
+    "diff_ci": [
+     -0.16256070087609517,
+     0.00452116441677148
+    ]
+   },
+   "own_use_among_labelled": {
+    "control": [
+     0.35697583787996884,
+     0.3314677581275532,
+     0.383348945835503
+    ],
+    "spike": [
+     0.19519519519519518,
+     0.14144171856167134,
+     0.2605740210493731
+    ],
+    "n": [
+     333,
+     1283
+    ],
+    "diff": -0.16178064268477366,
+    "diff_ci": [
+     -0.2197773132354356,
+     -0.0920702390137795
+    ]
+   },
+   "likes_median": [
+    2.0,
+    2.0
+   ],
+   "likes_mean": [
+    17.598200899550225,
+    15.082170542635659
+   ]
+  },
+  "ivermectin": {
+   "posts_spike": 1037,
+   "posts_control": 4423,
+   "spike_days": 40,
+   "first_time_author": {
+    "control": [
+     0.5487225864797649,
+     0.5244528213791687,
+     0.5721976049785724
+    ],
+    "spike": [
+     0.6914175506268081,
+     0.6208686594202899,
+     0.75
+    ],
+    "n": [
+     1037,
+     4423
+    ],
+    "diff": 0.1426949641470432,
+    "diff_ci": [
+     0.06902088363385135,
+     0.20969564953834358
+    ]
+   },
+   "report_yield": {
+    "control": [
+     0.21930816188107619,
+     0.1986062717770035,
+     0.24260291354560712
+    ],
+    "spike": [
+     0.1369334619093539,
+     0.10152504173622705,
+     0.18035167506009836
+    ],
+    "n": [
+     1037,
+     4423
+    ],
+    "diff": -0.08237469997172228,
+    "diff_ci": [
+     -0.12380344487854042,
+     -0.03416839902427948
+    ]
+   },
+   "positive_among_reports": {
+    "control": [
+     0.9185567010309278,
+     0.8985749757572363,
+     0.9365767272191475
+    ],
+    "spike": [
+     0.9366197183098591,
+     0.8947368421052632,
+     0.971268472906404
+    ],
+    "n": [
+     142,
+     970
+    ],
+    "diff": 0.018063017278931337,
+    "diff_ci": [
+     -0.02705980979438495,
+     0.05825414115154191
+    ]
+   },
+   "likes_median": [
+    1.0,
+    1.0
+   ],
+   "likes_mean": [
+    44.13982642237223,
+    6.533348406059236
+   ]
+  }
+ },
+ "composition_no_bots": {
+  "ldn": {
+   "posts_spike": 639,
+   "posts_control": 2560,
+   "spike_days": 54,
+   "first_time_author": {
+    "control": [
+     0.461328125,
+     0.4408144247193964,
+     0.48191540122484916
+    ],
+    "spike": [
+     0.5383411580594679,
+     0.45262540855478184,
+     0.616266512748444
+    ],
+    "n": [
+     639,
+     2560
+    ],
+    "diff": 0.07701303305946794,
+    "diff_ci": [
+     -0.012017684537922148,
+     0.1614991474036421
+    ]
+   },
+   "report_yield": {
+    "control": [
+     0.283203125,
+     0.2648269617653104,
+     0.30275382132259143
+    ],
+    "spike": [
+     0.17370892018779344,
+     0.138982557099562,
+     0.2140386879618974
+    ],
+    "n": [
+     639,
+     2560
+    ],
+    "diff": -0.10949420481220656,
+    "diff_ci": [
+     -0.1479033391402289,
+     -0.06154485859868992
+    ]
+   },
+   "positive_among_reports": {
+    "control": [
+     0.7779310344827586,
+     0.7487471719457014,
+     0.8081101715859342
+    ],
+    "spike": [
+     0.7027027027027027,
+     0.6226545253863135,
+     0.7883728567477876
+    ],
+    "n": [
+     111,
+     725
+    ],
+    "diff": -0.07522833178005583,
+    "diff_ci": [
+     -0.1583034836577586,
+     0.006083676120037285
+    ]
+   },
+   "own_use_among_labelled": {
+    "control": [
+     0.35927672955974843,
+     0.3324105102817974,
+     0.3871704159004928
+    ],
+    "spike": [
+     0.20186335403726707,
+     0.14684371915973496,
+     0.2693984885620914
+    ],
+    "n": [
+     322,
+     1272
+    ],
+    "diff": -0.15741337552248136,
+    "diff_ci": [
+     -0.21758436865130315,
+     -0.08762172096779966
+    ]
+   },
+   "likes_median": [
+    2.0,
+    2.0
+   ],
+   "likes_mean": [
+    18.358372456964005,
+    15.173046875
+   ]
+  },
+  "ivermectin": {
+   "posts_spike": 945,
+   "posts_control": 3968,
+   "spike_days": 40,
+   "first_time_author": {
+    "control": [
+     0.6018145161290323,
+     0.5861525066994939,
+     0.6186626191007815
+    ],
+    "spike": [
+     0.7470899470899471,
+     0.6697880549808566,
+     0.7905963147145838
+    ],
+    "n": [
+     945,
+     3968
+    ],
+    "diff": 0.1452754309609149,
+    "diff_ci": [
+     0.06627007867286301,
+     0.19262640968680847
+    ]
+   },
+   "report_yield": {
+    "control": [
+     0.21950604838709678,
+     0.2058596360282406,
+     0.23433221109626365
+    ],
+    "spike": [
+     0.11428571428571428,
+     0.08084562936005305,
+     0.16446466646360036
+    ],
+    "n": [
+     945,
+     3968
+    ],
+    "diff": -0.1052203341013825,
+    "diff_ci": [
+     -0.14161970139229385,
+     -0.05410417031031216
+    ]
+   },
+   "positive_among_reports": {
+    "control": [
+     0.9092996555683123,
+     0.8891735236846434,
+     0.9276158743526293
+    ],
+    "spike": [
+     0.9166666666666666,
+     0.8733932329609843,
+     0.9560945633314054
+    ],
+    "n": [
+     108,
+     871
+    ],
+    "diff": 0.007367011098354359,
+    "diff_ci": [
+     -0.0424909455875832,
+     0.04993800021871118
+    ]
+   },
+   "likes_median": [
+    1.0,
+    1.0
+   ],
+   "likes_mean": [
+    48.37989417989418,
+    7.207661290322581
+   ]
+  }
+ },
+ "matched_keyword": {
+  "term_regex": "long[ -]?covid|long[ -]?hauler|\\bpasc\\b|\\blc\\b",
+  "reddit_posts": 24014,
+  "paired": {
+   "n": 24,
+   "twitter_higher": 19,
+   "median_ratio": 3.0738463239132856,
+   "median_ratio_ci": [
+    2.360732961730328,
+    4.108825842345783
+   ],
+   "wilcoxon_p": 0.0005675554275512695,
+   "sign_p": 0.006610751152038574
+  }
+ },
+ "bots": {
+  "x_posts": 84420,
+  "reddit_drug_posts": 116792,
+  "x_roles": {
+   "organic": 74966,
+   "headline relay": 5148,
+   "flood": 3366,
+   "vendor": 541,
+   "other repeat": 372,
+   "coordinated": 27
+  },
+  "reddit_roles": {
+   "organic": 114929,
+   "flood": 1120,
+   "other repeat": 684,
+   "vendor": 51,
+   "coordinated": 8
+  },
+  "x_bot_share": 0.04660033167495854,
+  "reddit_bot_share": 0.010094869511610384,
+  "x_relay_share": 0.06098081023454158,
+  "reddit_relay_share": 0.0,
+  "bot_accounts": 366,
+  "vendor_accounts": 79,
+  "relay_clusters": 644,
+  "account_signals": [
+   {
+    "group": "organic",
+    "posts": 74966,
+    "accounts": 28172,
+    "young": 0.035962969879678786,
+    "digit_handle": 0.048515326948216524,
+    "med_likes": 1.0,
+    "likes": 997983,
+    "share_of_posts": 0.888012319355603,
+    "share_of_likes": 0.9085887682676795
+   },
+   {
+    "group": "headline relay",
+    "posts": 5148,
+    "accounts": 3544,
+    "young": 0.03360528360528361,
+    "digit_handle": 0.038655788655788656,
+    "med_likes": 0.0,
+    "likes": 77032,
+    "share_of_posts": 0.06098081023454158,
+    "share_of_likes": 0.07013186597085912
+   },
+   {
+    "group": "other repeat",
+    "posts": 372,
+    "accounts": 272,
+    "young": 0.03763440860215054,
+    "digit_handle": 0.06989247311827956,
+    "med_likes": 1.0,
+    "likes": 10615,
+    "share_of_posts": 0.004406538734896943,
+    "share_of_likes": 0.009664162390703467
+   },
+   {
+    "group": "bots and marketers",
+    "posts": 3934,
+    "accounts": 366,
+    "young": 0.04753431621759024,
+    "digit_handle": 0.11311642094560244,
+    "med_likes": 0.0,
+    "likes": 12758,
+    "share_of_posts": 0.04660033167495854,
+    "share_of_likes": 0.011615203370757875
+   }
+  ],
+  "account_signals_by_role": [
+   {
+    "role": "coordinated",
+    "posts": 27,
+    "young": 0.037037037037037035,
+    "digit_handle": 0.0
+   },
+   {
+    "role": "flood",
+    "posts": 3366,
+    "young": 0.03594771241830065,
+    "digit_handle": 0.13101604278074866
+   },
+   {
+    "role": "headline relay",
+    "posts": 5148,
+    "young": 0.03360528360528361,
+    "digit_handle": 0.038655788655788656
+   },
+   {
+    "role": "organic",
+    "posts": 74966,
+    "young": 0.035962969879678786,
+    "digit_handle": 0.048515326948216524
+   },
+   {
+    "role": "other repeat",
+    "posts": 372,
+    "young": 0.03763440860215054,
+    "digit_handle": 0.06989247311827956
+   },
+   {
+    "role": "vendor",
+    "posts": 541,
+    "young": 0.12014787430683918,
+    "digit_handle": 0.0073937153419593345
+   }
+  ],
+  "tier1_recall": {
+   "n": 382,
+   "caught": 380,
+   "any_bot": 380
+  },
+  "validation": {
+   "vendor": {
+    "n": 28,
+    "hits": 28,
+    "share": 1.0,
+    "ci": [
+     0.8793527963418923,
+     1.0
+    ],
+    "labels": {
+     "M": 28
+    }
+   },
+   "flood": {
+    "n": 30,
+    "hits": 28,
+    "share": 0.9333333333333333,
+    "ci": [
+     0.7867618227892791,
+     0.9815233646723066
+    ],
+    "labels": {
+     "A": 26,
+     "P": 2,
+     "M": 2
+    }
+   },
+   "coordinated": {
+    "n": 15,
+    "hits": 11,
+    "share": 0.7333333333333333,
+    "ci": [
+     0.48049110342313245,
+     0.8910272389681717
+    ],
+    "labels": {
+     "A": 11,
+     "N": 3,
+     "P": 1
+    }
+   },
+   "headline relay": {
+    "n": 30,
+    "hits": 29,
+    "share": 0.9666666666666667,
+    "ci": [
+     0.8332924860304112,
+     0.9940915620051425
+    ],
+    "labels": {
+     "N": 29,
+     "A": 1
+    }
+   },
+   "organic": {
+    "n": 102,
+    "hits": 6,
+    "share": 0.058823529411764705,
+    "ci": [
+     0.027235268139653063,
+     0.1224374503377698
+    ],
+    "labels": {
+     "P": 83,
+     "N": 13,
+     "M": 4,
+     "A": 2
+    }
+   },
+   "flood_or_coordinated": {
+    "n": 45,
+    "hits": 39,
+    "marketing": 2,
+    "personal": 3
+   },
+   "organic_missed_posts_est": [
+    2041.7191113572314,
+    9178.645902021251
+   ]
+  },
+  "paired": {
+   "raw": {
+    "n": 24,
+    "twitter_higher": 18,
+    "median_ratio": 1.6249551616952984,
+    "median_ratio_ci": [
+     1.2028597012431768,
+     2.6197277744826475
+    ],
+    "wilcoxon_p": 0.006516098976135254,
+    "sign_p": 0.022655844688415527
+   },
+   "no_bots": {
+    "n": 24,
+    "twitter_higher": 18,
+    "median_ratio": 1.637264273799225,
+    "median_ratio_ci": [
+     1.2163264815528894,
+     2.821728089204496
+    ],
+    "wilcoxon_p": 0.004810690879821777,
+    "sign_p": 0.022655844688415527
+   },
+   "relays_collapsed": {
+    "n": 24,
+    "twitter_higher": 16,
+    "median_ratio": 1.2792873450304674,
+    "median_ratio_ci": [
+     0.8856362415992195,
+     1.581474697163949
+    ],
+    "wilcoxon_p": 0.09509599208831787,
+    "sign_p": 0.15158963203430176
+   },
+   "both": {
+    "n": 24,
+    "twitter_higher": 16,
+    "median_ratio": 1.424449860832215,
+    "median_ratio_ci": [
+     0.9209492722858813,
+     1.6917029050939423
+    ],
+    "wilcoxon_p": 0.09509599208831787,
+    "sign_p": 0.15158963203430176
+   },
+   "no_bots_vs_reddit_raw": {
+    "n": 24,
+    "twitter_higher": 18,
+    "median_ratio": 1.7481689268354133,
+    "median_ratio_ci": [
+     1.2414970779380046,
+     2.831165997197907
+    ],
+    "wilcoxon_p": 0.0039006471633911133,
+    "sign_p": 0.022655844688415527
+   },
+   "ss_no_bots": {
+    "n": 24,
+    "twitter_higher": 18,
+    "median_ratio": 1.5548299326987494,
+    "median_ratio_ci": [
+     1.2654947964954375,
+     2.403154298893425
+    ],
+    "wilcoxon_p": 0.0031430721282958984,
+    "sign_p": 0.022655844688415527
+   },
+   "ss_relays_collapsed": {
+    "n": 24,
+    "twitter_higher": 16,
+    "median_ratio": 1.2739005200504943,
+    "median_ratio_ci": [
+     0.8248435115644706,
+     2.317890679133779
+    ],
+    "wilcoxon_p": 0.10109639167785645,
+    "sign_p": 0.15158963203430176
+   }
+  },
+  "spike_survival": {
+   "n": 225,
+   "no_bots": 220,
+   "relays_collapsed": 200,
+   "both": 193
+  },
+  "composition": {
+   "spike": {
+    "organic": 0.7763975155279503,
+    "headline relay": 0.1882630113514671,
+    "other repeat": 0.009638038123795245,
+    "bots and marketers": 0.02570143499678732
+   },
+   "nearby": {
+    "organic": 0.8832451705292691,
+    "headline relay": 0.06546453517257504,
+    "other repeat": 0.004149983926118596,
+    "bots and marketers": 0.047140310372037295
+   },
+   "n": {
+    "spike": 4669,
+    "nearby": 34217
+   },
+   "diff_ci": {
+    "organic": [
+     -0.17219098317990356,
+     -0.044640112514637655
+    ],
+    "headline relay": [
+     0.06155756531522022,
+     0.18726501458198383
+    ],
+    "other repeat": [
+     0.0008363663966976847,
+     0.010766195163645364
+    ],
+    "bots and marketers": [
+     -0.038231904329792135,
+     -0.00198293895906186
+    ]
+   },
+   "reddit": {
+    "organic": 0.9792300327604061,
+    "headline relay": 0.0,
+    "other repeat": 0.00457864125727014,
+    "bots and marketers": 0.016191325982323708
+   }
+  },
+  "sensitivity": [
+   {
+    "jaccard": null,
+    "few": 0.2,
+    "min_copies": 3,
+    "bot_share": 0.03951670220326937,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7207937411134333,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.838135616476426
+     ],
+     "wilcoxon_p": 0.005330443382263184,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5127728162595682,
+     "median_ratio_ci": [
+      0.9764967265299787,
+      1.8682251102347651
+     ],
+     "wilcoxon_p": 0.05264079570770264,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": null,
+    "few": 0.2,
+    "min_copies": 5,
+    "bot_share": 0.031106372897417675,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.828313897949079
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 17,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      1.0027895308747916,
+      1.9819806638115904
+     ],
+     "wilcoxon_p": 0.03948163986206055,
+     "sign_p": 0.06391465663909912
+    }
+   },
+   {
+    "jaccard": null,
+    "few": 0.3333333333333333,
+    "min_copies": 3,
+    "bot_share": 0.03961146647713812,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7207937411134333,
+     "median_ratio_ci": [
+      1.2213951229907174,
+      2.831104792747027
+     ],
+     "wilcoxon_p": 0.005330443382263184,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5138940015082771,
+     "median_ratio_ci": [
+      0.9764967265299787,
+      1.9303984475092308
+     ],
+     "wilcoxon_p": 0.05264079570770264,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": null,
+    "few": 0.3333333333333333,
+    "min_copies": 5,
+    "bot_share": 0.03127221037668799,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.2189343453960337,
+      2.82134837073004
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 17,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      1.0027895308747916,
+      1.9852461093431084
+     ],
+     "wilcoxon_p": 0.03948163986206055,
+     "sign_p": 0.06391465663909912
+    }
+   },
+   {
+    "jaccard": null,
+    "few": 0.5,
+    "min_copies": 3,
+    "bot_share": 0.04036958066808813,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7207937411134333,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.8304138690626166
+     ],
+     "wilcoxon_p": 0.005330443382263184,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5138940015082771,
+     "median_ratio_ci": [
+      0.9764967265299787,
+      1.8722359323888906
+     ],
+     "wilcoxon_p": 0.05264079570770264,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": null,
+    "few": 0.5,
+    "min_copies": 5,
+    "bot_share": 0.03207770670457238,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.220698259047664,
+      2.8222107028940613
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 17,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      1.0027895308747916,
+      1.9852461093431084
+     ],
+     "wilcoxon_p": 0.03948163986206055,
+     "sign_p": 0.06391465663909912
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.2,
+    "min_copies": 3,
+    "bot_share": 0.04647003079838901,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7481689268354133,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.8378714389833473
+     ],
+     "wilcoxon_p": 0.0039006471633911133,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.2792873450304674,
+     "median_ratio_ci": [
+      0.8856362415992195,
+      1.5580874082925822
+     ],
+     "wilcoxon_p": 0.09509599208831787,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.2,
+    "min_copies": 5,
+    "bot_share": 0.03624733475479744,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6450187679885266,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.833829198385539
+     ],
+     "wilcoxon_p": 0.00433504581451416,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.4143357581687326,
+     "median_ratio_ci": [
+      0.9175858026889459,
+      1.6187816393767553
+     ],
+     "wilcoxon_p": 0.07872927188873291,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.3333333333333333,
+    "min_copies": 3,
+    "bot_share": 0.04660033167495854,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7481689268354133,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.6747935071535447
+     ],
+     "wilcoxon_p": 0.0039006471633911133,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.2792873450304674,
+     "median_ratio_ci": [
+      0.8856362415992195,
+      1.5580874082925822
+     ],
+     "wilcoxon_p": 0.09509599208831787,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.3333333333333333,
+    "min_copies": 5,
+    "bot_share": 0.03654347311063729,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6450187679885266,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.827179887124517
+     ],
+     "wilcoxon_p": 0.00433504581451416,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.412234814878285,
+     "median_ratio_ci": [
+      0.9589849719833013,
+      1.6206876519246656
+     ],
+     "wilcoxon_p": 0.07872927188873291,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.5,
+    "min_copies": 3,
+    "bot_share": 0.04776119402985075,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.7481689268354133,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.8304659986432763
+     ],
+     "wilcoxon_p": 0.00433504581451416,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.22842800017368,
+     "median_ratio_ci": [
+      0.899475267549428,
+      1.5580874082925822
+     ],
+     "wilcoxon_p": 0.10109639167785645,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.6,
+    "few": 0.5,
+    "min_copies": 5,
+    "bot_share": 0.0380952380952381,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6450187679885266,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.8279248259106073
+     ],
+     "wilcoxon_p": 0.00433504581451416,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.3944580096716281,
+     "median_ratio_ci": [
+      0.9175858026889459,
+      1.6211310838361905
+     ],
+     "wilcoxon_p": 0.07379257678985596,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.2,
+    "min_copies": 3,
+    "bot_share": 0.04291637052831083,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.726447051380491,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.8416851993122947
+     ],
+     "wilcoxon_p": 0.005897641181945801,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.4345460866348898,
+     "median_ratio_ci": [
+      0.9173953417309443,
+      1.6946926491202068
+     ],
+     "wilcoxon_p": 0.06464934349060059,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.2,
+    "min_copies": 5,
+    "bot_share": 0.033511016346837244,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.831467590464751
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      0.9702518185181302,
+      1.7551470141024776
+     ],
+     "wilcoxon_p": 0.060427069664001465,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.3333333333333333,
+    "min_copies": 3,
+    "bot_share": 0.04310589907604833,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.726447051380491,
+     "median_ratio_ci": [
+      1.2228667437900855,
+      2.7524944201589068
+     ],
+     "wilcoxon_p": 0.005897641181945801,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.4330662049538703,
+     "median_ratio_ci": [
+      0.9173953417309443,
+      1.6946926491202068
+     ],
+     "wilcoxon_p": 0.06464934349060059,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.3333333333333333,
+    "min_copies": 5,
+    "bot_share": 0.03386638237384506,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.824496387952424
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      0.9702518185181302,
+      1.758017915253544
+     ],
+     "wilcoxon_p": 0.060427069664001465,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.5,
+    "min_copies": 3,
+    "bot_share": 0.04386401326699834,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.726447051380491,
+     "median_ratio_ci": [
+      1.2414970779380046,
+      2.833952686935449
+     ],
+     "wilcoxon_p": 0.005330443382263184,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.4330662049538703,
+     "median_ratio_ci": [
+      0.9267702575629334,
+      1.6946926491202068
+     ],
+     "wilcoxon_p": 0.06464934349060059,
+     "sign_p": 0.15158963203430176
+    }
+   },
+   {
+    "jaccard": 0.8,
+    "few": 0.5,
+    "min_copies": 5,
+    "bot_share": 0.03477848850983179,
+    "no_bots": {
+     "n": 24,
+     "twitter_higher": 18,
+     "median_ratio": 1.6249551616952984,
+     "median_ratio_ci": [
+      1.2257339337964592,
+      2.825361111274872
+     ],
+     "wilcoxon_p": 0.006516098976135254,
+     "sign_p": 0.022655844688415527
+    },
+    "relays_collapsed": {
+     "n": 24,
+     "twitter_higher": 16,
+     "median_ratio": 1.5156120408421754,
+     "median_ratio_ci": [
+      0.9702518185181302,
+      1.8166212787615055
+     ],
+     "wilcoxon_p": 0.060427069664001465,
+     "sign_p": 0.15158963203430176
+    }
+   }
+  ],
+  "reports": {
+   "ldn": {
+    "reports": 1086,
+    "from_bots": 0,
+    "by_role": {},
+    "positive": 0.7771639042357275,
+    "positive_bots": null,
+    "positive_clean": 0.7771639042357275
+   },
+   "ivermectin": {
+    "reports": 2186,
+    "from_bots": 141,
+    "by_role": {
+     "vendor": 105,
+     "flood": 36
+    },
+    "positive": 0.9190301921317475,
+    "positive_bots": 1.0,
+    "positive_clean": 0.9134474327628361
+   }
+  },
+  "table": [
+   {
+    "drug": "Aspirin",
+    "posts": 2521,
+    "reddit_posts": 7663,
+    "x_organic": 0.781,
+    "x_headline relay": 0.0048,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.2142,
+    "reddit_organic": 0.9897,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0004,
+    "reddit_bots and marketers": 0.0099,
+    "alpha_raw": 0.138,
+    "ss_raw": 0.0312,
+    "reddit_alpha_raw": 0.1999,
+    "reddit_ss_raw": 0.0427,
+    "alpha_no_bots": 0.1304,
+    "ss_no_bots": 0.0291,
+    "reddit_alpha_no_bots": 0.2012,
+    "reddit_ss_no_bots": 0.0428,
+    "alpha_relays_collapsed": 0.134,
+    "ss_relays_collapsed": 0.0295,
+    "reddit_alpha_relays_collapsed": 0.1999,
+    "reddit_ss_relays_collapsed": 0.0427,
+    "alpha_both": 0.1264,
+    "ss_both": 0.0273,
+    "reddit_alpha_both": 0.2012,
+    "reddit_ss_both": 0.0428
+   },
+   {
+    "drug": "CoQ10",
+    "posts": 587,
+    "reddit_posts": 3784,
+    "x_organic": 0.9949,
+    "x_headline relay": 0.0,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0051,
+    "reddit_organic": 0.9873,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0,
+    "reddit_bots and marketers": 0.0127,
+    "alpha_raw": 0.3588,
+    "ss_raw": 0.0993,
+    "reddit_alpha_raw": 0.2433,
+    "reddit_ss_raw": 0.0402,
+    "alpha_no_bots": 0.3641,
+    "ss_no_bots": 0.0994,
+    "reddit_alpha_no_bots": 0.2456,
+    "reddit_ss_no_bots": 0.0414,
+    "alpha_relays_collapsed": 0.3588,
+    "ss_relays_collapsed": 0.0993,
+    "reddit_alpha_relays_collapsed": 0.2433,
+    "reddit_ss_relays_collapsed": 0.0402,
+    "alpha_both": 0.3641,
+    "ss_both": 0.0994,
+    "reddit_alpha_both": 0.2456,
+    "reddit_ss_both": 0.0414
+   },
+   {
+    "drug": "Famotidine",
+    "posts": 912,
+    "reddit_posts": 9522,
+    "x_organic": 1.0,
+    "x_headline relay": 0.0,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0,
+    "reddit_organic": 0.9834,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0017,
+    "reddit_bots and marketers": 0.0149,
+    "alpha_raw": 0.1813,
+    "ss_raw": 0.0483,
+    "reddit_alpha_raw": 0.1163,
+    "reddit_ss_raw": 0.0193,
+    "alpha_no_bots": 0.1813,
+    "ss_no_bots": 0.0483,
+    "reddit_alpha_no_bots": 0.1183,
+    "reddit_ss_no_bots": 0.0195,
+    "alpha_relays_collapsed": 0.1813,
+    "ss_relays_collapsed": 0.0483,
+    "reddit_alpha_relays_collapsed": 0.1163,
+    "reddit_ss_relays_collapsed": 0.0193,
+    "alpha_both": 0.1813,
+    "ss_both": 0.0483,
+    "reddit_alpha_both": 0.1183,
+    "reddit_ss_both": 0.0195
+   },
+   {
+    "drug": "Fluvoxamine",
+    "posts": 1229,
+    "reddit_posts": 2722,
+    "x_organic": 0.9455,
+    "x_headline relay": 0.0358,
+    "x_other repeat": 0.0073,
+    "x_bots and marketers": 0.0114,
+    "reddit_organic": 0.9386,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0059,
+    "reddit_bots and marketers": 0.0555,
+    "alpha_raw": 0.749,
+    "ss_raw": 0.1265,
+    "reddit_alpha_raw": 0.1397,
+    "reddit_ss_raw": 0.0335,
+    "alpha_no_bots": 0.7207,
+    "ss_no_bots": 0.1254,
+    "reddit_alpha_no_bots": 0.1637,
+    "reddit_ss_no_bots": 0.0369,
+    "alpha_relays_collapsed": 0.6167,
+    "ss_relays_collapsed": 0.104,
+    "reddit_alpha_relays_collapsed": 0.1397,
+    "reddit_ss_relays_collapsed": 0.0335,
+    "alpha_both": 0.5943,
+    "ss_both": 0.1037,
+    "reddit_alpha_both": 0.1637,
+    "reddit_ss_both": 0.0369
+   },
+   {
+    "drug": "H1 antihistamines",
+    "posts": 1886,
+    "reddit_posts": 28093,
+    "x_organic": 0.9963,
+    "x_headline relay": 0.0,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0037,
+    "reddit_organic": 0.9827,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0053,
+    "reddit_bots and marketers": 0.012,
+    "alpha_raw": 0.1943,
+    "ss_raw": 0.0351,
+    "reddit_alpha_raw": 0.0815,
+    "reddit_ss_raw": 0.0059,
+    "alpha_no_bots": 0.1959,
+    "ss_no_bots": 0.0382,
+    "reddit_alpha_no_bots": 0.0824,
+    "reddit_ss_no_bots": 0.0059,
+    "alpha_relays_collapsed": 0.1943,
+    "ss_relays_collapsed": 0.0351,
+    "reddit_alpha_relays_collapsed": 0.0815,
+    "reddit_ss_relays_collapsed": 0.0059,
+    "alpha_both": 0.1959,
+    "ss_both": 0.0382,
+    "reddit_alpha_both": 0.0824,
+    "reddit_ss_both": 0.0059
+   },
+   {
+    "drug": "HBOT",
+    "posts": 2810,
+    "reddit_posts": 3579,
+    "x_organic": 0.8658,
+    "x_headline relay": 0.0783,
+    "x_other repeat": 0.0039,
+    "x_bots and marketers": 0.052,
+    "reddit_organic": 0.9877,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0067,
+    "reddit_bots and marketers": 0.0056,
+    "alpha_raw": 1.7331,
+    "ss_raw": 0.122,
+    "reddit_alpha_raw": 0.409,
+    "reddit_ss_raw": 0.0793,
+    "alpha_no_bots": 1.86,
+    "ss_no_bots": 0.1277,
+    "reddit_alpha_no_bots": 0.4118,
+    "reddit_ss_no_bots": 0.0797,
+    "alpha_relays_collapsed": 0.3622,
+    "ss_relays_collapsed": 0.0654,
+    "reddit_alpha_relays_collapsed": 0.409,
+    "reddit_ss_relays_collapsed": 0.0793,
+    "alpha_both": 0.3556,
+    "ss_both": 0.0594,
+    "reddit_alpha_both": 0.4118,
+    "reddit_ss_both": 0.0797
+   },
+   {
+    "drug": "Hydroxychloroquine",
+    "posts": 1698,
+    "reddit_posts": 963,
+    "x_organic": 0.7733,
+    "x_headline relay": 0.1254,
+    "x_other repeat": 0.0024,
+    "x_bots and marketers": 0.0989,
+    "reddit_organic": 0.9917,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0073,
+    "reddit_bots and marketers": 0.001,
+    "alpha_raw": 0.817,
+    "ss_raw": 0.1074,
+    "reddit_alpha_raw": 1.1988,
+    "reddit_ss_raw": 0.1663,
+    "alpha_no_bots": 0.8473,
+    "ss_no_bots": 0.1103,
+    "reddit_alpha_no_bots": 1.2041,
+    "reddit_ss_no_bots": 0.1665,
+    "alpha_relays_collapsed": 0.2718,
+    "ss_relays_collapsed": 0.0552,
+    "reddit_alpha_relays_collapsed": 1.1988,
+    "reddit_ss_relays_collapsed": 0.1663,
+    "alpha_both": 0.2922,
+    "ss_both": 0.0597,
+    "reddit_alpha_both": 1.2041,
+    "reddit_ss_both": 0.1665
+   },
+   {
+    "drug": "IVIG",
+    "posts": 1433,
+    "reddit_posts": 3468,
+    "x_organic": 0.9867,
+    "x_headline relay": 0.0056,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0077,
+    "reddit_organic": 0.9824,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0032,
+    "reddit_bots and marketers": 0.0144,
+    "alpha_raw": 0.6225,
+    "ss_raw": 0.0906,
+    "reddit_alpha_raw": 0.5198,
+    "reddit_ss_raw": 0.1185,
+    "alpha_no_bots": 0.6268,
+    "ss_no_bots": 0.0932,
+    "reddit_alpha_no_bots": 0.5239,
+    "reddit_ss_no_bots": 0.1188,
+    "alpha_relays_collapsed": 0.6234,
+    "ss_relays_collapsed": 0.0911,
+    "reddit_alpha_relays_collapsed": 0.5198,
+    "reddit_ss_relays_collapsed": 0.1185,
+    "alpha_both": 0.6277,
+    "ss_both": 0.0936,
+    "reddit_alpha_both": 0.5239,
+    "reddit_ss_both": 0.1188
+   },
+   {
+    "drug": "Interferon",
+    "posts": 895,
+    "reddit_posts": 431,
+    "x_organic": 0.9318,
+    "x_headline relay": 0.0391,
+    "x_other repeat": 0.0034,
+    "x_bots and marketers": 0.0257,
+    "reddit_organic": 0.9861,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0,
+    "reddit_bots and marketers": 0.0139,
+    "alpha_raw": 1.5039,
+    "ss_raw": 0.186,
+    "reddit_alpha_raw": 1.2503,
+    "reddit_ss_raw": 0.1661,
+    "alpha_no_bots": 1.5522,
+    "ss_no_bots": 0.1881,
+    "reddit_alpha_no_bots": 1.2762,
+    "reddit_ss_no_bots": 0.173,
+    "alpha_relays_collapsed": 1.4479,
+    "ss_relays_collapsed": 0.1718,
+    "reddit_alpha_relays_collapsed": 1.2503,
+    "reddit_ss_relays_collapsed": 0.1661,
+    "alpha_both": 1.4959,
+    "ss_both": 0.1737,
+    "reddit_alpha_both": 1.2762,
+    "reddit_ss_both": 0.173
+   },
+   {
+    "drug": "Ivermectin",
+    "posts": 12488,
+    "reddit_posts": 5479,
+    "x_organic": 0.8698,
+    "x_headline relay": 0.0352,
+    "x_other repeat": 0.0082,
+    "x_bots and marketers": 0.0867,
+    "reddit_organic": 0.9814,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0086,
+    "reddit_bots and marketers": 0.01,
+    "alpha_raw": 0.4354,
+    "ss_raw": 0.0674,
+    "reddit_alpha_raw": 0.4486,
+    "reddit_ss_raw": 0.1018,
+    "alpha_no_bots": 0.4443,
+    "ss_no_bots": 0.0642,
+    "reddit_alpha_no_bots": 0.4451,
+    "reddit_ss_no_bots": 0.1021,
+    "alpha_relays_collapsed": 0.3223,
+    "ss_relays_collapsed": 0.0548,
+    "reddit_alpha_relays_collapsed": 0.4486,
+    "reddit_ss_relays_collapsed": 0.1018,
+    "alpha_both": 0.3276,
+    "ss_both": 0.0536,
+    "reddit_alpha_both": 0.4451,
+    "reddit_ss_both": 0.1021
+   },
+   {
+    "drug": "LDN",
+    "posts": 4067,
+    "reddit_posts": 20926,
+    "x_organic": 0.9577,
+    "x_headline relay": 0.0288,
+    "x_other repeat": 0.001,
+    "x_bots and marketers": 0.0125,
+    "reddit_organic": 0.9768,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0143,
+    "reddit_bots and marketers": 0.0089,
+    "alpha_raw": 0.7257,
+    "ss_raw": 0.1105,
+    "reddit_alpha_raw": 0.0921,
+    "reddit_ss_raw": 0.0071,
+    "alpha_no_bots": 0.7316,
+    "ss_no_bots": 0.1162,
+    "reddit_alpha_no_bots": 0.0922,
+    "reddit_ss_no_bots": 0.0071,
+    "alpha_relays_collapsed": 0.5377,
+    "ss_relays_collapsed": 0.1033,
+    "reddit_alpha_relays_collapsed": 0.0921,
+    "reddit_ss_relays_collapsed": 0.0071,
+    "alpha_both": 0.5422,
+    "ss_both": 0.1048,
+    "reddit_alpha_both": 0.0922,
+    "reddit_ss_both": 0.0071
+   },
+   {
+    "drug": "Lumbrokinase",
+    "posts": 372,
+    "reddit_posts": 1700,
+    "x_organic": 0.9328,
+    "x_headline relay": 0.0,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0672,
+    "reddit_organic": 0.9312,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0018,
+    "reddit_bots and marketers": 0.0671,
+    "alpha_raw": 0.4721,
+    "ss_raw": 0.1293,
+    "reddit_alpha_raw": 0.2786,
+    "reddit_ss_raw": 0.0423,
+    "alpha_no_bots": 0.5464,
+    "ss_no_bots": 0.1504,
+    "reddit_alpha_no_bots": 0.3123,
+    "reddit_ss_no_bots": 0.0444,
+    "alpha_relays_collapsed": 0.4721,
+    "ss_relays_collapsed": 0.1293,
+    "reddit_alpha_relays_collapsed": 0.2786,
+    "reddit_ss_relays_collapsed": 0.0423,
+    "alpha_both": 0.5464,
+    "ss_both": 0.1504,
+    "reddit_alpha_both": 0.3123,
+    "reddit_ss_both": 0.0444
+   },
+   {
+    "drug": "Maraviroc",
+    "posts": 1276,
+    "reddit_posts": 2946,
+    "x_organic": 0.9592,
+    "x_headline relay": 0.0282,
+    "x_other repeat": 0.0024,
+    "x_bots and marketers": 0.0102,
+    "reddit_organic": 0.9946,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0,
+    "reddit_bots and marketers": 0.0054,
+    "alpha_raw": 0.7492,
+    "ss_raw": 0.1224,
+    "reddit_alpha_raw": 0.3404,
+    "reddit_ss_raw": 0.0558,
+    "alpha_no_bots": 0.7541,
+    "ss_no_bots": 0.123,
+    "reddit_alpha_no_bots": 0.3459,
+    "reddit_ss_no_bots": 0.056,
+    "alpha_relays_collapsed": 0.729,
+    "ss_relays_collapsed": 0.1167,
+    "reddit_alpha_relays_collapsed": 0.3404,
+    "reddit_ss_relays_collapsed": 0.0558,
+    "alpha_both": 0.734,
+    "ss_both": 0.1174,
+    "reddit_alpha_both": 0.3459,
+    "reddit_ss_both": 0.056
+   },
+   {
+    "drug": "Melatonin",
+    "posts": 2111,
+    "reddit_posts": 7084,
+    "x_organic": 0.9162,
+    "x_headline relay": 0.0213,
+    "x_other repeat": 0.0014,
+    "x_bots and marketers": 0.0611,
+    "reddit_organic": 0.9657,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0013,
+    "reddit_bots and marketers": 0.033,
+    "alpha_raw": 0.3182,
+    "ss_raw": 0.0495,
+    "reddit_alpha_raw": 0.2571,
+    "reddit_ss_raw": 0.0583,
+    "alpha_no_bots": 0.3465,
+    "ss_no_bots": 0.0483,
+    "reddit_alpha_no_bots": 0.267,
+    "reddit_ss_no_bots": 0.0583,
+    "alpha_relays_collapsed": 0.2229,
+    "ss_relays_collapsed": 0.0312,
+    "reddit_alpha_relays_collapsed": 0.2571,
+    "reddit_ss_relays_collapsed": 0.0583,
+    "alpha_both": 0.2459,
+    "ss_both": 0.0298,
+    "reddit_alpha_both": 0.267,
+    "reddit_ss_both": 0.0583
+   },
+   {
+    "drug": "Metformin",
+    "posts": 7012,
+    "reddit_posts": 3020,
+    "x_organic": 0.9025,
+    "x_headline relay": 0.057,
+    "x_other repeat": 0.0071,
+    "x_bots and marketers": 0.0334,
+    "reddit_organic": 0.9871,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0013,
+    "reddit_bots and marketers": 0.0116,
+    "alpha_raw": 1.7633,
+    "ss_raw": 0.2478,
+    "reddit_alpha_raw": 0.5646,
+    "reddit_ss_raw": 0.1252,
+    "alpha_no_bots": 1.7809,
+    "ss_no_bots": 0.2542,
+    "reddit_alpha_no_bots": 0.5677,
+    "reddit_ss_no_bots": 0.1261,
+    "alpha_relays_collapsed": 1.7594,
+    "ss_relays_collapsed": 0.2285,
+    "reddit_alpha_relays_collapsed": 0.5646,
+    "reddit_ss_relays_collapsed": 0.1252,
+    "alpha_both": 1.7811,
+    "ss_both": 0.2292,
+    "reddit_alpha_both": 0.5677,
+    "reddit_ss_both": 0.1261
+   },
+   {
+    "drug": "Nattokinase",
+    "posts": 2607,
+    "reddit_posts": 6401,
+    "x_organic": 0.962,
+    "x_headline relay": 0.0165,
+    "x_other repeat": 0.005,
+    "x_bots and marketers": 0.0165,
+    "reddit_organic": 0.968,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0067,
+    "reddit_bots and marketers": 0.0253,
+    "alpha_raw": 0.1554,
+    "ss_raw": 0.0463,
+    "reddit_alpha_raw": 0.1254,
+    "reddit_ss_raw": 0.0335,
+    "alpha_no_bots": 0.1577,
+    "ss_no_bots": 0.0466,
+    "reddit_alpha_no_bots": 0.1282,
+    "reddit_ss_no_bots": 0.0309,
+    "alpha_relays_collapsed": 0.1462,
+    "ss_relays_collapsed": 0.044,
+    "reddit_alpha_relays_collapsed": 0.1254,
+    "reddit_ss_relays_collapsed": 0.0335,
+    "alpha_both": 0.1482,
+    "ss_both": 0.0444,
+    "reddit_alpha_both": 0.1282,
+    "reddit_ss_both": 0.0309
+   },
+   {
+    "drug": "Omega-3",
+    "posts": 438,
+    "reddit_posts": 3710,
+    "x_organic": 0.9521,
+    "x_headline relay": 0.0411,
+    "x_other repeat": 0.0068,
+    "x_bots and marketers": 0.0,
+    "reddit_organic": 0.9631,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0,
+    "reddit_bots and marketers": 0.0369,
+    "alpha_raw": 0.4784,
+    "ss_raw": 0.0796,
+    "reddit_alpha_raw": 0.1363,
+    "reddit_ss_raw": 0.0291,
+    "alpha_no_bots": 0.4784,
+    "ss_no_bots": 0.0796,
+    "reddit_alpha_no_bots": 0.146,
+    "reddit_ss_no_bots": 0.0287,
+    "alpha_relays_collapsed": 0.3815,
+    "ss_relays_collapsed": 0.0724,
+    "reddit_alpha_relays_collapsed": 0.1363,
+    "reddit_ss_relays_collapsed": 0.0291,
+    "alpha_both": 0.3815,
+    "ss_both": 0.0724,
+    "reddit_alpha_both": 0.146,
+    "reddit_ss_both": 0.0287
+   },
+   {
+    "drug": "Paxlovid",
+    "posts": 20597,
+    "reddit_posts": 9228,
+    "x_organic": 0.8793,
+    "x_headline relay": 0.0844,
+    "x_other repeat": 0.0039,
+    "x_bots and marketers": 0.0324,
+    "reddit_organic": 0.987,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0056,
+    "reddit_bots and marketers": 0.0074,
+    "alpha_raw": 0.8221,
+    "ss_raw": 0.1384,
+    "reddit_alpha_raw": 0.2918,
+    "reddit_ss_raw": 0.0785,
+    "alpha_no_bots": 0.826,
+    "ss_no_bots": 0.1363,
+    "reddit_alpha_no_bots": 0.2927,
+    "reddit_ss_no_bots": 0.0799,
+    "alpha_relays_collapsed": 0.4538,
+    "ss_relays_collapsed": 0.0927,
+    "reddit_alpha_relays_collapsed": 0.2918,
+    "reddit_ss_relays_collapsed": 0.0785,
+    "alpha_both": 0.4549,
+    "ss_both": 0.0925,
+    "reddit_alpha_both": 0.2927,
+    "reddit_ss_both": 0.0799
+   },
+   {
+    "drug": "Quercetin",
+    "posts": 1355,
+    "reddit_posts": 5082,
+    "x_organic": 0.9232,
+    "x_headline relay": 0.0089,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0679,
+    "reddit_organic": 0.9866,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0008,
+    "reddit_bots and marketers": 0.0126,
+    "alpha_raw": 0.1118,
+    "ss_raw": 0.0263,
+    "reddit_alpha_raw": 0.1466,
+    "reddit_ss_raw": 0.0238,
+    "alpha_no_bots": 0.1222,
+    "ss_no_bots": 0.0298,
+    "reddit_alpha_no_bots": 0.1446,
+    "reddit_ss_no_bots": 0.0236,
+    "alpha_relays_collapsed": 0.1121,
+    "ss_relays_collapsed": 0.028,
+    "reddit_alpha_relays_collapsed": 0.1466,
+    "reddit_ss_relays_collapsed": 0.0238,
+    "alpha_both": 0.1227,
+    "ss_both": 0.0316,
+    "reddit_alpha_both": 0.1446,
+    "reddit_ss_both": 0.0236
+   },
+   {
+    "drug": "Serrapeptase",
+    "posts": 693,
+    "reddit_posts": 1795,
+    "x_organic": 0.9668,
+    "x_headline relay": 0.0,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.0332,
+    "reddit_organic": 0.9398,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0017,
+    "reddit_bots and marketers": 0.0585,
+    "alpha_raw": 0.0919,
+    "ss_raw": 0.048,
+    "reddit_alpha_raw": 0.1638,
+    "reddit_ss_raw": 0.0269,
+    "alpha_no_bots": 0.0929,
+    "ss_no_bots": 0.0494,
+    "reddit_alpha_no_bots": 0.1878,
+    "reddit_ss_no_bots": 0.0379,
+    "alpha_relays_collapsed": 0.0919,
+    "ss_relays_collapsed": 0.048,
+    "reddit_alpha_relays_collapsed": 0.1638,
+    "reddit_ss_relays_collapsed": 0.0269,
+    "alpha_both": 0.0929,
+    "ss_both": 0.0494,
+    "reddit_alpha_both": 0.1878,
+    "reddit_ss_both": 0.0379
+   },
+   {
+    "drug": "Statins",
+    "posts": 1332,
+    "reddit_posts": 3450,
+    "x_organic": 0.964,
+    "x_headline relay": 0.0263,
+    "x_other repeat": 0.0023,
+    "x_bots and marketers": 0.0075,
+    "reddit_organic": 0.9945,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0003,
+    "reddit_bots and marketers": 0.0052,
+    "alpha_raw": 0.5965,
+    "ss_raw": 0.0819,
+    "reddit_alpha_raw": 0.2921,
+    "reddit_ss_raw": 0.053,
+    "alpha_no_bots": 0.5911,
+    "ss_no_bots": 0.0781,
+    "reddit_alpha_no_bots": 0.2918,
+    "reddit_ss_no_bots": 0.0527,
+    "alpha_relays_collapsed": 0.4489,
+    "ss_relays_collapsed": 0.0655,
+    "reddit_alpha_relays_collapsed": 0.2921,
+    "reddit_ss_relays_collapsed": 0.053,
+    "alpha_both": 0.4412,
+    "ss_both": 0.0616,
+    "reddit_alpha_both": 0.2918,
+    "reddit_ss_both": 0.0527
+   },
+   {
+    "drug": "Vitamin C",
+    "posts": 1446,
+    "reddit_posts": 5056,
+    "x_organic": 0.8091,
+    "x_headline relay": 0.1169,
+    "x_other repeat": 0.0,
+    "x_bots and marketers": 0.074,
+    "reddit_organic": 0.9745,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0,
+    "reddit_bots and marketers": 0.0255,
+    "alpha_raw": 0.3501,
+    "ss_raw": 0.0468,
+    "reddit_alpha_raw": 0.0671,
+    "reddit_ss_raw": 0.0111,
+    "alpha_no_bots": 0.3942,
+    "ss_no_bots": 0.0533,
+    "reddit_alpha_no_bots": 0.0681,
+    "reddit_ss_no_bots": 0.0113,
+    "alpha_relays_collapsed": 0.0916,
+    "ss_relays_collapsed": 0.0257,
+    "reddit_alpha_relays_collapsed": 0.0671,
+    "reddit_ss_relays_collapsed": 0.0111,
+    "alpha_both": 0.1153,
+    "ss_both": 0.0288,
+    "reddit_alpha_both": 0.0681,
+    "reddit_ss_both": 0.0113
+   },
+   {
+    "drug": "Vitamin D",
+    "posts": 4498,
+    "reddit_posts": 11774,
+    "x_organic": 0.8526,
+    "x_headline relay": 0.0551,
+    "x_other repeat": 0.0069,
+    "x_bots and marketers": 0.0854,
+    "reddit_organic": 0.984,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0008,
+    "reddit_bots and marketers": 0.0151,
+    "alpha_raw": 0.3861,
+    "ss_raw": 0.0536,
+    "reddit_alpha_raw": 0.1474,
+    "reddit_ss_raw": 0.0362,
+    "alpha_no_bots": 0.4389,
+    "ss_no_bots": 0.0573,
+    "reddit_alpha_no_bots": 0.1515,
+    "reddit_ss_no_bots": 0.038,
+    "alpha_relays_collapsed": 0.1749,
+    "ss_relays_collapsed": 0.028,
+    "reddit_alpha_relays_collapsed": 0.1474,
+    "reddit_ss_relays_collapsed": 0.0362,
+    "alpha_both": 0.2074,
+    "ss_both": 0.0267,
+    "reddit_alpha_both": 0.1515,
+    "reddit_ss_both": 0.038
+   },
+   {
+    "drug": "Zinc",
+    "posts": 2615,
+    "reddit_posts": 5663,
+    "x_organic": 0.943,
+    "x_headline relay": 0.0103,
+    "x_other repeat": 0.0031,
+    "x_bots and marketers": 0.0436,
+    "reddit_organic": 0.9726,
+    "reddit_headline relay": 0.0,
+    "reddit_other repeat": 0.0004,
+    "reddit_bots and marketers": 0.027,
+    "alpha_raw": 0.0257,
+    "ss_raw": 0.0097,
+    "reddit_alpha_raw": 0.1401,
+    "reddit_ss_raw": 0.0312,
+    "alpha_no_bots": 0.0265,
+    "ss_no_bots": 0.0109,
+    "reddit_alpha_no_bots": 0.1455,
+    "reddit_ss_no_bots": 0.0286,
+    "alpha_relays_collapsed": 0.0234,
+    "ss_relays_collapsed": 0.0098,
+    "reddit_alpha_relays_collapsed": 0.1401,
+    "reddit_ss_relays_collapsed": 0.0312,
+    "alpha_both": 0.0238,
+    "ss_both": 0.011,
+    "reddit_alpha_both": 0.1455,
+    "reddit_ss_both": 0.0286
+   }
+  ]
+ },
+ "spike_to_step": {
+  "events": 219,
+  "step_rate": 0.1780821917808219,
+  "placebo_step_rate": 0.1365296803652968,
+  "lift_vs_placebo": 1.0281850391129046,
+  "lift_vs_placebo_ci": [
+   0.9712262298655294,
+   1.0881454095128955
+  ],
+  "top_steps": [
+   {
+    "drug": "Paxlovid",
+    "date": "2021-12-23",
+    "lift": 10.529018322037018
+   },
+   {
+    "drug": "Metformin",
+    "date": "2022-12-26",
+    "lift": 4.27645888023099
+   },
+   {
+    "drug": "Ivermectin",
+    "date": "2020-12-08",
+    "lift": 3.428852888275932
+   },
+   {
+    "drug": "Paxlovid",
+    "date": "2022-03-02",
+    "lift": 3.2913067447814126
+   },
+   {
+    "drug": "Metformin",
+    "date": "2023-02-09",
+    "lift": 3.2360516901400995
+   },
+   {
+    "drug": "Paxlovid",
+    "date": "2022-04-18",
+    "lift": 2.8806901090432655
+   },
+   {
+    "drug": "Interferon",
+    "date": "2023-10-16",
+    "lift": 2.7828586514304834
+   },
+   {
+    "drug": "IVIG",
+    "date": "2023-02-04",
+    "lift": 2.5422873547714784
+   }
+  ],
+  "reuters_lift": 1.3347565896269817,
+  "local_placebo": {
+   "lift": 1.0397953403043538,
+   "ci": [
+    0.9704271214488965,
+    1.1206833747912783
+   ]
+  }
+ },
+ "reuters_newcomers": {
+  "weeks": [
+   {
+    "w": -8,
+    "people": 35,
+    "first_time": 18,
+    "returning": 17
+   },
+   {
+    "w": -7,
+    "people": 44,
+    "first_time": 18,
+    "returning": 26
+   },
+   {
+    "w": -6,
+    "people": 46,
+    "first_time": 16,
+    "returning": 30
+   },
+   {
+    "w": -5,
+    "people": 40,
+    "first_time": 13,
+    "returning": 27
+   },
+   {
+    "w": -4,
+    "people": 27,
+    "first_time": 10,
+    "returning": 17
+   },
+   {
+    "w": -3,
+    "people": 37,
+    "first_time": 10,
+    "returning": 27
+   },
+   {
+    "w": -2,
+    "people": 34,
+    "first_time": 11,
+    "returning": 23
+   },
+   {
+    "w": -1,
+    "people": 34,
+    "first_time": 9,
+    "returning": 25
+   },
+   {
+    "w": 0,
+    "people": 67,
+    "first_time": 30,
+    "returning": 37
+   },
+   {
+    "w": 1,
+    "people": 69,
+    "first_time": 39,
+    "returning": 30
+   },
+   {
+    "w": 2,
+    "people": 60,
+    "first_time": 27,
+    "returning": 33
+   },
+   {
+    "w": 3,
+    "people": 62,
+    "first_time": 26,
+    "returning": 36
+   },
+   {
+    "w": 4,
+    "people": 46,
+    "first_time": 20,
+    "returning": 26
+   },
+   {
+    "w": 5,
+    "people": 48,
+    "first_time": 17,
+    "returning": 31
+   },
+   {
+    "w": 6,
+    "people": 60,
+    "first_time": 27,
+    "returning": 33
+   },
+   {
+    "w": 7,
+    "people": 56,
+    "first_time": 20,
+    "returning": 36
+   }
+  ],
+  "first_time_per_week_before": 13.125,
+  "first_time_per_week_wk1to3": 32.0,
+  "returning_per_week_before": 24.0,
+  "returning_per_week_wk1to3": 33.333333333333336,
+  "cohort": {
+   "start": "2022-10-18",
+   "n": 96,
+   "reported_within_180d": 0.3229166666666667,
+   "reported_later_day_180d": 0.15625,
+   "reported_before": 0.041666666666666664,
+   "new_to_sub_30d": 0.3125
+  },
+  "other_cohorts": {
+   "n": [
+    46.0,
+    20.0,
+    80.0
+   ],
+   "reported_within_180d": [
+    0.42244337680164723,
+    0.2,
+    0.4915254237288136
+   ],
+   "reported_later_day_180d": [
+    0.15,
+    0.043478260869565216,
+    0.32142857142857145
+   ],
+   "new_to_sub_30d": [
+    0.40588235294117647,
+    0.15,
+    0.5333333333333333
+   ]
+  }
+ },
+ "tourists": {
+  "x": {
+   "newcomers": 38605,
+   "spike_newcomers": 5465,
+   "spike_share_of_newcomers": 0.1415619738375858,
+   "back_spike": 0.11473010064043916,
+   "back_other": 0.1491550995775498,
+   "mh_odds_ratio": 0.6404139035737317,
+   "mh_ci": [
+    0.5847893077172147,
+    0.7013294574272049
+   ],
+   "mh_p": 0.0,
+   "drugs_lower": 20,
+   "drugs_with_spike_newcomers": 24,
+   "rows": [
+    {
+     "drug": "Aspirin",
+     "spike_n": 40,
+     "spike_back": 0.1,
+     "other_n": 1085,
+     "other_back": 0.1281
+    },
+    {
+     "drug": "CoQ10",
+     "spike_n": 42,
+     "spike_back": 0.1905,
+     "other_n": 322,
+     "other_back": 0.1056
+    },
+    {
+     "drug": "Famotidine",
+     "spike_n": 28,
+     "spike_back": 0.1071,
+     "other_n": 484,
+     "other_back": 0.1798
+    },
+    {
+     "drug": "Fluvoxamine",
+     "spike_n": 91,
+     "spike_back": 0.0549,
+     "other_n": 520,
+     "other_back": 0.1846
+    },
+    {
+     "drug": "H1 antihistamines",
+     "spike_n": 54,
+     "spike_back": 0.1111,
+     "other_n": 1070,
+     "other_back": 0.1243
+    },
+    {
+     "drug": "HBOT",
+     "spike_n": 247,
+     "spike_back": 0.0931,
+     "other_n": 1031,
+     "other_back": 0.1717
+    },
+    {
+     "drug": "Hydroxychloroquine",
+     "spike_n": 153,
+     "spike_back": 0.0261,
+     "other_n": 989,
+     "other_back": 0.0799
+    },
+    {
+     "drug": "IVIG",
+     "spike_n": 56,
+     "spike_back": 0.1786,
+     "other_n": 445,
+     "other_back": 0.2022
+    },
+    {
+     "drug": "Interferon",
+     "spike_n": 107,
+     "spike_back": 0.1589,
+     "other_n": 319,
+     "other_back": 0.1442
+    },
+    {
+     "drug": "Ivermectin",
+     "spike_n": 705,
+     "spike_back": 0.0738,
+     "other_n": 6313,
+     "other_back": 0.1316
+    },
+    {
+     "drug": "LDN",
+     "spike_n": 287,
+     "spike_back": 0.1429,
+     "other_n": 1457,
+     "other_back": 0.2217
+    },
+    {
+     "drug": "Lumbrokinase",
+     "spike_n": 27,
+     "spike_back": 0.1111,
+     "other_n": 167,
+     "other_back": 0.1257
+    },
+    {
+     "drug": "Maraviroc",
+     "spike_n": 59,
+     "spike_back": 0.1186,
+     "other_n": 415,
+     "other_back": 0.2096
+    },
+    {
+     "drug": "Melatonin",
+     "spike_n": 79,
+     "spike_back": 0.038,
+     "other_n": 946,
+     "other_back": 0.1406
+    },
+    {
+     "drug": "Metformin",
+     "spike_n": 1183,
+     "spike_back": 0.1361,
+     "other_n": 1993,
+     "other_back": 0.1932
+    },
+    {
+     "drug": "Nattokinase",
+     "spike_n": 79,
+     "spike_back": 0.1266,
+     "other_n": 1279,
+     "other_back": 0.1611
+    },
+    {
+     "drug": "Omega-3",
+     "spike_n": 24,
+     "spike_back": 0.1667,
+     "other_n": 280,
+     "other_back": 0.0929
+    },
+    {
+     "drug": "Paxlovid",
+     "spike_n": 1802,
+     "spike_back": 0.131,
+     "other_n": 7134,
+     "other_back": 0.1899
+    },
+    {
+     "drug": "Quercetin",
+     "spike_n": 25,
+     "spike_back": 0.08,
+     "other_n": 776,
+     "other_back": 0.1173
+    },
+    {
+     "drug": "Serrapeptase",
+     "spike_n": 13,
+     "spike_back": 0.2308,
+     "other_n": 313,
+     "other_back": 0.1885
+    },
+    {
+     "drug": "Statins",
+     "spike_n": 71,
+     "spike_back": 0.0704,
+     "other_n": 656,
+     "other_back": 0.125
+    },
+    {
+     "drug": "Vitamin C",
+     "spike_n": 57,
+     "spike_back": 0.0702,
+     "other_n": 953,
+     "other_back": 0.0829
+    },
+    {
+     "drug": "Vitamin D",
+     "spike_n": 213,
+     "spike_back": 0.0657,
+     "other_n": 2567,
+     "other_back": 0.0869
+    },
+    {
+     "drug": "Zinc",
+     "spike_n": 23,
+     "spike_back": 0.087,
+     "other_n": 1626,
+     "other_back": 0.099
+    }
+   ]
+  },
+  "reddit": {
+   "newcomers": 44380,
+   "spike_newcomers": 2490,
+   "spike_share_of_newcomers": 0.05610635421360973,
+   "back_spike": 0.25983935742971886,
+   "back_other": 0.2936022917164001,
+   "mh_odds_ratio": 0.902033369090243,
+   "mh_ci": [
+    0.8214427177412228,
+    0.990530661942786
+   ],
+   "mh_p": 0.030886735991613956,
+   "drugs_lower": 13,
+   "drugs_with_spike_newcomers": 24,
+   "rows": [
+    {
+     "drug": "Aspirin",
+     "spike_n": 155,
+     "spike_back": 0.2903,
+     "other_n": 2188,
+     "other_back": 0.2815
+    },
+    {
+     "drug": "CoQ10",
+     "spike_n": 71,
+     "spike_back": 0.2254,
+     "other_n": 1404,
+     "other_back": 0.2721
+    },
+    {
+     "drug": "Famotidine",
+     "spike_n": 88,
+     "spike_back": 0.375,
+     "other_n": 2587,
+     "other_back": 0.3309
+    },
+    {
+     "drug": "Fluvoxamine",
+     "spike_n": 27,
+     "spike_back": 0.2963,
+     "other_n": 579,
+     "other_back": 0.3299
+    },
+    {
+     "drug": "H1 antihistamines",
+     "spike_n": 62,
+     "spike_back": 0.3226,
+     "other_n": 5916,
+     "other_back": 0.3509
+    },
+    {
+     "drug": "HBOT",
+     "spike_n": 125,
+     "spike_back": 0.2,
+     "other_n": 1038,
+     "other_back": 0.2861
+    },
+    {
+     "drug": "Hydroxychloroquine",
+     "spike_n": 86,
+     "spike_back": 0.1628,
+     "other_n": 320,
+     "other_back": 0.2
+    },
+    {
+     "drug": "IVIG",
+     "spike_n": 144,
+     "spike_back": 0.3333,
+     "other_n": 752,
+     "other_back": 0.3298
+    },
+    {
+     "drug": "Interferon",
+     "spike_n": 44,
+     "spike_back": 0.2045,
+     "other_n": 155,
+     "other_back": 0.1871
+    },
+    {
+     "drug": "Ivermectin",
+     "spike_n": 250,
+     "spike_back": 0.192,
+     "other_n": 1678,
+     "other_back": 0.2598
+    },
+    {
+     "drug": "LDN",
+     "spike_n": 62,
+     "spike_back": 0.2419,
+     "other_n": 3819,
+     "other_back": 0.3862
+    },
+    {
+     "drug": "Lumbrokinase",
+     "spike_n": 28,
+     "spike_back": 0.2857,
+     "other_n": 409,
+     "other_back": 0.2787
+    },
+    {
+     "drug": "Maraviroc",
+     "spike_n": 30,
+     "spike_back": 0.4667,
+     "other_n": 547,
+     "other_back": 0.3254
+    },
+    {
+     "drug": "Melatonin",
+     "spike_n": 212,
+     "spike_back": 0.3113,
+     "other_n": 2250,
+     "other_back": 0.2787
+    },
+    {
+     "drug": "Metformin",
+     "spike_n": 194,
+     "spike_back": 0.268,
+     "other_n": 768,
+     "other_back": 0.306
+    },
+    {
+     "drug": "Nattokinase",
+     "spike_n": 90,
+     "spike_back": 0.3111,
+     "other_n": 1798,
+     "other_back": 0.2909
+    },
+    {
+     "drug": "Omega-3",
+     "spike_n": 67,
+     "spike_back": 0.2239,
+     "other_n": 1595,
+     "other_back": 0.2132
+    },
+    {
+     "drug": "Paxlovid",
+     "spike_n": 264,
+     "spike_back": 0.3371,
+     "other_n": 2265,
+     "other_back": 0.3148
+    },
+    {
+     "drug": "Quercetin",
+     "spike_n": 63,
+     "spike_back": 0.1429,
+     "other_n": 1753,
+     "other_back": 0.2778
+    },
+    {
+     "drug": "Serrapeptase",
+     "spike_n": 21,
+     "spike_back": 0.2857,
+     "other_n": 560,
+     "other_back": 0.2411
+    },
+    {
+     "drug": "Statins",
+     "spike_n": 61,
+     "spike_back": 0.1148,
+     "other_n": 752,
+     "other_back": 0.2713
+    },
+    {
+     "drug": "Vitamin C",
+     "spike_n": 40,
+     "spike_back": 0.15,
+     "other_n": 2153,
+     "other_back": 0.2155
+    },
+    {
+     "drug": "Vitamin D",
+     "spike_n": 212,
+     "spike_back": 0.2358,
+     "other_n": 4247,
+     "other_back": 0.2583
+    },
+    {
+     "drug": "Zinc",
+     "spike_n": 94,
+     "spike_back": 0.1702,
+     "other_n": 2357,
+     "other_back": 0.2172
+    }
+   ]
+  }
+ },
+ "long_run": {
+  "same_direction": 22,
+  "n": 24,
+  "change_spearman": {
+   "statistic": 0.9034782608695651,
+   "pvalue": 1.4852231299153238e-09,
+   "correlation": 0.9034782608695651
+  },
+  "table": [
+   {
+    "drug": "Aspirin",
+    "x_2021": 0.0409,
+    "x_2025": 0.0192,
+    "reddit_2021": 0.0652,
+    "reddit_2025": 0.0326,
+    "x_change": -0.0217,
+    "reddit_change": -0.0327
+   },
+   {
+    "drug": "CoQ10",
+    "x_2021": 0.0066,
+    "x_2025": 0.0144,
+    "reddit_2021": 0.0243,
+    "reddit_2025": 0.0386,
+    "x_change": 0.0078,
+    "reddit_change": 0.0143
+   },
+   {
+    "drug": "Famotidine",
+    "x_2021": 0.0128,
+    "x_2025": 0.0082,
+    "reddit_2021": 0.0869,
+    "reddit_2025": 0.0507,
+    "x_change": -0.0046,
+    "reddit_change": -0.0362
+   },
+   {
+    "drug": "Fluvoxamine",
+    "x_2021": 0.0378,
+    "x_2025": 0.0043,
+    "reddit_2021": 0.0249,
+    "reddit_2025": 0.0094,
+    "x_change": -0.0334,
+    "reddit_change": -0.0155
+   },
+   {
+    "drug": "H1 antihistamines",
+    "x_2021": 0.0327,
+    "x_2025": 0.0249,
+    "reddit_2021": 0.152,
+    "reddit_2025": 0.1447,
+    "x_change": -0.0078,
+    "reddit_change": -0.0073
+   },
+   {
+    "drug": "HBOT",
+    "x_2021": 0.0203,
+    "x_2025": 0.0405,
+    "reddit_2021": 0.0099,
+    "reddit_2025": 0.0261,
+    "x_change": 0.0201,
+    "reddit_change": 0.0162
+   },
+   {
+    "drug": "Hydroxychloroquine",
+    "x_2021": 0.0444,
+    "x_2025": 0.0162,
+    "reddit_2021": 0.01,
+    "reddit_2025": 0.0101,
+    "x_change": -0.0281,
+    "reddit_change": 0.0001
+   },
+   {
+    "drug": "IVIG",
+    "x_2021": 0.0074,
+    "x_2025": 0.0354,
+    "reddit_2021": 0.0145,
+    "reddit_2025": 0.0348,
+    "x_change": 0.0281,
+    "reddit_change": 0.0203
+   },
+   {
+    "drug": "Interferon",
+    "x_2021": 0.0093,
+    "x_2025": 0.0151,
+    "reddit_2021": 0.0043,
+    "reddit_2025": 0.0037,
+    "x_change": 0.0058,
+    "reddit_change": -0.0006
+   },
+   {
+    "drug": "Ivermectin",
+    "x_2021": 0.4106,
+    "x_2025": 0.1868,
+    "reddit_2021": 0.0863,
+    "reddit_2025": 0.0289,
+    "x_change": -0.2238,
+    "reddit_change": -0.0574
+   },
+   {
+    "drug": "LDN",
+    "x_2021": 0.0165,
+    "x_2025": 0.0951,
+    "reddit_2021": 0.0243,
+    "reddit_2025": 0.1538,
+    "x_change": 0.0787,
+    "reddit_change": 0.1295
+   },
+   {
+    "drug": "Lumbrokinase",
+    "x_2021": 0.0008,
+    "x_2025": 0.0105,
+    "reddit_2021": 0.0037,
+    "reddit_2025": 0.0158,
+    "x_change": 0.0097,
+    "reddit_change": 0.0121
+   },
+   {
+    "drug": "Maraviroc",
+    "x_2021": 0.0105,
+    "x_2025": 0.0302,
+    "reddit_2021": 0.0119,
+    "reddit_2025": 0.0169,
+    "x_change": 0.0197,
+    "reddit_change": 0.005
+   },
+   {
+    "drug": "Melatonin",
+    "x_2021": 0.0422,
+    "x_2025": 0.0247,
+    "reddit_2021": 0.0829,
+    "reddit_2025": 0.0386,
+    "x_change": -0.0175,
+    "reddit_change": -0.0442
+   },
+   {
+    "drug": "Metformin",
+    "x_2021": 0.0077,
+    "x_2025": 0.1011,
+    "reddit_2021": 0.0042,
+    "reddit_2025": 0.0354,
+    "x_change": 0.0933,
+    "reddit_change": 0.0313
+   },
+   {
+    "drug": "Nattokinase",
+    "x_2021": 0.0019,
+    "x_2025": 0.0494,
+    "reddit_2021": 0.0116,
+    "reddit_2025": 0.0452,
+    "x_change": 0.0475,
+    "reddit_change": 0.0335
+   },
+   {
+    "drug": "Omega-3",
+    "x_2021": 0.0099,
+    "x_2025": 0.0098,
+    "reddit_2021": 0.043,
+    "reddit_2025": 0.0273,
+    "x_change": -0.0,
+    "reddit_change": -0.0157
+   },
+   {
+    "drug": "Paxlovid",
+    "x_2021": 0.0122,
+    "x_2025": 0.1569,
+    "reddit_2021": 0.0018,
+    "reddit_2025": 0.0551,
+    "x_change": 0.1447,
+    "reddit_change": 0.0533
+   },
+   {
+    "drug": "Quercetin",
+    "x_2021": 0.0277,
+    "x_2025": 0.0137,
+    "reddit_2021": 0.0487,
+    "reddit_2025": 0.0397,
+    "x_change": -0.014,
+    "reddit_change": -0.009
+   },
+   {
+    "drug": "Serrapeptase",
+    "x_2021": 0.0015,
+    "x_2025": 0.0048,
+    "reddit_2021": 0.0093,
+    "reddit_2025": 0.0102,
+    "x_change": 0.0033,
+    "reddit_change": 0.001
+   },
+   {
+    "drug": "Statins",
+    "x_2021": 0.0279,
+    "x_2025": 0.0268,
+    "reddit_2021": 0.0184,
+    "reddit_2025": 0.0168,
+    "x_change": -0.0011,
+    "reddit_change": -0.0016
+   },
+   {
+    "drug": "Vitamin C",
+    "x_2021": 0.0385,
+    "x_2025": 0.024,
+    "reddit_2021": 0.057,
+    "reddit_2025": 0.0421,
+    "x_change": -0.0145,
+    "reddit_change": -0.015
+   },
+   {
+    "drug": "Vitamin D",
+    "x_2021": 0.1067,
+    "x_2025": 0.0551,
+    "reddit_2021": 0.1257,
+    "reddit_2025": 0.0846,
+    "x_change": -0.0516,
+    "reddit_change": -0.0411
+   },
+   {
+    "drug": "Zinc",
+    "x_2021": 0.0732,
+    "x_2025": 0.0327,
+    "reddit_2021": 0.0791,
+    "reddit_2025": 0.0389,
+    "x_change": -0.0405,
+    "reddit_change": -0.0402
+   }
+  ]
+ },
+ "robust_ldn": {
+  "x_census_narrow": {
+   "query": "(LDN OR naltrexone) (\"long covid\" OR longcovid OR LC OR PASC) -is:retweet",
+   "n": 5131,
+   "alpha": 0.6177806054613998,
+   "spike_share": 0.13143330456329871,
+   "top1": 0.09471837848372637
+  },
+  "x_census_wide": {
+   "query": "(LDN OR naltrexone) (\"long covid\" OR longcovid OR LC OR PASC OR \"long haul\" OR longhauler OR \"long hauler\" OR longhaulers OR \"ME/CFS\" OR MECFS OR pwME OR \"chronic fatigue\") -is:retweet",
+   "n": 7369,
+   "alpha": 0.46048550257687715,
+   "spike_share": 0.11689781517166509,
+   "top1": 0.07816528701316325
+  },
+  "x_census_synonyms": {
+   "query": "(LDN OR naltrexone OR naltrexon OR naltrexona OR \"low-dose naltrexone\" OR #LowDoseNaltrexone OR #LDNtherapy) (\"long covid\" OR longcovid OR LC OR PASC) -is:retweet",
+   "n": 5255,
+   "alpha": 0.6222756679861415,
+   "spike_share": 0.12689792034796793,
+   "top1": 0.09514747859181731
+  },
+  "x_corpus_posts": {
+   "n": 4067,
+   "alpha": 0.8654646011713671,
+   "spike_share": 0.1389377919842636,
+   "top1": 0.10917137939513155
+  },
+  "x_corpus_authors": {
+   "n": 3741,
+   "alpha": 0.7256872584562508,
+   "spike_share": 0.11054798182304199,
+   "top1": 0.09676557070302058
+  },
+  "x_corpus_texts": {
+   "n": 4026,
+   "alpha": 0.7739257870902967,
+   "spike_share": 0.13230004967709885,
+   "top1": 0.10556383507203179
+  },
+  "reddit_posts": {
+   "n": 20926,
+   "alpha": 0.15094828640246274,
+   "spike_share": 0.019537622369984027,
+   "top1": 0.04224409825097964
+  },
+  "reddit_authors": {
+   "n": 17119,
+   "alpha": 0.09212470942504154,
+   "spike_share": 0.007092954361486402,
+   "top1": 0.039780361002395
+  },
+  "reddit_threads": {
+   "n": 12202,
+   "alpha": 0.008638026894672919,
+   "spike_share": 0.0009674058116936334,
+   "top1": 0.03179806589083757
+  },
+  "reddit_authors_share_of_voice": {
+   "n": 17119,
+   "alpha": 0.07767489996030752,
+   "spike_share": 0.007092954361486402,
+   "top1": 0.039780361002395
+  },
+  "x_census_weekly": {
+   "alpha_within_quarter": 0.3978073904645579
+  },
+  "reddit_authors_weekly": {
+   "alpha_within_quarter": 0.03193811582183325
+  }
+ },
+ "thinning": {
+  "rows": [
+   [
+    "Aspirin",
+    0.19986396395085687,
+    0.19526535329163913,
+    0.28990326481257556
+   ],
+   [
+    "CoQ10",
+    0.24334660620452794,
+    0.22904866065810878,
+    0.15974625144175317
+   ],
+   [
+    "Famotidine",
+    0.11634367430130277,
+    0.11032581594446157,
+    0.10631591708085829
+   ],
+   [
+    "Fluvoxamine",
+    0.1397227772096505,
+    0.13877635399613827,
+    0.5289373814041746
+   ],
+   [
+    "H1 antihistamines",
+    0.08154323080586413,
+    0.08117038365643321,
+    0.07872478854912167
+   ],
+   [
+    "HBOT",
+    0.4089864947037422,
+    0.4079500822438504,
+    0.8334956183057449
+   ],
+   [
+    "Hydroxychloroquine",
+    1.1987675629100236,
+    1.1987675629100238,
+    1.0
+   ],
+   [
+    "IVIG",
+    0.5198464102343583,
+    0.5098694001141816,
+    0.450139470013947
+   ],
+   [
+    "Interferon",
+    1.250292055738579,
+    1.2502920557385793,
+    1.0
+   ],
+   [
+    "Ivermectin",
+    0.44861827005557947,
+    0.44861827005557947,
+    1.0
+   ],
+   [
+    "LDN",
+    0.09212470942504154,
+    0.09012026384178377,
+    0.21852911969157077
+   ],
+   [
+    "Lumbrokinase",
+    0.2785839739657108,
+    0.2631420927914317,
+    0.23443983402489627
+   ],
+   [
+    "Maraviroc",
+    0.34044916898430505,
+    0.33717046895210223,
+    0.48283082077051925
+   ],
+   [
+    "Melatonin",
+    0.257137182875542,
+    0.2499850739804159,
+    0.29498896942956193
+   ],
+   [
+    "Metformin",
+    0.5645809624484976,
+    0.5645809624484975,
+    1.0
+   ],
+   [
+    "Nattokinase",
+    0.12535105323799955,
+    0.12189646887302873,
+    0.4372670807453416
+   ],
+   [
+    "Omega-3",
+    0.13625397194124858,
+    0.11528938599810218,
+    0.12262218320163887
+   ],
+   [
+    "Paxlovid",
+    0.29175171183252335,
+    0.2917517118325233,
+    1.0
+   ],
+   [
+    "Quercetin",
+    0.1466304763487871,
+    0.14365703182444545,
+    0.2755079746558881
+   ],
+   [
+    "Serrapeptase",
+    0.16382463582820528,
+    0.1506754662402259,
+    0.40455665024630544
+   ],
+   [
+    "Statins",
+    0.29211432886483873,
+    0.2836607875866569,
+    0.43224216825061595
+   ],
+   [
+    "Vitamin C",
+    0.06714336100059687,
+    0.06417974900757498,
+    0.2921058292105829
+   ],
+   [
+    "Vitamin D",
+    0.14739781318164402,
+    0.14423626271247886,
+    0.3765840741441271
+   ],
+   [
+    "Zinc",
+    0.14007327290707436,
+    0.1391006744459374,
+    0.4805674310143801
+   ]
+  ],
+  "median_abs_change": 0.0030674974967534047,
+  "paired_after_thinning": {
+   "n": 24,
+   "twitter_higher": 18,
+   "median_ratio": 1.716947824614282,
+   "median_ratio_ci": [
+    1.237407462709535,
+    2.6771502382843533
+   ],
+   "wilcoxon_p": 0.004810690879821777,
+   "sign_p": 0.022655844688415527
+  }
+ },
+ "spike_share_volume": {
+  "poisson_null": {
+   "0.5": 0.014821368381405756,
+   "5.0": 0.0021659834434359275
+  },
+  "reddit_thinned_median": 0.04274926468569001,
+  "paired_after_thinning": {
+   "n": 24,
+   "twitter_higher": 19,
+   "median_ratio": 1.4968682014633927,
+   "median_ratio_ci": [
+    1.0127836829740373,
+    1.7625519065933124
+   ],
+   "wilcoxon_p": 0.005330443382263184,
+   "sign_p": 0.006610751152038574
+  }
+ },
+ "alpha_vs_volume_spearman": {
+  "twitter": {
+   "statistic": 0.1417391304347826,
+   "pvalue": 0.5088324543263879,
+   "correlation": 0.1417391304347826
+  },
+  "reddit": {
+   "statistic": -0.6278260869565216,
+   "pvalue": 0.001021588885038589,
+   "correlation": -0.6278260869565216
+  }
+ },
+ "twitter_reddit_alpha_spearman": {
+  "statistic": 0.606086956521739,
+  "pvalue": 0.0016940936259311093,
+  "correlation": 0.606086956521739
+ },
+ "corpus_vs_census_monthly_r": 0.8457093956671979,
+ "reddit_all_activity_alpha": 0.01677170287742326
+}
