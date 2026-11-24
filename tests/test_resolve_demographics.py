@@ -47,13 +47,23 @@ def run(conn) -> int:
     return register_run(conn, "demographics", {})
 
 
-def test_conflicting_ages_take_the_most_recent_and_are_counted(conn):
+def test_age_never_goes_backwards_and_conflicts_are_counted(conn):
     post(conn, "p1", "a", 2024), post(conn, "p2", "a", 2026)
     r = run(conn)
     read(conn, r, "p1", age="45", sex="female"), read(conn, r, "p2", age="33")
     stats = resolve_profiles(conn, r)
-    assert profile(conn, "a") == ("30s", "female", None)
+    assert profile(conn, "a") == ("40s", "female", None)  # 33 in 2026 is younger than 45 in 2024: kept 47
     assert stats["disagreements"] == {"age": 1}
+
+
+def test_one_stray_age_does_not_decide(conn):
+    for i, year in enumerate((2022, 2023, 2024, 2025, 2026)):
+        post(conn, f"p{i}", "a", year)
+    r = run(conn)
+    for i, age in enumerate(("23", "24", "25", "36", "27")):  # one person aging, plus one stray 36
+        read(conn, r, f"p{i}", age=age)
+    resolve_profiles(conn, r)
+    assert conn.execute("SELECT age FROM user_profiles_latest WHERE user_id = 'a'").fetchone() == (27.0,)
 
 
 def test_age_advances_to_the_users_newest_post(conn):

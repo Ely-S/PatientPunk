@@ -170,7 +170,15 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
             # A US state names its country too, so "Texas" alone is "United States / Texas".
             by_field["country"].append((date, post_id, "United States"))
     ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
-    age = ages[-1][0] if ages else None
+    # When claims conflict (after advancing all of them to the same date), take the age most of them
+    # agree with, to within a year, so one stray age ("23, 24, 34, 24") doesn't decide. When that
+    # leaves ages more than a year apart ("23" then "18"), age never goes backwards: the older
+    # (higher) one stands. Otherwise the newest of the agreeing claims. Disagreements are still counted.
+    support = [sum(abs(a[0] - b[0]) <= 1 for b in ages) for a in ages]
+    agreed = [a for a, s in zip(ages, support) if s == max(support)]
+    if agreed and max(a[0] for a in agreed) - min(a[0] for a in agreed) > 1:
+        agreed = [max(agreed, key=lambda a: a[0])]
+    age = agreed[-1][0] if agreed else None
     # Age as written, not advanced: a minor when they wrote it stays flagged, for exclusion.
     written = [a[0] for a in (stated_age(v) for _, _, v in by_field["age"]) if a is not None]
     ever_minor = int(min(written) < 18) if written else None
