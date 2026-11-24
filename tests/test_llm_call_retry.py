@@ -12,11 +12,11 @@ import openai
 import pytest
 
 from patientpunk import llm_cache
-from patientpunk._utils import LLMResponseError
+from patientpunk._utils import LLMResponseError, is_transient_failure
 
 os.environ["LLM_PROVIDER"] = "anthropic"
 
-from utilities import is_transient_failure, llm_call  # noqa: E402
+from utilities import llm_call  # noqa: E402
 
 
 def _status(status: int) -> Exception:

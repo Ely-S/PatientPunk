@@ -26,8 +26,7 @@ from typing import Any, Iterator
 
 from pydantic import BaseModel, Field
 
-from ._utils import REMOVED_MARKERS
-from ._utils import collect_texts_from_post as _collect_texts_from_post
+from ._utils import collect_texts_from_post, collect_texts_from_user
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +165,7 @@ class CorpusLoader:
             )
             return
         for post in posts:
-            texts = self._texts_from_post(post)
+            texts = collect_texts_from_post(post)
             yield CorpusRecord(
                 author_hash=post.get("author_hash") or "",
                 source="subreddit_post",
@@ -191,7 +190,7 @@ class CorpusLoader:
                     file=sys.stderr,
                 )
                 continue
-            texts = self._texts_from_user(user)
+            texts = collect_texts_from_user(user)
             yield CorpusRecord(
                 author_hash=user.get("author_hash") or user_file.stem,
                 source="user_history",
@@ -199,39 +198,3 @@ class CorpusLoader:
                 texts=texts,
                 raw=user,
             )
-
-    # ------------------------------------------------------------------
-    # Text extraction helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _texts_from_post(post: dict) -> list[str]:
-        """Extract non-empty text segments from a subreddit post dict.
-
-        Title + body only: comments are other users' text and must not be
-        attributed to the post author (same rule as biomedical / llm_extract /
-        discover). Commenters are captured via the aggregate path.
-        """
-        texts: list[str] = []
-        for raw in _collect_texts_from_post(post, include_comments=False):
-            kept = (raw or "").strip()
-            if kept and kept not in REMOVED_MARKERS:
-                texts.append(kept)
-        return texts
-
-    @staticmethod
-    def _texts_from_user(user: dict) -> list[str]:
-        """Extract non-empty text segments from a user history dict."""
-        texts: list[str] = []
-        for post in user.get("posts", []):
-            title = (post.get("title") or "").strip()
-            body = (post.get("body") or "").strip()
-            if title:
-                texts.append(title)
-            if body and body not in REMOVED_MARKERS:
-                texts.append(body)
-        for comment in user.get("comments", []):
-            comment_body = (comment.get("body") or "").strip()
-            if comment_body and comment_body not in REMOVED_MARKERS:
-                texts.append(comment_body)
-        return texts

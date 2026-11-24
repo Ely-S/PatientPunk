@@ -9,7 +9,7 @@ import pytest
 
 import utilities
 from patientpunk import llm_cache
-from patientpunk._utils import LLMContentFilteredError, LLMResponseError
+from patientpunk._utils import LLMContentFilteredError, LLMResponseError, is_transient_failure
 
 
 def test_get_client_uses_openrouter_openai_endpoint(monkeypatch):
@@ -120,4 +120,4 @@ def test_openrouter_http_content_filter_fails_the_item(monkeypatch):
 )
 def test_openrouter_in_band_errors_are_transient_only_when_the_provider_says_so(message, transient):
     request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
-    assert utilities.is_transient_failure(openai.APIError(message, request=request, body=None)) is transient
+    assert is_transient_failure(openai.APIError(message, request=request, body=None)) is transient

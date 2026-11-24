@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +19,6 @@ elif _src_env.exists():
     load_dotenv(_src_env, override=False)
 
 import anthropic
-import httpx
 import openai
 
 # ── Output file names ────────────────────────────────────────────────────────
@@ -278,44 +276,24 @@ def get_client() -> anthropic.Anthropic:
 
 
 # ── LLM response parsing ────────────────────────────────────────────────────
-def _strip_markdown(raw: str) -> str:
-    if "```" in raw:
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    return raw.strip()
-
-
 class LLMParseError(ValueError):
     """LLM response could not be parsed as JSON."""
 
 
-import re
+def _parse(raw: str, kind: type):
+    from patientpunk._utils import parse_json_response
+    value = parse_json_response(raw, kind)
+    if value is None:
+        raise LLMParseError(f"No JSON {kind.__name__} in response: {raw[:200]}")
+    return value
 
-_TRAILING_COMMA = re.compile(r",\s*([}\]])")
 
 def parse_json_array(raw: str) -> list:
-    raw = _strip_markdown(raw)
-    start, end = raw.find("["), raw.rfind("]") + 1
-    if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON array in response: {raw[:200]}")
-    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+    return _parse(raw, list)
 
 
 def parse_json_object(raw: str) -> dict:
-    raw = _strip_markdown(raw)
-    start, end = raw.find("{"), raw.rfind("}") + 1
-    if start < 0 or end <= start:
-        raise LLMParseError(f"No JSON object in response: {raw[:200]}")
-    text = _TRAILING_COMMA.sub(r"\1", raw[start:end])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMParseError(f"JSON decode failed: {e} — {raw[:200]}") from e
+    return _parse(raw, dict)
 
 
 # ── Drug aliases ─────────────────────────────────────────────────────────────
@@ -358,34 +336,8 @@ def get_drug_aliases(client, drug: str, cache_path: Path) -> list[str]:
 
 
 # ── LLM Call Wrapper ─────────────────────────────────────────────────────────
-RETRY_DELAYS = [2, 5, 15, 30]
-
-# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
-IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
-                     "no instances available", "temporarily unavailable")
-
 # Retry truncated replies with progressively larger output ceilings.
 BUDGET_MULTIPLIERS = (1, 2, 4, 8)
-
-
-def is_transient_failure(exc: BaseException) -> bool:
-    """Return whether retrying the same request may succeed."""
-    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError,
-                        anthropic.RateLimitError, anthropic.InternalServerError)):
-        return True
-    # OpenRouter's OpenAI SDK wraps transport failures, including timeouts,
-    # in APIConnectionError. Exhausted retries should fail only the current item.
-    if isinstance(exc, (httpx.TransportError, openai.APIConnectionError)):
-        return True
-    status = getattr(exc, "status_code", None)
-    if status == 429 or (isinstance(status, int) and 500 <= status < 600):
-        return True
-    # In-band provider failures arrive as anthropic.APIStatusError, or over OpenRouter as a
-    # status-less openai.APIError. Match their body, but never retry a 4xx request.
-    if isinstance(exc, (anthropic.APIStatusError, openai.APIError)) and not (
-            isinstance(status, int) and 400 <= status < 500):
-        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
-    return False
 
 
 def is_transient_or_truncated(exc: BaseException) -> bool:
@@ -393,7 +345,7 @@ def is_transient_or_truncated(exc: BaseException) -> bool:
     them, or a reply the provider returned empty, blocked by its content filter, or still truncated at
     the largest budget (``LLMResponseError`` and its subclasses). Anything else is a configuration
     error (a bad key or model name) or a bug, which a caller must not count as a failed batch."""
-    from patientpunk._utils import LLMResponseError
+    from patientpunk._utils import LLMResponseError, is_transient_failure
     return is_transient_failure(exc) or isinstance(exc, LLMResponseError)
 
 
@@ -411,7 +363,7 @@ def llm_call(
     raises for a reply the caller can't use; that reply is raised to the caller and never cached."""
     from patientpunk.llm_cache import cached_completion
     from patientpunk._utils import (LLMContentFilteredError, LLMTruncationError, check_response,
-                                    response_text)
+                                    response_text, with_retries)
 
     def _request_once(budget: int) -> str:
         kwargs = {
@@ -433,20 +385,6 @@ def llm_call(
                 raise LLMContentFilteredError(f"{model}: reply blocked by the provider's content filter") from exc
             raise
 
-    def _request_with_transport_retries(budget: int) -> str:
-        for attempt, delay in enumerate([0] + RETRY_DELAYS):
-            if delay:
-                time.sleep(delay)
-            try:
-                return _request_once(budget)
-            except Exception as exc:
-                if not is_transient_failure(exc) or attempt == len(RETRY_DELAYS):
-                    raise
-                log.warning(
-                    f"{type(exc).__name__} on {model} "
-                    f"(attempt {attempt + 1}/{len(RETRY_DELAYS) + 1}), retrying...")
-        raise AssertionError("unreachable")  # pragma: no cover
-
     def _cached_request(budget: int) -> str:
         return cached_completion(
             provider=LLM_PROVIDER,
@@ -455,7 +393,7 @@ def llm_call(
             prompt=prompt,
             temperature=temperature,
             max_tokens=budget,
-            call_fn=lambda: _request_with_transport_retries(budget),
+            call_fn=lambda: with_retries(lambda: _request_once(budget), label=model),
             validate=validate,
         )
 
