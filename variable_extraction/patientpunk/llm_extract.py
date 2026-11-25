@@ -1222,7 +1222,7 @@ def main(argv: list[str] | None = None) -> None:
             user_message = build_user_message([args.text])
             print(f"Sending to {MODEL}...\n")
             raw = call_haiku(client, system_prompt, user_message)
-            parsed = parse_json_response(raw)
+            parsed = parse_json_response(raw, dict)
             if parsed:
                 print("=== Extracted fields ===")
                 for field in sorted(parsed.get("fields", {})):

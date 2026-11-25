@@ -444,30 +444,34 @@ def load_json(path: Path) -> dict | list | None:
 
 
 _FENCED = re.compile(r"```(?:json)?(.*?)(?:```|$)", re.S | re.I)
-_TRAILING_COMMA = re.compile(r",\s*([}\]])")
+# A whole JSON string, kept as is, or a comma before a closing bracket, dropped.
+_TRAILING_COMMA = re.compile(r'("(?:[^"\\]|\\.)*")|,\s*(?=[}\]])')
 
 
 def parse_json_response(text: str, kind: type | None = None) -> dict | list | None:
     """The JSON in an LLM reply, or None.
 
-    Reads the first markdown-fenced block if there is one, then the whole reply; in each, the
-    text as is, then its outermost ``{...}`` or ``[...]``, each also with trailing commas
-    removed. ``kind`` (``dict`` or ``list``) accepts only that type, from its own brackets.
+    Reads the whole reply as is, then the first markdown-fenced block if there is one, then the
+    whole reply again; in each, the text as is, then its outermost ``{...}`` or ``[...]``, each
+    also with trailing commas removed. The whole reply comes first because a fence may sit
+    inside one of its strings. ``kind`` (``dict`` or ``list``) accepts only that type, from its
+    own brackets.
     """
     text = (text or "").strip()
     fenced = _FENCED.search(text)
     pairs = {None: ("{}", "[]"), dict: ("{}",), list: ("[]",)}[kind]
+    spans = [text]
     for source in ([fenced.group(1).strip()] if fenced else []) + [text]:
-        spans = [source] + [source[source.find(o):source.rfind(c) + 1]
-                            for o, c in pairs if -1 < source.find(o) < source.rfind(c)]
-        for span in spans:
-            for candidate in (span, _TRAILING_COMMA.sub(r"\1", span)):
-                try:
-                    value = json.loads(candidate)
-                except json.JSONDecodeError:
-                    continue
-                if kind is None or isinstance(value, kind):
-                    return value
+        spans += [source] + [source[source.find(o):source.rfind(c) + 1]
+                             for o, c in pairs if -1 < source.find(o) < source.rfind(c)]
+    for span in spans:
+        for candidate in (span, _TRAILING_COMMA.sub(r"\1", span)):
+            try:
+                value = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if kind is None or isinstance(value, kind):
+                return value
     return None
 
 

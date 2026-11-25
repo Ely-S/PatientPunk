@@ -31,6 +31,8 @@ REQUEST = httpx.Request("POST", "https://example.invalid")
     ('{"a": [1, 2,],}', None, {"a": [1, 2]}),                 # trailing commas (was src/ only)
     ('{"quote": "a ```b``` c"}', None, {"quote": "a ```b``` c"}),  # backticks inside a string
     ('{"quote": "x, }"}', None, {"quote": "x, }"}),            # valid JSON is never comma-repaired
+    ('{"quote": "x, }", "a": 1,}', None, {"quote": "x, }", "a": 1}),  # the repair skips strings
+    ('{"quote": "```[1, 2]```", "a": 1}', None, {"quote": "```[1, 2]```", "a": 1}),  # a fence in a string
     ('{"results": [1, 2]}', list, [1, 2]),                     # a list asked for is taken from its brackets
     ('[{"a": 1}]', dict, {"a": 1}),
     ('{"key": missing_quotes}', None, None),
