@@ -9,9 +9,9 @@ outside Git because it holds patient text: in `demographics_testset/` under the 
 `sample --out`) names another directory. A set made under the old default moves with
 `mv data/demographics_testset "${PATIENTPUNK_DATA:-../PatientPunk_data}/"`.
 
-The shared copy is in private S3 under `s3://patientpunk/demographics_testset/`. Uploading to it
-needs a yes for each object (AGENTS.md). With the bucket's keys in the environment (us-west-1;
-never print them), download it with:
+The shared copy is to go in private S3 under `s3://patientpunk/demographics_testset/` (not uploaded
+yet; uploading needs a yes for each object, AGENTS.md). Once it is there, with the bucket's keys in the
+environment (us-west-1; never print them), download it with:
 
 ```bash
 export MC_HOST_pp="https://${AWS_ACCESS_KEY_ID}:<url-encoded secret>@s3.us-west-1.amazonaws.com"

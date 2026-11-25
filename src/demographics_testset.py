@@ -659,6 +659,12 @@ def main():
                    "text, not the f-string template in src/prompts/demographic_prompt.py")
     e.add_argument("--dry-run", action="store_true", help="Print the calls and approximate tokens, send nothing")
     a = ap.parse_args()
+    # A wrong directory would otherwise read as an empty set: evaluate would pay for the synthetic
+    # items alone, and sample would make a data root wherever the checkout happens to sit.
+    if a.command == "sample" and not a.out.parent.is_dir():
+        ap.error(f"{a.out.parent} doesn't exist: create it, set PATIENTPUNK_DATA, or pass --out")
+    if a.command != "sample" and not (a.testset / "testset.jsonl").exists():
+        ap.error(f"no testset.jsonl in {a.testset}: set PATIENTPUNK_DATA or pass --testset")
     if a.command == "sample":
         result = sample(a.db, a.out, seed=a.seed, pool=a.pool, n_random=a.random, n_keyword=a.keyword,
                         n_other=a.other_person, n_authors=a.authors, max_author_posts=a.max_author_posts)

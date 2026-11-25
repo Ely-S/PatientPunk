@@ -383,3 +383,11 @@ def test_the_set_defaults_to_the_data_root_and_testset_overrides_it(tmp_path, mo
         return json.loads(capsys.readouterr().out)["items"]
     assert stats() == {"random/dev": 1}
     assert stats("--testset", str(tmp_path / "other")) == {"random/dev": 2}
+    with pytest.raises(SystemExit):  # no set there: an error, not an empty set
+        stats("--testset", str(tmp_path / "missing"))
+    assert "no testset.jsonl" in capsys.readouterr().err
+    monkeypatch.setattr("sys.argv", ["demographics_testset.py", "sample", "--db", "x.db",
+                                     "--out", str(tmp_path / "nowhere" / "demographics_testset")])
+    with pytest.raises(SystemExit):
+        ts.main()
+    assert "doesn't exist" in capsys.readouterr().err
