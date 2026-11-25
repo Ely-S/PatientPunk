@@ -3,6 +3,7 @@ with synthetic posts and stubbed replies, no API calls."""
 
 import json
 import sqlite3
+from collections import Counter
 from contextlib import closing
 
 import pytest
@@ -296,6 +297,41 @@ def test_evaluate_runs_read_post_and_writes_the_report(tmp_path, monkeypatch):
     assert report["posts"]["blocked"] == 1 and report["fields"]["age"]["recall"] == 1.0
     assert json.loads((tmp_path / "report_dev_t.json").read_text())["tag"] == "t"
     assert len((tmp_path / "predictions_dev_t.jsonl").read_text().splitlines()) == 2 + len(ts.load_synthetic())
+
+
+def test_evaluate_over_runs_asks_afresh_and_reports_the_spread(tmp_path, monkeypatch):
+    items = [item("a", "I'm 34", label(age=("34", "I'm 34")), split="test")]
+    (tmp_path / "testset.jsonl").write_text("".join(json.dumps(it) + "\n" for it in items))
+    monkeypatch.setattr(extractor, "get_client", lambda: None)
+    asked, cached = Counter(), []
+
+    def llm_call(client, prompt, **kwargs):  # "I'm 34" is read as 34, then 35, then 34
+        cached.append(ts.llm_cache.cache_enabled())
+        asked[prompt] += 1
+        age = "35" if "I'm 34" in prompt and asked[prompt] == 2 else "34"
+        return json.dumps({"age": {"value": age, "evidence": "I'm 34"}})
+
+    monkeypatch.setattr(extractor, "llm_call", llm_call)
+    n = 1 + len(ts.load_synthetic())
+    assert ts.evaluate(tmp_path, "test", "t", dry_run=True, runs=3)["calls"] == 3 * n
+    report = ts.evaluate(tmp_path, "test", "t", runs=3)
+    assert len(cached) == 3 * n and not any(cached) and ts.llm_cache.cache_enabled()  # off for the runs only
+    assert report["fields"]["age"]["recall"] == 1.0  # run 1's
+    age = report["runs"]["age"]
+    assert age["pooled"]["recall"] == {"mean": 0.667, "min": 0.0, "max": 1.0} == age["random"]["recall"]
+    assert age["changed"] == 1.0 and report["runs"]["sex"]["changed"] == 0.0 and report["runs"]["changed_n"] == 1
+    assert [(tmp_path / f"predictions_test_t_run{k}.jsonl").exists() for k in (1, 2, 3)] == [True] * 3
+    assert not (tmp_path / "predictions_test_t.jsonl").exists()
+    assert json.loads((tmp_path / "test_runs.jsonl").read_text())["runs"] == 3
+
+
+def test_evaluate_once_reports_as_before(tmp_path, monkeypatch):
+    (tmp_path / "testset.jsonl").write_text(json.dumps(item("a", "I'm 34", label(age=("34", "I'm 34")))) + "\n")
+    monkeypatch.setattr(extractor, "get_client", lambda: None)
+    monkeypatch.setattr(extractor, "llm_call", lambda client, prompt, **kw: json.dumps({"age": None}))
+    assert "runs" not in ts.evaluate(tmp_path, "dev", "t", dry_run=True)
+    report = ts.evaluate(tmp_path, "dev", "t")
+    assert "runs" not in report and sorted(p.name for p in tmp_path.glob("predictions_*")) == ["predictions_dev_t.jsonl"]
 
 
 def test_stats_flags_evidence_that_is_not_quoted_from_the_text():

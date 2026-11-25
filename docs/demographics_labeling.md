@@ -221,6 +221,14 @@ the post appended. It must be the rendered prompt, not the template in
 cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT as p; print(p, end='')" > ../candidate.txt
 ```
 
+`--runs N` reads every item N times with the reply cache off, since cached replies would repeat the
+first run. Identical runs differ: 13–20% of place answers changed between two (#237), enough to hide
+or invent a difference between prompts. Use 3 or more runs when comparing prompts; N runs cost N
+times as much. Each run's predictions go to `predictions_<split>_<tag>_run<k>.jsonl`. The report's
+metrics are run 1's, and `runs` adds, per field, precision and recall as `mean`, `min` and `max`
+(`pooled`, and on `random`), and `changed`, the share of pooled items whose answer differed between
+any two runs, out of `changed_n` items every run read.
+
 ## Reading a report
 
 - **Which labels.** Labels change with each review, so the plan and report carry `testset_sha256`
