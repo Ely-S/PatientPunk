@@ -233,6 +233,19 @@ def test_curate_and_add_curated_keep_picks_outside_the_pooled_set(tmp_path):
         ts.add_curated(out, curation)
 
 
+def test_curate_matches_curly_apostrophes_as_straight_ones(tmp_path):
+    db = tmp_path / "scrape.db"
+    scrape_db(db)
+    with closing(sqlite3.connect(db)) as conn:
+        conn.execute("INSERT INTO comments (id, subreddit, created_utc, body, author) VALUES ('cq', 'cfs', 1, 'I’m 51', 'u')")
+        conn.commit()
+    out = tmp_path / "set"
+    ts.sample(db, out, seed=1, pool=101, n_random=1, n_keyword=0, n_other=0, n_authors=0, max_author_posts=1)
+    cases = tmp_path / "cases.json"
+    cases.write_text(json.dumps({"fifty_one": {"n": 1, "why": "x", "pattern": "i'm 51"}}))
+    ts.curate(db, out, seed=1, cases_path=cases)
+    assert [json.loads(line)["post_id"] for line in (out / "candidates" / "fifty_one.jsonl").read_text().splitlines()] == ["t1_cq"]
+
 
 def test_evaluate_leaves_curated_and_synthetic_items_out_of_the_pooled_metrics(tmp_path, monkeypatch):
     items = [item("a", "I'm 34", label(age=("34", "I'm 34"))),
@@ -244,7 +257,7 @@ def test_evaluate_leaves_curated_and_synthetic_items_out_of_the_pooled_metrics(t
     assert report["posts"]["scored"] == 1
     assert report["by_stratum"]["curated"]["posts"]["scored"] == 1
     assert report["by_stratum"]["synthetic"]["posts"]["scored"] == len(ts.load_synthetic())
-    assert {"decade_age", "gender_identity"} <= set(report["by_case"])
+    assert set(report["by_case"]) == {"decade_age"} and "gender_identity" in report["synthetic_by_case"]
 
 
 def test_sample_reads_items_as_the_extractor_does(tmp_path):
@@ -322,6 +335,9 @@ def test_a_report_names_its_labels_and_a_test_run_is_logged(tmp_path, monkeypatc
     assert [r["tag"] for r in runs] == ["t1"] and runs[0]["testset_sha256"] == plan["testset_sha256"]
     (tmp_path / "testset.jsonl").write_text(json.dumps({**items[0], "labeled_by": "other"}) + "\n")
     assert ts.evaluate(tmp_path, "test", "t", dry_run=True)["testset_sha256"] != plan["testset_sha256"]
+    labels = ts.evaluate(tmp_path, "test", "t", dry_run=True)["testset_sha256"]
+    (tmp_path / "manifest.json").write_text(json.dumps({"excluded": [{"post_id": "a", "reason": "r"}]}))
+    assert ts.evaluate(tmp_path, "test", "t", dry_run=True)["testset_sha256"] != labels  # excluding a post counts
 
 
 def test_kappa_and_agreement_between_two_labelers():

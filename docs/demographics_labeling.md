@@ -175,8 +175,9 @@ The report's top-level `posts`, `fields` and `conditions` pool the sampled items
 (random, keyword, other_person, author); curated and synthetic items are left out, so adding hard
 cases doesn't move the headline numbers. `by_stratum` repeats them for each stratum alone: read
 recall from `random`, which is drawn uniformly, and wrong-person errors from `other_person`.
-`by_case` does the same for each curated or synthetic case. An item in two strata or cases counts in
-both. `conditions` gives precision and recall over condition names, matched through
+`by_case` does the same for each case on its curated items, and `synthetic_by_case` on its synthetic
+ones: those are written to the rules, so they would lift a case's figures on real posts. An item in two
+strata or cases counts in both. `conditions` gives precision and recall over condition names, matched through
 `canonical_condition`, and `severity_agreement`, the share of matched names whose severity agrees.
 
 ## Curated and synthetic items
@@ -223,7 +224,8 @@ cd src && uv run python -c "from prompts.demographic_prompt import POST_DEMOGRAP
 ## Reading a report
 
 - **Which labels.** Labels change with each review, so the plan and report carry `testset_sha256`
-  (of `testset.jsonl`, `authors.jsonl` and the synthetic fixture) and `labels_by`, the count of items
+  (of `manifest.json`, which lists the excluded posts, `testset.jsonl`, `authors.jsonl` and the
+  synthetic fixture) and `labels_by`, the count of items
   per labeler. Compare two reports only when their `testset_sha256` agree.
 - **Uncertainty.** Every precision and recall has its denominator (`precision_n`, `recall_n`) and a
   Wilson 95% interval (`precision_ci`, `recall_ci`). Most cases have 5 to 30 items and state and city

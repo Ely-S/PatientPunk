@@ -203,7 +203,7 @@ def curate(db: Path, testset: Path, *, seed: int, factor: int = 3, cases_path: P
         for kind, (table, cols) in _SOURCE.items():
             for row in conn.execute(f"SELECT {cols} FROM {table} WHERE author IS NOT NULL"):
                 raw = f"{row['title'] or ''}\n{row['selftext'] or ''}" if kind == "post" else row["body"] or ""
-                hits = {c: m.group() for c, r in regex.items() if (m := r.search(raw))}
+                hits = {c: m.group() for c, r in regex.items() if (m := plain_search(r, raw))}
                 if hits and (it := _item(row, kind)) and it["post_id"] not in have:
                     for c, match in hits.items():
                         found[c].append({**it, "match": match})
@@ -586,7 +586,8 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
             # Which labels this was scored against: they change with every review, so compare reports only
             # when these agree.
             "testset_sha256": {name: hashlib.sha256(path.read_bytes()).hexdigest()[:16]
-                               for name, path in (("testset.jsonl", testset / "testset.jsonl"),
+                               for name, path in (("manifest.json", testset / "manifest.json"),  # excluded posts
+                                                  ("testset.jsonl", testset / "testset.jsonl"),
                                                   ("authors.jsonl", testset / "authors.jsonl"),
                                                   ("synthetic", SYNTHETIC)) if path.exists()},
             "labels_by": dict(Counter(it.get("labeled_by") or "unknown" for it in items).most_common())}
@@ -601,7 +602,11 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
     report = {**plan, "tag": tag, "code_commit": extractor.get_git_commit(), "git_dirty": extractor.git_is_dirty(),
               "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
               **score(pooled, predictions, conditions), "by_stratum": score_by("strata", items, predictions, conditions),
-              "by_case": score_by("case", items, predictions, conditions),
+              # Synthetic posts are written to the rules, so they'd lift a case's figures on real posts.
+              "by_case": score_by("case", [it for it in items if it["strata"] != ["synthetic"]], predictions,
+                                  conditions),
+              "synthetic_by_case": score_by("case", [it for it in items if it["strata"] == ["synthetic"]],
+                                            predictions, conditions),
               "profiles": score_profiles(items, authors, predictions)}
     (testset / f"report_{name}.json").write_text(json.dumps(report, indent=2) + "\n")
     if split in ("test", "all"):  # the test split is for final comparisons: keep a record of every look
