@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[1] / "Scrapers"))
 
 from db_to_corpus import author_hash
+from patientpunk import llm_cache
 
 import extract_demographics_conditions as extractor
 from resolve_demographics import (
@@ -575,12 +576,38 @@ def predict(items: list[dict]) -> tuple[dict[str, dict | str | None], dict[str, 
     return predictions, conditions or None
 
 
-def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> dict:
+def spread(items: list[dict], runs: list[dict]) -> dict:
+    """Over runs of one prompt (#237): each field's precision and recall as mean, min and max, pooled
+    and on the random stratum, and ``changed``, the share of items whose claim for the field differed
+    between any two runs, over the items every run read."""
+    def summary(values: list) -> dict | None:
+        values = [v for v in values if v is not None]
+        return {"mean": round(sum(values) / len(values), 3), "min": min(values), "max": max(values)} if values else None
+    random_items = [it for it in items if "random" in it["strata"]]
+    reports = {"pooled": [score(items, r) for r in runs], "random": [score(random_items, r) for r in runs]}
+    read = [it["post_id"] for it in items if all(r.get(it["post_id"]) is not None for r in runs)]
+    claim = lambda r, post_id, f: None if r[post_id] == "blocked" or f not in r[post_id] else key(f, r[post_id][f][0])
+    out = {"n": len(runs), "changed_n": len(read)}
+    for f in FIELDS:
+        out[f] = {group: {m: summary([rep["fields"][f][m] for rep in reps]) for m in ("precision", "recall")}
+                  for group, reps in reports.items()}
+        changed = sum(len({claim(r, p, f) for r in runs}) > 1 for p in read)
+        out[f]["changed"] = round(changed / len(read), 3) if read else None
+    return out
+
+
+def _write_predictions(path: Path, predictions: dict, conditions: dict | None) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(json.dumps({"post_id": post_id, "claims": claims, "conditions": (conditions or {}).get(post_id)},
+                                ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
+
+
+def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False, runs: int = 1) -> dict:
     items, authors = load(testset, split)
     items = [it for it in items + load_synthetic() if it["label"] is not None]
     prompt = extractor.POST_DEMOGRAPHICS_PROMPT
-    tokens = sum(len(prompt) + len(it["text"]) for it in items) // 4
-    plan = {"split": split, "labeled_items": len(items), "calls": len(items), "approx_input_tokens": tokens,
+    tokens = runs * sum(len(prompt) + len(it["text"]) for it in items) // 4
+    plan = {"split": split, "labeled_items": len(items), "calls": runs * len(items), "approx_input_tokens": tokens,
             "model": extractor.MODEL_FAST, "provider": extractor.LLM_PROVIDER,
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest()[:12], "prompt_tokens": len(prompt) // 4,
             # Which labels this was scored against: they change with every review, so compare reports only
@@ -591,13 +618,24 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
                                                   ("authors.jsonl", testset / "authors.jsonl"),
                                                   ("synthetic", SYNTHETIC)) if path.exists()},
             "labels_by": dict(Counter(it.get("labeled_by") or "unknown" for it in items).most_common())}
+    if runs > 1:
+        plan["runs"] = runs
     if dry_run or not items:
         return plan
-    predictions, conditions = predict(items)
     name = f"{split}_{tag}"  # dev and test runs under one tag don't overwrite each other
-    with open(testset / f"predictions_{name}.jsonl", "w", encoding="utf-8") as f:
-        f.writelines(json.dumps({"post_id": post_id, "claims": claims, "conditions": (conditions or {}).get(post_id)},
-                                ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
+    if runs == 1:
+        predictions, conditions = predict(items)
+        _write_predictions(testset / f"predictions_{name}.jsonl", predictions, conditions)
+    else:
+        # Every run asks the model afresh: cached replies would repeat run 1 and hide the spread.
+        llm_cache.set_cache_enabled(False)
+        try:
+            results = [predict(items) for _ in range(runs)]
+        finally:
+            llm_cache.set_cache_enabled(None)
+        for k, (p, c) in enumerate(results, 1):
+            _write_predictions(testset / f"predictions_{name}_run{k}.jsonl", p, c)
+        predictions, conditions = results[0]
     pooled = [it for it in items if not set(it["strata"]) <= EXTRA_STRATA]
     report = {**plan, "tag": tag, "code_commit": extractor.get_git_commit(), "git_dirty": extractor.git_is_dirty(),
               "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -608,11 +646,13 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
               "synthetic_by_case": score_by("case", [it for it in items if it["strata"] == ["synthetic"]],
                                             predictions, conditions),
               "profiles": score_profiles(items, authors, predictions)}
+    if runs > 1:  # the metrics above are run 1's
+        report["runs"] = spread(pooled, [p for p, _ in results])
     (testset / f"report_{name}.json").write_text(json.dumps(report, indent=2) + "\n")
     if split in ("test", "all"):  # the test split is for final comparisons: keep a record of every look
         with open(testset / "test_runs.jsonl", "a", encoding="utf-8") as f:
-            f.write(json.dumps({k: report[k] for k in ("tag", "created_at", "split", "prompt_sha256", "model",
-                                                       "code_commit", "testset_sha256")}) + "\n")
+            f.write(json.dumps({**{k: report[k] for k in ("tag", "created_at", "split", "prompt_sha256", "model",
+                                                          "code_commit", "testset_sha256")}, "runs": runs}) + "\n")
     return report
 
 
@@ -649,8 +689,12 @@ def main():
     e.add_argument("--tag", default="baseline", help="Names predictions_<split>_<tag>.jsonl and report_<split>_<tag>.json")
     e.add_argument("--prompt-file", type=Path, help="Evaluate this per-post prompt instead of the merged one. Give the rendered "
                    "text, not the f-string template in src/prompts/demographic_prompt.py")
+    e.add_argument("--runs", type=int, default=1, help="Read every item this many times, uncached, and report the "
+                   "spread of each metric and how often answers change (#237). N runs cost N times as much")
     e.add_argument("--dry-run", action="store_true", help="Print the calls and approximate tokens, send nothing")
     a = ap.parse_args()
+    if a.command == "evaluate" and a.runs < 1:
+        ap.error("--runs must be at least 1")
     if a.command == "sample":
         result = sample(a.db, a.out, seed=a.seed, pool=a.pool, n_random=a.random, n_keyword=a.keyword,
                         n_other=a.other_person, n_authors=a.authors, max_author_posts=a.max_author_posts)
@@ -665,7 +709,7 @@ def main():
     else:
         if a.prompt_file:
             extractor.POST_DEMOGRAPHICS_PROMPT = a.prompt_file.read_text(encoding="utf-8")  # read_post reads it
-        result = evaluate(a.testset, a.split, a.tag, dry_run=a.dry_run)
+        result = evaluate(a.testset, a.split, a.tag, dry_run=a.dry_run, runs=a.runs)
     print(json.dumps(result, indent=2))
 
 
