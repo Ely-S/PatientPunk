@@ -96,5 +96,41 @@
   "long_post": {
     "n": 0, "fields": ["age"], "why": "a claim near the end of a long post still counts; synthetic only (n 0) until real items are curated",
     "pattern": "(?s)^.{4000,}$"
+  },
+  "implied_age": {
+    "n": 0, "fields": ["age"], "why": "an age implied but not stated (birth year, school year) is no claim; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bborn in (?:19|20)\\d{2}\\b|\\bclass of (?:19|20)\\d{2}\\b"
+  },
+  "role_word_self": {
+    "n": 0, "fields": ["sex"], "why": "a role or kinship word about the author is their sex (\"as a mom\", \"I'm a dad\"); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:as an?|i'?m an?|i am an?|speaking as an?)\\s+(?:(?:single|working|new|stay at home)\\s+)?(?:mom|mum|mother|dad|father|wife|husband|grandma|grandmother|grandpa|grandfather)\\b"
+  },
+  "pronouns_self": {
+    "n": 0, "fields": ["sex"], "why": "the author's own pronouns (\"she/her\") are no sex claim under the doc's current rule, an open question on #225; synthetic only (n 0) until real items are curated",
+    "pattern": "\\((?:she|he|they)/(?:her|him|them)\\)|\\b(?:my pronouns are|pronouns:)\\s*(?:she|he|they)\\b"
+  },
+  "metro_area": {
+    "n": 0, "fields": ["city"], "why": "a metro area is its city (\"the Boston area\" is Boston, \"the Bay Area\" is San Francisco); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:here in|i live in|living in|i'?m in|we'?re in|based in)\\s+the\\s+(?:greater\\s+)?(?:[a-z]+\\s+){1,2}area\\b"
+  },
+  "region_not_place": {
+    "n": 0, "fields": ["country", "state"], "why": "a region that is no country or state (\"the Midwest\", \"Europe\", \"a small town\") gives no place; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:here in|i live in|living in|i'?m in|we'?re in|based in)\\s+(?:the\\s+)?(?:midwest|deep south|south|pacific northwest|new england|east coast|west coast|europe|scandinavia|eu|asia|africa|south america|latin america|middle east|a small town|a rural area|countryside|a third world country)\\b"
+  },
+  "condition_not_author": {
+    "n": 0, "fields": ["conditions"], "why": "someone else's condition (\"my mom has MS\") is not the author's; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\bmy\\s+(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|sister|brother|friend|kid)\\s+(?:has|had|was diagnosed with|got|suffers from)\\b"
+  },
+  "condition_question": {
+    "n": 0, "fields": ["conditions"], "why": "a condition the author only asks or wonders about (\"could this be POTS?\") is not theirs; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\b(?:could|might|can)\\s+(?:this|it)\\s+be\\s+[\\w/]+\\s*\\?|\\bdo i have\\s+[^?]{1,40}\\?"
+  },
+  "condition_vague": {
+    "n": 0, "fields": ["conditions"], "why": "a vague self-assessment (\"something is wrong with my gut\") names no condition; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\bsomething(?:'s| is)\\s+(?:wrong|off)\\s+with\\s+my\\b|\\bpermanent damage\\b"
+  },
+  "covid_infection": {
+    "n": 0, "fields": ["conditions"], "why": "a covid infection itself is no condition; long covid is; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\b(?:got|had|caught|tested positive for)\\s+covid\\b"
   }
 }
