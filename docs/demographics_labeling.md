@@ -63,7 +63,10 @@ normalized value). The `F`/`M` in "31F", "male", "woman", "guy", "mom", "boy" co
 the author. The evaluation scores mom, guy, lady and similar words as the sex they mean, by the
 pipeline's own rule (`normalize_sex` in `src/resolve_demographics.py`, the one list of these words).
 Self-referring role and kinship words count ("as a mom", "I'm a dad", "speaking as a wife").
-Empty for pronouns, usernames, writing style, and what others call the author. Words about other
+The author's own stated pronouns count as their sex, quoting the pronouns: "(she/her)" or "my pronouns
+are she/her" is `"female"`, and "he/him" is `"male"`. "they/them" alone is empty, since it doesn't say
+which. Empty for pronouns others use for the author, usernames, writing style, and what others call the
+author. Words about other
 people never count ("my husband", "my daughter"); their sex goes in `others` only when it's written
 as a value a model could grab, as in "my daughter (16F)" (`others` sex `["F"]`). The author's own sex at birth or
 presentation is part of their sex value, joined with ` | ` in their words: "trans masc person who was
@@ -157,9 +160,13 @@ the merged resolve rules (`src/resolve_demographics.py`) should produce from tho
 - **sex_stated**: the most recent sex claim as written; **sex**: female, male or non-binary from it
   (non-binary wins over a binary value; a trans answer is null; null when no rule applies).
 - **location**: `"country / state"`, one spelling per country and US state (`US`, `USA` and `United States` are one country): the latest country, plus the latest state from a post that names
-  that country or no country, the latter tied to the nearest country named before it. Either alone
-  when only one is known.
-- **city**: the latest city, cleared when a later post names a different country or state.
+  that country or no country, the latter tied to the nearest country named before it, or else the
+  first named after it. A US state names its country too, so a US state alone is
+  `"United States / Tennessee"`. Any other region alone stays alone (`"Ontario"`), as does a country
+  alone.
+- **city**: the latest city, cleared when a later post names a different country or state from the
+  ones in force when the city was named. A country or state named for the first time doesn't clear it:
+  "Seattle", then "UK", is `"United Kingdom"` with city `"Seattle"`.
 
 `evaluate` compares these with the profile resolved from the labels (does the code follow the
 rules?) and from the model's claims (end to end).

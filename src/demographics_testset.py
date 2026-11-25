@@ -34,8 +34,14 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "Scrapers"))
 from db_to_corpus import author_hash
 
 import extract_demographics_conditions as extractor
+from resolve_demographics import (
+    _PLAIN,
+    _resolve,
+    canonical_place,
+    normalize_sex,
+    stated_age,
+)
 from resolve_demographics import _plain_place as _plain
-from resolve_demographics import _resolve, canonical_place, normalize_sex, stated_age
 
 FIELDS = extractor.CLAIM_FIELDS
 PROFILE = ("age_bucket", "age", "sex", "sex_stated", "location", "city", "ever_minor")  # _resolve's order
@@ -50,17 +56,24 @@ canonical_condition = getattr(extractor, "canonical_condition", lambda name: nam
 # random stratum, which these don't touch.
 DEMOGRAPHIC = re.compile(
     r"\b(?:i'?m|i am|aged?)\s+(?:a\s+|now\s+|only\s+)?\d{2}\b|\b\d{2}\s*(?:yo|y/o|years?[\s-]old|yrs?)\b"
-    r"|[(\[]\s*\d{2}\s*[mf]\s*[)\]]|\b\d{2}\s?[mf]\b|\bin my (?:early |mid |late )?\d0'?s\b"
+    r"|[(\[]\s*\d{2}\s*[mf]\s*[)\]]|\b\d{2}\s?[mf]\b|\bin my (?:(?:early|mid|late)[\s-])?\d0'?s\b"
     r"|\bi'?m an?\s+(?:\w+\s+)?(?:woman|man|female|male|guy|girl|mom|mum|dad)\b|\bas an? (?:woman|man|female|male)\b"
     r"|\b(?:non-?binary|transgender|trans (?:man|woman|guy|girl)|enby|intersex)\b"
     r"|\b(?:i live in|i'?m based in|i'?m from|living in|here in)\b",
     re.IGNORECASE)
 # Another person's age, the trap #85 found ("my 11yo son", "my wife is 36").
+_RELATIVE = (r"(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend"
+             r"|sister|brother)\b")
 OTHER_PERSON = re.compile(
-    r"\bmy\s+(?:\d{1,2}\s*(?:yo|y/o|years?[\s-]old|-year-old)\s+)?"
-    r"(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)"
-    r"\b[^.?!\n]{0,40}?\b\d{1,2}\b|\bwhen i was (?:\d{1,2}|a kid|a teen)",
+    rf"\bmy\s+\d{{1,2}}\s*(?:yo|y/o|years?[\s-]old|-year-old)\s+{_RELATIVE}"
+    rf"|\bmy\s+{_RELATIVE}[^.?!\n]{{0,40}}?\b\d{{1,2}}\b|\bwhen i was (?:\d{{1,2}}|a kid|a teen)",
     re.IGNORECASE)
+
+
+def plain_search(pattern: re.Pattern, text: str) -> re.Match | None:
+    """``pattern`` in ``text`` with curly apostrophes and dashes made plain, as the resolver reads
+    them, so "I’m 34" matches ``i'?m``."""
+    return pattern.search(text.translate(_PLAIN))
 
 
 def split_of(user_id: str) -> str:
@@ -122,12 +135,12 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
                 chosen.setdefault(it["post_id"], {**it, "strata": []})["strata"].append(stratum)
 
         take(drawn, n_random, "random")
-        take([it for it in drawn if DEMOGRAPHIC.search(it["text"])], n_keyword, "keyword")
-        take([it for it in drawn if OTHER_PERSON.search(it["text"])], n_other, "other_person")
+        take([it for it in drawn if plain_search(DEMOGRAPHIC, it["text"])], n_keyword, "keyword")
+        take([it for it in drawn if plain_search(OTHER_PERSON, it["text"])], n_other, "other_person")
 
         # Authors for the resolve check: keyword-hit authors not already in the set, with all their items
         # read in one pass over both tables (author has no index).
-        candidates = list(dict.fromkeys(it["user_id"] for it in drawn if DEMOGRAPHIC.search(it["text"])))
+        candidates = list(dict.fromkeys(it["user_id"] for it in drawn if plain_search(DEMOGRAPHIC, it["text"])))
         rng.shuffle(candidates)
         candidates = set(candidates[:n_authors * 10])
         history = defaultdict(list)
@@ -137,7 +150,7 @@ def sample(db: Path, out: Path, *, seed: int, pool: int, n_random: int, n_keywor
                     history[it["user_id"]].append(it)
     authors = []
     for user_id in sorted(history, key=lambda u: rng.random()):
-        hits = [it for it in history[user_id] if DEMOGRAPHIC.search(it["text"])]
+        hits = [it for it in history[user_id] if plain_search(DEMOGRAPHIC, it["text"])]
         if len(hits) < 2 or len(history[user_id]) > 200:
             continue  # one stated value checks nothing; a very heavy poster can't be labeled in full
         rest = [it for it in history[user_id] if it not in hits]
@@ -293,6 +306,7 @@ _METRO = dict.fromkeys(("bay", "sf bay", "san francisco bay", "sf"), "san franci
 
 def key(field: str, value: str) -> object:
     """A form of the value in which two ways of writing the same answer are equal."""
+    value = str(value)  # a label may write a number: 34, not "34"
     if field == "age":
         stated = stated_age(value)
         return stated[0] if stated else _plain(value)
@@ -521,6 +535,8 @@ def _same(field: str, a, b) -> bool:
         return len(a) == len(b) and all(key(f, x) == key(f, y) for f, x, y in zip(("country", "state"), a, b))
     if field == "city":
         return key("city", str(a)) == key("city", str(b))
+    if field in ("sex", "sex_stated"):  # as claims are compared: "F" is "female", "trans woman" stays apart
+        return key("sex", a) == key("sex", b)
     return _plain(str(a)) == _plain(str(b))
 
 
@@ -577,7 +593,8 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
     if dry_run or not items:
         return plan
     predictions, conditions = predict(items)
-    with open(testset / f"predictions_{tag}.jsonl", "w", encoding="utf-8") as f:
+    name = f"{split}_{tag}"  # dev and test runs under one tag don't overwrite each other
+    with open(testset / f"predictions_{name}.jsonl", "w", encoding="utf-8") as f:
         f.writelines(json.dumps({"post_id": post_id, "claims": claims, "conditions": (conditions or {}).get(post_id)},
                                 ensure_ascii=False) + "\n" for post_id, claims in predictions.items())
     pooled = [it for it in items if not set(it["strata"]) <= EXTRA_STRATA]
@@ -586,7 +603,7 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
               **score(pooled, predictions, conditions), "by_stratum": score_by("strata", items, predictions, conditions),
               "by_case": score_by("case", items, predictions, conditions),
               "profiles": score_profiles(items, authors, predictions)}
-    (testset / f"report_{tag}.json").write_text(json.dumps(report, indent=2) + "\n")
+    (testset / f"report_{name}.json").write_text(json.dumps(report, indent=2) + "\n")
     if split in ("test", "all"):  # the test split is for final comparisons: keep a record of every look
         with open(testset / "test_runs.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps({k: report[k] for k in ("tag", "created_at", "split", "prompt_sha256", "model",
@@ -624,7 +641,7 @@ def main():
     e.add_argument("--testset", required=True, type=Path)
     e.add_argument("--split", choices=("dev", "test", "all"), required=True,
                    help="Sampled and curated items in this split; the synthetic items are always included")
-    e.add_argument("--tag", default="baseline", help="Names predictions_<tag>.jsonl and report_<tag>.json")
+    e.add_argument("--tag", default="baseline", help="Names predictions_<split>_<tag>.jsonl and report_<split>_<tag>.json")
     e.add_argument("--prompt-file", type=Path, help="Evaluate this per-post prompt instead of the merged one. Give the rendered "
                    "text, not the f-string template in src/prompts/demographic_prompt.py")
     e.add_argument("--dry-run", action="store_true", help="Print the calls and approximate tokens, send nothing")
