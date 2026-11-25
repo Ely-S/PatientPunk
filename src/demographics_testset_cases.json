@@ -14,23 +14,23 @@
   },
   "past_age": {
     "n": 15, "fields": ["age"], "why": "ages at past events, recent ones included, go in others",
-    "pattern": "\\b(?:when i was|since i was|at age|at the age of)\\s+\\d{1,2}\\b|\\b(?:got sick|diagnosed|fell ill|got covid)\\b[^.?!\\n]{0,25}\\bat\\s+\\d{1,2}\\b"
+    "pattern": "\\b(?:when i was|since i was|at age|at the age of)\\s+\\d{1,2}\\b|\\b(?:got sick|diagnosed|fell ill|got covid)\\b[^.?!\\n]{0,25}\\bat\\s+\\d{1,2}\\b|\\b\\d{1,2}\\s+when\\s+i\\s+(?:got|was|fell|first)\\b|\\b(?:about|around)\\s+\\d{2}\\b(?!\\s*(?:mg|mcg|lbs?|kg|%|min|days?|weeks?|months?|years?))[^.?!\\n]{0,40}\\bthen\\b"
   },
   "bound_or_vague_age": {
     "n": 20, "fields": ["age"], "why": "bounds, comparisons and future ages are not claims",
-    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:over|under|almost|nearly|pushing|approaching|turning)\\s+\\d{2}\\b|\\bfeel(?:s|ing)?\\s+(?:like\\s+)?(?:i'?m\\s+)?(?:an?\\s+)?\\d{2}\\b|\\b(?:i'?ll be|i turn|turning)\\s+\\d{2}\\b"
+    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:over|under|almost|nearly|pushing|approaching|turning)\\s+\\d{2}\\b|\\bfeel(?:s|ing)?\\s+(?:like\\s+)?(?:i'?m\\s+)?(?:an?\\s+)?\\d{2}\\b|\\b(?:i'?ll be|i turn|turning)\\s+\\d{2}\\b|\\(\\s*\\d{2}\\s+(?:on|next|in|this)\\b[^)]{0,30}\\)"
   },
   "other_person_age": {
-    "n": 5, "fields": ["age"], "why": "someone else's age beside the author's; other_person already has 75",
-    "pattern": "\\bmy\\s+(?:\\d{1,2}\\s*(?:yo|y/o|years?[\\s-]old|-year-old)\\s+)?(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)\\b[^.?!\\n]{0,40}?\\b\\d{1,2}\\b[^\\n]{0,200}\\b(?:i'?m|i am)\\s+\\d{2}\\b"
+    "n": 5, "fields": ["age", "sex"], "why": "someone else's age or sex beside the author's; other_person already has 75",
+    "pattern": "\\bmy\\s+(?:\\d{1,2}\\s*(?:yo|y/o|years?[\\s-]old|-year-old)\\s+)?(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)\\b[^.?!\\n]{0,40}?\\b\\d{1,2}\\b[^\\n]{0,200}\\b(?:i'?m|i am)\\s+\\d{2}\\b|\\bmy\\s+(?:son|daughter|kid|child|wife|husband|partner|mom|mum|mother|dad|father|sister|brother)\\s*\\(\\s*\\d{1,2}\\s*[mf]?\\s*\\)"
   },
   "decade_age": {
     "n": 10, "fields": ["age"], "why": "decades are claims; their midpoint and bucket",
-    "pattern": "\\b(?:in my|i'?m in my)\\s+(?:early|mid|late)?\\s*-?\\s*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b"
+    "pattern": "\\b(?:in my|i'?m in my)\\s+(?:early|mid|late)?\\s*-?\\s*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b|\\b(?:in my|i'?m|i am|im|aged?|female|male|woman|man|guy)[,\\s]+(?:in\\s+my\\s+)?(?:early|mid|late|low|high)[\\s-]*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b"
   },
   "demonym_or_from": {
     "n": 15, "fields": ["country", "state", "city"], "why": "a demonym or 'I'm from X' alone is not residence",
-    "pattern": "\\b(?:i'?m|i am|as an?)\\s+(?:a\\s+)?(?:american|canadian|british|brit|australian|aussie|german|french|dutch|irish|scottish|swedish|norwegian|danish|indian|mexican|brazilian|italian|spanish|polish|english|kiwi|finnish|belgian|swiss|austrian)\\b|\\bi'?m (?:originally )?from\\b"
+    "pattern": "\\b(?:i'?m|i am|as an?)\\s+(?:a\\s+)?(?:american|canadian|british|brit|australian|aussie|german|french|dutch|irish|scottish|swedish|norwegian|danish|indian|mexican|brazilian|italian|spanish|polish|english|kiwi|finnish|belgian|swiss|austrian)\\b|\\bi'?m (?:originally )?from\\b|\\b(?:born|grew up|raised)\\s+(?:and raised\\s+)?in\\s+(?!(?:19|20)\\d{2})[a-z]"
   },
   "travel_or_treated": {
     "n": 10, "fields": ["country", "state", "city"], "why": "places visited or treated in go in others",
@@ -43,7 +43,7 @@
   },
   "condition_resolved": {
     "n": 15, "fields": ["conditions"], "severities": ["resolved"], "why": "#229: resolved, recovered and returning conditions", "conditions": true,
-    "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b"
+    "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b|\\bi\\s+(?:had|used to have)\\s+[a-z/ -]{3,30}?\\s+(?:in\\s+(?:19|20)\\d{2}|years ago|as a (?:kid|child|teen(?:ager)?))\\b"
   },
   "condition_severity": {
     "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
