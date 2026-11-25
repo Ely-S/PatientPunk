@@ -35,7 +35,7 @@
   "travel_or_treated": {
     "n": 10, "fields": ["country", "state", "city"], "why": "places visited or treated in go in others",
     "ignore_case": false,
-    "pattern": "\\b(?:flew|travel(?:l)?ed|went|drove|moved)\\s+to\\s+[A-Z][a-z]+|\\b(?:clinic|doctor|hospital|specialist)\\s+in\\s+[A-Z][a-z]+"
+    "pattern": "\\b(?:flew|travel(?:l)?ed|went|drove)\\s+to\\s+[A-Z][a-z]+|\\b(?:clinic|doctor|hospital|specialist)\\s+in\\s+[A-Z][a-z]+"
   },
   "city_ambiguous": {
     "n": 5, "fields": ["city", "state", "country"], "why": "a name that is a city, state or country (Georgia, Victoria, Birmingham)",
@@ -49,17 +49,13 @@
     "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
     "pattern": "\\b(?:mild|moderate|severe|very severe)(?:\\s+to\\s+(?:mild|moderate|severe))?\\s+(?:me/cfs|me|cfs|pots|long covid|mcas|eds|fibro\\w*)\\b|\\b(?:bedbound|housebound)\\b"
   },
-  "decade_words": {
-    "n": 0, "fields": ["age"], "why": "a decade in words (\"mid thirties\", \"low 60s\") is an age; synthetic only (n 0) until real items are curated",
-    "pattern": "\\b(?:early|mid|late|low|high)\\s+(?:twenties|thirties|forties|fifties|sixties|seventies)\\b|\\blow\\s+\\d0'?s\\b"
-  },
   "age_range": {
     "n": 0, "fields": ["age"], "why": "a stated range (\"25-34\") is an age at its midpoint; synthetic only (n 0) until real items are curated",
     "pattern": "\\b(?:i'?m|aged?|age)\\s+\\d{2}\\s*-\\s*\\d{2}\\b"
   },
   "not_an_age": {
-    "n": 0, "fields": ["age"], "why": "durations and doses are not ages (\"sick for 14 months\", \"600 mg\"); synthetic only (n 0) until real items are curated",
-    "pattern": "\\b(?:for|since)\\s+\\d{1,2}\\s*(?:months?|weeks?|days?)\\b|\\b\\d{2,3}\\s*mg\\b"
+    "n": 0, "fields": ["age"], "why": "durations, doses and weights are not ages (\"sick for 14 months\", \"15 years in\", \"600 mg\", \"25 lb underweight\"); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:for|since)\\s+\\d{1,2}\\s*(?:years?|months?|weeks?|days?)\\b|\\b\\d{1,2}\\s*years?\\s+in\\b|\\b\\d{2,3}\\s*mg\\b|\\b\\d{1,3}\\s*(?:lbs?|kg|pounds)\\b"
   },
   "trans_medical_word": {
     "n": 0, "fields": ["sex"], "why": "transplant, transverse myelitis and the like say nothing about sex; synthetic only (n 0) until real items are curated",
@@ -81,7 +77,8 @@
   },
   "moved": {
     "n": 0, "fields": ["country", "state", "city"], "why": "after a move, the new place is where the author lives and the old one goes in others (#238); synthetic only (n 0) until real items are curated",
-    "pattern": "\\bmoved\\s+from\\s+[a-z]+(?:\\s[a-z]+)?\\s+to\\s+[a-z]{3,}"
+    "ignore_case": false,
+    "pattern": "\\b(?:[Mm]oved|[Rr]elocated)\\s+(?:from\\s+[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?\\s+)?to\\s+[A-Z][a-z]{2,}|\\b[Uu]sed to live in\\s+[A-Z]"
   },
   "two_homes": {
     "n": 0, "fields": ["country", "state", "city"], "why": "two places lived in at once give no place; synthetic only (n 0) until real items are curated",
@@ -90,7 +87,7 @@
   "place_lowercase": {
     "n": 0, "fields": ["country"], "why": "a place written in lower case is still a place; synthetic only (n 0) until real items are curated",
     "ignore_case": false,
-    "pattern": "\\b(?:here in|i live in|i'm in|living in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b"
+    "pattern": "\\b(?:here in|i live in|i'm in|living in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b|\\((?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\)"
   },
   "instructions_in_post": {
     "n": 0, "fields": ["age", "sex", "country"], "why": "text that tries to instruct the model is data, not an answer; synthetic only (n 0) until real items are curated",
