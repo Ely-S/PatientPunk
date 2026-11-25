@@ -74,6 +74,7 @@ from .phase import PhaseResult
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
+    REMOVED_MARKERS,
     check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
@@ -186,7 +187,7 @@ def collect_texts_from_post(post: dict) -> list[str]:
     texts: list[str] = []
     for raw in _collect_texts_from_post(post, include_comments=False):
         kept = (raw or "").strip()
-        if kept and kept not in ("[removed]", "[deleted]"):
+        if kept and kept not in REMOVED_MARKERS:
             texts.append(kept)
     return texts
 

@@ -23,7 +23,12 @@ Usage:
     conn = init_db(Path("patientpunk.db"))            # over a copy of posts.db
     run_id = load_extractions(conn, Path("output/records.csv"))
     load_variables(conn, Path("output/records.csv"), run_id)
-    rows = query_treatment_outcomes(conn, drug="ldn", condition="POTS")
+    rows = query_treatment_outcomes(conn, drug="ldn", sex="female")
+
+The condition filter (``condition="POTS"``) reads only conditions that
+src/extract_demographics_conditions.py read from each post
+(condition_observations), so it needs that script's run on the database;
+conditions loaded from records.csv never count (#220).
 
 Drug sentiment (treatment / treatment_reports, with TEXT sentiment values) is
 written directly to the database by src/run_sentiment_pipeline.py; this module
@@ -112,9 +117,15 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
     ).replace(
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
+    # Views are created IF NOT EXISTS, so the ones whose definitions have changed are dropped first: a
+    # database built from #224's branch has a different conditions_latest, and older databases define
+    # the claim and condition views without demographics_post_runs.
+    conn.executescript("".join(f"DROP VIEW IF EXISTS {v};" for v in (
+        "conditions_latest", "condition_observations", "demographic_claims_latest", "demographics_post_runs")))
     conn.executescript(ddl_idempotent)
     # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
-    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"})):
+    for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"}),
+                         ("conditions", {"evidence": "TEXT"})):
         existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         for name, kind in added.items():
             if name not in existing:
@@ -325,7 +336,9 @@ def query_treatment_outcomes(
     sex:        sex/gender value (e.g. "female"). None = all.
     age_bucket: decade bucket (e.g. "30s"). None = all.
 
-    sex and age_bucket match each user's current profile (user_profiles_latest).
+    sex and age_bucket match each user's current profile (user_profiles_latest). condition matches
+    a condition any of the user's posts states as of its newest read (condition_observations), resolved
+    ones included; CSV-loaded and older per-user rows don't count.
 
     Returns
     -------
@@ -343,7 +356,7 @@ def query_treatment_outcomes(
     if condition:
         where_clauses.append(
             "EXISTS ("
-            "  SELECT 1 FROM conditions c"
+            "  SELECT 1 FROM condition_observations c"
             "  WHERE c.user_id = tr.user_id"
             "  AND LOWER(c.condition_name) LIKE LOWER(?)"
             ")"

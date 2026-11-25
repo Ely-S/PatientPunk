@@ -1,4 +1,4 @@
-"""The per-post demographics extractor (#206) with synthetic posts and stubbed replies, no API calls."""
+"""The per-post demographics and conditions extractor (#206, #220) with synthetic posts and stubbed replies, no API calls."""
 
 import json
 import re
@@ -15,11 +15,10 @@ import pytest
 import extract_demographics_conditions as demographics
 from import_posts import DELETED_USER_ID
 from patientpunk._utils import LLMContentFilteredError, LLMResponseError
-from prompts.demographic_prompt import CONDITIONS_PROMPT, POST_DEMOGRAPHICS_PROMPT
+from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 
 SCHEMA = Path(__file__).resolve().parents[1] / "schema.sql"
 NOTHING = {"age": None, "sex": None, "country": None, "state": None, "city": None}
-NO_CONDITIONS = '{"conditions": []}'
 
 
 def ts(year: int) -> int:
@@ -58,17 +57,16 @@ def patient_text(prompt):
     return text.removesuffix("\n</patient_text>")
 
 
-def stub(monkeypatch, post=lambda text: NOTHING, conditions=lambda text: NO_CONDITIONS):
-    """Route each call by prompt; ``post`` and ``conditions`` map the wrapped text to a reply (a dict
-    is sent as JSON, an exception is raised). Returns the calls as (kind, text, temperature)."""
+def stub(monkeypatch, post=lambda text: NOTHING):
+    """``post`` maps each post's wrapped text to a reply (a dict is sent as JSON, an exception is
+    raised). Returns the calls as ("post", text, temperature)."""
     calls = []
 
     def llm_call(client, prompt, *, temperature=0.0, **kwargs):
-        kind = "post" if prompt.startswith(POST_DEMOGRAPHICS_PROMPT) else "conditions"
-        assert kind == "post" or prompt.startswith(CONDITIONS_PROMPT)
+        assert prompt.startswith(POST_DEMOGRAPHICS_PROMPT)
         text = patient_text(prompt)
-        calls.append((kind, text, temperature))
-        reply = (post if kind == "post" else conditions)(text)
+        calls.append(("post", text, temperature))
+        reply = post(text)
         if isinstance(reply, Exception):
             raise reply
         return json.dumps(reply) if isinstance(reply, dict) else reply
@@ -113,25 +111,80 @@ def test_sends_each_post_alone_with_its_title_wrapped(db, monkeypatch):
     assert not conn.execute("SELECT 1 FROM conditions WHERE user_id = ?", (DELETED_USER_ID,)).fetchone()
 
 
-def test_conditions_are_one_call_per_user_over_newest_posts(db, monkeypatch):
+def condition(name, evidence="quote", **fields):
+    return {"name": name, "evidence": evidence, **fields}
+
+
+def test_conditions_are_read_from_each_post_with_their_severity_and_quote(db, monkeypatch):
     conn, path = db
-    add_posts(conn, [
-        ("old", "patient", 1, None, "b" * 3_000),
-        ("new", "patient", 2, "Newest", "a" * 6_000),
-        ("undated", "patient", None, None, "Undated"),
-        ("removed", "patient", 3, None, "[removed]"),
-    ])
-    calls = stub(monkeypatch, conditions=lambda text: {"conditions": [
-        {"condition_name": "ME/CFS", "condition_type": "illness"},
-        {"condition_name": " Headache ", "condition_type": "Symptom"},
-        {"condition_name": "POTS", "condition_type": "other"}]})
+    add_posts(conn, [("p1", "patient", 1, None, "I have LC and POTS, and brain fog"), ("p2", "patient", 2, None, "hi")])
+    calls = stub(monkeypatch, post=lambda text: {"conditions": [
+        condition("LC", "I have LC", type="illness", severity="Severe"),
+        condition("Long-COVID", "LC"),  # the same condition again, under another name
+        condition(" Brain Fog ", "brain fog", type="Symptom", severity="awful"),
+        condition("POTS", type="other"),
+        {"name": "ME/CFS"},  # no quote
+        "POTS",  # a bare name the post says word for word
+    ]} if text.startswith("I have") else NOTHING)
+
+    stats = demographics.run_demographics(path)
+
+    assert posts_read(conn, calls) == ["I have LC and POTS, and brain fog", "hi"]  # one call per post
+    assert conn.execute("SELECT post_id, condition_name, condition_type, severity, evidence FROM conditions "
+                        "ORDER BY condition_name").fetchall() == [
+        ("p1", "brain fog", "symptom", None, "brain fog"),
+        ("p1", "long covid", "illness", "severe", "I have LC"),
+        ("p1", "pots", "illness", None, "quote")]
+    assert stats["conditions"] == 3
+
+
+@pytest.mark.parametrize("conditions", [None, "POTS", {"name": "POTS"}, [None, 3, ["POTS"]]])
+def test_badly_shaped_conditions_are_none_and_keep_the_claims(db, monkeypatch, conditions):
+    conn, path = db
+    add_posts(conn, [("p1", "patient", 1, None, "I'm 34")])
+    stub(monkeypatch, post=lambda text: {"age": claim(34), "conditions": conditions})
 
     demographics.run_demographics(path)
 
-    histories = [text for kind, text, _ in calls if kind == "conditions"]
-    assert histories == [("Newest\n" + "a" * 6_000 + "\n---\n" + "b" * 3_000)[:8_000]]
-    assert conn.execute("SELECT condition_name, condition_type FROM conditions ORDER BY condition_name").fetchall() == [
-        ("headache", "symptom"), ("me/cfs", "illness"), ("pots", "illness")]
+    assert conn.execute("SELECT COUNT(*) FROM conditions").fetchone() == (0,)
+    assert conn.execute("SELECT value FROM demographic_claims").fetchall() == [("34",)]
+
+
+@pytest.mark.parametrize("reread", [{"age": None}, {"age": None, "conditions": "POTS"},
+                                    {"age": None, "conditions": None}, {"age": None, "conditions": {"name": "POTS"}}],
+                         ids=["missing", "string", "null", "object"])
+def test_a_reread_without_a_conditions_list_keeps_the_earlier_conditions(db, monkeypatch, reread):
+    conn, path = db
+    add_posts(conn, [("p1", "a", ts(2024), None, "I'm 34 and my POTS is severe")])
+    stub(monkeypatch, post=lambda text: {"conditions": [condition("POTS", severity="severe")]})
+    demographics.run_demographics(path)
+
+    stub(monkeypatch, post=lambda text: {**reread, "age": claim(34)})
+    demographics.run_demographics(path, reread=True)
+
+    assert conn.execute("SELECT condition_name, severity FROM conditions_latest").fetchall() == [("pots", "severe")]
+    assert conn.execute("SELECT field, value FROM demographic_claims_latest").fetchall() == [("age", "34")]
+
+    stub(monkeypatch, post=lambda text: {"age": claim(34), "conditions": []})  # an explicit [] retracts
+    demographics.run_demographics(path, reread=True)
+    assert conn.execute("SELECT COUNT(*) FROM condition_observations").fetchone() == (0,)
+
+
+def test_a_reread_retracts_a_condition_and_newer_posts_update_it(db, monkeypatch):
+    conn, path = db
+    add_posts(conn, [("p1", "a", ts(2024), None, "my POTS is severe"), ("p2", "a", ts(2025), None, "POTS gone")])
+    replies = {"my POTS is severe": [condition("POTS", severity="severe"), condition("migraine")],
+               "POTS gone": [condition("POTS", severity="resolved")]}
+    stub(monkeypatch, post=lambda text: {"conditions": replies[text]})
+    demographics.run_demographics(path)
+    latest = "SELECT condition_name, severity, first_seen, last_seen, n_posts FROM conditions_latest ORDER BY 1"
+    assert conn.execute(latest).fetchall() == [
+        ("migraine", None, ts(2024), ts(2024), 1), ("pots", "resolved", ts(2024), ts(2025), 2)]
+
+    replies["my POTS is severe"] = [condition("POTS", severity="severe")]  # migraine was a misread
+    stub(monkeypatch, post=lambda text: {"conditions": replies[text]})
+    demographics.run_demographics(path, reread=True)
+    assert conn.execute(latest).fetchall() == [("pots", "resolved", ts(2024), ts(2025), 2)]
 
 
 # ── Claims ───────────────────────────────────────────────────────────────────
@@ -219,7 +272,7 @@ def test_resolves_claims_from_several_posts_into_one_profile(db, monkeypatch):
     ids=["prose-before-object", "trailing-comma", "fenced"],
 )
 def test_reads_replies_with_text_around_the_object(raw):
-    assert demographics.parse_claims(raw) == {"age": ("34", "34")}
+    assert demographics.parse_post(raw) == ({"age": ("34", "34")}, None)  # no conditions list: None, not []
 
 
 def test_an_unreadable_reply_is_retried_hotter_with_the_same_prompt(db, monkeypatch):
@@ -287,9 +340,9 @@ def test_an_unreadable_reply_is_asked_again_by_the_next_run_through_the_real_cac
         def __exit__(self, *exc):
             return False
         def get_final_message(self):
-            post = self.prompt.startswith(POST_DEMOGRAPHICS_PROMPT)
-            sent.append("post" if post else "conditions")
-            text = next(post_replies) if post else NO_CONDITIONS
+            assert self.prompt.startswith(POST_DEMOGRAPHICS_PROMPT)
+            sent.append("post")
+            text = next(post_replies)
             return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn")
 
     client = SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: Stream(kw["messages"][0]["content"])))
@@ -370,23 +423,23 @@ def test_a_stopped_reread_is_not_resumed_and_the_next_reread_starts_over(db, mon
     assert posts_read(conn, calls) == []
 
 
-def test_the_conditions_pass_commits_as_it_goes(db, monkeypatch):
+def test_the_post_pass_commits_as_it_goes(db, monkeypatch):
     conn, path = db
     add_posts(conn, [(f"p{i}", f"u{i:02}", 1, None, f"post {i}") for i in range(5)])
     monkeypatch.setattr(demographics, "COMMIT_EVERY", 2)
     other = sqlite3.connect(path, timeout=0, check_same_thread=False)
     seen = []
 
-    def conditions(text):  # what another connection sees of the pass so far
+    def post(text):  # what another connection sees of the pass so far
         seen.append(other.execute("SELECT COUNT(*) FROM conditions").fetchone()[0])
-        return {"conditions": [{"condition_name": "POTS"}]}
+        return {"conditions": [condition("POTS")]}
 
     monkeypatch.setattr(demographics, "MAX_IN_FLIGHT", 1)
-    stub(monkeypatch, conditions=conditions)
+    stub(monkeypatch, post=post)
     demographics.run_demographics(path)
     other.close()
 
-    assert seen == [0, 0, 2, 2, 4]  # committed after every 2nd user, not once at the end
+    assert seen == [0, 0, 2, 2, 4]  # committed after every 2nd post read, not once at the end
 
 
 def test_dry_run_reports_what_a_run_would_send_and_sends_nothing(db, monkeypatch):
@@ -398,8 +451,7 @@ def test_dry_run_reports_what_a_run_would_send_and_sends_nothing(db, monkeypatch
     limited = demographics.run_demographics(path, limit=1, dry_run=True)
 
     assert calls == [] and conn.execute("SELECT COUNT(*) FROM extraction_runs").fetchone() == (0,)
-    assert {k: plan[k] for k in ("posts", "users", "post_calls", "conditions_calls")} == {
-        "posts": 3, "users": 2, "post_calls": 3, "conditions_calls": 2}
+    assert {k: plan[k] for k in ("posts", "users")} == {"posts": 3, "users": 2}
     assert plan["approx_input_tokens"] > 3 * len(POST_DEMOGRAPHICS_PROMPT) // 4
     assert (limited["posts"], limited["users"]) == (2, 1)
     demographics.run_demographics(path)
@@ -434,8 +486,6 @@ def test_the_next_run_reads_only_unread_posts_and_reread_reads_all(db, monkeypat
     calls = stub(monkeypatch)
     demographics.run_demographics(path)
     assert posts_read(conn, calls) == ["third"]
-    # Only the user read this run gets a conditions call, over all of their posts.
-    assert [text for kind, text, _ in calls if kind == "conditions"] == ["third\n---\nfirst"]
 
     calls = stub(monkeypatch)
     demographics.run_demographics(path, reread=True)
@@ -491,7 +541,31 @@ def test_an_age_moves_only_with_its_authors_own_posts(db, monkeypatch):
     ({"age": "34"}, "I'm 34"),
 ])
 def test_a_bare_value_must_be_whole_words_in_the_post(reply, text):
-    assert demographics.parse_claims(json.dumps(reply), text) == {}
+    assert demographics.parse_post(json.dumps(reply), text) == ({}, None)
+
+
+@pytest.mark.parametrize("bare, text, name", [
+    ("ME", "Can someone help me", None), ("POTS", "pots and pans", None), ("POTS", "POTSy", None),
+    ("ME", "I have ME", "me/cfs"), ("POTS", "my POTS flared", "pots"),
+])
+def test_a_bare_condition_counts_only_when_the_post_names_it_in_that_case(bare, text, name):
+    parsed = demographics.parse_conditions({"conditions": [bare]}, text)
+    assert parsed == ([(name, "illness", None, bare)] if name else [])
+
+
+@pytest.mark.parametrize("stated, severity", [
+    ("Severe", "severe"), ("moderate to severe", "severe"), ("mild-moderate", "moderate"), ("mostly resolved", "resolved"),
+    ("awful", None), ("", None), (3, None), ("not severe", None), ("no longer severe", None), ("isn't mild", None),
+    ("not that severe", None), ("severe, no improvement", "severe"), ("resolved, no symptoms", "resolved"),
+    ("mild (no flares lately)", "mild"),
+])
+def test_severity_takes_the_worst_level_a_phrase_names(stated, severity):
+    assert demographics.parse_conditions({"conditions": [condition("POTS", severity=stated)]})[0][2] == severity
+
+
+def test_a_condition_listed_twice_keeps_its_stated_severity():
+    reply = {"conditions": [condition("POTS"), condition("pots", severity="severe")]}
+    assert demographics.parse_conditions(reply) == [("pots", "illness", "severe", "quote")]
 
 
 def test_a_bare_value_is_kept_only_when_the_post_says_it_word_for_word(db, monkeypatch):
@@ -543,8 +617,9 @@ def test_runs_on_a_database_from_before_the_claim_tables(tmp_path, monkeypatch):
     old_schema = old_schema[:old_schema.index("-- A demographics run records here")]
     old_schema = "\n".join(
         line for line in old_schema.splitlines()
-        if not line.lstrip().startswith(("age        REAL", "sex_stated TEXT", "city       TEXT", "finished_at INTEGER"))
-    ).replace("config  TEXT NOT NULL,", "config  TEXT NOT NULL")
+        if not line.lstrip().startswith(("age        REAL", "sex_stated TEXT", "city       TEXT", "finished_at INTEGER",
+                                          "ever_minor INTEGER", "evidence       TEXT"))
+    ).replace("config  TEXT NOT NULL,", "config  TEXT NOT NULL").replace("severity       TEXT,", "severity       TEXT")
     path = tmp_path / "old.db"
     with closing(sqlite3.connect(path)) as conn:
         conn.executescript(old_schema)
@@ -557,6 +632,7 @@ def test_runs_on_a_database_from_before_the_claim_tables(tmp_path, monkeypatch):
 
     with closing(sqlite3.connect(path)) as conn:
         assert profile(conn, "patient") == ("30s", 34.0, "female", "female", None, None)
+        assert conn.execute("SELECT evidence FROM conditions").fetchall() == []  # the column was added
 
 
 def test_writes_after_another_connection_commits(db, monkeypatch):
@@ -577,8 +653,46 @@ def test_writes_after_another_connection_commits(db, monkeypatch):
 
 
 def test_unnamed_conditions_are_dropped_and_the_rest_kept():
-    raw = '{"conditions": [{"condition_name": "ME/CFS"}, {"condition_name": null}, {}, ""]}'
-    assert demographics.parse_conditions(raw) == [("me/cfs", "illness")]
+    reply = {"conditions": [condition("ME/CFS"), condition(None), {}, "", condition("  ")]}
+    assert demographics.parse_conditions(reply) == [("me/cfs", "illness", None, "quote")]
+
+
+@pytest.mark.parametrize("name, canonical", [
+    ("LC", "long covid"), ("Long-COVID", "long covid"), ("PASC", "long covid"), ("CFS", "me/cfs"),
+    ("Myalgic Encephalomyelitis", "me/cfs"), ("Postural Orthostatic Tachycardia Syndrome", "pots"),
+    ("Brain  fog.", "brain fog"), ("Hashimoto’s", "hashimoto's"), ("Long-haul COVID", "long covid"),
+    ("Long COVID (LC)", "long covid"), ("POTS syndrome", "pots"),
+    ("headaches", "headache"), ("Head pain", "headache"), ("migraines", "migraine"), ("crashes", "pem"),
+    ("crash", "pem"), ("PEM crashes", "pem"), ("post-exertional malaise", "pem"), ("trouble sleeping", "insomnia"),
+    ("sleep disturbance", "insomnia"), ("can’t sleep", "insomnia"), ("sleep issues", "insomnia"),
+    ("muscle cramps", "muscle cramp"), ("cramping", "muscle cramp"), ("heart palpitations", "palpitation"),
+    ("palpitations", "palpitation"), ("lack of concentration", "difficulty concentrating"),
+    ("cranio-cervical instability", "craniocervical instability"), ("post concussion syndrome", "post-concussion syndrome"),
+    ("hot flashes", "hot flash"), ("rashes", "rash"),
+    # not plurals, so not folded
+    ("POTS", "pots"), ("MS", "ms"), ("lupus", "lupus"), ("diabetes", "diabetes"), ("shingles", "shingles"),
+    ("herpes", "herpes"), ("mitosis", "mitosis"), ("arthritis", "arthritis"), ("chills", "chills"),
+    # distinct conditions stay apart
+    ("fatigue", "fatigue"), ("numbness", "numbness"), ("tumor", "tumor"), ("migraine", "migraine"),
+])
+def test_canonical_condition(name, canonical):
+    assert demographics.canonical_condition(name) == canonical
+
+
+def test_warns_about_posts_read_before_conditions_were_read_per_post(db, monkeypatch, caplog):
+    conn, path = db
+    add_posts(conn, [("p1", "a", 1, None, "old"), ("p2", "a", 2, None, "new")])
+    conn.execute("INSERT INTO extraction_runs (run_id, run_at, commit_hash, extraction_type, config) "
+                 "VALUES (1, 0, 'x', 'demographics', '{}')")
+    conn.execute("INSERT INTO post_runs VALUES (1, 'p1')")
+    conn.commit()
+    calls = stub(monkeypatch)
+
+    with caplog.at_level("WARNING", logger="pipeline"):
+        demographics.run_demographics(path)
+
+    assert posts_read(conn, calls) == ["new"]  # no paid reread of the old post
+    assert "1 posts were read before conditions were read per post" in caplog.text
 
 
 @pytest.mark.parametrize("value", ["1e1", "3e1", "inf", "nan"])
@@ -594,5 +708,5 @@ def test_age_must_be_written_as_a_number(value):
 ])
 def test_a_past_age_is_not_kept_as_the_current_age(evidence, kept):
     value = re.findall(r"\d+", evidence)[-1]
-    reply = json.dumps({"age": {"value": value, "evidence": evidence}})
+    reply = {"age": {"value": value, "evidence": evidence}}
     assert ("age" in demographics.parse_claims(reply, evidence)) is kept

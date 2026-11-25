@@ -24,8 +24,10 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from ._utils import REMOVED_MARKERS
+
 # Mirror extraction modules' _keep_text: drop empty / moderator-removed / user-deleted text.
-_DROP = {"", "[removed]", "[deleted]"}
+_DROP = REMOVED_MARKERS | {""}
 
 
 def _keep(text: object) -> str:
