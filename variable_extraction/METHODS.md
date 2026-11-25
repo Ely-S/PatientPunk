@@ -132,8 +132,3 @@ project:
 
 `demographic standard` and `clinical standard` are not instruments; they mark fields
 any patient-record schema carries.
-
-## Known limitations
-
-- **`collect_texts_from_post` is duplicated across modules.** The copies must stay
-  identical (title + body only); a shared helper would prevent divergence.

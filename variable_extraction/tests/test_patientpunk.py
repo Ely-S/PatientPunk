@@ -1811,11 +1811,6 @@ class TestActiveExtractorTextCollection:
         texts = collect_texts_from_post(self._post_with_other_author_comment())
         assert texts == ["Post title", "Post body"]
 
-    def test_corpus_loader_post_collection_uses_title_and_body_only(self):
-        from patientpunk.corpus import CorpusLoader
-        texts = CorpusLoader._texts_from_post(self._post_with_other_author_comment())
-        assert texts == ["Post title", "Post body"]
-
 
 class TestSubredditProvenance:
     def test_aggregate_counts_the_communities_each_patient_wrote_in(self):
@@ -2763,12 +2758,10 @@ class TestBatchExtraction:
         """
         import patientpunk.llm_extract as m
 
-        class _Conn(Exception):
-            pass
-        _Conn.__name__ = "APIConnectionError"
+        import httpx
 
         def boom(client, prompt, items):
-            raise _Conn("connection error")
+            raise httpx.ConnectError("connection refused")  # missed by the old class-name match (#126)
 
         monkeypatch.setattr(m, "_call_batch_raw", boom)
         out = m._process_batch(
@@ -2778,7 +2771,7 @@ class TestBatchExtraction:
         )
         assert len(out) == 1
         assert out[0]["_failed"] and out[0]["post_id"] == "p0"
-        assert out[0]["reason"] == "call_error: APIConnectionError"
+        assert out[0]["reason"] == "call_error: ConnectError"
 
     @pytest.mark.parametrize("status", [429, 500, 503])
     def test_transient_http_failure_fails_the_record_not_the_run(
@@ -2839,13 +2832,11 @@ class TestBatchExtraction:
         """The request timeout and fixed attempt count bound transport failures."""
         import patientpunk.llm_extract as m
 
-        class _Timeout(Exception):
-            pass
-        _Timeout.__name__ = "APITimeoutError"
+        import httpx
 
         attempts = []
         sleeps = []
-        error = _Timeout("read timed out")
+        error = httpx.ReadTimeout("read timed out")
 
         class _Client:
             class messages:
@@ -2855,9 +2846,9 @@ class TestBatchExtraction:
                     raise error
 
         monkeypatch.setattr(m, "cached_completion", lambda **kw: kw["call_fn"]())
-        monkeypatch.setattr(m.time, "sleep", sleeps.append)
+        monkeypatch.setattr(time, "sleep", sleeps.append)
 
-        with pytest.raises(_Timeout) as exc_info:
+        with pytest.raises(httpx.ReadTimeout) as exc_info:
             m.call_haiku(_Client(), "sys", "msg", label="p0")
         assert exc_info.value is error
         assert len(attempts) == 5

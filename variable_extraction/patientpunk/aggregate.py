@@ -24,15 +24,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from ._utils import REMOVED_MARKERS
-
-# Mirror extraction modules' _keep_text: drop empty / moderator-removed / user-deleted text.
-_DROP = REMOVED_MARKERS | {""}
-
-
-def _keep(text: object) -> str:
-    t = (text or "").strip() if isinstance(text, str) else ""
-    return "" if t in _DROP else t
+from ._utils import clean_text, collect_texts_from_post
 
 
 def aggregate_corpus_by_author(
@@ -62,9 +54,7 @@ def aggregate_corpus_by_author(
     for post in posts:
         n_posts += 1
         pa = (post.get("author_hash") or "").strip()
-        title = _keep(post.get("title"))
-        body = _keep(post.get("body"))
-        block = "\n\n".join(t for t in (title, body) if t)
+        block = "\n\n".join(collect_texts_from_post(post))
         post_subreddit = (post.get("subreddit") or "").strip()
         if pa and block:
             segments[pa].append(block)
@@ -73,7 +63,7 @@ def aggregate_corpus_by_author(
         for comment in post.get("comments") or []:
             n_comments += 1
             ca = (comment.get("author_hash") or "").strip()
-            cb = _keep(comment.get("body"))
+            cb = clean_text(comment.get("body"))
             if ca and cb:
                 segments[ca].append(cb)
                 comment_subreddit = (

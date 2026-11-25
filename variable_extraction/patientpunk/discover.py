@@ -38,7 +38,6 @@ import os
 import random
 import sys
 import threading
-import time
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -74,14 +73,15 @@ from .phase import PhaseResult
 # Model names resolved from _utils (OpenRouter or Anthropic direct)
 from ._utils import (
     LLM_PROVIDER,
-    REMOVED_MARKERS,
     check_response,
     LLM_TEMPERATURE,
     MODEL_FAST,
-    collect_texts_from_post as _collect_texts_from_post,
+    collect_texts_from_post,
+    collect_texts_from_user,
     get_llm_client,
     parse_json_response,
     response_text,
+    with_retries,
     wrap_untrusted_text,
 )
 from .llm_cache import cached_completion
@@ -100,7 +100,6 @@ MAX_TEXT_CHARS = 10_000
 # not read every word. Capping each item keeps batches dense (fewer API calls).
 MAX_TEXT_CHARS_PER_ITEM_PHASE1 = 0
 REQUEST_DELAY_S = 0.5
-RETRY_DELAYS = [2, 5, 15, 30]
 
 # How many example snippets Haiku should find per candidate field
 EXAMPLES_PER_FIELD = 8
@@ -119,35 +118,20 @@ def call_model(
     """Call a model with retry logic and prompt caching. Returns the text response."""
 
     def _call() -> str:
-        for attempt, delay in enumerate([0] + RETRY_DELAYS):
-            if delay:
-                print(f"    Retrying in {delay}s (attempt {attempt + 1})...")
-                time.sleep(delay)
-            try:
-                response = client.messages.create(
-                    model=model,
-                    temperature=LLM_TEMPERATURE,
-                    max_tokens=max_tokens,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    messages=[{"role": "user", "content": user_message}],
-                )
-                return response_text(check_response(response, model))
-            except (anthropic.RateLimitError, anthropic.InternalServerError):
-                if attempt == len(RETRY_DELAYS):
-                    raise
-                print(f"    Rate limited / server error.")
-            except anthropic.APIStatusError as e:
-                if e.status_code in (429, 500, 502, 503, 529) and attempt < len(RETRY_DELAYS):
-                    print(f"    API error {e.status_code}.")
-                else:
-                    raise
-        return ""
+        response = client.messages.create(
+            model=model,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=max_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return response_text(check_response(response, model))
 
     return cached_completion(
         provider=LLM_PROVIDER,
@@ -156,41 +140,13 @@ def call_model(
         prompt=user_message,
         temperature=LLM_TEMPERATURE,
         max_tokens=max_tokens,
-        call_fn=_call,
+        call_fn=lambda: with_retries(_call, label=model),
     )
-
-
-# parse_json_response lives in _utils (shared with llm_extract / demographics)
 
 
 # =============================================================================
 # CORPUS HELPERS
 # =============================================================================
-
-def collect_texts_from_user(user_data: dict) -> list[str]:
-    texts = []
-    for post in user_data.get("posts", []):
-        if post.get("title"):
-            texts.append(post["title"])
-        if post.get("body"):
-            texts.append(post["body"])
-    for comment in user_data.get("comments", []):
-        if comment.get("body"):
-            texts.append(comment["body"])
-    return texts
-
-
-def collect_texts_from_post(post: dict) -> list[str]:
-    """Title + body ONLY: comments are written by OTHER users, so including
-    them attributes their content to the post author (same as biomedical.py /
-    llm_extract.py; commenters are captured via the aggregate path)."""
-    texts: list[str] = []
-    for raw in _collect_texts_from_post(post, include_comments=False):
-        kept = (raw or "").strip()
-        if kept and kept not in REMOVED_MARKERS:
-            texts.append(kept)
-    return texts
-
 
 def load_corpus_texts(
     input_dir: Path,
