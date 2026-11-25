@@ -78,7 +78,7 @@
   "moved": {
     "n": 0, "fields": ["country", "state", "city"], "why": "after a move, the new place is where the author lives and the old one goes in others (#238); synthetic only (n 0) until real items are curated",
     "ignore_case": false,
-    "pattern": "\\b(?:[Mm]oved|[Rr]elocated)\\s+(?:from\\s+[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?\\s+)?to\\s+[A-Z][a-z]{2,}|\\b[Uu]sed to live in\\s+[A-Z]"
+    "pattern": "\\b(?:[Mm]oved|[Rr]elocated)\\s+(?:from\\s+(?:the\\s+)?(?:[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?|[A-Z]{2,3})\\s+)?to\\s+(?:the\\s+)?(?:[A-Z][a-z]{2,}|[A-Z]{2,3}\\b)|\\b[Uu]sed to live in\\s+[A-Z]"
   },
   "two_homes": {
     "n": 0, "fields": ["country", "state", "city"], "why": "two places lived in at once give no place; synthetic only (n 0) until real items are curated",
@@ -87,7 +87,7 @@
   "place_lowercase": {
     "n": 0, "fields": ["country"], "why": "a place written in lower case is still a place; synthetic only (n 0) until real items are curated",
     "ignore_case": false,
-    "pattern": "\\b(?:here in|i live in|i'm in|living in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b|\\((?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\)"
+    "pattern": "\\b(?:[Hh]ere in|[Ii] live in|[Ii]'?m in|[Ll]iving in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b|\\((?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\)"
   },
   "instructions_in_post": {
     "n": 0, "fields": ["age", "sex", "country"], "why": "text that tries to instruct the model is data, not an answer; synthetic only (n 0) until real items are curated",

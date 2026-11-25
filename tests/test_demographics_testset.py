@@ -175,7 +175,7 @@ def test_synthetic_items_follow_the_rules_and_score_perfectly_against_themselves
 
 def test_every_case_has_a_synthetic_item():
     # A case with n 0 has no curated items, so its synthetic posts are all that test it.
-    assert set(ts.load_cases()) - {c for it in ts.load_synthetic() for c in it["case"]} == set()
+    assert set(ts.load_cases()) == {c for it in ts.load_synthetic() for c in it["case"]}
 
 
 def scrape_db(path):
