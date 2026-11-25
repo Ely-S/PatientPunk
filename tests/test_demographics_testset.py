@@ -367,3 +367,27 @@ def test_excluded_items_are_dropped_by_load_and_counted_by_stats(tmp_path):
     loaded, authors = ts.load(tmp_path, "all")
     assert [it["post_id"] for it in loaded] == ["a"] and authors[0]["post_ids"] == ["a"]
     assert ts.evaluate(tmp_path, "dev", "t", dry_run=True)["labeled_items"] == 1 + len(ts.load_synthetic())
+
+
+def test_the_set_defaults_to_the_data_root_and_testset_overrides_it(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("PATIENTPUNK_DATA", raising=False)
+    assert ts.data_root() == ts.Path(ts.__file__).resolve().parents[2] / "PatientPunk_data"
+    monkeypatch.setenv("PATIENTPUNK_DATA", str(tmp_path / "root"))
+    assert ts.data_root() == tmp_path / "root"
+    for where, n in ((tmp_path / "root" / "demographics_testset", 1), (tmp_path / "other", 2)):
+        where.mkdir(parents=True)
+        (where / "testset.jsonl").write_text("".join(json.dumps(item(f"p{i}", "x", None)) + "\n" for i in range(n)))
+    def stats(*args):
+        monkeypatch.setattr("sys.argv", ["demographics_testset.py", "stats", *args])
+        ts.main()
+        return json.loads(capsys.readouterr().out)["items"]
+    assert stats() == {"random/dev": 1}
+    assert stats("--testset", str(tmp_path / "other")) == {"random/dev": 2}
+    with pytest.raises(SystemExit):  # no set there: an error, not an empty set
+        stats("--testset", str(tmp_path / "missing"))
+    assert "no testset.jsonl" in capsys.readouterr().err
+    monkeypatch.setattr("sys.argv", ["demographics_testset.py", "sample", "--db", "x.db",
+                                     "--out", str(tmp_path / "nowhere" / "demographics_testset")])
+    with pytest.raises(SystemExit):
+        ts.main()
+    assert "doesn't exist" in capsys.readouterr().err

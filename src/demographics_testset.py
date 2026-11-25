@@ -5,11 +5,12 @@
 Scrapers/db_to_corpus.py reads) into a directory outside Git, as the extractor sees them: one item at
 a time, title included, with the corpus's post_id and hashed user_id. ``evaluate`` sends the labeled
 items through the extractor's read_post and scores its claims against the labels. Labeling rules:
-docs/demographics_labeling.md.
+docs/demographics_labeling.md. The set lives in <data root>/demographics_testset, the data root being
+$PATIENTPUNK_DATA or else the checkout's sibling PatientPunk_data/; --out and --testset override it.
 
-    uv run python src/demographics_testset.py sample --db reddit_2026-06-13.db --out data/demographics_testset
-    uv run python src/demographics_testset.py stats --testset data/demographics_testset
-    uv run python src/demographics_testset.py evaluate --testset data/demographics_testset --split dev
+    uv run python src/demographics_testset.py sample --db reddit_2026-06-13.db
+    uv run python src/demographics_testset.py stats
+    uv run python src/demographics_testset.py evaluate --split dev
 
 ``curate`` and ``add-curated`` add the hand-picked ``curated`` stratum (cases in
 src/demographics_testset_cases.json); tests/fixtures/demographics_synthetic.jsonl holds the
@@ -19,6 +20,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import random
 import re
 import sqlite3
@@ -616,12 +618,18 @@ def evaluate(testset: Path, split: str, tag: str, *, dry_run: bool = False) -> d
     return report
 
 
+def data_root() -> Path:
+    """$PATIENTPUNK_DATA, else the checkout's sibling PatientPunk_data/ (docs/database-provenance.md)."""
+    return Path(os.environ.get("PATIENTPUNK_DATA") or Path(__file__).resolve().parents[2] / "PatientPunk_data")
+
+
 def main():
+    home = data_root() / "demographics_testset"
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
     s = sub.add_parser("sample", help="Draw the unlabeled set from a scraped Reddit database")
     s.add_argument("--db", required=True, type=Path)
-    s.add_argument("--out", required=True, type=Path, help="Directory outside Git, such as data/demographics_testset")
+    s.add_argument("--out", type=Path, default=home, help="Directory outside Git (default: %(default)s)")
     s.add_argument("--seed", type=int, default=207)
     s.add_argument("--pool", type=int, default=200_000, help="Rows drawn before strata are taken")
     s.add_argument("--random", type=int, default=200)
@@ -631,19 +639,19 @@ def main():
     s.add_argument("--max-author-posts", type=int, default=8)
     c = sub.add_parser("curate", help="Write each curated case's candidates from a scraped Reddit database")
     c.add_argument("--db", required=True, type=Path)
-    c.add_argument("--testset", required=True, type=Path)
+    c.add_argument("--testset", type=Path, default=home, help="Default: %(default)s")
     c.add_argument("--seed", type=int, default=207)
     c.add_argument("--factor", type=int, default=3, help="Candidates per case, as a multiple of its quota")
     r = sub.add_parser("add-curated", help="Add the picks in curation.jsonl to testset.jsonl, unlabeled")
-    r.add_argument("--testset", required=True, type=Path)
+    r.add_argument("--testset", type=Path, default=home, help="Default: %(default)s")
     r.add_argument("--curation", type=Path, help="Default: <testset>/curation.jsonl")
     g = sub.add_parser("agree", help="Agreement between the labels and a second, independent labeling")
-    g.add_argument("--testset", required=True, type=Path)
+    g.add_argument("--testset", type=Path, default=home, help="Default: %(default)s")
     g.add_argument("--second", required=True, type=Path, help="JSON Lines of {post_id, label}")
     t = sub.add_parser("stats", help="Item and label counts by stratum, field and split")
-    t.add_argument("--testset", required=True, type=Path)
+    t.add_argument("--testset", type=Path, default=home, help="Default: %(default)s")
     e = sub.add_parser("evaluate", help="Run read_post on the labeled items and score its claims (paid)")
-    e.add_argument("--testset", required=True, type=Path)
+    e.add_argument("--testset", type=Path, default=home, help="Default: %(default)s")
     e.add_argument("--split", choices=("dev", "test", "all"), required=True,
                    help="Sampled and curated items in this split; the synthetic items are always included")
     e.add_argument("--tag", default="baseline", help="Names predictions_<split>_<tag>.jsonl and report_<split>_<tag>.json")
@@ -651,6 +659,12 @@ def main():
                    "text, not the f-string template in src/prompts/demographic_prompt.py")
     e.add_argument("--dry-run", action="store_true", help="Print the calls and approximate tokens, send nothing")
     a = ap.parse_args()
+    # A wrong directory would otherwise read as an empty set: evaluate would pay for the synthetic
+    # items alone, and sample would make a data root wherever the checkout happens to sit.
+    if a.command == "sample" and not a.out.parent.is_dir():
+        ap.error(f"{a.out.parent} doesn't exist: create it, set PATIENTPUNK_DATA, or pass --out")
+    if a.command != "sample" and not (a.testset / "testset.jsonl").exists():
+        ap.error(f"no testset.jsonl in {a.testset}: set PATIENTPUNK_DATA or pass --testset")
     if a.command == "sample":
         result = sample(a.db, a.out, seed=a.seed, pool=a.pool, n_random=a.random, n_keyword=a.keyword,
                         n_other=a.other_person, n_authors=a.authors, max_author_posts=a.max_author_posts)

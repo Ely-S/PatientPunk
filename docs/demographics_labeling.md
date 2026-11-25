@@ -3,7 +3,20 @@
 The set scores the per-post extractor (`src/extract_demographics_conditions.py`, prompt in
 `src/prompts/demographic_prompt.py`) one post at a time, as #206 reads them. Labels hold what the
 post's **author** states **outright** about **themselves**, in **this post**, as written. The set lives
-outside Git (`data/demographics_testset/`, ignored), because it holds patient text.
+outside Git because it holds patient text: in `demographics_testset/` under the data root, which is
+`$PATIENTPUNK_DATA` or else `PatientPunk_data/` beside the checkout (as in
+[database-provenance.md](database-provenance.md)). Every command uses it unless `--testset` (or
+`sample --out`) names another directory. A set made under the old default moves with
+`mv data/demographics_testset "${PATIENTPUNK_DATA:-../PatientPunk_data}/"`.
+
+The shared copy is to go in private S3 under `s3://patientpunk/demographics_testset/` (not uploaded
+yet; uploading needs a yes for each object, AGENTS.md). Once it is there, with the bucket's keys in the
+environment (us-west-1; never print them), download it with:
+
+```bash
+export MC_HOST_pp="https://${AWS_ACCESS_KEY_ID}:<url-encoded secret>@s3.us-west-1.amazonaws.com"
+mc mirror pp/patientpunk/demographics_testset/ "${PATIENTPUNK_DATA:-../PatientPunk_data}/demographics_testset/"
+```
 
 ## Files
 
@@ -189,10 +202,10 @@ only finds candidates, and a quota, 60% dev and 40% test by `split_of`, so an au
 both splits:
 
 ```bash
-uv run python src/demographics_testset.py curate --db reddit_2026-06-13.db --testset data/demographics_testset
-# pick from data/demographics_testset/candidates/<case>.jsonl into curation.jsonl:
+uv run python src/demographics_testset.py curate --db reddit_2026-06-13.db
+# pick from <testset>/candidates/<case>.jsonl into curation.jsonl:
 #   {"post_id", "case", "rationale", "picked_by"}, one line per pick
-uv run python src/demographics_testset.py add-curated --testset data/demographics_testset
+uv run python src/demographics_testset.py add-curated
 ```
 
 `curate` writes, per case and split, three times the quota of matching items not already in the set,
@@ -249,8 +262,8 @@ sets of `canonical_condition` names) with its Wilson interval, and Cohen's kappa
 field is stated. A field the second labeling didn't cover isn't compared.
 
 ```bash
-uv run python src/demographics_testset.py agree --testset data/demographics_testset \
-  --second data/demographics_testset/labeling/second_conditions/second_labels.jsonl
+uv run python src/demographics_testset.py agree \
+  --second "${PATIENTPUNK_DATA:-../PatientPunk_data}/demographics_testset/labeling/second_conditions/second_labels.jsonl"
 ```
 
 | field | n | agree (95% CI) | kappa, stated |
