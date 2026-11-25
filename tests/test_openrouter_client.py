@@ -38,6 +38,7 @@ def test_openrouter_adapter_contract(monkeypatch):
         )]),
     ])
     monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", [])
     client = utilities._ORClient(backend)
 
     with client.messages.stream(
@@ -61,6 +62,38 @@ def test_openrouter_adapter_contract(monkeypatch):
     )
     assert message.content[0].text == "ok"
     assert message.stop_reason == "max_tokens"
+
+
+def test_a_pinned_upstream_provider_is_sent_without_fallback(monkeypatch):
+    backend = Mock()
+    backend.chat.completions.create.return_value = iter([
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"), finish_reason="stop")])])
+    monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", ["together"])
+
+    with utilities._ORClient(backend).messages.stream(model="m", messages=[{"role": "user", "content": "hi"}]) as s:
+        s.get_final_message()
+
+    assert backend.chat.completions.create.call_args.kwargs["extra_body"] == {
+        "reasoning": {"effort": "none"}, "provider": {"order": ["together"], "allow_fallbacks": False}}
+
+
+def test_llm_call_sends_the_pinned_provider_through_its_retries(monkeypatch):
+    # llm_call reaches the client through with_retries and _request_once (#232): the pin must
+    # survive that path, on the retried request too.
+    reply = [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"), finish_reason="stop")])]
+    backend = Mock()
+    backend.chat.completions.create.side_effect = [httpx.ConnectError("dropped"), iter(reply)]
+    monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", ["together"])
+    monkeypatch.setattr("patientpunk._utils.RETRY_DELAYS", (0, 0, 0, 0))
+    llm_cache.set_cache_enabled(False)
+    try:
+        assert utilities.llm_call(utilities._ORClient(backend), "hi", model="m") == "ok"
+    finally:
+        llm_cache.set_cache_enabled(None)
+    pins = [c.kwargs["extra_body"]["provider"] for c in backend.chat.completions.create.call_args_list]
+    assert pins == [{"order": ["together"], "allow_fallbacks": False}] * 2
 
 
 @pytest.mark.parametrize(

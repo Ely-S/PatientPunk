@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from models import SideEffectReport
-from utilities import LLM_PROVIDER, LLM_REASONING_MODE, git_is_dirty
+from utilities import LLM_PROVIDER, LLM_PROVIDER_ORDER, LLM_REASONING_MODE, git_is_dirty
 
 COMMIT_EVERY = 50  # commit after this many writes
 
@@ -116,7 +116,8 @@ class ReportWriter:
         self._pending = 0
 
         # Every run records what produced it; a key the caller already set is kept as the caller set it.
-        run_config = {"provider": LLM_PROVIDER, "reasoning_mode": LLM_REASONING_MODE, "git_dirty": git_is_dirty()} | run_config
+        run_config = {"provider": LLM_PROVIDER, "provider_order": LLM_PROVIDER_ORDER,
+                      "reasoning_mode": LLM_REASONING_MODE, "git_dirty": git_is_dirty()} | run_config
         cursor = self._conn.execute(
             "INSERT INTO extraction_runs (run_at, commit_hash, extraction_type, config) "
             "VALUES (?, ?, ?, ?)",
