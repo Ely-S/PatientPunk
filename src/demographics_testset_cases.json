@@ -48,5 +48,56 @@
   "condition_severity": {
     "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
     "pattern": "\\b(?:mild|moderate|severe|very severe)(?:\\s+to\\s+(?:mild|moderate|severe))?\\s+(?:me/cfs|me|cfs|pots|long covid|mcas|eds|fibro\\w*)\\b|\\b(?:bedbound|housebound)\\b"
+  },
+  "decade_words": {
+    "n": 0, "fields": ["age"], "why": "a decade in words (\"mid thirties\", \"low 60s\") is an age; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:early|mid|late|low|high)\\s+(?:twenties|thirties|forties|fifties|sixties|seventies)\\b|\\blow\\s+\\d0'?s\\b"
+  },
+  "age_range": {
+    "n": 0, "fields": ["age"], "why": "a stated range (\"25-34\") is an age at its midpoint; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:i'?m|aged?|age)\\s+\\d{2}\\s*-\\s*\\d{2}\\b"
+  },
+  "not_an_age": {
+    "n": 0, "fields": ["age"], "why": "durations and doses are not ages (\"sick for 14 months\", \"600 mg\"); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:for|since)\\s+\\d{1,2}\\s*(?:months?|weeks?|days?)\\b|\\b\\d{2,3}\\s*mg\\b"
+  },
+  "trans_medical_word": {
+    "n": 0, "fields": ["sex"], "why": "transplant, transverse myelitis and the like say nothing about sex; synthetic only (n 0) until real items are curated",
+    "pattern": "\\btrans(?:plant|verse|ient|fusion)\\w*"
+  },
+  "city_with_region": {
+    "n": 0, "fields": ["city", "state"], "why": "\"Austin, TX\" names a city and its state; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b[A-Z][a-z]{3,},\\s*(?:[A-Z]{2}\\b|Texas|California|Florida|Ontario|BC\\b)"
+  },
+  "place_in_question": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "a place asked about (\"anyone here from Egypt?\") is not where the author lives; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b[Aa]nyone (?:here )?(?:from|in)\\s+[A-Z][a-z]{2,}"
+  },
+  "place_general_remark": {
+    "n": 0, "fields": ["country"], "why": "a place in a general remark (\"GPs in France prescribe it\") is not where the author lives; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:not available|doctors?|gps?|insurance|healthcare)\\s+(?:\\w+\\s+){0,3}in\\s+(?:the\\s+)?(?:us|uk|canada|germany|france|australia|america)\\b"
+  },
+  "moved": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "after a move, the new place is where the author lives and the old one goes in others (#238); synthetic only (n 0) until real items are curated",
+    "pattern": "\\bmoved\\s+from\\s+[a-z]+(?:\\s[a-z]+)?\\s+to\\s+[a-z]{3,}"
+  },
+  "two_homes": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "two places lived in at once give no place; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bsplit (?:my )?time between\\b|\\bsummers in\\b.*\\bwinters in\\b"
+  },
+  "place_lowercase": {
+    "n": 0, "fields": ["country"], "why": "a place written in lower case is still a place; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b(?:here in|i live in|i'm in|living in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b"
+  },
+  "instructions_in_post": {
+    "n": 0, "fields": ["age", "sex", "country"], "why": "text that tries to instruct the model is data, not an answer; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bignore (?:all |the )?(?:previous|above) instructions\\b"
+  },
+  "long_post": {
+    "n": 0, "fields": ["age"], "why": "a claim near the end of a long post still counts; synthetic only (n 0) until real items are curated",
+    "pattern": "(?s)^.{4000,}$"
   }
 }

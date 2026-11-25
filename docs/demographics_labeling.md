@@ -193,8 +193,10 @@ cases under `case`, and records the selection in `manifest.json` under `curated`
 in `curation.jsonl`: the labeler sees only the text, so the reason for a pick can't steer its label.
 Every curated label is reviewed by a person before it counts.
 
-`tests/fixtures/demographics_synthetic.jsonl` holds the `synthetic` stratum: about 20 short posts
-written to the rules above, one per hard case, with no patient text, so it lives in Git. `evaluate`
+`tests/fixtures/demographics_synthetic.jsonl` holds the `synthetic` stratum: about 40 short posts
+written to the rules above, at least one per case in `src/demographics_testset_cases.json`, with no
+patient text, so it lives in Git. A case with `n` 0 has synthetic posts only, until real items are
+curated for it. `evaluate`
 always includes them, whatever `--split` says: they are rule regressions, not a sample, and they are
 left out of the pooled metrics, so including them in both splits leaks nothing into test scores.
 The evaluator matches spellings of one identity ("MtF" and "trans woman", "FtM" and "trans masc",
