@@ -117,9 +117,11 @@ def apply_schema(conn: sqlite3.Connection, schema_sql: Path | None = None) -> No
     ).replace(
         "CREATE INDEX ", "CREATE INDEX IF NOT EXISTS "
     )
-    # Views are created IF NOT EXISTS, so one whose definition changed is dropped first: a database built
-    # from #224's branch has a different conditions_latest.
-    conn.executescript("DROP VIEW IF EXISTS conditions_latest; DROP VIEW IF EXISTS condition_observations;")
+    # Views are created IF NOT EXISTS, so the ones whose definitions have changed are dropped first: a
+    # database built from #224's branch has a different conditions_latest, and older databases define
+    # the claim and condition views without demographics_post_runs.
+    conn.executescript("".join(f"DROP VIEW IF EXISTS {v};" for v in (
+        "conditions_latest", "condition_observations", "demographic_claims_latest", "demographics_post_runs")))
     conn.executescript(ddl_idempotent)
     # Columns added after these tables existed: CREATE TABLE IF NOT EXISTS skips them.
     for table, added in (("user_profiles", _ADDED_PROFILE_COLUMNS), ("extraction_runs", {"finished_at": "INTEGER"}),

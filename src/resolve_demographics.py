@@ -45,6 +45,12 @@ _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 def _parse_age(value: str) -> tuple[float, bool, float] | None:
+    """_age_parts(value) when its age is from 10 to 99 (#206): the one place that range is checked."""
+    parsed = _age_parts(value)
+    return parsed if parsed is not None and 10 <= parsed[0] <= 99 else None
+
+
+def _age_parts(value: str) -> tuple[float, bool, float] | None:
     """(age in years, estimated, youngest) from what the author wrote: a number as given; a range or
     decade at its midpoint ("25-34" -> 29.5, "30s" or "mid-30s" -> 35, "early 40s" -> 42.5, "late 30s"
     -> 37.5, "20s-30s" -> 30), with the youngest age it allows ("16-20" -> 16, "30s" -> 30, "late 30s"
@@ -74,24 +80,7 @@ def _parse_age(value: str) -> tuple[float, bool, float] | None:
 def stated_age(value: str) -> tuple[float, bool] | None:
     """(age, estimated) as stated, when it is from 10 to 99 (#206); a range or decade gives its midpoint."""
     stated = _parse_age(value)
-    return stated[:2] if stated is not None and 10 <= stated[0] <= 99 else None
-
-
-def youngest_age(value: str) -> float | None:
-    """The youngest age a stated age allows, as written: "16-20" -> 16, so a range crossing 18 may be a minor."""
-    return _parse_age(value)[2] if stated_age(value) else None
-
-
-def _age_now(value: str, date: int | None, reference: int | None) -> tuple[float, bool] | None:
-    """(age, estimated): a stated age advanced to ``reference``, the user's newest post; a range or decade is advanced
-    from its midpoint. None when unparseable or out of range."""
-    stated = stated_age(value)
-    if stated is None:
-        return None
-    age, estimated = stated
-    if date is not None and reference is not None:
-        age += _years_between(date, reference)
-    return age, estimated
+    return stated[:2] if stated is not None else None
 
 
 _US_STATES = (
@@ -153,10 +142,10 @@ _CIS = re.compile(r"^cis(?:gender)?[\s-]*", re.IGNORECASE)  # "cis woman" and "c
 
 
 def normalize_sex(stated: str) -> str | None:
-    """female, male or non-binary from the author's words, which may hold several values (#214):
-    non-binary wins over a binary value ("non-binary | female" -> non-binary), and other words are
-    ignored ("female | suspected intersex" -> female), and "cis" is dropped ("cis woman" -> female). None when no rule applies ("trans man",
-    "trans woman | female", "female | male"); the words themselves stay in sex_stated."""
+    """female, male or non-binary from the author's words, which may hold several values (#214).
+    Non-binary wins over a binary value ("non-binary | female"), other words are ignored ("female |
+    suspected intersex" -> female), and "cis" is dropped. None when no rule applies ("trans man",
+    "trans woman | female", "female | male"); the words stay in sex_stated."""
     # Parenthesized asides and trailing punctuation aren't part of the answer: "female (she/her)" and
     # "female." are female. The trans check below still reads the full answer, asides included.
     plain = re.sub(r"\([^)]*(?:\)|$)", " ", stated)  # an aside left open ("female (she/her") too
@@ -185,7 +174,11 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
         if field == "state" and value in _US_STATES and post_id not in countries:
             # A US state names its country too, so "Texas" alone is "United States / Texas".
             by_field["country"].append((date, post_id, "United States"))
-    ages = [a for a in (_age_now(v, d, reference) for d, _, v in by_field["age"]) if a is not None]
+    # Each age claim parsed once: (date, (age, estimated, youngest)), kept when it states 10 to 99.
+    parsed = [(d, a) for d, _, v in by_field["age"] if (a := _parse_age(v))]
+    # Advanced to the user's newest post; a range or decade from its midpoint.
+    ages = [(age + (_years_between(d, reference) if d is not None and reference is not None else 0), estimated)
+            for d, (age, estimated, _) in parsed]
     newest = ages[-1] if ages else None
     if newest and newest[1]:
         # A vaguer newer claim doesn't replace an exact age it agrees with: "34", then "30s", stays 34.
@@ -195,8 +188,7 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     age = newest[0] if newest else None
     # Age as written, not advanced: a minor when they wrote it stays flagged, for exclusion. A range
     # counts by its youngest age, so "16-20" may be a minor.
-    written = [a for a in (youngest_age(v) for _, _, v in by_field["age"]) if a is not None]
-    ever_minor = int(min(written) < 18) if written else None
+    ever_minor = int(min(youngest for _, (_, _, youngest) in parsed) < 18) if parsed else None
     age_bucket = _bucketize_age(str(age)) if age is not None else None
     sex_stated = by_field["sex"][-1][2] if by_field["sex"] else None
     sex = normalize_sex(sex_stated) if sex_stated else None
@@ -217,20 +209,19 @@ def _resolve(claims: list[tuple], reference: int | None) -> tuple[tuple, set[str
     location = " / ".join(x for x in (country, states[-1] if states else None) if x) or None
     # City: walk the posts oldest first; naming a different country or state clears it, so an old
     # city never pairs with a new place.
-    named = {f: {p: v.casefold() for _, p, v in by_field[f]} for f in ("country", "state")}
+    places = {f: {p: v.casefold() for _, p, v in by_field[f]} for f in ("country", "state")}
     cities = {p: v for _, p, v in by_field["city"]}
     place, city = {}, None
     for post_id in order:
         for f in ("country", "state"):
-            if post_id in named[f]:
-                if place.get(f, named[f][post_id]) != named[f][post_id]:
+            if post_id in places[f]:
+                if place.get(f, places[f][post_id]) != places[f][post_id]:
                     city = None
-                place[f] = named[f][post_id]
+                place[f] = places[f][post_id]
         city = cities.get(post_id, city)
     # "F" and "female" agree: sex is compared by its normalized value when it has one.
-    same = {"sex": lambda v: normalize_sex(v) or v.casefold()}
-    disagree = {f for f, rows in by_field.items()
-                if f != "age" and len({same.get(f, str.casefold)(v) for _, _, v in rows}) > 1}
+    disagree = {f for f, rows in by_field.items() if f != "age" and len(
+        {(normalize_sex(v) or v.casefold()) if f == "sex" else v.casefold() for _, _, v in rows}) > 1}
     # Stated ages within a year agree (whole-year advancing can put the same age a year apart);
     # an estimate from a range or decade disagrees only when its decade differs.
     stated = [a for a, estimated in ages if not estimated]
@@ -247,10 +238,7 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
     nothing is known. Users in ``failed_users`` are skipped, so their previous profile stays current;
     the ``deleted`` placeholder for authorless posts is never a patient and never gets a profile.
     Commits; returns counts."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(user_profiles)")}
-    if not set(PROFILE_FIELDS) <= columns or not conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE name = 'demographic_claims_latest'").fetchone():
-        apply_schema(conn)  # a database built before the claim tables or a profile column; this commits
+    apply_schema(conn)  # claim tables, views and profile columns an older database lacks; this commits
     run_type = conn.execute("SELECT extraction_type FROM extraction_runs WHERE run_id = ?", (run_id,)).fetchone()
     if run_type != ("demographics",):
         raise ValueError(f"run {run_id} is not a demographics run; user_profiles_latest would ignore its rows")
@@ -262,9 +250,8 @@ def resolve_profiles(conn: sqlite3.Connection, run_id: int, failed_users=frozens
             "ORDER BY p.post_date IS NOT NULL, p.post_date, c.post_id"):
         claims[user].append(tuple(claim))
     read = {u for (u,) in conn.execute(
-        "SELECT DISTINCT p.user_id FROM posts p WHERE EXISTS (SELECT 1 FROM post_runs pr "
-        "JOIN extraction_runs r ON r.run_id = pr.run_id "
-        "WHERE pr.post_id = p.post_id AND r.extraction_type = 'demographics')")}
+        "SELECT DISTINCT p.user_id FROM posts p WHERE EXISTS "
+        "(SELECT 1 FROM demographics_post_runs pr WHERE pr.post_id = p.post_id)")}
     current = latest_profiles(conn)
 
     disagreements, rows = Counter(), []

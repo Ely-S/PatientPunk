@@ -26,6 +26,7 @@ from typing import Any, Iterator
 
 from pydantic import BaseModel, Field
 
+from ._utils import REMOVED_MARKERS
 from ._utils import collect_texts_from_post as _collect_texts_from_post
 
 
@@ -214,7 +215,7 @@ class CorpusLoader:
         texts: list[str] = []
         for raw in _collect_texts_from_post(post, include_comments=False):
             kept = (raw or "").strip()
-            if kept and kept not in ("[removed]", "[deleted]"):
+            if kept and kept not in REMOVED_MARKERS:
                 texts.append(kept)
         return texts
 
@@ -227,10 +228,10 @@ class CorpusLoader:
             body = (post.get("body") or "").strip()
             if title:
                 texts.append(title)
-            if body and body not in ("[removed]", "[deleted]"):
+            if body and body not in REMOVED_MARKERS:
                 texts.append(body)
         for comment in user.get("comments", []):
             comment_body = (comment.get("body") or "").strip()
-            if comment_body and comment_body not in ("[removed]", "[deleted]"):
+            if comment_body and comment_body not in REMOVED_MARKERS:
                 texts.append(comment_body)
         return texts
