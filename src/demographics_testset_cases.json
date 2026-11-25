@@ -1,0 +1,52 @@
+{
+  "_about": "Hand-picked cases for the curated stratum of the #207 test set. `curate` writes each case's regex matches, in seeded order, as candidates; Claude picks `n` per case (60% dev, 40% test by split_of) and records why in curation.jsonl. A regex only finds candidates: the pick decides. `ignore_case` is false where capitals carry the meaning. `conditions` marks a case whose items are also labeled for conditions. `fields` are the claims the case targets: an item whose label has one is a positive, else a near miss; with `severities`, only a condition of one of those severities counts.",
+  "gender_identity": {
+    "n": 30, "fields": ["sex"], "why": "#214: trans, non-binary and intersex answers; no current label has one",
+    "pattern": "\\b(?:i'?m|i am|as an?|identify as)\\s+(?:a\\s+)?(?:trans(?:gender)?\\b|non-?binary|enby|intersex|genderqueer|gender ?fluid|agender|ftm|mtf|transmasc|transfem)|\\b\\d{2}\\s*(?:nb|ftm|mtf|tm|tf)\\b|\\b(?:my|since my|after my)\\s+(?:medical\\s+)?transition\\b"
+  },
+  "state_only": {
+    "n": 20, "fields": ["state"], "why": "a bare US state resolves to United States; state has 7 labels",
+    "pattern": "\\b(?:here in|i live in|living in|we live in|i'?m in|based in)\\s+(?:alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york state|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington state|west virginia|wisconsin|wyoming|ontario|quebec|british columbia|alberta|queensland|victoria|new south wales)\\b"
+  },
+  "minor_self": {
+    "n": 20, "fields": ["age"], "why": "ever_minor and the youngest ages",
+    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:only\\s+)?1[3-7]\\b(?!\\s*(?:lbs?|kg|pounds|days|weeks|months|hours|mg|%|min))|\\b1[3-7]\\s*[mf]\\b|\\b1[3-7]\\s*(?:yo|y/o|years?[\\s-]old)\\b|\\b(?:i'?m|i am) (?:a )?(?:teen(?:ager)?|in high school|a sophomore|a junior)\\b"
+  },
+  "past_age": {
+    "n": 15, "fields": ["age"], "why": "ages at past events, recent ones included, go in others",
+    "pattern": "\\b(?:when i was|since i was|at age|at the age of)\\s+\\d{1,2}\\b|\\b(?:got sick|diagnosed|fell ill|got covid)\\b[^.?!\\n]{0,25}\\bat\\s+\\d{1,2}\\b"
+  },
+  "bound_or_vague_age": {
+    "n": 20, "fields": ["age"], "why": "bounds, comparisons and future ages are not claims",
+    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:over|under|almost|nearly|pushing|approaching|turning)\\s+\\d{2}\\b|\\bfeel(?:s|ing)?\\s+(?:like\\s+)?(?:i'?m\\s+)?(?:an?\\s+)?\\d{2}\\b|\\b(?:i'?ll be|i turn|turning)\\s+\\d{2}\\b"
+  },
+  "other_person_age": {
+    "n": 5, "fields": ["age"], "why": "someone else's age beside the author's; other_person already has 75",
+    "pattern": "\\bmy\\s+(?:\\d{1,2}\\s*(?:yo|y/o|years?[\\s-]old|-year-old)\\s+)?(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)\\b[^.?!\\n]{0,40}?\\b\\d{1,2}\\b[^\\n]{0,200}\\b(?:i'?m|i am)\\s+\\d{2}\\b"
+  },
+  "decade_age": {
+    "n": 10, "fields": ["age"], "why": "decades are claims; their midpoint and bucket",
+    "pattern": "\\b(?:in my|i'?m in my)\\s+(?:early|mid|late)?\\s*-?\\s*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b"
+  },
+  "demonym_or_from": {
+    "n": 15, "fields": ["country", "state", "city"], "why": "a demonym or 'I'm from X' alone is not residence",
+    "pattern": "\\b(?:i'?m|i am|as an?)\\s+(?:a\\s+)?(?:american|canadian|british|brit|australian|aussie|german|french|dutch|irish|scottish|swedish|norwegian|danish|indian|mexican|brazilian|italian|spanish|polish|english|kiwi|finnish|belgian|swiss|austrian)\\b|\\bi'?m (?:originally )?from\\b"
+  },
+  "travel_or_treated": {
+    "n": 10, "fields": ["country", "state", "city"], "why": "places visited or treated in go in others",
+    "ignore_case": false,
+    "pattern": "\\b(?:flew|travel(?:l)?ed|went|drove|moved)\\s+to\\s+[A-Z][a-z]+|\\b(?:clinic|doctor|hospital|specialist)\\s+in\\s+[A-Z][a-z]+"
+  },
+  "city_ambiguous": {
+    "n": 5, "fields": ["city", "state", "country"], "why": "a name that is a city, state or country (Georgia, Victoria, Birmingham)",
+    "pattern": "\\b(?:here in|i live in|living in|based in)\\s+(?:portland|springfield|birmingham|london|cambridge|richmond|columbus|kansas city|georgia|washington|paris|perth|victoria|vancouver|manchester|newcastle)\\b"
+  },
+  "condition_resolved": {
+    "n": 15, "fields": ["conditions"], "severities": ["resolved"], "why": "#229: resolved, recovered and returning conditions", "conditions": true,
+    "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b"
+  },
+  "condition_severity": {
+    "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
+    "pattern": "\\b(?:mild|moderate|severe|very severe)(?:\\s+to\\s+(?:mild|moderate|severe))?\\s+(?:me/cfs|me|cfs|pots|long covid|mcas|eds|fibro\\w*)\\b|\\b(?:bedbound|housebound)\\b"
+  }
+}

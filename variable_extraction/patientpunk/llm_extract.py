@@ -32,7 +32,6 @@ import os
 import re
 import sys
 import threading
-import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -60,10 +59,13 @@ from ._utils import (
     LLM_TEMPERATURE,
     MODEL_FAST,
     collect_texts_from_post,
+    collect_texts_from_user,
     get_llm_client,
+    is_transient_failure,
     parse_json_response,
     response_text,
     split_retry_batch,
+    with_retries,
     wrap_untrusted_text,
 )
 from .db import drop_legacy_demographics
@@ -106,7 +108,6 @@ MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192") or "8192")
 # The discovery script learned the same lesson and uses 10_000; 8_000 keeps a
 # comfortable margin.
 MAX_TEXT_CHARS = 8_000
-RETRY_DELAYS = [2, 5, 15, 30]
 SAVE_EVERY_N = 10   # flush incremental save every N completed records
 # The multi-record array path is unreliable: a record's text holds several
 # posts and the model emits one object PER POST ("Expected 1, got N"),
@@ -171,33 +172,6 @@ BASE_OPTIONAL_DESCRIPTIONS = {
 
 
 
-def _exception_status(exc: BaseException) -> int | None:
-    """Return an SDK exception's HTTP status across provider dialects."""
-    status = getattr(exc, "status_code", None)
-    if status is None:
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-    return status
-
-
-def _is_transient_failure(exc: BaseException) -> bool:
-    """True only for failures that are safe to exhaust on one record.
-
-    Both SDKs expose status codes for HTTP failures but use different exception
-    classes for transport failures, so class-name matching is the common
-    provider-agnostic fallback. Unknown and nonretryable errors must propagate:
-    treating a bad request, billing failure, or programming bug as record-local
-    would silently fail the entire corpus one record at a time.
-    """
-    status = _exception_status(exc)
-    name = type(exc).__name__
-    return (
-        status == 429
-        or (status is not None and 500 <= status < 600)
-        or "Connection" in name
-        or "Timeout" in name
-    )
-
-
 def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: str,
                temperature: float | None = None, label: str = "?") -> str:
     """Call Haiku with retry/backoff and prompt caching.
@@ -220,37 +194,18 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
     ]
 
     def _call() -> str:
-        for attempt, delay in enumerate([0] + RETRY_DELAYS):
-            if delay:
-                time.sleep(delay)
-            try:
-                # Other dialects 400 on service_tier, aborting the run.
-                tier = {"service_tier": LLM_SERVICE_TIER} if (
-                    LLM_SERVICE_TIER and LLM_PROVIDER == "openai") else {}
-                response = client.messages.create(
-                    model=MODEL,
-                    temperature=temp,
-                    max_tokens=MAX_TOKENS,
-                    system=system,
-                    messages=[{"role": "user", "content": user_message}],
-                    **tier,
-                )
-                return response_text(check_response(response, MODEL))
-            except Exception as e:
-                # Provider-agnostic retry: works whether the error is raised by the
-                # Anthropic SDK or by the OpenAI adapter (OpenRouter / vLLM path).
-                # Retry on rate limits (429) and transient 5xx / connection errors;
-                # on a non-transient error or the last attempt, re-raise.
-                status = _exception_status(e)
-                name = type(e).__name__
-                # Always log so an exhausted retry ladder leaves enough evidence
-                # to diagnose the provider or transport failure.
-                print(f"  [retry] {label} attempt {attempt + 1}: {name}"
-                      f"{f' status={status}' if status is not None else ''}: "
-                      f"{str(e)[:200]}", flush=True)
-                if not _is_transient_failure(e) or attempt == len(RETRY_DELAYS):
-                    raise
-        return ""
+        # Other dialects 400 on service_tier, aborting the run.
+        tier = {"service_tier": LLM_SERVICE_TIER} if (
+            LLM_SERVICE_TIER and LLM_PROVIDER == "openai") else {}
+        response = client.messages.create(
+            model=MODEL,
+            temperature=temp,
+            max_tokens=MAX_TOKENS,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+            **tier,
+        )
+        return response_text(check_response(response, MODEL))
 
     return cached_completion(
         provider=LLM_PROVIDER,
@@ -259,11 +214,8 @@ def call_haiku(client: anthropic.Anthropic, system_prompt: str, user_message: st
         prompt=user_message,
         temperature=temp,
         max_tokens=MAX_TOKENS,
-        call_fn=_call,
+        call_fn=lambda: with_retries(_call, label=label),
     )
-
-
-# parse_json_response lives in _utils (shared with demographics / discover)
 
 
 # =============================================================================
@@ -415,32 +367,6 @@ def build_user_message(texts: list[str]) -> str:
 
 
 # =============================================================================
-# TEXT COLLECTION - health subreddits prioritised
-# =============================================================================
-
-def collect_texts_from_user(user_data: dict) -> list[str]:
-    """Collect texts, health-subreddit posts first so truncation keeps the best content."""
-    health_texts = []
-    other_texts = []
-
-    for post in user_data.get("posts", []):
-        sub = post.get("subreddit", "").lower()
-        bucket = health_texts if sub in HEALTH_SUBREDDITS else other_texts
-        if post.get("title"):
-            bucket.append(post["title"])
-        if post.get("body"):
-            bucket.append(post["body"])
-
-    for comment in user_data.get("comments", []):
-        sub = comment.get("subreddit", "").lower()
-        bucket = health_texts if sub in HEALTH_SUBREDDITS else other_texts
-        if comment.get("body"):
-            bucket.append(comment["body"])
-
-    return health_texts + other_texts
-
-
-# =============================================================================
 # RECORD BUILDING
 # =============================================================================
 
@@ -498,7 +424,7 @@ def _process_one(
     if item_type == "user":
         with open(item, encoding="utf-8") as f:
             user_data = json.load(f)
-        texts = collect_texts_from_user(user_data)
+        texts = collect_texts_from_user(user_data, first=HEALTH_SUBREDDITS)  # health first survives the cut
         author_hash = user_data.get("author_hash", "unknown")
         source = "user_history"
         post_id = None
@@ -582,25 +508,12 @@ def _call_batch_raw(client, system_prompt: str, items: list[dict]) -> list[dict]
         msg += f"--- Record {i} ---\n{text}\n\n"
 
     label = f"batch[{items[0].get('post_id') or '?'}+{len(items) - 1}]"
-    raw = call_haiku(client, system_prompt, msg, label=label).strip()
-
-    # Tolerant parse: strip ``` fences, then isolate the JSON array span so a
-    # leading prose line or trailing content after the array ("Extra data")
-    # doesn't break json.loads. A genuinely truncated reply still raises
-    # JSONDecodeError, which split_retry_batch handles by splitting smaller.
-    if raw.startswith("```"):
-        nl = raw.find("\n")                 # find() not index(): a single-line
-        if nl != -1:                        # fence (```json[...]```) has no newline
-            raw = raw[nl + 1:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    start, end = raw.find("["), raw.rfind("]")
-    if start != -1 and end > start:
-        raw = raw[start:end + 1]
-
-    results = json.loads(raw)
-    if not isinstance(results, list):
-        raise ValueError(f"Expected JSON array, got {type(results).__name__}")
+    raw = call_haiku(client, system_prompt, msg, label=label)
+    # A reply with no readable array (truncated, or not a list) raises ValueError, which
+    # split_retry_batch handles by splitting smaller.
+    results = parse_json_response(raw, list)
+    if results is None:
+        raise ValueError(f"No JSON array in batch response: {raw[:200]}")
     if len(results) != len(items):
         raise ValueError(f"Expected {len(items)} results, got {len(results)}")
     # Raise rather than record a malformed element as empty: split_retry_batch
@@ -659,7 +572,7 @@ def _process_batch(
     try:
         raw_results = split_retry_batch(call_fn, items)
     except Exception as exc:
-        if not _is_transient_failure(exc):
+        if not is_transient_failure(exc):
             raise
         reason = f"call_error: {type(exc).__name__}"
         print(f"  [failed] {len(items)} record(s): {reason}: {str(exc)[:200]}",
@@ -1309,7 +1222,7 @@ def main(argv: list[str] | None = None) -> None:
             user_message = build_user_message([args.text])
             print(f"Sending to {MODEL}...\n")
             raw = call_haiku(client, system_prompt, user_message)
-            parsed = parse_json_response(raw)
+            parsed = parse_json_response(raw, dict)
             if parsed:
                 print("=== Extracted fields ===")
                 for field in sorted(parsed.get("fields", {})):

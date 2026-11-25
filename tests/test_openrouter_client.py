@@ -9,7 +9,7 @@ import pytest
 
 import utilities
 from patientpunk import llm_cache
-from patientpunk._utils import LLMContentFilteredError, LLMResponseError
+from patientpunk._utils import LLMContentFilteredError, LLMResponseError, is_transient_failure
 
 
 def test_get_client_uses_openrouter_openai_endpoint(monkeypatch):
@@ -78,6 +78,24 @@ def test_a_pinned_upstream_provider_is_sent_without_fallback(monkeypatch):
         "reasoning": {"effort": "none"}, "provider": {"order": ["together"], "allow_fallbacks": False}}
 
 
+def test_llm_call_sends_the_pinned_provider_through_its_retries(monkeypatch):
+    # llm_call reaches the client through with_retries and _request_once (#232): the pin must
+    # survive that path, on the retried request too.
+    reply = [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"), finish_reason="stop")])]
+    backend = Mock()
+    backend.chat.completions.create.side_effect = [httpx.ConnectError("dropped"), iter(reply)]
+    monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", ["together"])
+    monkeypatch.setattr("patientpunk._utils.RETRY_DELAYS", (0, 0, 0, 0))
+    llm_cache.set_cache_enabled(False)
+    try:
+        assert utilities.llm_call(utilities._ORClient(backend), "hi", model="m") == "ok"
+    finally:
+        llm_cache.set_cache_enabled(None)
+    pins = [c.kwargs["extra_body"]["provider"] for c in backend.chat.completions.create.call_args_list]
+    assert pins == [{"order": ["together"], "allow_fallbacks": False}] * 2
+
+
 @pytest.mark.parametrize(
     ("content", "finish_reason", "refusal"),
     [
@@ -135,4 +153,4 @@ def test_openrouter_http_content_filter_fails_the_item(monkeypatch):
 )
 def test_openrouter_in_band_errors_are_transient_only_when_the_provider_says_so(message, transient):
     request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
-    assert utilities.is_transient_failure(openai.APIError(message, request=request, body=None)) is transient
+    assert is_transient_failure(openai.APIError(message, request=request, body=None)) is transient

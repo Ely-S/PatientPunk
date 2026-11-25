@@ -31,21 +31,23 @@ csv_fill_rate       Compute basic fill-rate statistics for a CSV file.
                     Useful for ad-hoc coverage checks; Pipeline prefers
                     ``PhaseResult.stats`` from ``run_export_csv``.
 
-collect_texts_from_post  Collect title/body (optionally + comments) text from
-                    a single subreddit post. Shared by biomedical.py,
-                    llm_extract.py, and discover.py so the comments-inclusion
-                    difference between them is an explicit flag, not three
-                    silently-diverging copies.
+clean_text, collect_texts_from_post, collect_texts_from_user
+                    The text sent to the model from a post or a user history,
+                    shared by discover.py, corpus.py, llm_extract.py and
+                    aggregate.py.
 
-strip_markdown_fences    Strip ``` / ```json fences (multi- and single-line).
-parse_json_response      Tolerant LLM JSON parse (fences + embedded {...}/[...]).
+parse_json_response, is_transient_failure, with_retries
+                    Reading an LLM reply and retrying a failed call, shared by
+                    src/ and variable_extraction/.
 """
 from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import re
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -58,6 +60,8 @@ PACKAGE_ROOT: Path = Path(__file__).resolve().parent.parent
 
 # Bodies Reddit shows for removed or deleted text (#199); not the missing-author rule (#198).
 REMOVED_MARKERS = frozenset({"[removed]", "[deleted]"})
+
+_log = logging.getLogger(__name__)
 
 
 def load_env() -> None:
@@ -439,43 +443,82 @@ def load_json(path: Path) -> dict | list | None:
         return None
 
 
-def strip_markdown_fences(raw: str) -> str:
-    """Strip ``` / ```json fences from LLM output (multi- and single-line)."""
-    raw = raw.strip()
-    if raw.startswith("```"):
-        nl = raw.find("\n")
-        if nl != -1:
-            raw = raw[nl + 1:]
-        else:
-            raw = raw[3:]
-            if raw[:4].lower() == "json":
-                raw = raw[4:]
-        if raw.endswith("```"):
-            raw = raw[:-3]
-    return raw.strip()
+_FENCED = re.compile(r"```(?:json)?(.*?)(?:```|$)", re.S | re.I)
+# A whole JSON string, kept as is, or a comma before a closing bracket, dropped. A string left
+# open by a cut-off reply runs to the end, so it is scanned once rather than from every quote.
+_TRAILING_COMMA = re.compile(r'("(?:[^"\\]|\\.)*(?:"|$))|,\s*(?=[}\]])')
 
 
-def parse_json_response(text: str) -> dict | list | None:
-    """Extract a JSON object or array from an LLM response.
+def parse_json_response(text: str, kind: type | None = None) -> dict | list | None:
+    """The JSON in an LLM reply, or None.
 
-    Handles markdown fences (including single-line `````json{...}``` ``) and
-    leading/trailing prose by isolating the outermost ``{...}`` or ``[...]``.
+    Reads the whole reply as is, then the first markdown-fenced block if there is one, then the
+    whole reply again; in each, the text as is, then its outermost ``{...}`` or ``[...]``, each
+    also with trailing commas removed. The whole reply comes first because a fence may sit
+    inside one of its strings. ``kind`` (``dict`` or ``list``) accepts only that type, from its
+    own brackets.
     """
-    text = strip_markdown_fences(text.strip())
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        for opener, closer in (("{", "}"), ("[", "]")):
-            start = text.find(opener)
-            end = text.rfind(closer)
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(text[start:end + 1])
-                except json.JSONDecodeError:
-                    continue
+    text = (text or "").strip()
+    fenced = _FENCED.search(text)
+    pairs = {None: ("{}", "[]"), dict: ("{}",), list: ("[]",)}[kind]
+    spans = [text]
+    for source in ([fenced.group(1).strip()] if fenced else []) + [text]:
+        spans += [source] + [source[source.find(o):source.rfind(c) + 1]
+                             for o, c in pairs if -1 < source.find(o) < source.rfind(c)]
+    for span in spans:
+        for candidate in (span, _TRAILING_COMMA.sub(r"\1", span)):
+            try:
+                value = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if kind is None or isinstance(value, kind):
+                return value
     return None
+
+
+RETRY_DELAYS = (2, 5, 15, 30)
+
+# OpenRouter can report upstream failures inside a stream after returning HTTP 200.
+IN_BAND_TRANSIENT = ("provider_unavailable", "overloaded",
+                     "no instances available", "temporarily unavailable")
+
+
+def is_transient_failure(exc: BaseException) -> bool:
+    """Whether retrying the same request may succeed: a dropped connection or timeout, a 429
+    or 5xx, or a provider failure reported inside a normal reply. Never a 4xx (a bad request,
+    key or credit), which would fail a whole run one record at a time."""
+    import anthropic
+    import openai
+    if isinstance(exc, (httpx.TransportError, anthropic.APIConnectionError, openai.APIConnectionError,
+                        ConnectionError, TimeoutError)):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status == 429 or (isinstance(status, int) and 500 <= status < 600):
+        return True
+    # In-band failures arrive as anthropic.APIStatusError, or over OpenRouter as a status-less
+    # openai.APIError. Match their body, but never retry a 4xx.
+    if isinstance(exc, (anthropic.APIStatusError, openai.APIError)) and not (
+            isinstance(status, int) and 400 <= status < 500):
+        return any(t in str(exc).lower() for t in IN_BAND_TRANSIENT)
+    return False
+
+
+def with_retries(call, label: str = ""):
+    """``call()``, retried after each of RETRY_DELAYS on a transient failure. Any other
+    failure, or the last transient one, is raised."""
+    for attempt, delay in enumerate((0, *RETRY_DELAYS), 1):
+        if delay:
+            time.sleep(delay)
+        try:
+            return call()
+        except Exception as exc:
+            if not is_transient_failure(exc) or attempt > len(RETRY_DELAYS):
+                raise
+            _log.warning("%s: %s on attempt %d/%d, retrying: %s", label, type(exc).__name__,
+                         attempt, len(RETRY_DELAYS) + 1, str(exc)[:200])
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def get_schema_id(schema_path: Path) -> str:
@@ -582,16 +625,33 @@ def csv_fill_rate(csv_path: Path) -> dict:
     }
 
 
-def collect_texts_from_post(post: dict, include_comments: bool = False) -> list[str]:
-    """Collect non-empty text segments from a subreddit post.
+def clean_text(text: object) -> str:
+    """``text`` without surrounding space, or "" when it is empty, removed or deleted (in any case)."""
+    kept = text.strip() if isinstance(text, str) else ""
+    return "" if kept.casefold() in REMOVED_MARKERS else kept
 
-    Title + body only by default: comments are written by OTHER users, so
-    including them would attribute their conditions/treatments to the post
-    author. Commenters are captured as their own patients via the aggregate
-    path (aggregate_corpus_by_author). Pass include_comments=True only for
-    callers that intentionally want discussion text (not per-author attribution).
+
+def collect_texts_from_post(post: dict, include_comments: bool = False) -> list[str]:
+    """A post's title and body, cleaned, without empty ones.
+
+    Comments are left out by default: they are written by OTHER users, so including them
+    would attribute their conditions and treatments to the post author. Commenters are
+    captured as their own patients by the aggregate path (aggregate_corpus_by_author).
     """
-    texts = [t for t in (post.get("title"), post.get("body")) if t]
+    parts = [post.get("title"), post.get("body")]
     if include_comments:
-        texts.extend(c["body"] for c in post.get("comments", []) if c.get("body"))
-    return texts
+        parts += [c.get("body") for c in post.get("comments", [])]
+    return [t for t in map(clean_text, parts) if t]
+
+
+def collect_texts_from_user(user: dict, first: frozenset[str] | set[str] = frozenset()) -> list[str]:
+    """A user's post titles and bodies, then comment bodies, cleaned, without empty ones.
+
+    Texts from the subreddits in ``first`` (lower case) go ahead of the rest, each group in
+    input order, so they survive a later length cut.
+    """
+    items = [(p.get("subreddit"), t) for p in user.get("posts", []) for t in (p.get("title"), p.get("body"))]
+    items += [(c.get("subreddit"), c.get("body")) for c in user.get("comments", [])]
+    items = [(sub, clean_text(t)) for sub, t in items]
+    items.sort(key=lambda it: (it[0] or "").lower() not in first)  # stable: input order within each group
+    return [t for _, t in items if t]
