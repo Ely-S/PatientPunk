@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from import_posts import DELETED_USER_ID
 from patientpunk._utils import REMOVED_MARKERS, LLMContentFilteredError, LLMResponseError, wrap_untrusted_text
+from patientpunk.conditions import canonical_condition
 from patientpunk.db import apply_schema, register_run
 from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
@@ -57,38 +58,6 @@ SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming sever
 NEGATION = re.compile(r"\b(?:not|never|no longer|isn'?t|wasn'?t)\s+(?:very\s+|that\s+|so\s+)?"
                       r"(?:severe|moderate|mild|resolved)\b", re.IGNORECASE)
 MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
-# One name for the conditions most often written several ways, so conditions_latest keeps one row for
-# each. Other names are kept as the model wrote them, in lower case. The author's words stay in evidence.
-_CONDITION_ALIASES = {
-    "long covid": ("long-covid", "longcovid", "lc", "long covid (lc)", "long hauler", "long haul covid",
-                   "long-haul covid", "long haul", "pasc", "post covid", "post-covid", "post covid syndrome",
-                   "post-covid syndrome", "post-covid condition", "post covid condition"),
-    "me/cfs": ("me", "cfs", "mecfs", "me cfs", "me / cfs", "chronic fatigue syndrome", "myalgic encephalomyelitis"),
-    "pots": ("pots syndrome", "postural orthostatic tachycardia syndrome", "postural tachycardia syndrome"),
-    "mcas": ("mast cell activation syndrome",),
-    "pem": ("post-exertional malaise", "post exertional malaise", "crash", "pem crash", "post-exertional crash"),
-    "small fiber neuropathy": ("sfn", "small fibre neuropathy"),
-    "eds": ("ehlers-danlos syndrome", "ehlers danlos syndrome", "ehlers-danlos"),
-    "insomnia": ("trouble sleeping", "difficulty sleeping", "sleep disturbance", "sleep difficulty", "sleep issue",
-                 "sleep problem", "can't sleep", "cannot sleep", "sleeplessness"),
-    "muscle cramp": ("cramp", "cramping", "muscle cramping"),
-    "headache": ("head pain",),
-    "palpitation": ("heart palpitation",),
-    "difficulty concentrating": ("trouble concentrating", "poor concentration", "lack of concentration",
-                                 "concentration problem"),
-    "craniocervical instability": ("cranio-cervical instability", "cci"),
-    "post-concussion syndrome": ("post concussion syndrome", "postconcussion syndrome"),
-    "dark circles": ("dark circles under eyes", "dark circles under the eyes"),
-    "burning eyes": ("eye burning",),
-}
-# A plural is one condition with its singular ("headaches" is headache). Listed, not a rule, because
-# many names end in s without being plurals: pots, ms, lupus, diabetes, herpes, shingles, mitosis.
-_SINGULAR = {f"{w}{'es' if w.endswith(('sh', 'ch')) else 's'}": w for w in (
-    "headache", "migraine", "crash", "cramp", "muscle cramp", "palpitation", "heart palpitation", "seizure",
-    "nightmare", "rash", "tremor", "spasm", "muscle spasm", "night sweat", "hot flash", "flare", "brain zap",
-    "adrenaline dump", "sleep issue", "sleep problem", "concentration problem", "infection", "nosebleed",
-    "ulcer", "panic attack", "pem crash")}
-_CONDITIONS = {alias: name for name, aliases in _CONDITION_ALIASES.items() for alias in (name, *aliases)}
 
 
 def _post_text(title: str | None, body: str) -> str:
@@ -193,13 +162,6 @@ def parse_claims(result: dict, text: str = "") -> dict[str, tuple[str, str]]:
                 continue  # the prompt says to ignore past ages, but "I was 35 when I got sick" gets through
             claims[field] = (value, evidence.strip())
     return claims
-
-
-def canonical_condition(name: str) -> str:
-    """One name for a condition written several ways ("LC", "Long-COVID" -> "long covid"); others in lower case."""
-    plain = re.sub(r"\s+", " ", name.strip().casefold().replace("’", "'")).removesuffix(".")
-    plain = _SINGULAR.get(plain, plain)
-    return _CONDITIONS.get(plain, plain)
 
 
 def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str | None, str]] | None:

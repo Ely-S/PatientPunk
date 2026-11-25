@@ -91,3 +91,12 @@ def test_the_condition_filter_reads_current_observations_only(conn):
 
     assert [r["n_reports"] for r in query_treatment_outcomes(conn, condition="POTS")] == [1]
     assert [r["n_reports"] for r in query_treatment_outcomes(conn)] == [3]
+
+
+@pytest.mark.parametrize("asked", ["long covid", "LC", "Long-COVID", "PASC", "covid"])
+def test_the_condition_filter_finds_a_condition_by_any_of_its_names(conn, asked):
+    r = register_run(conn, "demographics", {})
+    observe(conn, r, "a1", "a", "long covid")
+    conn.execute("INSERT INTO treatment_reports (report_id, run_id, post_id, user_id, drug_id, sentiment, "
+                 "signal_strength) VALUES (1, ?, 'a1', 'a', 1, 'positive', 'strong')", (r,))
+    assert [row["n_reports"] for row in query_treatment_outcomes(conn, condition=asked)] == [1]

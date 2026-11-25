@@ -25,7 +25,7 @@ Usage:
     load_variables(conn, Path("output/records.csv"), run_id)
     rows = query_treatment_outcomes(conn, drug="ldn", sex="female")
 
-The condition filter (``condition="POTS"``) reads only conditions that
+The condition filter (``condition="POTS"``, or an alias such as "LC") reads only conditions that
 src/extract_demographics_conditions.py read from each post
 (condition_observations), so it needs that script's run on the database;
 conditions loaded from records.csv never count (#220).
@@ -43,6 +43,8 @@ import re
 import sqlite3
 import time
 from pathlib import Path
+
+from patientpunk.conditions import canonical_condition
 
 
 # ── Sentiment / signal encoding ────────────────────────────────────────────────
@@ -361,7 +363,7 @@ def query_treatment_outcomes(
             "  AND LOWER(c.condition_name) LIKE LOWER(?)"
             ")"
         )
-        params.append(f"%{condition}%")
+        params.append(f"%{canonical_condition(condition)}%")  # "LC" finds long covid, as stored
 
     if sex:
         where_clauses.append(

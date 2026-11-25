@@ -15,6 +15,7 @@ import pytest
 import extract_demographics_conditions as demographics
 from import_posts import DELETED_USER_ID
 from patientpunk._utils import LLMContentFilteredError, LLMResponseError
+from patientpunk.conditions import canonical_condition
 from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 
 SCHEMA = Path(__file__).resolve().parents[1] / "schema.sql"
@@ -676,7 +677,7 @@ def test_unnamed_conditions_are_dropped_and_the_rest_kept():
     ("fatigue", "fatigue"), ("numbness", "numbness"), ("tumor", "tumor"), ("migraine", "migraine"),
 ])
 def test_canonical_condition(name, canonical):
-    assert demographics.canonical_condition(name) == canonical
+    assert canonical_condition(name) == canonical
 
 
 def test_warns_about_posts_read_before_conditions_were_read_per_post(db, monkeypatch, caplog):
