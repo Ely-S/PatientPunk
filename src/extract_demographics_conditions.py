@@ -58,6 +58,14 @@ SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming sever
 NEGATION = re.compile(r"\b(?:not|never|no longer|isn'?t|wasn'?t)\s+(?:very\s+|that\s+|so\s+)?"
                       r"(?:severe|moderate|mild|resolved)\b", re.IGNORECASE)
 MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
+# "resolved" counts only when its quote says the condition is gone. The model also gives it to
+# past-tense storytelling ("When I started experiencing PEM"), and one wrong "resolved" makes
+# conditions_latest show a current condition as gone.
+GONE = re.compile(r"\b(?:gone|went away|recovered|recovery|cleared|clear(?:ed)? up|no longer|stopped|cured|healed|"
+                  r"resolved|remission|disappeared|subsided|back to normal|used to|in the past)\b", re.IGNORECASE)
+NOT_GONE = re.compile(r"\b(?:not|never|hasn'?t|haven'?t|hadn'?t|didn'?t|isn'?t|wasn'?t|won'?t|still)\s+"
+                      r"(?:\w+\s+)?(?:gone|went away|go away|recovered|cleared|clear(?:ed)? up|stopped|cured|healed|"
+                      r"resolved|disappeared|subsided|back to normal)\b", re.IGNORECASE)
 
 
 def _post_text(title: str | None, body: str) -> str:
@@ -188,6 +196,8 @@ def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str |
         stated = str(entry.get("severity") or "").lower()
         severity = None if NEGATION.search(stated) else next(
             (s for s in SEVERITIES if re.search(rf"\b{s}\b", stated)), None)
+        if severity == "resolved" and (not GONE.search(evidence) or NOT_GONE.search(evidence)):
+            severity = None
         name = canonical_condition(name)
         observation = (name, kind if kind in ("illness", "symptom") else "illness",
                        severity, evidence.strip())

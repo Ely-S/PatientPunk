@@ -175,7 +175,7 @@ def test_a_reread_retracts_a_condition_and_newer_posts_update_it(db, monkeypatch
     conn, path = db
     add_posts(conn, [("p1", "a", ts(2024), None, "my POTS is severe"), ("p2", "a", ts(2025), None, "POTS gone")])
     replies = {"my POTS is severe": [condition("POTS", severity="severe"), condition("migraine")],
-               "POTS gone": [condition("POTS", severity="resolved")]}
+               "POTS gone": [condition("POTS", "POTS gone", severity="resolved")]}
     stub(monkeypatch, post=lambda text: {"conditions": replies[text]})
     demographics.run_demographics(path)
     latest = "SELECT condition_name, severity, first_seen, last_seen, n_posts FROM conditions_latest ORDER BY 1"
@@ -561,7 +561,26 @@ def test_a_bare_condition_counts_only_when_the_post_names_it_in_that_case(bare, 
     ("mild (no flares lately)", "mild"),
 ])
 def test_severity_takes_the_worst_level_a_phrase_names(stated, severity):
-    assert demographics.parse_conditions({"conditions": [condition("POTS", severity=stated)]})[0][2] == severity
+    reply = {"conditions": [condition("POTS", "my POTS went away", severity=stated)]}
+    assert demographics.parse_conditions(reply)[0][2] == severity
+
+
+@pytest.mark.parametrize("evidence, severity", [
+    # the quote says it's gone
+    ("POTS has I would say 99% cleared", "resolved"), ("it eventually went away", "resolved"),
+    ("I'm fully recovered", "resolved"), ("no longer have brain fog", "resolved"), ("back to normal now", "resolved"),
+    ("I used to get migraines", "resolved"), ("the tinnitus stopped", "resolved"),
+    # past-tense storytelling, from #229's pilot: still a current condition, so no severity
+    ("I knew i had long covid", None), ("my breathing issues got worse", None),
+    ("When I started experiencing PEM", None), ("i got some brain fog", None),
+    ("this time lost my sense of taste and smell", None),
+    # a quote saying it hasn't gone
+    ("the fatigue never went away", None), ("it hasn't fully cleared", None), ("I'm not recovered", None),
+    ("didn't go away", None), ("still not gone", None),
+])
+def test_resolved_needs_a_quote_saying_the_condition_is_gone(evidence, severity):
+    reply = {"conditions": [condition("long covid", evidence, severity="resolved")]}
+    assert demographics.parse_conditions(reply)[0][2] == severity
 
 
 def test_a_condition_listed_twice_keeps_its_stated_severity():
