@@ -444,8 +444,9 @@ def load_json(path: Path) -> dict | list | None:
 
 
 _FENCED = re.compile(r"```(?:json)?(.*?)(?:```|$)", re.S | re.I)
-# A whole JSON string, kept as is, or a comma before a closing bracket, dropped.
-_TRAILING_COMMA = re.compile(r'("(?:[^"\\]|\\.)*")|,\s*(?=[}\]])')
+# A whole JSON string, kept as is, or a comma before a closing bracket, dropped. A string left
+# open by a cut-off reply runs to the end, so it is scanned once rather than from every quote.
+_TRAILING_COMMA = re.compile(r'("(?:[^"\\]|\\.)*(?:"|$))|,\s*(?=[}\]])')
 
 
 def parse_json_response(text: str, kind: type | None = None) -> dict | list | None:

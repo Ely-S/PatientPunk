@@ -43,6 +43,12 @@ def test_parse_json_response(reply, kind, expected):
     assert parse_json_response(reply, kind) == expected
 
 
+def test_a_cut_off_string_of_escaped_quotes_parses_quickly():
+    start = time.monotonic()
+    assert parse_json_response('{"a": "' + '\\"' * 20_000) is None
+    assert time.monotonic() - start < 1  # was quadratic: about a minute at 50,000
+
+
 def _status(status):
     exc = Exception(f"HTTP {status}")
     exc.status_code = status
