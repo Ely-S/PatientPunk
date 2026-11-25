@@ -13,8 +13,8 @@ where a knob exists, the current default is stated explicitly.
 
 | Path | Command | Method | Output | Feeds analysis? |
 |---|---|---|---|---|
-| **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes**, except its demographic columns. Conditions and variables are loaded into the DB (`load_extractions` / `load_variables`); consumed by `cluster-prep` and `validate`. |
-| **Demographics** | `src/extract_demographics_conditions.py` | LLM, one call per post; claims resolved into `user_profiles` | `user_profiles_latest` | **Yes — the only source of age, sex and location** for filters, `unified` and `cluster-prep --db`. |
+| **Main pipeline** | `main.py run` | LLM extraction (`llm_extract`) + optional discovery (`discover`) | `records.csv` (all fields) | **Yes**, except its demographic columns and conditions. Variables are loaded into the DB (`load_variables`) and consumed by `cluster-prep` and `validate`; conditions loaded by `load_extractions` stay in `conditions` but don't count for the condition filter, `condition_observations` or `conditions_latest` (#220). |
+| **Demographics and conditions** | `src/extract_demographics_conditions.py` | LLM, one call per post; claims resolved into `user_profiles`, conditions kept as per-post observations | `user_profiles_latest`, `conditions_latest` | **Yes — the only source of age, sex and location** for filters, `unified` and `cluster-prep --db`, and of the conditions the condition filter in `query_treatment_outcomes` reads. |
 
 This pipeline no longer extracts `age`, `sex_gender` or `location_country` (#195).
 An older `records.csv` may still have them, with state columns; they are ignored downstream, and

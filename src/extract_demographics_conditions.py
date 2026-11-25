@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Extract self-reported demographics one post at a time, and conditions per user, from SQLite posts.
+"""Extract self-reported demographics and conditions one post at a time from SQLite posts.
 
-Each post goes to the model alone and its checked answers are stored as claims (demographic_claims),
-with the words they came from; post_runs records every post a run read. resolve_profiles then turns
-each user's claims into one user_profiles row in code (#206). Conditions keep one call per user.
+Each post goes to the model alone and its checked answers are stored with the words they came from:
+demographic claims in demographic_claims, and each condition the author states, with its severity,
+as an observation in conditions (#220). post_runs records every post a run read. resolve_profiles
+then turns each user's claims into one user_profiles row in code (#206); conditions_latest has one
+row per user and condition (see schema.sql).
 """
 
 import argparse
@@ -22,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from import_posts import DELETED_USER_ID
 from patientpunk._utils import LLMContentFilteredError, LLMResponseError, wrap_untrusted_text
 from patientpunk.db import apply_schema, register_run
-from prompts.demographic_prompt import CONDITIONS_PROMPT, POST_DEMOGRAPHICS_PROMPT
+from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
 from utilities import (
     LLM_PROVIDER,
@@ -39,8 +41,6 @@ from utilities import (
 )
 from utilities.db import open_db
 
-MAX_USER_CHARS = 8_000  # per-user conditions call only
-SEPARATOR = "\n---\n"
 MAX_IN_FLIGHT = 10
 COMMIT_EVERY = 200
 TEMPERATURES = (0.0, 0.7, 1.0)
@@ -53,6 +53,43 @@ ONE_PLACE_COMMA = re.compile(
     re.IGNORECASE,
 )
 UNKNOWN_VALUES = {"unknown", "none", "null", "not stated", "n.a.", "n/a"}
+SEVERITIES = ("severe", "moderate", "mild", "resolved")  # a phrase naming several takes the first: "moderate to severe" is severe
+# A negated level states none: "not severe", "no longer mild"; "severe, no improvement" is still severe.
+NEGATION = re.compile(r"\b(?:not|never|no longer|isn'?t|wasn'?t)\s+(?:very\s+|that\s+|so\s+)?"
+                      r"(?:severe|moderate|mild|resolved)\b", re.IGNORECASE)
+MAX_REPLY_TOKENS = 800  # a post listing many symptoms, each with its quote, needs more than 300
+# One name for the conditions most often written several ways, so conditions_latest keeps one row for
+# each. Other names are kept as the model wrote them, in lower case. The author's words stay in evidence.
+_CONDITION_ALIASES = {
+    "long covid": ("long-covid", "longcovid", "lc", "long covid (lc)", "long hauler", "long haul covid",
+                   "long-haul covid", "long haul", "pasc", "post covid", "post-covid", "post covid syndrome",
+                   "post-covid syndrome", "post-covid condition", "post covid condition"),
+    "me/cfs": ("me", "cfs", "mecfs", "me cfs", "me / cfs", "chronic fatigue syndrome", "myalgic encephalomyelitis"),
+    "pots": ("pots syndrome", "postural orthostatic tachycardia syndrome", "postural tachycardia syndrome"),
+    "mcas": ("mast cell activation syndrome",),
+    "pem": ("post-exertional malaise", "post exertional malaise", "crash", "pem crash", "post-exertional crash"),
+    "small fiber neuropathy": ("sfn", "small fibre neuropathy"),
+    "eds": ("ehlers-danlos syndrome", "ehlers danlos syndrome", "ehlers-danlos"),
+    "insomnia": ("trouble sleeping", "difficulty sleeping", "sleep disturbance", "sleep difficulty", "sleep issue",
+                 "sleep problem", "can't sleep", "cannot sleep", "sleeplessness"),
+    "muscle cramp": ("cramp", "cramping", "muscle cramping"),
+    "headache": ("head pain",),
+    "palpitation": ("heart palpitation",),
+    "difficulty concentrating": ("trouble concentrating", "poor concentration", "lack of concentration",
+                                 "concentration problem"),
+    "craniocervical instability": ("cranio-cervical instability", "cci"),
+    "post-concussion syndrome": ("post concussion syndrome", "postconcussion syndrome"),
+    "dark circles": ("dark circles under eyes", "dark circles under the eyes"),
+    "burning eyes": ("eye burning",),
+}
+# A plural is one condition with its singular ("headaches" is headache). Listed, not a rule, because
+# many names end in s without being plurals: pots, ms, lupus, diabetes, herpes, shingles, mitosis.
+_SINGULAR = {f"{w}{'es' if w.endswith(('sh', 'ch')) else 's'}": w for w in (
+    "headache", "migraine", "crash", "cramp", "muscle cramp", "palpitation", "heart palpitation", "seizure",
+    "nightmare", "rash", "tremor", "spasm", "muscle spasm", "night sweat", "hot flash", "flare", "brain zap",
+    "adrenaline dump", "sleep issue", "sleep problem", "concentration problem", "infection", "nosebleed",
+    "ulcer", "panic attack", "pem crash")}
+_CONDITIONS = {alias: name for name, aliases in _CONDITION_ALIASES.items() for alias in (name, *aliases)}
 
 
 def _post_text(title: str | None, body: str) -> str:
@@ -63,22 +100,12 @@ def _post_text(title: str | None, body: str) -> str:
     return "\n".join(part for part in ((title or "").strip(), body) if part)
 
 
-def _combine_posts(texts: Iterable[str]) -> str:
-    parts, size = [], 0
-    for text in texts:  # stop reading once the cap is reached
-        parts.append(text)
-        size += len(text) + len(SEPARATOR)
-        if size >= MAX_USER_CHARS:
-            break
-    return SEPARATOR.join(parts)[:MAX_USER_CHARS]
-
-
 def _ask(client, prompt: str, parse: Callable[[str], object]):
     """parse(reply), re-asking at a higher temperature while the reply is unreadable."""
     for attempt, temperature in enumerate(TEMPERATURES, start=1):
         try:
             # validate keeps an unreadable reply out of the cache, so a later run asks the model again.
-            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=300, temperature=temperature,
+            return parse(llm_call(client, prompt, model=MODEL_FAST, max_tokens=MAX_REPLY_TOKENS, temperature=temperature,
                                   validate=parse))
         except LLMContentFilteredError:
             raise
@@ -116,9 +143,16 @@ def _claim_value(field: str, value: object) -> str | None:
     return text
 
 
-def _says(text: str, phrase: str) -> bool:
-    """Whether ``text`` contains ``phrase`` as whole words, ignoring case: "M" isn't in "I'm 34"."""
-    return re.search(rf"(?<![\w'’]){re.escape(phrase)}(?![\w'’])", text, re.IGNORECASE) is not None
+def _says(text: str, phrase: str, ignore_case: bool = True) -> bool:
+    """Whether ``text`` contains ``phrase`` as whole words: "M" isn't in "I'm 34"."""
+    flags = re.IGNORECASE if ignore_case else 0
+    return re.search(rf"(?<![\w'’]){re.escape(phrase)}(?![\w'’])", text, flags) is not None
+
+
+def _bare(item: object, text: str, ignore_case: bool = True) -> str | None:
+    """A value given without its {value, evidence} wrapper, kept only when the post says it as whole words."""
+    bare = _words(item)
+    return bare if bare and _says(text, bare, ignore_case) else None
 
 
 _PAST = re.compile(r"\b(?:was|were|had\s+(?:just\s+)?turned)\b", re.IGNORECASE)
@@ -138,24 +172,21 @@ def _past_age(value: str, evidence: str) -> bool:
     return bool(cues) and len(between) <= 30 and not _PRESENT_OR_BREAK.search(between)
 
 
-def parse_claims(raw: str, text: str = "") -> dict[str, tuple[str, str]]:
+def parse_claims(result: dict, text: str = "") -> dict[str, tuple[str, str]]:
     """{field: (value, evidence)} from a per-post reply. A field the post doesn't state, a value
     without a quote, or an age whose quote gives it in the past tense, is left out. A sex or place
     given as a bare value instead of {value, evidence} is kept when the value appears as whole words in
     ``text``, the post, which is then its quote, and left out otherwise, so one badly shaped field
     doesn't lose the others. A bare age is always left out: a number alone isn't evidence of an age
-    ("ill for 17 months"). Only a reply that isn't a demographics object raises LLMParseError."""
-    result = parse_json_object(raw)
-    if result.keys().isdisjoint(CLAIM_FIELDS):
-        raise LLMParseError("Expected a demographics JSON object")
+    ("ill for 17 months")."""
     claims = {}
     for field in CLAIM_FIELDS:
         item = result.get(field)
         if item is None:
             continue
         if not isinstance(item, dict):
-            bare = _words(item) if field != "age" else None
-            item = {"value": bare, "evidence": bare} if bare and _says(text, bare) else {}
+            bare = _bare(item, text) if field != "age" else None
+            item = {"value": bare, "evidence": bare} if bare else {}
             if not item:
                 log.info("Dropping a %s claim not in {value, evidence} form", field)
         value, evidence = _claim_value(field, item.get("value")), item.get("evidence")
@@ -166,43 +197,65 @@ def parse_claims(raw: str, text: str = "") -> dict[str, tuple[str, str]]:
     return claims
 
 
+def canonical_condition(name: str) -> str:
+    """One name for a condition written several ways ("LC", "Long-COVID" -> "long covid"); others in lower case."""
+    plain = re.sub(r"\s+", " ", name.strip().casefold().replace("’", "'")).removesuffix(".")
+    plain = _SINGULAR.get(plain, plain)
+    return _CONDITIONS.get(plain, plain)
+
+
+def parse_conditions(result: dict, text: str = "") -> list[tuple[str, str, str | None, str]] | None:
+    """[(name, "illness" | "symptom", severity or None, evidence)] from a per-post reply, one per
+    condition. An entry needs a name and a quote; a bare name is kept only when the post says it
+    as whole words. A condition listed twice keeps the entry that states a severity. None when the
+    list is missing or isn't a list: unlike [], that says nothing about the post, so a reread keeps
+    what an earlier read found."""
+    entries = result.get("conditions")
+    if not isinstance(entries, list):
+        log.info("No conditions list in the reply; keeping the post's earlier conditions")
+        return None
+    parsed = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            # Case counts for a bare name: "ME" and "POTS" aren't "help me" or "pots and pans".
+            bare = _bare(entry, text, ignore_case=False) if isinstance(entry, str) else None
+            entry = {"name": bare, "evidence": bare} if bare else {}
+        name, evidence = entry.get("name"), entry.get("evidence")
+        name = _words(name) if isinstance(name, str) else None
+        if not name or not isinstance(evidence, str) or not evidence.strip():
+            continue
+        kind = str(entry.get("type") or "").strip().lower()
+        stated = str(entry.get("severity") or "").lower()
+        severity = None if NEGATION.search(stated) else next(
+            (s for s in SEVERITIES if re.search(rf"\b{s}\b", stated)), None)
+        name = canonical_condition(name)
+        observation = (name, kind if kind in ("illness", "symptom") else "illness",
+                       severity, evidence.strip())
+        if name not in parsed or (parsed[name][2] is None and observation[2]):  # keep a stated severity
+            parsed[name] = observation
+    return list(parsed.values())
+
+
+def parse_post(raw: str, text: str = "") -> tuple[dict, list | None]:
+    """(claims, conditions) from a per-post reply. Only a reply that isn't one of these objects
+    raises LLMParseError."""
+    result = parse_json_object(raw)
+    if result.keys().isdisjoint((*CLAIM_FIELDS, "conditions")):
+        raise LLMParseError("Expected a demographics JSON object")
+    return parse_claims(result, text), parse_conditions(result, text)
+
+
 BLOCKED = object()  # a read's result when the content filter blocks the call
 
 
-def read_post(client, text: str) -> dict[str, tuple[str, str]] | object:
+def read_post(client, text: str) -> tuple[dict, list | None] | object:
     try:
-        return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), lambda raw: parse_claims(raw, text))
+        return _ask(client, POST_DEMOGRAPHICS_PROMPT + wrap_untrusted_text(text), lambda raw: parse_post(raw, text))
     except LLMContentFilteredError:
         # The filter blocks the same post every time, so retrying would leave it unread, and its
-        # author's profile frozen, for good. It is recorded as read, keeping its earlier claims.
-        log.warning("Content filter blocked a post; recording it as read and keeping its earlier claims")
+        # author's profile frozen, for good. It is recorded as read, keeping what an earlier read found.
+        log.warning("Content filter blocked a post; recording it as read and keeping what an earlier read found")
         return BLOCKED
-
-
-# ── Per-user conditions ──────────────────────────────────────────────────────
-
-def _condition_name(condition: object) -> str:
-    name = condition.get("condition_name") if isinstance(condition, dict) else condition
-    return name.strip() if isinstance(name, str) else ""
-
-
-def parse_conditions(raw: str) -> list[tuple[str, str]]:
-    """[(name, "illness" | "symptom")] from a conditions reply."""
-    conditions = parse_json_object(raw).get("conditions")
-    if conditions is None:
-        return []
-    if not isinstance(conditions, list):
-        raise LLMParseError("Expected a list of conditions")
-    parsed = []
-    for condition in filter(_condition_name, conditions):  # an entry without a name is dropped, as on main
-        kind = condition.get("condition_type") if isinstance(condition, dict) else None
-        kind = kind.strip().lower() if isinstance(kind, str) else None
-        parsed.append((_condition_name(condition).lower(), kind if kind in ("illness", "symptom") else "illness"))
-    return parsed
-
-
-def read_conditions(client, text: str) -> list[tuple[str, str]]:
-    return _ask(client, CONDITIONS_PROMPT + wrap_untrusted_text(text), parse_conditions)
 
 
 # ── Running ──────────────────────────────────────────────────────────────────
@@ -253,10 +306,17 @@ def _plan(conn, since: int, limit: int) -> dict:
         f"{UNREAD_POSTS} GROUP BY p.user_id ORDER BY p.user_id", (DELETED_USER_ID, since)).fetchall()
     users = users[:limit or None]
     posts, chars = sum(n for n, _ in users), sum(c or 0 for _, c in users)
-    tokens = (chars + posts * len(POST_DEMOGRAPHICS_PROMPT)
-              + len(users) * (len(CONDITIONS_PROMPT) + MAX_USER_CHARS)) // 4
-    return {"posts": posts, "users": len(users), "post_calls": posts, "conditions_calls": len(users),
-            "approx_input_tokens": tokens}
+    tokens = (chars + posts * len(POST_DEMOGRAPHICS_PROMPT)) // 4
+    return {"posts": posts, "users": len(users), "post_calls": posts, "approx_input_tokens": tokens}
+
+
+# Posts whose newest demographics read is from before conditions were read per post (#220), so
+# conditions_latest has nothing from them until a --reread.
+READ_WITHOUT_CONDITIONS = (
+    "SELECT COUNT(*) FROM (SELECT pr.post_id, MAX(pr.run_id) AS run_id FROM post_runs pr "
+    "  JOIN extraction_runs r ON r.run_id = pr.run_id WHERE r.extraction_type = 'demographics' "
+    "  GROUP BY pr.post_id) newest JOIN extraction_runs r ON r.run_id = newest.run_id "
+    "WHERE NOT IFNULL(json_extract(r.config, '$.reads_conditions'), 0)")
 
 
 # Posts no demographics run has read since the checkpoint run.
@@ -274,13 +334,24 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
         (DELETED_USER_ID, since))
     read_users = []
 
-    def record(post_id: str, claims: dict) -> None:
+    def record(user_id: str, post_id: str, claims: dict, conditions: list) -> None:
         conn.execute("INSERT INTO post_runs (run_id, post_id) VALUES (?, ?)", (run_id, post_id))
         conn.executemany(
             "INSERT INTO demographic_claims (run_id, post_id, field, value, evidence) VALUES (?, ?, ?, ?, ?)",
             [(run_id, post_id, field, value, evidence) for field, (value, evidence) in claims.items()])
+        conn.executemany(
+            "INSERT INTO conditions (run_id, user_id, post_id, condition_name, condition_type, severity, evidence)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)", [(run_id, user_id, post_id, *c) for c in conditions])
         counts["posts_read"] += 1
         counts["claims"] += len(claims)
+        counts["conditions"] += len(conditions)
+
+    def earlier(post_id: str) -> tuple[dict, list]:
+        """The claims and conditions the post's newest earlier read found."""
+        claims = conn.execute("SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
+        conditions = conn.execute("SELECT condition_name, condition_type, severity, evidence FROM condition_observations "
+                                  "WHERE post_id = ?", (post_id,)).fetchall()
+        return {field: (value, evidence) for field, value, evidence in claims}, conditions
 
     def jobs():  # consumed on this thread by _in_parallel, so record() may write here
         for user_id, posts in islice(groupby(rows, key=itemgetter(0)), limit or None):
@@ -289,20 +360,20 @@ def _read_posts(client, conn, reader, run_id: int, since: int, limit: int, count
                 if text := _post_text(title, body):
                     yield (user_id, post_id), text
                 else:
-                    record(post_id, {})  # nothing to read: recorded as read without a model call
+                    record(user_id, post_id, {}, [])  # nothing to read: recorded as read without a model call
 
-    for n, ((user_id, post_id), claims) in enumerate(_in_parallel(client, jobs(), read_post), start=1):
-        if claims is None:
+    for n, ((user_id, post_id), reply) in enumerate(_in_parallel(client, jobs(), read_post), start=1):
+        if reply is None:
             counts["posts_failed"] += 1
-        elif claims is BLOCKED:
+        elif reply is BLOCKED:
             # A block says nothing about what the post states, so what an earlier read found still
-            # stands: its claims are carried forward under this run (none on a first read).
-            earlier = conn.execute(
-                "SELECT field, value, evidence FROM demographic_claims_latest WHERE post_id = ?", (post_id,))
-            record(post_id, {field: (value, evidence) for field, value, evidence in earlier})
+            # stands: its claims and conditions are carried forward under this run (none on a first read).
+            record(user_id, post_id, *earlier(post_id))
             counts["posts_blocked"] += 1
         else:
-            record(post_id, claims)
+            claims, conditions = reply
+            # No conditions list says nothing about the post either: keep its earlier conditions.
+            record(user_id, post_id, claims, earlier(post_id)[1] if conditions is None else conditions)
         if n % COMMIT_EVERY == 0:
             conn.commit()
             log.info("Read %d posts (%d failed)", counts["posts_read"], counts["posts_failed"])
@@ -315,34 +386,9 @@ def _users_with_unread_posts(conn, since: int) -> set[str]:
     return {u for (u,) in conn.execute(f"SELECT DISTINCT p.user_id {UNREAD_POSTS}", (DELETED_USER_ID, since))}
 
 
-def _read_conditions(client, conn, reader, run_id: int, users: set[str], counts: dict) -> None:
-    """One conditions call per user in ``users``, over their newest posts up to MAX_USER_CHARS. A failed
-    call writes nothing for that user, and nothing schedules it again: the next call for that user
-    comes when a run reads one of their posts. Commits every COMMIT_EVERY users, so the write lock isn't
-    held for the whole pass."""
-    histories = (
-        (user_id, _combine_posts(t for _, title, body in posts if (t := _post_text(title, body))))
-        for user_id, posts in groupby(reader.execute(
-            "SELECT user_id, title, body_text FROM posts WHERE user_id != ? "
-            "ORDER BY user_id, post_date DESC, post_id", (DELETED_USER_ID,)), key=itemgetter(0))
-        if user_id in users)
-    jobs = ((u, t) for u, t in histories if t)
-    for n, (user_id, conditions) in enumerate(_in_parallel(client, jobs, read_conditions), start=1):
-        if conditions is None:
-            counts["conditions_failed"] += 1
-        else:
-            conn.executemany(
-                "INSERT INTO conditions (run_id, user_id, condition_name, condition_type) VALUES (?, ?, ?, ?)",
-                [(run_id, user_id, name, kind) for name, kind in conditions])
-            counts["conditions"] += len(conditions)
-        if n % COMMIT_EVERY == 0:
-            conn.commit()
-    conn.commit()
-
-
 def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry_run: bool = False) -> dict:
-    """Read new posts (every post with ``reread``) into claims, extract conditions for the users read,
-    and resolve profiles. ``limit`` caps the number of users read. Returns the run's counts, or with
+    """Read new posts (every post with ``reread``) into claims and condition observations, and resolve
+    profiles. ``limit`` caps the number of users read. Returns the run's counts, or with
     ``dry_run`` only what it would send (_plan), with no model call and no run recorded."""
     if reread and limit:
         # A limited reread would become the newest reread checkpoint, so the next ordinary run would
@@ -360,6 +406,9 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
         if stopped and not reread:
             log.warning("The --reread in run %s stopped before finishing; this run reads only new and failed "
                         "posts. Run --reread again to reread every post.", stopped)
+        if not reread and (stale := conn.execute(READ_WITHOUT_CONDITIONS).fetchone()[0]):
+            log.warning("%d posts were read before conditions were read per post, so conditions_latest has "
+                        "nothing from them. Run --reread to read them again.", stale)
         if dry_run:
             plan = _plan(conn, 1 << 62 if reread else since, limit)  # with --reread, every post is unread
             log.info("Dry run, nothing sent: %s", plan)
@@ -372,7 +421,8 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
             "model": MODEL_FAST,
             "limit": limit,
             "reread": reread,
-            "max_user_chars": MAX_USER_CHARS,
+            "max_reply_tokens": MAX_REPLY_TOKENS,
+            "reads_conditions": True,
             "temperatures": TEMPERATURES,
             "workers": MAX_IN_FLIGHT,
         }, commit_hash=get_git_commit())
@@ -380,11 +430,9 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
             since = run_id
         log.info("Extraction run %s%s: %s", run_id, " (rereading every post)" if reread else "",
                  _plan(conn, since, limit))
-        counts = {"posts_read": 0, "posts_failed": 0, "posts_blocked": 0, "claims": 0, "conditions": 0,
-                  "conditions_failed": 0}
+        counts = {"posts_read": 0, "posts_failed": 0, "posts_blocked": 0, "claims": 0, "conditions": 0}
 
         read_users = _read_posts(client, conn, reader, run_id, since, limit, counts)
-        _read_conditions(client, conn, reader, run_id, set(read_users), counts)
         # Resolution recomputes from all claims, so it also finishes a run that stopped before here.
         # Users with unread posts keep their previous profile until all their posts are read.
         failed_users = _users_with_unread_posts(conn, since)
@@ -400,7 +448,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract demographics one post at a time, and conditions per user, from a corpus database."
+        description="Extract demographics and conditions one post at a time from a corpus database."
     )
     parser.add_argument("--db", required=True, type=Path, help="Path to the corpus SQLite database")
     parser.add_argument("--limit", type=int, default=0, help="Read the posts of at most N users (0 = all)")

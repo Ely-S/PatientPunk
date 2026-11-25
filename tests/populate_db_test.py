@@ -39,7 +39,7 @@ from utilities import PipelineConfig
 def _stub_response(messages, system):
     prompt = messages[0]["content"] if messages else ""
 
-    # Demographics, one post at a time (POST_DEMOGRAPHICS_PROMPT). Route by post body so user "b"
+    # Demographics and conditions, one post at a time (POST_DEMOGRAPHICS_PROMPT). Route by post body so user "b"
     # (who posts "I love it so much!!!") gets a populated profile, exercising the non-null path.
     if "Below is one Reddit post or comment" in prompt:
         if "I love it so much" in prompt:
@@ -49,14 +49,10 @@ def _stub_response(messages, system):
                 "country": {"value": "US", "evidence": "US"},
                 "state": {"value": "Texas", "evidence": "Texas"},
                 "city": None,
+                "conditions": [{"name": "fibromyalgia", "type": "illness", "evidence": "fibro"}],
             })
-        return json.dumps({"age": None, "sex": None, "country": None, "state": None, "city": None})
-
-    # Conditions, one call per user (CONDITIONS_PROMPT).
-    if "Given these Reddit posts by a single user" in prompt:
-        if "I love it so much" in prompt:
-            return json.dumps({"conditions": [{"condition_name": "fibromyalgia", "condition_type": "illness"}]})
-        return json.dumps({"conditions": []})
+        return json.dumps({"age": None, "sex": None, "country": None, "state": None, "city": None,
+                           "conditions": []})
 
     # Canonicalize: "identify true synonyms" is in CANONICALIZE_COMPOUND_PROMPT.
     if "identify true synonyms" in prompt:
