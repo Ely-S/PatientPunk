@@ -95,7 +95,7 @@
   },
   "long_post": {
     "n": 0, "fields": ["age"], "why": "a claim near the end of a long post still counts; synthetic only (n 0) until real items are curated",
-    "pattern": "(?s)^.{4000,}$"
+    "pattern": "\\A[\\s\\S]{4000}"
   },
   "implied_age": {
     "n": 0, "fields": ["age"], "why": "an age implied but not stated (birth year, school year) is no claim; synthetic only (n 0) until real items are curated",
