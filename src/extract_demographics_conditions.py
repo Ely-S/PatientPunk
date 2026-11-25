@@ -29,6 +29,7 @@ from prompts.demographic_prompt import POST_DEMOGRAPHICS_PROMPT
 from resolve_demographics import resolve_profiles, stated_age
 from utilities import (
     LLM_PROVIDER,
+    LLM_PROVIDER_ORDER,
     LLM_REASONING_MODE,
     MODEL_FAST,
     LLMParseError,
@@ -384,6 +385,7 @@ def run_demographics(db_path: Path, *, limit: int = 0, reread: bool = False, dry
         client = get_client()
         run_id = register_run(conn, "demographics", {
             "provider": LLM_PROVIDER,
+            "provider_order": LLM_PROVIDER_ORDER,
             "reasoning_mode": LLM_REASONING_MODE,
             "git_dirty": git_is_dirty(),
             "model": MODEL_FAST,

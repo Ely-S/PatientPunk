@@ -165,6 +165,11 @@ def git_is_dirty() -> bool | None:
 _REASONING_OFF = os.environ.get("LLM_REASONING", "").strip().lower() not in ("1", "true", "yes")
 # Only OpenRouter's reasoning is controlled here; other providers are "not_applicable".
 LLM_REASONING_MODE = "not_applicable" if LLM_PROVIDER != "openrouter" else "disabled" if _REASONING_OFF else "provider_default"
+# OpenRouter serves a model from many upstream providers, at different precisions, and by default
+# picks one per request, so the same prompt can get different answers. LLM_PROVIDER_ORDER=together
+# (comma-separated) sends every request to those providers only; a run stops rather than fall back.
+LLM_PROVIDER_ORDER = ([p.strip() for p in os.environ.get("LLM_PROVIDER_ORDER", "").split(",") if p.strip()]
+                      if LLM_PROVIDER == "openrouter" else [])
 
 
 class _ORStream:
@@ -220,6 +225,8 @@ class _ORMessages:
         body = dict(extra_body or {})
         if _REASONING_OFF:
             body.setdefault("reasoning", {"effort": "none"})
+        if LLM_PROVIDER_ORDER:
+            body.setdefault("provider", {"order": LLM_PROVIDER_ORDER, "allow_fallbacks": False})
         return _ORStream(self._client, model=model, messages=oai,
                          max_tokens=max_tokens, temperature=temperature,
                          extra_body=body)
@@ -255,7 +262,8 @@ def get_client() -> anthropic.Anthropic:
         )
 
     log.info(f"LLM provider: {LLM_PROVIDER} | fast: {MODEL_FAST} | strong: {MODEL_STRONG}"
-             + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else ""))
+             + (" | reasoning: off" if LLM_PROVIDER == "openrouter" and _REASONING_OFF else "")
+             + (f" | upstream: {', '.join(LLM_PROVIDER_ORDER)}" if LLM_PROVIDER_ORDER else ""))
 
     if LLM_PROVIDER == "openrouter":
         # Deliberately the OpenAI surface by defult so we have access to reasoning settings

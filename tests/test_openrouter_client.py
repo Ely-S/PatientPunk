@@ -38,6 +38,7 @@ def test_openrouter_adapter_contract(monkeypatch):
         )]),
     ])
     monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", [])
     client = utilities._ORClient(backend)
 
     with client.messages.stream(
@@ -61,6 +62,20 @@ def test_openrouter_adapter_contract(monkeypatch):
     )
     assert message.content[0].text == "ok"
     assert message.stop_reason == "max_tokens"
+
+
+def test_a_pinned_upstream_provider_is_sent_without_fallback(monkeypatch):
+    backend = Mock()
+    backend.chat.completions.create.return_value = iter([
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"), finish_reason="stop")])])
+    monkeypatch.setattr(utilities, "_REASONING_OFF", True)
+    monkeypatch.setattr(utilities, "LLM_PROVIDER_ORDER", ["together"])
+
+    with utilities._ORClient(backend).messages.stream(model="m", messages=[{"role": "user", "content": "hi"}]) as s:
+        s.get_final_message()
+
+    assert backend.chat.completions.create.call_args.kwargs["extra_body"] == {
+        "reasoning": {"effort": "none"}, "provider": {"order": ["together"], "allow_fallbacks": False}}
 
 
 @pytest.mark.parametrize(
