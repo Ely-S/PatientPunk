@@ -15,7 +15,7 @@
 <section>
   <span class="eyebrow">Methodology and data · v0.3.1</span>
   <h1>Why these six questions</h1>
-  <p>The corpus contains 243,289 posts and 3,602,691 comments from 15 Long COVID and ME/CFS communities on Reddit (2009–June 2026). The study used full-text searches and AI coding to identify candidate questions. The coverage exercise evaluated v0.2. Baseline Check v0.3.1 is a research draft awaiting patient validation. See the <a href="#code">study code and inputs</a>.</p>
+  <p>The corpus contains 243,289 posts and 3,602,691 comments from 15 Long COVID and ME/CFS communities on Reddit (2009–June 2026). The study used full-text searches and AI coding to identify candidate questions. Weekly Check v0.3.1 is a research draft awaiting patient validation. The coverage exercise assessed an earlier version, v0.2. See the <a href="#code">study code and inputs</a>.</p>
 </section>
 
 <section id="scoring">
@@ -27,7 +27,7 @@
     <li><b>Candidate trial endpoint.</b> The proposed win ratio compares changes in four-week averages for each treated–control pair. A difference of at least 1 crash day per week on Q1 decides the pair. Below that margin, the change in Q2 activities (0–23) decides it. This gives crash days priority at or above the provisional margin and allows an activity gain to decide a pair when the crash-day difference is smaller.</li>
     <li><b>Responder definition for clinicians:</b> a patient counts as improved if their Q2 count rises by 2 or more and their crash days do not rise by 1 or more a week (4-week averages). Both thresholds are provisional until the minimal important difference has been measured.</li>
     <li><b>Report the 4 Q2 group scores too</b> (at home 0–4, daily basics 0–6, getting out 0–6, full days 0–7). They show where on the severity range a change happened. A trial in mild-to-moderate patients could pre-specify the top two groups (13 items) as its primary; that cut is a proposal to test, not a validated threshold.</li>
-    <li><b>Q2 counts only activities done at least 2 days before the check,</b> because crashes often start one to three days later. That leaves the same 5 days of each week, so changes stay comparable.</li>
+    <li><b>Q2 counts only activities done at least 2 days before the check,</b> to give delayed crashes time to appear. This leaves a five-day activity window. With a fixed check day, the same two weekdays can be missed each week.</li>
     <li><b>"None of these" is an answer (0); "All of these" ticks every item in its group; a blank group is missing data.</b> The score shows a dash for a group nobody answered, so a skipped group is never scored as zero.</li>
     <li><b>Q1 counts crash or flare days, whatever set them off.</b> The optional "What seemed to cause them?" list is descriptive and not scored; analysts can separately count weeks whose crashes were set off by doing something (physical activity, mental effort, emotional stress or sensory overload).</li>
     <li><b>"No earlier check" on Q5 is recorded as missing.</b> It is the expected answer in the first week.</li>
@@ -37,7 +37,14 @@
 </section>
 
 <section id="evidence">
-  <h2>What the data shows</h2>
+  <h2>Supporting data</h2>
+  <p>We searched Long COVID and ME/CFS forums for the words people use to describe changes in their health. AI reviewers examined selected posts to see which changes mattered and which an early draft of the questionnaire would miss. These findings shaped Weekly Check. The current questions still need to be tested with patients.</p>
+  <ul>
+    <li><b>Crash days (Q1).</b> A crash can start after the day that triggered it. The check asks how many days people spent in a crash or flare, whatever set it off. <a href="#delay">Crash-delay search</a></li>
+    <li><b>Activities (Q2).</b> The checklist asks what people did without a later crash. The v0.2 review showed that the checklist needed more basic activities. <a href="#activities">Activity analysis</a></li>
+    <li><b>Symptoms (Q3).</b> Reviewers expected the symptom question to pick up some changes the crash and activity questions would miss. <a href="#coverage">Coverage exercise</a></li>
+    <li><b>Feeling like yourself (Q4).</b> People sometimes described their health as a percentage of how they felt before getting sick. Many ratings clustered near the top of the scale, and some varied across posts by the same person. We made the question optional. <a href="#self-ratings">Self-rating analysis</a></li>
+  </ul>
 
   <h3 id="vocabulary">Words used in the forums</h3>
   <div class="tablewrap"><table>
@@ -54,10 +61,10 @@
     <tr><td>DePaul symptom questionnaire</td><td class="num">79</td></tr>
     <tr><td>PROMIS</td><td class="num">27</td></tr>
   </table></div>
-  <p>These are search hits in 3,845,980 posts and comments. FUNCAP and the Bell scale had the most matches among the instrument names searched. Study source <code>v02_analysis/fts_counts.py</code>. <a href="https://pubmed.ncbi.nlm.nih.gov/38930014/">FUNCAP development study</a>.</p>
+  <p>The counts show how many of the 3,845,980 posts and comments matched each search. The same person can appear more than once. The counts tell us how often questionnaires were mentioned. They leave open how often people used them. Study source <code>v02_analysis/fts_counts.py</code>. <a href="https://pubmed.ncbi.nlm.nih.gov/38930014/">FUNCAP development study</a>.</p>
 
-  <h3 id="priorities">What AI coders judged most important in posts about change</h3>
-  <p>Three Claude Sonnet coders divided 242 first-person change narratives from the improvement- and worsening-title samples. Each post contributes one rating, with 20 posts also rated by a second coder. Study source <code>v03_rechecks/b_matters/analyze.py</code>.</p>
+  <h3 id="priorities">The main changes AI reviewers identified</h3>
+  <p>Three Claude Sonnet reviewers read 242 first-person accounts drawn from posts whose titles suggested improvement or worsening. They picked the change that seemed most important in each account. The chart counts each post once. A second reviewer also rated 20 posts to check agreement. Study source <code>v03_rechecks/b_matters/analyze.py</code>.</p>
   <div class="bars">
     <div class="bar"><span>A specific symptom</span><span class="track"><span class="fill" style="width:43%"></span></span><span class="pct">43%</span></div>
     <div class="bar"><span>Where things are heading: steady decline, relapse, fear it won't end</span><span class="track"><span class="fill" style="width:23%"></span></span><span class="pct">23%</span></div>
@@ -67,12 +74,12 @@
     <div class="bar"><span>Unclear</span><span class="track"><span class="fill" style="width:5%"></span></span><span class="pct">5%</span></div>
     <div class="bar"><span>Symptom and activity together</span><span class="track"><span class="fill" style="width:2%"></span></span><span class="pct">2%</span></div>
   </div>
-  <p>Coders agreed on 12 of 20 double-coded posts (60%, kappa 0.46). A broader description of feeling normal, recovered or like oneself appeared in 72 of 242 posts (30%). An earlier keyword-based estimate of the global category was withdrawn. Study sources <code>v03_rechecks/b_matters/analyze.py</code> and <code>v02_analysis/review_checks.py</code>.</p>
-  <p>In the same 242 posts, coders identified symptoms in 239 (99%), activity in 141 (58%), the cost of activity in 81 (33%), crashes in 77 (32%), and fluctuation in 76 (31%). They flagged 41 of 242 (17%) for symptoms that stayed lower or stable with less activity, or worsened with more activity. That trade-off motivates measuring both symptoms and activity. Study sources <code>v02_analysis/analyze_coded.py</code> and the coding prompt in <code>v02_analysis/code_llm.py</code>.</p>
+  <p>Reviewers most often chose a specific symptom (43%). They agreed on 12 of the 20 posts they both read (60%, kappa 0.46). Feeling normal, recovered or like oneself came up in 72 of 242 posts (30%), even though reviewers chose it as the main change in only 10%. We withdrew an earlier estimate based on keywords. Study sources <code>v03_rechecks/b_matters/analyze.py</code> and <code>v02_analysis/review_checks.py</code>.</p>
+  <p>People often described several changes in one post. Across the same 242 posts, reviewers found mentions of symptoms in 239 (99%), activity in 141 (58%), the effects of doing an activity in 81 (33%), crashes in 77 (32%), and fluctuations in 76 (31%). In 41 posts (17%), symptoms eased or held steady when people did less, or worsened when they did more. That is why the check asks about both symptoms and activity. Study sources <code>v02_analysis/analyze_coded.py</code> and the coding prompt in <code>v02_analysis/code_llm.py</code>.</p>
 
   <h3 id="delay">Reported delays before crashes</h3>
   <div class="tablewrap"><table>
-    <tr><th>Stated delay before a crash or flare</th><th class="num">Posts + comments</th></tr>
+    <tr><th>Timing mentioned near a crash or flare</th><th class="num">Posts + comments</th></tr>
     <tr><td>The next day / the day after</td><td class="num">~3,500</td></tr>
     <tr><td>A range, e.g. 24–72 hours or 1–3 days</td><td class="num">855</td></tr>
     <tr><td>2 days / 48 hours</td><td class="num">691</td></tr>
@@ -82,13 +89,13 @@
     <tr><td>3 days / 72 hours</td><td class="num">191</td></tr>
     <tr><td>4 days or more</td><td class="num">156</td></tr>
   </table></div>
-  <p>The search found 6,125 matching texts across 3,845,980 posts and comments. Counts are per delay bin, so one text can contribute to multiple rows. In a sample drawn from the first 400 matches in each bin, 40 of 52 (77%) described a trigger-to-crash delay, including 23 of 28 (82%) in the next-day bin. Some matches described crash duration. Study sources <code>v03_rechecks/d_checks/delay.py</code> and <code>v03_rechecks/d_checks/RESULTS.md</code>.</p>
-  <p>The next-day bin was the most frequent search match. Q1 counts crash days regardless of when the trigger occurred. Q2 uses a two-day cutoff. Longer delays can still fall outside that window.</p>
+  <p>Of 3,845,980 posts and comments, 6,125 matched the timing search. A post can appear in more than one row. We checked 52 excerpts drawn from the first 400 matches in each timing category. Forty described how long it took a crash to start, including 23 of 28 next-day matches and 2 of 6 two-day matches. Some excerpts described how long a crash lasted. Study sources <code>v03_rechecks/d_checks/delay.py</code> and <code>v03_rechecks/d_checks/RESULTS.md</code>.</p>
+  <p>Next-day wording came up most often. The search can’t tell us what share of crashes start within two days. To find out how much worsening the quiz’s two-day cutoff misses, we plan to compare weekly answers with daily diaries.</p>
 
   <h3 id="activities">Activities and their cost</h3>
-  <p>A pattern search for activities done without a crash or PEM returned 6,140 phrase matches across 3,845,980 posts and comments. This is a count of phrase matches. Study source <code>v02_analysis/patterns.py</code>.</p>
-  <p>Among authors with an extracted activity statement and a single severity tier, the severe group (5,753 authors) mentioned inability to sit up 5.0× as often as the mild or mostly functional group (2,782 authors). The corresponding mention ratios were 2.6× for leaving the house, 2.4× for reading, and 2.1× for watching TV. Study source <code>v02_analysis/milestones.py</code>.</p>
-  <p>Average severity among authors who mentioned being unable to do each activity broadly separated daily basics from work and exercise. Many nearby activities had overlapping confidence intervals. Q2 uses a checklist covering physical and cognitive activities. Study source <code>v02_analysis/ladder_ci.py</code>.</p>
+  <p>We found 6,140 phrases about doing an activity without a crash or post-exertional malaise (PEM) across 3,845,980 posts and comments. Q2 asks which activities people did without a crash afterwards. The score also depends on what people had the chance to do and chose to try. Study source <code>v02_analysis/patterns.py</code>.</p>
+  <p>We compared authors whose posts mentioned an activity and who had a single severity rating. Authors in the severe group (5,753) were 5.0 times as likely as those in the mild or mostly functional group (2,782) to write that they could not sit up. The corresponding ratios were 2.6 for leaving the house, 2.4 for reading, and 2.1 for watching TV. Study source <code>v02_analysis/milestones.py</code>.</p>
+  <p>Average severity differed more between broad groups of activities, such as daily basics and work or exercise, than between individual activities with similar estimates. Many confidence intervals overlapped. We used a checklist spanning physical and cognitive activities so people can tick what they did without having to fit into a single level. Study source <code>v02_analysis/ladder_ci.py</code>.</p>
   <div class="tablewrap"><table>
     <tr><th>Activity patients say they can't do</th><th class="num">Authors per activity</th><th class="num">Mean severity (1 bedbound – 6 mostly functional)</th><th class="num">95% CI</th></tr>
     <tr><td>Shower, sit up, leave the house, cook</td><td class="num">200–331</td><td class="num">2.72–2.81</td><td class="num">±0.15–0.19</td></tr>
@@ -101,7 +108,7 @@
   </table></div>
 
   <h3>Activity duration and intensity</h3>
-  <p>The upper Q2 groups capture how long or intensely an activity was done. The examples below summarise themes from the <code>milestones</code> field in the AI coding of 450 posts, focusing on descriptions of milder illness or recovery. Study sources <code>v02_analysis/code_llm.py</code> and <code>v02_analysis/milestones.py</code>.</p>
+  <p>The more demanding Q2 groups ask about sustained activity, such as walking for 45 minutes or working a full day. The examples below come from the <code>milestones</code> field in 450 AI-reviewed posts, with a focus on milder illness and recovery. Study sources <code>v02_analysis/code_llm.py</code> and <code>v02_analysis/milestones.py</code>.</p>
   <div class="tablewrap"><table>
     <tr><th>Theme</th><th>What changed</th><th>Q2 item</th></tr>
     <tr><td>Work</td><td>Hours worked, stamina across a full day, returning to regular duties</td><td>Half day · full day · usual tasks</td></tr>
@@ -110,17 +117,18 @@
     <tr><td>Walking</td><td>Walking duration, distance and step count</td><td>Walk 15 min · walk 45+ min</td></tr>
     <tr><td>Exercise</td><td>Frequency and intensity of exercise tolerated</td><td>Light exercise · as active as before</td></tr>
   </table></div>
-  <p>Among authors with an extracted activity statement, 42 of 2,782 in the mild or mostly functional group mentioned being able to work full time, as did 32 of 5,753 in the severe group. Being able to work part time appeared in 38 of 4,156 moderate authors, 23 of 5,753 severe authors, and 8 of 2,782 mild or mostly functional authors. Severity tiers combine posts across time. Study source <code>v02_analysis/milestones.py</code>.</p>
-  <p>Coders identified cognitive changes in 73 of 242 change narratives (30%) and upright or orthostatic changes in 26 of 242 (11%). These findings motivated the focused mental work and standing items in v0.2. Study source <code>v02_analysis/analyze_coded.py</code>.</p>
-  <p>The v0.2 coverage notes identified changes in basic activities below the original checklist's lowest item, sitting up for most of the day. The four At home items were added in v0.3 to test whether the check can register changes at that level. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
+  <p>Among authors with an extracted activity statement, 42 of 2,782 in the mild or mostly functional group mentioned being able to work full time, as did 32 of 5,753 in the severe group. Part-time work came up as something people could do in posts by 38 of 4,156 moderate authors, 23 of 5,753 severe authors, and 8 of 2,782 mild or mostly functional authors. Severity ratings draw on posts from different points in time. Study source <code>v02_analysis/milestones.py</code>.</p>
+  <p>Changes in thinking or concentration came up in 73 of 242 accounts (30%). Changes related to being upright came up in 26 (11%). We used those findings to add questions about sustained mental work and standing to v0.2. Study source <code>v02_analysis/analyze_coded.py</code>.</p>
+  <p>In v0.2, the least demanding item was sitting up for most of the day. Reviewers saw changes in more basic tasks that the checklist would miss. We added four At home items in v0.3 to see whether the quiz could pick up those changes. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
 
-  <h3 id="self-ratings">Percent-of-pre-illness self-ratings</h3>
-  <p>The self-rating pattern matched 339 of 5,062 posts in the recovery or improvement frame (6.7%) and 105 of 20,000 in the comparison frame (0.5%). In a separate sample of 150 candidate matches, AI coders found a current self-rating in 93 (62%). Study sources <code>v02_analysis/domains_v2.py</code> and <code>v02_analysis/analyze_coded.py</code>.</p>
-  <p>Among 5,919 pattern-extracted ratings from 3,099 authors, 55% were at least 90%. Across 764 successive same-author pairs 0.5–14 days apart, the correlation was 0.63, 51% of pairs had identical values, and the standard deviation of the differences was 15.5 points. This describes variation in forum ratings, which reflects both changes in health and measurement error. Study source <code>v02_analysis/longit.py</code>.</p>
-  <p>Q4 is optional and anchored to life before illness. Q5 compares with the last check.</p>
+  <h3 id="self-ratings">How close people felt to their pre-illness selves</h3>
+  <p>We searched for phrases that put current health at a percentage of how the person felt before illness. The search matched 339 of 5,062 posts in the recovery or improvement sample (6.7%) and 105 of 20,000 in the comparison sample (0.5%). In a separate check of 150 matches, AI reviewers found that 93 (62%) described the author’s current health. Study sources <code>v02_analysis/domains_v2.py</code> and <code>v02_analysis/analyze_coded.py</code>.</p>
+  <p>The search found 5,919 candidate ratings from 3,099 authors. Of those ratings, 55% were at least 90%. Among 764 pairs of consecutive ratings from the same person, posted 0.5–14 days apart, 51% matched exactly. The correlation was 0.63 and the standard deviation of the differences was 15.5 points. When we gave each of the 318 authors with a pair equal weight, about 47% matched exactly and 16% differed by at least 20 points.</p>
+  <p>Some people’s health may have changed between posts, and some matches may have picked up other uses of percentages. To measure how much Q4 varies on its own, we’ll need to ask patients twice about the same week and independently check that their health stayed stable between answers. Study sources <code>v02_analysis/longit.py</code> and <code>next_version/audit.py</code>.</p>
+  <p>Q4 asks how close people feel to their pre-illness selves. It is optional. Q5 asks how they’ve changed since the previous check.</p>
 
-  <h3 id="coverage">Coverage exercise for v0.2</h3>
-  <p>The designer AI reviewed 190 new posts, 95 in each severity stratum. Two fresh Sonnet coders then divided the 157 posts the designer had accepted and assessed them against the v0.2 questionnaire. They identified 114 first-person change narratives. Both sets of ratings below use those same 114 posts. Study sources <code>v03_rechecks/c_coverage/CODEBOOK.md</code> and <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
+  <h3 id="coverage">Which changes would v0.2 have picked up?</h3>
+  <p>The AI that designed the questionnaire screened 190 posts, split evenly between two severity groups based on keywords. Two other Sonnet reviewers divided the 157 posts it accepted. Without seeing its ratings, they identified 114 first-person accounts of change from 110 authors. Both sets of ratings below come from those same 114 accounts. The designer excluded 33 posts before the second review. Study sources <code>v03_rechecks/c_coverage/CODEBOOK.md</code> and <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
   <div class="tablewrap"><table>
     <tr><th>Rater</th><th class="num">Fully</th><th class="num">Partly</th><th class="num">Not at all</th></tr>
     <tr><td>Blind review (114)</td><td class="num">65 (57%)</td><td class="num">38 (33%)</td><td class="num">11 (10%)</td></tr>
@@ -128,14 +136,16 @@
     <tr><td>&nbsp;&nbsp;mild to moderate stratum (60)</td><td class="num">33 (55%)</td><td class="num">18 (30%)</td><td class="num">9 (15%)</td></tr>
     <tr><td>Designer review (114)</td><td class="num">79 (69%)</td><td class="num">32 (28%)</td><td class="num">3 (3%)</td></tr>
   </table></div>
-  <p>The reviews agreed on 73 of 114 posts (64%, kappa 0.29). Blind reviewers judged that Q3 helped register 100 of 114 changes (88%), Q5 91 (80%), Q4 65 (57%), Q2 63 (55%) and Q1 57 (50%). More than one question could register a change. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
-  <p>Blind reviewers flagged these recurring gaps in their notes on the 114 narratives. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
+  <p>The blind reviewers judged that the questionnaire would fully capture the change in 57% of the accounts (95% interval 48&ndash;66%). The designer put that figure at 69% for the same accounts, a difference of 12.3 percentage points (95% interval 2.6&ndash;21.9). The intervals account for people who wrote more than one post and reflect variation across the selected accounts using the same reviewers. The two reviews agreed on 73 of 114 accounts (64%, kappa 0.29). Study sources <code>v03_rechecks/c_coverage/analyze.py</code> and <code>next_version/audit.py</code>.</p>
+  <p>The reviewers rated how much of each change the whole questionnaire might capture. They also marked each question they expected to pick up some aspect of the change. Out of 114 accounts, they marked Q3 in 100 (88%), Q5 in 91 (80%), Q4 in 65 (57%), Q2 in 63 (55%) and Q1 in 57 (50%).</p>
+  <p>In 22 accounts, reviewers marked the symptom question and left both the crash and activity questions unmarked. That included 17 of 60 accounts in the mild-to-moderate keyword group. This is one reason we’re keeping the symptom question for patient testing.</p>
+  <p>The blind reviewers’ notes show what the earlier draft could miss. Study source <code>v03_rechecks/c_coverage/analyze.py</code>.</p>
   <ul>
-    <li><b>Individual symptoms</b> can be obscured by one overall symptom score. Examples include changes in heart rate, breathing, pain, sleep, smell, and mental health.</li>
+    <li><b>Changes in individual symptoms.</b> One overall score can hide which symptom changed, whether it was heart rate, breathing, pain, sleep, smell, or mental health.</li>
     <li><b>Flares triggered by infection, treatment, or other non-exertional causes</b> fell outside the v0.2 crash question. The v0.3.1 question counts crash or flare days from any trigger.</li>
-    <li><b>Eleven of 114 changes were missed entirely.</b> These included isolated symptoms such as changes in smell and new neuropathy.</li>
+    <li><b>Changes that no question picked up.</b> Reviewers judged that v0.2 would miss 11 of 114 changes entirely, including isolated changes in smell and new neuropathy.</li>
   </ul>
-  <p>Among the 157 posts the designer accepted, the notes also flagged cases of activity followed by a crash and changes that unfolded beyond one week. Patient interviews will test whether to add an activity-with-cost response and a symptom-specific item. Study source <code>v02_analysis/coverage/analyze_cov.py</code>.</p>
+  <p>In the 157 posts it accepted, the designer also found cases where people crashed after an activity or described a change that took longer than a week. In patient interviews, we’ll test response options for people who did an activity and then crashed, skipped it for health reasons, or had no opportunity to do it. We’ll also test a question about one symptom the patient considers important. Study source <code>v02_analysis/coverage/analyze_cov.py</code>.</p>
 
   <h3 id="literature">What the trial literature adds</h3>
   <ul>
@@ -172,11 +182,12 @@
 
 <section id="validation">
   <h2>Validation plan</h2>
+  <p>The <a href="https://github.com/Ely-S/PatientPunk/blob/claude/baseline-check-scripts/studies/baseline_check/next_version/README.md">next-version design and validation plan</a> documents the audit, candidate wording and prospective comparisons.</p>
   <ul>
     <li><b>Concept check:</b> a dated, post-level extraction of change statements across the corpus, with human double-coding of 500 statements.</li>
-    <li><b>Patient interviews:</b> 20–30 patients across severity levels, including bedbound patients by voice or proxy, with patient-led organisations as partners. Test the coverage gaps: a three-way answer for each activity and an optional worst-symptom item.</li>
+    <li><b>Patient interviews:</b> 20–30 patients across severity levels, including bedbound patients by voice or proxy, with patient-led organisations as partners. Test the revised activity response options and a separate item for a symptom the patient names as important.</li>
     <li><b>Prospective cohort:</b> 300–500 patients, weekly for 12 weeks, alongside SF-36 physical function, FUNCAP27, the DePaul PEM questions and a step tracker subset. Measure reliability in stable weeks, responsiveness, minimal important change, and floor and ceiling effects. Compare how well Q2 and Q3 pick up change, and use the cohort to set the win-ratio margin and the responder thresholds.</li>
-    <li><b>Diary bridge:</b> compare the weekly crash-day count with a daily crash diary.</li>
+    <li><b>Diary bridge:</b> compare weekly crash days with daily entries and test five- and seven-day activity windows with 48- and 72-hour follow-up.</li>
     <li><b>Trial use:</b> run it as an exploratory endpoint in a live trial before proposing it as a primary.</li>
   </ul>
 </section>

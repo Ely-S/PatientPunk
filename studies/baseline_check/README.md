@@ -381,7 +381,7 @@ These append rows. Re-running them duplicates data:
 | `b_matters/chk0.py`, `chk1.py` | `batch_N.txt`, `coded_N.jsonl` | flags quotes not found verbatim or over 25 words |
 | `c_coverage/analyze.py OLD` | `blind_0..1.jsonl`, designer `coded.jsonl` | blind vs designer coverage, κ, per-question share, gaps |
 | `d_checks/delay.py DB` | corpus FTS | delay bins; `delay_precision_sample.json` for hand checking |
-| `a_instrument/t/test.js [DIR]` | Product pages in `docs/baseline_check/` by default | 17 jsdom checks covering form behaviour, scoring and local links |
+| `a_instrument/t/test.js [DIR]` | Product pages in `docs/baseline_check/` by default | 18 jsdom checks covering form behaviour, scoring and local links |
 
 ### Codebooks
 
