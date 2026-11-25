@@ -14,28 +14,28 @@
   },
   "past_age": {
     "n": 15, "fields": ["age"], "why": "ages at past events, recent ones included, go in others",
-    "pattern": "\\b(?:when i was|since i was|at age|at the age of)\\s+\\d{1,2}\\b|\\b(?:got sick|diagnosed|fell ill|got covid)\\b[^.?!\\n]{0,25}\\bat\\s+\\d{1,2}\\b"
+    "pattern": "\\b(?:when i was|since i was|at age|at the age of)\\s+\\d{1,2}\\b|\\b(?:got sick|diagnosed|fell ill|got covid)\\b[^.?!\\n]{0,25}\\bat\\s+\\d{1,2}\\b|\\b\\d{1,2}\\s+when\\s+i\\s+(?:got|was|fell|first)\\b|\\b(?:about|around)\\s+\\d{2}\\b(?!\\s*(?:mg|mcg|lbs?|kg|%|min|days?|weeks?|months?|years?))[^.?!\\n]{0,40}\\bthen\\b"
   },
   "bound_or_vague_age": {
     "n": 20, "fields": ["age"], "why": "bounds, comparisons and future ages are not claims",
-    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:over|under|almost|nearly|pushing|approaching|turning)\\s+\\d{2}\\b|\\bfeel(?:s|ing)?\\s+(?:like\\s+)?(?:i'?m\\s+)?(?:an?\\s+)?\\d{2}\\b|\\b(?:i'?ll be|i turn|turning)\\s+\\d{2}\\b"
+    "pattern": "\\b(?:i'?m|i am|im)\\s+(?:over|under|almost|nearly|pushing|approaching|turning)\\s+\\d{2}\\b|\\bfeel(?:s|ing)?\\s+(?:like\\s+)?(?:i'?m\\s+)?(?:an?\\s+)?\\d{2}\\b|\\b(?:i'?ll be|i turn|turning)\\s+\\d{2}\\b|\\(\\s*\\d{2}\\s+(?:on|next|in|this)\\b[^)]{0,30}\\)"
   },
   "other_person_age": {
-    "n": 5, "fields": ["age"], "why": "someone else's age beside the author's; other_person already has 75",
-    "pattern": "\\bmy\\s+(?:\\d{1,2}\\s*(?:yo|y/o|years?[\\s-]old|-year-old)\\s+)?(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)\\b[^.?!\\n]{0,40}?\\b\\d{1,2}\\b[^\\n]{0,200}\\b(?:i'?m|i am)\\s+\\d{2}\\b"
+    "n": 5, "fields": ["age", "sex"], "why": "someone else's age or sex beside the author's; other_person already has 75",
+    "pattern": "\\bmy\\s+(?:\\d{1,2}\\s*(?:yo|y/o|years?[\\s-]old|-year-old)\\s+)?(?:son|daughter|kid|child|wife|husband|mom|mum|mother|dad|father|partner|boyfriend|girlfriend|sister|brother)\\b[^.?!\\n]{0,40}?\\b\\d{1,2}\\b[^\\n]{0,200}\\b(?:i'?m|i am)\\s+\\d{2}\\b|\\bmy\\s+(?:son|daughter|kid|child|wife|husband|partner|mom|mum|mother|dad|father|sister|brother)\\s*\\(\\s*\\d{1,2}\\s*[mf]?\\s*\\)"
   },
   "decade_age": {
     "n": 10, "fields": ["age"], "why": "decades are claims; their midpoint and bucket",
-    "pattern": "\\b(?:in my|i'?m in my)\\s+(?:early|mid|late)?\\s*-?\\s*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b"
+    "pattern": "\\b(?:in my|i'?m in my)\\s+(?:early|mid|late)?\\s*-?\\s*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b|\\b(?:in my|i'?m|i am|im|aged?|female|male|woman|man|guy)[,\\s]+(?:in\\s+my\\s+)?(?:early|mid|late|low|high)[\\s-]*(?:twenties|thirties|forties|fifties|sixties|seventies|[2-8]0'?s)\\b"
   },
   "demonym_or_from": {
     "n": 15, "fields": ["country", "state", "city"], "why": "a demonym or 'I'm from X' alone is not residence",
-    "pattern": "\\b(?:i'?m|i am|as an?)\\s+(?:a\\s+)?(?:american|canadian|british|brit|australian|aussie|german|french|dutch|irish|scottish|swedish|norwegian|danish|indian|mexican|brazilian|italian|spanish|polish|english|kiwi|finnish|belgian|swiss|austrian)\\b|\\bi'?m (?:originally )?from\\b"
+    "pattern": "\\b(?:i'?m|i am|as an?)\\s+(?:a\\s+)?(?:american|canadian|british|brit|australian|aussie|german|french|dutch|irish|scottish|swedish|norwegian|danish|indian|mexican|brazilian|italian|spanish|polish|english|kiwi|finnish|belgian|swiss|austrian)\\b|\\bi'?m (?:originally )?from\\b|\\b(?:born|grew up|raised)\\s+(?:and raised\\s+)?in\\s+(?!(?:19|20)\\d{2})[a-z]"
   },
   "travel_or_treated": {
     "n": 10, "fields": ["country", "state", "city"], "why": "places visited or treated in go in others",
     "ignore_case": false,
-    "pattern": "\\b(?:flew|travel(?:l)?ed|went|drove|moved)\\s+to\\s+[A-Z][a-z]+|\\b(?:clinic|doctor|hospital|specialist)\\s+in\\s+[A-Z][a-z]+"
+    "pattern": "\\b(?:flew|travel(?:l)?ed|went|drove)\\s+to\\s+[A-Z][a-z]+|\\b(?:clinic|doctor|hospital|specialist)\\s+in\\s+[A-Z][a-z]+"
   },
   "city_ambiguous": {
     "n": 5, "fields": ["city", "state", "country"], "why": "a name that is a city, state or country (Georgia, Victoria, Birmingham)",
@@ -43,10 +43,94 @@
   },
   "condition_resolved": {
     "n": 15, "fields": ["conditions"], "severities": ["resolved"], "why": "#229: resolved, recovered and returning conditions", "conditions": true,
-    "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b"
+    "pattern": "\\b(?:my|the)\\s+(?:pots|me/cfs|cfs|long covid|fibro\\w*|mcas|eds|migraines?|brain fog|fatigue)\\s+(?:is|are|has|have)\\s+(?:(?:now|finally|completely|mostly)\\s+)?(?:gone|resolved|in remission|cured|back|returned|come back|flared)\\b|\\b(?:recovered|remission) from\\s+(?:pots|me/cfs|cfs|long covid|mcas)\\b|\\bi\\s+(?:had|used to have)\\s+[a-z/ -]{3,30}?\\s+(?:in\\s+(?:19|20)\\d{2}|years ago|as a (?:kid|child|teen(?:ager)?))\\b"
   },
   "condition_severity": {
     "n": 10, "fields": ["conditions"], "severities": ["mild", "moderate", "severe"], "why": "#229: severity words and phrases naming several levels", "conditions": true,
     "pattern": "\\b(?:mild|moderate|severe|very severe)(?:\\s+to\\s+(?:mild|moderate|severe))?\\s+(?:me/cfs|me|cfs|pots|long covid|mcas|eds|fibro\\w*)\\b|\\b(?:bedbound|housebound)\\b"
+  },
+  "age_range": {
+    "n": 0, "fields": ["age"], "why": "a stated range (\"25-34\") is an age at its midpoint; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:i'?m|aged?|age)\\s+\\d{2}\\s*-\\s*\\d{2}\\b"
+  },
+  "not_an_age": {
+    "n": 0, "fields": ["age"], "why": "durations, doses and weights are not ages (\"sick for 14 months\", \"15 years in\", \"600 mg\", \"25 lb underweight\"); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:for|since)\\s+\\d{1,2}\\s*(?:years?|months?|weeks?|days?)\\b|\\b\\d{1,2}\\s*years?\\s+in\\b|\\b\\d{2,3}\\s*mg\\b|\\b\\d{1,3}\\s*(?:lbs?|kg|pounds)\\b"
+  },
+  "trans_medical_word": {
+    "n": 0, "fields": ["sex"], "why": "transplant, transverse myelitis and the like say nothing about sex; synthetic only (n 0) until real items are curated",
+    "pattern": "\\btrans(?:plant|verse|ient|fusion)\\w*"
+  },
+  "city_with_region": {
+    "n": 0, "fields": ["city", "state"], "why": "\"Austin, TX\" names a city and its state; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b[A-Z][a-z]{3,},\\s*(?:[A-Z]{2}\\b|Texas|California|Florida|Ontario|BC\\b)"
+  },
+  "place_in_question": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "a place asked about (\"anyone here from Egypt?\") is not where the author lives; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b[Aa]nyone (?:here )?(?:from|in)\\s+[A-Z][a-z]{2,}"
+  },
+  "place_general_remark": {
+    "n": 0, "fields": ["country"], "why": "a place in a general remark (\"GPs in France prescribe it\") is not where the author lives; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:not available|doctors?|gps?|insurance|healthcare)\\s+(?:\\w+\\s+){0,3}in\\s+(?:the\\s+)?(?:us|uk|canada|germany|france|australia|america)\\b"
+  },
+  "moved": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "after a move, the new place is where the author lives and the old one goes in others (#238); synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b(?:[Mm]oved|[Rr]elocated)\\s+(?:from\\s+(?:the\\s+)?(?:[A-Z][a-z]+(?:\\s[A-Z][a-z]+)?|[A-Z]{2,3})\\s+)?to\\s+(?:the\\s+)?(?:[A-Z][a-z]{2,}|[A-Z]{2,3}\\b)|\\b[Uu]sed to live in\\s+[A-Z]"
+  },
+  "two_homes": {
+    "n": 0, "fields": ["country", "state", "city"], "why": "two places lived in at once give no place; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bsplit (?:my )?time between\\b|\\bsummers in\\b.*\\bwinters in\\b"
+  },
+  "place_lowercase": {
+    "n": 0, "fields": ["country"], "why": "a place written in lower case is still a place; synthetic only (n 0) until real items are curated",
+    "ignore_case": false,
+    "pattern": "\\b(?:[Hh]ere in|[Ii] live in|[Ii]'?m in|[Ll]iving in)\\s+(?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\b|\\((?:canada|australia|germany|france|ireland|croatia|slovenia|sweden|norway|spain|italy)\\)"
+  },
+  "instructions_in_post": {
+    "n": 0, "fields": ["age", "sex", "country"], "why": "text that tries to instruct the model is data, not an answer; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bignore (?:all |the )?(?:previous|above) instructions\\b"
+  },
+  "long_post": {
+    "n": 0, "fields": ["age"], "why": "a claim near the end of a long post still counts; synthetic only (n 0) until real items are curated",
+    "pattern": "\\A[\\s\\S]{4000}"
+  },
+  "implied_age": {
+    "n": 0, "fields": ["age"], "why": "an age implied but not stated (birth year, school year) is no claim; synthetic only (n 0) until real items are curated",
+    "pattern": "\\bborn in (?:19|20)\\d{2}\\b|\\bclass of (?:19|20)\\d{2}\\b"
+  },
+  "role_word_self": {
+    "n": 0, "fields": ["sex"], "why": "a role or kinship word about the author is their sex (\"as a mom\", \"I'm a dad\"); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:as an?|i'?m an?|i am an?|speaking as an?)\\s+(?:(?:single|working|new|stay at home)\\s+)?(?:mom|mum|mother|dad|father|wife|husband|grandma|grandmother|grandpa|grandfather)\\b"
+  },
+  "pronouns_self": {
+    "n": 0, "fields": ["sex"], "why": "the author's own pronouns (\"she/her\") are no sex claim under the doc's current rule, an open question on #225; synthetic only (n 0) until real items are curated",
+    "pattern": "\\((?:she|he|they)/(?:her|him|them)\\)|\\b(?:my pronouns are|pronouns:)\\s*(?:she|he|they)\\b"
+  },
+  "metro_area": {
+    "n": 0, "fields": ["city"], "why": "a metro area is its city (\"the Boston area\" is Boston, \"the Bay Area\" is San Francisco); synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:here in|i live in|living in|i'?m in|we'?re in|based in)\\s+the\\s+(?:greater\\s+)?(?:[a-z]+\\s+){1,2}area\\b"
+  },
+  "region_not_place": {
+    "n": 0, "fields": ["country", "state"], "why": "a region that is no country or state (\"the Midwest\", \"Europe\", \"a small town\") gives no place; synthetic only (n 0) until real items are curated",
+    "pattern": "\\b(?:here in|i live in|living in|i'?m in|we'?re in|based in)\\s+(?:the\\s+)?(?:midwest|deep south|south|pacific northwest|new england|east coast|west coast|europe|scandinavia|eu|asia|africa|south america|latin america|middle east|a small town|a rural area|countryside|a third world country)\\b"
+  },
+  "condition_not_author": {
+    "n": 0, "fields": ["conditions"], "why": "someone else's condition (\"my mom has MS\") is not the author's; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\bmy\\s+(?:mom|mum|mother|dad|father|wife|husband|partner|son|daughter|sister|brother|friend|kid)\\s+(?:has|had|was diagnosed with|got|suffers from)\\b"
+  },
+  "condition_question": {
+    "n": 0, "fields": ["conditions"], "why": "a condition the author only asks or wonders about (\"could this be POTS?\") is not theirs; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\b(?:could|might|can)\\s+(?:this|it)\\s+be\\s+[\\w/]+\\s*\\?|\\bdo i have\\s+[^?]{1,40}\\?"
+  },
+  "condition_vague": {
+    "n": 0, "fields": ["conditions"], "why": "a vague self-assessment (\"something is wrong with my gut\") names no condition; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\bsomething(?:'s| is)\\s+(?:wrong|off)\\s+with\\s+my\\b|\\bpermanent damage\\b"
+  },
+  "covid_infection": {
+    "n": 0, "fields": ["conditions"], "why": "a covid infection itself is no condition; long covid is; synthetic only (n 0) until real items are curated", "conditions": true,
+    "pattern": "\\b(?:got|had|caught|tested positive for)\\s+covid\\b"
   }
 }

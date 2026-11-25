@@ -76,13 +76,16 @@ for other people and for traps such as what others call the author.
 
 **country, state.** Where the author lives, one place each. "45 male here in Tennessee" is state
 `"Tennessee"` with country empty: label only what is named, never what it implies. Living there
-must be stated in the present: "here in", "I live in", "we're in", "my GP in X". A demonym or "I'm
-from X" alone is not residence: "I'm Canadian" and "I'm from Ohio" go in `others` (country
-`["Canada"]`, state `["Ohio"]`), written as the place's name. Abbreviations are
+must be stated in the present: "here in", "I live in", "we're in", "my GP in X". A demonym, "I'm
+from X" or "born in X" alone is not residence: "I'm Canadian" and "I'm from Ohio" go in `others` (country
+`["Canada"]`, state `["Ohio"]`), written as the place's name. After a move, the new place is where
+the author lives and the old one goes in `others` ("I moved from Texas to Ohio" is state `"Ohio"`,
+`others` state `["Texas"]`; #238). Abbreviations are
 fine (`"TX"`, `"UK"`); the evaluation treats them as the full name, as the pipeline stores them
 (`canonical_place` in `src/resolve_demographics.py`). Empty for places they visited,
-were treated in, or are comparing ("doctors in Germany prescribe..."), and for unnamed places ("a
-third world country"). Two places they live between ("I split time between Ohio and Florida") is
+were treated in, or are comparing ("doctors in Germany prescribe..."), for unnamed places ("a
+third world country"), and for regions that are no country or state ("the Midwest", "Europe"),
+which go nowhere, not even `others`. Two places they live between ("I split time between Ohio and Florida") is
 empty, as the extractor refuses two places.
 
 **city.** The city or town where the author lives, not one they travelled to or were treated in
@@ -201,8 +204,10 @@ cases under `case`, and records the selection in `manifest.json` under `curated`
 in `curation.jsonl`: the labeler sees only the text, so the reason for a pick can't steer its label.
 Every curated label is reviewed by a person before it counts.
 
-`tests/fixtures/demographics_synthetic.jsonl` holds the `synthetic` stratum: about 20 short posts
-written to the rules above, one per hard case, with no patient text, so it lives in Git. `evaluate`
+`tests/fixtures/demographics_synthetic.jsonl` holds the `synthetic` stratum: short posts
+written to the rules above, at least one per case in `src/demographics_testset_cases.json`, with no
+patient text, so it lives in Git. A case with `n` 0 has synthetic posts only, until real items are
+curated for it. `evaluate`
 always includes them, whatever `--split` says: they are rule regressions, not a sample, and they are
 left out of the pooled metrics, so including them in both splits leaks nothing into test scores.
 The evaluator matches spellings of one identity ("MtF" and "trans woman", "FtM" and "trans masc",

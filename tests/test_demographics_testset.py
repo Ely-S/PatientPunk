@@ -189,6 +189,11 @@ def test_synthetic_items_follow_the_rules_and_score_perfectly_against_themselves
     assert report["conditions"]["severity_agreement"] == 1.0
 
 
+def test_every_case_has_a_synthetic_item():
+    # A case with n 0 has no curated items, so its synthetic posts are all that test it.
+    assert set(ts.load_cases()) == {c for it in ts.load_synthetic() for c in it["case"]}
+
+
 def scrape_db(path):
     with closing(sqlite3.connect(path)) as conn:
         conn.executescript("""
