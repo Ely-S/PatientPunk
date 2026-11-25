@@ -28,7 +28,7 @@ def item(post_id, text, lab, user="u1", date=0, split="dev"):
     ("country", "U.K.", "England"), ("state", "TX", "Texas"), ("city", "Austin, TX", "austin"),
     ("sex", "Female | non-binary", "non-binary|female"), ("sex", "mom", "F"), ("sex", "guy", "male"),
     ("sex", "ladies", "woman"), ("sex", "f | mom", "female"), ("country", "the States", "US"),
-    ("country", "Aus", "Australia"),
+    ("country", "Aus", "Australia"), ("age", 34, "34"),
 ])
 def test_two_ways_of_writing_one_answer_match(field, a, b):
     assert ts.key(field, a) == ts.key(field, b)
@@ -38,6 +38,22 @@ def test_two_ways_of_writing_one_answer_match(field, a, b):
                                            ("sex", "mom", "dad"), ("sex", "non-binary | mom", "female")])
 def test_different_answers_do_not_match(field, a, b):
     assert ts.key(field, a) != ts.key(field, b)
+
+
+def test_profiles_compare_sex_as_claims_do():
+    assert ts._same("sex_stated", "F", "female") and ts._same("sex", "female", "Female")
+    assert not ts._same("sex_stated", "trans woman", "female")
+
+
+@pytest.mark.parametrize("pattern, text, hit", [
+    (ts.DEMOGRAPHIC, "I’m 34 and sick of this", True), (ts.DEMOGRAPHIC, "I’m from Ohio", True),
+    (ts.DEMOGRAPHIC, "in my mid-30s now", True), (ts.DEMOGRAPHIC, "in my mid‑30s now", True),
+    (ts.DEMOGRAPHIC, "the 30s were a long decade", False),
+    (ts.OTHER_PERSON, "my 11yo son caught it", True), (ts.OTHER_PERSON, "my 14-year-old daughter has it", True),
+    (ts.OTHER_PERSON, "my son is 11", True), (ts.OTHER_PERSON, "my son has it too", False),
+])
+def test_sampling_patterns_read_text_as_the_resolver_does(pattern, text, hit):
+    assert bool(ts.plain_search(pattern, text)) is hit
 
 
 def test_score_counts_hits_misses_wrong_person_blocks_and_failures():
@@ -166,8 +182,8 @@ def test_evaluate_runs_read_post_and_writes_the_report(tmp_path, monkeypatch):
     assert ts.evaluate(tmp_path, "dev", "t", dry_run=True)["calls"] == 2
     report = ts.evaluate(tmp_path, "dev", "t")
     assert report["posts"]["blocked"] == 1 and report["fields"]["age"]["recall"] == 1.0
-    assert json.loads((tmp_path / "report_t.json").read_text())["tag"] == "t"
-    assert len((tmp_path / "predictions_t.jsonl").read_text().splitlines()) == 2
+    assert json.loads((tmp_path / "report_dev_t.json").read_text())["tag"] == "t"
+    assert len((tmp_path / "predictions_dev_t.jsonl").read_text().splitlines()) == 2
 
 
 def test_stats_flags_evidence_that_is_not_quoted_from_the_text():
