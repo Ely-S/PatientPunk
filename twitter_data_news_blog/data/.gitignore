@@ -1,0 +1,2 @@
+# Per-post exports (date + likes + reposts + labels) can re-identify posts. Keep private.
+twitter_*_posts.csv

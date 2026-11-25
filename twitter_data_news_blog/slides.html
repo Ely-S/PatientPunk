@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spikes and Steps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#1b1e23; --muted:#5d6570; --faint:#9aa1aa; --rule:#e3e1da; --bg:#f7f5ef; --card:#fffdf8;
+  --tw:#1f6fd1; --tw-soft:rgba(31,111,209,.12); --rd:#d4561e; --rd-soft:rgba(212,86,30,.12);
+  --serif: "Fraunces", Georgia, serif; --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ink:#ecebe6; --muted:#a3a9b1; --faint:#666d76; --rule:#2f333a; --bg:#121418; --card:#1b1e23;
+    --tw:#5ea2f0; --tw-soft:rgba(94,162,240,.16); --rd:#f08a52; --rd-soft:rgba(240,138,82,.16); }
+}
+:root[data-theme="dark"] { --ink:#ecebe6; --muted:#a3a9b1; --faint:#666d76; --rule:#2f333a; --bg:#121418; --card:#1b1e23;
+  --tw:#5ea2f0; --tw-soft:rgba(94,162,240,.16); --rd:#f08a52; --rd-soft:rgba(240,138,82,.16); }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 18px/1.5 var(--sans); }
+.deck { height: 100%; position: relative; overflow: hidden; }
+.slide { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
+  padding: 6vh 7vw 11vh; max-width: 1280px; margin: 0 auto;
+  opacity: 0; visibility: hidden; z-index: 0; transform: translateX(40px); transition: opacity .45s ease, transform .45s ease, visibility .45s; }
+.slide.on { opacity: 1; visibility: visible; transform: none; }
+.slide.past { transform: translateX(-40px); }
+
+h1, h2 { font-family: var(--serif); font-weight: 700; letter-spacing: -.01em; }
+h1 { font-size: clamp(38px, 7vw, 92px); line-height: 1; margin: 0 0 .3em; }
+h2 { font-size: clamp(26px, 3.8vw, 46px); line-height: 1.08; margin: 0 0 .5em; }
+p, li { font-size: clamp(16px, 1.75vw, 21px); margin: .35em 0; }
+.kicker { text-transform: uppercase; letter-spacing: .14em; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 1em;
+  display: flex; align-items: center; gap: .7em; }
+.kicker::before { content: ""; width: 28px; height: 2px; background: var(--ink); }
+.muted { color: var(--muted); }
+.tw { color: var(--tw); font-weight: 600; } .rd { color: var(--rd); font-weight: 600; }
+.cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 4vw; align-items: center; }
+.note { font-size: 15px; color: var(--muted); border-left: 3px solid var(--rule); padding-left: .9em; margin-top: 1.2em; }
+.big { font-family: var(--serif); font-weight: 700; line-height: 1; }
+
+/* fragments */
+.f { opacity: 0; transform: translateY(12px); transition: opacity .4s ease, transform .4s ease; }
+.f.shown { opacity: 1; transform: none; }
+
+/* title */
+.hero { position: absolute; inset: 18vh 0 9vh 0; z-index: -1; opacity: .55; pointer-events: none; }
+.chart.hero svg { width: 100%; height: 100%; }
+.title-sub { font-size: clamp(18px, 2.2vw, 26px); max-width: 30ch; color: var(--muted); }
+.legend { display: flex; gap: 1.6em; font-size: 15px; margin-top: 1.5em; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: .5em; }
+.hint { position: absolute; bottom: 11vh; font-size: 14px; color: var(--faint); }
+kbd { font: 12px var(--sans); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; background: var(--card); }
+
+/* stakes cards */
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5vw; margin-top: 1em; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 1.1em 1.2em; }
+.card .n { font-family: var(--serif); font-size: 34px; color: var(--faint); line-height: 1; }
+.card p { font-size: clamp(15px, 1.5vw, 19px); }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5vw; margin: .6em 0 1em; }
+.stat { border-top: 3px solid currentColor; padding-top: .7em; }
+.stat b { display: block; font-family: var(--serif); font-size: clamp(40px, 6vw, 76px); line-height: 1; }
+.stat > span { color: var(--muted); font-size: 15px; display: block; margin-top: .4em; color: var(--muted); }
+.stat.tw, .stat.rd { font-weight: 400; }
+
+/* charts */
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { font-family: var(--sans); fill: var(--muted); font-size: 12px; }
+.chart .axis line, .chart .grid { stroke: var(--rule); }
+.chart .lbl { fill: var(--ink); font-size: 13px; }
+.chart .strong { font-weight: 600; }
+.draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.slide.on .draw { animation: draw 1.6s cubic-bezier(.6,0,.3,1) forwards; animation-delay: var(--d, .2s); }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.pop { opacity: 0; }
+.slide.on .pop { animation: pop .5s ease forwards; animation-delay: var(--d, .6s); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.chart .row:hover text { fill: var(--ink); }
+.chart .row:hover .bgrow { fill: var(--tw-soft); }
+.cap { font-size: 13px; color: var(--muted); margin-top: .5em; }
+
+/* Reuters case study */
+.reuters-slide { justify-content: safe center; overflow-y: auto; }
+.reuters-slide h2 { margin-bottom: .2em; text-wrap: balance; }
+.reuters-context { margin: 0 0 clamp(14px, 2.5vh, 24px); }
+.reuters-layout { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: clamp(16px, 3vw, 40px); }
+.reuters-figure { margin: 0; padding: clamp(12px, 1.7vw, 22px); background: var(--card);
+  border: 1px solid var(--rule); border-radius: 12px; }
+.reuters-figure .chart text { font-size: 15px; }
+.reuters-figure .cap { margin-top: .65em; }
+.reuters-summary { display: grid; gap: clamp(12px, 2.2vh, 24px); }
+.reuters-platform { border-top: 2px solid var(--rule); padding-top: .55rem; }
+.reuters-platform h3 { font-size: 15px; margin: 0 0 .3rem; }
+.reuters-ratios { display: flex; align-items: baseline; gap: .6rem; }
+.reuters-ratios span { display: block; font-size: 13px; }
+.reuters-ratios b { display: block; font-size: clamp(27px, 3vw, 39px); margin-bottom: .2rem; }
+.reuters-platform p, .reuters-slide .note { font-size: clamp(14px, 1.3vw, 16px); }
+.reuters-platform p { margin: .45rem 0 0; }
+.reuters-slide .note { margin: 1rem 0 0; }
+
+/* tiles */
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 1em 0; }
+.tile { border: 1px solid var(--rule); background: var(--card); border-radius: 8px; padding: .7em .5em; text-align: center;
+  font-size: clamp(12px, 1.2vw, 15px); font-weight: 500; transition: background .4s, color .4s, border-color .4s, transform .4s; }
+.flip .tile.x { background: var(--tw); border-color: var(--tw); color: #fff; transform: rotateX(360deg); }
+.flip .tile.r { background: var(--rd); border-color: var(--rd); color: #fff; transform: rotateX(360deg); }
+.score { display: flex; gap: 2.5em; align-items: baseline; flex-wrap: wrap; }
+.score .big { font-size: clamp(56px, 9vw, 120px); }
+
+/* takeaways */
+.todo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vw; margin-top: .6em; }
+.todo .card { display: flex; flex-direction: column; gap: .5em; }
+.todo .card .n { color: var(--tw); }
+.closing { font-family: var(--serif); font-size: clamp(20px, 2.2vw, 28px); margin-top: 1.2em; }
+
+/* limits */
+.limits { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em 3vw; margin-top: .5em; }
+.limits div { border-left: 3px solid var(--rd); padding-left: 1em; }
+.limits b { font-family: var(--serif); font-size: clamp(18px, 2vw, 24px); display: block; }
+.limits p { font-size: clamp(14px, 1.45vw, 18px); color: var(--muted); }
+
+/* data limits grid */
+.defs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.4vw; margin: .4em 0 .2em; }
+.defs div { border-left: 3px solid var(--tw); padding-left: .8em; }
+.defs b { font-size: clamp(14px, 1.4vw, 17px); }
+.defs p { font-size: clamp(12px, 1.15vw, 14px); color: var(--muted); margin: .2em 0 0; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2vw; margin-top: .4em; }
+.grid3 .card b { display: block; font-family: var(--serif); font-size: clamp(26px, 3vw, 40px); line-height: 1.05; color: var(--rd); margin-bottom: .25em; }
+.grid3 .card p { font-size: clamp(13px, 1.3vw, 16px); color: var(--muted); margin: 0; }
+
+/* waffle */
+.waffle { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; max-width: 340px; }
+.waffle i { aspect-ratio: 1; border-radius: 3px; background: var(--rule); opacity: 0; transform: scale(.4); transition: opacity .3s, transform .3s; }
+.slide.on .waffle i { opacity: 1; transform: none; }
+.waffle i.in { background: var(--tw); }
+.waffle i.out { background: var(--faint); opacity: .55; }
+.slide.on .waffle i.out { opacity: .55; }
+
+/* lessons */
+.lessons { display: grid; grid-template-columns: 1fr 1fr; gap: .9em 3vw; margin-top: .4em; }
+.lesson { display: grid; grid-template-columns: auto 1fr; gap: .2em .9em; align-items: start; align-content: start; }
+.lesson .n { font-family: var(--serif); font-size: 28px; color: var(--tw); grid-row: span 2; line-height: 1; }
+.lesson b { font-size: clamp(15px, 1.55vw, 19px); }
+.lesson code { font-size: .9em; }
+.lesson p { font-size: clamp(13px, 1.3vw, 16px); color: var(--muted); margin: 0; }
+
+nav { position: fixed; bottom: 2.6vh; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 14px;
+  font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; z-index: 5; }
+nav button { border: 1px solid var(--rule); background: var(--card); color: var(--ink); border-radius: 999px;
+  width: 38px; height: 38px; font-size: 16px; cursor: pointer; }
+nav button:hover { border-color: var(--ink); }
+.bar { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, var(--tw), var(--rd)); transition: width .4s ease; z-index: 5; }
+
+@media (max-width: 760px) {
+  .cols, .stats, .cards, .limits, .todo, .grid3, .lessons, .defs { grid-template-columns: 1fr; }
+  .reuters-slide { justify-content: flex-start; }
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+  .slide { padding: 5vh 16px 14vh; justify-content: flex-start; overflow-y: auto; }
+  .hint { display: none; }
+  nav { bottom: 0; padding: 10px 0 14px; background: var(--bg); border-top: 1px solid var(--rule); }
+}
+@media (max-width: 520px) {
+  .reuters-figure .chart text { font-size: 20px; }
+}
+@media (min-width: 761px) and (max-height: 650px) {
+  .reuters-slide { padding-top: 4vh; }
+  .reuters-slide .kicker { margin-bottom: .65em; }
+  .reuters-slide h2 { font-size: clamp(26px, 3.2vw, 34px); }
+  .reuters-context { font-size: 16px; margin-bottom: 12px; }
+  .reuters-figure { padding: 12px; }
+  .reuters-summary { gap: 10px; }
+  .reuters-platform p, .reuters-slide .note { font-size: 14px; line-height: 1.4; }
+  .reuters-slide .note { margin-top: .65rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide, .f, .tile { transition: none; }
+  .slide.on .draw, .slide.on .pop { animation-duration: .01s; animation-delay: 0s !important; }
+}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide">
+  <div class="hero chart" id="hero"></div>
+  <div class="kicker">PatientPunk · five years of posts, to 11 November 2025</div>
+  <h1>Spikes on X,<br>steps on Reddit</h1>
+  <p class="title-sub">How the news cycle drives talk about long COVID treatments: 24 drugs on two platforms.</p>
+  <div class="legend"><span><i style="background:var(--tw)"></i>X</span><span><i style="background:var(--rd)"></i>Reddit</span><span class="muted">Weekly LDN mentions around one Reuters story</span></div>
+  <div class="hint"><kbd>→</kbd> or <kbd>space</kbd> to advance · <kbd>F</kbd> for full screen</div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="kicker">Why it matters</div>
+  <h2>When a drug trends, is that patients<br>or the news?</h2>
+  <p class="muted">PatientPunk reads patient posts to learn which treatments people try and how those treatments work out. If news coverage drives the volume on a platform, then on that platform:</p>
+  <div class="cards">
+    <div class="card f"><div class="n">01</div><p>Raw volume says little about how many patients use a drug.</p></div>
+    <div class="card f"><div class="n">02</div><p>Trends in sentiment or uptake track the news calendar.</p></div>
+    <div class="card f"><div class="n">03</div><p>Posts written during a spike come from a different crowd.</p></div>
+  </div>
+  <p class="f" style="margin-top:1.2em">So we tested whether X really is more news-driven than Reddit.</p>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="kicker">The data</div>
+  <h2>Two platforms, five years</h2>
+  <div class="stats">
+    <div class="stat tw"><b data-count="87041">0</b><span>X posts that name both a drug and long COVID, from 32,515 accounts</span></div>
+    <div class="stat tw"><b data-count="5150">0</b><span>LDN (low-dose naltrexone) posts in X's own complete daily count, which has no gaps</span></div>
+    <div class="stat rd"><b data-count="1.85" data-dec="2" data-suffix="M">0</b><span>posts and comments: the whole of r/covidlonghaulers</span></div>
+  </div>
+  <div class="defs f">
+    <div><b>Account-day</b><p>One account mentioning a drug on one day. We count these, not posts, so one busy account, thread or bot can't fake a surge.</p></div>
+    <div><b>Spike</b><p>A day with at least 3× the median of the 28 days around it, and too high to be chance (under 1 in 1,000).</p></div>
+    <div><b>Step</b><p>A lasting change in a platform's level that doesn't fall back once the news fades.</p></div>
+    <div><b>Volatility, √α</b><p>How far interest swings from day to day around its monthly level, after removing counting noise. √α = 0.3 means about ±30% on a typical day.</p></div>
+  </div>
+  <p class="note f">The samples differ. Every X post had to name long COVID; Reddit posts didn't, because the whole subreddit is about it. We compare both platforms over the same 1,929 days, 1 August 2020 to 11 November 2025, and return to this sampling difference at the end.</p>
+</section>
+
+<!-- 4 -->
+<section class="slide reuters-slide" aria-labelledby="reuters-title">
+  <div class="kicker">Reuters feature · 18 October 2022</div>
+  <h2 id="reuters-title">An LDN spike on X, a sustained rise on Reddit</h2>
+  <p class="reuters-context muted">The story covered low-dose naltrexone for long COVID.</p>
+  <div class="cols reuters-layout">
+    <figure class="reuters-figure">
+      <div class="chart" id="reuters"></div>
+      <figcaption class="cap">Weekly totals add up each day’s distinct accounts. The baseline (1×) is the average weekly total in the four weeks before publication.</figcaption>
+    </figure>
+    <div class="reuters-summary">
+      <div class="reuters-platform">
+        <h3 class="tw">X</h3>
+        <div class="reuters-ratios">
+          <div><b class="big tw">9.6×</b><span class="muted">Week 1</span></div>
+          <span class="muted" aria-hidden="true">→</span>
+          <div><b class="big tw">1.9×</b><span class="muted">Week 3</span></div>
+        </div>
+        <p>X’s full post count reached 8.3× its baseline in week 1. On publication day, 12 accounts, nearly all radio or news stations, shared identical wording.</p>
+      </div>
+      <div class="reuters-platform">
+        <h3 class="rd">Reddit</h3>
+        <div class="reuters-ratios">
+          <div><b class="big rd">2.1×</b><span class="muted">Week 1</span></div>
+          <span class="muted" aria-hidden="true">→</span>
+          <div><b class="big rd">2.0×</b><span class="muted">Week 3</span></div>
+        </div>
+        <p>Mentions peaked at 2.3× in week 2. Most of the additional weekly participants were mentioning LDN in the subreddit for the first time.</p>
+      </div>
+    </div>
+  </div>
+  <p class="note">Reddit discussion was already rising before publication. Mentions alone can’t show whether the story prompted anyone to start taking LDN.</p>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="kicker">Main result · guess first</div>
+  <h2>Of 24 drugs, how many swing more sharply on X?</h2>
+  <div class="tiles" id="tiles"></div>
+  <div class="score f" data-flip="tiles">
+    <div><span class="big tw" data-count="18">0</span> <span class="muted">more volatile on X</span></div>
+    <div><span class="big rd" data-count="6">0</span> <span class="muted">more volatile on Reddit</span></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="kicker">Main result</div>
+  <h2>X is more volatile for 18 of 24 drugs</h2>
+  <div class="cols">
+    <div><div class="chart" id="dumbbell"></div><div class="cap"><span class="tw">● X</span> &nbsp;<span class="rd">● Reddit</span> &nbsp;√α: day-to-day swings in attention after removing the monthly level and counting noise. Hover over a row for values.</div></div>
+    <div>
+      <p>Median ratio of day-to-day volatility (α), X to Reddit: <b class="big" style="font-size:1.6em">1.62</b> <span class="muted">(95% CI 1.20–2.62; 1.27 on the chart's √α scale)</span>.</p>
+      <p class="f">Both platforms agree on which drugs are news drugs (ρ = 0.61): <b>metformin, HBOT (hyperbaric oxygen) and Paxlovid</b>. Staples such as zinc, quercetin and antihistamines stay steady on both platforms.</p>
+      <p class="note f">Much of the gap comes from single headlines shared word for word by many accounts. Counting each headline once cuts the ratio to 1.28, with an interval that includes 1.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="kicker">Nine dated releases</div>
+  <h2>X jumps; Reddit has an ordinary week</h2>
+  <div class="cols">
+    <div><div class="chart" id="dated"></div><div class="cap"><span class="tw">● X</span> &nbsp;<span class="rd">● Reddit</span> &nbsp;Account-days (distinct accounts each day, summed) in the first week, relative to the four weeks before (log scale). Hollow, faded rows concerned acute COVID, so most posts about them fall outside the data.</div></div>
+    <div>
+      <p>Every LDN and Paxlovid release lifted X <b class="tw" style="white-space:nowrap">3–10×</b> in its first week. Reddit rose only <b class="rd" style="white-space:nowrap">1.1–1.4×</b>, except after Reuters.</p>
+      <p class="f">For Paxlovid, X reacted on the same scale to two <b>null trials</b> (9.1× and 4.3×) as to a positive study (8.6×). On Reddit, the following weeks <em>rose</em> after the positive news and <em>fell</em> after the null results.</p>
+      <p class="f muted">X reacts to whether something is news. The patient community may react to what the news says.</p>
+      <p class="note">This is a hand-picked case series, not a random sample, and nine events can't separate a delayed response from coincidence.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="kicker">Do spikes become steps?</div>
+  <h2>Usually not</h2>
+  <div class="cols">
+    <div>
+      <p>How much busier Reddit was in the eight weeks after <b data-count="219">0</b> X spikes with enough data on each side, than after comparison dates:</p>
+      <div class="chart" id="ci"></div>
+    </div>
+    <div>
+      <p class="f">The largest steps that did follow X spikes came with changes in <b>access or evidence</b>, such as the US authorisation of Paxlovid in December 2021, not with commentary.</p>
+      <p class="f">Reddit notices the stories that light up X, but only faintly: <b>1.3×</b> on the same day and back to about normal a week later.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="kicker">Who posts during a spike</div>
+  <h2>Spike-day posts say less about patients</h2>
+  <div class="cols">
+    <div><div class="chart" id="comp"></div></div>
+    <div>
+      <p>On spike days, fewer X posts become treatment reports or describe the poster's own use.</p>
+      <p class="note f">The drop in treatment reports remains after removing flagged bot posts.</p>
+      <p class="f">On X, people who first post about a drug on a spike day are less likely to post about it again: <b class="big" style="font-size:1.6em">11%</b> versus 15% (odds ratio 0.64).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <div class="kicker">Bots, marketers and copy-paste</div>
+  <h2>Bots and marketers don't cause spikes, but they inflate treatment reports</h2>
+  <div class="chart" id="roles"></div>
+  <div class="cols" style="margin-top:1em; align-items:start">
+    <ul>
+      <li class="f">Bots and marketers post less on spike days: 2.6% of posts, versus 4.7% on ordinary days nearby. Remove them and <b>220 of 225</b> spikes remain.</li>
+      <li class="f"><b>Headline relays</b>, one link shared by many ordinary accounts, swell the spikes: <b>18.8%</b> of posts on spike days versus 6.6% on ordinary days nearby.</li>
+    </ul>
+    <ul>
+      <li class="f"><b>141</b> of 2,186 ivermectin reports on X come from flagged posts, and all are positive: 105 vendor scripts, which the pipeline reads as testimonials, and 36 from accounts repeating themselves. These are flagged, not confirmed fakes.</li>
+      <li class="f">Removing them barely moves ivermectin's positive share (91.9% to 91.3%). For a drug with mixed reviews, the same campaign would matter much more.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <div class="kicker">Limits of the analysis</div>
+  <h2>What this can't tell you</h2>
+  <div class="limits">
+    <div class="f"><b>Platform or population?</b><p>Reddit is a support group; X is a public square. We can't separate a platform's design from who is in the room.</p></div>
+    <div class="f"><b>Observational data</b><p>This is not an experiment. News events were identified from word patterns and a hand-picked list, and we chose the peak phrases after reading the peaks.</p></div>
+    <div class="f"><b>Other causes</b><p>Reddit's LDN discussion was already rising in September 2022, so the Reuters story can't take credit for the whole step.</p></div>
+    <div class="f"><b>Fixed windows</b><p>Returns and steps are measured over fixed windows, such as eight weeks before and after. Other windows would shift the exact figures; we didn't tune them.</p></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide">
+  <div class="kicker">Limitations of the data</div>
+  <h2>The raw material has gaps</h2>
+  <div class="grid3">
+    <div class="card f"><b>280 characters</b><p>The scrape stored only each post's 280-character preview, with no conversation or parent ids. Keyword matching ran on the preview, so long posts were missed: all 3 misses in an LDN test week were long posts.</p></div>
+    <div class="card f"><b>64 vs 51</b><p>LDN posts on Reuters day in the scrape and in X's complete count. The queries used different long COVID terms, and the count, run later, probably can't see deleted posts.</p></div>
+    <div class="card f"><b>6 of 102</b><p>posts we marked as organic turned out to be one-off promotion or spam. Real marketing on X could be up to three times what we flagged.</p></div>
+    <div class="card f"><b>One labeller</b><p>All 220 labels used to check the bot flags came from one AI model, with no independent human check. Treatment reports also come from language models.</p></div>
+    <div class="card f"><b>UTC days</b><p>A story that breaks in the US evening spans two UTC days, which spreads X spikes across neighbouring days and makes single-day ratios conservative.</p></div>
+    <div class="card f"><b>13 of 50</b><p>sampled X authors whose posts became LDN reports never said they had long COVID or any other condition, in their bio or their posts. Naming long COVID in a post doesn't make someone a patient: parents, clinicians and vaccine-injury accounts also pass the filter.</p></div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide">
+  <div class="kicker">Sampling issues</div>
+  <h2>The two samples were drawn differently</h2>
+  <div class="cols">
+    <div>
+      <div class="waffle" id="waffle"></div>
+      <p class="cap" style="max-width:340px">Each square is 1% of the LDN posts from 70 X accounts. <span class="tw">Blue</span>: posts already in our corpus. <span class="muted">Grey (79%)</span>: posts our corpus missed, almost all because they don't name long COVID.</p>
+    </div>
+    <div>
+      <p><b>Every X post had to name a drug and long COVID.</b> Reddit posts only had to name the drug, because the whole subreddit is about long COVID.</p>
+      <p class="f">Headlines name the condition; patients discussing their dose, side effects or crashes often don't. So the X corpus over-represents headlines and under-represents everyday treatment talk.</p>
+      <p class="note f">The 70 accounts were hand-picked, so 79% shows the direction of the gap, not its size. This bias probably raises X's measured volatility, but it doesn't explain the gap: requiring Reddit posts to name long COVID too widens X's lead.</p>
+    </div>
+  </div>
+  <div class="stats f" style="margin-top:1.2em">
+    <div class="stat tw"><b style="font-size:clamp(26px,3vw,40px)">32% <span class="muted" style="font-size:.55em">vs</span> <span class="rd">66%</span></b><span>of LDN posts describe the poster's or someone else's use, on X and on Reddit (samples of 2,273 and 500 posts)</span></div>
+    <div class="stat tw"><b style="font-size:clamp(26px,3vw,40px)">1,083 <span class="muted" style="font-size:.55em">vs</span> <span class="rd">12,040</span></b><span>positive, negative or mixed LDN reports across the whole scrape, from 554 X authors and 2,634 Reddit authors</span></div>
+    <div class="stat tw"><b style="font-size:clamp(26px,3vw,40px)">60 of 152</b><span>patients posting about LDN in an X sample had no post in our corpus. Patients who name long COVID only in their bio can't be found at all, because our API tier can't search bios.</span></div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide">
+  <div class="kicker">Lessons for future scrapes</div>
+  <h2>What we would do differently next time</h2>
+  <div class="lessons">
+    <div class="lesson f"><span class="n">1</span><b>Store and search the full post.</b><p>Request <code>note_tweet</code>, keep its text, and run keyword matching on the full body. Keep conversation and parent ids so replies can be read in context.</p></div>
+    <div class="lesson f"><span class="n">2</span><b>Search by author, not just by keyword.</b><p>Find posts that name the drug and the condition, then pull each author's posts about the drug: 4.8× as many posts for 70 authors. Pool authors across every drug to reach those who never name both together.</p></div>
+    <div class="lesson f"><span class="n">3</span><b>Pull author profiles and label the condition.</b><p>Add <code>expansions=author_id</code> with user fields, then flag bios that mention long COVID, ME/CFS or POTS. User fields also give each account's creation date, one of our few bot signals.</p></div>
+    <div class="lesson f"><span class="n">4</span><b>Widen the term lists.</b><p>Add brand names, abbreviations, misspellings and non-English forms, plus more long COVID and ME/CFS terms. Add one query without the condition term, so news about acute COVID isn't lost.</p></div>
+    <div class="lesson f"><span class="n">5</span><b>Pair every scrape with a complete count.</b><p>X's daily counts have no gaps. Run them at the same time and with the same terms as the scrape, before posts are deleted, and match the query rules across platforms.</p></div>
+    <div class="lesson f"><span class="n">6</span><b>Fix the rules first, and check the labels.</b><p>Write down which news releases qualify before looking. Have a person check a sample of every model's labels, and save the script behind every number.</p></div>
+  </div>
+  <p class="note f">Budget before pulling timelines: X charges $0.005 per post read and $0.10 per counts request.</p>
+</section>
+
+<!-- 15 -->
+<section class="slide">
+  <div class="kicker">For anyone mining X for patient reports</div>
+  <h2>What to do</h2>
+  <div class="todo">
+    <div class="card f"><div class="n">1</div><p>Flag spike windows and check every estimate with and without them.</p></div>
+    <div class="card f"><div class="n">2</div><p>Count distinct accounts and texts, not posts. Remove vendor scripts before quoting sentiment.</p></div>
+    <div class="card f"><div class="n">3</div><p>Use X to see which <em>direction</em> interest in a drug is heading, not how widely it is used.</p></div>
+    <div class="card f"><div class="n">4</div><p>On Reddit, look for lasting steps, then split them into first-time and returning posters.</p></div>
+    <div class="card f"><div class="n">5</div><p>Expect politicised drugs (ivermectin, hydroxychloroquine, IVIG) to be noisy on every platform.</p></div>
+  </div>
+  <p class="f closing">In short: X spikes with the news and fades. When news does reach patients, which is rare, it shows up on Reddit as a smaller, slower step that can last.</p>
+</section>
+
+</div>
+<nav>
+  <button id="prev" aria-label="Previous">←</button>
+  <span id="count"></span>
+  <button id="next" aria-label="Next">→</button>
+</nav>
+<script>
+/* ---------- data (from data/daily_counts.csv, data/cross_drug.csv, post.md tables) ---------- */
+// Daily distinct accounts mentioning LDN, summed by week from 2 Aug 2022. Week 12 starts 18 Oct (Reuters).
+const LDN_X  = [10,18,9,16,21,19,18,11,21,17,11,144,54,28,25,23,18,16,13,17,25];
+const LDN_RD = [42,25,33,42,59,53,47,32,48,40,43,86,94,80,69,59,68,77,68,53,54];
+const EV = 11;  // index of the Reuters week
+const base = a => a.slice(EV - 4, EV).reduce((s, v) => s + v, 0) / 4;
+const mult = a => { const b = base(a); return a.map(v => v / b); };
+// α for distinct accounts per day
+const ALPHA = { "Aspirin":[0.138,0.1999], "CoQ10":[0.3588,0.2433], "Famotidine":[0.1813,0.1163], "Fluvoxamine":[0.749,0.1397],
+  "H1 antihistamines":[0.1943,0.0815], "HBOT":[1.7331,0.409], "Hydroxychloroquine":[0.817,1.1988], "IVIG":[0.6225,0.5198],
+  "Interferon":[1.5039,1.2503], "Ivermectin":[0.4354,0.4486], "LDN":[0.7257,0.0921], "Lumbrokinase":[0.4721,0.2786],
+  "Maraviroc":[0.7492,0.3404], "Melatonin":[0.3182,0.2571], "Metformin":[1.7633,0.5646], "Nattokinase":[0.1554,0.1254],
+  "Omega-3":[0.4784,0.1363], "Paxlovid":[0.8221,0.2918], "Quercetin":[0.1118,0.1466], "Serrapeptase":[0.0919,0.1638],
+  "Statins":[0.5965,0.2921], "Vitamin C":[0.3501,0.0671], "Vitamin D":[0.3861,0.1474], "Zinc":[0.0257,0.1401] };
+const DATED = [ // name, drug, date, X wk1, Reddit wk1, acute-COVID (outside data)
+  ["FDA social post","Ivermectin","Aug 2021",1.11,1.64,1], ["TOGETHER results","Ivermectin","Mar 2022",0.86,0.97,1],
+  ["Reuters feature","LDN","Oct 2022",9.6,2.11,0], ["ACTIV-6 results","Ivermectin","Oct 2022",1.28,1.16,1],
+  ["VA prevention study","Paxlovid","Nov 2022",8.63,1.34,0], ["NIH RECOVER launch","Paxlovid","Jul 2023",3.2,1.2,0],
+  ["Griffith trial (ABC)","LDN","May 2024",4.3,1.1,0], ["STOP-PASC (null)","Paxlovid","Jun 2024",9.1,1.4,0],
+  ["PAX LC (null)","Paxlovid","Apr 2025",4.3,1.4,0] ];
+
+/* ---------- tiny SVG helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function svg(id, w, h) { const s = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img" }); document.getElementById(id).appendChild(s); return s; }
+const line = (pts) => "M" + pts.map(p => p.map(v => v.toFixed(1)).join(",")).join("L");
+
+/* ---------- Reuters chart (also the title hero) ---------- */
+function reuters(id, hero) {
+  const W = hero ? 1200 : 640, H = hero ? 700 : 320;
+  const m = hero ? { l: 0, r: 0, t: 120, b: 40 } : { l: 48, r: 76, t: 32, b: 32 };
+  const s = svg(id, W, H);
+  if (hero) s.setAttribute("preserveAspectRatio", "xMidYMax slice");
+  const xs = mult(LDN_X), rs = mult(LDN_RD), n = xs.length, ymax = 10.5;
+  const X = i => m.l + i / (n - 1) * (W - m.l - m.r), Y = v => H - m.b - v / ymax * (H - m.t - m.b);
+  if (!hero) {
+    s.setAttribute("aria-label", "Weekly LDN discussion from August to December 2022. X spiked in the week the Reuters story appeared. Reddit rose more gradually and stayed above its baseline through December.");
+    [0, 2, 4, 6, 8, 10].forEach(v => {
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: "grid" }, s);
+      el("text", { x: m.l - 8, y: Y(v), "dominant-baseline": "central", "text-anchor": "end" }, s, v + "×");
+    });
+    [["Aug", 0], ["Sep", 5], ["Oct", 9], ["Nov", 13], ["Dec", 18]].forEach(([t, i]) => el("text", { x: X(i), y: H - 6, "text-anchor": "middle" }, s, t));
+  }
+  el("line", { x1: X(EV), x2: X(EV), y1: m.t - (hero ? 0 : 6), y2: H - m.b, stroke: "var(--faint)", "stroke-dasharray": "3 4", opacity: hero ? .5 : 1 }, s);
+  if (!hero) el("text", { x: X(EV), y: m.t - 14, class: "lbl strong", "text-anchor": "middle" }, s, "Reuters publishes");
+  const area = (arr, col) => el("path", { d: line(arr.map((v, i) => [X(i), Y(v)])) + `L${X(n - 1)},${Y(0)}L${X(0)},${Y(0)}Z`, fill: col, class: "pop", style: "--d:1.4s" }, s);
+  area(rs, "var(--rd-soft)"); area(xs, "var(--tw-soft)");
+  if (!hero) {
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(1), y2: Y(1), stroke: "var(--faint)", "stroke-dasharray": "4 4" }, s);
+    el("text", { x: m.l - 8, y: Y(1), "dominant-baseline": "central", "text-anchor": "end" }, s, "1×");
+  }
+  el("path", { d: line(rs.map((v, i) => [X(i), Y(v)])), fill: "none", stroke: "var(--rd)", "stroke-width": hero ? 5 : 3, pathLength: 1, class: "draw", style: "--d:.5s", "stroke-linejoin": "round" }, s);
+  el("path", { d: line(xs.map((v, i) => [X(i), Y(v)])), fill: "none", stroke: "var(--tw)", "stroke-width": hero ? 5 : 3, pathLength: 1, class: "draw", style: "--d:.3s", "stroke-linejoin": "round" }, s);
+  if (!hero) {
+    const labels = el("g", { class: "pop", style: "--d:1.8s" }, s);
+    el("circle", { cx: X(EV), cy: Y(xs[EV]), r: 5, fill: "var(--tw)" }, labels);
+    el("text", { x: X(n - 1) + 8, y: Y(xs[n - 1]) - 9, class: "strong", style: "fill:var(--tw)" }, labels, "X");
+    el("text", { x: X(n - 1) + 8, y: Y(rs[n - 1]) + 15, class: "strong", style: "fill:var(--rd)" }, labels, "Reddit");
+  }
+}
+reuters("hero", true);
+reuters("reuters", false);
+
+/* ---------- tiles ---------- */
+const tiles = document.getElementById("tiles");
+Object.entries(ALPHA).forEach(([d, [a, b]], k) => {
+  const t = document.createElement("div");
+  t.className = "tile " + (a > b ? "x" : "r"); t.textContent = d;
+  t.style.transitionDelay = (k * 45) + "ms";
+  tiles.appendChild(t);
+});
+
+/* ---------- dumbbell ---------- */
+(function () {
+  const rows = Object.entries(ALPHA).map(([d, [a, b]]) => [d, Math.sqrt(a), Math.sqrt(b)]).sort((p, q) => (q[1] - q[2]) - (p[1] - p[2]));
+  const W = 560, rh = 21, m = { l: 130, r: 16, t: 22, b: 8 }, H = m.t + rows.length * rh + m.b, xmax = 1.4;
+  const s = svg("dumbbell", W, H);
+  const X = v => m.l + v / xmax * (W - m.l - m.r);
+  [0, .5, 1].forEach(v => { el("line", { x1: X(v), x2: X(v), y1: m.t - 6, y2: H - m.b, class: "grid" }, s); el("text", { x: X(v), y: 12, "text-anchor": "middle" }, s, v); });
+  rows.forEach(([d, x, r], i) => {
+    const y = m.t + i * rh + rh / 2, g = el("g", { class: "row pop", style: `--d:${.15 + i * .04}s` }, s);
+    el("rect", { x: 0, y: y - rh / 2, width: W, height: rh, fill: "transparent", class: "bgrow", rx: 3 }, g);
+    el("title", {}, g, `${d}: X ${x.toFixed(2)}, Reddit ${r.toFixed(2)}`);
+    el("text", { x: m.l - 10, y: y + 4, "text-anchor": "end", class: x > r ? "lbl" : "" }, g, d);
+    el("line", { x1: X(Math.min(x, r)), x2: X(Math.max(x, r)), y1: y, y2: y, stroke: x > r ? "var(--tw)" : "var(--rd)", "stroke-width": 2, opacity: .45 }, g);
+    el("circle", { cx: X(r), cy: y, r: 4.5, fill: "var(--rd)" }, g);
+    el("circle", { cx: X(x), cy: y, r: 4.5, fill: "var(--tw)" }, g);
+  });
+})();
+
+/* ---------- dated releases (log scale) ---------- */
+(function () {
+  const W = 620, rh = 34, m = { l: 160, r: 40, t: 26, b: 6 }, H = m.t + DATED.length * rh + m.b;
+  const s = svg("dated", W, H), lo = Math.log(0.7), hi = Math.log(12);
+  const X = v => m.l + (Math.log(v) - lo) / (hi - lo) * (W - m.l - m.r);
+  [1, 2, 5, 10].forEach(v => { el("line", { x1: X(v), x2: X(v), y1: m.t - 8, y2: H - m.b, class: "grid", "stroke-dasharray": v === 1 ? "" : "2 4" }, s);
+    el("text", { x: X(v), y: 12, "text-anchor": "middle" }, s, v + "×"); });
+  DATED.forEach(([name, drug, date, x, r, out], i) => {
+    const y = m.t + i * rh + rh / 2, g = el("g", { class: "row pop", style: `--d:${.2 + i * .12}s`, opacity: out ? .6 : 1 }, s);
+    el("text", { x: m.l - 12, y: y, "text-anchor": "end", class: "lbl" }, g, name);
+    el("text", { x: m.l - 12, y: y + 14, "text-anchor": "end", style: "font-size:11px" }, g, `${drug} · ${date}`);
+    el("line", { x1: X(Math.min(x, r)), x2: X(Math.max(x, r)), y1: y + 2, y2: y + 2, stroke: "var(--faint)", "stroke-width": 2 }, g);
+    el("circle", { cx: X(r), cy: y + 2, r: out ? 5 : 6, fill: out ? "var(--bg)" : "var(--rd)", stroke: "var(--rd)", "stroke-width": out ? 2 : 0 }, g);
+    el("circle", { cx: X(x), cy: y + 2, r: out ? 5 : 6, fill: out ? "var(--bg)" : "var(--tw)", stroke: "var(--tw)", "stroke-width": out ? 2 : 0 }, g);
+    if (!out) el("text", { x: X(x) + 10, y: y + 6, style: "fill:var(--tw);font-weight:600" }, g, x.toFixed(1) + "×");
+  });
+})();
+
+/* ---------- spike→step CI ---------- */
+(function () {
+  const W = 560, H = 170, m = { l: 12, r: 12 }, lo = -6, hi = 15;
+  const s = svg("ci", W, H), X = v => m.l + (v - lo) / (hi - lo) * (W - m.l - m.r);
+  el("line", { x1: X(0), x2: X(0), y1: 14, y2: 142, stroke: "var(--ink)", "stroke-width": 1.5 }, s);
+  el("text", { x: X(0), y: 160, "text-anchor": "middle", class: "lbl strong" }, s, "no effect");
+  [-5, 5, 10, 15].forEach(v => el("text", { x: X(v), y: 160, "text-anchor": "middle" }, s, (v > 0 ? "+" : "") + v + "%"));
+  [["Compared with random dates", 3, -3, 9, 52], ["Compared with dates within 90 days of the spike", 4, -3, 12, 106]].forEach(([t, e, a, b, y], k) => {
+    const g = el("g", { class: "pop", style: `--d:${.4 + k * .5}s` }, s);
+    el("line", { x1: X(a), x2: X(b), y1: y, y2: y, stroke: "var(--rd)", "stroke-width": 4, "stroke-linecap": "round", opacity: .55 }, g);
+    el("circle", { cx: X(e), cy: y, r: 8, fill: "var(--rd)" }, g);
+    el("text", { x: X(b) + 10, y: y + 5, class: "lbl" }, g, `+${e}%`);
+    el("text", { x: X(lo), y: y - 14, style: "paint-order:stroke;stroke:var(--bg);stroke-width:5px" }, g, t);
+  });
+})();
+
+/* ---------- composition bars ---------- */
+(function () {
+  const rows = [["LDN posts that become treatment reports", 17, 28], ["Ivermectin posts that become treatment reports", 14, 22], ["LDN posts describing the poster's own use", 20, 36]];
+  const W = 560, H = 270, m = { l: 0, r: 40 }, X = v => v / 55 * (W - m.l - m.r);
+  const s = svg("comp", W, H);
+  rows.forEach(([t, sp, ct], i) => {
+    const y = i * 90, g = el("g", { class: "pop", style: `--d:${.2 + i * .25}s` }, s);
+    el("text", { x: 0, y: y + 12, class: "lbl" }, g, t);
+    el("rect", { x: 0, y: y + 22, width: X(ct), height: 22, rx: 3, fill: "var(--faint)", opacity: .5 }, g);
+    el("text", { x: X(ct) + 8, y: y + 38 }, g, ct + "% on ordinary days nearby");
+    el("rect", { x: 0, y: y + 48, width: X(sp), height: 22, rx: 3, fill: "var(--tw)" }, g);
+    el("text", { x: X(sp) + 8, y: y + 64, style: "fill:var(--tw);font-weight:600" }, g, sp + "% on spike days");
+  });
+})();
+
+/* ---------- X post roles ---------- */
+(function () {
+  const parts = [["Organic", 74966, "var(--faint)"], ["Headline relays", 5148, "var(--tw)"], ["Bots & marketers", 3934, "var(--rd)"], ["Other repeats", 372, "var(--ink)"]];
+  const total = parts.reduce((s, p) => s + p[1], 0), W = 1000, H = 92;
+  const s = svg("roles", W, H);
+  let x = 0;
+  parts.forEach(([t, n, c], i) => {
+    const w = n / total * W, g = el("g", { class: "pop", style: `--d:${.2 + i * .25}s` }, s);
+    el("rect", { x, y: 30, width: Math.max(w - 2, 1), height: 30, fill: c, opacity: i ? 1 : .45 }, g);
+    const pct = (n / total * 100).toFixed(1) + "%";
+    if (i === 0) el("text", { x: 8, y: 50, class: "lbl" }, g, `${t} ${pct}`);
+    else if (i < 3) el("text", { x: i === 2 ? W : x + w / 2, y: i === 1 ? 20 : 80, "text-anchor": i === 2 ? "end" : "middle", style: `fill:${c};font-weight:600` }, g, `${t} ${pct}`);
+    x += w;
+  });
+  el("text", { x: 0, y: 14 }, s, `All ${total.toLocaleString()} X posts naming one of the 24 drugs, by source (other repeats: 0.4%)`);
+})();
+
+/* ---------- waffle: 79% of LDN posts from 70 accounts lacked a long COVID term ---------- */
+(function () {
+  const w = document.getElementById("waffle");
+  for (let k = 0; k < 100; k++) {
+    const sq = document.createElement("i");
+    sq.className = k < 21 ? "in" : "out";
+    sq.style.transitionDelay = (k * 12) + "ms";
+    w.appendChild(sq);
+  }
+})();
+
+/* ---------- deck engine ---------- */
+const slides = [...document.querySelectorAll(".slide")];
+let i = 0, step = 0;
+const frags = s => [...s.querySelectorAll(".f")];
+
+function countUp(e) {
+  const to = +e.dataset.count, dec = +(e.dataset.dec || 0), suf = e.dataset.suffix || "", t0 = performance.now(), dur = 1100;
+  const tick = t => { const p = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - p, 3));
+    e.textContent = v.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suf;
+    if (p < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+function revealed(e) {
+  e.classList.add("shown");
+  if (e.dataset.flip) document.getElementById(e.dataset.flip).classList.add("flip");
+  e.querySelectorAll("[data-count]").forEach(countUp);
+}
+function show(n, fromEnd) {
+  i = Math.max(0, Math.min(n, slides.length - 1));
+  slides.forEach((s, k) => { s.classList.toggle("on", k === i); s.classList.toggle("past", k < i); });
+  const s = slides[i], fs = frags(s);
+  document.querySelectorAll(".flip").forEach(t => t.classList.remove("flip"));
+  fs.forEach(f => f.classList.remove("shown"));
+  step = fromEnd ? fs.length : 0;
+  if (fromEnd) fs.forEach(revealed);
+  // replay chart animations
+  s.querySelectorAll(".draw, .pop").forEach(e => { e.style.animation = "none"; e.getBoundingClientRect(); e.style.animation = ""; });
+  s.querySelectorAll("[data-count]").forEach(e => { if (!e.closest(".f")) countUp(e); else if (!fromEnd) e.textContent = "0"; });
+  document.getElementById("count").textContent = (i + 1) + " / " + slides.length;
+  document.getElementById("bar").style.width = ((i + 1) / slides.length * 100) + "%";
+  try { history.replaceState(null, "", "#" + (i + 1)); } catch (e) {}
+}
+function next() { const fs = frags(slides[i]); if (step < fs.length) revealed(fs[step++]); else if (i < slides.length - 1) show(i + 1); }
+function prev() {
+  const fs = frags(slides[i]);
+  if (step > 0) { const f = fs[--step]; f.classList.remove("shown"); if (f.dataset.flip) document.getElementById(f.dataset.flip).classList.remove("flip"); }
+  else if (i > 0) show(i - 1, true);
+}
+document.getElementById("prev").onclick = prev;
+document.getElementById("next").onclick = next;
+document.addEventListener("keydown", e => {
+  if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); next(); }
+  if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); prev(); }
+  if (e.key === "Home") show(0);
+  if (e.key === "End") show(slides.length - 1, true);
+  if (e.key === "f" || e.key === "F") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+});
+let x0 = null;
+document.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; }, { passive: true });
+document.addEventListener("touchend", e => {
+  if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0;
+  if (Math.abs(dx) > 50) (dx < 0 ? next : prev)(); x0 = null;
+});
+show(Math.min(Math.max((parseInt(location.hash.slice(1)) || 1) - 1, 0), slides.length - 1));
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Raw X API responses, post-level labels and databases can link back to patient posts.
+# Keep them private; only code and written notes belong in Git.
+*.json
+*.csv
+*.db
+*.db-shm
+*.db-wal
+*.zip
+/coverage_test_2026-11/METHOD_ldn_coverage.md
+/coverage_test_2026-11/run_ldn_authorpass_20261118T020357Z/RESULT.md
+/coverage_test_2026-11/run_tier2_ivermectin_20261117T002057Z/tier2_ivermectin_summary.md
+/coverage_test_2026-11/run_tier2_ldn_20261117T001229Z/tier2_ldn_summary.md
+/coverage_test_2026-11/tier1/tier1_summary.md
+/coverage_test_2026-11/tier1/vendor_reconciliation.md
